@@ -17,7 +17,7 @@ func esc(s string) string { return html.EscapeString(s) }
 
 // Enterprise HTML email templates for Fe3dr / HomeChef
 // Responsive, branded layout matching the Fe3dr design system.
-// Base colors: brand-500 (#FF6B35), brand-600 (#E55A2B), gray-900 (#111827)
+// Base colors: neutral ink (#111827), gray-700 (#374151), gray-900 (#111827) — deliberately brandless/monochrome
 
 // emailBase wraps content in the branded Fe3dr email layout
 func emailBase(title, preheader, body string) string {
@@ -31,19 +31,19 @@ func emailBase(title, preheader, body string) string {
   <style>
     body { margin:0; padding:0; background-color:#f9fafb; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; }
     .container { max-width:600px; margin:0 auto; }
-    .header { background:linear-gradient(135deg,#FF6B35,#E55A2B); padding:32px 40px; text-align:center; border-radius:12px 12px 0 0; }
+    .header { background:linear-gradient(135deg,#111827,#374151); padding:32px 40px; text-align:center; border-radius:12px 12px 0 0; }
     .header h1 { margin:0; color:#ffffff; font-size:24px; font-weight:700; letter-spacing:0.5px; }
     .content { background:#ffffff; padding:40px; border-left:1px solid #e5e7eb; border-right:1px solid #e5e7eb; }
     .content h2 { color:#111827; font-size:22px; margin:0 0 16px 0; font-weight:600; }
     .content p { color:#4b5563; font-size:15px; line-height:1.7; margin:0 0 16px 0; }
-    .btn { display:inline-block; background:#FF6B35; color:#ffffff !important; text-decoration:none; padding:14px 32px; border-radius:8px; font-weight:600; font-size:15px; margin:8px 0 24px 0; }
-    .btn:hover { background:#E55A2B; }
-    .info-box { background:#FFF7ED; border:1px solid #FDBA74; border-radius:8px; padding:16px 20px; margin:16px 0; }
-    .info-box p { color:#9A3412; margin:0; font-size:14px; }
+    .btn { display:inline-block; background:#111827; color:#ffffff !important; text-decoration:none; padding:14px 32px; border-radius:8px; font-weight:600; font-size:15px; margin:8px 0 24px 0; }
+    .btn:hover { background:#374151; }
+    .info-box { background:#F3F4F6; border:1px solid #E5E7EB; border-radius:8px; padding:16px 20px; margin:16px 0; }
+    .info-box p { color:#374151; margin:0; font-size:14px; }
     .divider { border:none; border-top:1px solid #e5e7eb; margin:24px 0; }
     .footer { background:#f9fafb; padding:24px 40px; text-align:center; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 12px 12px; }
     .footer p { color:#9ca3af; font-size:12px; line-height:1.6; margin:0; }
-    .footer a { color:#FF6B35; text-decoration:none; }
+    .footer a { color:#111827; text-decoration:none; }
     .muted { color:#9ca3af; font-size:13px; }
     @media only screen and (max-width:620px) {
       .container { width:100%% !important; }
@@ -109,7 +109,7 @@ func EmailOTPHTML(firstName, code string) (subject, html string) {
           <h2>Verify your email, %s</h2>
           <p>Use this 6-digit code to verify your email and continue setting up your account.</p>
           <div style="text-align:center;margin:8px 0 24px 0;">
-            <span style="display:inline-block;font-size:34px;font-weight:700;letter-spacing:10px;color:#111827;background:#FFF7ED;border:1px solid #FDBA74;border-radius:8px;padding:16px 28px;">%s</span>
+            <span style="display:inline-block;font-size:34px;font-weight:700;letter-spacing:10px;color:#111827;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:8px;padding:16px 28px;">%s</span>
           </div>
           <div class="info-box">
             <p>This code expires in 10 minutes. If you didn't request it, you can safely ignore this email.</p>
@@ -131,7 +131,7 @@ func EmailVerificationHTML(firstName, verifyURL string) (subject, html string) {
           </div>
           <hr class="divider">
           <p class="muted">Button not working? Copy and paste this URL into your browser:<br>
-          <span style="word-break:break-all;color:#FF6B35;">%s</span></p>
+          <span style="word-break:break-all;color:#111827;">%s</span></p>
 `, esc(firstName), verifyURL, verifyURL)
 	html = emailBase(subject, "Verify your email to start using Fe3dr", body)
 	return
@@ -167,7 +167,7 @@ func PasswordResetHTML(resetURL string) (subject, html string) {
           </div>
           <hr class="divider">
           <p class="muted">Button not working? Copy and paste this URL:<br>
-          <span style="word-break:break-all;color:#FF6B35;">%s</span></p>
+          <span style="word-break:break-all;color:#111827;">%s</span></p>
 `, resetURL, resetURL)
 	html = emailBase(subject, "Reset your Fe3dr password", body)
 	return
@@ -247,7 +247,7 @@ func OrderConfirmationHTML(orderNumber string, items []OrderItemSummary, total f
           <table width="100%%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px 0;">
             <tr>
               <td colspan="2" style="padding:12px 0;border-top:2px solid #111827;font-weight:700;color:#111827;font-size:16px;">Grand total</td>
-              <td style="padding:12px 0;border-top:2px solid #111827;text-align:right;font-weight:700;color:#FF6B35;font-size:18px;">₹%.2f</td>
+              <td style="padding:12px 0;border-top:2px solid #111827;text-align:right;font-weight:700;color:#111827;font-size:18px;">₹%.2f</td>
             </tr>
           </table>
           <a href="https://fe3dr.com/orders" class="btn">Track Your Order</a>
@@ -257,7 +257,7 @@ func OrderConfirmationHTML(orderNumber string, items []OrderItemSummary, total f
           %s
           %s
           <hr class="divider">
-          <p class="muted">Need help? Visit <a href="https://fe3dr.com/refund" style="color:#FF6B35;">our refund policy</a> or reply to this email. This is a computer-generated invoice — no signature is required.</p>
+          <p class="muted">Need help? Visit <a href="https://fe3dr.com/refund" style="color:#111827;">our refund policy</a> or reply to this email. This is a computer-generated invoice — no signature is required.</p>
 `,
 		orderNumber,
 		renderInvoiceHeader(d),
@@ -339,7 +339,7 @@ func renderFulfilmentBlock(d *OrderInvoiceDetails) string {
 	if d.ETA != "" {
 		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#374151;font-size:14px;"><strong>Expected by:</strong> %s</p>`, esc(d.ETA))
 	}
-	return fmt.Sprintf(`<div style="border-left:3px solid #FF6B35;padding:8px 12px;margin:16px 0;">%s</div>`, parts)
+	return fmt.Sprintf(`<div style="border-left:3px solid #111827;padding:8px 12px;margin:16px 0;">%s</div>`, parts)
 }
 
 // renderInvoiceSummary returns the GST breakup rows. Empty when no GST data
@@ -385,7 +385,7 @@ func renderSupplierFooter(d *OrderInvoiceDetails) string {
 
 // renderRefundBlurb returns the short cancellation/refund policy line.
 func renderRefundBlurb() string {
-	return `<p class="muted">Cancellations and refunds are handled per our <a href="https://fe3dr.com/refund" style="color:#FF6B35;">refund policy</a>. Contact support within 24 hours if anything is wrong with your order.</p>`
+	return `<p class="muted">Cancellations and refunds are handled per our <a href="https://fe3dr.com/refund" style="color:#111827;">refund policy</a>. Contact support within 24 hours if anything is wrong with your order.</p>`
 }
 
 // OrderStatusUpdateHTML returns the order status update email
