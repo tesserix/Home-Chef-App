@@ -469,3 +469,39 @@ func TestAdminResolveIssue_AllAffectedCancelled_Returns409(t *testing.T) {
 	require.NoError(t, db.Raw(`SELECT status FROM order_issues WHERE id = ?`, issueID.String()).Scan(&status).Error)
 	require.Equal(t, "pending", status, "nothing resolved — the affected line was already refunded via the cancel")
 }
+
+// TestDeliveryFailureIssue_NotResolvableViaGenericPath — a delivery_failed issue
+// carries the fault-based RTO money policy (#393), so it must be EXCLUDED from the
+// generic issues list and REJECTED by the generic resolve/reject paths (a flat
+// refund there would mis-handle a customer-fault RTO, which pays the chef with no
+// refund). It's resolvable only via the delivery-failure fault resolver.
+func TestDeliveryFailureIssue_NotResolvableViaGenericPath(t *testing.T) {
+	db := setupOrderIssueHandlerDB(t)
+	admin, orderID, chefID, issueID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, subtotal, tax, total, refund_amount)
+		 VALUES (?, ?, ?, 'completed', 'delivered', 400, 0, 400, 0)`,
+		orderID.String(), uuid.New().String(), chefID.String()).Error)
+	require.NoError(t, db.Exec(
+		`INSERT INTO order_issues (id, order_id, chef_id, reason, status, requested_amount)
+		 VALUES (?, ?, ?, 'delivery_failed', 'pending', 0)`,
+		issueID.String(), orderID.String(), chefID.String()).Error)
+
+	// Excluded from the generic issues list.
+	gin.SetMode(gin.TestMode)
+	rList := gin.New()
+	rList.GET("/admin/issues", NewOrderIssueHandler().AdminListIssues)
+	reqList := httptest.NewRequest(http.MethodGet, "/admin/issues?status=pending", nil)
+	recList := httptest.NewRecorder()
+	rList.ServeHTTP(recList, reqList)
+	require.Equal(t, http.StatusOK, recList.Code)
+	assert.NotContains(t, recList.Body.String(), issueID.String(), "delivery_failed excluded from generic list")
+
+	// Generic resolve + reject both refuse it (409); the issue stays pending.
+	require.Equal(t, http.StatusConflict, resolveIssueReq(t, admin, issueID, 100).Code)
+	require.Equal(t, http.StatusConflict, rejectIssueReq(t, admin, issueID).Code)
+
+	var status string
+	require.NoError(t, db.Raw(`SELECT status FROM order_issues WHERE id = ?`, issueID.String()).Scan(&status).Error)
+	require.Equal(t, "pending", status)
+}

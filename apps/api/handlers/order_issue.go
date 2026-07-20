@@ -323,8 +323,13 @@ func normalizeIDList(vals []string) []string {
 // ── Admin (#262): list + resolve/reject assisted issues ─────────────────────
 
 // AdminListIssues returns order issues, newest first, optionally filtered by status.
+// `delivery_failed` issues are EXCLUDED — they carry a fault-based RTO money policy
+// (#393) and are resolved from the dedicated Delivery Failures queue, never the
+// generic refund flow, so surfacing them here would invite a wrong resolution.
 func (h *OrderIssueHandler) AdminListIssues(c *gin.Context) {
-	q := database.DB.Model(&models.OrderIssue{}).Order("created_at DESC")
+	q := database.DB.Model(&models.OrderIssue{}).
+		Where("reason <> ?", models.IssueDeliveryFailed).
+		Order("created_at DESC")
 	if status := c.Query("status"); status != "" {
 		q = q.Where("status = ?", status)
 	}
@@ -372,6 +377,13 @@ func (h *OrderIssueHandler) AdminResolveIssue(c *gin.Context) {
 	}
 	if issue.Status != models.IssuePending {
 		c.JSON(http.StatusConflict, gin.H{"error": "This issue has already been handled"})
+		return
+	}
+	// A delivery-failure issue must go through the fault-based RTO resolver
+	// (resolve-delivery-failure), NOT this flat-amount refund path — a customer-fault
+	// RTO must pay the chef with NO refund, which this endpoint can't express (#393).
+	if issue.Reason == models.IssueDeliveryFailed {
+		c.JSON(http.StatusConflict, gin.H{"error": "Resolve delivery-failure issues from the Delivery Failures queue by confirming fault."})
 		return
 	}
 	// Cap the assisted refund at the order's remaining refundable amount. Use
@@ -424,6 +436,15 @@ func (h *OrderIssueHandler) AdminRejectIssue(c *gin.Context) {
 	issueID, err := uuid.Parse(c.Param("issueId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid issue id"})
+		return
+	}
+	// Delivery-failure issues are resolved via the fault-based RTO flow only, never
+	// rejected through the generic path (#393). Defense-in-depth: they're already
+	// excluded from AdminListIssues, so this should be unreachable from the UI.
+	var pre models.OrderIssue
+	if err := database.DB.Select("id", "reason").First(&pre, "id = ?", issueID).Error; err == nil &&
+		pre.Reason == models.IssueDeliveryFailed {
+		c.JSON(http.StatusConflict, gin.H{"error": "Resolve delivery-failure issues from the Delivery Failures queue by confirming fault."})
 		return
 	}
 	now := time.Now()
