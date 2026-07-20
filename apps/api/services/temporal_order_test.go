@@ -20,14 +20,14 @@ import (
 // compensation (which loads + updates the order) is exercisable.
 func addOrdersTable(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	require.NoError(t, db.Exec(`CREATE TABLE orders (
+	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id text PRIMARY KEY, order_number text, customer_id text, total real,
 		status text, payment_status text, refunded_at datetime, refund_amount real,
 		refund_reason text, created_at datetime, updated_at datetime, deleted_at datetime
 	)`).Error)
 	// #544: CompensateOrderRefund now checks TypedRefundOrderKind, which Counts these by order_id.
 	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id text PRIMARY KEY, order_id text, status text, deleted_at datetime)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE group_orders (id text PRIMARY KEY, order_id text, status text, deleted_at datetime)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id text PRIMARY KEY, order_id text, status text, deleted_at datetime)`).Error)
 }
 
 // #544: the saga compensation must NOT generic-refund a typed escrow order (meal-plan day /

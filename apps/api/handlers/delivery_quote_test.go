@@ -26,7 +26,7 @@ func setupQuoteDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: glogger.Default.LogMode(glogger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 		id text PRIMARY KEY, user_id text, business_name text, is_active integer DEFAULT 1,
 		offers_pickup integer DEFAULT 0, offers_self_delivery integer DEFAULT 0,
 		self_delivery_base_fee real DEFAULT 0, self_delivery_free_radius_km real DEFAULT 0,

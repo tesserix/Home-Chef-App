@@ -45,7 +45,7 @@ func setupDPDPDB(t *testing.T) *gorm.DB {
 	db := setupDB(t) // users table (shared helper from internal_users_test.go)
 
 	require.NoError(t, db.Exec(`
-		CREATE TABLE chef_profiles (
+		CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 			id                TEXT PRIMARY KEY,
 			user_id           TEXT NOT NULL,
 			business_name     TEXT NOT NULL DEFAULT '',

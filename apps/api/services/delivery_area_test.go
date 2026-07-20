@@ -123,7 +123,7 @@ func TestDeliveryAreaKeepSQL_HybridFilter(t *testing.T) {
 
 	// Minimal table with only the columns the predicate touches — mirrors the
 	// raw-DDL approach used elsewhere to avoid sqlite's lack of text[].
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, business_name TEXT DEFAULT '',
 		offers_pickup INTEGER DEFAULT 0, offers_self_delivery INTEGER DEFAULT 0,
 		delivery_radius REAL DEFAULT 0, latitude REAL DEFAULT 0, longitude REAL DEFAULT 0

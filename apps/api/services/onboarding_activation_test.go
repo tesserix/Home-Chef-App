@@ -24,9 +24,9 @@ func setupOnboardingDB(t *testing.T) *gorm.DB {
 	stmts := []string{
 		`CREATE TABLE approval_requests (id text PRIMARY KEY, type text, chef_id text, partner_id text, status text,
 			created_at datetime, updated_at datetime, deleted_at datetime)`,
-		`CREATE TABLE chef_profiles (id text PRIMARY KEY, user_id text, is_verified integer DEFAULT 0,
+		`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text, is_verified integer DEFAULT 0,
 			verified_at datetime, is_active integer DEFAULT 1, created_at datetime, updated_at datetime, deleted_at datetime)`,
-		`CREATE TABLE users (id text PRIMARY KEY, role text, created_at datetime, updated_at datetime, deleted_at datetime)`,
+		`CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', id text PRIMARY KEY, role text, created_at datetime, updated_at datetime, deleted_at datetime)`,
 	}
 	for _, s := range stmts {
 		require.NoError(t, db.Exec(s).Error)

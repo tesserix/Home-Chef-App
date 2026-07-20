@@ -729,11 +729,21 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 			return fmt.Errorf("create chef profile: %w", err)
 		}
 
-		if err := tx.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		// Map-based Updates bypasses the User BeforeSave hook, so the PII
+		// companions are added explicitly here (#710 P1) — otherwise this path
+		// writes plaintext into the encrypted columns with no error.
+		userUpdates := map[string]interface{}{
 			"role":       models.RoleChef,
 			"first_name": req.FullName,
 			"phone":      req.Phone,
-		}).Error; err != nil {
+		}
+		for k, v := range models.PIIUpdates(map[string]string{
+			"first_name": req.FullName,
+			"phone":      req.Phone,
+		}) {
+			userUpdates[k] = v
+		}
+		if err := tx.Model(&models.User{}).Where("id = ?", userID).Updates(userUpdates).Error; err != nil {
 			return fmt.Errorf("update user role: %w", err)
 		}
 
@@ -873,11 +883,19 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 			return fmt.Errorf("save chef: %w", err)
 		}
 
-		if err := tx.Model(&models.User{}).Where("id = ?", chef.UserID).Updates(map[string]interface{}{
+		// Companions added explicitly — map-based Updates skips BeforeSave (#710 P1).
+		userUpdates := map[string]interface{}{
 			"role":       models.RoleChef,
 			"first_name": req.FullName,
 			"phone":      req.Phone,
-		}).Error; err != nil {
+		}
+		for k, v := range models.PIIUpdates(map[string]string{
+			"first_name": req.FullName,
+			"phone":      req.Phone,
+		}) {
+			userUpdates[k] = v
+		}
+		if err := tx.Model(&models.User{}).Where("id = ?", chef.UserID).Updates(userUpdates).Error; err != nil {
 			return fmt.Errorf("update user role: %w", err)
 		}
 

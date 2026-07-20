@@ -35,7 +35,7 @@ func setupReleaseDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 			chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 			chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
@@ -49,7 +49,7 @@ func setupReleaseDB(t *testing.T) *gorm.DB {
 			date DATETIME, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
 			customer_id TEXT, chef_id TEXT, status TEXT, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0)`,
-		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,
+		`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			customer_confirmed_at DATETIME, delivered_at DATETIME, payout_settled_at DATETIME,
 			payout_settle_attempts INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, commission_rate REAL DEFAULT 0,

@@ -36,18 +36,18 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
 
-	require.NoError(t, db.Exec(`CREATE TABLE users (
+	require.NoError(t, db.Exec(`CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', 
 		id TEXT PRIMARY KEY, email TEXT, first_name TEXT DEFAULT '', last_name TEXT DEFAULT '',
 		phone TEXT DEFAULT '', role TEXT DEFAULT 'customer', is_active INTEGER DEFAULT 1,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
 		rating REAL DEFAULT 0, total_reviews INTEGER DEFAULT 0, total_orders INTEGER DEFAULT 0,
 		accepting_orders INTEGER DEFAULT 1, paused_until DATETIME,
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (
+	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_number TEXT, customer_id TEXT, chef_id TEXT,
 		status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'pending',
 		payment_method TEXT DEFAULT '', fulfillment_type TEXT DEFAULT '',
@@ -70,7 +70,7 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE meal_subscription_fulfillments (
 		id TEXT PRIMARY KEY, order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE group_orders (
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
 

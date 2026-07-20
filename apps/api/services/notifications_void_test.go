@@ -23,9 +23,9 @@ func setupVoidNotifDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := setupNotifDB(t)
 	// chefUserID (the accept-reminder path) maps a profile id to a user id.
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (id text PRIMARY KEY, user_id text)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text)`).Error)
 	// handleOrderVoided may fall back to the order for the customer id.
-	require.NoError(t, db.Exec(`CREATE TABLE orders (id text PRIMARY KEY, customer_id text, deleted_at datetime)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id text PRIMARY KEY, customer_id text, deleted_at datetime)`).Error)
 	return db
 }
 

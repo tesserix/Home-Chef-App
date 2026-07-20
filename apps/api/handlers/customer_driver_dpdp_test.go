@@ -23,7 +23,7 @@ func setupCustomerDPDPDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := setupDPDPDB(t) // users + chef_profiles + menu_items + audit_logs, points database.DB
 	require.NoError(t, db.Exec(`
-		CREATE TABLE addresses (
+		CREATE TABLE addresses (line1_enc text DEFAULT '', line2_enc text DEFAULT '', 
 			id          TEXT PRIMARY KEY,
 			user_id     TEXT NOT NULL,
 			label       TEXT NOT NULL DEFAULT '',
@@ -179,7 +179,7 @@ func setupDriverDPDPDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := setupDPDPDB(t)
 	require.NoError(t, db.Exec(`
-		CREATE TABLE delivery_partners (
+		CREATE TABLE delivery_partners (emergency_contact_enc text DEFAULT '', emergency_phone_enc text DEFAULT '', emergency_phone_bidx text DEFAULT '', 
 			id          TEXT PRIMARY KEY,
 			user_id     TEXT NOT NULL,
 			is_online   INTEGER NOT NULL DEFAULT 1,
@@ -190,7 +190,7 @@ func setupDriverDPDPDB(t *testing.T) *gorm.DB {
 		)
 	`).Error)
 	require.NoError(t, db.Exec(`
-		CREATE TABLE deliveries (
+		CREATE TABLE deliveries (rider_name_enc text DEFAULT '', rider_phone_enc text DEFAULT '', 
 			id                  TEXT PRIMARY KEY,
 			delivery_partner_id TEXT,
 			created_at          DATETIME,

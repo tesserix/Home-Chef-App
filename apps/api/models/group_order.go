@@ -1,6 +1,7 @@
 package models
 
 import (
+	"gorm.io/gorm"
 	"time"
 
 	"github.com/google/uuid"
@@ -100,6 +101,9 @@ type GroupOrder struct {
 	// Single drop — frozen at lock (mirrors Order's delivery columns).
 	DeliveryAddressLine1      string  `gorm:"" json:"deliveryAddressLine1,omitempty"`
 	DeliveryAddressLine2      string  `gorm:"" json:"deliveryAddressLine2,omitempty"`
+	// PII companions (#710 P1).
+	DeliveryAddressLine1Enc EncryptedString `gorm:"column:delivery_address_line1_enc;type:text" json:"-"`
+	DeliveryAddressLine2Enc EncryptedString `gorm:"column:delivery_address_line2_enc;type:text" json:"-"`
 	DeliveryAddressCity       string  `gorm:"" json:"deliveryAddressCity,omitempty"`
 	DeliveryAddressState      string  `gorm:"" json:"deliveryAddressState,omitempty"`
 	DeliveryAddressPostalCode string  `gorm:"" json:"deliveryAddressPostalCode,omitempty"`
@@ -154,6 +158,8 @@ type GroupOrderParticipant struct {
 	UserID       uuid.UUID            `gorm:"type:uuid;uniqueIndex:idx_group_participant;not null" json:"userId"`
 	Role         GroupParticipantRole `gorm:"type:varchar(8);not null;default:'guest'" json:"role"`
 	DisplayName  string               `gorm:"" json:"displayName,omitempty"`
+	// PII companion (#710 P1) — a user-supplied name.
+	DisplayNameEnc EncryptedString `gorm:"column:display_name_enc;type:text" json:"-"`
 
 	ShareAmount       float64                       `gorm:"default:0" json:"shareAmount"`
 	PaymentStatus     GroupParticipantPaymentStatus `gorm:"type:varchar(12);index;default:'pending'" json:"paymentStatus"`
@@ -219,4 +225,19 @@ func SplitShares(subtotals map[uuid.UUID]float64, extras float64) map[uuid.UUID]
 		out[biggestID] = round2(out[biggestID] + drift)
 	}
 	return out
+}
+
+// BeforeSave mirrors the group-order delivery address into its encrypted
+// companions (#710 P1).
+func (g *GroupOrder) BeforeSave(*gorm.DB) error {
+	g.DeliveryAddressLine1Enc = encOf(g.DeliveryAddressLine1)
+	g.DeliveryAddressLine2Enc = encOf(g.DeliveryAddressLine2)
+	return nil
+}
+
+// BeforeSave mirrors the participant display name into its encrypted companion
+// (#710 P1).
+func (p *GroupOrderParticipant) BeforeSave(*gorm.DB) error {
+	p.DisplayNameEnc = encOf(p.DisplayName)
+	return nil
 }

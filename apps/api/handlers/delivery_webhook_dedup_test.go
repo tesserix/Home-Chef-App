@@ -43,7 +43,7 @@ func setupDeliveryWebhookDB(t *testing.T) *gorm.DB {
 		status_mapping TEXT DEFAULT '{}', is_enabled INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE deliveries (
+	require.NoError(t, db.Exec(`CREATE TABLE deliveries (rider_name_enc text DEFAULT '', rider_phone_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_id TEXT, provider_id TEXT, external_delivery_id TEXT DEFAULT '',
 		status TEXT DEFAULT 'pending', assignment_type TEXT DEFAULT 'manual',
 		picked_up_at DATETIME, delivered_at DATETIME, cancelled_at DATETIME,

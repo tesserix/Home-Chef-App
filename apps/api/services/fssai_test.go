@@ -183,7 +183,7 @@ func TestExcludeFSSAILocked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.Exec(`CREATE TABLE chef_profiles (id text PRIMARY KEY, payout_country text, fssai_override_until datetime)`).Error; err != nil {
+	if err := db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, payout_country text, fssai_override_until datetime)`).Error; err != nil {
 		t.Fatalf("create chef_profiles: %v", err)
 	}
 	if err := db.Exec(`CREATE TABLE chef_documents (

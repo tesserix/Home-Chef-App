@@ -42,7 +42,7 @@ func setupWinbackDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT,
 			aggregate_id TEXT, payload TEXT, status TEXT DEFAULT 'pending', attempts INTEGER DEFAULT 0,
 			last_error TEXT, next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, status TEXT, created_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, customer_id TEXT, status TEXT, created_at DATETIME, deleted_at DATETIME)`,
 		// Mirror the prod backstop: at most one open offer per user (#42).
 		`CREATE UNIQUE INDEX idx_winback_one_open ON winback_offers (user_id) WHERE status = 'offered'`,
 	}

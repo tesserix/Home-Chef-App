@@ -26,17 +26,17 @@ func setupCampaignDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	stmts := []string{
-		`CREATE TABLE users (
+		`CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', 
 			id text PRIMARY KEY, email text, first_name text, last_name text, phone text,
 			role text, is_active integer DEFAULT 1, fcm_token text DEFAULT '',
 			marketing_consent integer DEFAULT 0, marketing_consent_at datetime,
 			created_at datetime, updated_at datetime, deleted_at datetime
 		)`,
-		`CREATE TABLE addresses (
+		`CREATE TABLE addresses (line1_enc text DEFAULT '', line2_enc text DEFAULT '', 
 			id text PRIMARY KEY, user_id text, city text, state text,
 			latitude real, longitude real, is_default integer, created_at datetime
 		)`,
-		`CREATE TABLE orders (
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 			id text PRIMARY KEY, customer_id text, chef_id text, status text,
 			created_at datetime, updated_at datetime, deleted_at datetime
 		)`,

@@ -32,7 +32,7 @@ func setupSubPromoDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE promo_code_usages (id TEXT PRIMARY KEY, promo_code_id TEXT, user_id TEXT, order_id TEXT,
 			subscription_id TEXT, discount REAL, used_at DATETIME)`,
 		`CREATE TABLE subscriptions (id TEXT PRIMARY KEY, user_id TEXT, promo_code_id TEXT, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, customer_id TEXT, deleted_at DATETIME)`,
 	}
 	for _, s := range stmts {
 		require.NoError(t, db.Exec(s).Error)

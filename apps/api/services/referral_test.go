@@ -46,7 +46,7 @@ func setupReferralDB(t *testing.T) *gorm.DB {
 			updated_at DATETIME
 		)`).Error)
 	require.NoError(t, db.Exec(`
-		CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, payment_status TEXT, deleted_at DATETIME)`).Error)
+		CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, customer_id TEXT, payment_status TEXT, deleted_at DATETIME)`).Error)
 	return db
 }
 

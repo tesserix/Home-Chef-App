@@ -25,14 +25,14 @@ func setupStuckRefundDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT,
 			status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'razorpay', total REAL DEFAULT 0,
 			wallet_applied REAL DEFAULT 0, refund_amount REAL DEFAULT 0, refund_id TEXT DEFAULT '', refund_reason TEXT,
 			refund_initiated_by TEXT, refunded_at DATETIME, payout_hold_status TEXT DEFAULT '',
 			razorpay_order_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0)`,
 		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT)`,
-		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT)`,
+		`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}

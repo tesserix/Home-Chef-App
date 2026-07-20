@@ -29,9 +29,9 @@ func setupDeliveryReconcileDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE deliveries (id TEXT PRIMARY KEY, order_id TEXT, status TEXT DEFAULT 'pending',
+		`CREATE TABLE deliveries (rider_name_enc text DEFAULT '', rider_phone_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT, status TEXT DEFAULT 'pending',
 			failure_reason TEXT DEFAULT '', attempt_number INTEGER DEFAULT 1, updated_at DATETIME, created_at DATETIME)`,
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 			chef_id TEXT, status TEXT, razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', refund_amount REAL DEFAULT 0, delivery_id TEXT,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
@@ -42,7 +42,7 @@ func setupDeliveryReconcileDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT, status TEXT,
 			payout_transfer_id TEXT DEFAULT '', price REAL DEFAULT 0, payout_hold_status TEXT DEFAULT '',
 			delivered_at DATETIME, refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT, status TEXT,
+		`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT, status TEXT,
 			payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT,

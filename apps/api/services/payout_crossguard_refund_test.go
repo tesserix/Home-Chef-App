@@ -37,7 +37,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 			chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 			chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
@@ -53,13 +53,13 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
 			customer_id TEXT, chef_id TEXT, status TEXT, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0,
 			total REAL DEFAULT 0, created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,
+		`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			customer_confirmed_at DATETIME, delivered_at DATETIME, payout_settled_at DATETIME,
 			payout_settle_attempts INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 			currency TEXT DEFAULT 'INR', cancelled_at DATETIME, cancel_reason TEXT DEFAULT '',
 			created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE group_order_participants (id TEXT PRIMARY KEY, group_order_id TEXT, user_id TEXT,
+		`CREATE TABLE group_order_participants (display_name_enc text DEFAULT '', id TEXT PRIMARY KEY, group_order_id TEXT, user_id TEXT,
 			role TEXT DEFAULT 'guest', display_name TEXT DEFAULT '', share_amount REAL DEFAULT 0,
 			payment_status TEXT DEFAULT 'pending', razorpay_order_id TEXT DEFAULT '',
 			razorpay_payment_id TEXT DEFAULT '', refund_txn_id TEXT, joined_at DATETIME, updated_at DATETIME)`,
@@ -82,7 +82,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			entity_id TEXT, old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT, correlation_id TEXT, created_at DATETIME)`,
 		// chef_profiles — the partial-refund claw-back (#549) resolves the chef's
 		// Route account by joining orders.chef_id → chef_profiles.id.
-		`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, razorpay_account_id TEXT DEFAULT '',
+		`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, razorpay_account_id TEXT DEFAULT '',
 			payout_country TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)

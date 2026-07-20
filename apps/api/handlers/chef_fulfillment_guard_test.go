@@ -35,7 +35,7 @@ import (
 // chefProfilesGuardDDL lists every column gorm's tx.Save(&chef) writes for
 // models.ChefProfile (verified via schema.Parse against the live struct) so
 // the full-record UPDATE the handler issues never hits "no such column".
-const chefProfilesGuardDDL = `CREATE TABLE chef_profiles (
+const chefProfilesGuardDDL = `CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 	id text PRIMARY KEY, user_id text, business_name text DEFAULT '',
 	slug text DEFAULT '', description text DEFAULT '',
 	profile_image text DEFAULT '', banner_image text DEFAULT '',

@@ -32,7 +32,7 @@ func setupDB(t *testing.T) *gorm.DB {
 	})
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`
-		CREATE TABLE users (
+		CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', 
 			id                    TEXT PRIMARY KEY,
 			email                 TEXT NOT NULL,
 			first_name            TEXT NOT NULL DEFAULT '',

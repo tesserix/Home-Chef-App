@@ -17,7 +17,7 @@ import (
 func TestPaymentIDPartialUniqueIndex(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (id TEXT PRIMARY KEY, razorpay_payment_id TEXT DEFAULT '')`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, razorpay_payment_id TEXT DEFAULT '')`).Error)
 	// The exact index the postMigrate block creates.
 	require.NoError(t, db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_razorpay_payment_id
 		ON orders (razorpay_payment_id) WHERE razorpay_payment_id <> ''`).Error)

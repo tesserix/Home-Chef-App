@@ -60,7 +60,7 @@ func TestChefMayMarkDelivered(t *testing.T) {
 // ordersDDL lists every column GORM's tx.Save(&order) writes; a missing column
 // fails the UPDATE. id defaults to a valid UUID literal so RETURNING-style reads
 // never scan NULL into a uuid field.
-const ordersDDL = `CREATE TABLE orders (
+const ordersDDL = `CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 	id text PRIMARY KEY,
 	order_number text, customer_id text, chef_id text, delivery_id text,
 	status text, payment_status text, payment_method text, fulfillment_type text,
@@ -111,7 +111,7 @@ func setupChefOrderDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: glogger.Default.LogMode(glogger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE chef_profiles (id text PRIMARY KEY, user_id text, business_name text, is_active integer DEFAULT 1)`,
+		`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text, business_name text, is_active integer DEFAULT 1)`,
 		ordersDDL, orderItemsDDL, outboxDDL, auditDDL,
 	} {
 		require.NoError(t, db.Exec(s).Error)

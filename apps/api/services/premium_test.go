@@ -26,7 +26,7 @@ func setupPremiumDB(t *testing.T) *gorm.DB {
 	})
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`
-		CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEXT)
+		CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, user_id TEXT)
 	`).Error)
 	require.NoError(t, db.Exec(`
 		CREATE TABLE subscriptions (

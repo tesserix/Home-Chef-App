@@ -158,14 +158,14 @@ func setupGroupDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE group_orders (id TEXT PRIMARY KEY, chef_id TEXT, order_id TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, chef_id TEXT, order_id TEXT,
 		status TEXT DEFAULT 'collecting', created_at DATETIME, updated_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE group_order_participants (id TEXT PRIMARY KEY, group_order_id TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE group_order_participants (display_name_enc text DEFAULT '', id TEXT PRIMARY KEY, group_order_id TEXT,
 		user_id TEXT, role TEXT DEFAULT 'guest', display_name TEXT DEFAULT '', share_amount REAL DEFAULT 0,
 		payment_status TEXT DEFAULT 'pending', razorpay_order_id TEXT DEFAULT '', razorpay_payment_id TEXT DEFAULT '',
 		refund_txn_id TEXT, joined_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE group_order_items (id TEXT PRIMARY KEY, group_order_id TEXT)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, razorpay_account_id TEXT DEFAULT '')`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, razorpay_account_id TEXT DEFAULT '')`).Error)
 	prev := database.DB
 	database.DB = db
 	t.Cleanup(func() { database.DB = prev })

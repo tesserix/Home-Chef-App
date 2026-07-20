@@ -25,12 +25,12 @@ func setupDeliveryRetryDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 			chef_id TEXT, status TEXT, razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', delivery_id TEXT, refund_amount REAL DEFAULT 0,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		// order_id UNIQUE — the real constraint. No soft-delete, matching production.
-		`CREATE TABLE deliveries (id TEXT PRIMARY KEY, order_id TEXT UNIQUE NOT NULL,
+		`CREATE TABLE deliveries (rider_name_enc text DEFAULT '', rider_phone_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT UNIQUE NOT NULL,
 			delivery_partner_id TEXT, status TEXT DEFAULT 'pending', assignment_type TEXT DEFAULT 'manual',
 			assigned_by_id TEXT, pickup_address_line1 TEXT DEFAULT '', pickup_address_city TEXT DEFAULT '',
 			pickup_latitude REAL DEFAULT 0, pickup_longitude REAL DEFAULT 0,

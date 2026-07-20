@@ -34,6 +34,21 @@ type User struct {
 	FirstName string    `gorm:"not null" json:"firstName"`
 	LastName  string    `gorm:"not null" json:"lastName"`
 	Phone     string    `gorm:"" json:"phone"`
+
+	// PII companions (#710 P1). Written alongside the plaintext columns above;
+	// nothing reads them until P2. json:"-" so they never reach an API response.
+	// text, not varchar — prefixed base64 ciphertext outgrows varchar(255).
+	//
+	// email_bidx is deliberately NOT uniqueIndex here: the live constraint is
+	// partial and per-pool, UNIQUE (lower(email), auth_pool), and a plain gorm
+	// uniqueIndex would be neither. Its blind-index replacement is raw DDL in
+	// database.go alongside the original, added in P2 when reads switch over.
+	EmailEnc     EncryptedString `gorm:"column:email_enc;type:text" json:"-"`
+	EmailBidx    string          `gorm:"column:email_bidx;type:text;index" json:"-"`
+	FirstNameEnc EncryptedString `gorm:"column:first_name_enc;type:text" json:"-"`
+	LastNameEnc  EncryptedString `gorm:"column:last_name_enc;type:text" json:"-"`
+	PhoneEnc     EncryptedString `gorm:"column:phone_enc;type:text" json:"-"`
+	PhoneBidx    string          `gorm:"column:phone_bidx;type:text;index" json:"-"`
 	Avatar    string    `gorm:"" json:"avatar"`
 	Role      UserRole  `gorm:"type:varchar(20);default:'customer'" json:"role"`
 
@@ -71,12 +86,30 @@ type User struct {
 	Notifications   []Notification   `gorm:"foreignKey:UserID" json:"notifications,omitempty"`
 }
 
+// BeforeSave mirrors the plaintext PII columns into their encrypted and
+// blind-index companions (#710 P1). Hook rather than per-call-site so a new
+// handler that sets Email/Phone/name cannot forget it.
+//
+// Does not fire for map-based Updates — see models.PIIUpdates.
+func (u *User) BeforeSave(*gorm.DB) error {
+	u.EmailEnc = encOf(u.Email)
+	u.EmailBidx = bidxOf(u.Email)
+	u.FirstNameEnc = encOf(u.FirstName)
+	u.LastNameEnc = encOf(u.LastName)
+	u.PhoneEnc = encOf(u.Phone)
+	u.PhoneBidx = bidxOf(u.Phone)
+	return nil
+}
+
 type Address struct {
 	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID     uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
 	Label      string    `gorm:"" json:"label"` // Home, Work, etc.
 	Line1      string    `gorm:"not null" json:"line1"`
 	Line2      string    `gorm:"" json:"line2"`
+	// PII companions (#710 P1) — not searched, so ciphertext only.
+	Line1Enc EncryptedString `gorm:"column:line1_enc;type:text" json:"-"`
+	Line2Enc EncryptedString `gorm:"column:line2_enc;type:text" json:"-"`
 	City       string    `gorm:"not null" json:"city"`
 	State      string    `gorm:"not null" json:"state"`
 	PostalCode string    `gorm:"not null" json:"postalCode"`
@@ -96,6 +129,13 @@ func (a *Address) BeforeCreate(*gorm.DB) error {
 	if a.ID == uuid.Nil {
 		a.ID = uuid.New()
 	}
+	return nil
+}
+
+// BeforeSave mirrors the address lines into their encrypted companions (#710 P1).
+func (a *Address) BeforeSave(*gorm.DB) error {
+	a.Line1Enc = encOf(a.Line1)
+	a.Line2Enc = encOf(a.Line2)
 	return nil
 }
 

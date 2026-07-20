@@ -1,6 +1,7 @@
 package models
 
 import (
+	"gorm.io/gorm"
 	"time"
 
 	"github.com/google/uuid"
@@ -90,6 +91,10 @@ type DeliveryPartner struct {
 	City             string     `gorm:"" json:"city"`
 	EmergencyContact string     `gorm:"" json:"emergencyContact"`
 	EmergencyPhone   string     `gorm:"" json:"emergencyPhone"`
+	// PII companions (#710 P1) — next-of-kin contact for a delivery partner.
+	EmergencyContactEnc EncryptedString `gorm:"column:emergency_contact_enc;type:text" json:"-"`
+	EmergencyPhoneEnc   EncryptedString `gorm:"column:emergency_phone_enc;type:text" json:"-"`
+	EmergencyPhoneBidx  string          `gorm:"column:emergency_phone_bidx;type:text;index" json:"-"`
 	DateOfBirth      *time.Time `gorm:"" json:"dateOfBirth,omitempty"`
 
 	// Extended vehicle details
@@ -256,6 +261,9 @@ type Delivery struct {
 	// prefers these when set so the customer map shows the real 3PL rider.
 	RiderName      string  `gorm:"" json:"riderName,omitempty"`
 	RiderPhone     string  `gorm:"" json:"riderPhone,omitempty"`
+	// PII companions (#710 P1) — third-party courier rider identity.
+	RiderNameEnc  EncryptedString `gorm:"column:rider_name_enc;type:text" json:"-"`
+	RiderPhoneEnc EncryptedString `gorm:"column:rider_phone_enc;type:text" json:"-"`
 	RiderLatitude  float64 `gorm:"" json:"riderLatitude,omitempty"`
 	RiderLongitude float64 `gorm:"" json:"riderLongitude,omitempty"`
 	ProviderStatus string  `gorm:"" json:"providerStatus,omitempty"` // raw provider status, pre-mapping
@@ -485,4 +493,22 @@ type DriverReferral struct {
 
 	Referrer DeliveryPartner `gorm:"foreignKey:ReferrerID" json:"referrer,omitempty"`
 	Referee  DeliveryPartner `gorm:"foreignKey:RefereeID" json:"referee,omitempty"`
+}
+
+// BeforeSave mirrors the delivery-partner emergency contact into its encrypted
+// companions (#710 P1).
+func (d *DeliveryPartner) BeforeSave(*gorm.DB) error {
+	d.EmergencyContactEnc = encOf(d.EmergencyContact)
+	d.EmergencyPhoneEnc = encOf(d.EmergencyPhone)
+	d.EmergencyPhoneBidx = bidxOf(d.EmergencyPhone)
+	return nil
+}
+
+// BeforeSave mirrors the courier rider identity into its encrypted companions
+// (#710 P1). The webhook path writes via a map and is handled separately — see
+// services/provider.go.
+func (d *Delivery) BeforeSave(*gorm.DB) error {
+	d.RiderNameEnc = encOf(d.RiderName)
+	d.RiderPhoneEnc = encOf(d.RiderPhone)
+	return nil
 }
