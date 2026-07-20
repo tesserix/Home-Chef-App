@@ -5,6 +5,7 @@
 // home active-order card so the stage→icon mapping lives in one place.
 
 import { useEffect, type ReactNode } from 'react';
+import { View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -66,6 +67,24 @@ function Pop({ children }: { children: ReactNode }) {
 }
 
 export function StageIcon({ status, size = 20, color }: StageIconProps) {
+  const icon = renderStageIcon(status, size, color);
+  if (!icon) return null;
+  // Purely decorative: every place this renders already states the status in
+  // adjacent text (chip, timeline label, card status line), so announcing the
+  // glyph would just duplicate it. Matches the ChevronRight treatment on
+  // ActiveOrderCard.
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {icon}
+    </View>
+  );
+}
+
+function renderStageIcon(
+  status: Order['status'],
+  size: number,
+  color?: string,
+): ReactNode {
   const tint = color ?? customerColors.coral.DEFAULT;
   switch (status) {
     case 'pending':
