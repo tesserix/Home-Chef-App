@@ -256,6 +256,9 @@ interface FooterActionsProps {
   customerName: string;
   total: number;
   disabled: boolean;
+  /** An open delivery-failure review — closes the order off (no actions, an
+   *  "under review" caption) until an admin confirms fault (#393). */
+  deliveryFailureReported: boolean;
   /** ISO timestamp of the last status transition — used to compute
    *  waiting-for-driver elapsed time in the `ready` state. */
   updatedAt?: string;
@@ -310,6 +313,7 @@ function FooterActions({
   onMarkDelivered,
   onCancel,
   onReportDeliveryFailure,
+  deliveryFailureReported,
 }: FooterActionsProps) {
   const isPickup = fulfillmentType === 'pickup';
   const isChefDelivery = fulfillmentType === 'chef_delivery';
@@ -363,6 +367,18 @@ function FooterActions({
         <Text style={styles.cancelLinkLabel}>Couldn&apos;t deliver this order</Text>
       </Pressable>
     ) : null;
+
+  // An open delivery-failure review closes the order off for the chef (#393):
+  // no status actions until an admin confirms fault and resolves the payout.
+  if (deliveryFailureReported) {
+    return (
+      <View style={[styles.footer, styles.footerCaptionWrap]}>
+        <Text style={styles.footerCaption}>
+          Delivery failure reported — our team is reviewing it.
+        </Text>
+      </View>
+    );
+  }
   if (status === 'pending') {
     return (
       <View style={styles.footer}>
@@ -1468,6 +1484,7 @@ export default function OrderDetailScreen() {
         }
         onCancel={openCancelSheet}
         onReportDeliveryFailure={openDeliveryFailureSheet}
+        deliveryFailureReported={order.deliveryFailureReported}
       />
     </SafeAreaView>
   );

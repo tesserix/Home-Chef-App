@@ -1057,6 +1057,19 @@ func chefCanTransition(from, to models.OrderStatus) bool {
 	return false
 }
 
+// hasOpenDeliveryFailure reports whether the order has an unresolved
+// delivery-failure review (#393) — a pending `delivery_failed` OrderIssue. While
+// one is open the order is out of the chef's hands (an admin decides the money),
+// so further chef transitions are blocked and the vendor app closes the order off.
+func hasOpenDeliveryFailure(orderID uuid.UUID) bool {
+	var n int64
+	database.DB.Model(&models.OrderIssue{}).
+		Where("order_id = ? AND reason = ? AND status = ?",
+			orderID, models.IssueDeliveryFailed, models.IssuePending).
+		Count(&n)
+	return n > 0
+}
+
 // chefMayMarkDelivered reports whether a chef is permitted to move an order to
 // Delivered given its fulfilment type. 3PL `delivery` orders reach Delivered
 // ONLY via the courier pipeline / webhook (handlers/delivery.go) — a chef
@@ -1192,6 +1205,18 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	// issues). Re-stamping the same status is a safe idempotent no-op.
 	if newStatus != priorStatus && !chefCanTransition(priorStatus, newStatus) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cannot change order status from %s to %s", priorStatus, newStatus)})
+		return
+	}
+
+	// Once the chef has reported "couldn't deliver" (#393), the order is under
+	// admin review — block any further transition (notably Mark delivered, which
+	// would release the now-disputed hold to the chef). Re-stamping the same
+	// status stays a safe idempotent no-op.
+	if newStatus != priorStatus && hasOpenDeliveryFailure(order.ID) {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "delivery_failure_under_review",
+			"message": "You reported this order as undelivered — our team is reviewing it. It can't be changed until that's resolved.",
+		})
 		return
 	}
 
@@ -1733,6 +1758,11 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 	// is enabled. The vendor app hides the rider button when this is false, so the
 	// chef is never offered a rider while 3PL is dark.
 	detail.RiderDispatchAvailable = services.ThirdPartyDeliveryEnabled()
+
+	// An open delivery-failure review closes the order off for the chef (#393):
+	// the vendor app swaps the action footer for an "under review" caption and
+	// drops the order from the active list.
+	detail.DeliveryFailureReported = hasOpenDeliveryFailure(order.ID)
 
 	// Surface the chef→drop distance + comfort radius for the Mark-Ready carrier
 	// decision: on chef_delivery orders AND on delivery orders the chef COULD
