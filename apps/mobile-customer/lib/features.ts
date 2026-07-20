@@ -29,5 +29,5 @@ export const REWARDS_ENABLED: boolean = false;
 /** Referral / refer-&-earn program (v2-deferred). */
 export const REFERRAL_ENABLED: boolean = false;
 
-/** Social feed / community (stub — no real data yet, v2-deferred). */
+/** Social feed / community (built & wired to /v1/social, off by flag — v2-deferred). */
 export const SOCIAL_ENABLED: boolean = false;
