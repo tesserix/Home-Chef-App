@@ -38,6 +38,12 @@ import {
   CANCEL_REASON_LABEL,
   type CancelReason,
 } from '../../hooks/useCancelOrder';
+import {
+  useReportDeliveryFailure,
+  DELIVERY_FAILURE_REASONS,
+  DELIVERY_FAILURE_REASON_LABEL,
+  type DeliveryFailureReason,
+} from '../../hooks/useReportDeliveryFailure';
 
 // Statuses where the chef can still cancel + refund. picked_up onward
 // is out of the chef's hands — cancellation becomes a customer-support
@@ -250,6 +256,9 @@ interface FooterActionsProps {
   customerName: string;
   total: number;
   disabled: boolean;
+  /** An open delivery-failure review — closes the order off (no actions, an
+   *  "under review" caption) until an admin confirms fault (#393). */
+  deliveryFailureReported: boolean;
   /** ISO timestamp of the last status transition — used to compute
    *  waiting-for-driver elapsed time in the `ready` state. */
   updatedAt?: string;
@@ -276,6 +285,8 @@ interface FooterActionsProps {
   onMarkOutForDelivery: () => void;
   onMarkDelivered: () => void;
   onCancel: () => void;
+  /** Self-delivery chef reports they couldn't deliver (chef_delivery only). */
+  onReportDeliveryFailure: () => void;
 }
 
 function FooterActions({
@@ -301,6 +312,8 @@ function FooterActions({
   onMarkOutForDelivery,
   onMarkDelivered,
   onCancel,
+  onReportDeliveryFailure,
+  deliveryFailureReported,
 }: FooterActionsProps) {
   const isPickup = fulfillmentType === 'pickup';
   const isChefDelivery = fulfillmentType === 'chef_delivery';
@@ -336,6 +349,36 @@ function FooterActions({
       <Text style={styles.cancelLinkLabel}>Cancel order</Text>
     </Pressable>
   ) : null;
+  // "Couldn't deliver" — only a self-delivery chef, and only once they're
+  // actually OUT FOR DELIVERY (status 'picked_up'/en route). At 'ready' the food
+  // hasn't left the kitchen — that's what "Cancel order" is for; you can't fail a
+  // delivery you haven't started. Quiet destructive link so the primary
+  // "Mark delivered" action stays the hero.
+  const deliveryFailLink =
+    isChefDelivery && status === 'picked_up' ? (
+      <Pressable
+        onPress={onReportDeliveryFailure}
+        disabled={disabled}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Report that you couldn't deliver this order"
+        style={styles.cancelLinkWrap}
+      >
+        <Text style={styles.cancelLinkLabel}>Couldn&apos;t deliver this order</Text>
+      </Pressable>
+    ) : null;
+
+  // An open delivery-failure review closes the order off for the chef (#393):
+  // no status actions until an admin confirms fault and resolves the payout.
+  if (deliveryFailureReported) {
+    return (
+      <View style={[styles.footer, styles.footerCaptionWrap]}>
+        <Text style={styles.footerCaption}>
+          Delivery failure reported — our team is reviewing it.
+        </Text>
+      </View>
+    );
+  }
   if (status === 'pending') {
     return (
       <View style={styles.footer}>
@@ -597,11 +640,10 @@ function FooterActions({
   // completes the order on arrival. (3PL orders are driver-controlled here.)
   if (status === 'picked_up' && isChefDelivery) {
     return (
-      <View style={styles.footer}>
+      <View style={[styles.footer, styles.footerColumn]}>
         <Pressable
           onPress={onMarkDelivered}
           disabled={disabled}
-          style={styles.flex1}
           accessibilityRole="button"
           accessibilityLabel={`Mark order delivered to ${customerName}`}
         >
@@ -617,6 +659,7 @@ function FooterActions({
             </View>
           )}
         </Pressable>
+        {deliveryFailLink}
       </View>
     );
   }
@@ -693,6 +736,7 @@ export default function OrderDetailScreen() {
   const uploadPhoto = useUploadOrderPhoto();
   const cancelOrder = useCancelOrder(orderId);
   const cancelItem = useCancelOrderItem(orderId);
+  const reportFailure = useReportDeliveryFailure(orderId);
   const { show: showToast } = useToast();
 
   // A lifecycle photo is REQUIRED before these transitions: the chef captures
@@ -883,6 +927,62 @@ export default function OrderDetailScreen() {
           text: 'Cancel order',
           style: 'destructive',
           onPress: () => promptCancelReasonAndroid(submitCancel),
+        },
+      ],
+    );
+  }
+
+  // "Couldn't deliver" (#393) — a self-delivery chef reports a failed drop.
+  // Two-step like cancel: pick a reason, then it fires. This does NOT refund
+  // instantly — it opens an admin review and freezes the payout until fault is
+  // decided, so the copy says so plainly.
+  function submitDeliveryFailure(reason: DeliveryFailureReason): void {
+    reportFailure.mutate(reason, {
+      onSuccess: () => {
+        showToast({
+          message: "Reported. We'll review it and sort out the payment.",
+          tone: 'success',
+        });
+      },
+      onError: () => {
+        showToast({
+          message: "Couldn't report that right now. Try again.",
+          tone: 'error',
+        });
+      },
+    });
+  }
+
+  function openDeliveryFailureSheet(): void {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: "Couldn't deliver this order?",
+          message:
+            "We'll review what happened. Your payout for this order is held until our team confirms it — you won't be paid or charged automatically.",
+          options: [
+            ...DELIVERY_FAILURE_REASONS.map((r) => DELIVERY_FAILURE_REASON_LABEL[r]),
+            'Keep trying',
+          ],
+          cancelButtonIndex: DELIVERY_FAILURE_REASONS.length,
+          destructiveButtonIndex: DELIVERY_FAILURE_REASONS.length - 1,
+        },
+        (index) => {
+          if (index < 0 || index >= DELIVERY_FAILURE_REASONS.length) return;
+          submitDeliveryFailure(DELIVERY_FAILURE_REASONS[index]!);
+        },
+      );
+      return;
+    }
+    Alert.alert(
+      "Couldn't deliver this order?",
+      "We'll review it and your payout is held until our team decides. Pick a reason next.",
+      [
+        { text: 'Keep trying', style: 'cancel' },
+        {
+          text: "Couldn't deliver",
+          style: 'destructive',
+          onPress: () => promptDeliveryFailureReasonAndroid(submitDeliveryFailure),
         },
       ],
     );
@@ -1383,6 +1483,8 @@ export default function OrderDetailScreen() {
           updateStatus.mutate({ orderId: order.id, status: 'delivered' })
         }
         onCancel={openCancelSheet}
+        onReportDeliveryFailure={openDeliveryFailureSheet}
+        deliveryFailureReported={order.deliveryFailureReported}
       />
     </SafeAreaView>
   );
@@ -1474,6 +1576,43 @@ function promptCancelReasonAndroid(submit: (r: CancelReason) => void): void {
           },
           {
             text: CANCEL_REASON_LABEL.other,
+            onPress: () => submit('other'),
+          },
+          { text: 'Back', style: 'cancel' },
+        ]),
+    },
+  ]);
+}
+
+// promptDeliveryFailureReasonAndroid emulates an action sheet with a chained
+// Alert for the delivery-failure reason picker (Android caps reliably at 3
+// buttons). Mirrors promptCancelReasonAndroid.
+function promptDeliveryFailureReasonAndroid(
+  submit: (r: DeliveryFailureReason) => void,
+): void {
+  Alert.alert('What went wrong?', '', [
+    {
+      text: DELIVERY_FAILURE_REASON_LABEL.customer_unavailable,
+      onPress: () => submit('customer_unavailable'),
+    },
+    {
+      text: DELIVERY_FAILURE_REASON_LABEL.customer_refused,
+      onPress: () => submit('customer_refused'),
+    },
+    {
+      text: 'More…',
+      onPress: () =>
+        Alert.alert('What went wrong?', '', [
+          {
+            text: DELIVERY_FAILURE_REASON_LABEL.wrong_address,
+            onPress: () => submit('wrong_address'),
+          },
+          {
+            text: DELIVERY_FAILURE_REASON_LABEL.food_damaged,
+            onPress: () => submit('food_damaged'),
+          },
+          {
+            text: DELIVERY_FAILURE_REASON_LABEL.other,
             onPress: () => submit('other'),
           },
           { text: 'Back', style: 'cancel' },

@@ -503,6 +503,13 @@ type ChefOrderDetailResponse struct {
 	// modes (or when coords are missing — distance unknown).
 	SelfDeliveryDistanceKm    float64 `json:"selfDeliveryDistanceKm,omitempty"`
 	SelfDeliveryMaxDistanceKm float64 `json:"selfDeliveryMaxDistanceKm,omitempty"`
+	// DeliveryFailureReported is true while the order has an OPEN delivery-failure
+	// review (#393) — the chef reported "couldn't deliver" and an admin hasn't yet
+	// confirmed fault. The order status stays picked_up (the admin decides the
+	// money), but the vendor app uses this to close the order off for the chef:
+	// no more Mark-delivered/Couldn't-deliver actions, a terminal "under review"
+	// footer, and it drops out of the active list.
+	DeliveryFailureReported bool `json:"deliveryFailureReported,omitempty"`
 }
 
 func (o *Order) ToResponse() OrderResponse {

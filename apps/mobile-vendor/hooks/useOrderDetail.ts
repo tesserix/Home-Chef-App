@@ -97,6 +97,10 @@ export interface OrderDetail {
   // switch-to-rider link) are hidden when this is false, so the chef is never
   // offered a rider while 3PL is dark.
   riderDispatchAvailable: boolean;
+  // Server-computed: an open delivery-failure review is in flight (#393). The
+  // chef reported "couldn't deliver"; an admin hasn't confirmed fault yet. The
+  // footer closes the order off (no actions) and shows an "under review" caption.
+  deliveryFailureReported: boolean;
 }
 
 // ---- Hook --------------------------------------------------------------------
@@ -153,6 +157,7 @@ interface RawChefOrderDetailResponse {
   selfDeliveryDistanceKm?: number;
   selfDeliveryMaxDistanceKm?: number;
   riderDispatchAvailable?: boolean;
+  deliveryFailureReported?: boolean;
 }
 
 function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
@@ -203,6 +208,7 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
     selfDeliveryDistanceKm: raw.selfDeliveryDistanceKm ?? 0,
     selfDeliveryMaxDistanceKm: raw.selfDeliveryMaxDistanceKm ?? 0,
     riderDispatchAvailable: raw.riderDispatchAvailable ?? false,
+    deliveryFailureReported: raw.deliveryFailureReported ?? false,
   };
 }
 
