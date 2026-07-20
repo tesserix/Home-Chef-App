@@ -16,6 +16,7 @@ import (
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"gorm.io/gorm"
 )
 
 // NotificationService consumes domain events from durable JetStream consumers
@@ -540,15 +541,22 @@ func (s *NotificationService) handleOrderDelivered(event OrderEvent) error {
 
 	// Wave 3: auto-email the GST tax invoice PDF to the customer shortly after
 	// delivery. Kept off the worker hot path (PDF render is ~hundreds of ms).
-	go emailDeliveredInvoice(event)
+	// Capture the DB handle at spawn time rather than reading the global inside
+	// the detached goroutine: the handler returns immediately, and the global can
+	// be swapped/torn down out from under the goroutine (nil-deref panic in tests
+	// that reset database.DB between cases).
+	go emailDeliveredInvoice(database.DB, event)
 	return nil
 }
 
 // emailDeliveredInvoice resolves the customer's email and dispatches the PDF
 // invoice. Best-effort: the in-app + push confirmations above are authoritative.
-func emailDeliveredInvoice(event OrderEvent) {
+func emailDeliveredInvoice(db *gorm.DB, event OrderEvent) {
+	if db == nil {
+		return
+	}
 	var customer models.User
-	if err := database.DB.First(&customer, "id = ?", event.CustomerID).Error; err != nil {
+	if err := db.First(&customer, "id = ?", event.CustomerID).Error; err != nil {
 		log.Printf("invoice-email skipped: customer %s lookup failed: %v", event.CustomerID, err)
 		return
 	}
