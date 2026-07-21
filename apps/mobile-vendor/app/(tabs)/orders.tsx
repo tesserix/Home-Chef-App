@@ -81,10 +81,18 @@ const STATUS_CHIP_FALLBACK: StatusChipColors = {
 // A chef-delivery order at `picked_up` means the CHEF is out delivering — still
 // active, so it must NOT fall into History until `delivered`. Only 3PL/pickup
 // `picked_up` (rider has it, out of the chef's hands) is History.
-function isHistoryOrder(o: { status: string; fulfillmentType?: string }): boolean {
+function isHistoryOrder(o: {
+  status: string;
+  fulfillmentType?: string;
+  deliveryFailureReported?: boolean;
+}): boolean {
   if (o.status === 'delivered' || o.status === 'cancelled' || o.status === 'rejected') {
     return true;
   }
+  // An OPEN delivery-failure review (#393) closes the order off for the chef —
+  // it's an admin's call now — so it belongs in History even though the status
+  // is still picked_up. Mirrors the dashboard active query, which drops it.
+  if (o.deliveryFailureReported) return true;
   if (o.status === 'picked_up') return o.fulfillmentType !== 'chef_delivery';
   return false;
 }

@@ -70,8 +70,14 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE meal_subscription_fulfillments (
 		id TEXT PRIMARY KEY, order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '',
 		id TEXT PRIMARY KEY, order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
+	)`).Error)
+	// The chef list flags rows under an open delivery-failure review (#393), and
+	// the dashboard subquery-excludes them from the active queue. Both read
+	// order_issues; without it those queries error and silently return nothing.
+	require.NoError(t, db.Exec(`CREATE TABLE order_issues (
+		id TEXT PRIMARY KEY, order_id TEXT, reason TEXT, status TEXT
 	)`).Error)
 
 	prev := database.DB
@@ -138,6 +144,21 @@ func sourcesByID(t *testing.T, body map[string]any) map[string]string {
 		id, _ := m["id"].(string)
 		src, _ := m["source"].(string)
 		out[id] = src
+	}
+	return out
+}
+
+// deliveryFailureByID pulls the `deliveryFailureReported` flag for each order in
+// a /chef/orders response, keyed by order id (absent → false, matching omitempty).
+func deliveryFailureByID(t *testing.T, body map[string]any) map[string]bool {
+	t.Helper()
+	out := map[string]bool{}
+	orders, _ := body["orders"].([]any)
+	for _, o := range orders {
+		m, _ := o.(map[string]any)
+		id, _ := m["id"].(string)
+		flag, _ := m["deliveryFailureReported"].(bool)
+		out[id] = flag
 	}
 	return out
 }
@@ -275,4 +296,42 @@ func TestChefOrders_GroupAndSubscriptionSources(t *testing.T) {
 	src := sourcesByID(t, all)
 	require.Equal(t, "group", src[group.String()])
 	require.Equal(t, "subscription", src[sub.String()])
+}
+
+// #393: an order under an OPEN delivery-failure review is flagged on the chef
+// order list so the app can route it to History (isHistoryOrder) even though its
+// status is still picked_up. A normal picked_up order carries no flag.
+func TestChefOrders_OpenDeliveryFailure_FlaggedForHistory(t *testing.T) {
+	db := setupChefVisDB(t)
+	userID, chefID := seedVisChef(t, db)
+
+	normal := seedVisOrderID(t, db, chefID, "picked_up", "completed")
+	failed := seedVisOrderID(t, db, chefID, "picked_up", "completed")
+	require.NoError(t, db.Exec(
+		`INSERT INTO order_issues (id, order_id, reason, status) VALUES (?,?,?,?)`,
+		uuid.NewString(), failed.String(), "delivery_failed", "pending").Error)
+
+	r := chefVisRouter(userID)
+	flags := deliveryFailureByID(t, chefVisGET(t, r, "/chef/orders"))
+	require.True(t, flags[failed.String()],
+		"an order under an open delivery-failure review must be flagged so the app moves it to History")
+	require.False(t, flags[normal.String()],
+		"a normal picked_up order must not be flagged — it is still live work")
+}
+
+// A resolved/rejected delivery-failure review no longer flags the order: it is
+// no longer OPEN, so the flag (which gates the History routing) must clear.
+func TestChefOrders_ResolvedDeliveryFailure_NotFlagged(t *testing.T) {
+	db := setupChefVisDB(t)
+	userID, chefID := seedVisChef(t, db)
+
+	order := seedVisOrderID(t, db, chefID, "picked_up", "completed")
+	require.NoError(t, db.Exec(
+		`INSERT INTO order_issues (id, order_id, reason, status) VALUES (?,?,?,?)`,
+		uuid.NewString(), order.String(), "delivery_failed", "resolved").Error)
+
+	r := chefVisRouter(userID)
+	flags := deliveryFailureByID(t, chefVisGET(t, r, "/chef/orders"))
+	require.False(t, flags[order.String()],
+		"a resolved review is no longer open — the flag must clear")
 }

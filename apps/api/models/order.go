@@ -356,6 +356,12 @@ type OrderResponse struct {
 	// Source groups the order in the vendor feed (à-la-carte / meal-plan day /
 	// subscription day / group). Set by the chef-orders handler (#435).
 	Source OrderSource `json:"source,omitempty"`
+	// DeliveryFailureReported flags a row under an OPEN delivery-failure review
+	// (#393): the chef reported "couldn't deliver" and an admin hasn't yet ruled
+	// on the money. The status stays picked_up, so the vendor app uses this to
+	// route the order to History instead of the live queue. Set by the chef-orders
+	// handler (absent from the base DTO / ToResponse).
+	DeliveryFailureReported bool `json:"deliveryFailureReported,omitempty"`
 	// CustomerName and CustomerPhone are populated by handlers that load the
 	// Customer relation (e.g. chef order list, chef order detail). They are
 	// intentionally absent from the base DTO so customer-facing endpoints
