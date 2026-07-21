@@ -1052,21 +1052,13 @@ func (s *NotificationService) handleDeliveryAssigned(event Event) error {
 		return fmt.Errorf("save delivery_assigned notification: %w", err)
 	}
 
+	// Delivery-assignment is a lifecycle update: push + in-app only, no email.
+	// The delivered GST invoice is the sole order email (owner decision 2026-07-20).
 	PublishNotification(NotificationEvent{
 		UserID: customerID, Type: "push",
 		Title:   "Delivery Partner Assigned",
 		Message: "A delivery partner has been assigned to your order and will pick it up soon!",
 		Data:    event.Data,
-	})
-	PublishNotification(NotificationEvent{
-		UserID: customerID, Type: "email",
-		Title:   "Delivery Partner Assigned",
-		Message: "A delivery partner has been assigned to your order",
-		Data: map[string]any{
-			"type":        "delivery_assigned",
-			"driver_name": event.Data["driver_name"],
-			"order_id":    event.Data["order_id"],
-		},
 	})
 	return nil
 }
@@ -1391,24 +1383,10 @@ func (s *NotificationService) sendEmailNotification(notif NotificationEvent) err
 
 	emailSvc := GetEmailService()
 	switch notifType {
-	case "order_confirmation":
-		orderNumber, _ := notif.Data["order_number"].(string)
-		total, _ := notif.Data["total"].(float64)
-		// TODO(CW-01e-backend): populate OrderInvoiceDetails (GST breakup, HSN/SAC,
-		// chef name + FSSAI, address, ETA) so the confirmation email satisfies
-		// CGST Act 2017 §31 + Rule 46. nil keeps the legacy minimal layout.
-		return emailSvc.SendOrderConfirmation(user.Email, orderNumber, nil, total, nil)
-	case "order_status":
-		orderNumber, _ := notif.Data["order_number"].(string)
-		status, _ := notif.Data["status"].(string)
-		return emailSvc.SendOrderStatusUpdate(user.Email, orderNumber, status)
-	case "chef_new_order":
-		orderNumber, _ := notif.Data["order_number"].(string)
-		total, _ := notif.Data["total"].(float64)
-		return emailSvc.SendChefNewOrder(user.Email, orderNumber, total)
-	case "delivery_assigned":
-		orderID, _ := notif.Data["order_id"].(string)
-		return emailSvc.SendDeliveryAssigned(user.Email, orderID, "")
+	// Order-lifecycle status emails (order_confirmation, order_status, chef_new_order,
+	// delivery_assigned) are intentionally NOT dispatched — lifecycle updates go out as
+	// push + in-app only. The delivered GST invoice is the sole order email
+	// (owner decision 2026-07-20). Do not re-add these cases.
 	case "chef_verified":
 		return emailSvc.SendChefVerificationApproved(user.Email, user.FirstName)
 	case "welcome":
