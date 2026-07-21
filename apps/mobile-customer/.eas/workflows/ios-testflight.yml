@@ -12,14 +12,23 @@ jobs:
   build_ios:
     name: Build iOS (production)
     type: build
+    environment: production
     params:
       platform: ios
       profile: production
 
+  # environment: production is REQUIRED here. The submit job runs its own
+  # `pnpm install`, and the lockfile pins @tesserix/otto-widget to GitHub
+  # Packages (npm.pkg.github.com). The eas-build-pre-install hook only writes the
+  # registry auth line when $NODE_AUTH_TOKEN is set — and that token is a secret
+  # scoped to the `production` environment. Without this line the submit job's
+  # install 401s on otto-widget and every downstream submit step is skipped
+  # (build succeeds, TestFlight upload silently never happens).
   submit_ios:
     name: Submit to TestFlight
     type: submit
     needs: [build_ios]
+    environment: production
     params:
       build_id: ${{ needs.build_ios.outputs.build_id }}
       profile: production
