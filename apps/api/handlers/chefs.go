@@ -715,6 +715,17 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	// Limit is a runaway guard, not a window: 200 in-flight orders at once is far
 	// beyond any real home kitchen, and unlike Limit(10) it cannot silently hide
 	// live work.
+	//
+	// An order with an OPEN delivery-failure review (#393) is deliberately
+	// excluded: the chef reported "couldn't deliver", it is now an admin's call
+	// on the money, and the order is out of the chef's hands. Such orders stay
+	// picked_up (so they'd otherwise match the chef_delivery clause above and
+	// linger in the queue) — this subquery drops them, mirroring isHistoryOrder()
+	// which routes them to History on the app.
+	openFailureSub := database.DB.Model(&models.OrderIssue{}).
+		Select("order_id").
+		Where("reason = ? AND status = ?", models.IssueDeliveryFailed, models.IssuePending)
+
 	var active []models.Order
 	chefVisibleOrders(chef.ID).
 		Preload("Customer").
@@ -723,6 +734,7 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 			[]models.OrderStatus{models.OrderStatusAccepted, models.OrderStatusPreparing, models.OrderStatusReady},
 			models.OrderStatusPickedUp, models.FulfillmentChefDelivery,
 		).
+		Where("id NOT IN (?)", openFailureSub).
 		Order("created_at ASC").
 		Limit(200).
 		Find(&active)
@@ -1011,12 +1023,18 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 		orderIDs[i] = orders[i].ID
 	}
 	sources := services.ClassifyOrderSources(database.DB, orderIDs)
+	// Which rows are under an open delivery-failure review (#393) — one batched
+	// query rather than a per-order count, so History can close them off.
+	underReview := openDeliveryFailureOrderIDs(orderIDs)
 
 	responses := make([]models.OrderResponse, len(orders))
 	for i, order := range orders {
 		// Chef view: area-only address, no phone, first name only (privacy).
 		responses[i] = order.ToChefResponse()
 		responses[i].Source = sources[order.ID]
+		// Lets the app route a still-picked_up "couldn't deliver" order to
+		// History (isHistoryOrder) instead of leaving it in the live list.
+		responses[i].DeliveryFailureReported = underReview[order.ID]
 	}
 
 	// Mobile (`useVendorPendingOrders`, `useVendorOrderHistory`) consumes the
@@ -1068,6 +1086,27 @@ func hasOpenDeliveryFailure(orderID uuid.UUID) bool {
 			orderID, models.IssueDeliveryFailed, models.IssuePending).
 		Count(&n)
 	return n > 0
+}
+
+// openDeliveryFailureOrderIDs returns which of the given order IDs have an
+// unresolved delivery-failure review (#393). Batched sibling of
+// hasOpenDeliveryFailure so the chef order list can flag "under review" rows
+// without an N+1 count per order.
+func openDeliveryFailureOrderIDs(orderIDs []uuid.UUID) map[uuid.UUID]bool {
+	out := make(map[uuid.UUID]bool, len(orderIDs))
+	if len(orderIDs) == 0 {
+		return out
+	}
+	var ids []uuid.UUID
+	database.DB.Model(&models.OrderIssue{}).
+		Where("order_id IN ? AND reason = ? AND status = ?",
+			orderIDs, models.IssueDeliveryFailed, models.IssuePending).
+		Distinct("order_id").
+		Pluck("order_id", &ids)
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out
 }
 
 // chefMayMarkDelivered reports whether a chef is permitted to move an order to

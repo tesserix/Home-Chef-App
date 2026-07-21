@@ -64,6 +64,11 @@ export interface Order {
   // How the order reaches the customer. 'pickup' → customer collects; the chef
   // confirms handover (ready → delivered). Legacy orders default to delivery.
   fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
+  // True while an OPEN delivery-failure review is in flight (#393): the chef
+  // reported "couldn't deliver" and an admin hasn't ruled on the money yet. The
+  // status stays picked_up, so the app treats the order as History (out of the
+  // chef's hands) rather than leaving it in the live queue.
+  deliveryFailureReported?: boolean;
   createdAt: string;
   deliveryAddress: string;
   specialInstructions?: string;

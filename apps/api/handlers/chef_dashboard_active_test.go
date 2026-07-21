@@ -36,7 +36,23 @@ func setupDashboardDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) {
 	require.NoError(t, db.Exec(
 		`CREATE TABLE meal_plan_days (id text PRIMARY KEY, order_id text, status text, deleted_at datetime)`,
 	).Error)
+	// The active query subquery-excludes orders under an open delivery-failure
+	// review (#393). Without this table that subquery errors and the whole
+	// dashboard query silently returns an empty queue — hiding live work.
+	require.NoError(t, db.Exec(
+		`CREATE TABLE order_issues (id text PRIMARY KEY, order_id text, reason text, status text)`,
+	).Error)
 	return db, userID, chefID
+}
+
+// seedOpenDeliveryFailure marks orderID as under an open delivery-failure review
+// (#393): a pending `delivery_failed` issue. The chef has closed it off; an admin
+// now decides the money.
+func seedOpenDeliveryFailure(t *testing.T, db *gorm.DB, orderID uuid.UUID) {
+	t.Helper()
+	require.NoError(t, db.Exec(
+		`INSERT INTO order_issues (id, order_id, reason, status) VALUES (?,?,?,?)`,
+		uuid.New().String(), orderID.String(), "delivery_failed", "pending").Error)
 }
 
 // seedOrderAt inserts an order with an explicit status/fulfilment/created_at so a
@@ -131,6 +147,25 @@ func TestDashboard_ChefDeliveryPickedUp_StaysInTheQueue(t *testing.T) {
 		"the chef is out delivering this — it is still their job and must stay on the queue")
 	require.NotContains(t, ids, riderHasIt.String(),
 		"a 3PL rider has this one; it is out of the chef's hands and belongs in History")
+}
+
+// A chef_delivery order the chef reported "couldn't deliver" (#393) stays
+// picked_up while an admin rules on the money — but it is out of the chef's
+// hands, so it must leave the kitchen queue (and route to History) rather than
+// linger as live work the chef can no longer act on.
+func TestDashboard_OpenDeliveryFailure_DropsFromQueue(t *testing.T) {
+	db, userID, chefID := setupDashboardDB(t)
+
+	base := time.Now().Add(-time.Hour)
+	stillDriving := seedOrderAt(t, db, chefID, "picked_up", "chef_delivery", base)
+	reportedFailed := seedOrderAt(t, db, chefID, "picked_up", "chef_delivery", base.Add(time.Minute))
+	seedOpenDeliveryFailure(t, db, reportedFailed)
+
+	ids := activeIDs(t, getDashboard(t, userID))
+	require.Contains(t, ids, stillDriving.String(),
+		"a chef still out delivering must stay on the queue")
+	require.NotContains(t, ids, reportedFailed.String(),
+		"an order under an open delivery-failure review is an admin's call now — it must leave the chef's queue")
 }
 
 // Terminal orders must not clutter the queue.
