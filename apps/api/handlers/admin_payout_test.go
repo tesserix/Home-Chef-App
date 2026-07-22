@@ -301,19 +301,46 @@ func TestSetPayoutAutomation_StoresALegalValue(t *testing.T) {
 
 func TestSetPayoutAutomation_WritesAnAuditEntry(t *testing.T) {
 	// Suspending a chef acts on someone else's money; "who did this" must be
-	// answerable months later.
+	// answerable months later. The audit entry must capture old→new state and the actor.
+	db := setupPayoutHandlerDB(t)
+	actor := uuid.New()
+	chefID := seedChef(t, db, uuid.New(), "Test Kitchen")
+
+	w := doJSON(t, payoutRouter(actor), http.MethodPut,
+		"/admin/chefs/"+chefID.String()+"/payout-automation", map[string]any{"value": "off"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var audit models.AuditLog
+	require.NoError(t, db.Where("action = ? AND entity_id = ?", "chef.payout.automation", chefID.String()).
+		First(&audit).Error, "exactly one audit entry")
+	require.Equal(t, actor, *audit.UserID, "acting user is recorded")
+	require.Contains(t, audit.OldValue, `"payoutAutoRelease":""`, "old value is empty string")
+	require.Contains(t, audit.NewValue, `"payoutAutoRelease":"off"`, "new value is off")
+}
+
+func TestSetPayoutAutomation_RejectsWhitespaceValue(t *testing.T) {
+	// A value that is only whitespace ("  ") should be rejected like an invalid
+	// value — trimmed, treated as empty string, and validated. If not trimmed
+	// before validation, a future change adding TrimSpace could silently accept
+	// it and reactivate a suspended chef.
 	db := setupPayoutHandlerDB(t)
 	chefID := seedChef(t, db, uuid.New(), "Test Kitchen")
 
 	w := doJSON(t, payoutRouter(uuid.New()), http.MethodPut,
-		"/admin/chefs/"+chefID.String()+"/payout-automation", map[string]any{"value": "off"})
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		"/admin/chefs/"+chefID.String()+"/payout-automation", map[string]any{"value": "  "})
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 
+	// Reload the chef and confirm nothing was persisted
+	var reloaded models.ChefProfile
+	require.NoError(t, db.First(&reloaded, "id = ?", chefID.String()).Error)
+	require.Equal(t, "", reloaded.PayoutAutoRelease, "whitespace value must not be persisted")
+
+	// Confirm no audit entry was written for this failed request
 	var count int64
 	require.NoError(t, db.Model(&models.AuditLog{}).
 		Where("action = ? AND entity_id = ?", "chef.payout.automation", chefID.String()).
 		Count(&count).Error)
-	require.Equal(t, int64(1), count)
+	require.Equal(t, int64(0), count, "no audit entry on validation failure")
 }
 
 func TestBlockedChefs_ListsNeedsClarificationWithRequirements(t *testing.T) {

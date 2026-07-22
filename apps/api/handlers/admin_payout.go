@@ -261,9 +261,12 @@ func (h *AdminPayoutHandler) SetPayoutAutomation(c *gin.Context) {
 		return
 	}
 
-	chefID := c.Param("id")
+	chefID, ok := parsePayoutID(c)
+	if !ok {
+		return
+	}
 	var chef models.ChefProfile
-	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+	if err := database.DB.First(&chef, "id = ?", chefID.String()).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "chef not found"})
 		return
 	}
@@ -273,7 +276,7 @@ func (h *AdminPayoutHandler) SetPayoutAutomation(c *gin.Context) {
 		return
 	}
 
-	services.LogAudit(c, "chef.payout.automation", "chef", chefID,
+	services.LogAudit(c, "chef.payout.automation", "chef", chefID.String(),
 		gin.H{"payoutAutoRelease": old}, gin.H{"payoutAutoRelease": req.Value})
 	c.JSON(http.StatusOK, gin.H{"payoutAutoRelease": req.Value})
 }
