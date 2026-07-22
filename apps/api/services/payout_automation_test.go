@@ -86,3 +86,17 @@ func TestPayoutAutomation_GarbageValuesFailClosed(t *testing.T) {
 		t.Fatal("an unparseable master switch must fail closed")
 	}
 }
+
+func TestPayoutAutomation_MissingSweepSettingWithChefOn(t *testing.T) {
+	// The kill switch absent is not the kill switch permitting. An explicitly
+	// enabled chef must still not release when payout.sweep_enabled has never
+	// been written — otherwise a fresh environment starts moving money.
+	db := setupPlatformSettingsDB(t)
+	setSetting(t, db, "payout.auto_release_default", "on")
+	// deliberately never set payout.sweep_enabled
+
+	chef := &models.ChefProfile{PayoutAutoRelease: PayoutAutoOn}
+	if PayoutAutomationEnabled(db, chef) {
+		t.Fatal("an absent master switch must not permit automation")
+	}
+}
