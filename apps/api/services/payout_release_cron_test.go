@@ -248,6 +248,85 @@ func TestRunPayoutReleaseSweep_SecondRunDoesNotRepublish(t *testing.T) {
 	}
 }
 
+// TestRunPayoutReleaseSweep_MasterSwitchOffPublishesNothing pins finding 1: with
+// payout.sweep_enabled off (the ship default), the sweep must not touch the
+// outbox AT ALL — not a release, not a payout_blocked block-noise event either
+// — even when a fully release-eligible, matured order sits in the query's own
+// result set. Gating this per-order (the old behaviour) still let
+// BlockAutomationOff reach recordPayoutBlock as the SOLE reason on every
+// release-eligible row, and recordPayoutBlock's noise guard only silences a
+// sole BlockNotMatured — so every such order republished payments.payout_blocked
+// with a fresh msg_id (no JetStream dedup) on every 15-minute tick, before any
+// admin had opted in. The fix is a top-of-function short-circuit, so this test
+// asserts on the whole sweep's observable effects, not just the release path.
+func TestRunPayoutReleaseSweep_MasterSwitchOffPublishesNothing(t *testing.T) {
+	withPayoutMovementDisabled(t)
+	db := newPayoutReleaseTestDB(t)
+	// payout.sweep_enabled deliberately left unset — the shipped default (off).
+	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
+		c.RazorpaySettlementStatus = "activated"
+		c.PayoutAutoRelease = "on"
+	})
+	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
+		string(models.PayoutHoldReleaseEligible), order.ID.String()).Error)
+
+	withSweepDB(t, db, func() { runPayoutReleaseSweep(context.Background()) })
+
+	if got := countOutbox(t, db, SubjectPayoutReleased); got != 0 {
+		t.Fatalf("released events published = %d, want 0 when payout.sweep_enabled is off", got)
+	}
+	if got := countOutbox(t, db, SubjectPayoutBlocked); got != 0 {
+		t.Fatalf("blocked events published = %d, want 0 — the master switch must short-circuit before the per-order query and loop, not just before release", got)
+	}
+	updated := loadOrder(t, db, order.ID)
+	if updated.PayoutHoldStatus != models.PayoutHoldReleaseEligible {
+		t.Fatalf("payout_hold_status = %q, want unchanged %q — the switch being off must not touch the row at all",
+			updated.PayoutHoldStatus, models.PayoutHoldReleaseEligible)
+	}
+	if updated.PayoutSettledAt != nil {
+		t.Fatal("payout_settled_at must stay nil — nothing may be released while the master switch is off")
+	}
+}
+
+// TestRunPayoutReleaseSweep_DisputedOrderIsNotReleased pins finding 2: the
+// order_issues table was added to the test harness but nothing ever inserted
+// into it, so the sweep-level dispute cross-guard (ReleaseHold ->
+// releaseBlockedForAgg -> orderRefundBlocks -> HasOpenOrderIssue) was never
+// actually exercised end to end. A release-eligible, matured order with a
+// pending OrderIssue must not be released, and must publish zero
+// SubjectPayoutReleased events, even with sweep_enabled and the chef's
+// automation both on so nothing else in the governor blocks it first.
+func TestRunPayoutReleaseSweep_DisputedOrderIsNotReleased(t *testing.T) {
+	withPayoutMovementDisabled(t)
+	db := newPayoutReleaseTestDB(t)
+	releaseReadySettings(t, db)
+	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
+		c.RazorpaySettlementStatus = "activated"
+		c.PayoutAutoRelease = "on"
+	})
+	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
+		string(models.PayoutHoldReleaseEligible), order.ID.String()).Error)
+	// HasOpenOrderIssue's exact shape: order_id + status = 'pending' (models.IssuePending).
+	require.NoError(t, db.Exec(
+		`INSERT INTO order_issues (id, order_id, status, created_at, updated_at) VALUES (?,?,?,?,?)`,
+		uuid.New().String(), order.ID.String(), string(models.IssuePending), time.Now(), time.Now(),
+	).Error)
+
+	withSweepDB(t, db, func() { runPayoutReleaseSweep(context.Background()) })
+
+	if got := countOutbox(t, db, SubjectPayoutReleased); got != 0 {
+		t.Fatalf("released events published = %d, want 0 — a disputed order must never release", got)
+	}
+	updated := loadOrder(t, db, order.ID)
+	if updated.PayoutHoldStatus != models.PayoutHoldReleaseEligible {
+		t.Fatalf("payout_hold_status = %q, want unchanged %q — the dispute cross-guard must block the release_eligible -> released flip",
+			updated.PayoutHoldStatus, models.PayoutHoldReleaseEligible)
+	}
+	if updated.PayoutSettledAt != nil {
+		t.Fatal("payout_settled_at must stay nil — a disputed order was never released, so nothing should be settled")
+	}
+}
+
 func TestBuildReleaseInput_ReadsSettlementActivation(t *testing.T) {
 	db := newPayoutReleaseTestDB(t)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {

@@ -140,8 +140,22 @@ func BuildReleaseInput(db *gorm.DB, order *models.Order, now time.Time) (payouts
 
 // runPayoutReleaseSweep releases every matured, unblocked delivered order.
 func runPayoutReleaseSweep(ctx context.Context) {
-	now := time.Now()
 	db := database.DB
+
+	// payout.sweep_enabled is the master kill switch (services/payout_automation.go)
+	// and ships OFF. Bail here, before the per-order query and loop, rather than
+	// leaving the gate to PayoutAutomationEnabled inside the per-order decision:
+	// with the switch off, EVERY delivered, release-eligible order would land
+	// BlockAutomationOff as its sole reason, and recordPayoutBlock's noise guard
+	// only silences a sole BlockNotMatured — so every one of those orders would
+	// publish payments.payout_blocked, with a fresh msg_id (no JetStream dedup),
+	// on every 15-minute tick, indefinitely, before any admin has opted in.
+	if !settingBool(db, payoutSweepEnabledKey) {
+		log.Println("payout-sweep: payout.sweep_enabled is off — skipping this sweep")
+		return
+	}
+
+	now := time.Now()
 
 	// payout_hold_status = release_eligible is the hold state machine's own gate
 	// (services/payout_hold.go's KEY INVARIANT: a disputed or unconfirmed hold
@@ -155,7 +169,7 @@ func runPayoutReleaseSweep(ctx context.Context) {
 	if err := db.Preload("Chef").
 		Where("status = ? AND payout_hold_status = ? AND payout_settled_at IS NULL",
 			models.OrderStatusDelivered, models.PayoutHoldReleaseEligible).
-		Limit(500).Find(&orders).Error; err != nil {
+		Limit(sweepBatchLimit).Find(&orders).Error; err != nil {
 		log.Printf("payout-sweep: load orders: %v", err)
 		return
 	}
@@ -185,8 +199,15 @@ func runPayoutReleaseSweep(ctx context.Context) {
 				// failure. No release event; the next sweep re-evaluates.
 				continue
 			}
-			// Returned so the Temporal activity retries; the next sweep
-			// re-drives it either way.
+			// Any other error: if the release_eligible -> released flip itself
+			// never committed, this row is untouched and this sweep's own query
+			// picks it up again next tick. But if the flip DID commit and it was
+			// the post-commit money seam (settleRelease) that failed, the row now
+			// sits at payout_hold_status=released with payout_settled_at NULL —
+			// excluded from THIS sweep's release_eligible query from here on. That
+			// drift is re-driven by the separate payout-reconcile cron
+			// (reconcileOrders(models.PayoutHoldReleased, settleRelease) in
+			// services/payout_reconcile_cron.go), not by another run of this sweep.
 			log.Printf("payout-sweep: release order=%s: %v", order.OrderNumber, err)
 			continue
 		}
