@@ -251,6 +251,15 @@ outbox, feeding the admin surface and analytics.
 - **Registration:** already covered — sequence order, account and product reuse,
   requirement propagation, missing bank account, partial failure.
 
+## References
+
+- [Disburse payments](https://razorpay.com/docs/payments/#disburse-payments) —
+  Route is positioned for "marketplaces, platforms and franchises", splitting
+  incoming payments to linked accounts; RazorpayX is separate outbound banking.
+- [Linked Accounts](https://razorpay.com/docs/payments/route/linked-account/) —
+  settlement takes 2 working days regardless of the platform's own schedule.
+- [Route API](https://razorpay.com/docs/api/payments/route/)
+
 ## Open items
 
 - Delivery-fee ownership for self-delivery chefs remains unresolved from ADR
