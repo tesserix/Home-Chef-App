@@ -19,6 +19,7 @@
 - Money is integer minor units (paise) via `payouts.Money`. Never use float for money.
 - Reason codes are persisted and grouped in analytics — treat their string values as stable API.
 - All thresholds are `PlatformSettings` keys, read at runtime. No recompile to change a limit.
+- Events go through `EnqueueOutbox` (`services/outbox.go:42`), never a direct NATS publish. The relay delivers to **JetStream** with PubAck and `Nats-Msg-Id` dedup. Both new subjects sit under the existing `PAYMENTS` stream (`payments.>`, `services/nats.go`), so no stream definition changes.
 
 ---
 
@@ -1089,7 +1090,9 @@ type PayoutBlockEvent struct {
 //
 // Through the transactional outbox rather than a direct NATS publish, so the
 // event cannot be lost if the process dies between deciding and publishing —
-// the same guarantee the rest of the money path relies on.
+// the same guarantee the rest of the money path relies on. OutboxRelay
+// publishes to JetStream with PubAck and Nats-Msg-Id dedup, so a redelivery
+// after a crash is at-least-once at the transport and effectively-once here.
 func recordPayoutBlock(db *gorm.DB, order *models.Order, decision payouts.ReleaseDecision) {
 	reasons := make([]string, 0, len(decision.Reasons))
 	overridable := true
