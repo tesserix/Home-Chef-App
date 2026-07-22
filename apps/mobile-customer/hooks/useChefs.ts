@@ -150,7 +150,13 @@ export function useChefs(filters: ChefFilters = {}) {
       const list = (r.data?.data ?? []) as ApiChefProfile[];
       return { data: list.map(mapChef) };
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes — chef list changes infrequently
+    // Open/closed is the volatile part of this payload, not the chef roster.
+    // A chef closing their kitchen used to stay "open" here for two minutes,
+    // long enough for a customer to order into a kitchen that had shut. Keep
+    // it short and refetch when the screen regains focus.
+    staleTime: 1000 * 20,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -167,6 +173,11 @@ export function useChef(id: string, coords?: { lat: number; lng: number }) {
       return { data: mapChef(r.data as ApiChefProfile) };
     },
     enabled: !!id,
+    // Same reasoning as the list: a customer sitting on a chef's page must not
+    // keep seeing "open" after the kitchen closes.
+    staleTime: 1000 * 20,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 

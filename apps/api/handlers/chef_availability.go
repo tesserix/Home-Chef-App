@@ -10,6 +10,7 @@ package handlers
 // the timer elapses; the chef can also resume early via /resume.
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -92,6 +93,10 @@ func (h *ChefAvailabilityHandler) ResumeReceiving(c *gin.Context) {
 		}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resume"})
 		return
+	}
+
+	if err := services.EnqueueChefAvailabilityChanged(database.DB, chef.ID, true); err != nil {
+		log.Printf("chef availability event (resume) for %s: %v", chef.ID, err)
 	}
 
 	services.LogAudit(c, "chef.availability.resume", "chef", chef.ID.String(), nil, nil)
