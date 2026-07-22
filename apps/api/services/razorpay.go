@@ -667,8 +667,13 @@ func (c *RazorpayClient) doRequestWithHeaders(method, path string, body []byte, 
 	if base == "" {
 		base = razorpayBaseURL
 	}
-	url := base + path
+	return c.doURL(method, base+path, body, extraHeaders)
+}
 
+// doURL is doRequestWithHeaders against an already-resolved absolute URL. Split
+// out so the v2 onboarding endpoints (#740) — which sit on a different API
+// version than razorpayBaseURL — reuse one auth and error-handling path.
+func (c *RazorpayClient) doURL(method, url string, body []byte, extraHeaders map[string]string) ([]byte, error) {
 	var req *http.Request
 	var err error
 	if body != nil {
