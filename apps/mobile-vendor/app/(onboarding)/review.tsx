@@ -105,7 +105,7 @@ export default function ReviewScreen() {
   const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
 
-  const { personalInfo, kitchenDetails, operations, documents, policies } = store;
+  const { personalInfo, kitchenDetails, operations, documents, policies, payout } = store;
 
   const openDaysShort = Object.entries(operations.operatingHours)
     .filter(([, hours]) => !hours.closed)
@@ -205,8 +205,8 @@ export default function ReviewScreen() {
 
   return (
     <OnboardingScaffold
-      step={6}
-      total={6}
+      step={7}
+      total={7}
       stepName={t('onboarding.stepReview')}
       title={t('onboarding.reviewTitle')}
       subtitle={t('onboarding.reviewSubtitle')}
@@ -292,6 +292,15 @@ export default function ReviewScreen() {
                   : policies.cancellationPolicy)
               : '—'
           }
+          isLast
+        />
+      </Section>
+
+      {/* ── PAYOUT ───────────────────────────────────────────── */}
+      <Section title="Payouts" editRoute="/(onboarding)/payout">
+        <RowItem
+          label="Paid to"
+          value={payout.configured ? payout.summary : 'Not set up'}
           isLast
         />
       </Section>
