@@ -50,11 +50,11 @@ export default function NewMenuItemScreen() {
   const { ready, draft, saveDraft, clearDraft } =
     useFormDraft<MenuItemFormValues>('menu-item-new');
 
-  // The newly-created item's ID is needed for photo upload. We hold it in a
-  // ref so we can construct the upload hook once at the top of the component
-  // without violating the rules of hooks.
-  const [newItemId, setNewItemId] = useState<string>('');
-  const uploadMutation = useUploadMenuPhoto(newItemId);
+  // The upload takes the item id per call. It must NOT be captured at render:
+  // the id only exists once the create mutation resolves, and a setState in
+  // this handler would not reach an already-constructed mutation — which is
+  // exactly how new items used to save with their photos silently dropped.
+  const uploadMutation = useUploadMenuPhoto();
 
   const categories = menuData?.categories ?? [];
   const isSaving = createMutation.isPending || uploadMutation.isPending;
@@ -78,20 +78,29 @@ export default function NewMenuItemScreen() {
       });
 
       const createdId = result.item.id;
-      setNewItemId(createdId);
 
-      // Upload queued photos sequentially
+      // Upload queued photos sequentially. Failures stay non-blocking — the
+      // item exists and photos can be added from the edit screen — but they
+      // are counted and surfaced, because a silent drop is indistinguishable
+      // from success to the chef.
+      let failed = 0;
       for (const uri of localPhotoUris) {
         try {
-          await uploadMutation.mutateAsync(uri);
+          await uploadMutation.mutateAsync({ itemId: createdId, uri });
         } catch {
-          // Photo upload failure is non-blocking — item already created.
-          // A later session allows adding photos from the edit screen.
+          failed += 1;
         }
       }
 
       clearDraft();
-      showToast({ message: `${values.name} added to menu`, tone: 'success' });
+      if (failed > 0) {
+        showToast({
+          message: `${values.name} added, but ${failed} photo${failed > 1 ? 's' : ''} didn't upload. Add them from Edit.`,
+          tone: 'error',
+        });
+      } else {
+        showToast({ message: `${values.name} added to menu`, tone: 'success' });
+      }
       router.back();
     } catch (err: unknown) {
       Alert.alert(

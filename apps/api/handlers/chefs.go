@@ -797,18 +797,18 @@ func chefDashboardOrderRows(orders []models.Order) []gin.H {
 // while sending an empty string or zero genuinely clears the value.
 // This unblocks clearing the description / address fields from the app.
 type UpdateChefProfileRequest struct {
-	BusinessName    *string  `json:"businessName"`
-	Description     *string  `json:"description"`
-	ProfileImage    *string  `json:"profileImage"`
-	BannerImage     *string  `json:"bannerImage"`
-	Cuisines        []string `json:"cuisines"`
-	Specialties     []string `json:"specialties"`
-	PrepTime        *string  `json:"prepTime"`
-	MinimumOrder    *float64 `json:"minimumOrder"`
-	ServiceRadius   *float64 `json:"serviceRadius"`
-	AcceptingOrders     *bool `json:"acceptingOrders"`
-	AutoScheduleEnabled *bool `json:"autoScheduleEnabled"`
-	OffersPickup        *bool `json:"offersPickup"`
+	BusinessName        *string  `json:"businessName"`
+	Description         *string  `json:"description"`
+	ProfileImage        *string  `json:"profileImage"`
+	BannerImage         *string  `json:"bannerImage"`
+	Cuisines            []string `json:"cuisines"`
+	Specialties         []string `json:"specialties"`
+	PrepTime            *string  `json:"prepTime"`
+	MinimumOrder        *float64 `json:"minimumOrder"`
+	ServiceRadius       *float64 `json:"serviceRadius"`
+	AcceptingOrders     *bool    `json:"acceptingOrders"`
+	AutoScheduleEnabled *bool    `json:"autoScheduleEnabled"`
+	OffersPickup        *bool    `json:"offersPickup"`
 	// Chef self-delivery offering + pricing (Phase 2).
 	OffersSelfDelivery        *bool                      `json:"offersSelfDelivery"`
 	SelfDeliveryBaseFee       *float64                   `json:"selfDeliveryBaseFee"`
@@ -2032,6 +2032,12 @@ func (h *ChefHandler) UpdateChefSettings(c *gin.Context) {
 		"accepting_orders": req.AcceptingOrders,
 		"paused_until":     nil,
 	})
+
+	// Tell customers browsing this kitchen. Without it they keep seeing an open
+	// kitchen until their chef list happens to refetch (#useChefs staleTime).
+	if err := services.EnqueueChefAvailabilityChanged(database.DB, chef.ID, req.AcceptingOrders); err != nil {
+		log.Printf("chef availability event (settings) for %s: %v", chef.ID, err)
+	}
 
 	// Upsert chef settings
 	var settings models.ChefSettings
