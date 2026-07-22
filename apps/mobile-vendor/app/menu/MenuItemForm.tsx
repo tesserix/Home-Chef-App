@@ -26,6 +26,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { ChevronLeft, Plus } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
+import { validationSummary } from '../../lib/menu-validation';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import { DietIcon } from '../../components/vendor/DietIcon';
 import { ModifierComboEditor } from '../../components/vendor/ModifierComboEditor';
@@ -453,6 +454,9 @@ export function MenuItemForm({
   onDraftChange,
 }: MenuItemFormProps) {
   const { show: showToast } = useToast();
+  // validate() writes errors via setState; handleSave runs in the same tick and
+  // would otherwise read the previous render's value.
+  const errorsRef = useRef<Partial<Record<keyof MenuItemFormValues, string>>>({});
 
   // Form state — plain useState mirrors profile.tsx's EditableField pattern
   const [name, setName] = useState(initialValues.name);
@@ -564,13 +568,20 @@ export function MenuItemForm({
     }
     if (!categoryId) next.categoryId = 'Select a category';
     setErrors(next);
+    errorsRef.current = next;
     return Object.keys(next).length === 0;
   }
 
   // ---- Handlers -------------------------------------------------------------
 
   function handleSave() {
-    if (!validate()) return;
+    if (!validate()) {
+      // Without this the button reads as broken: the offending field is
+      // usually scrolled out of view, so nothing visibly happens.
+      const summary = validationSummary(errorsRef.current);
+      if (summary) showToast({ message: summary, tone: 'error' });
+      return;
+    }
     onSave(
       {
         name: name.trim(),
