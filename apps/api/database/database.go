@@ -9,6 +9,7 @@ import (
 
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/payouts"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -329,6 +330,14 @@ func Migrate() error {
 
 		// Escrow conservation ledger: gateway-vs-platform payout drift report (#398)
 		&models.PaymentDrift{},
+
+		// Automated vendor payouts (#736, ADR 0002). These live in the
+		// domain-free payouts core rather than models/ — the package must not
+		// depend on this application's domain types so it stays extractable
+		// (#749). Registering them here is the one place the two meet.
+		&payouts.LedgerEntry{},
+		&payouts.Batch{},
+		&payouts.BatchItem{},
 	)
 
 	if err != nil {
