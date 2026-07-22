@@ -312,7 +312,8 @@ func DecideRelease(in ReleaseInput) ReleaseDecision {
 		reasons = append(reasons, BlockNewChefRamp)
 	}
 	if !in.ReviewAbove.IsZero() {
-		if cmp, err := in.OrderTotal.Cmp(in.ReviewAbove); err == nil && cmp > 0 {
+		// A comparison we cannot trust must block, never pass.
+		if cmp, err := in.OrderTotal.Cmp(in.ReviewAbove); err != nil || cmp > 0 {
 			reasons = append(reasons, BlockAboveReviewThreshold)
 		}
 	}
