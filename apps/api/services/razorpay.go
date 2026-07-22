@@ -674,6 +674,57 @@ func (c *RazorpayClient) doRequestWithHeaders(method, path string, body []byte, 
 // out so the v2 onboarding endpoints (#740) — which sit on a different API
 // version than razorpayBaseURL — reuse one auth and error-handling path.
 func (c *RazorpayClient) doURL(method, url string, body []byte, extraHeaders map[string]string) ([]byte, error) {
+	respBody, status, err := c.rawDo(method, url, body, extraHeaders)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("razorpay API error (HTTP %d): %s", status, string(respBody))
+	}
+	return respBody, nil
+}
+
+// doURLSanitized is doURL for endpoints whose request bodies carry bank PII
+// (account number, IFSC, beneficiary name) that Razorpay's own validation
+// errors sometimes echo back verbatim in the response body. Same request,
+// same auth — but on a 4xx/5xx it surfaces only the HTTP status plus
+// Razorpay's structured error.code/error.description, never the raw body, so
+// a rejected bank detail can never ride an error message into a log line or
+// Sentry event (review finding 4). Every other Razorpay call keeps doURL's
+// full-body contract unchanged.
+func (c *RazorpayClient) doURLSanitized(method, url string, body []byte, extraHeaders map[string]string) ([]byte, error) {
+	respBody, status, err := c.rawDo(method, url, body, extraHeaders)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, sanitizedGatewayError(status, respBody)
+	}
+	return respBody, nil
+}
+
+// sanitizedGatewayError builds a 4xx/5xx error from only the HTTP status and
+// Razorpay's own structured error.code/error.description — deliberately
+// dropping everything else in the body, since that's where a bank-detail
+// validation error tends to echo the submitted (and rejected) value back.
+func sanitizedGatewayError(status int, body []byte) error {
+	var parsed struct {
+		Error struct {
+			Code        string `json:"code"`
+			Description string `json:"description"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err == nil && (parsed.Error.Code != "" || parsed.Error.Description != "") {
+		return fmt.Errorf("razorpay API error (HTTP %d): %s: %s", status, parsed.Error.Code, parsed.Error.Description)
+	}
+	return fmt.Errorf("razorpay API error (HTTP %d)", status)
+}
+
+// rawDo performs the authenticated HTTP round-trip and returns the raw
+// response body and status code, leaving error-message formatting to the
+// caller (doURL vs. doURLSanitized) — the only difference between the two
+// gateway error paths.
+func (c *RazorpayClient) rawDo(method, url string, body []byte, extraHeaders map[string]string) ([]byte, int, error) {
 	var req *http.Request
 	var err error
 	if body != nil {
@@ -682,7 +733,7 @@ func (c *RazorpayClient) doURL(method, url string, body []byte, extraHeaders map
 		req, err = http.NewRequest(method, url, nil)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.SetBasicAuth(c.keyID, c.keySecret)
@@ -696,18 +747,14 @@ func (c *RazorpayClient) doURL(method, url string, body []byte, extraHeaders map
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("razorpay request failed: %w", err)
+		return nil, 0, fmt.Errorf("razorpay request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, 0, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("razorpay API error (HTTP %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	return respBody, nil
+	return respBody, resp.StatusCode, nil
 }

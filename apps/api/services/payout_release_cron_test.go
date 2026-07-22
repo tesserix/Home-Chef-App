@@ -66,6 +66,7 @@ const payoutReleaseChefProfilesDDL = `CREATE TABLE chef_profiles (
 	address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '',
 	id text PRIMARY KEY, user_id text, business_name text, state text DEFAULT '',
 	razorpay_account_id text DEFAULT '', razorpay_settlement_status text DEFAULT '',
+	payout_method text DEFAULT '',
 	payout_auto_release text DEFAULT '')`
 
 const payoutReleaseLedgerDDL = `CREATE TABLE payout_ledger_entries (
@@ -116,14 +117,19 @@ func seedDeliveredOrder(t *testing.T, db *gorm.DB, mutateChef func(*models.ChefP
 	chef := &models.ChefProfile{
 		ID:                       uuid.New(),
 		RazorpaySettlementStatus: "activated",
+		// The happy-path default: an activated bank-transfer chef is what
+		// every pre-existing test in this file is actually about (release
+		// eligibility, hold state, dispute guards). Tests specifically about
+		// the payout-method check override this via mutateChef.
+		PayoutMethod: "bank_transfer",
 	}
 	if mutateChef != nil {
 		mutateChef(chef)
 	}
 	require.NoError(t, db.Exec(
-		`INSERT INTO chef_profiles (id, razorpay_account_id, razorpay_settlement_status, payout_auto_release, state)
-		 VALUES (?,?,?,?,?)`,
-		chef.ID.String(), chef.RazorpayAccountID, chef.RazorpaySettlementStatus, chef.PayoutAutoRelease, chef.State,
+		`INSERT INTO chef_profiles (id, razorpay_account_id, razorpay_settlement_status, payout_method, payout_auto_release, state)
+		 VALUES (?,?,?,?,?,?)`,
+		chef.ID.String(), chef.RazorpayAccountID, chef.RazorpaySettlementStatus, chef.PayoutMethod, chef.PayoutAutoRelease, chef.State,
 	).Error)
 
 	orderID := uuid.New()
@@ -342,6 +348,30 @@ func TestBuildReleaseInput_ReadsSettlementActivation(t *testing.T) {
 	}
 }
 
+// TestBuildReleaseInput_UpiPayoutMethodNeverReadsAsActivated pins review
+// finding 2: a chef who switched to UPI can carry a stale
+// razorpay_settlement_status="activated" left over from when they were on
+// bank transfer (SavePayoutDetails clears this going forward, but existing
+// rows predating that fix, and any gap, must fail safe here too). Route only
+// ever settles by NEFT/IMPS to a bank account, so "activated" without
+// payout_method=bank_transfer must never let the sweep release money toward
+// an abandoned bank account.
+func TestBuildReleaseInput_UpiPayoutMethodNeverReadsAsActivated(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
+		c.RazorpaySettlementStatus = "activated"
+		c.PayoutMethod = "upi"
+	})
+
+	in, err := BuildReleaseInput(db, order, time.Now())
+	if err != nil {
+		t.Fatalf("BuildReleaseInput: %v", err)
+	}
+	if in.SettlementActivated {
+		t.Fatal("a UPI payout method must never read as SettlementActivated, however stale the status column")
+	}
+}
+
 func TestBuildReleaseInput_TreatsNeedsClarificationAsNotActivated(t *testing.T) {
 	// The single most dangerous mis-mapping: needs_clarification means
 	// Razorpay has NOT accepted the bank account, so a release strands money.
@@ -409,10 +439,10 @@ func TestBuildReleaseInput_FlagsAnOpenRefund(t *testing.T) {
 // with Chef preloaded, matching the shape runPayoutReleaseSweep loads.
 func seedChefWithDeliveredOrders(t *testing.T, db *gorm.DB, priorDelivered int) *models.Order {
 	t.Helper()
-	chef := &models.ChefProfile{ID: uuid.New(), RazorpaySettlementStatus: "activated"}
+	chef := &models.ChefProfile{ID: uuid.New(), RazorpaySettlementStatus: "activated", PayoutMethod: "bank_transfer"}
 	require.NoError(t, db.Exec(
-		`INSERT INTO chef_profiles (id, razorpay_account_id, razorpay_settlement_status, payout_auto_release, state) VALUES (?,?,?,?,?)`,
-		chef.ID.String(), chef.RazorpayAccountID, chef.RazorpaySettlementStatus, chef.PayoutAutoRelease, chef.State,
+		`INSERT INTO chef_profiles (id, razorpay_account_id, razorpay_settlement_status, payout_method, payout_auto_release, state) VALUES (?,?,?,?,?,?)`,
+		chef.ID.String(), chef.RazorpayAccountID, chef.RazorpaySettlementStatus, chef.PayoutMethod, chef.PayoutAutoRelease, chef.State,
 	).Error)
 
 	for i := 0; i < priorDelivered; i++ {

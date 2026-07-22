@@ -247,6 +247,40 @@ func TestSavePayoutDetails_UpiChefIsNotMarkedPayable(t *testing.T) {
 	require.NotEqual(t, "activated", body["razorpaySettlementStatus"])
 }
 
+// TestSavePayoutDetails_SwitchingToUpiClearsStaleActivatedStatus pins review
+// finding 2's handler half: a chef who was activated on bank transfer and
+// then switches to UPI must not keep razorpay_settlement_status="activated"
+// in the DB — the automated release sweep (BuildReleaseInput) trusts that
+// column, and a stale "activated" would let it release money toward a bank
+// account the chef has already abandoned. razorpay_account_id/
+// razorpay_product_id must survive the switch so a later switch back to bank
+// reuses them instead of minting a new linked account.
+func TestSavePayoutDetails_SwitchingToUpiClearsStaleActivatedStatus(t *testing.T) {
+	db, userID, chefID := setupChefPayoutSettlementDB(t)
+	require.NoError(t, db.Exec(
+		`UPDATE chef_profiles SET razorpay_account_id = ?, razorpay_product_id = ?, razorpay_settlement_status = ? WHERE id = ?`,
+		"acc_existing", "prd_existing", "activated", chefID.String()).Error)
+
+	// No stub server needed — a UPI save must never touch the gateway at all.
+	services.SetRazorpayClient(services.NewRazorpayTestClient("http://unused.invalid", "k", "s", ""))
+	t.Cleanup(func() { services.SetRazorpayClient(nil) })
+
+	w := postPayout(t, userID, map[string]any{
+		"payoutMethod": "upi",
+		"upiId":        "chef@upi",
+	})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	accountID, productID, status, _ := chefSettlementRow(t, db, chefID)
+	require.Equal(t, "acc_existing", accountID, "the linked account must survive a switch to UPI so switching back to bank reuses it")
+	require.Equal(t, "prd_existing", productID, "the product configuration must survive a switch to UPI so switching back to bank reuses it")
+	require.Empty(t, status, "a stale activated status must be cleared — the release sweep trusts this column")
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.NotEqual(t, "activated", body["razorpaySettlementStatus"])
+}
+
 func TestSavePayoutDetails_PartialFailurePersistsWhatWasCreated(t *testing.T) {
 	// A stakeholder-step rejection leaves an account created but no product/
 	// status. That partial result has to be persisted anyway — otherwise a

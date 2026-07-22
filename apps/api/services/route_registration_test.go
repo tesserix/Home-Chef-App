@@ -205,4 +205,110 @@ func TestRegisterSettlementAccount_StopsOnGatewayFailure(t *testing.T) {
 	if res == nil || res.AccountID != "acc_123" {
 		t.Fatalf("partial result should retain the created account id, got %+v", res)
 	}
+	if res.StakeholderCreated {
+		t.Fatal("a failed stakeholder call must not be recorded as created")
+	}
+}
+
+// TestRegisterSettlementAccount_RetryAfterStakeholderFailureReattempts pins
+// review finding 3: the old code nested CreateStakeholder inside
+// "if AccountID == empty", so once an account existed (whether just-created or
+// carried in from a prior attempt), every later retry skipped the
+// stakeholder step forever — even if it had never actually succeeded. A
+// retry must re-attempt the stakeholder exactly until it succeeds, and must
+// never mint a second linked account while doing so.
+func TestRegisterSettlementAccount_RetryAfterStakeholderFailureReattempts(t *testing.T) {
+	var accountHits, stakeholderHits int
+	srv, _ := newRouteServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/stakeholders"):
+			stakeholderHits++
+			if stakeholderHits == 1 {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"error":{"description":"internal error, please retry"}}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"sth_1"}`))
+		case strings.Contains(r.URL.Path, "/products/"):
+			_, _ = w.Write([]byte(`{"id":"acc_prd_1","activation_status":"activated"}`))
+		case strings.HasSuffix(r.URL.Path, "/products"):
+			_, _ = w.Write([]byte(`{"id":"acc_prd_1","activation_status":"created"}`))
+		default:
+			accountHits++
+			_, _ = w.Write([]byte(`{"id":"acc_123","status":"created"}`))
+		}
+	})
+	c := NewRazorpayTestClient(srv.URL, "k", "s", "")
+
+	res1, err1 := RegisterSettlementAccount(c, registration())
+	if err1 == nil {
+		t.Fatal("the first attempt's stakeholder failure must surface as an error")
+	}
+	if res1.AccountID != "acc_123" {
+		t.Fatalf("account id = %q, want acc_123 kept from the failed attempt", res1.AccountID)
+	}
+	if res1.StakeholderCreated {
+		t.Fatal("a failed stakeholder call must not be recorded as created")
+	}
+
+	in := registration()
+	in.ExistingAccountID = res1.AccountID
+	in.ExistingStakeholderCreated = res1.StakeholderCreated // false — must be re-attempted
+
+	res2, err2 := RegisterSettlementAccount(c, in)
+	if err2 != nil {
+		t.Fatalf("retry must succeed once the stakeholder call is re-attempted: %v", err2)
+	}
+	if !res2.StakeholderCreated {
+		t.Fatal("a successful retry must record the stakeholder as created")
+	}
+	if accountHits != 1 {
+		t.Fatalf("POST /v2/accounts hits = %d, want exactly 1 — the retry must reuse the existing account, not mint a second", accountHits)
+	}
+	if stakeholderHits != 2 {
+		t.Fatalf("stakeholder hits = %d, want 2 — the retry must re-attempt the stakeholder step rather than skip it forever", stakeholderHits)
+	}
+}
+
+// TestRegisterSettlementAccount_StakeholderAlreadyExistsIsTreatedAsSuccess
+// covers the case where our own retry's CreateStakeholder call lands on an
+// account that already has one (e.g. an earlier attempt succeeded at
+// Razorpay but our client never saw the response) — a "stakeholder already
+// exists" style rejection is the goal state, not a failure to report.
+func TestRegisterSettlementAccount_StakeholderAlreadyExistsIsTreatedAsSuccess(t *testing.T) {
+	srv, calls := newRouteServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/stakeholders"):
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"code":"BAD_REQUEST_ERROR","description":"Stakeholder already exists for this account"}}`))
+		case strings.Contains(r.URL.Path, "/products/"):
+			_, _ = w.Write([]byte(`{"id":"acc_prd_1","activation_status":"activated"}`))
+		case strings.HasSuffix(r.URL.Path, "/products"):
+			_, _ = w.Write([]byte(`{"id":"acc_prd_1","activation_status":"created"}`))
+		default:
+			_, _ = w.Write([]byte(`{"id":"acc_123","status":"created"}`))
+		}
+	})
+	c := NewRazorpayTestClient(srv.URL, "k", "s", "")
+
+	in := registration()
+	in.ExistingAccountID = "acc_existing"
+	// ExistingStakeholderCreated deliberately left false — the retry case
+	// where the prior attempt never confirmed the stakeholder existed.
+
+	res, err := RegisterSettlementAccount(c, in)
+	if err != nil {
+		t.Fatalf("an 'already exists' rejection must be treated as success, got error: %v", err)
+	}
+	if !res.StakeholderCreated {
+		t.Fatal("an already-exists response must still record the stakeholder as created")
+	}
+	if res.ActivationStatus != "activated" {
+		t.Fatalf("registration must continue past the stakeholder step to product/settlement, got activation_status=%q", res.ActivationStatus)
+	}
+	for _, p := range paths(*calls) {
+		if p == "POST /v2/accounts" {
+			t.Fatal("must not create a new account when reusing an existing one")
+		}
+	}
 }

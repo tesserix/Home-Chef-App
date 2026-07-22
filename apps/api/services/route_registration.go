@@ -28,6 +28,15 @@ var ErrNoSettlementAccount = errors.New("route: a bank account is required — R
 type SettlementRegistration struct {
 	ExistingAccountID string
 	ExistingProductID string
+	// ExistingStakeholderCreated marks that a prior attempt already got the
+	// stakeholder attached to ExistingAccountID. The stakeholder step is
+	// skipped ONLY when this is true — independent of whether AccountID is
+	// freshly created or reused this call. Without a field of its own, the
+	// stakeholder step used to be nested inside "account was just created",
+	// so an account-created-but-stakeholder-failed retry would carry a
+	// non-empty AccountID and skip the stakeholder forever, never able to
+	// complete registration (review finding 3).
+	ExistingStakeholderCreated bool
 
 	Email        string
 	Phone        string
@@ -40,10 +49,15 @@ type SettlementRegistration struct {
 
 // SettlementRegistrationResult is what the caller persists on the chef.
 type SettlementRegistrationResult struct {
-	AccountID        string
-	ProductID        string
-	ActivationStatus string
-	Requirements     []RouteRequirement
+	AccountID string
+	ProductID string
+	// StakeholderCreated records that the stakeholder step has succeeded —
+	// either just now or on an earlier attempt, carried in via
+	// ExistingStakeholderCreated — mirroring how AccountID/ProductID
+	// themselves persist across retries.
+	StakeholderCreated bool
+	ActivationStatus   string
+	Requirements       []RouteRequirement
 }
 
 // Payable reports whether a released transfer can actually reach the chef's
@@ -68,8 +82,9 @@ func RegisterSettlementAccount(rz *RazorpayClient, in SettlementRegistration) (*
 	}
 
 	res := &SettlementRegistrationResult{
-		AccountID: in.ExistingAccountID,
-		ProductID: in.ExistingProductID,
+		AccountID:          in.ExistingAccountID,
+		ProductID:          in.ExistingProductID,
+		StakeholderCreated: in.ExistingStakeholderCreated,
 	}
 
 	if res.AccountID == "" {
@@ -84,13 +99,28 @@ func RegisterSettlementAccount(rz *RazorpayClient, in SettlementRegistration) (*
 			return res, fmt.Errorf("route: create linked account: %w", err)
 		}
 		res.AccountID = acct.ID
+	}
 
-		// Only for a brand-new account: Razorpay rejects a duplicate
-		// stakeholder, and an existing account already has one.
-		if _, err := rz.CreateStakeholder(res.AccountID, &StakeholderRequest{
+	// Runs whenever the stakeholder hasn't succeeded yet — NOT nested inside
+	// "account was just created". A fresh account whose stakeholder call then
+	// fails must still be retried on the next attempt; gating this on
+	// AccountID's freshness (the old shape) meant a stakeholder failure right
+	// after account creation left AccountID non-empty forever, so every later
+	// retry skipped BOTH steps and the chef could never complete registration.
+	if !res.StakeholderCreated {
+		_, err := rz.CreateStakeholder(res.AccountID, &StakeholderRequest{
 			Name:  in.ContactName,
 			Email: in.Email,
-		}); err != nil {
+		})
+		switch {
+		case err == nil:
+			res.StakeholderCreated = true
+		case isStakeholderAlreadyExists(err):
+			// Razorpay already has a stakeholder on this account — e.g. an
+			// earlier attempt succeeded server-side but our client never saw
+			// the response. That's the goal state, not a failure to report.
+			res.StakeholderCreated = true
+		default:
 			return res, fmt.Errorf("route: create stakeholder: %w", err)
 		}
 	}
@@ -110,4 +140,14 @@ func RegisterSettlementAccount(rz *RazorpayClient, in SettlementRegistration) (*
 	res.ActivationStatus = cfg.ActivationStatus
 	res.Requirements = cfg.Requirements
 	return res, nil
+}
+
+// isStakeholderAlreadyExists recognizes Razorpay's "stakeholder already
+// exists" style rejection as the goal state rather than a failure. Without
+// this, a retry that lands on an account whose stakeholder actually was
+// created by an earlier attempt (e.g. the create call succeeded at Razorpay
+// but the response never reached our client) would error on every
+// subsequent attempt forever, even though nothing is actually wrong.
+func isStakeholderAlreadyExists(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "already exist")
 }

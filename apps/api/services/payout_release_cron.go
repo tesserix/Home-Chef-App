@@ -124,11 +124,19 @@ func BuildReleaseInput(db *gorm.DB, order *models.Order, now time.Time) (payouts
 	}
 
 	return payouts.ReleaseInput{
-		Now:                 now,
-		DeliveredAt:         deliveredAt(order, now),
-		Maturation:          maturationWindow(db),
-		AutomationEnabled:   PayoutAutomationEnabled(db, &order.Chef),
-		SettlementActivated: order.Chef.RazorpaySettlementStatus == "activated",
+		Now:               now,
+		DeliveredAt:       deliveredAt(order, now),
+		Maturation:        maturationWindow(db),
+		AutomationEnabled: PayoutAutomationEnabled(db, &order.Chef),
+		// Both must hold: Route only ever settles by NEFT/IMPS to a bank
+		// account, so "activated" alone is not enough — a chef who switches
+		// to UPI keeps whatever razorpay_settlement_status was last written
+		// (SavePayoutDetails now clears it on that switch, but this is the
+		// belt-and-suspenders read for any row that predates that fix or any
+		// gap in it). Trusting status alone would let the sweep auto-release
+		// money toward a bank account the chef has already abandoned (review
+		// finding 2).
+		SettlementActivated: order.Chef.RazorpaySettlementStatus == "activated" && order.Chef.PayoutMethod == "bank_transfer",
 		RefundOpen:          order.RefundedAt != nil,
 		RecoveryBalance:     deducted,
 		DeliveredOrderCount: int(delivered),

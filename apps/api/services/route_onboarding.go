@@ -111,6 +111,21 @@ func (c *RazorpayClient) doV2(method, path string, payload any) ([]byte, error) 
 	return c.doURL(method, c.v2URL(path), body, nil)
 }
 
+// doV2Sanitized is doV2 for the one v2 call whose request body carries bank
+// PII (ConfigureRouteSettlement's account_number/ifsc_code/beneficiary_name):
+// on a 4xx/5xx it never propagates the raw response body, only Razorpay's
+// structured error code/description (review finding 4).
+func (c *RazorpayClient) doV2Sanitized(method, path string, payload any) ([]byte, error) {
+	var body []byte
+	if payload != nil {
+		var err error
+		if body, err = json.Marshal(payload); err != nil {
+			return nil, fmt.Errorf("failed to marshal request: %w", err)
+		}
+	}
+	return c.doURLSanitized(method, c.v2URL(path), body, nil)
+}
+
 // CreateLinkedAccountV2 creates a linked account that can later be configured
 // with a settlement destination.
 func (c *RazorpayClient) CreateLinkedAccountV2(req *V2AccountRequest) (*V2AccountResponse, error) {
@@ -165,6 +180,12 @@ func (c *RazorpayClient) RequestRouteProduct(accountID string) (*RouteProductRes
 // A needs_clarification response is returned as a normal result, not an error:
 // Razorpay reviews the details asynchronously and the requirements have to
 // reach the admin queue rather than being swallowed as a failure.
+//
+// Goes through doV2Sanitized, not doV2: this is the one onboarding call whose
+// request body carries the bank account number, IFSC and beneficiary name, and
+// Razorpay's validation errors commonly echo the offending value back in the
+// body. A raw-body error here would let a rejected bank account ride straight
+// into whatever logs/Sentry the caller feeds it into (review finding 4).
 func (c *RazorpayClient) ConfigureRouteSettlement(accountID, productID string, acct *SettlementAccount) (*RouteProductResponse, error) {
 	payload := map[string]any{
 		"settlements": map[string]string{
@@ -173,7 +194,7 @@ func (c *RazorpayClient) ConfigureRouteSettlement(accountID, productID string, a
 			"beneficiary_name": acct.BeneficiaryName,
 		},
 	}
-	raw, err := c.doV2("PATCH", "/accounts/"+accountID+"/products/"+productID, payload)
+	raw, err := c.doV2Sanitized("PATCH", "/accounts/"+accountID+"/products/"+productID, payload)
 	if err != nil {
 		return nil, err
 	}

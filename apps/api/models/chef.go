@@ -118,6 +118,18 @@ type ChefProfile struct {
 	// which field Razorpay objected to and where to resolve it.
 	RazorpaySettlementRequirements string `gorm:"type:text;default:''" json:"-"`
 
+	// RazorpayStakeholderCreated mirrors
+	// SettlementRegistrationResult.StakeholderCreated: whether the individual
+	// behind RazorpayAccountID has been attached at Razorpay. Kept as its own
+	// column, not inferred from RazorpayAccountID being non-empty — a
+	// stakeholder failure right after a fresh account creation used to leave
+	// the account id persisted with no stakeholder, and every later retry
+	// skipped both steps forever because the code only ever attempted the
+	// stakeholder call for a brand-new account (review finding 3). Feeds
+	// SettlementRegistration.ExistingStakeholderCreated on the next save so a
+	// retry keeps re-attempting only the stakeholder step until it succeeds.
+	RazorpayStakeholderCreated bool `gorm:"default:false" json:"-"`
+
 	// PayoutAutoRelease is the admin's per-chef automation switch: "on",
 	// "off", or "" to follow payout.auto_release_default. A tri-state rather
 	// than a boolean because rollout wants opt-in and steady state wants
