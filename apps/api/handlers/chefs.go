@@ -797,18 +797,18 @@ func chefDashboardOrderRows(orders []models.Order) []gin.H {
 // while sending an empty string or zero genuinely clears the value.
 // This unblocks clearing the description / address fields from the app.
 type UpdateChefProfileRequest struct {
-	BusinessName    *string  `json:"businessName"`
-	Description     *string  `json:"description"`
-	ProfileImage    *string  `json:"profileImage"`
-	BannerImage     *string  `json:"bannerImage"`
-	Cuisines        []string `json:"cuisines"`
-	Specialties     []string `json:"specialties"`
-	PrepTime        *string  `json:"prepTime"`
-	MinimumOrder    *float64 `json:"minimumOrder"`
-	ServiceRadius   *float64 `json:"serviceRadius"`
-	AcceptingOrders     *bool `json:"acceptingOrders"`
-	AutoScheduleEnabled *bool `json:"autoScheduleEnabled"`
-	OffersPickup        *bool `json:"offersPickup"`
+	BusinessName        *string  `json:"businessName"`
+	Description         *string  `json:"description"`
+	ProfileImage        *string  `json:"profileImage"`
+	BannerImage         *string  `json:"bannerImage"`
+	Cuisines            []string `json:"cuisines"`
+	Specialties         []string `json:"specialties"`
+	PrepTime            *string  `json:"prepTime"`
+	MinimumOrder        *float64 `json:"minimumOrder"`
+	ServiceRadius       *float64 `json:"serviceRadius"`
+	AcceptingOrders     *bool    `json:"acceptingOrders"`
+	AutoScheduleEnabled *bool    `json:"autoScheduleEnabled"`
+	OffersPickup        *bool    `json:"offersPickup"`
 	// Chef self-delivery offering + pricing (Phase 2).
 	OffersSelfDelivery        *bool                      `json:"offersSelfDelivery"`
 	SelfDeliveryBaseFee       *float64                   `json:"selfDeliveryBaseFee"`
@@ -881,6 +881,9 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 		chef.ServiceRadius = *req.ServiceRadius
 	}
 	if req.AcceptingOrders != nil {
+		if payoutGateBlocks(c, &chef, *req.AcceptingOrders) {
+			return
+		}
 		chef.AcceptingOrders = *req.AcceptingOrders
 	}
 	if req.AutoScheduleEnabled != nil {
@@ -2023,6 +2026,10 @@ func (h *ChefHandler) UpdateChefSettings(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if payoutGateBlocks(c, &chef, req.AcceptingOrders) {
 		return
 	}
 

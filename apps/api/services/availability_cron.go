@@ -66,14 +66,27 @@ func runAvailabilityResumeScan(ctx context.Context) {
 	for _, ch := range due {
 		ids = append(ids, ch.ID)
 	}
-	if err := database.DB.Model(&models.ChefProfile{}).
-		Where("id IN ?", ids).
-		Updates(map[string]interface{}{
-			"accepting_orders": true,
-			"paused_until":     nil,
-		}).Error; err != nil {
+	// The payout gate (#739) also applies to automatic reopening: a chef with
+	// no payout destination must not be switched back on by a timer. Clearing
+	// paused_until is unconditional so a gated chef does not stay stuck behind
+	// an expired pause once they add a method.
+	reopen := database.DB.Model(&models.ChefProfile{}).Where("id IN ?", ids)
+	if predicate, enforced := PayoutGateOpenFilter(database.DB, now); enforced {
+		reopen = reopen.Where(predicate)
+	}
+	if err := reopen.Updates(map[string]interface{}{
+		"accepting_orders": true,
+		"paused_until":     nil,
+	}).Error; err != nil {
 		log.Printf("availability-resume: reopen failed: %v", err)
 		return
+	}
+	if predicate, enforced := PayoutGateOpenFilter(database.DB, now); enforced {
+		if err := database.DB.Model(&models.ChefProfile{}).
+			Where("id IN ?", ids).Where("NOT ("+predicate+")").
+			Update("paused_until", nil).Error; err != nil {
+			log.Printf("availability-resume: clearing pause for gated chefs failed: %v", err)
+		}
 	}
 
 	for _, ch := range due {

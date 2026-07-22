@@ -84,6 +84,10 @@ func (h *ChefAvailabilityHandler) ResumeReceiving(c *gin.Context) {
 		return
 	}
 
+	if payoutGateBlocks(c, &chef, true) {
+		return
+	}
+
 	if err := database.DB.Model(&models.ChefProfile{}).
 		Where("id = ?", chef.ID).
 		Updates(map[string]interface{}{
