@@ -410,6 +410,49 @@ func TestOrderSettlements_RecoveryDeductionReducesChefTransfer(t *testing.T) {
 	}
 }
 
+// TestOrderSettlements_LedgerReadFailure_PaysGross (#741) locks in the fail-OPEN
+// behavior on a ledger-read error: applyChefRecoveryDeduction must pay the
+// chef's undeducted gross rather than zero. Nothing in this codebase ever
+// writes a resolving ledger entry, so a real debt is re-derived and
+// re-deducted from the chef's NEXT order regardless of whether this read
+// succeeds — failing closed protects nothing and only turns a transient read
+// error into a permanent, silent loss of this order's whole chef payout.
+//
+// The failure is induced realistically: a DB whose payout_ledger_entries
+// table does not exist at all (unlike setupPayDB, which creates it), so the
+// query inside services.ApplyRecoveryDeduction errors exactly as it would
+// against a real, unmigrated/unreachable table.
+func TestOrderSettlements_LedgerReadFailure_PaysGross(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
+	require.NoError(t, err)
+	// Deliberately no payout_ledger_entries table — the ledger read must fail.
+
+	order := &models.Order{
+		OrderNumber:        "HC-3",
+		ChefID:             uuid.New(),
+		Subtotal:           1000,
+		Tax:                50,
+		ChefTip:            20,
+		DeliveryFee:        40,
+		ChefFundedDiscount: 100,
+		CommissionRate:     0.06,
+	}
+	order.Chef.RazorpayAccountID = "acc_chef"
+
+	settlements := orderSettlements(db, order)
+	// The full undeducted gross (906.30 → 90630 paise, see
+	// TestOrderSettlements_ChefNetTransfer) — NOT zero.
+	wantChef := services.ToPaise(906.3)
+	if settlements[0].Amount != wantChef {
+		t.Fatalf("chef settlement on ledger-read failure = %d paise, want %d (full gross, fail-open)",
+			settlements[0].Amount, wantChef)
+	}
+	// The driver's slice is unaffected by a chef-ledger read failure.
+	if settlements[1].Amount != services.ToPaise(40) {
+		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, services.ToPaise(40))
+	}
+}
+
 // seedChefPenalty inserts one outstanding payout_ledger_entries debit for a
 // chef, mirroring services/payout_recovery_test.go's seedPenalty.
 func seedChefPenalty(t *testing.T, db *gorm.DB, chefID uuid.UUID, minor int64) {

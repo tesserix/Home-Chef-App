@@ -253,23 +253,23 @@ func orderSettlements(db *gorm.DB, order *models.Order) []services.Settlement {
 // raised against them (e.g. an order-issue clawback) that could not be netted
 // against a Route transfer already sent, so it comes off the next one instead.
 //
-// Fails CLOSED on a ledger read error: this runs at checkout, and an error
-// here could be hiding a real, uncollected debt. Paying the unadjusted gross
-// would risk letting that debt disappear for good — Route transfers cannot be
-// clawed back the way a batch net could, so once the money is sent it is
-// gone. Withholding the chef's slice for this one order is the safe side of
-// that trade-off, and it costs nothing to correct: ApplyRecoveryDeduction only
-// reads the ledger and never mutates it, so no entry is consumed by a failed
-// attempt — the withheld amount stays with the platform (never transferred,
-// never lost) and the same debt, if any, is recomputed and correctly deducted
-// from this chef's next order once the read succeeds.
+// Fails OPEN on a ledger read error: pays the unadjusted gross. A comparison
+// we cannot make must not silently confiscate a chef's whole payout for this
+// order — that would turn a transient DB error into a permanent, unrecorded
+// loss with no reconcile path revisiting it. The debt is not lost by paying
+// gross here: ApplyRecoveryDeduction only reads the ledger and never
+// discharges it, so the same outstanding balance is re-derived and correctly
+// deducted from this chef's next order regardless of whether this read
+// succeeded.
 func applyChefRecoveryDeduction(db *gorm.DB, order *models.Order, grossPaise int) int {
 	gross := payouts.Money{Minor: int64(grossPaise), Currency: payouts.CurrencyINR}
 	net, _, err := services.ApplyRecoveryDeduction(db, order.ChefID, gross, time.Now())
 	if err != nil {
+		log.Printf("recovery-deduction: ledger read failed, paying gross order=%s chef=%s gross_paise=%d: %v",
+			order.OrderNumber, order.ChefID, grossPaise, err)
 		services.CaptureBackgroundError(fmt.Errorf(
 			"recovery-deduction: order=%s chef=%s: %w", order.OrderNumber, order.ChefID, err))
-		return 0
+		return grossPaise
 	}
 	return int(net.Minor)
 }
