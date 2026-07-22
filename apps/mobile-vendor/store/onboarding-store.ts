@@ -63,6 +63,20 @@ interface Policies {
   cancellationPolicy: string;
 }
 
+// Payout (#739). This slice holds ONLY a non-sensitive record that the step
+// was completed — never the account number, IFSC or UPI ID. Those are POSTed
+// straight to /chef/payout, which stores them in GCP Secret Manager; putting
+// them in this AsyncStorage draft would write a chef's bank details to device
+// plaintext and undo the reason the backend blanks those columns.
+interface Payout {
+  /** True once /chef/payout has accepted the details. */
+  configured: boolean;
+  /** 'bank_transfer' | 'upi' — the selector, which is not sensitive. */
+  method: string;
+  /** Masked summary for the Review step, e.g. "Bank ••••9012". */
+  summary: string;
+}
+
 interface VendorOnboardingState {
   currentStep: number;
   personalInfo: PersonalInfo;
@@ -70,12 +84,14 @@ interface VendorOnboardingState {
   operations: Operations;
   documents: Documents;
   policies: Policies;
+  payout: Payout;
   setStep: (step: number) => void;
   updatePersonalInfo: (data: Partial<PersonalInfo>) => void;
   updateKitchenDetails: (data: Partial<KitchenDetails>) => void;
   updateOperations: (data: Partial<Operations>) => void;
   updateDocuments: (data: Partial<Documents>) => void;
   updatePolicies: (data: Partial<Policies>) => void;
+  updatePayout: (data: Partial<Payout>) => void;
   reset: () => void;
 }
 
@@ -120,6 +136,7 @@ const initialState = {
     kitchenMedia: [],
   },
   policies: { acceptedTerms: false, cancellationPolicy: '' },
+  payout: { configured: false, method: '', summary: '' },
 };
 
 export const useVendorOnboardingStore = create<VendorOnboardingState>()(
@@ -154,6 +171,11 @@ export const useVendorOnboardingStore = create<VendorOnboardingState>()(
           policies: { ...state.policies, ...data },
         })),
 
+      updatePayout: (data) =>
+        set((state) => ({
+          payout: { ...state.payout, ...data },
+        })),
+
       reset: () => set({ ...initialState }),
     }),
     {
@@ -169,6 +191,9 @@ export const useVendorOnboardingStore = create<VendorOnboardingState>()(
         operations: state.operations,
         documents: state.documents,
         policies: state.policies,
+        // Safe to persist: a masked summary and the method selector only.
+        // The sensitive fields never enter this store (see the Payout type).
+        payout: state.payout,
       }),
     },
   ),

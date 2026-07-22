@@ -54,7 +54,7 @@ export default function PoliciesScreen() {
     }
     updatePolicies({ acceptedTerms, cancellationPolicy });
     setStep(6);
-    router.push('/(onboarding)/review');
+    router.push('/(onboarding)/payout');
   }
 
   const canContinue = acceptedTerms && cancellationPolicy !== '';

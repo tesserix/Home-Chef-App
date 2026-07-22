@@ -398,9 +398,9 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id", chefHandler.GetChef)
 			chefs.GET("/:id/menu", chefHandler.GetChefMenu)
 			chefs.GET("/:id/reviews", chefHandler.GetChefReviews)
-			chefs.GET("/:id/weekly-menu", chefHandler.GetPublicWeeklyMenu)     // #192 tiffin menu
-			chefs.GET("/:id/daily-menu", chefHandler.GetPublicDailyMenu)       // #405 per-date menu
-			chefs.GET("/:id/subscription", mealSubHandler.GetChefOffer)        // #280 tiffin offer
+			chefs.GET("/:id/weekly-menu", chefHandler.GetPublicWeeklyMenu)           // #192 tiffin menu
+			chefs.GET("/:id/daily-menu", chefHandler.GetPublicDailyMenu)             // #405 per-date menu
+			chefs.GET("/:id/subscription", mealSubHandler.GetChefOffer)              // #280 tiffin offer
 			chefs.GET("/:id/delivery-slots", chefHandler.GetChefDeliverySlots)       // #51 scheduled slots
 			chefs.GET("/:id/fulfillment-times", chefHandler.GetChefFulfillmentTimes) // #709 home-tiffin suggested times
 			// Per-mode delivery-fee preview so checkout can show the real fee +
@@ -552,6 +552,9 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/analytics/advanced", chefHandler.GetAdvancedAnalytics)        // #44 premium-gated
 			chefDashboard.GET("/payout", chefHandler.GetPayoutDetails)
 			chefDashboard.POST("/payout", chefHandler.SavePayoutDetails)
+			// Payout-setup gate (#739) — the vendor app reads this to decide
+			// between nagging and blocking before going online.
+			chefDashboard.GET("/payout/readiness", chefHandler.GetPayoutReadiness)
 			chefDashboard.GET("/admin-requests", approvalHandler.GetChefApprovalRequests)
 			chefDashboard.PUT("/admin-requests/:id/respond", approvalHandler.RespondToApprovalRequest)
 			// #697 — bump an unattended request. Rate-limited by a per-request

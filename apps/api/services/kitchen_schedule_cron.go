@@ -123,8 +123,14 @@ func runKitchenScheduleScan(ctx context.Context) {
 	}
 
 	if len(toOpen) > 0 {
-		if err := database.DB.Model(&models.ChefProfile{}).
-			Where("id IN ?", toOpen).Update("accepting_orders", true).Error; err != nil {
+		// The payout gate (#739) applies to scheduled opening too — otherwise
+		// a chef with no payout destination is put back online by a timetable.
+		// Scheduled closing below is never filtered.
+		open := database.DB.Model(&models.ChefProfile{}).Where("id IN ?", toOpen)
+		if predicate, enforced := PayoutGateOpenFilter(database.DB, time.Now()); enforced {
+			open = open.Where(predicate)
+		}
+		if err := open.Update("accepting_orders", true).Error; err != nil {
 			log.Printf("kitchen-schedule: open failed: %v", err)
 		} else {
 			log.Printf("kitchen-schedule: opened %d kitchen(s) on schedule", len(toOpen))

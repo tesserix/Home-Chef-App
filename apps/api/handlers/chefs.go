@@ -881,6 +881,9 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 		chef.ServiceRadius = *req.ServiceRadius
 	}
 	if req.AcceptingOrders != nil {
+		if payoutGateBlocks(c, &chef, *req.AcceptingOrders) {
+			return
+		}
 		chef.AcceptingOrders = *req.AcceptingOrders
 	}
 	if req.AutoScheduleEnabled != nil {
@@ -2023,6 +2026,10 @@ func (h *ChefHandler) UpdateChefSettings(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if payoutGateBlocks(c, &chef, req.AcceptingOrders) {
 		return
 	}
 
