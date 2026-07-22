@@ -27,6 +27,7 @@ import { ChevronLeft, Plus } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { validationSummary } from '../../lib/menu-validation';
+import { pricingHint } from '../../lib/pricing-guidance';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import { DietIcon } from '../../components/vendor/DietIcon';
 import { ModifierComboEditor } from '../../components/vendor/ModifierComboEditor';
@@ -574,6 +575,8 @@ export function MenuItemForm({
 
   // ---- Handlers -------------------------------------------------------------
 
+  const priceGuidance = pricingHint(price);
+
   function handleSave() {
     if (!validate()) {
       // Without this the button reads as broken: the offending field is
@@ -903,6 +906,17 @@ export function MenuItemForm({
                   ]}
                 />
               </View>
+              {/* Always-on positioning guidance, plus a louder nudge once the
+                  price reaches restaurant parity. Guidance only — never a
+                  block; the chef knows their portion and ingredient cost. */}
+              {priceGuidance ? (
+                <Text style={styles.priceWarn}>{priceGuidance.message}</Text>
+              ) : (
+                <Text style={styles.priceHelp}>
+                  Price below what a restaurant charges for the same dish — that lower price
+                  is why customers choose a home kitchen.
+                </Text>
+              )}
             </FormField>
           </View>
 
@@ -1272,6 +1286,20 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.soft,
     fontVariant: ['tabular-nums'],
+  },
+  priceHelp: {
+    fontFamily: 'Inter-Regular',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.muted,
+    marginTop: theme.spacing[2],
+    lineHeight: 18,
+  },
+  priceWarn: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.amber?.DEFAULT ?? '#B45309',
+    marginTop: theme.spacing[2],
+    lineHeight: 18,
   },
   priceInput: {
     flex: 1,
