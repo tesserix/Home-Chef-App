@@ -149,3 +149,17 @@ func TestDecideRelease_ZeroThresholdDisablesTheReviewCheck(t *testing.T) {
 		t.Fatal("a zero threshold must disable the check")
 	}
 }
+
+func TestDecideRelease_BlocksWhenTheThresholdComparisonFails(t *testing.T) {
+	// An uncomparable amount must block rather than slip through: a Money
+	// built without a Currency would otherwise skip the review gate entirely.
+	in := clean()
+	in.OrderTotal = Money{Minor: 900_000} // no currency set
+	d := DecideRelease(in)
+	if d.Release {
+		t.Fatal("an uncomparable order total must not auto-release")
+	}
+	if !hasReason(d, BlockAboveReviewThreshold) {
+		t.Fatalf("reasons = %v, want %q", d.Reasons, BlockAboveReviewThreshold)
+	}
+}
