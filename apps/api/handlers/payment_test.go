@@ -29,6 +29,7 @@ import (
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/payouts"
 	"github.com/homechef/api/services"
 )
 
@@ -103,6 +104,16 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS processed_events (
 		consumer TEXT NOT NULL, msg_id TEXT NOT NULL, subject TEXT DEFAULT '', processed_at DATETIME,
 		PRIMARY KEY (consumer, msg_id))`).Error)
+	// payout_ledger_entries — orderSettlements reads this via
+	// services.ApplyRecoveryDeduction (#741) to deduct a chef's outstanding
+	// recovery balance before their Route transfer is created. Hand-DDL'd:
+	// payouts.LedgerEntry carries a Postgres-only gen_random_uuid() default
+	// that sqlite's AutoMigrate rejects.
+	require.NoError(t, db.Exec(`CREATE TABLE payout_ledger_entries (
+		id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, payee_type TEXT NOT NULL, payee_id TEXT NOT NULL,
+		kind TEXT NOT NULL, amount_minor INTEGER NOT NULL, currency TEXT NOT NULL,
+		source_type TEXT NOT NULL, source_id TEXT NOT NULL, matures_at DATETIME,
+		batch_id TEXT, actor_id TEXT, reason TEXT, created_at DATETIME)`).Error)
 
 	prev := database.DB
 	database.DB = db
@@ -340,8 +351,10 @@ func TestChefNetPayout(t *testing.T) {
 }
 
 func TestOrderSettlements_ChefNetTransfer(t *testing.T) {
+	db := setupPayDB(t)
 	order := &models.Order{
 		OrderNumber:        "HC-1",
+		ChefID:             uuid.New(),
 		Subtotal:           1000,
 		Tax:                50,
 		ChefTip:            20,
@@ -350,9 +363,9 @@ func TestOrderSettlements_ChefNetTransfer(t *testing.T) {
 		CommissionRate:     0.06,
 	}
 	order.Chef.RazorpayAccountID = "acc_chef"
-	settlements := orderSettlements(order)
+	settlements := orderSettlements(db, order)
 	// Chef settlement = NET: itemRevenue 900, gross 970, commission 54, tds 9.70,
-	// net = 906.30 → 90630 paise.
+	// net = 906.30 → 90630 paise. No recovery debt seeded, so nothing is deducted.
 	if settlements[0].Amount != services.ToPaise(906.3) {
 		t.Fatalf("chef settlement = %d paise, want %d (net)", settlements[0].Amount, services.ToPaise(906.3))
 	}
@@ -360,6 +373,55 @@ func TestOrderSettlements_ChefNetTransfer(t *testing.T) {
 	if settlements[1].Amount != services.ToPaise(40) {
 		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, services.ToPaise(40))
 	}
+}
+
+// TestOrderSettlements_RecoveryDeductionReducesChefTransfer (#741) proves the
+// wiring gap this task closes: ApplyRecoveryDeduction on its own never touches
+// a Route transfer. Unless orderSettlements actually applies its result, a
+// chef's outstanding debt is computed but never collected.
+func TestOrderSettlements_RecoveryDeductionReducesChefTransfer(t *testing.T) {
+	db := setupPayDB(t)
+	chefID := uuid.New()
+	seedChefPenalty(t, db, chefID, 20_000) // ₹200.00 owed to the platform
+
+	order := &models.Order{
+		OrderNumber:        "HC-2",
+		ChefID:             chefID,
+		Subtotal:           1000,
+		Tax:                50,
+		ChefTip:            20,
+		DeliveryFee:        40,
+		ChefFundedDiscount: 100,
+		CommissionRate:     0.06,
+	}
+	order.Chef.RazorpayAccountID = "acc_chef"
+
+	settlements := orderSettlements(db, order)
+	// Gross net payout is 90630 paise (see TestOrderSettlements_ChefNetTransfer);
+	// a 20000 paise debt must come off THIS transfer before it is created.
+	wantChef := services.ToPaise(906.3) - 20_000
+	if settlements[0].Amount != wantChef {
+		t.Fatalf("chef settlement = %d paise, want %d (gross net of the 20000 paise debt)",
+			settlements[0].Amount, wantChef)
+	}
+	// The driver's slice is untouched by the chef's debt.
+	if settlements[1].Amount != services.ToPaise(40) {
+		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, services.ToPaise(40))
+	}
+}
+
+// seedChefPenalty inserts one outstanding payout_ledger_entries debit for a
+// chef, mirroring services/payout_recovery_test.go's seedPenalty.
+func seedChefPenalty(t *testing.T, db *gorm.DB, chefID uuid.UUID, minor int64) {
+	t.Helper()
+	entry := payouts.LedgerEntry{
+		ID: uuid.New(), TenantID: "t1",
+		PayeeType: payouts.PayeeChef, PayeeID: chefID,
+		Kind: payouts.EntryDebitPenalty, AmountMinor: minor,
+		Currency:   payouts.CurrencyINR,
+		SourceType: "order_issue", SourceID: uuid.NewString(),
+	}
+	require.NoError(t, db.Create(&entry).Error)
 }
 
 // TestChefTransferEqualsStatementNetPayout (#390, W3) is the non-tautological

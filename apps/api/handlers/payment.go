@@ -15,6 +15,7 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/payouts"
 	"github.com/homechef/api/services"
 	"gorm.io/gorm"
 )
@@ -126,7 +127,7 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 		})
 	}
 
-	settlements := orderSettlements(order)
+	settlements := orderSettlements(database.DB, order)
 
 	// Clamp the requested wallet credit against the live balance, then plan the
 	// split: payment-funded transfers (bounded by the capture) + platform-funded
@@ -216,25 +217,61 @@ func chefNetPayout(order *models.Order) float64 {
 // orderSettlements derives the chef + driver payouts for an order, chef first so
 // its (larger) food payout stays a single payment-linked transfer when the capture
 // allows (#141). The chef slice is NET (chefNetPayout, reading the frozen
-// order.CommissionRate); the chef account is cleared when its FSSAI licence has
-// lapsed, so that slice is withheld and never transferred. Requires Chef and
-// Delivery.DeliveryPartner preloaded. Deterministic — because the rate is frozen
-// on the row, create and verify produce the identical split for a given order.
-func orderSettlements(order *models.Order) []services.Settlement {
+// order.CommissionRate), further reduced by any outstanding recovery balance the
+// chef owes the platform (#741, applyChefRecoveryDeduction) before the transfer is
+// created — Route transfers are per-payment, so a penalty cannot be netted across
+// orders after the fact the way a daily batch would. The chef account is cleared
+// when its FSSAI licence has lapsed, so that slice is withheld and never
+// transferred. Requires Chef and Delivery.DeliveryPartner preloaded. Deterministic —
+// because the rate is frozen on the row, create and verify produce the identical
+// split for a given order (recovery is re-derived from the ledger identically both
+// times, since nothing here mutates it).
+func orderSettlements(db *gorm.DB, order *models.Order) []services.Settlement {
 	chefAccount := order.Chef.RazorpayAccountID
 	if services.IsChefFSSAIExpired(&order.Chef) {
 		chefAccount = ""
 	}
+	chefAmount := services.ToPaise(chefNetPayout(order))
+	if chefAccount != "" {
+		chefAmount = applyChefRecoveryDeduction(db, order, chefAmount)
+	}
+
 	driverAccount := ""
 	if order.Delivery != nil {
 		driverAccount = order.Delivery.DeliveryPartner.RazorpayAccountID
 	}
 	return []services.Settlement{
-		{Account: chefAccount, Amount: services.ToPaise(chefNetPayout(order)), Hold: true,
+		{Account: chefAccount, Amount: chefAmount, Hold: true,
 			Notes: map[string]string{"purpose": "food_payment", "order_number": order.OrderNumber}},
 		{Account: driverAccount, Amount: services.ToPaise(order.DeliveryFee + order.DriverTip), Hold: true,
 			Notes: map[string]string{"purpose": "delivery_payment", "order_number": order.OrderNumber}},
 	}
+}
+
+// applyChefRecoveryDeduction reduces a chef's gross transfer (in paise) by
+// whatever recovery balance they still owe the platform (#741) — a penalty
+// raised against them (e.g. an order-issue clawback) that could not be netted
+// against a Route transfer already sent, so it comes off the next one instead.
+//
+// Fails CLOSED on a ledger read error: this runs at checkout, and an error
+// here could be hiding a real, uncollected debt. Paying the unadjusted gross
+// would risk letting that debt disappear for good — Route transfers cannot be
+// clawed back the way a batch net could, so once the money is sent it is
+// gone. Withholding the chef's slice for this one order is the safe side of
+// that trade-off, and it costs nothing to correct: ApplyRecoveryDeduction only
+// reads the ledger and never mutates it, so no entry is consumed by a failed
+// attempt — the withheld amount stays with the platform (never transferred,
+// never lost) and the same debt, if any, is recomputed and correctly deducted
+// from this chef's next order once the read succeeds.
+func applyChefRecoveryDeduction(db *gorm.DB, order *models.Order, grossPaise int) int {
+	gross := payouts.Money{Minor: int64(grossPaise), Currency: payouts.CurrencyINR}
+	net, _, err := services.ApplyRecoveryDeduction(db, order.ChefID, gross, time.Now())
+	if err != nil {
+		services.CaptureBackgroundError(fmt.Errorf(
+			"recovery-deduction: order=%s chef=%s: %w", order.OrderNumber, order.ChefID, err))
+		return 0
+	}
+	return int(net.Minor)
 }
 
 // debitOrderWallet debits the customer's store credit for the wallet applied to an
@@ -325,7 +362,7 @@ func settleOrderWallet(order *models.Order) {
 		return
 	}
 	appliedPaise := services.ToPaise(order.WalletApplied)
-	plan := services.PlanWalletFunding(services.ToPaise(order.Total), appliedPaise, appliedPaise, orderSettlements(order))
+	plan := services.PlanWalletFunding(services.ToPaise(order.Total), appliedPaise, appliedPaise, orderSettlements(database.DB, order))
 	settleWalletTopUps(order, plan.DirectTopUps)
 }
 
