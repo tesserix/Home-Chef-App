@@ -920,6 +920,9 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/payouts/:aggType/:id/withhold", payoutPerm, adminPayoutHandler.WithholdPayout)
 			admin.POST("/payouts/:aggType/:id/reverse", payoutPerm, adminPayoutHandler.ReversePayout)
 			admin.POST("/payouts/release-bulk", payoutPerm, adminPayoutHandler.BulkReleasePayouts)
+			// Blocked-chef visibility + the per-chef automation switch (#747).
+			admin.GET("/payouts/blocked-chefs", payoutPerm, adminPayoutHandler.GetBlockedChefs)
+			admin.PUT("/chefs/:id/payout-automation", payoutPerm, adminPayoutHandler.SetPayoutAutomation)
 
 			// Review moderation (#35) — list, hide, unhide (audited; recomputes rating)
 			admin.GET("/reviews", adminHandler.AdminListReviews)

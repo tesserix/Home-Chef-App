@@ -60,12 +60,23 @@ const payoutAuditDDL = `CREATE TABLE audit_logs (id TEXT DEFAULT '00000000-0000-
 	user_id TEXT, action TEXT, entity_type TEXT, entity_id TEXT, old_value TEXT, new_value TEXT,
 	ip_address TEXT, user_agent TEXT, correlation_id TEXT, created_at DATETIME)`
 
+// payoutChefProfilesDDL backs the blocked-chefs list + the automation switch
+// (#747). Only the columns those two handlers and the shared seedChef helper
+// (chef_dpdp_test.go) touch — not the full models.ChefProfile column set,
+// since nothing here does a full-struct gorm Save().
+const payoutChefProfilesDDL = `CREATE TABLE chef_profiles (
+	id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
+	description TEXT DEFAULT '', accepting_orders INTEGER DEFAULT 1,
+	razorpay_settlement_status TEXT DEFAULT '', razorpay_settlement_requirements TEXT DEFAULT '',
+	payout_auto_release TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`
+
 func setupPayoutHandlerDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: glogger.Default.LogMode(glogger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
 		payoutOrdersDDL, payoutDaysDDL, payoutPlansDDL, payoutGroupOrdersDDL, payoutOutboxDDL, payoutAuditDDL,
+		payoutChefProfilesDDL,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT, value TEXT, type TEXT, updated_at DATETIME)`,
 		// order_issues backs the pending-queue open-issue flag + release guard (#457).
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`,
@@ -102,6 +113,8 @@ func payoutRouter(userID uuid.UUID) *gin.Engine {
 	r.POST("/admin/payouts/:aggType/:id/withhold", h.WithholdPayout)
 	r.POST("/admin/payouts/:aggType/:id/reverse", h.ReversePayout)
 	r.POST("/admin/payouts/release-bulk", h.BulkReleasePayouts)
+	r.GET("/admin/payouts/blocked-chefs", h.GetBlockedChefs)
+	r.PUT("/admin/chefs/:id/payout-automation", h.SetPayoutAutomation)
 	return r
 }
 
@@ -247,4 +260,99 @@ func TestBulkRelease_CapsBatchSize(t *testing.T) {
 	}
 	w := doJSON(t, payoutRouter(uuid.New()), http.MethodPost, "/admin/payouts/release-bulk", map[string]any{"items": items})
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
+// #747 — the admin controls over payout automation.
+//
+// seedChef here is the existing helper from chef_dpdp_test.go
+// (func seedChef(t, db, userID, business) uuid.UUID) — there is no
+// `newAdminTestRouter`/`seedChef(t, db) *models.ChefProfile` pair in this
+// package, so these tests are built on setupPayoutHandlerDB + payoutRouter
+// (now carrying the two new routes) and the real seedChef signature.
+
+func TestSetPayoutAutomation_RejectsAnUnknownValue(t *testing.T) {
+	// Only the three legal values may be stored. Anything else is read back as
+	// "follow the default", which would silently re-enable a chef an admin
+	// deliberately suspended.
+	db := setupPayoutHandlerDB(t)
+	chefID := seedChef(t, db, uuid.New(), "Test Kitchen")
+
+	w := doJSON(t, payoutRouter(uuid.New()), http.MethodPut,
+		"/admin/chefs/"+chefID.String()+"/payout-automation", map[string]any{"value": "enabled"})
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+
+	var reloaded models.ChefProfile
+	require.NoError(t, db.First(&reloaded, "id = ?", chefID.String()).Error)
+	require.Equal(t, "", reloaded.PayoutAutoRelease, "a rejected value must not be persisted")
+}
+
+func TestSetPayoutAutomation_StoresALegalValue(t *testing.T) {
+	db := setupPayoutHandlerDB(t)
+	chefID := seedChef(t, db, uuid.New(), "Test Kitchen")
+
+	w := doJSON(t, payoutRouter(uuid.New()), http.MethodPut,
+		"/admin/chefs/"+chefID.String()+"/payout-automation", map[string]any{"value": "off"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var reloaded models.ChefProfile
+	require.NoError(t, db.First(&reloaded, "id = ?", chefID.String()).Error)
+	require.Equal(t, "off", reloaded.PayoutAutoRelease)
+}
+
+func TestSetPayoutAutomation_WritesAnAuditEntry(t *testing.T) {
+	// Suspending a chef acts on someone else's money; "who did this" must be
+	// answerable months later.
+	db := setupPayoutHandlerDB(t)
+	chefID := seedChef(t, db, uuid.New(), "Test Kitchen")
+
+	w := doJSON(t, payoutRouter(uuid.New()), http.MethodPut,
+		"/admin/chefs/"+chefID.String()+"/payout-automation", map[string]any{"value": "off"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var count int64
+	require.NoError(t, db.Model(&models.AuditLog{}).
+		Where("action = ? AND entity_id = ?", "chef.payout.automation", chefID.String()).
+		Count(&count).Error)
+	require.Equal(t, int64(1), count)
+}
+
+func TestBlockedChefs_ListsNeedsClarificationWithRequirements(t *testing.T) {
+	// Status alone tells an admin nothing about what to fix, so the
+	// requirements have to travel with it.
+	db := setupPayoutHandlerDB(t)
+	chefID := seedChef(t, db, uuid.New(), "Test Kitchen")
+	chef := models.ChefProfile{ID: chefID}
+	require.NoError(t, db.Model(&chef).Updates(map[string]any{
+		"razorpay_settlement_status":       "needs_clarification",
+		"razorpay_settlement_requirements": `[{"field_reference":"settlements.ifsc_code"}]`,
+	}).Error)
+
+	w := doJSON(t, payoutRouter(uuid.New()), http.MethodGet, "/admin/payouts/blocked-chefs", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var body struct {
+		Chefs []struct {
+			SettlementStatus string `json:"settlementStatus"`
+			Requirements     string `json:"requirements"`
+		} `json:"chefs"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Len(t, body.Chefs, 1)
+	require.Contains(t, body.Chefs[0].Requirements, "ifsc_code", "must say what to fix")
+}
+
+func TestBlockedChefs_ExcludesAnActivatedChef(t *testing.T) {
+	db := setupPayoutHandlerDB(t)
+	chefID := seedChef(t, db, uuid.New(), "Test Kitchen")
+	chef := models.ChefProfile{ID: chefID}
+	require.NoError(t, db.Model(&chef).Update("razorpay_settlement_status", "activated").Error)
+
+	w := doJSON(t, payoutRouter(uuid.New()), http.MethodGet, "/admin/payouts/blocked-chefs", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var body struct {
+		Chefs []json.RawMessage `json:"chefs"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Len(t, body.Chefs, 0, "a healthy chef is not a blockage")
 }
