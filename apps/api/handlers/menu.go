@@ -716,44 +716,7 @@ func (h *MenuHandler) UploadMenuItemImage(c *gin.Context) {
 		return
 	}
 
-	// Count, primary-flag and sort order are decided under a row lock on the
-	// parent item. The picker uploads a multi-selection concurrently, so a
-	// plain count-then-insert lets several requests all read the same count:
-	// the 5-image cap is exceeded, two images both claim IsPrimary, and
-	// sort_order collides. Serialising per item makes all three impossible.
-	var img models.MenuItemImage
-	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
-		var locked models.MenuItem
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("id = ?", item.ID).First(&locked).Error; err != nil {
-			return err
-		}
-
-		var count int64
-		if err := tx.Model(&models.MenuItemImage{}).
-			Where("menu_item_id = ?", locked.ID).Count(&count).Error; err != nil {
-			return err
-		}
-		if count >= maxMenuItemImages {
-			return errMenuItemImageLimit
-		}
-
-		isPrimary := count == 0
-		img = models.MenuItemImage{
-			MenuItemID: locked.ID,
-			URL:        fileURL,
-			IsPrimary:  isPrimary,
-			SortOrder:  int(count),
-		}
-		if err := tx.Create(&img).Error; err != nil {
-			return err
-		}
-		if isPrimary {
-			return tx.Model(&models.MenuItem{}).
-				Where("id = ?", locked.ID).Update("image_url", fileURL).Error
-		}
-		return nil
-	})
+	img, txErr := claimMenuItemImageSlot(database.DB, item.ID, fileURL)
 
 	if errors.Is(txErr, errMenuItemImageLimit) {
 		// The object already landed in GCS; drop it rather than leave an
@@ -1033,4 +996,50 @@ func saveItemModifiers(itemID, chefID uuid.UUID, groups []ModifierGroupInput, co
 		}
 		return nil
 	})
+}
+
+// claimMenuItemImageSlot inserts one gallery row for itemID, deciding the
+// count, primary flag and sort order under a row lock on the parent item.
+//
+// The lock is the whole point. The picker uploads a multi-selection
+// concurrently; without it several requests read the same count and all pass,
+// which puts the gallery past its cap, gives more than one row IsPrimary (so
+// menu_items.image_url is written twice, last write wins) and collides
+// sort_order. Reproduced against Postgres in menu_image_race_test.go: eight
+// racers on a 4-image item produced 12 rows.
+func claimMenuItemImageSlot(db *gorm.DB, itemID uuid.UUID, url string) (models.MenuItemImage, error) {
+	var img models.MenuItemImage
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var locked models.MenuItem
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", itemID).First(&locked).Error; err != nil {
+			return err
+		}
+
+		var count int64
+		if err := tx.Model(&models.MenuItemImage{}).
+			Where("menu_item_id = ?", locked.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count >= maxMenuItemImages {
+			return errMenuItemImageLimit
+		}
+
+		isPrimary := count == 0
+		img = models.MenuItemImage{
+			MenuItemID: locked.ID,
+			URL:        url,
+			IsPrimary:  isPrimary,
+			SortOrder:  int(count),
+		}
+		if err := tx.Create(&img).Error; err != nil {
+			return err
+		}
+		if isPrimary {
+			return tx.Model(&models.MenuItem{}).
+				Where("id = ?", locked.ID).Update("image_url", url).Error
+		}
+		return nil
+	})
+	return img, err
 }
