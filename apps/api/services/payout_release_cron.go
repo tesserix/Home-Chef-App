@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strconv"
 	"time"
@@ -41,20 +42,46 @@ func maturationWindow(db *gorm.DB) time.Duration {
 	return time.Duration(mins) * time.Minute
 }
 
-// reviewThreshold reads the value above which a human looks; zero disables it.
+// defaultReviewThresholdPaise / defaultRampOrders are the safe-ON fallbacks for
+// payout.review_above_paise / payout.new_chef_ramp_orders — the plan's
+// documented defaults (₹5,000 / 3 orders). Zero means "guardrail disabled", so
+// falling back to zero on an unset or unparseable setting would silently strip
+// the guardrail out; falling back to these instead keeps it on until an admin
+// deliberately sets 0. Only an explicit, successfully-parsed 0 disables either
+// check.
+const (
+	defaultReviewThresholdPaise = 500000
+	defaultRampOrders           = 3
+)
+
+// reviewThreshold reads the value above which a human looks. Explicit 0
+// disables the check; unset or unparseable fails safe to the default (never
+// silently disabling a guardrail an admin never touched).
 func reviewThreshold(db *gorm.DB) payouts.Money {
-	paise, err := strconv.ParseInt(settingValue(db, "payout.review_above_paise"), 10, 64)
+	raw := settingValue(db, "payout.review_above_paise")
+	if raw == "" {
+		return payouts.Money{Minor: defaultReviewThresholdPaise, Currency: payouts.CurrencyINR}
+	}
+	paise, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || paise < 0 {
-		return payouts.Zero(payouts.CurrencyINR)
+		log.Printf("payout-sweep: payout.review_above_paise=%q is invalid, falling back to the %dp default", raw, defaultReviewThresholdPaise)
+		return payouts.Money{Minor: defaultReviewThresholdPaise, Currency: payouts.CurrencyINR}
 	}
 	return payouts.Money{Minor: paise, Currency: payouts.CurrencyINR}
 }
 
-// rampOrders reads the new-chef review period; zero disables it.
+// rampOrders reads the new-chef review period (orders held regardless of other
+// checks). Explicit 0 disables it; unset or unparseable fails safe to the
+// default for the same reason as reviewThreshold.
 func rampOrders(db *gorm.DB) int {
-	n, err := strconv.Atoi(settingValue(db, "payout.new_chef_ramp_orders"))
+	raw := settingValue(db, "payout.new_chef_ramp_orders")
+	if raw == "" {
+		return defaultRampOrders
+	}
+	n, err := strconv.Atoi(raw)
 	if err != nil || n < 0 {
-		return 0
+		log.Printf("payout-sweep: payout.new_chef_ramp_orders=%q is invalid, falling back to the %d-order default", raw, defaultRampOrders)
+		return defaultRampOrders
 	}
 	return n
 }
@@ -66,18 +93,26 @@ func rampOrders(db *gorm.DB) int {
 // read as trivially matured, releasing money against a broken row. Mapping to
 // "now" instead makes the row look freshly delivered, so the maturation window
 // blocks it until the data is fixed.
-func deliveredAt(order *models.Order) time.Time {
+//
+// Takes now from the caller rather than reading time.Now() itself — the same
+// deterministic clock BuildReleaseInput already threads through everything
+// else — so the nil-fallback path is exercisable from a test.
+func deliveredAt(order *models.Order, now time.Time) time.Time {
 	if order.DeliveredAt == nil {
-		return time.Now()
+		return now
 	}
 	return *order.DeliveredAt
 }
 
 // BuildReleaseInput maps one order onto the governor's inputs.
 func BuildReleaseInput(db *gorm.DB, order *models.Order, now time.Time) (payouts.ReleaseInput, error) {
+	// Count the chef's PRIOR delivered orders only — the sweep only ever
+	// evaluates rows already status=delivered, so counting unconditionally would
+	// include this order in its own tally and let the Nth order in the ramp
+	// (DeliveredOrderCount == RampOrders) auto-release a step early.
 	var delivered int64
 	if err := db.Model(&models.Order{}).
-		Where("chef_id = ? AND status = ?", order.ChefID, models.OrderStatusDelivered).
+		Where("chef_id = ? AND status = ? AND id <> ?", order.ChefID, models.OrderStatusDelivered, order.ID).
 		Count(&delivered).Error; err != nil {
 		return payouts.ReleaseInput{}, err
 	}
@@ -90,7 +125,7 @@ func BuildReleaseInput(db *gorm.DB, order *models.Order, now time.Time) (payouts
 
 	return payouts.ReleaseInput{
 		Now:                 now,
-		DeliveredAt:         deliveredAt(order),
+		DeliveredAt:         deliveredAt(order, now),
 		Maturation:          maturationWindow(db),
 		AutomationEnabled:   PayoutAutomationEnabled(db, &order.Chef),
 		SettlementActivated: order.Chef.RazorpaySettlementStatus == "activated",
@@ -108,9 +143,18 @@ func runPayoutReleaseSweep(ctx context.Context) {
 	now := time.Now()
 	db := database.DB
 
+	// payout_hold_status = release_eligible is the hold state machine's own gate
+	// (services/payout_hold.go's KEY INVARIANT: a disputed or unconfirmed hold
+	// must NEVER reach release_eligible) — status=delivered alone is not enough,
+	// since a delivered order sits in awaiting_customer_confirmation (or
+	// disputed) until the customer confirms. payout_settled_at IS NULL is a
+	// belt-and-suspenders guard: once ReleaseHold settles a row it also flips
+	// payout_hold_status away from release_eligible, so this clause should
+	// already be redundant in practice.
 	var orders []models.Order
 	if err := db.Preload("Chef").
-		Where("status = ? AND payout_settled_at IS NULL", models.OrderStatusDelivered).
+		Where("status = ? AND payout_hold_status = ? AND payout_settled_at IS NULL",
+			models.OrderStatusDelivered, models.PayoutHoldReleaseEligible).
 		Limit(500).Find(&orders).Error; err != nil {
 		log.Printf("payout-sweep: load orders: %v", err)
 		return
@@ -128,7 +172,19 @@ func runPayoutReleaseSweep(ctx context.Context) {
 			recordPayoutBlock(db, order, decision)
 			continue
 		}
-		if err := ReleaseOrderPayouts(order.ID); err != nil {
+		// Drive the transition through the hold state machine rather than
+		// moving money directly: ReleaseHold re-checks the refund/dispute
+		// cross-guards atomically with the release_eligible -> released flip
+		// (closing the window this governor's own, narrower RefundOpen check
+		// leaves open), and its settleRelease stamps payout_settled_at so this
+		// row drops out of the query above and is never re-picked.
+		if err := ReleaseHold(db, aggTypeOrder, order.ID); err != nil {
+			if errors.Is(err, ErrHoldNotEligible) {
+				// A guard refused (e.g. a dispute or refund landed on this order
+				// after it was loaded above) — an ordinary block, not a sweep
+				// failure. No release event; the next sweep re-evaluates.
+				continue
+			}
 			// Returned so the Temporal activity retries; the next sweep
 			// re-drives it either way.
 			log.Printf("payout-sweep: release order=%s: %v", order.OrderNumber, err)

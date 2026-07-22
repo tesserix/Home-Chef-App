@@ -19,6 +19,7 @@ package services
 // the "missing column" class of breakage this task was warned about.
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/payouts"
 )
@@ -77,6 +79,14 @@ const payoutReleaseOutboxDDL = `CREATE TABLE outbox_events (
 	payload text, status text, attempts integer DEFAULT 0, last_error text, next_retry_at datetime,
 	created_at datetime, updated_at datetime, published_at datetime)`
 
+// payoutReleaseOrderIssuesDDL mirrors setupHoldDB's order_issues table
+// (payout_hold_test.go) — ReleaseHold's cross-guard (releaseBlockedForAgg ->
+// orderRefundBlocks -> HasOpenOrderIssue) queries it, so any test that drives a
+// real release through the sweep needs it present even with zero rows.
+const payoutReleaseOrderIssuesDDL = `CREATE TABLE order_issues (
+	id text PRIMARY KEY, order_id text, meal_plan_day_id text, status text,
+	created_at datetime, updated_at datetime)`
+
 // newPayoutReleaseTestDB extends setupPlatformSettingsDB (platform_settings)
 // with the tables BuildReleaseInput / recordPayoutBlock touch.
 func newPayoutReleaseTestDB(t *testing.T) *gorm.DB {
@@ -87,6 +97,7 @@ func newPayoutReleaseTestDB(t *testing.T) *gorm.DB {
 		payoutReleaseChefProfilesDDL,
 		payoutReleaseLedgerDDL,
 		payoutReleaseOutboxDDL,
+		payoutReleaseOrderIssuesDDL,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
@@ -129,6 +140,112 @@ func seedDeliveredOrder(t *testing.T, db *gorm.DB, mutateChef func(*models.ChefP
 	var order models.Order
 	require.NoError(t, db.Preload("Chef").First(&order, "id = ?", orderID.String()).Error)
 	return &order
+}
+
+// releaseReadySettings configures the platform_settings the sweep needs to
+// consider an order release-ready, other than the hold status itself: sweep
+// automation on, and the new-chef ramp explicitly disabled so a lone test order
+// doesn't get blocked by BlockNewChefRamp — a concern this test group isn't
+// about (that off-by-one is covered separately by
+// TestBuildReleaseInput_DeliveredOrderCountExcludesCurrentOrder).
+func releaseReadySettings(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	setSetting(t, db, "payout.sweep_enabled", "true")
+	setSetting(t, db, "payout.new_chef_ramp_orders", "0")
+}
+
+// withPayoutMovementDisabled pins config.AppConfig for the duration of the test
+// so ReleaseOrderPayouts' gateway seam stays a pure no-op (OrderPayoutAutoReleaseEnabled
+// false) regardless of what an earlier test in this package left behind —
+// letting the sweep tests assert on hold-state/outbox effects without a live
+// Razorpay client.
+func withPayoutMovementDisabled(t *testing.T) {
+	t.Helper()
+	saved := config.AppConfig
+	config.AppConfig = &config.Config{OrderPayoutAutoReleaseEnabled: false}
+	t.Cleanup(func() { config.AppConfig = saved })
+}
+
+// TestRunPayoutReleaseSweep_SkipsOrderNotAtReleaseEligible pins the core of
+// finding 1: a delivered, matured, automation-eligible order whose payout hold
+// has NOT been advanced to release_eligible (no customer confirmation yet) must
+// never be released by the sweep, no matter how "ready" it otherwise looks.
+func TestRunPayoutReleaseSweep_SkipsOrderNotAtReleaseEligible(t *testing.T) {
+	withPayoutMovementDisabled(t)
+	db := newPayoutReleaseTestDB(t)
+	releaseReadySettings(t, db)
+	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
+		c.RazorpaySettlementStatus = "activated"
+		c.PayoutAutoRelease = "on"
+	})
+	// payout_hold_status is left at its DDL default ('' / PayoutHoldNone) — the
+	// customer has not confirmed, so the hold state machine has not advanced it.
+
+	withSweepDB(t, db, func() { runPayoutReleaseSweep(context.Background()) })
+
+	if got := countOutbox(t, db, SubjectPayoutReleased); got != 0 {
+		t.Fatalf("released events published = %d, want 0 — a non-release_eligible hold must never be released", got)
+	}
+	updated := loadOrder(t, db, order.ID)
+	if updated.PayoutSettledAt != nil {
+		t.Fatal("payout_settled_at must stay nil when the hold was never release_eligible")
+	}
+}
+
+// TestRunPayoutReleaseSweep_ReleasesEligibleOrderExactlyOnce pins that a genuine
+// release_eligible order IS released, through ReleaseHold (which stamps
+// payout_hold_status=released and payout_settled_at), and emits exactly one
+// release event.
+func TestRunPayoutReleaseSweep_ReleasesEligibleOrderExactlyOnce(t *testing.T) {
+	withPayoutMovementDisabled(t)
+	db := newPayoutReleaseTestDB(t)
+	releaseReadySettings(t, db)
+	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
+		c.RazorpaySettlementStatus = "activated"
+		c.PayoutAutoRelease = "on"
+	})
+	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
+		string(models.PayoutHoldReleaseEligible), order.ID.String()).Error)
+
+	withSweepDB(t, db, func() { runPayoutReleaseSweep(context.Background()) })
+
+	if got := countOutbox(t, db, SubjectPayoutReleased); got != 1 {
+		t.Fatalf("released events published = %d, want exactly 1", got)
+	}
+	updated := loadOrder(t, db, order.ID)
+	if updated.PayoutHoldStatus != models.PayoutHoldReleased {
+		t.Fatalf("payout_hold_status = %q, want %q", updated.PayoutHoldStatus, models.PayoutHoldReleased)
+	}
+	if updated.PayoutSettledAt == nil {
+		t.Fatal("payout_settled_at must be stamped by ReleaseHold's settleRelease — bypassing it via ReleaseOrderPayouts never stamps it")
+	}
+}
+
+// TestRunPayoutReleaseSweep_SecondRunDoesNotRepublish pins the concrete symptom
+// of finding 1's payout_settled_at gap: without the stamp, the same row is
+// re-picked by the next sweep and republishes payments.payout_released with a
+// fresh msg_id (JetStream dedup never sees it). Once ReleaseHold's settleRelease
+// stamps payout_settled_at AND flips payout_hold_status away from
+// release_eligible, the second sweep's query must not match this row again.
+func TestRunPayoutReleaseSweep_SecondRunDoesNotRepublish(t *testing.T) {
+	withPayoutMovementDisabled(t)
+	db := newPayoutReleaseTestDB(t)
+	releaseReadySettings(t, db)
+	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
+		c.RazorpaySettlementStatus = "activated"
+		c.PayoutAutoRelease = "on"
+	})
+	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
+		string(models.PayoutHoldReleaseEligible), order.ID.String()).Error)
+
+	withSweepDB(t, db, func() {
+		runPayoutReleaseSweep(context.Background())
+		runPayoutReleaseSweep(context.Background())
+	})
+
+	if got := countOutbox(t, db, SubjectPayoutReleased); got != 1 {
+		t.Fatalf("released events published after two sweeps = %d, want exactly 1 (no re-publish of an already-released order)", got)
+	}
 }
 
 func TestBuildReleaseInput_ReadsSettlementActivation(t *testing.T) {
@@ -205,6 +322,140 @@ func TestBuildReleaseInput_FlagsAnOpenRefund(t *testing.T) {
 	}
 	if !in.RefundOpen {
 		t.Fatal("a refunded order must block release")
+	}
+}
+
+// seedChefWithDeliveredOrders inserts a chef with n PRIOR delivered orders, then
+// returns the (n+1)th delivered order for that chef — the row under evaluation —
+// with Chef preloaded, matching the shape runPayoutReleaseSweep loads.
+func seedChefWithDeliveredOrders(t *testing.T, db *gorm.DB, priorDelivered int) *models.Order {
+	t.Helper()
+	chef := &models.ChefProfile{ID: uuid.New(), RazorpaySettlementStatus: "activated"}
+	require.NoError(t, db.Exec(
+		`INSERT INTO chef_profiles (id, razorpay_account_id, razorpay_settlement_status, payout_auto_release, state) VALUES (?,?,?,?,?)`,
+		chef.ID.String(), chef.RazorpayAccountID, chef.RazorpaySettlementStatus, chef.PayoutAutoRelease, chef.State,
+	).Error)
+
+	for i := 0; i < priorDelivered; i++ {
+		priorID := uuid.New()
+		require.NoError(t, db.Exec(
+			`INSERT INTO orders (id, order_number, chef_id, status, total, delivered_at) VALUES (?,?,?,?,?,?)`,
+			priorID.String(), "ORD-"+priorID.String()[:8], chef.ID.String(), string(models.OrderStatusDelivered),
+			100.0, time.Now().Add(-48*time.Hour),
+		).Error)
+	}
+
+	orderID := uuid.New()
+	delivered := time.Now().Add(-3 * time.Hour)
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders
+			(id, order_number, chef_id, status, subtotal, tax, chef_tip, delivery_fee, chef_funded_discount,
+			 commission_rate, total, delivery_address_state, delivered_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		orderID.String(), "ORD-"+orderID.String()[:8], chef.ID.String(), string(models.OrderStatusDelivered),
+		500.0, 25.0, 0.0, 40.0, 0.0, 0.0, 565.0, "", delivered,
+	).Error)
+
+	var order models.Order
+	require.NoError(t, db.Preload("Chef").First(&order, "id = ?", orderID.String()).Error)
+	return &order
+}
+
+func TestBuildReleaseInput_DeliveredOrderCountExcludesCurrentOrder(t *testing.T) {
+	// The chef's 3rd delivered order overall (2 PRIOR + itself) must see a count
+	// of 2, not 3 — "hold the chef's first 3 orders" means the Nth order sees
+	// N-1 PRIOR deliveries, not itself included in its own tally.
+	db := newPayoutReleaseTestDB(t)
+	order := seedChefWithDeliveredOrders(t, db, 2)
+
+	in, err := BuildReleaseInput(db, order, time.Now())
+	if err != nil {
+		t.Fatalf("BuildReleaseInput: %v", err)
+	}
+	if in.DeliveredOrderCount != 2 {
+		t.Fatalf("DeliveredOrderCount = %d, want 2 (must exclude the order being evaluated)", in.DeliveredOrderCount)
+	}
+}
+
+func TestReviewThreshold_ExplicitZeroDisables(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	setSetting(t, db, "payout.review_above_paise", "0")
+	got := reviewThreshold(db)
+	if !got.IsZero() {
+		t.Fatalf("an explicit 0 must disable the review-above guardrail, got %+v", got)
+	}
+}
+
+func TestReviewThreshold_AbsentUsesSafeDefault(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	// payout.review_above_paise never set.
+	got := reviewThreshold(db)
+	want := payouts.Money{Minor: 500000, Currency: payouts.CurrencyINR}
+	if got != want {
+		t.Fatalf("an absent setting must fall back to the safe default %+v, got %+v", want, got)
+	}
+}
+
+func TestReviewThreshold_GarbageUsesSafeDefault(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	setSetting(t, db, "payout.review_above_paise", "not-a-number")
+	got := reviewThreshold(db)
+	want := payouts.Money{Minor: 500000, Currency: payouts.CurrencyINR}
+	if got != want {
+		t.Fatalf("a garbage setting must fall back to the safe default %+v, got %+v", want, got)
+	}
+}
+
+func TestRampOrders_ExplicitZeroDisables(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	setSetting(t, db, "payout.new_chef_ramp_orders", "0")
+	if got := rampOrders(db); got != 0 {
+		t.Fatalf("an explicit 0 must disable the new-chef ramp, got %d", got)
+	}
+}
+
+func TestRampOrders_AbsentUsesSafeDefault(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	// payout.new_chef_ramp_orders never set.
+	if got := rampOrders(db); got != 3 {
+		t.Fatalf("an absent setting must fall back to the safe default of 3, got %d", got)
+	}
+}
+
+func TestRampOrders_GarbageUsesSafeDefault(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	setSetting(t, db, "payout.new_chef_ramp_orders", "garbage")
+	if got := rampOrders(db); got != 3 {
+		t.Fatalf("a garbage setting must fall back to the safe default of 3, got %d", got)
+	}
+}
+
+func TestDeliveredAt_NilFallsBackToPassedInNow(t *testing.T) {
+	// deliveredAt must take its "now" from the caller (BuildReleaseInput's
+	// deterministic clock), not read time.Now() itself — otherwise the nil-order
+	// fallback path can never be pinned down in a test.
+	now := time.Now()
+	order := &models.Order{} // DeliveredAt nil — data corruption on a delivered row
+	got := deliveredAt(order, now)
+	if !got.Equal(now) {
+		t.Fatalf("deliveredAt(nil, now) = %v, want the passed-in now %v", got, now)
+	}
+
+	// Fed into the governor, "just now" can never be matured — the fail-safe
+	// property this function exists for: a corrupt row blocks, it never releases.
+	in := payouts.ReleaseInput{Now: now, DeliveredAt: got, Maturation: 2 * time.Hour}
+	decision := payouts.DecideRelease(in)
+	if decision.Release {
+		t.Fatal("a nil DeliveredAt must fail safe and block release, not release")
+	}
+	found := false
+	for _, r := range decision.Reasons {
+		if r == payouts.BlockNotMatured {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected BlockNotMatured among reasons, got %v", decision.Reasons)
 	}
 }
 
