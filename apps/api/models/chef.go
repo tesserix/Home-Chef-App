@@ -118,6 +118,12 @@ type ChefProfile struct {
 	// which field Razorpay objected to and where to resolve it.
 	RazorpaySettlementRequirements string `gorm:"type:text;default:''" json:"-"`
 
+	// PayoutAutoRelease is the admin's per-chef automation switch: "on",
+	// "off", or "" to follow payout.auto_release_default. A tri-state rather
+	// than a boolean because rollout wants opt-in and steady state wants
+	// opt-out, and a boolean would need live money config migrated to swap.
+	PayoutAutoRelease string `gorm:"type:varchar(8);default:''" json:"payoutAutoRelease"`
+
 	// Payout details
 	PayoutMethod      string `gorm:"default:''" json:"-"`
 	BankAccountNumber string `gorm:"default:''" json:"-"`
