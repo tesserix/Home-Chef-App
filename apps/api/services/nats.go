@@ -54,18 +54,22 @@ const (
 	SubjectHoldReleased        = "payments.hold_released"         // → admin payout queue released the hold (#388)
 	SubjectUserRegistered      = "users.registered"
 	SubjectChefVerified        = "chef.verified"
-	SubjectWeeklyMenuPublished = "chef.weekly_menu.published" // → followers: a favorited chef dropped a new menu (#239)
-	SubjectDailyMenuPublished  = "chef.daily_menu.published"  // → followers: a favorited chef published a per-date menu (#405)
-	SubjectReferralRewarded    = "referral.reward.granted"    // → referrer: a referee placed their first paid order (#38)
-	SubjectLoyaltyEarned       = "loyalty.points_earned"      // → customer: earned points on a delivered order / streak (#40)
-	SubjectLoyaltyRedeemed     = "loyalty.redeemed"           // → customer: points converted to wallet credit (#40)
-	SubjectCampaignDispatch    = "campaigns.dispatch"         // → fan out a marketing campaign to its segment (#56)
-	SubjectReviewPosted        = "reviews.posted"
-	SubjectCateringRequest     = "catering.request"
-	SubjectCateringQuote       = "catering.quote"
-	SubjectNotificationEmail   = "notifications.email"
-	SubjectNotificationPush    = "notifications.push"
-	SubjectNotificationSMS     = "notifications.sms"
+	// SubjectChefAvailabilityChanged — the chef opened, closed or paused their
+	// kitchen. Customers browsing a closed kitchen would otherwise keep seeing
+	// it as open until their chef list happens to refetch.
+	SubjectChefAvailabilityChanged = "chef.availability_changed"
+	SubjectWeeklyMenuPublished     = "chef.weekly_menu.published" // → followers: a favorited chef dropped a new menu (#239)
+	SubjectDailyMenuPublished      = "chef.daily_menu.published"  // → followers: a favorited chef published a per-date menu (#405)
+	SubjectReferralRewarded        = "referral.reward.granted"    // → referrer: a referee placed their first paid order (#38)
+	SubjectLoyaltyEarned           = "loyalty.points_earned"      // → customer: earned points on a delivered order / streak (#40)
+	SubjectLoyaltyRedeemed         = "loyalty.redeemed"           // → customer: points converted to wallet credit (#40)
+	SubjectCampaignDispatch        = "campaigns.dispatch"         // → fan out a marketing campaign to its segment (#56)
+	SubjectReviewPosted            = "reviews.posted"
+	SubjectCateringRequest         = "catering.request"
+	SubjectCateringQuote           = "catering.quote"
+	SubjectNotificationEmail       = "notifications.email"
+	SubjectNotificationPush        = "notifications.push"
+	SubjectNotificationSMS         = "notifications.sms"
 
 	SubjectApprovalCreated       = "approvals.created"
 	SubjectApprovalApproved      = "approvals.approved"

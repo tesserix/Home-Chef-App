@@ -21,6 +21,7 @@ import {
   type MealVariant,
   type WeeklyMenuItem,
 } from '../hooks/useMealPlans';
+import { bookingEmptyState } from '../lib/booking-empty-state';
 import {
   WeeklyMenuDayHeader,
   WeeklyMenuDishCard,
@@ -157,6 +158,11 @@ export default function BookMealPlanScreen() {
     return out;
   }, [menu, daily]);
 
+  // Bookable dates are the authority here, not the weekly menu. A chef who
+  // publishes only per-date menus (#405 — the ones carrying combos) still has
+  // a grid to show; gating on the weekly menu hid it behind "No weekly menu".
+  const emptyState = bookingEmptyState(Boolean(menu?.isPublished), dates.length);
+
   const selected = Object.values(selection);
   const total = selected.reduce((s, x) => s + x.price, 0);
 
@@ -289,7 +295,7 @@ export default function BookMealPlanScreen() {
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
         </View>
-      ) : !menu?.isPublished ? (
+      ) : emptyState === 'no-menu' ? (
         <View style={styles.centered}>
           <CalendarDays size={40} color={customerColors.charcoal.soft} strokeWidth={1.5} />
           <Text style={styles.emptyTitle}>No weekly menu yet</Text>
@@ -298,7 +304,7 @@ export default function BookMealPlanScreen() {
             ordering individual dishes instead.
           </Text>
         </View>
-      ) : dates.length === 0 ? (
+      ) : emptyState === 'no-dates' ? (
         <View style={styles.centered}>
           <CalendarDays size={40} color={customerColors.charcoal.soft} strokeWidth={1.5} />
           <Text style={styles.emptyTitle}>No upcoming days to book</Text>

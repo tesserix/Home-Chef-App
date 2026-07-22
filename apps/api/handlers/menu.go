@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,7 +17,17 @@ import (
 	"github.com/homechef/api/services"
 	"github.com/lib/pq"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+// maxMenuItemImages caps the gallery per dish. Enforced under a row lock in
+// UploadMenuItemImage — a plain count-then-insert races when the picker
+// uploads a multi-selection concurrently.
+const maxMenuItemImages = 5
+
+// errMenuItemImageLimit is a sentinel so the transaction can reject a late
+// arrival and the caller can distinguish "full" from a real failure.
+var errMenuItemImageLimit = errors.New("menu item image limit reached")
 
 type MenuHandler struct{}
 
@@ -189,19 +200,19 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 	}
 
 	item := models.MenuItem{
-		ChefID:       chef.ID,
-		Name:         req.Name,
-		Description:  req.Description,
-		Price:        req.Price,
-		ComparePrice: req.ComparePrice,
-		ImageURL:     req.ImageURL,
-		DietaryTags:  ensureStringArray(req.DietaryTags),
-		Allergens:    ensureStringArray(req.Allergens),
-		Ingredients:  ensureStringArray(req.Ingredients),
-		PrepTime:     req.PrepTime,
-		PortionSize:  req.PortionSize,
-		Serves:       max(req.Serves, 1),
-		SpiceLevel:   req.SpiceLevel,
+		ChefID:        chef.ID,
+		Name:          req.Name,
+		Description:   req.Description,
+		Price:         req.Price,
+		ComparePrice:  req.ComparePrice,
+		ImageURL:      req.ImageURL,
+		DietaryTags:   ensureStringArray(req.DietaryTags),
+		Allergens:     ensureStringArray(req.Allergens),
+		Ingredients:   ensureStringArray(req.Ingredients),
+		PrepTime:      req.PrepTime,
+		PortionSize:   req.PortionSize,
+		Serves:        max(req.Serves, 1),
+		SpiceLevel:    req.SpiceLevel,
 		IsVeg:         req.IsVeg,
 		IsAvailable:   true,
 		AvailableDays: sanitizeWeekdays(req.AvailableDays),
@@ -654,14 +665,6 @@ func (h *MenuHandler) UploadMenuItemImage(c *gin.Context) {
 		return
 	}
 
-	// Check existing image count (max 5)
-	var imageCount int64
-	database.DB.Model(&models.MenuItemImage{}).Where("menu_item_id = ?", item.ID).Count(&imageCount)
-	if imageCount >= 5 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Maximum 5 images per menu item"})
-		return
-	}
-
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
@@ -681,6 +684,29 @@ func (h *MenuHandler) UploadMenuItemImage(c *gin.Context) {
 		return
 	}
 
+	// The declared multipart Content-Type is client-controlled, so also sniff
+	// the real bytes — the same guard every upload.go path already applies.
+	// This one lands in the PUBLIC bucket, so an SVG or HTML payload wearing an
+	// image/jpeg header would be served back to browsers verbatim.
+	sniffed, serr := sniffContentType(file)
+	if serr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not read file"})
+		return
+	}
+	if !services.IsImageContentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
+		return
+	}
+
+	// Cheap pre-check so an obviously-full item doesn't pay for a GCS upload.
+	// It is NOT the enforcement point — the transaction below is.
+	var preCount int64
+	database.DB.Model(&models.MenuItemImage{}).Where("menu_item_id = ?", item.ID).Count(&preCount)
+	if preCount >= maxMenuItemImages {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Maximum 5 images per menu item"})
+		return
+	}
+
 	// Upload to public bucket: chefs/{chefID}/menu/{itemID}/{uuid}.{ext}
 	folder := fmt.Sprintf("chefs/%s/menu/%s", chef.ID.String(), item.ID.String())
 	fileURL, err := services.UploadPublicFile(c.Request.Context(), folder, header.Filename, file, contentType)
@@ -690,24 +716,26 @@ func (h *MenuHandler) UploadMenuItemImage(c *gin.Context) {
 		return
 	}
 
-	// Determine sort order (append to end)
-	isPrimary := imageCount == 0
+	img, txErr := claimMenuItemImageSlot(database.DB, item.ID, fileURL)
 
-	img := models.MenuItemImage{
-		MenuItemID: item.ID,
-		URL:        fileURL,
-		IsPrimary:  isPrimary,
-		SortOrder:  int(imageCount),
-	}
-	if err := database.DB.Create(&img).Error; err != nil {
-		log.Printf("Failed to save menu item image: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
+	if errors.Is(txErr, errMenuItemImageLimit) {
+		// The object already landed in GCS; drop it rather than leave an
+		// orphan nothing references. Best effort, same as DeleteMenuItemImage.
+		bucket := config.AppConfig.GCSPublicBucket
+		prefix := fmt.Sprintf("https://storage.googleapis.com/%s/", bucket)
+		if objectPath := fileURL; len(objectPath) > len(prefix) {
+			objectPath = objectPath[len(prefix):]
+			if delErr := services.DeleteFile(c.Request.Context(), bucket, objectPath); delErr != nil {
+				log.Printf("Warning: orphaned menu image %s after limit hit: %v", objectPath, delErr)
+			}
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Maximum 5 images per menu item"})
 		return
 	}
-
-	// Also set the first image as the item's main imageUrl
-	if isPrimary {
-		database.DB.Model(&item).Update("image_url", fileURL)
+	if txErr != nil {
+		log.Printf("Failed to save menu item image: %v", txErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save image"})
+		return
 	}
 
 	c.JSON(http.StatusCreated, img)
@@ -968,4 +996,50 @@ func saveItemModifiers(itemID, chefID uuid.UUID, groups []ModifierGroupInput, co
 		}
 		return nil
 	})
+}
+
+// claimMenuItemImageSlot inserts one gallery row for itemID, deciding the
+// count, primary flag and sort order under a row lock on the parent item.
+//
+// The lock is the whole point. The picker uploads a multi-selection
+// concurrently; without it several requests read the same count and all pass,
+// which puts the gallery past its cap, gives more than one row IsPrimary (so
+// menu_items.image_url is written twice, last write wins) and collides
+// sort_order. Reproduced against Postgres in menu_image_race_test.go: eight
+// racers on a 4-image item produced 12 rows.
+func claimMenuItemImageSlot(db *gorm.DB, itemID uuid.UUID, url string) (models.MenuItemImage, error) {
+	var img models.MenuItemImage
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var locked models.MenuItem
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", itemID).First(&locked).Error; err != nil {
+			return err
+		}
+
+		var count int64
+		if err := tx.Model(&models.MenuItemImage{}).
+			Where("menu_item_id = ?", locked.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count >= maxMenuItemImages {
+			return errMenuItemImageLimit
+		}
+
+		isPrimary := count == 0
+		img = models.MenuItemImage{
+			MenuItemID: locked.ID,
+			URL:        url,
+			IsPrimary:  isPrimary,
+			SortOrder:  int(count),
+		}
+		if err := tx.Create(&img).Error; err != nil {
+			return err
+		}
+		if isPrimary {
+			return tx.Model(&models.MenuItem{}).
+				Where("id = ?", locked.ID).Update("image_url", url).Error
+		}
+		return nil
+	})
+	return img, err
 }
