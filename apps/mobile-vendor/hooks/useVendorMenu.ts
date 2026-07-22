@@ -295,15 +295,36 @@ export function useDeleteMenuItem() {
   });
 }
 
-export function useUploadMenuPhoto(itemId: string) {
+/**
+ * Builds the photo-upload path, refusing a missing id.
+ *
+ * An empty id collapses the URL to `/chef/menu/items//images`, which is a
+ * different route: it 404s, and because the caller swallows upload errors the
+ * chef sees a saved item with no photos and no explanation. Failing loudly
+ * here turns a silent data-loss bug into an obvious one.
+ */
+export function menuItemImagesPath(itemId: string): string {
+  if (!itemId || !itemId.trim()) {
+    throw new Error('menuItemImagesPath: item id is required to upload a photo');
+  }
+  return `/chef/menu/items/${itemId}/images`;
+}
+
+/**
+ * Uploads one menu photo. The item id is supplied per call rather than
+ * captured at render: a newly created item's id only exists after the create
+ * mutation resolves, and setState does not update an already-constructed
+ * mutation within the same handler.
+ */
+export function useUploadMenuPhoto() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (uri: string) => {
+    mutationFn: async ({ itemId, uri }: { itemId: string; uri: string }) => {
       const formData = new FormData();
       const filename = uri.split('/').pop() ?? 'menu-photo.jpg';
       const type = filename.endsWith('.png') ? 'image/png' : 'image/jpeg';
       formData.append('file', { uri, name: filename, type } as unknown as Blob);
-      return api.post(`/chef/menu/items/${itemId}/images`, formData, multipartConfig());
+      return api.post(menuItemImagesPath(itemId), formData, multipartConfig());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MENU_KEY });

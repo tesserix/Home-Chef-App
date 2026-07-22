@@ -34,7 +34,7 @@ export default function EditMenuItemScreen() {
 
   const updateMutation = useUpdateMenuItem();
   const deleteMutation = useDeleteMenuItem();
-  const uploadMutation = useUploadMenuPhoto(itemId ?? '');
+  const uploadMutation = useUploadMenuPhoto();
 
   // Derive initial values from the item whenever it first arrives (or updates).
   // We keep a version counter so MenuItemForm can re-mount with fresh
@@ -154,10 +154,13 @@ export default function EditMenuItemScreen() {
   }
 
   function handleAddPhoto(uri: string) {
-    uploadMutation.mutate(uri, {
-      onError: (err) =>
-        Alert.alert('Upload failed', getServerErrorMessage(err, 'Please try again.')),
-    });
+    uploadMutation.mutate(
+      { itemId: itemId ?? '', uri },
+      {
+        onError: (err) =>
+          Alert.alert('Upload failed', getServerErrorMessage(err, 'Please try again.')),
+      },
+    );
   }
 
   const isSaving = updateMutation.isPending;

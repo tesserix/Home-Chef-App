@@ -26,6 +26,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { ChevronLeft, Plus } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
+import { validationSummary } from '../../lib/menu-validation';
+import { pricingHint } from '../../lib/pricing-guidance';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import { DietIcon } from '../../components/vendor/DietIcon';
 import { ModifierComboEditor } from '../../components/vendor/ModifierComboEditor';
@@ -453,6 +455,9 @@ export function MenuItemForm({
   onDraftChange,
 }: MenuItemFormProps) {
   const { show: showToast } = useToast();
+  // validate() writes errors via setState; handleSave runs in the same tick and
+  // would otherwise read the previous render's value.
+  const errorsRef = useRef<Partial<Record<keyof MenuItemFormValues, string>>>({});
 
   // Form state — plain useState mirrors profile.tsx's EditableField pattern
   const [name, setName] = useState(initialValues.name);
@@ -564,13 +569,22 @@ export function MenuItemForm({
     }
     if (!categoryId) next.categoryId = 'Select a category';
     setErrors(next);
+    errorsRef.current = next;
     return Object.keys(next).length === 0;
   }
 
   // ---- Handlers -------------------------------------------------------------
 
+  const priceGuidance = pricingHint(price);
+
   function handleSave() {
-    if (!validate()) return;
+    if (!validate()) {
+      // Without this the button reads as broken: the offending field is
+      // usually scrolled out of view, so nothing visibly happens.
+      const summary = validationSummary(errorsRef.current);
+      if (summary) showToast({ message: summary, tone: 'error' });
+      return;
+    }
     onSave(
       {
         name: name.trim(),
@@ -892,6 +906,17 @@ export function MenuItemForm({
                   ]}
                 />
               </View>
+              {/* Always-on positioning guidance, plus a louder nudge once the
+                  price reaches restaurant parity. Guidance only — never a
+                  block; the chef knows their portion and ingredient cost. */}
+              {priceGuidance ? (
+                <Text style={styles.priceWarn}>{priceGuidance.message}</Text>
+              ) : (
+                <Text style={styles.priceHelp}>
+                  Price below what a restaurant charges for the same dish — that lower price
+                  is why customers choose a home kitchen.
+                </Text>
+              )}
             </FormField>
           </View>
 
@@ -1261,6 +1286,20 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.soft,
     fontVariant: ['tabular-nums'],
+  },
+  priceHelp: {
+    fontFamily: 'Inter-Regular',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.muted,
+    marginTop: theme.spacing[2],
+    lineHeight: 18,
+  },
+  priceWarn: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.amber?.DEFAULT ?? '#B45309',
+    marginTop: theme.spacing[2],
+    lineHeight: 18,
   },
   priceInput: {
     flex: 1,

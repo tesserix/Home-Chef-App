@@ -2040,6 +2040,12 @@ func (h *ChefHandler) UpdateChefSettings(c *gin.Context) {
 		"paused_until":     nil,
 	})
 
+	// Tell customers browsing this kitchen. Without it they keep seeing an open
+	// kitchen until their chef list happens to refetch (#useChefs staleTime).
+	if err := services.EnqueueChefAvailabilityChanged(database.DB, chef.ID, req.AcceptingOrders); err != nil {
+		log.Printf("chef availability event (settings) for %s: %v", chef.ID, err)
+	}
+
 	// Upsert chef settings
 	var settings models.ChefSettings
 	if err := database.DB.Where("chef_id = ?", chef.ID).First(&settings).Error; err != nil {
