@@ -142,7 +142,7 @@ delivery confirmed ──▶ hold matures (2h) ──▶ sweep (≤15 min)
   delivered orders, applies the governor, and drives releases.
 - **Recovery deduction** — `chefNetPayout` consults the ledger balance.
 - **Admin surface** (tesserix-home) — chefs blocked from payout, the release
-  queue, and per-chef payout history.
+  queue, per-chef payout history, and the per-chef automation switch.
 
 ### Runtime settings
 
@@ -152,11 +152,64 @@ All `PlatformSettings` keys, changeable without a deploy:
 |---|---|
 | `payout.maturation_minutes` | `120` |
 | `payout.sweep_enabled` | `false` |
+| `payout.auto_release_default` | `off` |
 | `payout.new_chef_ramp_orders` | `3` |
 | `payout.review_above_paise` | `500000` |
 
 `payout.sweep_enabled` defaults off. This moves live settlement, so it is
 enabled deliberately after the Razorpay sandbox verification in #218.
+
+### Per-chef automation switch
+
+Automation is enabled per chef from the tesserix-home HomeChef admin, via a
+tri-state on `ChefProfile`:
+
+| `PayoutAutoRelease` | Meaning |
+|---|---|
+| `"on"` | This chef auto-releases |
+| `"off"` | This chef never auto-releases; every order goes to the queue |
+| `""` (unset) | Follow `payout.auto_release_default` |
+
+Precedence is strict, and the order matters:
+
+1. `payout.sweep_enabled == false` → nothing releases, for anyone. A per-chef
+   `"on"` does **not** override this. A kill switch that individual records can
+   opt out of is not a kill switch, and this is the control used when something
+   is actively going wrong with live money.
+2. Otherwise the chef's tri-state decides, falling back to
+   `payout.auto_release_default` when unset.
+3. A chef cleared to auto-release still passes the full guardrail chain. The
+   switch grants candidacy, never exemption — an `"on"` chef with an open refund
+   is still blocked.
+
+The tri-state exists rather than a boolean because the two rollout phases want
+opposite defaults. Early on, `auto_release_default` is `off` and chefs are
+switched on individually as they are verified. Once the mechanism is trusted,
+the default flips to `on` and the field becomes a per-chef suspension for a chef
+under investigation. A boolean would force a choice between those and then a
+migration of live money configuration to change it.
+
+Turning a chef off never touches money already in flight: transfers stay held
+and appear in the release queue for manual handling.
+
+## Admin surface (tesserix-home)
+
+Four views over the same data:
+
+- **Chefs blocked from payout** — unactivated or `needs_clarification`, showing
+  Razorpay's `requirements` and resolution URL so the blockage is actionable
+  rather than merely visible.
+- **Release queue** — orders held by a guardrail, each listing *every* reason,
+  with release and withhold actions.
+- **Payout history** — per chef, reconciling released transfers against orders.
+- **Automation switch** — the per-chef tri-state above.
+
+Every switch flip and manual release is written to the audit trail with the
+acting admin. These are the actions that move real money on someone else's
+behalf, and "who released this" must be answerable months later.
+
+Reached through the existing HMAC gateway proxy
+(`/api/admin/apps/homechef/gw`), so no new auth surface is introduced.
 
 ## Durability
 
