@@ -188,30 +188,14 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 	})
 }
 
-// chefNetPayout is the chef's actual Route/Transfer payout for an order: NET of
-// platform commission and TDS (#390). It is the SINGLE SOURCE OF TRUTH shared by
-// the Route split, the Stripe transfer, and the FSSAI-withhold audit, so the three
-// can never drift — and it equals ComputeOrderEarnings(order).NetPayout, the exact
-// figure on the settlement statement.
-//
-//	gross = Subtotal + Tax + ChefTip (less any chef-funded promo the chef bears);
-//	net   = gross − commission − TDS.
-//
-// The commission rate is read from the FROZEN order.CommissionRate (stamped at
-// checkout), so a mid-flight admin rate change cannot make the statement disagree
-// with a transfer already sent. A legacy 0 falls back to DefaultCommissionRate
-// inside ComputeOrderEarnings. Delivery is the DRIVER's money and is excluded.
-// Requires order.Chef preloaded (for the intra/inter-state GST state).
+// chefNetPayout is a thin package-local alias for services.ChefNetPayoutFor —
+// the actual calculation moved there (#741) so the Route split here, the
+// Stripe transfer below, and the payout release governor's BuildReleaseInput
+// all read the identical figure instead of three copies drifting apart. Kept
+// as a call-through (rather than inlining the call at every site) so this
+// package's existing callers/tests are unaffected by the move.
 func chefNetPayout(order *models.Order) float64 {
-	return services.ComputeOrderEarnings(services.EarningsInput{
-		ItemRevenue:        order.Subtotal,
-		Tax:                order.Tax,
-		ChefTip:            order.ChefTip,
-		DeliveryFee:        order.DeliveryFee,
-		ChefFundedDiscount: order.ChefFundedDiscount,
-		DeliveryState:      order.DeliveryAddressState,
-		CommissionRate:     order.CommissionRate,
-	}, order.Chef.State).NetPayout
+	return services.ChefNetPayoutFor(order)
 }
 
 // orderSettlements derives the chef + driver payouts for an order, chef first so
