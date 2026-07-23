@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { formatMoney } from '../../lib/format';
 import {
   ActivityIndicator,
@@ -14,9 +14,8 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft, Heart, Share2, UtensilsCrossed } from 'lucide-react-native';
+import { ChevronLeft, Heart, Share2, UtensilsCrossed, ShoppingCart } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import BottomSheet from '@gorhom/bottom-sheet';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useChef, useChefMenu } from '../../hooks/useChefs';
 import { useCustomerCoords } from '../../hooks/useCustomerCoords';
@@ -34,7 +33,6 @@ import { ChefMenuTab } from '../../components/chef/ChefMenuTab';
 import { ChefWeeklyPlanTab } from '../../components/chef/ChefWeeklyPlanTab';
 import { ChefReviewList } from '../../components/chef/ChefReviewList';
 import { TIFFIN_ENABLED } from '../../lib/features';
-import { CartSheet } from '../../components/cart/CartSheet';
 
 // Compact photo header — ~28% of viewport (capped at 260) so the menu shows
 // higher up. 40% ate too much vertical space above the fold.
@@ -72,7 +70,6 @@ function formatCuisines(cuisine?: string): string {
 export default function ChefDetailScreen() {
   const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const insets = useSafeAreaInsets();
-  const cartSheetRef = useRef<BottomSheet>(null);
 
   // Customer coords let the server compute deliverableToYou (can this chef reach
   // you) so the detail screen can show delivery as pickup-only when out of range.
@@ -153,7 +150,7 @@ export default function ChefDetailScreen() {
   const isSaved = favData?.data.some((f) => f.chefId === chef?.id) ?? false;
 
   const openCart = () => {
-    cartSheetRef.current?.expand();
+    router.push('/cart');
   };
 
   const handleToggleSave = () => {
@@ -510,9 +507,16 @@ export default function ChefDetailScreen() {
                     pressed && styles.ctaButtonPressed,
                   ]}
                 >
-                  <Text style={styles.ctaLabel}>
-                    Add to cart
-                  </Text>
+                  <View style={styles.ctaLeft}>
+                    <ShoppingCart size={18} color={customerColors.canvas} />
+                    {/* Live count — Zustand selector, updates instantly on add/remove */}
+                    <View style={styles.ctaCountBadge}>
+                      <Text style={styles.ctaCountText}>{cartCount}</Text>
+                    </View>
+                    <Text style={styles.ctaLabel}>
+                      View cart
+                    </Text>
+                  </View>
                   <Text style={styles.ctaTotal}>
                     {formatMoney(cartTotal)}
                   </Text>
@@ -523,8 +527,6 @@ export default function ChefDetailScreen() {
         </View>
       ) : null}
 
-      {/* Cart bottom sheet */}
-      <CartSheet ref={cartSheetRef} />
     </View>
   );
 }
@@ -772,6 +774,26 @@ const styles = StyleSheet.create({
   },
   ctaButtonPressed: {
     backgroundColor: customerColors.coral.pressed,
+  },
+  ctaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  ctaCountBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: customerColors.canvas,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaCountText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: customerColors.coral.DEFAULT,
+    fontVariant: ['tabular-nums'],
   },
   ctaLabel: {
     fontFamily: 'Inter-SemiBold',
