@@ -6,16 +6,18 @@
 // (useSetDefaultAddress), which invalidates both the address list and the
 // chef/discovery queries so the home feed re-fetches against the new coords.
 //
-// Design: @gorhom/bottom-sheet at 60% snap, matching FilterSheet's chrome
-// (radius-lg sheet, hairline separators, coral active state). iOS Pressable
-// inner-View pattern throughout — never a function-style style array on
-// Pressable.
+// Design: radius-lg sheet, hairline separators, coral active state. iOS
+// Pressable inner-View pattern throughout — never a function-style style
+// array on Pressable.
+//
+// Built on the shared SheetBase (plain React Native Modal + Animated) —
+// @gorhom/bottom-sheet's raw BottomSheet + `.expand()` silently no-opped
+// here (confirmed on-device: tapping the address row did nothing).
 
 import { forwardRef, useCallback } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
+import { SheetBase, type SheetHandle } from '@homechef/mobile-shared/ui';
 import { Check, Plus } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useAddresses, useSetDefaultAddress } from '../../hooks/useAddresses';
@@ -29,7 +31,7 @@ function formatShortLine(addr: Address): string {
   return parts.filter(Boolean).join(' ');
 }
 
-export const AddressSwitcherSheet = forwardRef<BottomSheetMethods>((_props, ref) => {
+export const AddressSwitcherSheet = forwardRef<SheetHandle>((_props, ref) => {
   const { data, isLoading } = useAddresses();
   const addresses = data?.data ?? [];
   const activeAddress = pickActiveAddress(addresses);
@@ -37,7 +39,7 @@ export const AddressSwitcherSheet = forwardRef<BottomSheetMethods>((_props, ref)
 
   const handleClose = useCallback(() => {
     if (ref && 'current' in ref && ref.current) {
-      ref.current.close();
+      ref.current.dismiss();
     }
   }, [ref]);
 
@@ -57,18 +59,11 @@ export const AddressSwitcherSheet = forwardRef<BottomSheetMethods>((_props, ref)
   }
 
   return (
-    <BottomSheet
-      ref={ref}
-      index={-1}
-      snapPoints={['60%']}
-      enablePanDownToClose
-      backgroundStyle={styles.sheetBackground}
-      handleIndicatorStyle={styles.handleIndicator}
-    >
-      <BottomSheetScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+    // maxHeightRatio caps growth at the same ~60% ceiling snapPoints={['60%']}
+    // used; the panel now hugs its content (usually a short address list)
+    // instead of always padding out to a fixed height.
+    <SheetBase ref={ref} maxHeightRatio={0.6} panelStyle={styles.sheetBackground}>
+      <View style={styles.scrollContent}>
         {/* ── Sheet header ── */}
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle}>Delivery address</Text>
@@ -152,28 +147,21 @@ export const AddressSwitcherSheet = forwardRef<BottomSheetMethods>((_props, ref)
         </Pressable>
 
         <View style={{ height: 32 }} />
-      </BottomSheetScrollView>
-    </BottomSheet>
+      </View>
+    </SheetBase>
   );
 });
 
 AddressSwitcherSheet.displayName = 'AddressSwitcherSheet';
 
 const styles = StyleSheet.create({
+  // Background/radius only — shadow lives on SheetBase's own outer
+  // (unclipped) shadow view; putting shadow props on this clipped node too
+  // would sit under `overflow: hidden` and iOS would drop them.
   sheetBackground: {
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     backgroundColor: customerColors.canvas,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  handleIndicator: {
-    backgroundColor: customerColors.hairline,
-    width: 36,
-    height: 4,
   },
   scrollContent: {
     paddingTop: 8,

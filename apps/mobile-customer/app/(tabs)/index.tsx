@@ -6,9 +6,9 @@
 //   3. Slim filter bar — Open Now pill (most-used quick toggle) + "Filters"
 //      pill with an active-count badge + Social Feed & Catering nav entries
 //
-// Secondary filters (diet, price, sort) live in FilterSheet — a @gorhom/
-// bottom-sheet that opens on the "Filters" tap and drives the SAME state
-// variables/setters that previously powered three separate chip rows.
+// Secondary filters (diet, price, sort) live in FilterSheet — a bottom sheet
+// that opens on the "Filters" tap and drives the SAME state variables/setters
+// that previously powered three separate chip rows.
 //
 // ALL filter state (selectedDiet, maxPrice, sort, isOpenOnly) is defined
 // here and passed down — FilterSheet holds zero state of its own.
@@ -44,7 +44,7 @@ import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { ActivePlanChip } from '../../components/meal-plan/ActivePlanChip';
 import { FilterSheet } from '../../components/home/FilterSheet';
 import { CATERING_ENABLED, SOCIAL_ENABLED } from '../../lib/features';
-import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
+import { type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
 import { useOrderStatusWS } from '../../hooks/useOrderStatusWS';
 import { useChefs } from '../../hooks/useChefs';
@@ -123,8 +123,8 @@ export default function HomeScreen() {
   useOrderStatusWS(undefined, activeOrders.length > 0);
 
   // Ref for opening the FilterSheet imperatively on Filters pill tap.
-  const filterSheetRef = useRef<BottomSheetMethods>(null);
-  const addressSheetRef = useRef<BottomSheetMethods>(null);
+  const filterSheetRef = useRef<SheetHandle>(null);
+  const addressSheetRef = useRef<SheetHandle>(null);
 
   // ── Data fetching ────────────────────────────────────────────────────────
   // Customer location drives the chef delivery-area gate: a chef who only
@@ -172,7 +172,7 @@ export default function HomeScreen() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   function handleOpenFilters() {
-    filterSheetRef.current?.expand();
+    filterSheetRef.current?.present();
   }
 
   // ── Header component ─────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ export default function HomeScreen() {
           old "Map view →" text link. ── */}
       <View style={styles.addressRow}>
         <View style={styles.addressRowPill}>
-          <AddressSwitcher onOpen={() => addressSheetRef.current?.expand()} />
+          <AddressSwitcher onOpen={() => addressSheetRef.current?.present()} />
         </View>
         <Pressable
           onPress={() => router.push('/chefs-map')}
@@ -504,8 +504,8 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* FilterSheet — mounts always so @gorhom can manage its own gesture
-            state; hidden at index -1 until the Filters pill is tapped. */}
+        {/* FilterSheet — mounts a Modal only once presented (SheetBase's
+            `present()`); nothing renders until the Filters pill is tapped. */}
         <FilterSheet
           ref={filterSheetRef}
           selectedDiet={selectedDiet}
@@ -519,9 +519,10 @@ export default function HomeScreen() {
         />
 
         {/* AddressSwitcherSheet — mounted at the screen root (sibling of the
-            FlatList), NOT inside the list header, so @gorhom overlays the whole
-            screen instead of being trapped in the header's layout box. Hidden at
-            index -1 until the address pill is tapped (addressSheetRef.expand). */}
+            FlatList), NOT inside the list header, so its Modal overlays the
+            whole screen instead of being trapped in the header's layout box.
+            Renders nothing until the address pill is tapped
+            (addressSheetRef.present()). */}
         <AddressSwitcherSheet ref={addressSheetRef} />
       </View>
     </SafeAreaView>

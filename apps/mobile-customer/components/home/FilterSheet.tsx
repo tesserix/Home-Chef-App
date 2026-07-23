@@ -5,14 +5,17 @@
 // Each filter group is wired to the SAME state/handlers as before — this
 // component owns no state; all values and setters flow in via props.
 //
-// Design: @gorhom/bottom-sheet at 75% snap; radius-lg (16) on the sheet;
-// hairline group separators; coral active state; iOS Pressable inner-View
-// pattern throughout (never function-style style array on Pressable).
+// Design: radius-lg (16) on the sheet; hairline group separators; coral
+// active state; iOS Pressable inner-View pattern throughout (never
+// function-style style array on Pressable).
+//
+// Built on the shared SheetBase (plain React Native Modal + Animated) —
+// @gorhom/bottom-sheet's raw BottomSheet + `.expand()` silently no-ops on
+// this app's gorhom 5.2.8 + reanimated 4.4.1 pairing, confirmed on-device.
 
 import React, { forwardRef, useCallback } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
+import { SheetBase, type SheetHandle } from '@homechef/mobile-shared/ui';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { ChefFilters } from '../../hooks/useChefs';
 
@@ -102,7 +105,7 @@ function FilterChip({ label, isSelected, onPress, accessibilityLabel }: FilterCh
 
 // ---- Main component ---------------------------------------------------------
 
-export const FilterSheet = forwardRef<BottomSheetMethods, FilterSheetProps>(
+export const FilterSheet = forwardRef<SheetHandle, FilterSheetProps>(
   (props, ref) => {
     const {
       selectedDiet,
@@ -117,25 +120,20 @@ export const FilterSheet = forwardRef<BottomSheetMethods, FilterSheetProps>(
 
     const handleClose = useCallback(() => {
       if (ref && 'current' in ref && ref.current) {
-        ref.current.close();
+        ref.current.dismiss();
       }
     }, [ref]);
 
     return (
-      <BottomSheet
-        ref={ref}
-        index={-1}
-        snapPoints={['75%']}
-        enablePanDownToClose
-        backgroundStyle={styles.sheetBackground}
-        handleIndicatorStyle={styles.handleIndicator}
-      >
-        {/* BottomSheetScrollView is gesture-aware — swipe-down on the scroll
-            still dismisses the sheet when the list is at the top. */}
-        <BottomSheetScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+      // SheetBase's own ScrollView owns the max-height + scroll bounding
+      // (setting maxHeight on an ancestor View instead of the ScrollView
+      // itself doesn't actually bound a ScrollView child — RN's scrollable-
+      // area recipe needs maxHeight on the ScrollView). maxHeightRatio caps
+      // growth at the same ~75% ceiling the old snapPoints={['75%']} used;
+      // the panel now hugs its (fixed, known) content instead of always
+      // padding out to a fixed height — sensible for content-height sheets.
+      <SheetBase ref={ref} maxHeightRatio={0.75} panelStyle={styles.sheetBackground}>
+        <View style={styles.scrollContent}>
           {/* ── Sheet header ── */}
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Filters</Text>
@@ -243,8 +241,8 @@ export const FilterSheet = forwardRef<BottomSheetMethods, FilterSheetProps>(
 
           {/* Bottom breathing room above the safe-area notch */}
           <View style={{ height: 32 }} />
-        </BottomSheetScrollView>
-      </BottomSheet>
+        </View>
+      </SheetBase>
     );
   }
 );
@@ -254,22 +252,13 @@ FilterSheet.displayName = 'FilterSheet';
 // ---- Styles -----------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  // Sheet chrome
+  // Sheet chrome — background/radius only. Shadow lives on SheetBase's own
+  // outer (unclipped) shadow view; putting shadow props here too would sit
+  // on the same node as `overflow: hidden` and iOS would drop them.
   sheetBackground: {
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     backgroundColor: customerColors.canvas,
-    // Shadow[3] on the sheet handle area
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  handleIndicator: {
-    backgroundColor: customerColors.hairline,
-    width: 36,
-    height: 4,
   },
   scrollContent: {
     paddingTop: 8,
