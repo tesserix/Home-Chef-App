@@ -30,6 +30,8 @@
     "todaysEarnings": "Today's earnings",
     "orders": "Orders",
     "rating": "Rating",
+    "ratingNew": "New",
+    "today": "TODAY",
     "actionRequired": "ACTION REQUIRED",
     "inProgress": "IN PROGRESS",
     "adminNeedsInfo": "Admin needs info",
