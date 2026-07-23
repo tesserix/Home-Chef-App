@@ -3,8 +3,11 @@
 // inactive labels are charcoal-soft. Purely presentational: the screen owns
 // which tabs exist (Weekly plan is gated by TIFFIN_ENABLED) and the active key.
 
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+
+// Android ripple tint — translucent charcoal derived from the token.
+const TAB_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 export type ChefDetailTabKey = 'menu' | 'weekly' | 'reviews';
 
@@ -31,11 +34,12 @@ export function ChefDetailTabs({ tabs, activeTab, onChange }: ChefDetailTabsProp
             accessibilityRole="tab"
             accessibilityLabel={tab.label}
             accessibilityState={{ selected: isActive }}
+            android_ripple={{ color: TAB_RIPPLE }}
           >
             {({ pressed }) => (
               // Visual + layout styles on the inner View — iOS drops
               // flex/bg/padding returned from a Pressable style function.
-              <View style={[styles.tab, pressed && styles.tabPressed]}>
+              <View style={[styles.tab, pressed && Platform.OS === 'ios' && styles.tabPressed]}>
                 <Text style={[styles.label, isActive && styles.labelActive]}>
                   {tab.label}
                 </Text>

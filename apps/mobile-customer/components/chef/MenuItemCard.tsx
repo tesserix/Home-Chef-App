@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { AlertTriangle, Minus, Plus, UtensilsCrossed } from 'lucide-react-native';
@@ -10,6 +10,11 @@ import { ModifierSheet } from '../cart/ModifierSheet';
 import { FavoriteHeart } from '../shared/FavoriteHeart';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { CartItem, MenuItem, SelectedModifier } from '../../types/customer';
+
+// Android ripple tints — translucent colours derived from existing tokens
+// (never a new literal colour), matching the ChefCard `withAlpha` convention.
+const ADD_BTN_RIPPLE = `${customerColors.canvas}40`;
+const STEPPER_RIPPLE = `${customerColors.coral.DEFAULT}22`;
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -194,13 +199,14 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
                 onPress={handleAdd}
                 accessibilityLabel={`Add ${item.name} to cart`}
                 accessibilityRole="button"
+                android_ripple={{ color: ADD_BTN_RIPPLE, borderless: false }}
               >
                 {({ pressed }) => (
                   // Visual styles on inner View per iOS Pressable bug rule.
                   <View
                     style={[
                       styles.addButton,
-                      pressed && styles.addButtonPressed,
+                      pressed && Platform.OS === 'ios' && styles.addButtonPressed,
                     ]}
                   >
                     <Plus
@@ -223,12 +229,13 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
                   accessibilityLabel={`Remove one ${item.name}`}
                   accessibilityRole="button"
                   style={styles.stepperBtnWrap}
+                  android_ripple={{ color: STEPPER_RIPPLE, borderless: false }}
                 >
                   {({ pressed }) => (
                     <View
                       style={[
                         styles.stepperBtn,
-                        pressed && styles.stepperBtnPressed,
+                        pressed && Platform.OS === 'ios' && styles.stepperBtnPressed,
                       ]}
                     >
                       <Minus
@@ -248,12 +255,13 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
                   accessibilityLabel={`Add another ${item.name}`}
                   accessibilityRole="button"
                   style={styles.stepperBtnWrap}
+                  android_ripple={{ color: STEPPER_RIPPLE, borderless: false }}
                 >
                   {({ pressed }) => (
                     <View
                       style={[
                         styles.stepperBtn,
-                        pressed && styles.stepperBtnPressed,
+                        pressed && Platform.OS === 'ios' && styles.stepperBtnPressed,
                       ]}
                     >
                       <Plus
@@ -450,7 +458,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    minHeight: 36,
+    minHeight: 44, // R5: ≥44pt touch target
   },
   addButtonPressed: {
     backgroundColor: customerColors.coral.pressed,
@@ -469,14 +477,14 @@ const styles = StyleSheet.create({
     borderColor: customerColors.coral.DEFAULT,
     borderRadius: 8,
     overflow: 'hidden',
-    minHeight: 36,
+    minHeight: 44,
   },
   stepperBtnWrap: {
     // Plain wrapper so Pressable layout is stable on iOS.
   },
   stepperBtn: {
-    width: 36,
-    height: 36,
+    width: 44, // R5: ≥44pt touch target
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

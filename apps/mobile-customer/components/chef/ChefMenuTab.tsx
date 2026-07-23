@@ -11,6 +11,10 @@ import { GROUP_ORDERS_ENABLED } from '../../lib/features';
 import { MenuItemCard } from './MenuItemCard';
 import { ChefActionRow } from './ChefActionRow';
 
+// Android ripple tint — translucent charcoal derived from the token (never a
+// new literal colour), matching the ChefCard `withAlpha` convention.
+const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+
 export interface ChefMenuTabProps {
   chefId: string;
   chefName: string;
@@ -52,6 +56,7 @@ export function ChefMenuTab({
                 accessibilityRole="button"
                 accessibilityLabel={`Filter by ${cat}`}
                 accessibilityState={{ selected: activeCategory === cat }}
+                android_ripple={{ color: CHIP_RIPPLE }}
               >
                 {/* Inner View: visual styles here to dodge iOS Pressable bug */}
                 <View

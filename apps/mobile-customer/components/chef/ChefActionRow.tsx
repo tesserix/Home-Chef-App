@@ -4,9 +4,12 @@
 // an optional caption, and a chevron. No tinted background — hairline only.
 
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+
+// Android ripple tint — translucent charcoal derived from the token.
+const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 export interface ChefActionRowProps {
   icon: ReactNode;
@@ -28,11 +31,12 @@ export function ChefActionRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      android_ripple={{ color: ROW_RIPPLE }}
     >
       {({ pressed }) => (
         // Visual + layout styles on the inner View — iOS drops flex/bg/padding
         // returned from a Pressable style function.
-        <View style={[styles.row, pressed && styles.rowPressed]}>
+        <View style={[styles.row, pressed && Platform.OS === 'ios' && styles.rowPressed]}>
           {icon}
           <View style={styles.textCol}>
             <Text style={styles.title}>{title}</Text>

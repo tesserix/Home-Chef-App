@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -11,6 +12,15 @@ import {
   Text,
   View,
 } from 'react-native';
+import Animated, {
+  Easing,
+  FadeInDown,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -34,11 +44,19 @@ import { ChefWeeklyPlanTab } from '../../components/chef/ChefWeeklyPlanTab';
 import { ChefReviewList } from '../../components/chef/ChefReviewList';
 import { TIFFIN_ENABLED } from '../../lib/features';
 
-// Compact photo header — ~28% of viewport (capped at 260) so the menu shows
-// higher up. 40% ate too much vertical space above the fold.
+// Entrance easing — ease-out-quart, matches the app-wide motion spec (§3.5).
+const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
+
+// Android ripple tints — translucent colours derived from existing tokens
+// (never a new literal colour), matching the ChefCard `withAlpha` convention.
+const OVERLAY_BTN_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const RATING_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+
+// Full-bleed photo header — ~40% of viewport per canonical spec §2.4, capped
+// so it stays sane on very tall devices/phablets.
 const HEADER_HEIGHT = Math.min(
-  Math.round(Dimensions.get('window').height * 0.28),
-  260,
+  Math.round(Dimensions.get('window').height * 0.4),
+  400,
 );
 
 // In-page tabs under the identity block. Weekly plan only exists while the
@@ -70,6 +88,14 @@ function formatCuisines(cuisine?: string): string {
 export default function ChefDetailScreen() {
   const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
+
+  // Heart save scale-pop: 1 → 1.25 → 1 in 150ms, gated by reduced-motion —
+  // mirrors the ChefCard heart (spec §2 item 3 / motion §5).
+  const heartScale = useSharedValue(1);
+  const heartAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
+  }));
 
   // Customer coords let the server compute deliverableToYou (can this chef reach
   // you) so the detail screen can show delivery as pickup-only when out of range.
@@ -155,6 +181,12 @@ export default function ChefDetailScreen() {
 
   const handleToggleSave = () => {
     if (!chef) return;
+    if (!reduceMotion) {
+      heartScale.value = withSequence(
+        withTiming(1.25, { duration: 75 }),
+        withTiming(1, { duration: 75 }),
+      );
+    }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleFavorite.mutate({ chefId: chef.id, isFavorited: isSaved });
   };
@@ -190,12 +222,13 @@ export default function ChefDetailScreen() {
             onPress={() => router.back()}
             accessibilityRole="button"
             accessibilityLabel="Go back"
+            android_ripple={{ color: OVERLAY_BTN_RIPPLE, borderless: true, radius: 22 }}
           >
             {({ pressed }) => (
               <View
                 style={[
                   styles.overlayBtn,
-                  pressed && styles.overlayBtnPressed,
+                  pressed && Platform.OS === 'ios' && styles.overlayBtnPressed,
                 ]}
               >
                 <ChevronLeft
@@ -266,12 +299,13 @@ export default function ChefDetailScreen() {
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Go back"
+          android_ripple={{ color: OVERLAY_BTN_RIPPLE, borderless: true, radius: 22 }}
         >
           {({ pressed }) => (
             <View
               style={[
                 styles.overlayBtn,
-                pressed && styles.overlayBtnPressed,
+                pressed && Platform.OS === 'ios' && styles.overlayBtnPressed,
               ]}
             >
               <ChevronLeft
@@ -289,12 +323,13 @@ export default function ChefDetailScreen() {
             onPress={() => { void handleShare(); }}
             accessibilityRole="button"
             accessibilityLabel="Share chef"
+            android_ripple={{ color: OVERLAY_BTN_RIPPLE, borderless: true, radius: 22 }}
           >
             {({ pressed }) => (
               <View
                 style={[
                   styles.overlayBtn,
-                  pressed && styles.overlayBtnPressed,
+                  pressed && Platform.OS === 'ios' && styles.overlayBtnPressed,
                 ]}
               >
                 <Share2
@@ -311,6 +346,7 @@ export default function ChefDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel={isSaved ? 'Remove from saved' : 'Save chef'}
             accessibilityState={{ checked: isSaved }}
+            android_ripple={{ color: OVERLAY_BTN_RIPPLE, borderless: true, radius: 22 }}
           >
             {({ pressed }) => (
               <View
@@ -318,19 +354,21 @@ export default function ChefDetailScreen() {
                   styles.overlayBtn,
                   // Saved heart = coral fill bg (spec §2.4).
                   isSaved && styles.overlayBtnSaved,
-                  pressed && styles.overlayBtnPressed,
+                  pressed && Platform.OS === 'ios' && styles.overlayBtnPressed,
                 ]}
               >
-                <Heart
-                  size={20}
-                  color={
-                    isSaved
-                      ? customerColors.canvas
-                      : customerColors.charcoal.DEFAULT
-                  }
-                  fill={isSaved ? customerColors.canvas : 'transparent'}
-                  strokeWidth={2}
-                />
+                <Animated.View style={heartAnimStyle}>
+                  <Heart
+                    size={20}
+                    color={
+                      isSaved
+                        ? customerColors.canvas
+                        : customerColors.charcoal.DEFAULT
+                    }
+                    fill={isSaved ? customerColors.canvas : 'transparent'}
+                    strokeWidth={2}
+                  />
+                </Animated.View>
               </View>
             )}
           </Pressable>
@@ -352,8 +390,15 @@ export default function ChefDetailScreen() {
 
         {/* ── WHITE CONTENT SHEET (rounded top corners, overlaps photo) ── */}
         <View style={styles.contentSheet}>
-          {/* Chef identity block */}
-          <View style={styles.identityBlock}>
+          {/* Chef identity block — staggered entrance, step 1 of 3 (§3.5). */}
+          <Animated.View
+            style={styles.identityBlock}
+            entering={
+              reduceMotion
+                ? undefined
+                : FadeInDown.delay(0).duration(250).easing(ENTRANCE_EASING)
+            }
+          >
             <View style={styles.identityRow}>
               <Text style={styles.chefName} numberOfLines={1}>
                 {chef.name}
@@ -377,15 +422,30 @@ export default function ChefDetailScreen() {
                 onPress={() => setActiveTab('reviews')}
                 hitSlop={6}
                 accessibilityRole="button"
-                accessibilityLabel={`See ${chef.reviewCount} reviews, rated ${chef.rating.toFixed(1)} out of 5`}
+                accessibilityLabel={
+                  chef.reviewCount === 0
+                    ? 'New chef — no reviews yet, see reviews'
+                    : `See ${chef.reviewCount} reviews, rated ${chef.rating.toFixed(1)} out of 5`
+                }
                 style={styles.ratingTap}
+                android_ripple={{ color: RATING_RIPPLE }}
               >
-                {/* Unicode star glyph: charcoal colour to match spec */}
-                <Text style={styles.star}>★</Text>
-                <Text style={styles.ratingValue}>
-                  {chef.rating.toFixed(1)}
-                </Text>
-                <Text style={styles.ratingCount}>({chef.reviewCount})</Text>
+                {chef.reviewCount === 0 ? (
+                  // R1 — never render "★ 0.0 (0)". A fresh chef reads as
+                  // "New" instead of a badly-rated one.
+                  <View style={styles.newChip}>
+                    <Text style={styles.newChipText}>New</Text>
+                  </View>
+                ) : (
+                  <>
+                    {/* Unicode star glyph: charcoal colour to match spec */}
+                    <Text style={styles.star}>★</Text>
+                    <Text style={styles.ratingValue}>
+                      {chef.rating.toFixed(1)}
+                    </Text>
+                    <Text style={styles.ratingCount}>({chef.reviewCount})</Text>
+                  </>
+                )}
               </Pressable>
 
               {chef.deliveryTime ? (
@@ -436,50 +496,68 @@ export default function ChefDetailScreen() {
                 Outside delivery area · pickup only
               </Text>
             ) : null}
-          </View>
+          </Animated.View>
 
           {/* ── IN-PAGE TABS: Menu · Weekly plan · Reviews ── */}
-          <ChefDetailTabs
-            tabs={DETAIL_TABS}
-            activeTab={activeTab}
-            onChange={setActiveTab}
-          />
-
-          {/* ── MENU TAB (default) ── */}
-          {/* Category chips + à-la-carte items + the small group-order row
-              (GROUP_ORDERS_ENABLED gating lives inside ChefMenuTab). */}
-          {activeTab === 'menu' ? (
-            <ChefMenuTab
-              chefId={chef.id}
-              chefName={chef.name}
-              categories={categories}
-              activeCategory={activeCategory}
-              onSelectCategory={setSelectedCategory}
-              filteredItems={filteredItems}
-              menuIsEmpty={menuItems.length === 0}
-              onStartGroupOrder={() => startGroupOrder(chef.id)}
+          {/* Staggered entrance, step 2 of 3 (§3.5). */}
+          <Animated.View
+            entering={
+              reduceMotion
+                ? undefined
+                : FadeInDown.delay(60).duration(250).easing(ENTRANCE_EASING)
+            }
+          >
+            <ChefDetailTabs
+              tabs={DETAIL_TABS}
+              activeTab={activeTab}
+              onChange={setActiveTab}
             />
-          ) : null}
+          </Animated.View>
 
-          {/* ── WEEKLY PLAN TAB ── */}
-          {/* Tiffin pre-booking + subscription + weekly menu (#196/#283/#1) —
-              DEFERRED flows stay gated: the tab itself only exists while
-              TIFFIN_ENABLED (see DETAIL_TABS). */}
-          {activeTab === 'weekly' && TIFFIN_ENABLED ? (
-            <ChefWeeklyPlanTab
-              chefId={chef.id}
-              mealOfferAvailable={mealOffer?.available === true}
-              weeklyMenuItems={weeklyMenu?.items ?? []}
-              weeklyMenuPublished={weeklyMenu?.isPublished === true}
-            />
-          ) : null}
+          {/* Tab content — staggered entrance, step 3 of 3 (§3.5). */}
+          <Animated.View
+            entering={
+              reduceMotion
+                ? undefined
+                : FadeInDown.delay(120).duration(250).easing(ENTRANCE_EASING)
+            }
+          >
+            {/* ── MENU TAB (default) ── */}
+            {/* Category chips + à-la-carte items + the small group-order row
+                (GROUP_ORDERS_ENABLED gating lives inside ChefMenuTab). */}
+            {activeTab === 'menu' ? (
+              <ChefMenuTab
+                chefId={chef.id}
+                chefName={chef.name}
+                categories={categories}
+                activeCategory={activeCategory}
+                onSelectCategory={setSelectedCategory}
+                filteredItems={filteredItems}
+                menuIsEmpty={menuItems.length === 0}
+                onStartGroupOrder={() => startGroupOrder(chef.id)}
+              />
+            ) : null}
 
-          {/* ── REVIEWS TAB ── */}
-          {activeTab === 'reviews' ? (
-            <View style={styles.reviewsPane}>
-              <ChefReviewList chefId={chef.id} />
-            </View>
-          ) : null}
+            {/* ── WEEKLY PLAN TAB ── */}
+            {/* Tiffin pre-booking + subscription + weekly menu (#196/#283/#1) —
+                DEFERRED flows stay gated: the tab itself only exists while
+                TIFFIN_ENABLED (see DETAIL_TABS). */}
+            {activeTab === 'weekly' && TIFFIN_ENABLED ? (
+              <ChefWeeklyPlanTab
+                chefId={chef.id}
+                mealOfferAvailable={mealOffer?.available === true}
+                weeklyMenuItems={weeklyMenu?.items ?? []}
+                weeklyMenuPublished={weeklyMenu?.isPublished === true}
+              />
+            ) : null}
+
+            {/* ── REVIEWS TAB ── */}
+            {activeTab === 'reviews' ? (
+              <View style={styles.reviewsPane}>
+                <ChefReviewList chefId={chef.id} />
+              </View>
+            ) : null}
+          </Animated.View>
         </View>
       </ScrollView>
 
@@ -696,6 +774,19 @@ const styles = StyleSheet.create({
   ratingCount: {
     fontFamily: 'Inter',
     fontSize: 13,
+    color: customerColors.charcoal.soft,
+  },
+  // R1 zero-review state — surface-soft bg + charcoal-soft text (never a
+  // gold/coral badge; that budget stays with the accent). Matches ChefCard.
+  newChip: {
+    backgroundColor: customerColors.surface.soft,
+    borderRadius: 9999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  newChipText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
     color: customerColors.charcoal.soft,
   },
   metaDot: {

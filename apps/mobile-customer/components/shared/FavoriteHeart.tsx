@@ -14,6 +14,10 @@ import Animated, {
 import { Heart } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
+// Android ripple tint — translucent canvas derived from the token (never a
+// new literal colour), matching the ChefCard heart's ripple convention.
+const HEART_RIPPLE = `${customerColors.canvas}59`;
+
 interface FavoriteHeartProps {
   /** Whether the entity is currently saved (heart filled coral). */
   filled: boolean;
@@ -49,11 +53,12 @@ export function FavoriteHeart({ filled, onToggle, label, size = 18 }: FavoriteHe
         accessibilityRole="togglebutton"
         accessibilityLabel={filled ? `Remove ${label} from saved` : `Save ${label}`}
         accessibilityState={{ checked: filled }}
+        android_ripple={{ color: HEART_RIPPLE, borderless: true, radius: 20 }}
       >
         <Animated.View style={[styles.button, animStyle]}>
           <Heart
             size={size}
-            color={filled ? customerColors.coral.DEFAULT : '#FFFFFF'}
+            color={filled ? customerColors.coral.DEFAULT : customerColors.canvas}
             fill={filled ? customerColors.coral.DEFAULT : 'transparent'}
           />
         </Animated.View>
