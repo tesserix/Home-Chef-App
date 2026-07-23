@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -225,7 +226,9 @@ export default function WeeklyMenuEditorScreen() {
           android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
-            <View style={[styles.retryBtn, pressed && { opacity: 0.85 }]}>
+            <View
+              style={[styles.retryBtn, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}
+            >
               <Text style={styles.retryLabel}>Retry</Text>
             </View>
           )}
@@ -246,7 +249,11 @@ export default function WeeklyMenuEditorScreen() {
           accessibilityLabel="Go back"
           android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+              <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.title}>Weekly menu</Text>
         <View style={{ width: 24 }} />
@@ -272,21 +279,29 @@ export default function WeeklyMenuEditorScreen() {
                 borderless: false,
               }}
             >
-              <View style={[styles.dayTab, active && styles.dayTabActive]}>
-                <Text style={[styles.dayTabText, active && styles.dayTabTextActive]}>
-                  {d.short}
-                </Text>
-                {filledByDay.has(d.dow) ? (
-                  <View
-                    style={[
-                      styles.dot,
-                      { backgroundColor: active ? theme.colors.paper : theme.colors.ink.DEFAULT },
-                    ]}
-                  />
-                ) : (
-                  <View style={styles.dotPlaceholder} />
-                )}
-              </View>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.dayTab,
+                    active && styles.dayTabActive,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={[styles.dayTabText, active && styles.dayTabTextActive]}>
+                    {d.short}
+                  </Text>
+                  {filledByDay.has(d.dow) ? (
+                    <View
+                      style={[
+                        styles.dot,
+                        { backgroundColor: active ? theme.colors.paper : theme.colors.ink.DEFAULT },
+                      ]}
+                    />
+                  ) : (
+                    <View style={styles.dotPlaceholder} />
+                  )}
+                </View>
+              )}
             </Pressable>
           );
         })}
@@ -302,7 +317,13 @@ export default function WeeklyMenuEditorScreen() {
             accessibilityLabel="Copy this day to all days"
             android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
           >
-            <Text style={styles.copyLink}>Copy to all days</Text>
+            {({ pressed }) => (
+              <Text
+                style={[styles.copyLink, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}
+              >
+                Copy to all days
+              </Text>
+            )}
           </Pressable>
         </View>
         {SLOTS.map((s) => (

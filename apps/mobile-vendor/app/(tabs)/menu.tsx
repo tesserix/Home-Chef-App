@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -140,7 +141,9 @@ export default function MenuScreen() {
           android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
-            <View style={[styles.errorBtn, pressed && { opacity: 0.85 }]}>
+            <View
+              style={[styles.errorBtn, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}
+            >
               <Text style={styles.errorBtnLabel}>Retry</Text>
             </View>
           )}
@@ -164,7 +167,9 @@ export default function MenuScreen() {
           android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
-            <View style={[styles.addBtn, pressed && { opacity: 0.85 }]}>
+            <View
+              style={[styles.addBtn, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}
+            >
               <Text style={styles.addBtnLabel}>+ Add</Text>
             </View>
           )}
@@ -312,16 +317,19 @@ function CategoryTab({ label, active, onPress }: CategoryTabProps) {
     >
       {/* Inner-View pattern — visual styles live on the View, not the
           Pressable, to dodge the iOS function-style style drop. */}
-      <View
-        style={[
-          tabStyles.chip,
-          active ? tabStyles.chipActive : tabStyles.chipInactive,
-        ]}
-      >
-        <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
-          {label}
-        </Text>
-      </View>
+      {({ pressed }) => (
+        <View
+          style={[
+            tabStyles.chip,
+            active ? tabStyles.chipActive : tabStyles.chipInactive,
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+          ]}
+        >
+          <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
+            {label}
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CalendarDays, ChevronRight } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import type { MealPlan } from '../../hooks/useMealPlans';
@@ -37,7 +37,7 @@ export function MealPlanRequestCard({ plan, onPress }: Props) {
       android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
-        <View style={[styles.card, pressed && styles.pressed]}>
+        <View style={[styles.card, pressed && Platform.OS === 'ios' && styles.pressed]}>
           <View style={styles.header}>
             <Text style={styles.name} numberOfLines={1}>
               {customerName(plan)}

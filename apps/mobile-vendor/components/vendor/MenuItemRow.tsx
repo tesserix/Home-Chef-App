@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { UtensilsCrossed } from "lucide-react-native";
 import { theme } from "@homechef/mobile-shared/theme";
@@ -54,7 +54,7 @@ export function MenuItemRow({ item, onPress }: MenuItemRowProps) {
           <View
             style={[
               styles.root,
-              pressed && { backgroundColor: theme.colors.bone },
+              pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
               isDimmed && { opacity: 0.55 },
             ]}
           >

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -86,11 +87,23 @@ export default function DailyMenuScreen() {
   const [rows, setRows] = useState<DailyMenuItemInput[]>([]);
   const [isPublished, setIsPublished] = useState(false);
 
+  // R13: row keys are stable client-only identities, kept in lockstep with
+  // `rows` but never sent to the API (DailyMenuItemInput carries no id until
+  // the server assigns one) — index-keying would misattribute Reanimated
+  // entrance state / TextInput focus after a mid-list remove.
+  const rowKeySeq = useRef(0);
+  const [rowKeys, setRowKeys] = useState<string[]>([]);
+  function nextRowKey(): string {
+    rowKeySeq.current += 1;
+    return `row-${rowKeySeq.current}`;
+  }
+
   // Seed the editor from the selected date's saved menu.
   useEffect(() => {
     const day = data?.days.find((d) => d.date === selected);
+    const items = day?.items ?? [];
     setRows(
-      (day?.items ?? []).map((it, i) => ({
+      items.map((it, i) => ({
         slot: it.slot,
         variant: it.variant,
         name: it.name,
@@ -101,7 +114,9 @@ export default function DailyMenuScreen() {
         sortOrder: i,
       })),
     );
+    setRowKeys(items.map(() => nextRowKey()));
     setIsPublished(day?.isPublished ?? false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, data]);
 
   function patchRow(i: number, patch: Partial<DailyMenuItemInput>) {
@@ -147,7 +162,11 @@ export default function DailyMenuScreen() {
           accessibilityLabel="Go back"
           android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+              <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.title}>Daily menu</Text>
         <View style={{ width: 24 }} />
@@ -162,7 +181,6 @@ export default function DailyMenuScreen() {
             <Pressable
               key={iso}
               onPress={() => setSelected(iso)}
-              style={[styles.dateChip, active && styles.dateChipActive]}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
               accessibilityLabel={`${l.dow} ${l.day}`}
@@ -171,8 +189,18 @@ export default function DailyMenuScreen() {
                 borderless: false,
               }}
             >
-              <Text style={[styles.dateDow, active && styles.dateTextActive]}>{l.dow}</Text>
-              <Text style={[styles.dateDay, active && styles.dateTextActive]}>{l.day}</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.dateChip,
+                    active && styles.dateChipActive,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={[styles.dateDow, active && styles.dateTextActive]}>{l.dow}</Text>
+                  <Text style={[styles.dateDay, active && styles.dateTextActive]}>{l.day}</Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
@@ -190,7 +218,12 @@ export default function DailyMenuScreen() {
             android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
             {({ pressed }) => (
-              <View style={[styles.retryBtn, pressed && { opacity: 0.85 }]}>
+              <View
+                style={[
+                  styles.retryBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
                 <Text style={styles.retryLabel}>Retry</Text>
               </View>
             )}
@@ -203,7 +236,7 @@ export default function DailyMenuScreen() {
           ) : null}
 
           {rows.map((row, i) => (
-            <View key={i} style={styles.card}>
+            <View key={rowKeys[i] ?? `row-fallback-${i}`} style={styles.card}>
               <View style={styles.cardTop}>
                 <TextInput
                   value={row.name}
@@ -213,13 +246,20 @@ export default function DailyMenuScreen() {
                   style={styles.nameInput}
                 />
                 <Pressable
-                  onPress={() => setRows((p) => p.filter((_, idx) => idx !== i))}
+                  onPress={() => {
+                    setRows((p) => p.filter((_, idx) => idx !== i));
+                    setRowKeys((p) => p.filter((_, idx) => idx !== i));
+                  }}
                   hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel={row.name ? `Remove ${row.name}` : 'Remove dish'}
                   android_ripple={{ color: `${theme.colors.destructive.DEFAULT}14`, borderless: true }}
                 >
-                  <Trash2 size={18} color={theme.colors.destructive.DEFAULT} />
+                  {({ pressed }) => (
+                    <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+                      <Trash2 size={18} color={theme.colors.destructive.DEFAULT} />
+                    </View>
+                  )}
                 </Pressable>
               </View>
 
@@ -230,7 +270,6 @@ export default function DailyMenuScreen() {
                     <Pressable
                       key={s.slot}
                       onPress={() => patchRow(i, { slot: s.slot })}
-                      style={[styles.pill, active && styles.pillActive]}
                       accessibilityRole="radio"
                       accessibilityState={{ checked: active }}
                       accessibilityLabel={s.label}
@@ -239,7 +278,17 @@ export default function DailyMenuScreen() {
                         borderless: false,
                       }}
                     >
-                      <Text style={[styles.pillText, active && styles.pillTextActive]}>{s.label}</Text>
+                      {({ pressed }) => (
+                        <View
+                          style={[
+                            styles.pill,
+                            active && styles.pillActive,
+                            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                          ]}
+                        >
+                          <Text style={[styles.pillText, active && styles.pillTextActive]}>{s.label}</Text>
+                        </View>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -249,7 +298,6 @@ export default function DailyMenuScreen() {
                     <Pressable
                       key={v.variant}
                       onPress={() => patchRow(i, { variant: v.variant })}
-                      style={[styles.pill, active && styles.pillActive]}
                       accessibilityRole="radio"
                       accessibilityState={{ checked: active }}
                       accessibilityLabel={v.label}
@@ -258,7 +306,17 @@ export default function DailyMenuScreen() {
                         borderless: false,
                       }}
                     >
-                      <Text style={[styles.pillText, active && styles.pillTextActive]}>{v.label}</Text>
+                      {({ pressed }) => (
+                        <View
+                          style={[
+                            styles.pill,
+                            active && styles.pillActive,
+                            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                          ]}
+                        >
+                          <Text style={[styles.pillText, active && styles.pillTextActive]}>{v.label}</Text>
+                        </View>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -294,14 +352,22 @@ export default function DailyMenuScreen() {
           ))}
 
           <Pressable
-            onPress={() => setRows((p) => [...p, blankRow(p.length)])}
-            style={styles.addBtn}
+            onPress={() => {
+              setRows((p) => [...p, blankRow(p.length)]);
+              setRowKeys((p) => [...p, nextRowKey()]);
+            }}
             accessibilityRole="button"
             accessibilityLabel="Add a dish"
             android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
           >
-            <Plus size={18} color={theme.colors.ink.DEFAULT} />
-            <Text style={styles.addBtnText}>Add dish</Text>
+            {({ pressed }) => (
+              <View
+                style={[styles.addBtn, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}
+              >
+                <Plus size={18} color={theme.colors.ink.DEFAULT} />
+                <Text style={styles.addBtnText}>Add dish</Text>
+              </View>
+            )}
           </Pressable>
 
           <View style={styles.publishRow}>

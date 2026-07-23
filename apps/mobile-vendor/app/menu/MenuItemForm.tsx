@@ -226,7 +226,7 @@ function CategoryTab({ label, active, onPress }: CategoryTabProps) {
           style={[
             chipStyles.root,
             active && chipStyles.rootActive,
-            pressed && { opacity: 0.7 },
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
           ]}
         >
           <Text style={[chipStyles.label, active && chipStyles.labelActive]}>
@@ -264,7 +264,7 @@ function PrepTab({ value, active, onPress }: PrepTabProps) {
           style={[
             chipStyles.root,
             active && chipStyles.rootActive,
-            pressed && { opacity: 0.7 },
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
           ]}
         >
           <Text
@@ -311,7 +311,7 @@ function DietTab({ label, optionIsVeg, active, onPress }: DietTabProps) {
           style={[
             chipStyles.root,
             active && chipStyles.rootActive,
-            pressed && { opacity: 0.7 },
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
           ]}
         >
           <DietIcon isVeg={optionIsVeg} size={12} />
@@ -346,7 +346,13 @@ function MultiChip({ label, active, onPress }: MultiChipProps) {
       }}
     >
       {({ pressed }) => (
-        <View style={[chipStyles.root, active && chipStyles.rootActive, pressed && { opacity: 0.7 }]}>
+        <View
+          style={[
+            chipStyles.root,
+            active && chipStyles.rootActive,
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+          ]}
+        >
           <Text style={[chipStyles.label, active && chipStyles.labelActive]}>{label}</Text>
         </View>
       )}
@@ -382,7 +388,12 @@ function PhotoThumb({ uri, onRemove }: PhotoThumbProps) {
           android_ripple={{ color: `${theme.colors.paper}55`, borderless: true }}
         >
           {({ pressed }) => (
-            <View style={[photoStyles.removeBtn, pressed && { opacity: 0.75 }]}>
+            <View
+              style={[
+                photoStyles.removeBtn,
+                pressed && Platform.OS === 'ios' && { opacity: 0.75 },
+              ]}
+            >
               <Text style={photoStyles.removeBtnText}>×</Text>
             </View>
           )}
@@ -841,7 +852,9 @@ export function MenuItemForm({
             android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
             {({ pressed }) => (
-              <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
+              <View
+                style={[styles.backBtn, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}
+              >
                 <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
               </View>
             )}
@@ -1090,7 +1103,7 @@ export function MenuItemForm({
                       style={[
                         styles.newCatAdd,
                         (isCreatingCategory || newCatName.trim().length < 2) && styles.newCatAddDisabled,
-                        pressed && { opacity: 0.8 },
+                        pressed && Platform.OS === 'ios' && { opacity: 0.8 },
                       ]}
                     >
                       {isCreatingCategory ? (

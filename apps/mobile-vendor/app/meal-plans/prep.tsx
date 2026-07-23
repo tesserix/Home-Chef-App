@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -78,7 +79,11 @@ export default function PrepScreen() {
           accessibilityLabel="Go back"
           android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+              <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.title}>Prep</Text>
         <View style={{ width: 24 }} />
@@ -101,9 +106,17 @@ export default function PrepScreen() {
                 borderless: false,
               }}
             >
-              <View style={[styles.tabInner, sel && styles.tabInnerSel]}>
-                <Text style={[styles.tabText, sel && styles.tabTextSel]}>{d.label}</Text>
-              </View>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.tabInner,
+                    sel && styles.tabInnerSel,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={[styles.tabText, sel && styles.tabTextSel]}>{d.label}</Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
@@ -124,7 +137,13 @@ export default function PrepScreen() {
             android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
             {({ pressed }) => (
-              <View style={[styles.markBtn, pressed && { opacity: 0.85 }, { marginTop: theme.spacing[2] }]}>
+              <View
+                style={[
+                  styles.markBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                  { marginTop: theme.spacing[2] },
+                ]}
+              >
                 <Text style={styles.markBtnText}>Retry</Text>
               </View>
             )}
@@ -189,9 +208,16 @@ export default function PrepScreen() {
                         accessibilityLabel={`Mark ${row.dishName || 'dish'} for ${row.customerName || 'customer'} prepared`}
                         android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
                       >
-                        <View style={styles.markBtn}>
-                          <Text style={styles.markBtnText}>Mark</Text>
-                        </View>
+                        {({ pressed }) => (
+                          <View
+                            style={[
+                              styles.markBtn,
+                              pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                            ]}
+                          >
+                            <Text style={styles.markBtnText}>Mark</Text>
+                          </View>
+                        )}
                       </Pressable>
                     )}
                   </View>
@@ -247,9 +273,16 @@ function ManifestSection({
                   accessibilityLabel={`Mark ${line.dishName || 'dish'} prepared`}
                   android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
                 >
-                  <View style={styles.markBtn}>
-                    <Text style={styles.markBtnText}>Mark prepared</Text>
-                  </View>
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.markBtn,
+                        pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                      ]}
+                    >
+                      <Text style={styles.markBtnText}>Mark prepared</Text>
+                    </View>
+                  )}
                 </Pressable>
               )}
             </View>

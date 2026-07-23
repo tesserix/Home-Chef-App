@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -224,7 +225,11 @@ function Header() {
         accessibilityLabel="Go back"
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
       >
-        <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+        {({ pressed }) => (
+          <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+            <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+          </View>
+        )}
       </Pressable>
       <Text style={styles.title}>Review request</Text>
       <View style={{ width: 24 }} />

@@ -1,4 +1,12 @@
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import {
+  FlatList,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { CalendarDays, ChefHat, ChevronLeft, Inbox, UtensilsCrossed } from 'lucide-react-native';
@@ -23,7 +31,11 @@ export default function MealPlansScreen() {
           accessibilityLabel="Go back"
           android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+              <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.title}>Tiffin plans</Text>
         <View style={{ width: 24 }} />
@@ -37,7 +49,12 @@ export default function MealPlansScreen() {
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.menuCta, pressed && styles.pressed]}>
+          <View
+            style={[
+              styles.menuCta,
+              pressed && Platform.OS === 'ios' && styles.pressed,
+            ]}
+          >
             <View style={styles.menuIcon}>
               <UtensilsCrossed
                 size={20}
@@ -64,7 +81,12 @@ export default function MealPlansScreen() {
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.menuCta, pressed && styles.pressed]}>
+          <View
+            style={[
+              styles.menuCta,
+              pressed && Platform.OS === 'ios' && styles.pressed,
+            ]}
+          >
             <View style={styles.menuIcon}>
               <UtensilsCrossed
                 size={20}
@@ -91,7 +113,12 @@ export default function MealPlansScreen() {
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.menuCta, pressed && styles.pressed]}>
+          <View
+            style={[
+              styles.menuCta,
+              pressed && Platform.OS === 'ios' && styles.pressed,
+            ]}
+          >
             <View style={styles.menuIcon}>
               <ChefHat size={20} color={theme.colors.ink.soft} strokeWidth={1.75} />
             </View>
@@ -124,7 +151,12 @@ export default function MealPlansScreen() {
             android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
             {({ pressed }) => (
-              <View style={[styles.retryBtn, pressed && { opacity: 0.85 }]}>
+              <View
+                style={[
+                  styles.retryBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
                 <Text style={styles.retryLabel}>Retry</Text>
               </View>
             )}

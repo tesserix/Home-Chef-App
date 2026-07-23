@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react';
 import {
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -72,7 +73,11 @@ export function ComboComposer({ menuItems, value, onChange }: Props) {
               accessibilityLabel={`Remove ${name}`}
               android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
             >
-              <X size={16} color={theme.colors.ink.muted} />
+              {({ pressed }) => (
+                <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+                  <X size={16} color={theme.colors.ink.muted} />
+                </View>
+              )}
             </Pressable>
           </View>
         ))
@@ -85,7 +90,13 @@ export function ComboComposer({ menuItems, value, onChange }: Props) {
         accessibilityLabel="Add from your menu"
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
-        <Text style={styles.addLink}>+ Add from your menu</Text>
+        {({ pressed }) => (
+          <Text
+            style={[styles.addLink, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}
+          >
+            + Add from your menu
+          </Text>
+        )}
       </Pressable>
 
       {/* Custom add-on, one at a time (no comma-typing). */}
@@ -105,10 +116,15 @@ export function ComboComposer({ menuItems, value, onChange }: Props) {
           hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel="Add custom item"
-          style={styles.customAdd}
           android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
-          <Plus size={18} color={theme.colors.paper} />
+          {({ pressed }) => (
+            <View
+              style={[styles.customAdd, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}
+            >
+              <Plus size={18} color={theme.colors.paper} />
+            </View>
+          )}
         </Pressable>
       </View>
 
@@ -130,7 +146,11 @@ export function ComboComposer({ menuItems, value, onChange }: Props) {
               accessibilityLabel="Done"
               android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
             >
-              <X size={24} color={theme.colors.ink.DEFAULT} />
+              {({ pressed }) => (
+                <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+                  <X size={24} color={theme.colors.ink.DEFAULT} />
+                </View>
+              )}
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={{ padding: theme.spacing[4] }}>
@@ -147,10 +167,17 @@ export function ComboComposer({ menuItems, value, onChange }: Props) {
                   accessibilityLabel={`Add ${m.name}`}
                   android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
                 >
-                  <View style={styles.pickRow}>
-                    <Text style={styles.pickName}>{m.name}</Text>
-                    <Plus size={18} color={theme.colors.ink.DEFAULT} />
-                  </View>
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.pickRow,
+                        pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                      ]}
+                    >
+                      <Text style={styles.pickName}>{m.name}</Text>
+                      <Plus size={18} color={theme.colors.ink.DEFAULT} />
+                    </View>
+                  )}
                 </Pressable>
               ))
             )}
