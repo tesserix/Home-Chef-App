@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   Text,
   TextInput,
@@ -15,6 +16,10 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useCreateReview } from '../../../hooks/useCreateReview';
+
+// Android ripple tint for the star targets — translucent token, never a new
+// literal colour.
+const STAR_RIPPLE = `${customerColors.coral.DEFAULT}1F`;
 
 function StarRow({
   label,
@@ -40,21 +45,29 @@ function StarRow({
         {label}
         {required ? <Text style={{ color: customerColors.destructive.DEFAULT }}> *</Text> : null}
       </Text>
-      <View style={{ flexDirection: 'row', gap: 4 }} accessibilityRole="radiogroup" accessibilityLabel={label}>
+      <View style={{ flexDirection: 'row' }} accessibilityRole="radiogroup" accessibilityLabel={label}>
         {[1, 2, 3, 4, 5].map((n) => (
           <Pressable
             key={n}
             onPress={() => onChange(n)}
-            hitSlop={6}
             accessibilityRole="radio"
             accessibilityState={{ selected: value === n }}
             accessibilityLabel={`${n} star${n > 1 ? 's' : ''}`}
+            // 44pt touch target (R5) — the glyph itself is 26px, so the box
+            // reserves the extra space rather than relying on overlap-prone
+            // hitSlop between adjacent stars.
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            android_ripple={{ color: STAR_RIPPLE, borderless: true, radius: 20 }}
           >
-            <Star
-              size={26}
-              color={customerColors.coral.DEFAULT}
-              fill={n <= value ? customerColors.coral.DEFAULT : 'transparent'}
-            />
+            {({ pressed }) => (
+              <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+                <Star
+                  size={26}
+                  color={customerColors.coral.DEFAULT}
+                  fill={n <= value ? customerColors.coral.DEFAULT : 'transparent'}
+                />
+              </View>
+            )}
           </Pressable>
         ))}
       </View>
@@ -209,30 +222,49 @@ export default function OrderReviewScreen() {
             />
           </View>
 
-          <Pressable onPress={handleSubmit} disabled={createReview.isPending} style={{ marginTop: 24 }}>
-            <View
-              style={{
-                backgroundColor: overall < 1 ? customerColors.surface.soft : customerColors.coral.DEFAULT,
-                borderRadius: 999,
-                paddingVertical: 16,
-                alignItems: 'center',
-              }}
-            >
-              {createReview.isPending ? (
-                <ActivityIndicator color={customerColors.canvas} />
-              ) : (
-                <Text
-                  style={{
-                    fontFamily: 'Inter',
-                    fontSize: 16,
-                    fontWeight: '600',
-                    color: overall < 1 ? customerColors.charcoal.soft : customerColors.canvas,
-                  }}
-                >
-                  Submit review
-                </Text>
-              )}
-            </View>
+          <Pressable
+            onPress={handleSubmit}
+            disabled={createReview.isPending}
+            accessibilityRole="button"
+            accessibilityLabel="Submit review"
+            style={{ marginTop: 24 }}
+            android_ripple={
+              overall < 1 || createReview.isPending
+                ? undefined
+                : { color: `${customerColors.canvas}33`, borderless: false }
+            }
+          >
+            {({ pressed }) => (
+              <View
+                style={{
+                  backgroundColor:
+                    overall < 1
+                      ? customerColors.surface.soft
+                      : pressed && Platform.OS === 'ios'
+                        ? customerColors.coral.pressed
+                        : customerColors.coral.DEFAULT,
+                  borderRadius: 8,
+                  minHeight: 52,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {createReview.isPending ? (
+                  <ActivityIndicator color={customerColors.canvas} />
+                ) : (
+                  <Text
+                    style={{
+                      fontFamily: 'Inter-SemiBold',
+                      fontSize: 16,
+                      color: overall < 1 ? customerColors.charcoal.soft : customerColors.canvas,
+                    }}
+                  >
+                    Submit review
+                  </Text>
+                )}
+              </View>
+            )}
           </Pressable>
         </KeyboardAwareScrollView>
       )}

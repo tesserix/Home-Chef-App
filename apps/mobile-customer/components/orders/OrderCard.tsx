@@ -1,4 +1,4 @@
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatMoney } from '../../lib/format';
 import { useRouter } from 'expo-router';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -6,6 +6,10 @@ import type { Order } from '../../types/customer';
 import { useConfirmOrderReceived } from '../../hooks/useConfirmReceived';
 import { canConfirmReceipt } from '../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../lib/errors';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const CARD_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
+const CONFIRM_RIPPLE = `${customerColors.canvas}33`;
 
 interface OrderCardProps {
   order: Order;
@@ -60,9 +64,12 @@ function getStatusChip(order: Order): ChipStyle {
         label: 'Ready',
       };
     case 'picked_up':
+      // In-progress (spec §2.7) — 'Picked Up' precedes 'Delivered', so it stays
+      // on the coral family like the other active states; success is reserved
+      // for the terminal 'delivered' status.
       return {
-        bg: customerColors.success.tint,
-        text: customerColors.success.DEFAULT,
+        bg: customerColors.coral.tint,
+        text: customerColors.coral.pressed,
         label: 'Picked Up',
       };
     case 'delivering':
@@ -149,12 +156,15 @@ export function OrderCard({ order }: OrderCardProps) {
       accessibilityRole="button"
       accessibilityLabel={`Order #${order.orderNumber}${order.chef?.name ? ` from ${order.chef.name}` : ''}`}
       style={styles.pressableWrapper}
+      android_ripple={{ color: CARD_RIPPLE, borderless: false }}
     >
       {({ pressed }) => (
         // Shadow must be on the outer clip view; overflow hidden on same view
         // kills shadow on iOS so we split: shadow on the outer View only,
         // clip radius on the inner content View.
-        <View style={[styles.cardOuter, pressed && styles.cardPressed]}>
+        <View
+          style={[styles.cardOuter, pressed && Platform.OS === 'ios' && styles.cardPressed]}
+        >
           <View style={styles.cardInner}>
             {/* Top row: chef name + status chip */}
             <View style={styles.topRow}>
@@ -198,12 +208,21 @@ export function OrderCard({ order }: OrderCardProps) {
                 disabled={confirm.isPending}
                 accessibilityRole="button"
                 accessibilityLabel="Confirm you received this order"
-                style={styles.confirmBtn}
+                android_ripple={confirm.isPending ? undefined : { color: CONFIRM_RIPPLE, borderless: false }}
               >
-                {confirm.isPending ? (
-                  <ActivityIndicator color={customerColors.canvas} size="small" />
-                ) : (
-                  <Text style={styles.confirmBtnText}>Confirm received</Text>
+                {({ pressed }) => (
+                  <View
+                    style={[
+                      styles.confirmBtn,
+                      pressed && Platform.OS === 'ios' && !confirm.isPending && styles.confirmBtnPressed,
+                    ]}
+                  >
+                    {confirm.isPending ? (
+                      <ActivityIndicator color={customerColors.canvas} size="small" />
+                    ) : (
+                      <Text style={styles.confirmBtnText}>Confirm received</Text>
+                    )}
+                  </View>
                 )}
               </Pressable>
             )}
@@ -331,5 +350,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
     color: customerColors.canvas,
+  },
+  confirmBtnPressed: {
+    backgroundColor: customerColors.coral.pressed,
   },
 });

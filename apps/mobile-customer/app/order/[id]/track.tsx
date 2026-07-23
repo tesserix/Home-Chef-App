@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
 } from 'react-native';
@@ -107,14 +108,22 @@ export default function TrackOrderScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back"
             hitSlop={8}
+            android_ripple={{ color: `${customerColors.charcoal.DEFAULT}1F`, borderless: true, radius: 21 }}
           >
-            <View style={styles.backCircleInner}>
-              <ChevronLeft
-                size={22}
-                color={customerColors.charcoal.DEFAULT}
-                accessibilityElementsHidden
-              />
-            </View>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.backCircleInner,
+                  pressed && Platform.OS === 'ios' && styles.backCircleInnerPressed,
+                ]}
+              >
+                <ChevronLeft
+                  size={22}
+                  color={customerColors.charcoal.DEFAULT}
+                  accessibilityElementsHidden
+                />
+              </View>
+            )}
           </Pressable>
         </View>
       </SafeAreaView>
@@ -240,6 +249,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  backCircleInnerPressed: {
+    backgroundColor: customerColors.surface.soft,
   },
 
   // ---- Bottom sheet floating card -----------------------------------------

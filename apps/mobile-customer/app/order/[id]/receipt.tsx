@@ -12,6 +12,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -25,6 +26,10 @@ import * as WebBrowser from 'expo-web-browser';
 import { ChevronLeft, Download, Share2 } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder, fetchInvoiceDownloadUrl } from '../../../hooks/useOrderHistory';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const PDF_RIPPLE = `${customerColors.canvas}33`;
 
 function money(n: number): string {
   return `₹${n.toFixed(2)}`;
@@ -150,13 +155,33 @@ export default function OrderReceiptScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back" accessibilityRole="button">
-          <ChevronLeft size={26} color={customerColors.charcoal.DEFAULT} />
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={10}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          android_ripple={{ color: ICON_RIPPLE, borderless: true, radius: 20 }}
+        >
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' ? styles.iconPressed : undefined}>
+              <ChevronLeft size={26} color={customerColors.charcoal.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.headerTitle}>Receipt</Text>
         {order ? (
-          <Pressable onPress={onShare} hitSlop={10} accessibilityLabel="Share receipt" accessibilityRole="button">
-            <Share2 size={22} color={customerColors.charcoal.DEFAULT} />
+          <Pressable
+            onPress={onShare}
+            hitSlop={10}
+            accessibilityLabel="Share receipt"
+            accessibilityRole="button"
+            android_ripple={{ color: ICON_RIPPLE, borderless: true, radius: 20 }}
+          >
+            {({ pressed }) => (
+              <View style={pressed && Platform.OS === 'ios' ? styles.iconPressed : undefined}>
+                <Share2 size={22} color={customerColors.charcoal.DEFAULT} />
+              </View>
+            )}
           </Pressable>
         ) : (
           <View style={{ width: 22 }} />
@@ -260,15 +285,24 @@ export default function OrderReceiptScreen() {
             disabled={openingPdf}
             accessibilityRole="button"
             accessibilityLabel="Open the PDF receipt"
-            style={({ pressed }) => [styles.pdfBtn, pressed && { opacity: 0.7 }]}
+            android_ripple={openingPdf ? undefined : { color: PDF_RIPPLE, borderless: false }}
           >
-            {openingPdf ? (
-              <ActivityIndicator size="small" color={customerColors.canvas} />
-            ) : (
-              <>
-                <Download size={18} color={customerColors.canvas} />
-                <Text style={styles.pdfBtnText}>Open PDF receipt</Text>
-              </>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.pdfBtn,
+                  pressed && Platform.OS === 'ios' && !openingPdf && styles.pdfBtnPressed,
+                ]}
+              >
+                {openingPdf ? (
+                  <ActivityIndicator size="small" color={customerColors.canvas} />
+                ) : (
+                  <>
+                    <Download size={18} color={customerColors.canvas} />
+                    <Text style={styles.pdfBtnText}>Open PDF receipt</Text>
+                  </>
+                )}
+              </View>
             )}
           </Pressable>
         </ScrollView>
@@ -312,6 +346,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   headerTitle: { fontFamily: 'Geist-Bold', fontSize: 20, color: customerColors.charcoal.DEFAULT },
+  iconPressed: { opacity: 0.6 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   muted: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft },
   scroll: { padding: 16 },
@@ -358,4 +393,5 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.coral.DEFAULT,
   },
   pdfBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.canvas },
+  pdfBtnPressed: { backgroundColor: customerColors.coral.pressed },
 });

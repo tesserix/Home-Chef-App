@@ -7,15 +7,19 @@
 // routing to the result screen. The webhook remains the authoritative backstop.
 
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
+import { customerColors } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { RAZORPAY_DISPLAY_CONFIG } from '../../lib/razorpay-config';
 import { useCartStore } from '../../store/cart-store';
 import { friendlyErrorMessage } from '../../lib/errors';
+
+// Android ripple tint — translucent token, never a new literal colour.
+const BACK_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 interface PaymentCheckoutParams {
   orderId: string;
@@ -233,15 +237,20 @@ export default function PaymentCheckout() {
           accessibilityRole="button"
           accessibilityLabel="Cancel payment"
           className="p-1"
+          android_ripple={{ color: BACK_RIPPLE, borderless: true, radius: 20 }}
         >
-          <ChevronLeft size={24} color="#222222" />
+          {({ pressed }) => (
+            <View className={pressed && Platform.OS === 'ios' ? 'opacity-60' : ''}>
+              <ChevronLeft size={24} color={customerColors.charcoal.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text className="text-xl font-semibold text-charcoal flex-1">Payment</Text>
       </View>
 
       {verifying ? (
         <View className="flex-1 items-center justify-center gap-3">
-          <ActivityIndicator size="large" color="#FF385C" />
+          <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
           <Text className="text-sm text-charcoal-soft">Confirming payment…</Text>
         </View>
       ) : (
@@ -254,10 +263,10 @@ export default function PaymentCheckout() {
           startInLoadingState
           renderLoading={() => (
             <View className="absolute inset-0 items-center justify-center bg-canvas">
-              <ActivityIndicator size="large" color="#FF385C" />
+              <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
             </View>
           )}
-          style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+          style={{ flex: 1, backgroundColor: customerColors.canvas }}
         />
       )}
     </SafeAreaView>

@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
+import { Check } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
 import { getStepIndex, getStepLabels, getStepStatuses } from '../../lib/orderSteps';
@@ -66,14 +67,18 @@ export function OrderTimeline({
                     />
                   </View>
                 ) : (
-                  // Completed = coral filled dot; future = hairline dot
+                  // Completed = coral filled dot + white check glyph; future = hairline dot
                   <View
                     style={[
                       styles.dot,
                       isCompleted && styles.dotCompleted,
                       isFuture && styles.dotFuture,
                     ]}
-                  />
+                  >
+                    {isCompleted ? (
+                      <Check size={8} color={customerColors.canvas} strokeWidth={3.5} />
+                    ) : null}
+                  </View>
                 )}
 
                 {/* Step label */}
@@ -138,11 +143,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
 
-  // Completed step: coral filled dot (12×12)
+  // Completed step: coral filled dot (12×12) holding a small check glyph
   dot: {
     width: 12,
     height: 12,
     borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dotCompleted: {
     backgroundColor: customerColors.coral.DEFAULT,
