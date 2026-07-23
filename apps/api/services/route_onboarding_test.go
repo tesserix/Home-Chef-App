@@ -188,6 +188,66 @@ func TestRequestRouteProduct_AsksForRoute(t *testing.T) {
 	}
 }
 
+// TestCreateLinkedAccountV2_SanitizesGatewayError pins the final-review
+// finding: CreateLinkedAccountV2 must not let a gateway 4xx echo the chef's
+// name/email into whatever logs/Sentry the caller feeds the returned error
+// into (services.CaptureBackgroundError) — the same protection
+// ConfigureRouteSettlement's bank-detail call already has via doV2Sanitized.
+// The structured error.code/description must still come through, since a
+// caller (isStakeholderAlreadyExists-style checks) may need it.
+func TestCreateLinkedAccountV2_SanitizesGatewayError(t *testing.T) {
+	srv, _ := newRouteServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		// Razorpay's own validation error, PLUS a hypothetical echo of the
+		// submitted identity fields elsewhere in the body — exactly the shape
+		// doURL's unsanitized error (which includes the WHOLE raw body) would
+		// leak verbatim.
+		_, _ = w.Write([]byte(`{"error":{"code":"BAD_REQUEST_ERROR","description":"invalid legal_business_name"},"input":{"email":"chef@example.com","contact_name":"Anita R"}}`))
+	})
+	c := NewRazorpayTestClient(srv.URL, "k", "s", "")
+
+	_, err := c.CreateLinkedAccountV2(&V2AccountRequest{
+		Email:        "chef@example.com",
+		Phone:        "9876543210",
+		LegalName:    "Anita's Kitchen",
+		BusinessType: "individual",
+		ContactName:  "Anita R",
+	})
+	if err == nil {
+		t.Fatal("a rejected account creation must surface as an error")
+	}
+	if strings.Contains(err.Error(), "chef@example.com") {
+		t.Fatalf("error must not echo the chef's email, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "invalid legal_business_name") {
+		t.Fatalf("error should still carry the structured gateway reason, got: %v", err)
+	}
+}
+
+// TestCreateStakeholder_SanitizesGatewayError is the same protection for the
+// stakeholder call, whose request body also carries the chef's name/email.
+func TestCreateStakeholder_SanitizesGatewayError(t *testing.T) {
+	srv, _ := newRouteServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":"BAD_REQUEST_ERROR","description":"invalid phone"},"input":{"email":"chef@example.com","name":"Anita R"}}`))
+	})
+	c := NewRazorpayTestClient(srv.URL, "k", "s", "")
+
+	_, err := c.CreateStakeholder("acc_123", &StakeholderRequest{
+		Name:  "Anita R",
+		Email: "chef@example.com",
+	})
+	if err == nil {
+		t.Fatal("a rejected stakeholder creation must surface as an error")
+	}
+	if strings.Contains(err.Error(), "chef@example.com") {
+		t.Fatalf("error must not echo the chef's email, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "invalid phone") {
+		t.Fatalf("error should still carry the structured gateway reason, got: %v", err)
+	}
+}
+
 func TestRouteOnboarding_ReportsGatewayFailures(t *testing.T) {
 	// A 4xx from Razorpay must not be mistaken for a registered account — that
 	// would mark the chef payout-ready and silently strand their money.

@@ -210,6 +210,11 @@ func chefNetPayout(order *models.Order) float64 {
 // because the rate is frozen on the row, create and verify produce the identical
 // split for a given order (recovery is re-derived from the ledger identically both
 // times, since nothing here mutates it).
+//
+// LANDMINE: this is one of TWO uncoordinated places that act on the same
+// non-discharging recovery debt — see applyChefRecoveryDeduction's doc comment
+// below, and services/payout_release_cron.go's BuildReleaseInput (the
+// RecoveryBalance sweep block), for the full explanation before touching either.
 func orderSettlements(db *gorm.DB, order *models.Order) []services.Settlement {
 	chefAccount := order.Chef.RazorpayAccountID
 	if services.IsChefFSSAIExpired(&order.Chef) {
@@ -245,15 +250,42 @@ func orderSettlements(db *gorm.DB, order *models.Order) []services.Settlement {
 // discharges it, so the same outstanding balance is re-derived and correctly
 // deducted from this chef's next order regardless of whether this read
 // succeeded.
+//
+// LANDMINE (final money-safety review): this checkout-time reduction and the
+// sweep's release-time block (BuildReleaseInput's RecoveryBalance in
+// services/payout_release_cron.go) are two UNCOORDINATED places handling the
+// SAME debt — one reduces the transfer here, the other blocks release there,
+// and neither knows the other exists. Recovery is non-discharging (see
+// services/payout_recovery.go): nothing anywhere writes a resolving ledger
+// entry, so the same full debt is re-derived and can be re-applied by BOTH
+// sites against the SAME outstanding balance. No penalty/ledger writer may
+// ship until exactly one of these two mechanisms actually collects-and-
+// discharges the debt and the other is changed to defer to it — do not add a
+// third site, and do not wire a discharging writer to only one of the two
+// without also fixing the other.
+//
+// On the success path, a deduction that actually reduces the transfer
+// (deducted > 0) writes a system audit row — order, chef, gross, and deducted
+// paise only, nothing else — so a reduced payout is never silent.
 func applyChefRecoveryDeduction(db *gorm.DB, order *models.Order, grossPaise int) int {
 	gross := payouts.Money{Minor: int64(grossPaise), Currency: payouts.CurrencyINR}
-	net, _, err := services.ApplyRecoveryDeduction(db, order.ChefID, gross, time.Now())
+	net, deducted, err := services.ApplyRecoveryDeduction(db, order.ChefID, gross, time.Now())
 	if err != nil {
 		log.Printf("recovery-deduction: ledger read failed, paying gross order=%s chef=%s gross_paise=%d: %v",
 			order.OrderNumber, order.ChefID, grossPaise, err)
 		services.CaptureBackgroundError(fmt.Errorf(
 			"recovery-deduction: order=%s chef=%s: %w", order.OrderNumber, order.ChefID, err))
 		return grossPaise
+	}
+	if deducted.Minor > 0 {
+		services.LogSystemAudit(nil, "chef.payout.recovery_deducted", "chef", order.ChefID.String(), nil, map[string]any{
+			"orderId":       order.ID.String(),
+			"orderNumber":   order.OrderNumber,
+			"chefId":        order.ChefID.String(),
+			"grossPaise":    grossPaise,
+			"deductedPaise": deducted.Minor,
+			"netPaise":      net.Minor,
+		})
 	}
 	return int(net.Minor)
 }

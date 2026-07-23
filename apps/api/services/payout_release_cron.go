@@ -117,6 +117,19 @@ func BuildReleaseInput(db *gorm.DB, order *models.Order, now time.Time) (payouts
 		return payouts.ReleaseInput{}, err
 	}
 
+	// LANDMINE: this is one of TWO uncoordinated places that act on the same
+	// non-discharging recovery debt (services/payout_recovery.go — nothing
+	// anywhere writes a resolving ledger entry, so ApplyRecoveryDeduction
+	// re-derives the SAME full outstanding balance every time it is called).
+	// The other is handlers/payment.go's applyChefRecoveryDeduction, which
+	// already reduced this same chef's gross transfer for a PRIOR order at
+	// checkout. Neither site knows the other exists or discharges anything, so
+	// today the debt can be independently deducted-from-transfer here-and-there
+	// AND block-release here, against the identical outstanding figure. No
+	// penalty/ledger writer may ship until exactly one of these two mechanisms
+	// actually collects-and-discharges the debt and the other defers to it —
+	// do not add a third site, and do not wire a discharging writer to only one
+	// of the two without also fixing the other.
 	gross := payouts.Money{Minor: int64(ToPaise(ChefNetPayoutFor(order))), Currency: payouts.CurrencyINR}
 	_, deducted, err := ApplyRecoveryDeduction(db, order.ChefID, gross, now)
 	if err != nil {
@@ -160,6 +173,26 @@ func runPayoutReleaseSweep(ctx context.Context) {
 	// on every 15-minute tick, indefinitely, before any admin has opted in.
 	if !settingBool(db, payoutSweepEnabledKey) {
 		log.Println("payout-sweep: payout.sweep_enabled is off — skipping this sweep")
+		return
+	}
+
+	// payout.sweep_enabled being on is not the whole gate: this loop only ever
+	// releases aggTypeOrder holds (the query below is orders-only), and
+	// releaseMoney's order branch (ReleaseOrderPayouts, services/order_payout.go)
+	// is itself gated on payoutMovementEnabled() alone — a meal-plan-day or
+	// group-order hold is never touched by this sweep, so MealPlanEscrowActive()
+	// is not this guard's concern (contrast payout_reconcile_cron.go's
+	// runPayoutReconcileScan, which re-drives every aggregate kind and so checks
+	// both flags). Without this check, ReleaseHold still commits the
+	// release_eligible -> released transition and settleRelease still stamps
+	// payout_settled_at, because ReleaseOrderPayouts silently returns nil when
+	// movement is off (a deliberate no-op for its OTHER callers, the admin queue
+	// with the flag on) — leaving the row looking fully settled while the
+	// Razorpay transfer stays on_hold, permanently excluded from the reconcile
+	// cron's own `released AND payout_settled_at IS NULL` query. Bail here,
+	// before that flip, not after.
+	if !payoutMovementEnabled() {
+		log.Println("payout-sweep: payout movement (ORDER_PAYOUT_AUTO_RELEASE_ENABLED) is off — skipping this sweep")
 		return
 	}
 
@@ -272,11 +305,38 @@ type PayoutBlockEvent struct {
 // the same guarantee the rest of the money path relies on. OutboxRelay
 // publishes to JetStream with PubAck and Nats-Msg-Id dedup, so a redelivery
 // after a crash is at-least-once at the transport and effectively-once here.
+// payoutBlockNoiseReasons are block reasons that are expected to hold for a
+// long or indefinite time and carry nothing an admin can act on: a still-
+// maturing order, or a chef who simply hasn't been opted into automation yet
+// (the normal state for most chefs during the intended opt-in rollout —
+// sweep_enabled on, auto_release_default unset/off, PayoutAutoRelease==""). A
+// block is silenced only when EVERY reason it carries is in this set; any
+// reason outside it is actionable (settlement not activated, an open refund,
+// a recovery balance, the new-chef ramp, above the review threshold) and must
+// always surface, even alongside a suppressed reason.
+var payoutBlockNoiseReasons = map[payouts.BlockReason]bool{
+	payouts.BlockNotMatured:     true,
+	payouts.BlockAutomationOff: true,
+}
+
+// isPayoutBlockNoise reports whether every reason in the decision is one this
+// package treats as expected/non-actionable noise, not worth publishing.
+func isPayoutBlockNoise(reasons []payouts.BlockReason) bool {
+	for _, r := range reasons {
+		if !payoutBlockNoiseReasons[r] {
+			return false
+		}
+	}
+	return true
+}
+
 func recordPayoutBlock(db *gorm.DB, order *models.Order, decision payouts.ReleaseDecision) {
-	// A still-maturing order is the common case, not a problem — publishing it
-	// every 15 minutes would drown the queue in noise. Only silence the SOLE
-	// not_matured reason; a real block alongside it must still surface.
-	if len(decision.Reasons) == 1 && decision.Reasons[0] == payouts.BlockNotMatured {
+	// A still-maturing order, or a not-yet-enrolled chef, is the common case
+	// during rollout, not a problem — publishing either every 15 minutes would
+	// drown the queue in noise. Only silence a block whose reasons are ENTIRELY
+	// within that persistent, non-actionable set; a genuinely actionable reason
+	// alongside them must still surface.
+	if isPayoutBlockNoise(decision.Reasons) {
 		return
 	}
 

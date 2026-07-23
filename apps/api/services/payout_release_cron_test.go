@@ -172,6 +172,21 @@ func withPayoutMovementDisabled(t *testing.T) {
 	t.Cleanup(func() { config.AppConfig = saved })
 }
 
+// withPayoutMovementEnabled pins config.AppConfig so payoutMovementEnabled()
+// reads true — required for any test that wants runPayoutReleaseSweep to reach
+// ReleaseHold at all, now that the sweep bails up front when movement is off.
+// The gateway seam this flips on (ReleaseOrderPayouts) still runs as a pure
+// no-op for these tests: seedDeliveredOrder never sets razorpay_order_id, so
+// orderRazorpayID reads back "" and ReleaseOrderPayouts returns nil via its own
+// "not a gateway-charged regular order" branch, before it ever needs a live
+// Razorpay client.
+func withPayoutMovementEnabled(t *testing.T) {
+	t.Helper()
+	saved := config.AppConfig
+	config.AppConfig = &config.Config{OrderPayoutAutoReleaseEnabled: true}
+	t.Cleanup(func() { config.AppConfig = saved })
+}
+
 // TestRunPayoutReleaseSweep_SkipsOrderNotAtReleaseEligible pins the core of
 // finding 1: a delivered, matured, automation-eligible order whose payout hold
 // has NOT been advanced to release_eligible (no customer confirmation yet) must
@@ -203,7 +218,7 @@ func TestRunPayoutReleaseSweep_SkipsOrderNotAtReleaseEligible(t *testing.T) {
 // payout_hold_status=released and payout_settled_at), and emits exactly one
 // release event.
 func TestRunPayoutReleaseSweep_ReleasesEligibleOrderExactlyOnce(t *testing.T) {
-	withPayoutMovementDisabled(t)
+	withPayoutMovementEnabled(t)
 	db := newPayoutReleaseTestDB(t)
 	releaseReadySettings(t, db)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
@@ -234,7 +249,7 @@ func TestRunPayoutReleaseSweep_ReleasesEligibleOrderExactlyOnce(t *testing.T) {
 // stamps payout_settled_at AND flips payout_hold_status away from
 // release_eligible, the second sweep's query must not match this row again.
 func TestRunPayoutReleaseSweep_SecondRunDoesNotRepublish(t *testing.T) {
-	withPayoutMovementDisabled(t)
+	withPayoutMovementEnabled(t)
 	db := newPayoutReleaseTestDB(t)
 	releaseReadySettings(t, db)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
@@ -294,6 +309,45 @@ func TestRunPayoutReleaseSweep_MasterSwitchOffPublishesNothing(t *testing.T) {
 	}
 }
 
+// TestRunPayoutReleaseSweep_MovementOffReleasesNothing pins the final-review
+// finding: payout.sweep_enabled being on is NOT the whole story — the sweep
+// must also bail when the money-movement seam (ORDER_PAYOUT_AUTO_RELEASE_ENABLED,
+// payoutMovementEnabled()) is off, even though every other release-readiness
+// check on this order passes. Before the fix, ReleaseHold still committed the
+// release_eligible -> released transition and settleRelease still stamped
+// payout_settled_at, because releaseMoney's order branch (ReleaseOrderPayouts)
+// silently returns nil when the movement flag is off — so the row looked fully
+// settled while the Razorpay transfer stayed on_hold, permanently excluded from
+// every reconcile query keyed on `released AND payout_settled_at IS NULL`.
+func TestRunPayoutReleaseSweep_MovementOffReleasesNothing(t *testing.T) {
+	withPayoutMovementDisabled(t)
+	db := newPayoutReleaseTestDB(t)
+	releaseReadySettings(t, db)
+	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
+		c.RazorpaySettlementStatus = "activated"
+		c.PayoutAutoRelease = "on"
+	})
+	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
+		string(models.PayoutHoldReleaseEligible), order.ID.String()).Error)
+
+	withSweepDB(t, db, func() { runPayoutReleaseSweep(context.Background()) })
+
+	if got := countOutbox(t, db, SubjectPayoutReleased); got != 0 {
+		t.Fatalf("released events published = %d, want 0 when payout movement is off", got)
+	}
+	if got := countOutbox(t, db, SubjectPayoutBlocked); got != 0 {
+		t.Fatalf("blocked events published = %d, want 0 — the movement guard must short-circuit before the per-order query and loop", got)
+	}
+	updated := loadOrder(t, db, order.ID)
+	if updated.PayoutHoldStatus != models.PayoutHoldReleaseEligible {
+		t.Fatalf("payout_hold_status = %q, want unchanged %q — movement off must leave the hold untouched",
+			updated.PayoutHoldStatus, models.PayoutHoldReleaseEligible)
+	}
+	if updated.PayoutSettledAt != nil {
+		t.Fatal("payout_settled_at must stay nil — nothing may be stamped settled while payout movement is off")
+	}
+}
+
 // TestRunPayoutReleaseSweep_DisputedOrderIsNotReleased pins finding 2: the
 // order_issues table was added to the test harness but nothing ever inserted
 // into it, so the sweep-level dispute cross-guard (ReleaseHold ->
@@ -303,7 +357,7 @@ func TestRunPayoutReleaseSweep_MasterSwitchOffPublishesNothing(t *testing.T) {
 // SubjectPayoutReleased events, even with sweep_enabled and the chef's
 // automation both on so nothing else in the governor blocks it first.
 func TestRunPayoutReleaseSweep_DisputedOrderIsNotReleased(t *testing.T) {
-	withPayoutMovementDisabled(t)
+	withPayoutMovementEnabled(t)
 	db := newPayoutReleaseTestDB(t)
 	releaseReadySettings(t, db)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
@@ -600,5 +654,67 @@ func TestRecordPayoutBlock_StillPublishesWhenNotMaturedJoinsARealBlock(t *testin
 	})
 	if countOutbox(t, db, SubjectPayoutBlocked) != 1 {
 		t.Fatal("a real block alongside not_matured must still be published")
+	}
+}
+
+// TestRecordPayoutBlock_SoleAutomationOffIsSilenced pins the final-review
+// finding: during the intended opt-in rollout (sweep_enabled on,
+// auto_release_default unset/off, most chefs PayoutAutoRelease==""), every
+// matured release_eligible order of a not-yet-enrolled chef lands
+// BlockAutomationOff as its SOLE reason. That is the expected, indefinite
+// steady state for those chefs — not a signal an admin needs to act on — so it
+// must be silenced exactly like a sole BlockNotMatured, or every such order
+// re-publishes payments.payout_blocked on every 15-minute tick forever (no
+// JetStream dedup — a fresh msg_id every time).
+func TestRecordPayoutBlock_SoleAutomationOffIsSilenced(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	order := seedDeliveredOrder(t, db, nil)
+	recordPayoutBlock(db, order, payouts.ReleaseDecision{
+		Reasons: []payouts.BlockReason{payouts.BlockAutomationOff},
+	})
+	if got := countOutbox(t, db, SubjectPayoutBlocked); got != 0 {
+		t.Fatalf("blocked events published = %d, want 0 — a not-yet-enrolled chef is the normal opt-in-rollout state", got)
+	}
+}
+
+// TestRecordPayoutBlock_NotMaturedPlusAutomationOffIsSilenced pins the same
+// finding for the combined case: BOTH persistent, not-yet-actionable reasons
+// together must still be silenced — neither one becoming "actionable" merely
+// by the other's presence.
+func TestRecordPayoutBlock_NotMaturedPlusAutomationOffIsSilenced(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	order := seedDeliveredOrder(t, db, nil)
+	recordPayoutBlock(db, order, payouts.ReleaseDecision{
+		Reasons: []payouts.BlockReason{payouts.BlockNotMatured, payouts.BlockAutomationOff},
+	})
+	if got := countOutbox(t, db, SubjectPayoutBlocked); got != 0 {
+		t.Fatalf("blocked events published = %d, want 0 — not_matured + automation_off together is still the normal rollout state", got)
+	}
+}
+
+// TestRecordPayoutBlock_SettlementNotActivatedAlwaysPublishes pins the other
+// half: a genuinely actionable reason (settlement not activated) must publish,
+// alone or joined by either/both of the persistent, suppressed reasons — the
+// widened guard must never suppress a block that carries any actionable
+// reason.
+func TestRecordPayoutBlock_SettlementNotActivatedAlwaysPublishes(t *testing.T) {
+	cases := []struct {
+		name    string
+		reasons []payouts.BlockReason
+	}{
+		{"alone", []payouts.BlockReason{payouts.BlockSettlementNotActivated}},
+		{"with not_matured", []payouts.BlockReason{payouts.BlockNotMatured, payouts.BlockSettlementNotActivated}},
+		{"with automation_off", []payouts.BlockReason{payouts.BlockAutomationOff, payouts.BlockSettlementNotActivated}},
+		{"with both suppressed reasons", []payouts.BlockReason{payouts.BlockNotMatured, payouts.BlockAutomationOff, payouts.BlockSettlementNotActivated}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := newPayoutReleaseTestDB(t)
+			order := seedDeliveredOrder(t, db, nil)
+			recordPayoutBlock(db, order, payouts.ReleaseDecision{Reasons: tc.reasons})
+			if got := countOutbox(t, db, SubjectPayoutBlocked); got != 1 {
+				t.Fatalf("blocked events published = %d, want exactly 1 for reasons %v", got, tc.reasons)
+			}
+		})
 	}
 }

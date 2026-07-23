@@ -128,11 +128,18 @@ func (c *RazorpayClient) doV2Sanitized(method, path string, payload any) ([]byte
 
 // CreateLinkedAccountV2 creates a linked account that can later be configured
 // with a settlement destination.
+//
+// Goes through doV2Sanitized, not doV2 (review finding 4): the request body
+// carries the chef's name/email, and Razorpay's validation errors on this
+// endpoint can echo the full submitted body back on a 4xx — a raw-body error
+// here would let that ride straight into whatever logs/Sentry the caller
+// (CaptureBackgroundError) feeds it into. Same treatment as
+// ConfigureRouteSettlement's bank-detail call.
 func (c *RazorpayClient) CreateLinkedAccountV2(req *V2AccountRequest) (*V2AccountResponse, error) {
 	if req.Type == "" {
 		req.Type = "route"
 	}
-	raw, err := c.doV2("POST", "/accounts", req)
+	raw, err := c.doV2Sanitized("POST", "/accounts", req)
 	if err != nil {
 		return nil, err
 	}
@@ -144,8 +151,14 @@ func (c *RazorpayClient) CreateLinkedAccountV2(req *V2AccountRequest) (*V2Accoun
 }
 
 // CreateStakeholder attaches the individual behind a linked account.
+//
+// Goes through doV2Sanitized, not doV2 (review finding 4) for the same reason
+// as CreateLinkedAccountV2 above: the request body carries the chef's
+// name/email, which a gateway 4xx can echo verbatim. The structured
+// error.code/description Razorpay still returns is enough for callers like
+// isStakeholderAlreadyExists, which matches on that text.
 func (c *RazorpayClient) CreateStakeholder(accountID string, req *StakeholderRequest) (*StakeholderResponse, error) {
-	raw, err := c.doV2("POST", "/accounts/"+accountID+"/stakeholders", req)
+	raw, err := c.doV2Sanitized("POST", "/accounts/"+accountID+"/stakeholders", req)
 	if err != nil {
 		return nil, err
 	}

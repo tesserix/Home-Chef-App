@@ -114,6 +114,14 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		kind TEXT NOT NULL, amount_minor INTEGER NOT NULL, currency TEXT NOT NULL,
 		source_type TEXT NOT NULL, source_id TEXT NOT NULL, matures_at DATETIME,
 		batch_id TEXT, actor_id TEXT, reason TEXT, created_at DATETIME)`).Error)
+	// audit_logs — applyChefRecoveryDeduction (#741 final review) writes a
+	// system audit row when a recovery deduction actually reduces a chef's
+	// transfer, via services.LogSystemAudit.
+	require.NoError(t, db.Exec(`CREATE TABLE audit_logs (
+		id TEXT PRIMARY KEY DEFAULT '00000000-0000-0000-0000-000000000000',
+		user_id TEXT, action TEXT, entity_type TEXT, entity_id TEXT,
+		old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT,
+		correlation_id TEXT, created_at DATETIME)`).Error)
 
 	prev := database.DB
 	database.DB = db
@@ -408,6 +416,77 @@ func TestOrderSettlements_RecoveryDeductionReducesChefTransfer(t *testing.T) {
 	if settlements[1].Amount != services.ToPaise(40) {
 		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, services.ToPaise(40))
 	}
+}
+
+// TestOrderSettlements_RecoveryDeductionWritesAuditRow pins the final-review
+// finding: recovery is currently inert (nothing discharges the ledger debt) and
+// invisible everywhere except the reduced transfer amount itself — a chef's
+// payout can be silently cut with no record of why. When a deduction actually
+// reduces the gross (deducted > 0), an audit row must be written recording the
+// order, chef, gross, and deducted figures, so a reduced payout is never
+// silent.
+func TestOrderSettlements_RecoveryDeductionWritesAuditRow(t *testing.T) {
+	db := setupPayDB(t)
+	chefID := uuid.New()
+	seedChefPenalty(t, db, chefID, 20_000) // ₹200.00 owed to the platform
+
+	order := &models.Order{
+		ID:                 uuid.New(),
+		OrderNumber:        "HC-2",
+		ChefID:             chefID,
+		Subtotal:           1000,
+		Tax:                50,
+		ChefTip:            20,
+		DeliveryFee:        40,
+		ChefFundedDiscount: 100,
+		CommissionRate:     0.06,
+	}
+	order.Chef.RazorpayAccountID = "acc_chef"
+
+	orderSettlements(db, order)
+
+	var row struct {
+		UserID     *string
+		Action     string
+		EntityType string
+		EntityID   string
+		NewValue   string
+	}
+	require.NoError(t, db.Raw(`SELECT user_id, action, entity_type, entity_id, new_value FROM audit_logs`).Scan(&row).Error)
+	require.Nil(t, row.UserID, "a recovery deduction has no human actor — system audit row")
+	require.NotEmpty(t, row.Action, "a reduced payout must be recorded, not silent")
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(row.NewValue), &payload))
+	require.EqualValues(t, 20_000, payload["deductedPaise"], "the audit row must record the deducted amount")
+	require.EqualValues(t, services.ToPaise(906.3), payload["grossPaise"], "the audit row must record the undeducted gross")
+	require.Equal(t, order.ID.String(), payload["orderId"], "the audit row must identify the order")
+	require.Equal(t, chefID.String(), payload["chefId"], "the audit row must identify the chef")
+}
+
+// TestOrderSettlements_NoRecoveryDebt_NoAuditRow ensures the audit write is
+// conditional on an actual deduction — a chef with a clear balance produces no
+// audit noise.
+func TestOrderSettlements_NoRecoveryDebt_NoAuditRow(t *testing.T) {
+	db := setupPayDB(t)
+	order := &models.Order{
+		ID:                 uuid.New(),
+		OrderNumber:        "HC-2b",
+		ChefID:             uuid.New(),
+		Subtotal:           1000,
+		Tax:                50,
+		ChefTip:            20,
+		DeliveryFee:        40,
+		ChefFundedDiscount: 100,
+		CommissionRate:     0.06,
+	}
+	order.Chef.RazorpayAccountID = "acc_chef"
+
+	orderSettlements(db, order)
+
+	var count int64
+	require.NoError(t, db.Raw(`SELECT COUNT(*) FROM audit_logs`).Scan(&count).Error)
+	require.Zero(t, count, "no debt was deducted, so no audit row should be written")
 }
 
 // TestOrderSettlements_LedgerReadFailure_PaysGross (#741) locks in the fail-OPEN
