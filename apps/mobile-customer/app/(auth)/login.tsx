@@ -141,6 +141,7 @@ export default function LoginPage() {
         router.replace('/(tabs)');
       }}
       onNavigateToRegister={() => router.push('/(auth)/register')}
+      onNavigateToForgotPassword={() => router.push('/(auth)/forgot-password' as never)}
       onGoogleSignIn={handleGoogleSignIn}
       onAppleSignIn={Platform.OS === 'ios' ? handleAppleSignIn : undefined}
       onBiometricLogin={biometricsEnabled ? handleBiometricLogin : undefined}

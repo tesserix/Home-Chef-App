@@ -24,6 +24,7 @@ import {
   Gift,
   Award,
   DatabaseZap,
+  KeyRound,
 } from 'lucide-react-native';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { friendlyErrorMessage } from '../../lib/errors';
@@ -39,6 +40,7 @@ import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
+import { hasPasswordProvider } from '@homechef/mobile-shared/auth';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { ScreenTitle } from '../../components/shared/ScreenTitle';
 
@@ -121,6 +123,12 @@ export default function ProfileScreen() {
   const dockClearance = useDockClearance();
   const { data, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
+
+  // Only email/password accounts can change a password. Google/Apple (SSO)
+  // accounts have no password credential, so the "Change password" row is
+  // hidden for them. Read once on mount — providerData is stable for the
+  // session and the user is already authenticated on this screen.
+  const [canChangePassword] = useState(() => hasPasswordProvider());
 
   // The API returns the profile FLAT (no { data } envelope), so read it directly.
   const profile = data;
@@ -674,6 +682,34 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
+
+        {/* ── Account — password change, gated to email/password accounts.
+            Google/Apple (SSO) accounts have no password credential, so this
+            section is hidden for them (hasPasswordProvider). ── */}
+        {canChangePassword ? (
+          <>
+            <SectionLabel>Account</SectionLabel>
+            <View
+              className="mx-4"
+              style={{
+                shadowColor: customerColors.charcoal.DEFAULT,
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.06,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <View className="rounded-xl overflow-hidden">
+                <NavRow
+                  icon={<KeyRound size={18} color={customerColors.charcoal.soft} />}
+                  label="Change password"
+                  onPress={() => router.push('/(auth)/forgot-password' as never)}
+                  isLast
+                />
+              </View>
+            </View>
+          </>
+        ) : null}
 
         {/* ── Logout — destructive action ── */}
         <Pressable

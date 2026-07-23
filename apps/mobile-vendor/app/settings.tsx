@@ -17,6 +17,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
+import { hasPasswordProvider } from '@homechef/mobile-shared/auth';
 import { api } from '../lib/api';
 import { useVendorPendingOrders } from '../hooks/useVendorOrders';
 
@@ -227,6 +228,12 @@ export default function SettingsScreen() {
   );
   const [acceptingOrders, setAcceptingOrders] = useState(false);
   const [autoSchedule, setAutoSchedule] = useState(false);
+
+  // Only email/password accounts can change a password. Google/Apple (SSO)
+  // accounts have no password credential, so the "Change password" row is
+  // hidden for them. Read once on mount — providerData is stable for the
+  // session and the user is already authenticated on this screen.
+  const [canChangePassword] = useState(() => hasPasswordProvider());
 
   // Auto open/close reads/writes the chef profile (not /chef/settings), via the
   // pointer-based PUT /chef/profile so it never disturbs other settings.
@@ -474,10 +481,12 @@ export default function SettingsScreen() {
         <Text style={styles.sectionLabel}>ACCOUNT</Text>
         <View style={styles.card}>
           <View style={styles.cardInner}>
-            <NavRow
-              label="Change password"
-              onPress={() => router.push('/(auth)/forgot-password' as never)}
-            />
+            {canChangePassword ? (
+              <NavRow
+                label="Change password"
+                onPress={() => router.push('/(auth)/forgot-password' as never)}
+              />
+            ) : null}
             <NavRow
               label="Delete account"
               onPress={handleDeleteAccount}

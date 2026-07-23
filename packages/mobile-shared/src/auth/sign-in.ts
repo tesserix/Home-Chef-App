@@ -77,3 +77,22 @@ export async function signOut(): Promise<void> {
 export async function sendPasswordResetEmail(email: string): Promise<void> {
   return auth().sendPasswordResetEmail(email);
 }
+
+/**
+ * Provider IDs linked to the currently signed-in Firebase user, e.g.
+ * 'password', 'google.com', 'apple.com'. Empty array when signed out.
+ */
+export function getLinkedProviderIds(): string[] {
+  return auth().currentUser?.providerData.map((p) => p.providerId) ?? [];
+}
+
+/**
+ * True only when the account has an email/password credential — i.e. the user
+ * actually has a password to change. Google/Apple (SSO) accounts have no
+ * password, so password-change UI (Change password / reset-email) must stay
+ * hidden for them. A password provider linked alongside a social one still
+ * counts, since such a user can genuinely change their password.
+ */
+export function hasPasswordProvider(): boolean {
+  return getLinkedProviderIds().includes("password");
+}
