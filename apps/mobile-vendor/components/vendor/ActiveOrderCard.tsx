@@ -90,6 +90,22 @@ const AWAITING_CAPTION: Record<string, string> = {
   delivering: 'Out for delivery',
 };
 
+// Status chip palette per UI-V2-SPEC §2 (Task 9: group-card rows with status
+// chips + ₹ totals) — tint bg + dark text of the same hue. `ready` is the
+// only positive-operational state so it alone gets the success green; every
+// other in-flight state stays a calm ink-on-mist chip.
+const STATUS_CHIP: Partial<Record<Order['status'], { bg: string; text: string }>> = {
+  accepted: { bg: theme.colors.info.tint, text: theme.colors.info.DEFAULT },
+  preparing: { bg: theme.colors.mist.DEFAULT, text: theme.colors.ink.DEFAULT },
+  ready: { bg: theme.colors.success.tint, text: theme.colors.success.soft },
+  picked_up: { bg: theme.colors.mist.DEFAULT, text: theme.colors.diet.veg },
+  delivered: { bg: theme.colors.mist.DEFAULT, text: theme.colors.diet.veg },
+};
+const STATUS_CHIP_FALLBACK = {
+  bg: theme.colors.mist.DEFAULT,
+  text: theme.colors.ink.soft,
+};
+
 function formatMinutesAgo(iso: string): string {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return '';
@@ -230,7 +246,8 @@ interface ActiveOrderCardProps {
  * Active-order card for the Dashboard "In Progress" section.
  *
  * Shows:
- *  - Order summary: customer name, item count, total (tabular figures).
+ *  - Order summary: customer name + status chip (§2 — ready = success green
+ *    tint, everything else calm ink-on-mist), total (tabular figures).
  *  - Lifecycle stepper: Accepted → Preparing → Ready → Out for delivery →
  *    Delivered. Completed steps filled, current highlighted, future muted.
  *  - One-tap advance button for chef-controllable transitions (accepted →
@@ -239,7 +256,7 @@ interface ActiveOrderCardProps {
  *
  * Design intent (vendor monochrome, .impeccable.md §Per-role density):
  *  - Ink-filled advance button with paper text — matches PendingOrderCard's
- *    Accept button. NOT the customer coral.
+ *    Accept button. NOT the customer app's brand accent — vendor is zero-accent.
  *  - Inner-View pattern on the Pressable to avoid the iOS function-style
  *    style-drop bug (flex/bg/padding silently lost without it).
  *  - Touch target: minHeight 44 on the advance button (Apple HIG).
@@ -296,6 +313,11 @@ export function ActiveOrderCard({
   // action (incl. "Mark Handed Over") until the order is collected.
   const awaitingCaption = isPickup ? undefined : AWAITING_CAPTION[order.status];
   const currentStep = statusToStep[order.status] ?? 1;
+  // Chip text reuses the same step label the stepper already renders for the
+  // current step — one source of truth for the wording instead of a second
+  // status→label map.
+  const chipLabel = steps[currentStep - 1]?.label ?? order.status;
+  const chip = STATUS_CHIP[order.status] ?? STATUS_CHIP_FALLBACK;
 
   return (
     <Animated.View
@@ -311,16 +333,24 @@ export function ActiveOrderCard({
         onPress={() => onOpenDetail(order.id)}
         accessibilityRole="button"
         accessibilityLabel={`Open order details for ${order.customerName}`}
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
           // Inner-View pattern — visual styles (bg, radius) on View,
           // not on Pressable, to avoid the iOS function-style style drop.
           <View style={[styles.body, pressed && { opacity: 0.85 }]}>
-            {/* Header row: customer name left, total right */}
+            {/* Header row: customer name + status chip left, total right */}
             <View style={styles.topRow}>
-              <Text style={styles.customerName} numberOfLines={1}>
-                {order.customerName}
-              </Text>
+              <View style={styles.nameWithChip}>
+                <Text style={styles.customerName} numberOfLines={1}>
+                  {order.customerName}
+                </Text>
+                <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
+                  <Text style={[styles.statusChipLabel, { color: chip.text }]}>
+                    {chipLabel}
+                  </Text>
+                </View>
+              </View>
               <Text style={styles.total}>₹{order.total.toFixed(0)}</Text>
             </View>
             {/* Items summary + age — items may be absent on dashboard RecentOrder */}
@@ -352,6 +382,7 @@ export function ActiveOrderCard({
             accessibilityRole="button"
             accessibilityLabel={`${advanceLabel} for order from ${order.customerName}`}
             style={styles.advancePressable}
+            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
             <Animated.View
               style={[
@@ -464,11 +495,28 @@ const styles = StyleSheet.create({
     gap: theme.spacing[3],
     marginBottom: theme.spacing[1],
   },
-  customerName: {
+  nameWithChip: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[2],
+  },
+  customerName: {
+    flexShrink: 1,
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
+  },
+  // Status chip (UI-V2-SPEC §2) — tint bg pill, dark same-hue text.
+  statusChip: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+    borderRadius: theme.radius.full,
+  },
+  statusChipLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.2,
   },
   total: {
     fontFamily: 'Geist-Bold',
