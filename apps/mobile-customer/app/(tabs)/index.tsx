@@ -252,7 +252,13 @@ export default function HomeScreen() {
         {CUISINES.map((cuisine) => {
           const isSelected = selectedCuisine === cuisine;
           return (
-            // iOS Pressable inner-View pattern: no style array on Pressable
+            // iOS Pressable inner-View pattern: visual styles stay on the
+            // inner View. `style` here is a static object (not a function),
+            // so it's safe under the array-style bug — and it's REQUIRED:
+            // without it, this Pressable is the actual flex-row child inside
+            // the ScrollView's contentContainerStyle, and on-device it was
+            // being treated as shrinkable, compressing every chip below its
+            // label's natural width instead of letting the row scroll (R3).
             <Pressable
               key={cuisine}
               onPress={() => setSelectedCuisine(cuisine)}
@@ -260,6 +266,7 @@ export default function HomeScreen() {
               accessibilityState={{ selected: isSelected }}
               accessibilityLabel={`Filter by ${cuisine}`}
               android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+              style={styles.chipPressable}
             >
               {({ pressed }) => (
                 <View
@@ -609,13 +616,36 @@ const styles = StyleSheet.create({
     // a horizontal chip row grows into any free vertical space it is offered.
     // Keep it content-height.
     flexGrow: 0,
+    // Belt-and-suspenders: never let the ScrollView itself be compressed by
+    // an ancestor — a horizontal ScrollView must always measure at its full
+    // natural/available width so its CONTENT can legitimately exceed it and
+    // scroll (that's the whole point of it being a ScrollView).
+    flexShrink: 0,
   },
+  // Explicit row direction + no-wrap: a horizontal ScrollView already
+  // defaults to this, but leaving it implicit is exactly how the previous
+  // clipping regression went unnoticed by a static styles read — spelling
+  // it out removes any doubt about how these chips are meant to lay out.
   chipRowContent: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
     gap: 0,
     paddingHorizontal: 16,
     paddingBottom: 4,
   },
+  // This is the Pressable's OWN style (not the inner `chip` View below) —
+  // the Pressable is the actual flex item living inside chipRowContent's
+  // row. Root cause of the on-device truncation: this Pressable had no
+  // style at all, so Yoga's flex algorithm was free to compress it (and
+  // everything inside it) once the row's total content width exceeded the
+  // viewport, instead of leaving that overflow to the ScrollView's own
+  // horizontal scroll. flexShrink: 0 makes every chip's true content width
+  // non-negotiable.
+  chipPressable: {
+    flexShrink: 0,
+  },
   chip: {
+    flexShrink: 0,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -629,6 +659,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   chipLabel: {
+    flexShrink: 0,
     fontFamily: 'Inter',
     fontSize: 14,
     letterSpacing: 0,
