@@ -1,8 +1,25 @@
 # ADR 0002 — Automated Vendor Payouts
 
-- **Status:** Accepted (pending finance sign-off — see Open Items)
+- **Status:** Superseded in part (2026-07-23) — see Superseded below
 - **Date:** 2026-07-22
 - **Deciders:** Mahesh Sangawar (product/eng)
+
+## Superseded (2026-07-23)
+
+Confirming Razorpay Route as the rail reversed three decisions in this ADR. The
+originals are left in place below — an ADR records what was decided and why it
+changed, it is not edited into looking correct. The replacement is
+[docs/superpowers/specs/2026-07-22-payout-release-governor-design.md](../superpowers/specs/2026-07-22-payout-release-governor-design.md).
+
+| Decision here | Superseded by | Why |
+|---|---|---|
+| Rail: RazorpayX push payouts | Razorpay Route | Route is already implemented and live (transfers held at checkout). It never custodies chef funds and the platform fee simply stays unremitted. RazorpayX would have added a current account and custody. |
+| Cadence: daily batch, 24h maturation | 15-minute sweep, 2h maturation | Our hold and Razorpay's fixed 2-working-day linked-account settlement are sequential; a 24h hold pushed the chef to ~3 days. 2h keeps the total inside two days while preserving a late-refund window. |
+| Recovery: netted across a daily batch | deducted from the next order's transfer at creation | Route transfers are per-payment, so a debt cannot be netted after the fact — it is taken off the next transfer before it is built. |
+
+The batch builder (PR #762) is retired accordingly. The payee-agnostic core
+(money, ledger, rules, payee registry — #754) is kept; only the batch-assembly
+step is replaced by a per-order release decision.
 - **Extends:** [ADR 0001](0001-vendor-payout-settlement-model.md) — vendor payout & settlement model
 - **Epic:** [#736](https://github.com/tesserix/Home-Chef-App/issues/736) — automated vendor payouts
 - **Resolves:** [#737](https://github.com/tesserix/Home-Chef-App/issues/737)

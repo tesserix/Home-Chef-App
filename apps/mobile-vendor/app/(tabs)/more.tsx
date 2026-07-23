@@ -10,6 +10,7 @@ import {
   ChevronRight,
   DollarSign,
   FileText,
+  Landmark,
   Languages,
   LifeBuoy,
   LogOut,
@@ -58,6 +59,12 @@ const ALL_SECTIONS: NavSection[] = [
     titleKey: 'money',
     rows: [
       { labelKey: 'earnings', caption: 'Payouts and transactions', route: '/earnings', Icon: DollarSign },
+      // Direct entry on purpose. It was previously reachable only from inside
+      // Earnings, which a chef who has not earned anything yet has no reason to
+      // open — and the payout gate (#739) blocks them from accepting orders
+      // until a method exists, so "add your payout details" has to lead
+      // somewhere findable.
+      { labelKey: 'payout', caption: 'Bank account or UPI for your earnings', route: '/payout', Icon: Landmark },
       { labelKey: 'analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
     ],
   },

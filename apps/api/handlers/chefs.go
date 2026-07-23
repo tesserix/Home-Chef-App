@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -2147,71 +2148,194 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 	}
 
 	var chef models.ChefProfile
-	if err := database.DB.Preload("User").Where("user_id = ?", userID).First(&chef).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
-		return
-	}
+	var vendorID string
+	var settlementResult *services.SettlementRegistrationResult
+	var settlementErr error
 
-	vendorID := chef.ID.String()
+	// The chef read, the RegisterSettlementAccount call, and the persist of
+	// whatever it returns all run inside one transaction that locks this
+	// chef's row (SELECT ... FOR UPDATE) — the same pattern
+	// claimMenuItemImageSlot (handlers/menu.go) uses for the same class of
+	// race. RegisterSettlementAccount is synchronous (see below) and this
+	// action can be double-clicked or client-retried; two near-simultaneous
+	// requests both reading RazorpayAccountID=="" would otherwise both call
+	// POST /v2/accounts, each minting a FULL linked account (stakeholder +
+	// live bank settlement) at Razorpay — an orphaned duplicate whose money
+	// can never be merged back. The lock makes a concurrent request block
+	// until this one's transaction (read, up to 4 sequential gateway calls,
+	// persist) commits, so it observes the freshly-committed
+	// RazorpayAccountID/RazorpayProductID and reuses them instead of minting
+	// a second account (review finding 1; concurrency proof in
+	// chef_payout_race_test.go).
+	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Preload("User").Where("user_id = ?", userID).First(&chef).Error; err != nil {
+			return err
+		}
+		vendorID = chef.ID.String()
 
-	// DB stores ONLY the payout method (non-sensitive selector).
-	// All sensitive fields (account number, IFSC, name, UPI) live exclusively in Secret Manager.
-	chef.PayoutMethod = req.PayoutMethod
-	chef.BankAccountNumber = "" // No sensitive data in DB
-	chef.BankIFSC = ""          // Stored in Secret Manager
-	chef.BankAccountName = ""   // Stored in Secret Manager
-	chef.UpiID = ""             // Stored in Secret Manager
+		// DB stores ONLY the payout method (non-sensitive selector). All
+		// sensitive fields (account number, IFSC, name, UPI) live exclusively
+		// in Secret Manager.
+		//
+		// A targeted column update, not a struct Save: Save writes every
+		// column on the struct, including razorpay_account_id/
+		// razorpay_product_id/razorpay_settlement_status below — a
+		// full-struct save issued from a stale in-memory snapshot could
+		// silently overwrite whatever this same transaction (or a
+		// concurrent one holding the row lock a moment longer) commits for
+		// those columns. A column-scoped update can never touch a column it
+		// doesn't name, so it can't reopen the race the row lock exists to
+		// close.
+		chef.PayoutMethod = req.PayoutMethod
+		chef.BankAccountNumber = "" // No sensitive data in DB
+		chef.BankIFSC = ""          // Stored in Secret Manager
+		chef.BankAccountName = ""   // Stored in Secret Manager
+		chef.UpiID = ""             // Stored in Secret Manager
+		payoutFieldUpdates := map[string]any{
+			"payout_method":       chef.PayoutMethod,
+			"bank_account_number": chef.BankAccountNumber,
+			"bank_ifsc":           chef.BankIFSC,
+			"bank_account_name":   chef.BankAccountName,
+			"upi_id":              chef.UpiID,
+		}
+		if err := tx.Model(&models.ChefProfile{}).Where("id = ?", chef.ID).Updates(payoutFieldUpdates).Error; err != nil {
+			return err
+		}
 
-	if err := database.DB.Save(&chef).Error; err != nil {
+		log.Printf("Payout details saved for vendor %s (method: %s)", vendorID, req.PayoutMethod)
+
+		// Store sensitive fields in GCP Secret Manager asynchronously
+		// (Secret Manager creation can take several seconds on first call).
+		// Fire-and-forget and independent of tx, so starting it here (rather
+		// than after the transaction commits) preserves the original timing:
+		// it runs concurrently with the synchronous gateway calls below
+		// instead of serialized after them.
+		go func() {
+			ctx := context.Background()
+			secretFields := map[string]string{
+				"bank-account-number": req.BankAccountNumber,
+				"bank-account-name":   req.BankAccountName,
+				"bank-ifsc":           req.BankIFSC,
+				"upi-id":              req.UpiID,
+			}
+			for field, value := range secretFields {
+				if value != "" {
+					if err := services.StoreVendorSecret(ctx, vendorID, field, value); err != nil {
+						log.Printf("Warning: failed to store secret %s for vendor %s: %v", field, vendorID, err)
+					}
+				}
+			}
+			log.Printf("Secrets stored in Secret Manager for vendor %s", vendorID)
+		}()
+
+		// Register (or update) the chef's Razorpay Route settlement
+		// destination.
+		//
+		// Synchronous, not a goroutine: this call — not the account-creation
+		// step above it — decides whether the chef can ever be paid, so its
+		// outcome has to reach the response the chef is looking at right
+		// now. A goroutine's error is invisible to them; they would see
+		// "Payout details saved" and have no idea their bank details were
+		// rejected until an order fails to settle days later. The extra
+		// request latency (at most 4 sequential gateway calls on first
+		// registration, 1 on every re-save since the account/product are
+		// reused) is worth paying on this low-traffic settings action for
+		// that visibility.
+		//
+		// ExistingAccountID/ExistingProductID reuse whatever this chef
+		// already has (read under the lock above, so it reflects any
+		// concurrent request that already committed) so re-saving bank
+		// details never mints a second linked account.
+		rz := services.GetRazorpay()
+		contactName := chef.User.FirstName + " " + chef.User.LastName
+		settlementResult, settlementErr = services.RegisterSettlementAccount(rz, services.SettlementRegistration{
+			ExistingAccountID:          chef.RazorpayAccountID,
+			ExistingProductID:          chef.RazorpayProductID,
+			ExistingStakeholderCreated: chef.RazorpayStakeholderCreated,
+			Email:                      chef.User.Email,
+			Phone:                      chef.User.Phone,
+			LegalName:                  chef.BusinessName,
+			ContactName:                contactName,
+			BusinessType:               "individual",
+			Account: services.SettlementAccount{
+				BeneficiaryName: req.BankAccountName,
+				AccountNumber:   req.BankAccountNumber,
+				IFSC:            req.BankIFSC,
+			},
+		})
+
+		// RegisterSettlementAccount returns whatever it managed to create
+		// even on a partial failure (e.g. the account exists but the
+		// product request failed) — persist it regardless of settlementErr,
+		// or a retry mints a duplicate account instead of resuming.
+		if settlementResult != nil {
+			reqJSON, jErr := json.Marshal(settlementResult.Requirements)
+			if jErr != nil {
+				log.Printf("payout-settlement: failed to marshal requirements for vendor %s: %v", vendorID, jErr)
+				services.CaptureBackgroundError(jErr)
+				reqJSON = []byte("[]")
+			}
+			settlementUpdates := map[string]any{
+				"razorpay_account_id":              settlementResult.AccountID,
+				"razorpay_product_id":              settlementResult.ProductID,
+				"razorpay_stakeholder_created":     settlementResult.StakeholderCreated,
+				"razorpay_settlement_status":       settlementResult.ActivationStatus,
+				"razorpay_settlement_requirements": string(reqJSON),
+			}
+			if uErr := tx.Model(&models.ChefProfile{}).Where("id = ?", chef.ID).Updates(settlementUpdates).Error; uErr != nil {
+				log.Printf("payout-settlement: failed to persist settlement result for vendor %s: %v", vendorID, uErr)
+				services.CaptureBackgroundError(uErr)
+			} else {
+				chef.RazorpayAccountID = settlementResult.AccountID
+				chef.RazorpayProductID = settlementResult.ProductID
+				chef.RazorpayStakeholderCreated = settlementResult.StakeholderCreated
+				chef.RazorpaySettlementStatus = settlementResult.ActivationStatus
+				chef.RazorpaySettlementRequirements = string(reqJSON)
+			}
+		} else if req.PayoutMethod != "bank_transfer" && chef.RazorpaySettlementStatus != "" {
+			// Switching away from bank transfer must not leave a stale
+			// "activated" status the automated release sweep trusts
+			// (BuildReleaseInput also independently requires
+			// payout_method=="bank_transfer" as defense in depth — review
+			// finding 2). razorpay_account_id/razorpay_product_id are left
+			// intact so a later switch back to bank reuses them instead of
+			// minting a new linked account.
+			if uErr := tx.Model(&models.ChefProfile{}).Where("id = ?", chef.ID).
+				Update("razorpay_settlement_status", "").Error; uErr != nil {
+				log.Printf("payout-settlement: failed to clear stale settlement status for vendor %s: %v", vendorID, uErr)
+				services.CaptureBackgroundError(uErr)
+			} else {
+				chef.RazorpaySettlementStatus = ""
+			}
+		}
+
+		return nil
+	})
+
+	if txErr != nil {
+		if errors.Is(txErr, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save payout details"})
 		return
 	}
 
-	log.Printf("Payout details saved for vendor %s (method: %s)", vendorID, req.PayoutMethod)
-
-	// Store sensitive fields in GCP Secret Manager asynchronously
-	// (Secret Manager creation can take several seconds on first call)
-	go func() {
-		ctx := context.Background()
-		secretFields := map[string]string{
-			"bank-account-number": req.BankAccountNumber,
-			"bank-account-name":   req.BankAccountName,
-			"bank-ifsc":           req.BankIFSC,
-			"upi-id":              req.UpiID,
-		}
-		for field, value := range secretFields {
-			if value != "" {
-				if err := services.StoreVendorSecret(ctx, vendorID, field, value); err != nil {
-					log.Printf("Warning: failed to store secret %s for vendor %s: %v", field, vendorID, err)
-				}
-			}
-		}
-		log.Printf("Secrets stored in Secret Manager for vendor %s", vendorID)
-	}()
-
-	// Create Razorpay Route linked account asynchronously if not already created
-	razorpayConnected := chef.RazorpayAccountID != ""
-	if !razorpayConnected {
-		go func() {
-			rz := services.GetRazorpay()
-			if rz == nil {
-				return
-			}
-			contactName := chef.User.FirstName + " " + chef.User.LastName
-			linkedAcct, err := rz.CreateLinkedAccount(&services.LinkedAccountRequest{
-				Email:        chef.User.Email,
-				Phone:        chef.User.Phone,
-				LegalName:    chef.BusinessName,
-				BusinessType: "individual",
-				ContactName:  contactName,
-			})
-			if err != nil {
-				log.Printf("Failed to create Razorpay linked account for vendor %s", vendorID)
-				return
-			}
-			database.DB.Model(&models.ChefProfile{}).Where("id = ?", chef.ID).Update("razorpay_account_id", linkedAcct.ID)
-			log.Printf("Created Razorpay linked account for vendor %s", vendorID)
-		}()
+	settlementErrorCode := ""
+	switch {
+	case settlementErr == nil:
+		log.Printf("payout-settlement: registered vendor %s (account=%s status=%s)", vendorID, chef.RazorpayAccountID, chef.RazorpaySettlementStatus)
+	case errors.Is(settlementErr, services.ErrNoSettlementAccount):
+		// Expected for a chef who chose UPI — Route settles by NEFT/IMPS and
+		// has no VPA destination. Not a crash, but the response must not
+		// silently look like a payable account was configured.
+		settlementErrorCode = "upi_not_supported_for_route_settlement"
+		log.Printf("payout-settlement: vendor %s has no Route settlement destination (upi payout method)", vendorID)
+	default:
+		settlementErrorCode = "settlement_registration_failed"
+		log.Printf("payout-settlement: registration failed for vendor %s: %v", vendorID, settlementErr)
+		services.CaptureBackgroundError(settlementErr)
 	}
 
 	// Audit the payout change. NEVER store raw bank details in the audit row —
@@ -2223,14 +2347,20 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 	})
 
 	resp := gin.H{
-		"message":           "Payout details saved",
-		"payoutMethod":      chef.PayoutMethod,
-		"bankAccountName":   req.BankAccountName,
-		"bankAccountNumber": maskBankAccount(req.BankAccountNumber),
-		"bankIFSC":          req.BankIFSC,
-		"upiId":             maskEmail(req.UpiID),
-		"razorpayConnected": razorpayConnected,
-		"razorpayAccountId": maskID(chef.RazorpayAccountID),
+		"message":                  "Payout details saved",
+		"payoutMethod":             chef.PayoutMethod,
+		"bankAccountName":          req.BankAccountName,
+		"bankAccountNumber":        maskBankAccount(req.BankAccountNumber),
+		"bankIFSC":                 req.BankIFSC,
+		"upiId":                    maskEmail(req.UpiID),
+		"razorpayConnected":        chef.RazorpayAccountID != "",
+		"razorpayAccountId":        maskID(chef.RazorpayAccountID),
+		"razorpaySettlementStatus": chef.RazorpaySettlementStatus,
+	}
+	if settlementErrorCode != "" {
+		// Present even for the UPI case: the response must not read as an
+		// unqualified success when the chef has no way to be paid yet.
+		resp["razorpaySettlementError"] = settlementErrorCode
 	}
 
 	c.JSON(http.StatusOK, resp)

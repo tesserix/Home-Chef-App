@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/homechef/api/models"
 )
 
 // Earnings rate constants. Exported so every surface references the same
@@ -174,6 +176,35 @@ func (t *EarningsTotals) Add(e OrderEarnings) {
 	t.TDS += e.TDS
 	t.NetPayout += e.NetPayout
 	t.OrdersCount++
+}
+
+// ChefNetPayoutFor is the chef's actual Route/Transfer payout for an order: NET
+// of platform commission and TDS (#390). It is the SINGLE SOURCE OF TRUTH
+// shared by the Route split, the Stripe transfer, the FSSAI-withhold audit
+// (handlers/payment.go), and the payout release governor (services.BuildReleaseInput,
+// #741) — moved here from handlers/payment.go's private chefNetPayout so all
+// four read the identical figure and can never drift. It equals
+// ComputeOrderEarnings(order).NetPayout, the exact number on the settlement
+// statement.
+//
+//	gross = Subtotal + Tax + ChefTip (less any chef-funded promo the chef bears);
+//	net   = gross − commission − TDS.
+//
+// The commission rate is read from the FROZEN order.CommissionRate (stamped at
+// checkout), so a mid-flight admin rate change cannot make the statement disagree
+// with a transfer already sent. A legacy 0 falls back to DefaultCommissionRate
+// inside ComputeOrderEarnings. Delivery is the DRIVER's money and is excluded.
+// Requires order.Chef preloaded (for the intra/inter-state GST state).
+func ChefNetPayoutFor(order *models.Order) float64 {
+	return ComputeOrderEarnings(EarningsInput{
+		ItemRevenue:        order.Subtotal,
+		Tax:                order.Tax,
+		ChefTip:            order.ChefTip,
+		DeliveryFee:        order.DeliveryFee,
+		ChefFundedDiscount: order.ChefFundedDiscount,
+		DeliveryState:      order.DeliveryAddressState,
+		CommissionRate:     order.CommissionRate,
+	}, order.Chef.State).NetPayout
 }
 
 // Round normalises every accumulated total to 2dp.

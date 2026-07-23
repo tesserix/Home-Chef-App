@@ -50,6 +50,9 @@ func cronJobs() []cronJob {
 		{"payout-auto-confirm", payoutAutoConfirmInterval, runPayoutAutoConfirmScan, StartPayoutAutoConfirmCron},
 		{"payout-reconcile", payoutReconcileInterval, runPayoutReconcileScan, StartPayoutReconcileCron},
 		{"cancellation-sweep", cancellationSweepInterval, runCancellationSweep, StartCancellationCron},
+		// #741 — release matured, unblocked order payouts. Gated by
+		// payout.sweep_enabled, which ships off.
+		{"payout-release", payoutReleaseInterval, runPayoutReleaseSweep, StartPayoutReleaseCron},
 	}
 }
 

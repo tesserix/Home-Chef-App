@@ -238,6 +238,74 @@ func (h *AdminPayoutHandler) BulkReleasePayouts(c *gin.Context) {
 	})
 }
 
+// payoutAutomationReq is the body for SetPayoutAutomation.
+type payoutAutomationReq struct {
+	Value string `json:"value"`
+}
+
+// SetPayoutAutomation switches a chef's payout automation on or off.
+//
+// Validated against the three legal values: an unrecognised string would be
+// read back as "follow the default", silently re-enabling a chef an admin
+// deliberately suspended (#747).
+func (h *AdminPayoutHandler) SetPayoutAutomation(c *gin.Context) {
+	var req payoutAutomationReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	switch req.Value {
+	case services.PayoutAutoOn, services.PayoutAutoOff, "":
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "value must be on, off or empty"})
+		return
+	}
+
+	chefID, ok := parsePayoutID(c)
+	if !ok {
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID.String()).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chef not found"})
+		return
+	}
+	old := chef.PayoutAutoRelease
+	if err := database.DB.Model(&chef).Update("payout_auto_release", req.Value).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
+		return
+	}
+
+	services.LogAudit(c, "chef.payout.automation", "chef", chefID.String(),
+		gin.H{"payoutAutoRelease": old}, gin.H{"payoutAutoRelease": req.Value})
+	c.JSON(http.StatusOK, gin.H{"payoutAutoRelease": req.Value})
+}
+
+// GetBlockedChefs lists chefs who cannot currently be paid, with Razorpay's
+// own requirements so the blockage is actionable rather than merely visible
+// (#747).
+func (h *AdminPayoutHandler) GetBlockedChefs(c *gin.Context) {
+	var chefs []models.ChefProfile
+	if err := database.DB.
+		Where("razorpay_settlement_status IS NULL OR razorpay_settlement_status <> ?", "activated").
+		Find(&chefs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load"})
+		return
+	}
+
+	out := make([]gin.H, 0, len(chefs))
+	for _, ch := range chefs {
+		out = append(out, gin.H{
+			"chefId":            ch.ID,
+			"businessName":      ch.BusinessName,
+			"settlementStatus":  ch.RazorpaySettlementStatus,
+			"requirements":      ch.RazorpaySettlementRequirements,
+			"payoutAutoRelease": ch.PayoutAutoRelease,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"chefs": out})
+}
+
 // resolveBulkItems returns the explicit items, or (when none are given but a
 // `before` cutoff is) the currently eligible holds older than that cutoff.
 func (h *AdminPayoutHandler) resolveBulkItems(req bulkReleaseReq) []bulkItem {
