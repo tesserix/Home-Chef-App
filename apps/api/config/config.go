@@ -81,6 +81,11 @@ type Config struct {
 
 	// NATS
 	NATSURL string
+	// NATSCreds is the path to a NATS user credentials (.creds) file. Empty for
+	// anonymous connections (current default); set once the cluster enforces
+	// operator/JWT auth so this service authenticates as its account. See
+	// Home-Chef-App#758.
+	NATSCreds string
 	// NATSStreamReplicas is the JetStream stream replica factor. 1 for local /
 	// single-node dev; set to 3 in prod (3-node JetStream HA cluster).
 	NATSStreamReplicas int
@@ -317,6 +322,7 @@ func Load() {
 
 		// NATS
 		NATSURL:             getEnv("NATS_URL", "nats://localhost:4222"),
+		NATSCreds:           getEnv("NATS_CREDS", ""),
 		NATSStreamReplicas:  getEnvInt("NATS_STREAM_REPLICAS", 1),
 		OutboxRelayInterval: time.Duration(getEnvInt("OUTBOX_RELAY_INTERVAL_MS", 1000)) * time.Millisecond,
 		OutboxBatchSize:     getEnvInt("OUTBOX_BATCH_SIZE", 100),

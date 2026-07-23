@@ -193,6 +193,13 @@ func (n *NATSClient) Connect() error {
 		}),
 	}
 
+	// Authenticate with account credentials when the cluster enforces
+	// operator/JWT auth (Home-Chef-App#758). Empty until then → anonymous.
+	if creds := config.AppConfig.NATSCreds; creds != "" {
+		opts = append(opts, nats.UserCredentials(creds))
+		log.Printf("NATS using credentials file %s", creds)
+	}
+
 	conn, err := nats.Connect(config.AppConfig.NATSURL, opts...)
 	if err != nil {
 		return err
