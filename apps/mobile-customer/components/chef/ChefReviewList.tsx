@@ -49,10 +49,13 @@ function ReviewerAvatar({ name, avatarUrl }: ReviewerAvatarProps) {
   const initial = (name || 'C').trim().charAt(0).toUpperCase() || 'C';
   if (avatarUrl) {
     return (
+      // surface-soft backgroundColor (on the Image itself) + blurhash
+      // placeholder — no blank flash before the 150ms fade-in (R2).
       <Image
         source={{ uri: avatarUrl }}
         style={styles.avatarPhoto}
         contentFit="cover"
+        placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
         transition={150}
         accessibilityElementsHidden
       />
@@ -102,12 +105,21 @@ function ReviewRow({ review }: ReviewRowProps) {
 
 export interface ChefReviewListProps {
   chefId: string;
+  /**
+   * Whether rows should play their entrance stagger on this mount. Defaults
+   * to true (the standalone `/chef/reviews/[id]` route always wants it on
+   * its one-and-only mount). The chef-detail Reviews tab remounts this list
+   * every time the tab is revealed (conditional render) — pass `false` after
+   * the first reveal so revisiting the tab doesn't replay the stagger.
+   */
+  animateOnMount?: boolean;
 }
 
-export function ChefReviewList({ chefId }: ChefReviewListProps) {
+export function ChefReviewList({ chefId, animateOnMount = true }: ChefReviewListProps) {
   const { data, isLoading, isError } = useChefReviews(chefId);
   const reviews = data?.data ?? [];
   const reduceMotion = useReducedMotion();
+  const shouldAnimate = animateOnMount && !reduceMotion;
 
   if (isLoading) {
     return (
@@ -143,12 +155,12 @@ export function ChefReviewList({ chefId }: ChefReviewListProps) {
         <Animated.View
           key={review.id}
           entering={
-            reduceMotion
-              ? undefined
-              // §3.5: stagger steps 40-60ms, max 3 steps.
-              : FadeInDown.delay(Math.min(index, 2) * 60)
+            shouldAnimate
+              ? // §3.5: stagger steps 40-60ms, max 3 steps.
+                FadeInDown.delay(Math.min(index, 2) * 60)
                   .duration(250)
                   .easing(ENTRANCE_EASING)
+              : undefined
           }
         >
           <ReviewRow review={review} />
@@ -190,6 +202,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
+    // Neutral fill behind the photo so there's no blank flash before the
+    // blurhash placeholder/fade resolves (R2).
+    backgroundColor: customerColors.surface.soft,
   },
   avatarLetter: {
     width: 36,

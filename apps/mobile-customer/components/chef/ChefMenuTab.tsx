@@ -3,7 +3,7 @@
 // group-order secondary action at the bottom. Presentational: category state
 // and the startGroupOrder flow stay in the screen and come in as props.
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Users } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { MenuItem } from '../../types/customer';
@@ -58,26 +58,29 @@ export function ChefMenuTab({
                 accessibilityState={{ selected: activeCategory === cat }}
                 android_ripple={{ color: CHIP_RIPPLE }}
               >
-                {/* Inner View: visual styles here to dodge iOS Pressable bug */}
-                <View
-                  style={[
-                    styles.categoryChip,
-                    activeCategory === cat && styles.categoryChipActive,
-                  ]}
-                >
-                  <Text
+                {({ pressed }) => (
+                  // Inner View: visual styles here to dodge iOS Pressable bug
+                  <View
                     style={[
-                      styles.categoryChipLabel,
-                      activeCategory === cat && styles.categoryChipLabelActive,
+                      styles.categoryChip,
+                      activeCategory === cat && styles.categoryChipActive,
+                      pressed && Platform.OS === 'ios' && styles.categoryChipPressed,
                     ]}
                   >
-                    {cat}
-                  </Text>
-                  {/* 2px underline for selected (Airbnb category bar) */}
-                  {activeCategory === cat ? (
-                    <View style={styles.categoryChipUnderline} />
-                  ) : null}
-                </View>
+                    <Text
+                      style={[
+                        styles.categoryChipLabel,
+                        activeCategory === cat && styles.categoryChipLabelActive,
+                      ]}
+                    >
+                      {cat}
+                    </Text>
+                    {/* 2px underline for selected (Airbnb category bar) */}
+                    {activeCategory === cat ? (
+                      <View style={styles.categoryChipUnderline} />
+                    ) : null}
+                  </View>
+                )}
               </Pressable>
             ))}
           </ScrollView>
@@ -160,6 +163,10 @@ const styles = StyleSheet.create({
   },
   categoryChipActive: {
     // Underline drawn as a child View (see below)
+  },
+  // Opacity-only iOS press feedback (Android gets android_ripple instead).
+  categoryChipPressed: {
+    opacity: 0.6,
   },
   categoryChipLabel: {
     fontFamily: 'Inter-SemiBold',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatMoney } from '../../lib/format';
 import {
   ActivityIndicator,
@@ -161,6 +161,17 @@ export default function ChefDetailScreen() {
   const initialTab: ChefDetailTabKey =
     (tab === 'weekly' && TIFFIN_ENABLED) || tab === 'reviews' ? tab : 'menu';
   const [activeTab, setActiveTab] = useState<ChefDetailTabKey>(initialTab);
+
+  // The Reviews tab's content is conditionally rendered (unmounts when the
+  // user switches away), so ChefReviewList remounts — and its entrance
+  // stagger would replay — every time the tab is revisited. Track whether
+  // it's already been revealed once so only the FIRST reveal animates.
+  const reviewsRevealedRef = useRef(false);
+  useEffect(() => {
+    if (activeTab === 'reviews') {
+      reviewsRevealedRef.current = true;
+    }
+  }, [activeTab]);
 
   const filteredItems = activeCategory
     ? menuItems.filter((item) => (item.category ?? 'Other') === activeCategory)
@@ -554,7 +565,11 @@ export default function ChefDetailScreen() {
             {/* ── REVIEWS TAB ── */}
             {activeTab === 'reviews' ? (
               <View style={styles.reviewsPane}>
-                <ChefReviewList chefId={chef.id} />
+                {/* Only animate the very first reveal — see reviewsRevealedRef. */}
+                <ChefReviewList
+                  chefId={chef.id}
+                  animateOnMount={!reviewsRevealedRef.current}
+                />
               </View>
             ) : null}
           </Animated.View>
