@@ -122,6 +122,29 @@ bounce/elastic if found.
 **R12 — No new hex literals in screens.** Colors trace to tokens (customer: NativeWind classes
 / `customerColors`; vendor: `theme`). Exceptions already sanctioned by the June specs stay.
 
+**R13 — Zero-flicker rule (owner escalation 2026-07-24: "lots of flickers and blips").**
+Every task must leave its screens flicker-free; the classic RN causes to hunt and fix:
+- **Refetch flash:** React Query screens must not flash a skeleton/empty state when data is
+  already cached (focus refetch, param change). Use `placeholderData: keepPreviousData` /
+  render stale-while-revalidating; skeletons appear only on true first load.
+- **Entrance re-fire:** Reanimated `entering` animations must run once per MOUNT, never
+  re-fire on re-render/refetch (key them stably; never key list rows by index).
+- **Image pop-in:** every remote image has a placeholder (blurhash or surface tint) + ≤150ms
+  fade; never a white/grey flash then pop.
+- **Layout jump:** loading→content must not shift layout (reserve heights: skeletons match
+  final row geometry; buttons keep width when loading — Task 1's Button already does).
+- **State rehydration blink:** screens reading persisted stores (cart, auth) must not render
+  the empty state for one frame before hydration; gate on hydration where the store exposes it.
+- Dev-only overlays (Metro LogBox toasts) are NOT product flickers — ignore them, but never
+  cause new console warnings that summon them.
+
+**R14 — Journey smoothing (owner: "smarter user journey").** Within refinement scope
+(client-only, zero backend): every flow's next-step is one obvious tap — post-payment lands on
+order tracking CTA; validation errors scroll-to-first-error with focus; forms pre-select the
+only/default option (address, fulfilment); collapse secondary detail (fee breakdowns) behind
+a disclosure; destructive/irreversible actions confirm via branded Sheet, transient
+confirmations never block (toast, not Alert). Bigger journey features stay in the backlog doc.
+
 ## 5. Screen-specific mandates (observed defects to fix)
 
 Customer:

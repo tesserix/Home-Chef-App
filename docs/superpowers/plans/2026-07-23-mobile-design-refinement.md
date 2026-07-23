@@ -252,7 +252,7 @@ error association, decorative images `accessible={false}`; (c) touch-target audi
 (d) motion audit — every Reanimated/Animated usage gated by reduced-motion, durations within
 §3.5 bands, no layout-property animation, no bounce easings anywhere
 (`grep -rn "bounce\|elastic\|overshoot"`); (e) tabular-numeral audit on ₹/ETA/counts;
-(f) `console.log` leftovers in touched trees removed. Produce a short report of what was
+(f) `console.log` leftovers in touched trees removed; (g) R13 flicker audit — grep both apps for React Query list/detail screens missing `placeholderData`/stale-render handling, `entering` animations keyed by index or re-firing on data change, remote images without placeholder+fade, and persisted-store screens rendering empty pre-hydration — fix what you find; (h) R14 spot-audit — validation-error scroll/focus present on the big forms (checkout, menu item form, onboarding). Produce a short report of what was
 fixed in the task report file.
 
 **Verify:** Global gates in both apps.
