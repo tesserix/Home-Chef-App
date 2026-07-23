@@ -126,6 +126,10 @@ export default function LoginPage() {
     <LoginScreen
       title="Welcome back"
       accent={customerColors.coral.DEFAULT}
+      // THE SPEC §2 AA micro-adjustment: link text uses coral-pressed
+      // (#E00B41), not the coral fill (#FF385C), which fails AA at link/body
+      // text size. Fills (CTA, focus rings) stay coral via `accent` above.
+      linkColor={customerColors.coral.pressed}
       onLogin={async ({ email, password }) => {
         await signInWithEmail(email, password);
         const response = await completeBFFLogin();

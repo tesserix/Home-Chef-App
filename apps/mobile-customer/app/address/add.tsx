@@ -44,10 +44,30 @@ const schema = z.object({
   pincode: z.string().regex(/^\d{6}$/, 'Enter a valid 6-digit pincode'),
 });
 
+// Android ripple tints — translucent tokens derived from existing colours,
+// never a new literal colour (matches the ChefCard `withAlpha` convention).
+const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CTA_RIPPLE = `${customerColors.canvas}33`;
+
+type AddressField = 'search' | 'addressLine2' | 'addressLine1' | 'city' | 'state' | 'pincode';
+
+// 2px coral focus ring (falls back to the destructive border on error),
+// matching the Input primitive's focus treatment (Task 1).
+function fieldBorderStyle(hasError: boolean, isFocused: boolean) {
+  if (hasError) {
+    return { borderWidth: 1.5, borderColor: customerColors.destructive.DEFAULT };
+  }
+  if (isFocused) {
+    return { borderWidth: 2, borderColor: customerColors.coral.DEFAULT };
+  }
+  return { borderWidth: 0, borderColor: 'transparent' };
+}
+
 type AddressForm = z.infer<typeof schema>;
 
 export default function AddAddressScreen() {
   const createAddress = useCreateAddress();
+  const [focusedField, setFocusedField] = useState<AddressField | null>(null);
 
   const {
     control,
@@ -119,6 +139,8 @@ export default function AddAddressScreen() {
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Go back"
+          hitSlop={8}
+          android_ripple={{ color: ROW_RIPPLE, borderless: true, radius: 20 }}
         >
           <View className="p-1">
             <ChevronLeft size={24} color={customerColors.charcoal.DEFAULT} />
@@ -150,7 +172,10 @@ export default function AddAddressScreen() {
           </View>
 
           {/* ── Address autocomplete (Photon/OpenStreetMap) ── */}
-          <View className="flex-row items-center bg-surface-soft rounded-lg px-4 mb-2 gap-2">
+          <View
+            className="flex-row items-center bg-surface-soft rounded-lg px-4 mb-2 gap-2"
+            style={fieldBorderStyle(false, focusedField === 'search')}
+          >
             <Search size={18} color={customerColors.charcoal.soft} />
             <TextInput
               className="flex-1 h-12 text-base text-charcoal"
@@ -161,6 +186,8 @@ export default function AddAddressScreen() {
                 setAddressQuery(t);
                 setShowSuggestions(true);
               }}
+              onFocus={() => setFocusedField('search')}
+              onBlur={() => setFocusedField(null)}
               autoCapitalize="words"
               autoCorrect={false}
               returnKeyType="search"
@@ -179,16 +206,19 @@ export default function AddAddressScreen() {
                   onPress={() => pickSuggestion(s)}
                   accessibilityRole="button"
                   accessibilityLabel={`Use address ${s.description}`}
+                  android_ripple={{ color: ROW_RIPPLE, borderless: false }}
                 >
-                  <View
-                    className={`px-4 py-3 ${
-                      i < suggestions.length - 1 ? 'border-b border-hairline' : ''
-                    }`}
-                  >
-                    <Text className="text-sm text-charcoal leading-5" numberOfLines={2}>
-                      {s.description}
-                    </Text>
-                  </View>
+                  {({ pressed }) => (
+                    <View
+                      className={`px-4 py-3 min-h-[44px] justify-center ${
+                        i < suggestions.length - 1 ? 'border-b border-hairline' : ''
+                      } ${pressed && Platform.OS === 'ios' ? 'bg-surface-soft' : ''}`}
+                    >
+                      <Text className="text-sm text-charcoal leading-5" numberOfLines={2}>
+                        {s.description}
+                      </Text>
+                    </View>
+                  )}
                 </Pressable>
               ))}
             </View>
@@ -204,9 +234,14 @@ export default function AddAddressScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-4"
+                style={fieldBorderStyle(false, focusedField === 'addressLine2')}
                 placeholder="e.g. Flat 402, B-Wing"
                 placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
+                onFocus={() => setFocusedField('addressLine2')}
+                onBlur={() => {
+                  setFocusedField(null);
+                  onBlur();
+                }}
                 onChangeText={onChange}
                 value={value}
                 autoCapitalize="words"
@@ -226,15 +261,14 @@ export default function AddAddressScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={{
-                  borderWidth: errors.addressLine1 ? 1.5 : 0,
-                  borderColor: errors.addressLine1
-                    ? customerColors.destructive.DEFAULT
-                    : 'transparent',
-                }}
+                style={fieldBorderStyle(Boolean(errors.addressLine1), focusedField === 'addressLine1')}
                 placeholder="House no., street, area"
                 placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
+                onFocus={() => setFocusedField('addressLine1')}
+                onBlur={() => {
+                  setFocusedField(null);
+                  onBlur();
+                }}
                 onChangeText={(t) => {
                   // Manual edit invalidates the picked-suggestion geocode.
                   onChange(t);
@@ -263,15 +297,14 @@ export default function AddAddressScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={{
-                  borderWidth: errors.city ? 1.5 : 0,
-                  borderColor: errors.city
-                    ? customerColors.destructive.DEFAULT
-                    : 'transparent',
-                }}
+                style={fieldBorderStyle(Boolean(errors.city), focusedField === 'city')}
                 placeholder="Enter your city"
                 placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
+                onFocus={() => setFocusedField('city')}
+                onBlur={() => {
+                  setFocusedField(null);
+                  onBlur();
+                }}
                 onChangeText={onChange}
                 value={value}
                 autoCapitalize="words"
@@ -294,15 +327,14 @@ export default function AddAddressScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={{
-                  borderWidth: errors.state ? 1.5 : 0,
-                  borderColor: errors.state
-                    ? customerColors.destructive.DEFAULT
-                    : 'transparent',
-                }}
+                style={fieldBorderStyle(Boolean(errors.state), focusedField === 'state')}
                 placeholder="Enter your state"
                 placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
+                onFocus={() => setFocusedField('state')}
+                onBlur={() => {
+                  setFocusedField(null);
+                  onBlur();
+                }}
                 onChangeText={onChange}
                 value={value}
                 autoCapitalize="words"
@@ -325,15 +357,14 @@ export default function AddAddressScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={{
-                  borderWidth: errors.pincode ? 1.5 : 0,
-                  borderColor: errors.pincode
-                    ? customerColors.destructive.DEFAULT
-                    : 'transparent',
-                }}
+                style={fieldBorderStyle(Boolean(errors.pincode), focusedField === 'pincode')}
                 placeholder="6-digit pincode"
                 placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
+                onFocus={() => setFocusedField('pincode')}
+                onBlur={() => {
+                  setFocusedField(null);
+                  onBlur();
+                }}
                 onChangeText={onChange}
                 value={value}
                 keyboardType="numeric"
@@ -355,6 +386,7 @@ export default function AddAddressScreen() {
             disabled={createAddress.isPending}
             accessibilityRole="button"
             accessibilityLabel="Save address"
+            android_ripple={{ color: CTA_RIPPLE, borderless: false }}
           >
             <View
               className={`rounded-lg min-h-[52px] items-center justify-center mt-4 bg-coral ${

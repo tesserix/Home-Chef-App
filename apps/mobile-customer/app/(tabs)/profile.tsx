@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   Text,
   TextInput,
@@ -68,6 +69,13 @@ const CUISINE_OPTIONS = [
   'Street Food',
 ];
 
+// Android ripple tints — translucent tokens derived from existing colours,
+// never a new literal colour (matches the ChefCard `withAlpha` convention).
+const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CTA_RIPPLE = `${customerColors.canvas}33`;
+const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const DESTRUCTIVE_RIPPLE = `${customerColors.destructive.DEFAULT}14`;
+
 // ─── Section label (iOS grouped style) ───────────────────────────────────────
 
 function SectionLabel({ children }: { children: string }) {
@@ -89,9 +97,14 @@ interface NavRowProps {
   isLast?: boolean;
 }
 
-function NavRow({ icon, label, onPress, isLast = false }: NavRowProps) {
+function NavRow({ icon, label, onPress }: NavRowProps) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+    >
       {({ pressed }) => (
         <View
           className={`flex-row items-center px-4 py-3 min-h-[52px] ${pressed ? 'bg-surface-soft' : 'bg-canvas'}`}
@@ -129,6 +142,10 @@ export default function ProfileScreen() {
   // hidden for them. Read once on mount — providerData is stable for the
   // session and the user is already authenticated on this screen.
   const [canChangePassword] = useState(() => hasPasswordProvider());
+
+  // Visible 2px coral focus ring on the inline-edit fields below (R9 / Input
+  // parity) — which field (if any) currently has focus.
+  const [focusedField, setFocusedField] = useState<'firstName' | 'lastName' | 'phone' | null>(null);
 
   // The API returns the profile FLAT (no { data } envelope), so read it directly.
   const profile = data;
@@ -314,10 +331,20 @@ export default function ProfileScreen() {
               render={({ field: { onChange, value, onBlur } }) => (
                 <TextInput
                   className="text-base text-charcoal bg-transparent pb-2"
-                  style={{ borderBottomWidth: errors.firstName ? 1 : 0, borderBottomColor: customerColors.destructive.DEFAULT }}
+                  style={
+                    errors.firstName
+                      ? { borderBottomWidth: 1, borderBottomColor: customerColors.destructive.DEFAULT }
+                      : focusedField === 'firstName'
+                        ? { borderBottomWidth: 2, borderBottomColor: customerColors.coral.DEFAULT }
+                        : { borderBottomWidth: 0 }
+                  }
                   value={value}
                   onChangeText={onChange}
-                  onBlur={onBlur}
+                  onFocus={() => setFocusedField('firstName')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
                   placeholder="First name"
                   placeholderTextColor={customerColors.charcoal.soft}
                   autoCapitalize="words"
@@ -343,10 +370,20 @@ export default function ProfileScreen() {
               render={({ field: { onChange, value, onBlur } }) => (
                 <TextInput
                   className="text-base text-charcoal bg-transparent pb-2"
-                  style={{ borderBottomWidth: errors.lastName ? 1 : 0, borderBottomColor: customerColors.destructive.DEFAULT }}
+                  style={
+                    errors.lastName
+                      ? { borderBottomWidth: 1, borderBottomColor: customerColors.destructive.DEFAULT }
+                      : focusedField === 'lastName'
+                        ? { borderBottomWidth: 2, borderBottomColor: customerColors.coral.DEFAULT }
+                        : { borderBottomWidth: 0 }
+                  }
                   value={value}
                   onChangeText={onChange}
-                  onBlur={onBlur}
+                  onFocus={() => setFocusedField('lastName')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
                   placeholder="Last name"
                   placeholderTextColor={customerColors.charcoal.soft}
                   autoCapitalize="words"
@@ -372,10 +409,20 @@ export default function ProfileScreen() {
               render={({ field: { onChange, value, onBlur } }) => (
                 <TextInput
                   className="text-base text-charcoal bg-transparent pb-2"
-                  style={{ borderBottomWidth: errors.phone ? 1 : 0, borderBottomColor: customerColors.destructive.DEFAULT }}
+                  style={
+                    errors.phone
+                      ? { borderBottomWidth: 1, borderBottomColor: customerColors.destructive.DEFAULT }
+                      : focusedField === 'phone'
+                        ? { borderBottomWidth: 2, borderBottomColor: customerColors.coral.DEFAULT }
+                        : { borderBottomWidth: 0 }
+                  }
                   value={value ?? ''}
                   onChangeText={onChange}
-                  onBlur={onBlur}
+                  onFocus={() => setFocusedField('phone')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
                   placeholder="+91 9876543210"
                   placeholderTextColor={customerColors.charcoal.soft}
                   keyboardType="phone-pad"
@@ -396,6 +443,7 @@ export default function ProfileScreen() {
             disabled={updateProfile.isPending}
             accessibilityRole="button"
             accessibilityLabel="Save changes"
+            android_ripple={{ color: CTA_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
               <View
@@ -432,20 +480,24 @@ export default function ProfileScreen() {
                   accessibilityRole="checkbox"
                   accessibilityLabel={cuisine}
                   accessibilityState={{ checked: isSelected }}
+                  android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
                 >
-                  <View
-                    className={`px-4 py-2 rounded-full ${
-                      isSelected ? 'bg-coral-tint' : 'bg-surface-soft'
-                    }`}
-                  >
-                    <Text
-                      className={`text-sm font-medium ${
-                        isSelected ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                  {({ pressed }) => (
+                    <View
+                      className={`px-4 py-2 rounded-full ${
+                        isSelected ? 'bg-coral-tint' : 'bg-surface-soft'
                       }`}
+                      style={pressed && Platform.OS === 'ios' ? { opacity: 0.7 } : undefined}
                     >
-                      {cuisine}
-                    </Text>
-                  </View>
+                      <Text
+                        className={`text-sm font-medium ${
+                          isSelected ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                        }`}
+                      >
+                        {cuisine}
+                      </Text>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
@@ -459,6 +511,7 @@ export default function ProfileScreen() {
             disabled={updateProfile.isPending}
             accessibilityRole="button"
             accessibilityLabel="Save preferences"
+            android_ripple={{ color: CTA_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
               <View
@@ -494,20 +547,24 @@ export default function ProfileScreen() {
                   accessibilityRole="checkbox"
                   accessibilityLabel={opt.label}
                   accessibilityState={{ checked: isSelected }}
+                  android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
                 >
-                  <View
-                    className={`px-4 py-2 rounded-full ${
-                      isSelected ? 'bg-coral-tint' : 'bg-surface-soft'
-                    }`}
-                  >
-                    <Text
-                      className={`text-sm font-medium ${
-                        isSelected ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                  {({ pressed }) => (
+                    <View
+                      className={`px-4 py-2 rounded-full ${
+                        isSelected ? 'bg-coral-tint' : 'bg-surface-soft'
                       }`}
+                      style={pressed && Platform.OS === 'ios' ? { opacity: 0.7 } : undefined}
                     >
-                      {opt.label}
-                    </Text>
-                  </View>
+                      <Text
+                        className={`text-sm font-medium ${
+                          isSelected ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                        }`}
+                      >
+                        {opt.label}
+                      </Text>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
@@ -524,20 +581,24 @@ export default function ProfileScreen() {
                   accessibilityRole="checkbox"
                   accessibilityLabel={opt.label}
                   accessibilityState={{ checked: isSelected }}
+                  android_ripple={{ color: DESTRUCTIVE_RIPPLE, borderless: false }}
                 >
-                  <View
-                    className={`px-4 py-2 rounded-full ${
-                      isSelected ? 'bg-destructive-tint' : 'bg-surface-soft'
-                    }`}
-                  >
-                    <Text
-                      className={`text-sm font-medium ${
-                        isSelected ? 'text-destructive font-semibold' : 'text-charcoal-soft'
+                  {({ pressed }) => (
+                    <View
+                      className={`px-4 py-2 rounded-full ${
+                        isSelected ? 'bg-destructive-tint' : 'bg-surface-soft'
                       }`}
+                      style={pressed && Platform.OS === 'ios' ? { opacity: 0.7 } : undefined}
                     >
-                      {opt.label}
-                    </Text>
-                  </View>
+                      <Text
+                        className={`text-sm font-medium ${
+                          isSelected ? 'text-destructive font-semibold' : 'text-charcoal-soft'
+                        }`}
+                      >
+                        {opt.label}
+                      </Text>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
@@ -550,6 +611,7 @@ export default function ProfileScreen() {
             disabled={updateProfile.isPending}
             accessibilityRole="button"
             accessibilityLabel="Save dietary profile"
+            android_ripple={{ color: CTA_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
               <View
@@ -716,6 +778,7 @@ export default function ProfileScreen() {
           onPress={handleLogout}
           accessibilityRole="button"
           accessibilityLabel="Log out"
+          android_ripple={{ color: DESTRUCTIVE_RIPPLE, borderless: false }}
         >
           {({ pressed }) => (
             <View

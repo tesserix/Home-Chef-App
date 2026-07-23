@@ -31,9 +31,16 @@ interface ForgotPasswordScreenProps {
   brand?: string;
   title?: string;
   subtitle?: string;
-  /** Optional accent colour for the primary CTA + links. Customer passes its
-   *  Airbnb coral; vendor/driver omit it and keep the ink palette. */
+  /** Optional accent colour for the primary CTA + Input focus ring. Customer
+   *  passes its Airbnb coral; vendor/driver omit it and keep the ink palette. */
   accent?: string;
+  /** Optional colour override for the "Back to sign in" text link only —
+   *  distinct from `accent` (CTA fill + Input focus ring). THE SPEC's AA
+   *  micro-adjustment: the customer's coral fill (#FF385C) reads ~3.9:1 at
+   *  link/body text size (fails AA), so the customer wrapper passes
+   *  `coral-pressed` (#E00B41, ~4.9:1) here. Also drops the underline when
+   *  set. Defaults to `accent` when omitted, so vendor/driver are unaffected. */
+  linkColor?: string;
 }
 
 export function ForgotPasswordScreen({
@@ -43,7 +50,9 @@ export function ForgotPasswordScreen({
   subtitle = "Enter your email and we'll send you a reset link",
   brand,
   accent,
+  linkColor,
 }: ForgotPasswordScreenProps) {
+  const resolvedLinkColor = linkColor ?? accent;
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const errorOpacity = useRef(new Animated.Value(0)).current;
@@ -161,6 +170,7 @@ export function ForgotPasswordScreen({
             onChangeText={onChange}
             value={value}
             error={errors.email?.message}
+            accentColor={accent}
           />
         )}
       />
@@ -178,7 +188,14 @@ export function ForgotPasswordScreen({
       {onNavigateToLogin ? (
         <View style={styles.backRow}>
           <Pressable onPress={onNavigateToLogin} hitSlop={8}>
-            <Text style={[styles.backText, accent ? { color: accent } : null]}>
+            <Text
+              style={[
+                styles.backText,
+                resolvedLinkColor
+                  ? { color: resolvedLinkColor, textDecorationLine: 'none' }
+                  : null,
+              ]}
+            >
               Back to sign in
             </Text>
           </Pressable>

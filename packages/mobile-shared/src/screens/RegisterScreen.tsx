@@ -80,9 +80,16 @@ interface RegisterScreenProps {
   brand?: string;
   title?: string;
   subtitle?: string;
-  /** Optional accent colour for the primary CTA + links. Customer passes its
-   *  Airbnb coral; vendor/driver omit it and keep the ink palette. */
+  /** Optional accent colour for the primary CTA + Input focus rings. Customer
+   *  passes its Airbnb coral; vendor/driver omit it and keep the ink palette. */
   accent?: string;
+  /** Optional colour override for the "Sign in" text link only — distinct
+   *  from `accent` (CTA fill + Input focus ring). THE SPEC's AA
+   *  micro-adjustment: the customer's coral fill (#FF385C) reads ~3.9:1 at
+   *  link/body text size (fails AA), so the customer wrapper passes
+   *  `coral-pressed` (#E00B41, ~4.9:1) here. Also drops the underline when
+   *  set. Defaults to `accent` when omitted, so vendor/driver are unaffected. */
+  linkColor?: string;
   /** ISO country for the phone rule (digit length + format). Defaults to India;
    *  a future market passes its own code. */
   phoneCountry?: string;
@@ -97,8 +104,10 @@ export function RegisterScreen({
   subtitle = 'A few details to get you cooking',
   brand,
   accent,
+  linkColor,
   phoneCountry = DEFAULT_PHONE_COUNTRY,
 }: RegisterScreenProps) {
+  const resolvedLinkColor = linkColor ?? accent;
   const [error, setError] = useState<string | null>(null);
   const errorOpacity = useRef(new Animated.Value(0)).current;
   const errorTranslate = useRef(new Animated.Value(-8)).current;
@@ -198,6 +207,7 @@ export function RegisterScreen({
                 onChangeText={onChange}
                 value={value}
                 error={errors.firstName?.message}
+                accentColor={accent}
               />
             )}
           />
@@ -215,6 +225,7 @@ export function RegisterScreen({
                 onChangeText={onChange}
                 value={value}
                 error={errors.lastName?.message}
+                accentColor={accent}
               />
             )}
           />
@@ -235,6 +246,7 @@ export function RegisterScreen({
             onChangeText={onChange}
             value={value}
             error={errors.email?.message}
+            accentColor={accent}
           />
         )}
       />
@@ -257,6 +269,7 @@ export function RegisterScreen({
             value={value ?? ''}
             error={errors.phone?.message}
             helper={`${phoneRule.dialCode} · ${phoneRule.length}-digit mobile. Only for order issues — never shared.`}
+            accentColor={accent}
           />
         )}
       />
@@ -275,6 +288,7 @@ export function RegisterScreen({
             onChangeText={onChange}
             value={value}
             error={errors.password?.message}
+            accentColor={accent}
           />
         )}
       />
@@ -313,6 +327,7 @@ export function RegisterScreen({
             onChangeText={onChange}
             value={value}
             error={errors.confirmPassword?.message}
+            accentColor={accent}
           />
         )}
       />
@@ -359,7 +374,14 @@ export function RegisterScreen({
           <Pressable onPress={onNavigateToLogin} hitSlop={8}>
             <Text style={styles.signinPrompt}>
               Already have an account?{' '}
-              <Text style={[styles.signinCTA, accent ? { color: accent } : null]}>
+              <Text
+                style={[
+                  styles.signinCTA,
+                  resolvedLinkColor
+                    ? { color: resolvedLinkColor, textDecorationLine: 'none' }
+                    : null,
+                ]}
+              >
                 Sign in
               </Text>
             </Text>

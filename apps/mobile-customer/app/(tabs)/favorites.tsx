@@ -1,121 +1,15 @@
 import React, { useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Image } from 'expo-image';
-import { Heart, ChefHat, Star, ChevronRight } from 'lucide-react-native';
+import { Heart, ChefHat } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { useFavorites, useToggleFavorite, useFavoriteDishes } from '../../hooks/useFavorites';
-import type { FavoriteChefEntry, FavoriteDishEntry } from '../../hooks/useFavorites';
-import type { Chef } from '../../types/customer';
-import { friendlyErrorMessage } from '../../lib/errors';
+import { useFavorites, useFavoriteDishes } from '../../hooks/useFavorites';
+import type { FavoriteDishEntry } from '../../hooks/useFavorites';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { ScreenTitle } from '../../components/shared/ScreenTitle';
 import { MenuItemCard } from '../../components/chef/MenuItemCard';
-
-// ─── Compact saved-chef row ──────────────────────────────────────────────────
-// The Saved tab is a shortlist, not a discovery feed, so it uses a dense
-// horizontal row (thumbnail + a line of metadata) rather than the big photo card
-// from Home — more chefs per screen, less scrolling, cleaner. The thumbnail is
-// the same chef image downscaled by expo-image, and the whole row taps through to
-// the full chef page.
-
-function SavedChefRow({
-  chef,
-  onUnsave,
-  unsaving,
-}: {
-  chef: Chef;
-  onUnsave: () => void;
-  unsaving: boolean;
-}) {
-  const router = useRouter();
-  const initial = (chef.name?.trim()[0] ?? '·').toUpperCase();
-
-  return (
-    <Pressable
-      onPress={() => router.push(`/chef/${chef.id}`)}
-      accessibilityRole="button"
-      accessibilityLabel={`View ${chef.name}`}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-    >
-      {/* Thumbnail — downscaled from the same image the chef page shows. */}
-      <View style={styles.thumb}>
-        {chef.imageUrl ? (
-          <Image
-            source={{ uri: chef.imageUrl }}
-            style={styles.thumbImg}
-            contentFit="cover"
-            transition={150}
-          />
-        ) : (
-          <View style={[styles.thumbImg, styles.thumbFallback]}>
-            <Text style={styles.thumbInitial}>{initial}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Metadata — name, rating, cuisine, open/min on one compact stack. */}
-      <View style={styles.meta}>
-        <Text style={styles.name} numberOfLines={1}>
-          {chef.name}
-        </Text>
-        <View style={styles.ratingRow}>
-          <Star size={12} color={customerColors.charcoal.DEFAULT} fill={customerColors.charcoal.DEFAULT} />
-          <Text style={styles.rating}>
-            {chef.rating.toFixed(1)}
-            {chef.reviewCount > 0 ? ` (${chef.reviewCount})` : ''}
-          </Text>
-          {chef.cuisine ? (
-            <>
-              <Text style={styles.dot}>·</Text>
-              <Text style={styles.cuisine} numberOfLines={1}>
-                {chef.cuisine}
-              </Text>
-            </>
-          ) : null}
-        </View>
-        <View style={styles.statusRow}>
-          <View
-            style={[
-              styles.openDot,
-              chef.isOpen ? styles.openDotOpen : styles.openDotClosed,
-            ]}
-          />
-          <Text style={styles.statusText}>
-            {chef.isOpen ? 'Open' : 'Closed'}
-            {chef.minimumOrder != null ? ` · Min ₹${chef.minimumOrder}` : ''}
-          </Text>
-        </View>
-      </View>
-
-      {/* Unsave — hitSlop keeps the 44px target without bloating the row. */}
-      <Pressable
-        onPress={onUnsave}
-        disabled={unsaving}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel={`Remove ${chef.name} from saved`}
-        style={styles.heartBtn}
-      >
-        <Heart
-          size={20}
-          color={customerColors.coral.DEFAULT}
-          fill={customerColors.coral.DEFAULT}
-        />
-      </Pressable>
-      <ChevronRight size={18} color={customerColors.charcoal.soft} />
-    </Pressable>
-  );
-}
+import { ChefGrid } from '../../components/chef/ChefGrid';
 
 // ─── Loading skeleton ────────────────────────────────────────────────────────
 
@@ -159,7 +53,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
     <View className="flex-1 items-center justify-center px-8 gap-4">
       <View className="w-16 h-16 rounded-full bg-surface-soft items-center justify-center">
-        <Heart size={28} color="#EBEBEB" />
+        <Heart size={28} color={customerColors.hairline} />
       </View>
       <Text className="text-lg font-semibold text-charcoal text-center font-display">
         Something went wrong
@@ -168,7 +62,12 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
         We could not load your saved chefs. Please try again.
       </Text>
       {/* Coral CTA — visual styles on inner View per iOS Pressable bug */}
-      <Pressable onPress={onRetry} accessibilityRole="button" accessibilityLabel="Retry loading favorites">
+      <Pressable
+        onPress={onRetry}
+        accessibilityRole="button"
+        accessibilityLabel="Retry loading favorites"
+        android_ripple={{ color: `${customerColors.canvas}33`, borderless: false }}
+      >
         <View className="bg-coral rounded-lg px-6 py-3 min-h-[44px] items-center justify-center">
           <Text className="text-canvas font-semibold text-sm">Try again</Text>
         </View>
@@ -185,7 +84,7 @@ function EmptyState() {
     <View className="flex-1 items-center justify-center px-8 gap-4 pt-16">
       {/* Surface-soft icon circle */}
       <View className="w-20 h-20 rounded-full bg-surface-soft items-center justify-center">
-        <ChefHat size={36} color="#717171" />
+        <ChefHat size={36} color={customerColors.charcoal.soft} />
       </View>
       <View className="items-center gap-2">
         <Text className="text-xl font-bold text-charcoal text-center font-display">
@@ -200,6 +99,7 @@ function EmptyState() {
         onPress={() => router.push('/(tabs)')}
         accessibilityRole="button"
         accessibilityLabel="Browse chefs"
+        android_ripple={{ color: `${customerColors.canvas}33`, borderless: false }}
       >
         <View className="bg-coral rounded-lg px-8 py-3 min-h-[44px] items-center justify-center mt-2">
           <Text className="text-canvas font-semibold text-base">Browse chefs</Text>
@@ -215,7 +115,7 @@ function EmptyDishesState() {
   return (
     <View className="flex-1 items-center justify-center px-8 gap-4 pt-16">
       <View className="w-20 h-20 rounded-full bg-surface-soft items-center justify-center">
-        <Heart size={34} color="#717171" />
+        <Heart size={34} color={customerColors.charcoal.soft} />
       </View>
       <View className="items-center gap-2">
         <Text className="text-xl font-bold text-charcoal text-center font-display">
@@ -229,6 +129,7 @@ function EmptyDishesState() {
         onPress={() => router.push('/(tabs)')}
         accessibilityRole="button"
         accessibilityLabel="Browse chefs"
+        android_ripple={{ color: `${customerColors.canvas}33`, borderless: false }}
       >
         <View className="bg-coral rounded-lg px-8 py-3 min-h-[44px] items-center justify-center mt-2">
           <Text className="text-canvas font-semibold text-base">Browse chefs</Text>
@@ -268,6 +169,7 @@ function FavoriteTabs({
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={`${s.label}${s.count != null ? `, ${s.count}` : ''}`}
+            android_ripple={{ color: `${customerColors.charcoal.DEFAULT}14`, borderless: false }}
           >
             {/* Dock language: active segment = coral-tint pill + coral text
                 (same DNA as the dock's active tab), not a solid coral block. */}
@@ -296,40 +198,8 @@ export default function FavoritesScreen() {
 
   const chefs = useFavorites();
   const dishes = useFavoriteDishes();
-  const toggleFavorite = useToggleFavorite();
-  // Optimistic local state — set of chef IDs currently being removed
-  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
 
-  function handleUnfavorite(chefId: string) {
-    setRemovingIds((prev) => new Set([...prev, chefId]));
-
-    toggleFavorite.mutate(
-      { chefId, isFavorited: true },
-      {
-        onError: (error) => {
-          setRemovingIds((prev) => {
-            const next = new Set(prev);
-            next.delete(chefId);
-            return next;
-          });
-          Alert.alert(
-            'Error',
-            friendlyErrorMessage(error, 'Could not remove from favorites. Please try again.'),
-          );
-        },
-        onSuccess: () => {
-          setRemovingIds((prev) => {
-            const next = new Set(prev);
-            next.delete(chefId);
-            return next;
-          });
-        },
-      },
-    );
-  }
-
-  const visibleEntries =
-    chefs.data?.data.filter((e) => !removingIds.has(e.chefId)) ?? [];
+  const chefEntries = chefs.data?.data ?? [];
   const dishEntries = dishes.data?.data ?? [];
 
   // First-load skeleton only for the active tab's query.
@@ -357,31 +227,20 @@ export default function FavoritesScreen() {
       {tab === 'chefs' ? (
         chefs.isError ? (
           <ErrorState onRetry={() => void chefs.refetch()} />
+        ) : chefEntries.length === 0 ? (
+          <EmptyState />
         ) : (
-          <FlatList<FavoriteChefEntry>
-            data={visibleEntries}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={
-              visibleEntries.length === 0
-                ? { flexGrow: 1 }
-                : { paddingTop: 8, paddingHorizontal: 16, paddingBottom: dockClearance }
-            }
-            ItemSeparatorComponent={() => <View style={styles.rowSep} />}
-            refreshControl={
-              <RefreshControl
-                refreshing={chefs.isRefetching}
-                onRefresh={() => void chefs.refetch()}
-                tintColor="#FF385C"
-              />
-            }
-            renderItem={({ item }) => (
-              <SavedChefRow
-                chef={item.chef}
-                onUnsave={() => handleUnfavorite(item.chefId)}
-                unsaving={removingIds.has(item.chefId)}
-              />
-            )}
-            ListEmptyComponent={<EmptyState />}
+          // Mirrors the Home ChefCard exactly — same 2-col grid component,
+          // so R1 "New" chip, R2 photo fallback, and the heart scale-pop all
+          // come free. The heart toggle lives inside ChefCard (useFavorites +
+          // useToggleFavorite) and invalidates ['favorites'], so unsaving a
+          // chef here removes it from the grid on the next render — no local
+          // optimistic-removal bookkeeping needed in this screen.
+          <ChefGrid
+            chefs={chefEntries.map((entry) => entry.chef)}
+            isLoading={false}
+            onRefresh={() => void chefs.refetch()}
+            isRefreshing={chefs.isRefetching}
           />
         )
       ) : dishes.isError ? (
@@ -399,7 +258,7 @@ export default function FavoritesScreen() {
             <RefreshControl
               refreshing={dishes.isRefetching}
               onRefresh={() => void dishes.refetch()}
-              tintColor="#FF385C"
+              tintColor={customerColors.coral.DEFAULT}
             />
           }
           renderItem={({ item }) => (
@@ -421,38 +280,3 @@ export default function FavoritesScreen() {
 function Header() {
   return <ScreenTitle title="Saved" />;
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-  },
-  rowPressed: { opacity: 0.6 },
-  rowSep: { height: StyleSheet.hairlineWidth, backgroundColor: customerColors.hairline },
-  thumb: { width: 72, height: 72, borderRadius: 12, overflow: 'hidden' },
-  thumbImg: { width: '100%', height: '100%' },
-  thumbFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: customerColors.surface.soft,
-  },
-  thumbInitial: {
-    fontFamily: 'Geist-Bold',
-    fontSize: 26,
-    color: customerColors.charcoal.soft,
-  },
-  meta: { flex: 1, gap: 3 },
-  name: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  rating: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.DEFAULT },
-  dot: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
-  cuisine: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, flexShrink: 1 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  openDot: { width: 7, height: 7, borderRadius: 4 },
-  openDotOpen: { backgroundColor: customerColors.success.DEFAULT },
-  openDotClosed: { backgroundColor: customerColors.charcoal.soft },
-  statusText: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft },
-  heartBtn: { padding: 2 },
-})

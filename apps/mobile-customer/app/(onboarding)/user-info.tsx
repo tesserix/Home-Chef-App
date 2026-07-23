@@ -29,6 +29,25 @@ const schema = z.object({
 
 type UserInfoForm = z.infer<typeof schema>;
 
+// Android ripple tints — translucent tokens derived from existing colours,
+// never a new literal colour (matches the ChefCard `withAlpha` convention).
+const CTA_RIPPLE = `${customerColors.canvas}33`;
+const GHOST_RIPPLE = `${customerColors.coral.DEFAULT}22`;
+
+type UserInfoField = 'firstName' | 'lastName' | 'phone';
+
+// 2px coral focus ring (falls back to the destructive border on error),
+// matching the Input primitive's focus treatment (Task 1).
+function fieldBorderStyle(hasError: boolean, isFocused: boolean) {
+  if (hasError) {
+    return { borderWidth: 1.5, borderColor: customerColors.destructive.DEFAULT };
+  }
+  if (isFocused) {
+    return { borderWidth: 2, borderColor: customerColors.coral.DEFAULT };
+  }
+  return { borderWidth: 0, borderColor: 'transparent' };
+}
+
 export default function UserInfoScreen() {
   // Prefill from whatever the user already gave at sign-up (email signup
   // captures name + phone into the auth store; social sign-up leaves them
@@ -51,9 +70,11 @@ export default function UserInfoScreen() {
   });
 
   const email = user?.email ?? '';
+  const [focusedField, setFocusedField] = useState<UserInfoField | null>(null);
   const [emailVerified, setEmailVerified] = useState(draft.emailVerified);
   const [otpSent, setOtpSent] = useState(false);
   const [code, setCode] = useState('');
+  const [codeFocused, setCodeFocused] = useState(false);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -148,15 +169,14 @@ export default function UserInfoScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={{
-                  borderWidth: errors.firstName ? 1.5 : 0,
-                  borderColor: errors.firstName
-                    ? customerColors.destructive.DEFAULT
-                    : 'transparent',
-                }}
+                style={fieldBorderStyle(Boolean(errors.firstName), focusedField === 'firstName')}
                 placeholder="Enter your first name"
                 placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
+                onFocus={() => setFocusedField('firstName')}
+                onBlur={() => {
+                  setFocusedField(null);
+                  onBlur();
+                }}
                 onChangeText={onChange}
                 value={value}
                 autoCapitalize="words"
@@ -183,15 +203,14 @@ export default function UserInfoScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={{
-                  borderWidth: errors.lastName ? 1.5 : 0,
-                  borderColor: errors.lastName
-                    ? customerColors.destructive.DEFAULT
-                    : 'transparent',
-                }}
+                style={fieldBorderStyle(Boolean(errors.lastName), focusedField === 'lastName')}
                 placeholder="Enter your last name"
                 placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
+                onFocus={() => setFocusedField('lastName')}
+                onBlur={() => {
+                  setFocusedField(null);
+                  onBlur();
+                }}
                 onChangeText={onChange}
                 value={value}
                 autoCapitalize="words"
@@ -218,15 +237,14 @@ export default function UserInfoScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={{
-                  borderWidth: errors.phone ? 1.5 : 0,
-                  borderColor: errors.phone
-                    ? customerColors.destructive.DEFAULT
-                    : 'transparent',
-                }}
+                style={fieldBorderStyle(Boolean(errors.phone), focusedField === 'phone')}
                 placeholder="10-digit mobile number"
                 placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
+                onFocus={() => setFocusedField('phone')}
+                onBlur={() => {
+                  setFocusedField(null);
+                  onBlur();
+                }}
                 onChangeText={onChange}
                 value={value}
                 keyboardType="phone-pad"
@@ -257,7 +275,13 @@ export default function UserInfoScreen() {
 
           {!emailVerified &&
             (!otpSent ? (
-              <Pressable onPress={() => void sendCode()} disabled={sending || !email}>
+              <Pressable
+                onPress={() => void sendCode()}
+                disabled={sending || !email}
+                accessibilityRole="button"
+                accessibilityLabel="Send verification code"
+                android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
+              >
                 {({ pressed }) => (
                   <View
                     className={`rounded-lg min-h-[44px] items-center justify-center mt-2 mb-4 border border-coral ${
@@ -277,10 +301,13 @@ export default function UserInfoScreen() {
                 </Text>
                 <TextInput
                   className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal tracking-[8px] mb-2"
+                  style={fieldBorderStyle(false, codeFocused)}
                   placeholder="000000"
                   placeholderTextColor={customerColors.charcoal.soft}
                   value={code}
                   onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+                  onFocus={() => setCodeFocused(true)}
+                  onBlur={() => setCodeFocused(false)}
                   keyboardType="number-pad"
                   maxLength={6}
                   accessibilityLabel="Verification code"
@@ -288,6 +315,9 @@ export default function UserInfoScreen() {
                 <Pressable
                   onPress={() => void confirmCode()}
                   disabled={verifying || code.length !== 6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Verify code"
+                  android_ripple={{ color: CTA_RIPPLE, borderless: false }}
                 >
                   {({ pressed }) => (
                     <View
@@ -304,7 +334,11 @@ export default function UserInfoScreen() {
                 <Pressable
                   onPress={() => void sendCode()}
                   disabled={cooldown > 0 || sending}
-                  className="mt-2 items-center"
+                  accessibilityRole="button"
+                  accessibilityLabel={cooldown > 0 ? `Resend code in ${cooldown} seconds` : 'Resend code'}
+                  hitSlop={8}
+                  className="mt-2 items-center min-h-[44px] justify-center"
+                  android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
                 >
                   <Text className="text-[13px] text-charcoal-soft">
                     {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
@@ -319,6 +353,7 @@ export default function UserInfoScreen() {
             onPress={() => void handleSubmit(onSubmit)()}
             accessibilityRole="button"
             accessibilityLabel="Continue to address"
+            android_ripple={{ color: CTA_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
               <View
