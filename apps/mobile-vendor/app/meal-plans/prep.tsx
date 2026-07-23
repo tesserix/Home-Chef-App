@@ -50,7 +50,7 @@ function VariantDot({ variant }: { variant: 'veg' | 'nonveg' }) {
 
 export default function PrepScreen() {
   const [date, setDate] = useState(DAYS[1]!.value); // default tomorrow
-  const { data, isLoading, refetch, isRefetching } = usePrepManifest(date);
+  const { data, isLoading, isError, refetch, isRefetching } = usePrepManifest(date);
   const mark = useMarkPrepared();
 
   const manifest = data?.manifest ?? [];
@@ -71,7 +71,13 @@ export default function PrepScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+        >
           <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
         </Pressable>
         <Text style={styles.title}>Prep</Text>
@@ -83,7 +89,18 @@ export default function PrepScreen() {
         {DAYS.map((d) => {
           const sel = date === d.value;
           return (
-            <Pressable key={d.value} style={styles.tabItem} onPress={() => setDate(d.value)} accessibilityRole="tab" accessibilityState={{ selected: sel }}>
+            <Pressable
+              key={d.value}
+              style={styles.tabItem}
+              onPress={() => setDate(d.value)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: sel }}
+              accessibilityLabel={d.label}
+              android_ripple={{
+                color: sel ? `${theme.colors.ink.DEFAULT}14` : `${theme.colors.ink.DEFAULT}0d`,
+                borderless: false,
+              }}
+            >
               <View style={[styles.tabInner, sel && styles.tabInnerSel]}>
                 <Text style={[styles.tabText, sel && styles.tabTextSel]}>{d.label}</Text>
               </View>
@@ -94,7 +111,24 @@ export default function PrepScreen() {
 
       {isLoading ? (
         <View style={styles.centered}>
-          <ActivityIndicator color={theme.colors.herb.DEFAULT} />
+          <ActivityIndicator color={theme.colors.ink.DEFAULT} />
+        </View>
+      ) : isError ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>Couldn't load the prep list</Text>
+          <Text style={styles.emptyText}>Check your connection and try again.</Text>
+          <Pressable
+            onPress={() => refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading prep list"
+            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View style={[styles.markBtn, pressed && { opacity: 0.85 }, { marginTop: theme.spacing[2] }]}>
+                <Text style={styles.markBtnText}>Retry</Text>
+              </View>
+            )}
+          </Pressable>
         </View>
       ) : (
         <ScrollView
@@ -108,7 +142,7 @@ export default function PrepScreen() {
                 You owe <Text style={styles.totalsStrong}>{totals.lunch} lunch</Text> ·{' '}
                 <Text style={styles.totalsStrong}>{totals.dinner} dinner</Text>
               </Text>
-              <Text style={styles.totalsSub}>
+              <Text style={styles.totalsSub} accessibilityLabel={`${totals.prepared} of ${totals.total} prepared`}>
                 {totals.prepared}/{totals.total} prepared
               </Text>
             </View>
@@ -147,7 +181,14 @@ export default function PrepScreen() {
                         <Text style={styles.donePillText}>Prepared</Text>
                       </View>
                     ) : (
-                      <Pressable onPress={() => markDay(row)} disabled={mark.isPending} hitSlop={6}>
+                      <Pressable
+                        onPress={() => markDay(row)}
+                        disabled={mark.isPending}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mark ${row.dishName || 'dish'} for ${row.customerName || 'customer'} prepared`}
+                        android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+                      >
                         <View style={styles.markBtn}>
                           <Text style={styles.markBtnText}>Mark</Text>
                         </View>
@@ -198,7 +239,14 @@ function ManifestSection({
                   <Text style={styles.donePillText}>Done</Text>
                 </View>
               ) : (
-                <Pressable onPress={() => onMark(line)} disabled={busy} hitSlop={6}>
+                <Pressable
+                  onPress={() => onMark(line)}
+                  disabled={busy}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mark ${line.dishName || 'dish'} prepared`}
+                  android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+                >
                   <View style={styles.markBtn}>
                     <Text style={styles.markBtnText}>Mark prepared</Text>
                   </View>
@@ -241,13 +289,20 @@ const styles = StyleSheet.create({
   tabTextSel: { fontFamily: 'Inter-SemiBold', color: theme.colors.ink.DEFAULT },
 
   totalsCard: {
-    backgroundColor: theme.colors.herb.tint,
+    backgroundColor: theme.colors.paper,
     borderRadius: theme.radius.md,
     padding: theme.spacing[4],
+    ...theme.shadow[1],
   },
   totalsText: { fontFamily: 'Inter', fontSize: 16, color: theme.colors.ink.DEFAULT },
-  totalsStrong: { fontFamily: 'Inter-SemiBold', color: theme.colors.herb.soft },
-  totalsSub: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 4 },
+  totalsStrong: { fontFamily: 'Inter-SemiBold', color: theme.colors.ink.DEFAULT },
+  totalsSub: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: theme.colors.ink.soft,
+    marginTop: 4,
+    fontVariant: ['tabular-nums'],
+  },
 
   sectionLabel: {
     fontFamily: 'Inter-SemiBold',

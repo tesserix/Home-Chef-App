@@ -65,14 +65,26 @@ export function ComboComposer({ menuItems, value, onChange }: Props) {
             <Text style={styles.chipName} numberOfLines={1}>
               {name}
             </Text>
-            <Pressable onPress={() => remove(name)} hitSlop={6} accessibilityLabel={`Remove ${name}`}>
+            <Pressable
+              onPress={() => remove(name)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${name}`}
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+            >
               <X size={16} color={theme.colors.ink.muted} />
             </Pressable>
           </View>
         ))
       )}
 
-      <Pressable onPress={() => setPicker(true)} hitSlop={6}>
+      <Pressable
+        onPress={() => setPicker(true)}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Add from your menu"
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      >
         <Text style={styles.addLink}>+ Add from your menu</Text>
       </Pressable>
 
@@ -88,8 +100,15 @@ export function ComboComposer({ menuItems, value, onChange }: Props) {
           returnKeyType="done"
           blurOnSubmit={false}
         />
-        <Pressable onPress={addCustom} hitSlop={6} accessibilityLabel="Add custom item" style={styles.customAdd}>
-          <Plus size={18} color={theme.colors.herb.DEFAULT} />
+        <Pressable
+          onPress={addCustom}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Add custom item"
+          style={styles.customAdd}
+          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+        >
+          <Plus size={18} color={theme.colors.paper} />
         </Pressable>
       </View>
 
@@ -104,7 +123,13 @@ export function ComboComposer({ menuItems, value, onChange }: Props) {
         <SafeAreaView style={styles.modalRoot} edges={['top', 'left', 'right']}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add from your menu</Text>
-            <Pressable onPress={() => setPicker(false)} hitSlop={8} accessibilityLabel="Done">
+            <Pressable
+              onPress={() => setPicker(false)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+            >
               <X size={24} color={theme.colors.ink.DEFAULT} />
             </Pressable>
           </View>
@@ -115,10 +140,16 @@ export function ComboComposer({ menuItems, value, onChange }: Props) {
               </Text>
             ) : (
               available.map((m) => (
-                <Pressable key={m.id} onPress={() => add(m.name)}>
+                <Pressable
+                  key={m.id}
+                  onPress={() => add(m.name)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${m.name}`}
+                  android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+                >
                   <View style={styles.pickRow}>
                     <Text style={styles.pickName}>{m.name}</Text>
-                    <Plus size={18} color={theme.colors.herb.DEFAULT} />
+                    <Plus size={18} color={theme.colors.ink.DEFAULT} />
                   </View>
                 </Pressable>
               ))
@@ -149,7 +180,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing[2],
   },
   chipName: { flex: 1, fontFamily: 'Inter', fontSize: 14, color: theme.colors.ink.DEFAULT },
-  addLink: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: theme.colors.herb.DEFAULT },
+  addLink: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: theme.colors.ink.DEFAULT },
   customRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   customInput: {
     flex: 1,
@@ -166,7 +197,7 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.herb.tint,
+    backgroundColor: theme.colors.ink.DEFAULT,
     borderRadius: theme.radius.DEFAULT,
   },
   modalRoot: { flex: 1, backgroundColor: theme.colors.bone },

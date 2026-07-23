@@ -59,7 +59,7 @@ const cellKey = (dow: number, slot: MealSlot, variant: MealVariant) =>
 // day × slot × veg/nonveg. Customers pre-book against these cells (#196).
 // Replace-all save mirrors PutWeeklyMenu.
 export default function WeeklyMenuEditorScreen() {
-  const { data, isLoading } = useWeeklyMenu();
+  const { data, isLoading, isError, refetch } = useWeeklyMenu();
   const save = useSaveWeeklyMenu();
   // Local backup of the in-progress grid — a pre-save safety net so an app
   // background/kill before the server "Save draft" doesn't lose the chef's edits.
@@ -208,7 +208,28 @@ export default function WeeklyMenuEditorScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.centered}>
-        <ActivityIndicator color={theme.colors.herb.DEFAULT} />
+        <ActivityIndicator color={theme.colors.ink.DEFAULT} />
+      </SafeAreaView>
+    );
+  }
+
+  if (isError) {
+    return (
+      <SafeAreaView style={styles.centered}>
+        <Text style={styles.emptyHeadline}>Couldn't load your weekly menu</Text>
+        <Text style={styles.emptyBody}>Check your connection and try again.</Text>
+        <Pressable
+          onPress={() => refetch()}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading weekly menu"
+          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+        >
+          {({ pressed }) => (
+            <View style={[styles.retryBtn, pressed && { opacity: 0.85 }]}>
+              <Text style={styles.retryLabel}>Retry</Text>
+            </View>
+          )}
+        </Pressable>
       </SafeAreaView>
     );
   }
@@ -223,6 +244,7 @@ export default function WeeklyMenuEditorScreen() {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Go back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
           <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
         </Pressable>
@@ -242,7 +264,13 @@ export default function WeeklyMenuEditorScreen() {
             <Pressable
               key={d.dow}
               onPress={() => setSelectedDow(d.dow)}
-              accessibilityRole="button"
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={d.long}
+              android_ripple={{
+                color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
+                borderless: false,
+              }}
             >
               <View style={[styles.dayTab, active && styles.dayTabActive]}>
                 <Text style={[styles.dayTabText, active && styles.dayTabTextActive]}>
@@ -252,7 +280,7 @@ export default function WeeklyMenuEditorScreen() {
                   <View
                     style={[
                       styles.dot,
-                      { backgroundColor: active ? theme.colors.paper : theme.colors.herb.DEFAULT },
+                      { backgroundColor: active ? theme.colors.paper : theme.colors.ink.DEFAULT },
                     ]}
                   />
                 ) : (
@@ -267,7 +295,13 @@ export default function WeeklyMenuEditorScreen() {
       <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.dayHeadingRow}>
           <Text style={styles.dayHeading}>{day.long}</Text>
-          <Pressable onPress={copyDayToAll} hitSlop={8} accessibilityRole="button" accessibilityLabel="Copy this day to all days">
+          <Pressable
+            onPress={copyDayToAll}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Copy this day to all days"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+          >
             <Text style={styles.copyLink}>Copy to all days</Text>
           </Pressable>
         </View>
@@ -311,18 +345,28 @@ export default function WeeklyMenuEditorScreen() {
         ))}
 
         <View style={styles.publishRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.publishLabel}>Published</Text>
+          <View style={{ flex: 1, gap: theme.spacing[1] }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
+              <Text style={styles.publishLabel}>Published</Text>
+              {/* Status chip (UI-V2-SPEC §2 pill language) — published is
+                  operational-positive, so it reads success green. */}
+              <View style={[styles.statusChip, published ? styles.statusChipLive : styles.statusChipDraft]}>
+                <Text style={[styles.statusChipText, published && styles.statusChipTextLive]}>
+                  {published ? 'Live' : 'Draft'}
+                </Text>
+              </View>
+            </View>
             <Text style={styles.publishCaption}>
               {published
-                ? 'Live — customers can pre-book this menu'
-                : 'Draft — not visible to customers'}
+                ? 'Customers can pre-book this menu'
+                : 'Not visible to customers'}
             </Text>
           </View>
           <Switch
             value={published}
             onValueChange={(v) => onSave(v)}
-            trackColor={{ true: theme.colors.herb.DEFAULT }}
+            trackColor={{ true: theme.colors.ink.DEFAULT }}
+            accessibilityLabel={`Weekly menu ${published ? 'published' : 'draft'}, tap to toggle`}
           />
         </View>
       </KeyboardAwareScrollView>
@@ -331,6 +375,7 @@ export default function WeeklyMenuEditorScreen() {
         <Button
           label={published ? 'Save changes' : 'Save draft'}
           variant="primary"
+          size="lg"
           loading={save.isPending}
           onPress={() => onSave(published)}
         />
@@ -341,7 +386,42 @@ export default function WeeklyMenuEditorScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bone },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.bone,
+    paddingHorizontal: theme.spacing[6],
+  },
+  emptyHeadline: {
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.h2.size,
+    color: theme.colors.ink.DEFAULT,
+    letterSpacing: -0.2,
+    marginBottom: theme.spacing[2],
+    textAlign: 'center',
+  },
+  emptyBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: theme.spacing[4],
+  },
+  retryBtn: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[6],
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.paper,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -393,7 +473,7 @@ const styles = StyleSheet.create({
   copyLink: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
   },
   slotBlock: {
     backgroundColor: theme.colors.paper,
@@ -448,6 +528,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bone,
     borderRadius: theme.radius.DEFAULT,
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   publishRow: {
     flexDirection: 'row',
@@ -469,6 +550,20 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.muted,
     marginTop: 2,
   },
+  statusChip: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.mist.DEFAULT,
+  },
+  statusChipDraft: { backgroundColor: theme.colors.mist.DEFAULT },
+  statusChipLive: { backgroundColor: theme.colors.success.tint },
+  statusChipText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+  },
+  statusChipTextLive: { color: theme.colors.success.soft },
   footer: {
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[3],

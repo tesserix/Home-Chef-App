@@ -69,20 +69,26 @@ export function ModifierComboEditor({ groups, setGroups, isCombo, setIsCombo, co
                   value={g.name}
                   onChangeText={(t) => patchGroup(gi, { name: t })}
                 />
-                <Pressable onPress={() => removeGroup(gi)} hitSlop={8} accessibilityLabel="Remove group">
+                <Pressable
+                  onPress={() => removeGroup(gi)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove group"
+                  android_ripple={{ color: `${theme.colors.destructive.DEFAULT}14`, borderless: true }}
+                >
                   <Trash2 size={18} color={theme.colors.destructive.DEFAULT} />
                 </Pressable>
               </View>
               <View style={styles.toggleRow}>
                 <Text style={styles.toggleLabel}>Required</Text>
-                <Switch value={g.required} onValueChange={(v) => patchGroup(gi, { required: v })} trackColor={{ true: theme.colors.herb.DEFAULT }} />
+                <Switch value={g.required} onValueChange={(v) => patchGroup(gi, { required: v })} trackColor={{ true: theme.colors.ink.DEFAULT }} />
               </View>
               <View style={styles.toggleRow}>
                 <Text style={styles.toggleLabel}>Single choice</Text>
                 <Switch
                   value={single}
                   onValueChange={(v) => patchGroup(gi, { maxSelect: v ? 1 : 0 })}
-                  trackColor={{ true: theme.colors.herb.DEFAULT }}
+                  trackColor={{ true: theme.colors.ink.DEFAULT }}
                 />
               </View>
               {g.options.map((o, oi) => (
@@ -105,18 +111,36 @@ export function ModifierComboEditor({ groups, setGroups, isCombo, setIsCombo, co
                       onChangeText={(t) => patchOption(gi, oi, { priceDelta: num(t) })}
                     />
                   </View>
-                  <Pressable onPress={() => removeOption(gi, oi)} hitSlop={6} accessibilityLabel="Remove option">
+                  <Pressable
+                    onPress={() => removeOption(gi, oi)}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove option"
+                    android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+                  >
                     <X size={16} color={theme.colors.ink.muted} />
                   </Pressable>
                 </View>
               ))}
-              <Pressable onPress={() => addOption(gi)} hitSlop={6}>
+              <Pressable
+                onPress={() => addOption(gi)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Add option"
+                android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+              >
                 <Text style={styles.addLink}>+ Add option</Text>
               </Pressable>
             </View>
           );
         })}
-        <Pressable onPress={addGroup} hitSlop={6}>
+        <Pressable
+          onPress={addGroup}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Add a group"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+        >
           <Text style={styles.addLink}>+ Add a group</Text>
         </Pressable>
       </View>
@@ -129,7 +153,7 @@ export function ModifierComboEditor({ groups, setGroups, isCombo, setIsCombo, co
             <Text style={styles.toggleLabel}>This item is a combo</Text>
             <Text style={styles.hint}>Bundle several dishes; the price above is the bundle price.</Text>
           </View>
-          <Switch value={isCombo} onValueChange={setIsCombo} trackColor={{ true: theme.colors.herb.DEFAULT }} />
+          <Switch value={isCombo} onValueChange={setIsCombo} trackColor={{ true: theme.colors.ink.DEFAULT }} />
         </View>
         {isCombo ? (
           <>
@@ -139,20 +163,44 @@ export function ModifierComboEditor({ groups, setGroups, isCombo, setIsCombo, co
                   {nameById(c.menuItemId)}
                 </Text>
                 <View style={styles.qtyRow}>
-                  <Pressable onPress={() => patchComboQty(c.menuItemId, c.quantity - 1)} hitSlop={6} accessibilityLabel="Decrease">
+                  <Pressable
+                    onPress={() => patchComboQty(c.menuItemId, c.quantity - 1)}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Decrease quantity of ${nameById(c.menuItemId)}`}
+                    android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+                  >
                     <Text style={styles.qtyBtn}>−</Text>
                   </Pressable>
                   <Text style={styles.qtyVal}>{c.quantity}</Text>
-                  <Pressable onPress={() => patchComboQty(c.menuItemId, c.quantity + 1)} hitSlop={6} accessibilityLabel="Increase">
+                  <Pressable
+                    onPress={() => patchComboQty(c.menuItemId, c.quantity + 1)}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Increase quantity of ${nameById(c.menuItemId)}`}
+                    android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+                  >
                     <Text style={styles.qtyBtn}>+</Text>
                   </Pressable>
                 </View>
-                <Pressable onPress={() => removeComboItem(c.menuItemId)} hitSlop={6} accessibilityLabel="Remove">
+                <Pressable
+                  onPress={() => removeComboItem(c.menuItemId)}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${nameById(c.menuItemId)} from combo`}
+                  android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+                >
                   <X size={16} color={theme.colors.ink.muted} />
                 </Pressable>
               </View>
             ))}
-            <Pressable onPress={() => setPicker(true)} hitSlop={6}>
+            <Pressable
+              onPress={() => setPicker(true)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Add an item to the combo"
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+            >
               <Text style={styles.addLink}>+ Add an item</Text>
             </Pressable>
           </>
@@ -164,7 +212,13 @@ export function ModifierComboEditor({ groups, setGroups, isCombo, setIsCombo, co
         <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add to combo</Text>
-            <Pressable onPress={() => setPicker(false)} hitSlop={8} accessibilityLabel="Close">
+            <Pressable
+              onPress={() => setPicker(false)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+            >
               <X size={24} color={theme.colors.ink.DEFAULT} />
             </Pressable>
           </View>
@@ -175,10 +229,17 @@ export function ModifierComboEditor({ groups, setGroups, isCombo, setIsCombo, co
               menuItems.map((m) => {
                 const picked = comboItems.some((c) => c.menuItemId === m.id);
                 return (
-                  <Pressable key={m.id} onPress={() => !picked && addComboItem(m.id)} disabled={picked}>
+                  <Pressable
+                    key={m.id}
+                    onPress={() => !picked && addComboItem(m.id)}
+                    disabled={picked}
+                    accessibilityRole="button"
+                    accessibilityLabel={picked ? `${m.name}, already added` : `Add ${m.name} to combo`}
+                    android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+                  >
                     <View style={[styles.pickRow, picked && { opacity: 0.4 }]}>
                       <Text style={styles.toggleLabel}>{m.name}</Text>
-                      {picked ? <Text style={styles.hint}>Added</Text> : <Plus size={18} color={theme.colors.herb.DEFAULT} />}
+                      {picked ? <Text style={styles.hint}>Added</Text> : <Plus size={18} color={theme.colors.ink.DEFAULT} />}
                     </View>
                   </Pressable>
                 );
@@ -242,9 +303,9 @@ const styles = StyleSheet.create({
   },
   pricePrefix: { fontFamily: 'Inter', fontSize: 14, color: theme.colors.ink.soft },
   priceInput: { flex: 1, minHeight: 40, fontFamily: 'Inter-SemiBold', fontSize: 14, color: theme.colors.ink.DEFAULT, textAlign: 'center' },
-  addLink: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: theme.colors.herb.DEFAULT, marginTop: theme.spacing[2] },
+  addLink: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: theme.colors.ink.DEFAULT, marginTop: theme.spacing[2] },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
-  qtyBtn: { fontFamily: 'Inter-SemiBold', fontSize: 18, color: theme.colors.herb.DEFAULT, width: 24, textAlign: 'center' },
+  qtyBtn: { fontFamily: 'Inter-SemiBold', fontSize: 18, color: theme.colors.ink.DEFAULT, width: 24, textAlign: 'center' },
   qtyVal: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.ink.DEFAULT, minWidth: 20, textAlign: 'center' },
   modalHeader: {
     flexDirection: 'row',
