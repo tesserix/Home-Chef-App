@@ -80,13 +80,29 @@ jobs:
           file: apps/auth-bff/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          # On a PR nothing is pushed; load the image locally so Trivy can scan
+          # it (catches base-image CVEs before merge, not only after).
+          load: ${{ github.event_name == 'pull_request' }}
+          provenance: false
+          tags: ${{ github.event_name == 'pull_request' && 'local/homechef-auth-bff:pr-scan' || steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
           # cache write needs GHCR auth (skipped on PRs); read-only cache-from still works
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0},mode=max', steps.cache.outputs.ref) || '' }}
 
       # --- Security scanning (gated: fails the build on CRITICAL+HIGH) ---
+      # On a PR: scan the locally-loaded image and fail on a fixable CRITICAL/
+      # HIGH so a vulnerable base image or dependency is caught before merge.
+      - name: Run Trivy vulnerability scanner (PR)
+        if: github.event_name == 'pull_request'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: local/homechef-auth-bff:pr-scan
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+
       - name: Run Trivy vulnerability scanner
         id: trivy
         if: github.event_name != 'pull_request'
