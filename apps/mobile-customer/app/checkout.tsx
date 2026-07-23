@@ -4,8 +4,9 @@
 // which opens the NATIVE Razorpay checkout sheet (react-native-razorpay) and
 // routes to /payment/result. No WebView, no visible web page load.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
   FlatList,
@@ -17,12 +18,31 @@ import {
   Text,
   TextInput,
   View,
+  findNodeHandle,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Link, router, type Href } from 'expo-router';
-import { AlertTriangle, Check, ChevronLeft, Clock, MapPin, Plus, Search } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  Clock,
+  MapPin,
+  Plus,
+  Search,
+} from 'lucide-react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
 import { useChef } from '../hooks/useChefs';
@@ -44,6 +64,12 @@ import { friendlyErrorMessage } from '../lib/errors';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { AddressLabelSelect } from '../components/address/AddressLabelSelect';
 import type { Address } from '../types/customer';
+
+// Android ripple tints — translucent colours derived from existing tokens
+// (never a new literal colour), matching the ChefCard/MenuItemCard convention.
+const CORAL_RIPPLE = `${customerColors.coral.DEFAULT}22`;
+const CHARCOAL_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CANVAS_RIPPLE = `${customerColors.canvas}33`;
 
 // ─── Address form schema ──────────────────────────────────────────────────────
 
@@ -77,9 +103,27 @@ function slotDayLabel(dateStr: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
+// R13 (zero-flicker) — component-layer stale-while-revalidating. The delivery
+// quote / slots / fulfillment-times queries below don't set
+// `placeholderData`/`keepPreviousData` on the hook itself (that's a hook-config
+// change, out of this task's scope — see the task report), so switching query
+// keys (e.g. picking a different address re-keys the quote) would otherwise
+// blank an already-rendered section for a frame. Remembering the last defined
+// value and rendering that while the new value loads gets the same effect
+// entirely at the component layer, with zero change to the hooks.
+function useStaleValue<T>(value: T | undefined): T | undefined {
+  const ref = useRef<T | undefined>(undefined);
+  if (value !== undefined) {
+    ref.current = value;
+  }
+  return value ?? ref.current;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CheckoutScreen() {
+  const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const cartStore = useCartStore();
   const createOrder = useCreateOrder();
   const coords = useCustomerCoords();
@@ -176,7 +220,8 @@ export default function CheckoutScreen() {
   }, [noteReady, note, saveNoteDraft]);
   // Scheduled delivery slot (#51) — null = ASAP. Only shown when the chef
   // offers slots; the chosen slot+date ride along on the create-order payload.
-  const { data: slotsData } = useDeliverySlots(cartStore.chefId ?? undefined);
+  const { data: slotsDataFresh } = useDeliverySlots(cartStore.chefId ?? undefined);
+  const slotsData = useStaleValue(slotsDataFresh);
   const [selectedSlot, setSelectedSlot] = useState<{ slot: string; date: string } | null>(null);
   const availableSlots = (slotsData?.slots ?? []).filter((s) => s.available);
   // Windowed (restaurant-style) chefs keep the #51 slot picker; everyone else —
@@ -184,12 +229,14 @@ export default function CheckoutScreen() {
   const useSlotPicker = !!slotsData?.slotsEnabled && availableSlots.length > 0;
 
   // Home-tiffin suggested time (#709): the customer PROPOSES a preferred time and
-  // the chef confirms/proposes at accept. null = "as soon as ready".
+  // the chef confirms/proposes at accept. null = "as soon as ready" (stays the
+  // default hero option — R14).
   const [requestedTime, setRequestedTime] = useState<Date | null>(null);
   // Realistic proposable times come from the server, derived from the CHEF's meal
   // windows + open hours + prep headroom — NOT "now + 1h" (which proposed 9am for a
   // 6am order). Same list for delivery and pickup.
-  const { data: fulfillmentTimesData } = useFulfillmentTimes(cartStore.chefId ?? undefined);
+  const { data: fulfillmentTimesDataFresh } = useFulfillmentTimes(cartStore.chefId ?? undefined);
+  const fulfillmentTimesData = useStaleValue(fulfillmentTimesDataFresh);
   const fulfillmentTimes = fulfillmentTimesData?.times ?? [];
   // Group suggested times by "day · meal" so the picker reads as a few labelled
   // clusters (Today · Lunch, Today · Dinner …) instead of a wall of chips.
@@ -214,8 +261,43 @@ export default function CheckoutScreen() {
   const [showAddressForm, setShowAddressForm] = useState(false);
   // CW-01d: explicit per-order T&C + Refund Policy consent for RBI PA disclosure.
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  // Fee breakdown disclosure (R14) — collapsed by default; the itemised
+  // self-delivery estimate is secondary detail, not core price transparency
+  // (subtotal/delivery/tax/total stay always visible — #fee-transparency).
+  const [feeBreakdownOpen, setFeeBreakdownOpen] = useState(false);
+  const feeChevronRotation = useSharedValue(0);
+  const feeChevronStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${feeChevronRotation.value}deg` }],
+  }));
+  function toggleFeeBreakdown() {
+    const next = !feeBreakdownOpen;
+    setFeeBreakdownOpen(next);
+    feeChevronRotation.value = reduceMotion
+      ? next
+        ? 180
+        : 0
+      : withTiming(next ? 180 : 0, { duration: 150 });
+  }
 
-  // Pre-select default address when addresses load
+  // R14 — scroll the first invalid/incomplete section into view + move
+  // accessibility focus to it, instead of a disabled-looking tap doing nothing.
+  const scrollRef = useRef<ScrollView>(null);
+  const addressSectionRef = useRef<View>(null);
+  const termsSectionRef = useRef<View>(null);
+  const addressSectionY = useRef(0);
+  const termsSectionY = useRef(0);
+  function focusSection(sectionRef: RefObject<View | null>, y: number) {
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
+    const node = sectionRef.current ? findNodeHandle(sectionRef.current) : null;
+    if (node) {
+      // Slight delay so the scroll settles before VoiceOver/TalkBack grabs focus.
+      setTimeout(() => AccessibilityInfo.setAccessibilityFocus(node), 300);
+    }
+  }
+
+  // Pre-select default address when addresses load. Also covers the
+  // only-address case: with exactly one saved address, `addresses[0]` IS that
+  // address, so it auto-selects the same way (verified — do not remove).
   useEffect(() => {
     if (addresses.length > 0 && !selectedAddressId) {
       const defaultAddr = addresses.find((a) => a.isDefault) ?? addresses[0];
@@ -301,9 +383,17 @@ export default function CheckoutScreen() {
 
   async function handlePlaceOrder() {
     const needsAddress = fulfillment !== 'pickup';
-    if ((needsAddress && !selectedAddressId) || cartStore.items.length === 0 || !cartStore.chefId) return;
+    // R14 — guide the customer to what's missing instead of a silent no-op tap:
+    // scroll the relevant section into view and move accessibility focus to it.
+    if (needsAddress && !selectedAddressId) {
+      setError('Please choose a delivery address to continue.');
+      focusSection(addressSectionRef, addressSectionY.current);
+      return;
+    }
+    if (cartStore.items.length === 0 || !cartStore.chefId) return;
     if (!acceptedTerms) {
       setError('Please accept the Terms of Service and Refund Policy to continue.');
+      focusSection(termsSectionRef, termsSectionY.current);
       return;
     }
     // Guard re-entry: the button is disabled via canPlaceOrder, but a second tap
@@ -313,6 +403,15 @@ export default function CheckoutScreen() {
 
     setIsLoading(true);
     setError(null);
+
+    // R7 — light haptic the instant the customer commits to paying, fired
+    // before the async round-trip starts. Never let a haptics failure (e.g. on
+    // a simulator) interrupt the order flow.
+    try {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      // no-op — haptics are non-critical
+    }
 
     try {
       // Step 1: Create the order on the server
@@ -389,13 +488,14 @@ export default function CheckoutScreen() {
   // `deliveryFee = 0 // free for v1`, which both hid the fee and could show a
   // "Free" total the server then charged a fee on.
   const selectedAddr = addresses.find((a) => a.id === selectedAddressId);
-  const { data: quote } = useDeliveryQuote(cartStore.chefId ?? undefined, {
+  const { data: quoteFresh } = useDeliveryQuote(cartStore.chefId ?? undefined, {
     latitude: selectedAddr?.latitude,
     longitude: selectedAddr?.longitude,
     city: selectedAddr?.city,
     state: selectedAddr?.state,
     subtotal,
   });
+  const quote = useStaleValue(quoteFresh);
   // Out-of-range guard (#709): the kitchen's delivery has a hard radius (the chef's
   // own range, else the platform's 10 km default). When the selected address is
   // beyond it, delivery isn't possible — block placing and tell the customer why,
@@ -433,6 +533,17 @@ export default function CheckoutScreen() {
   // The Place Order button is live only when the order is placeable AND not an
   // out-of-range delivery (which the server would reject anyway).
   const placeEnabled = canPlaceOrder && !deliveryOutOfRange && !deliveryNeedsLocation;
+  // The RN `disabled` prop only hard-blocks the conditions that have no
+  // "fix by scrolling" path (loading, empty cart, out-of-range/needs-location —
+  // both already surfaced by an always-visible banner). Missing address / unchecked
+  // terms stay tappable so handlePlaceOrder's own guards can scroll-to-fix (R14);
+  // they never let an order through — same gating as before, just reachable by tap.
+  const hardBlocked =
+    isLoading ||
+    cartStore.items.length === 0 ||
+    !cartStore.chefId ||
+    deliveryOutOfRange ||
+    deliveryNeedsLocation;
 
   // Wallet store-credit applied at checkout (#141). Apply as much as the balance
   // and total allow; the remaining payable is what the gateway charges.
@@ -440,6 +551,11 @@ export default function CheckoutScreen() {
   const walletAvailable = WALLET_CHECKOUT_ENABLED && walletBalance > 0;
   const walletApplied = applyWallet ? Math.min(walletBalance, total) : 0;
   const payable = Math.max(0, total - walletApplied);
+  // Extracted to a plain local so it stays narrowed to non-undefined inside the
+  // fee-breakdown disclosure's nested Pressable render-prop closures below — TS
+  // doesn't retain narrowing of an object PROPERTY like `selfDeliveryBreakdown`
+  // across a closure boundary, even though `quote` itself is const.
+  const selfDeliveryBreakdown = quote?.selfDeliveryBreakdown;
 
   async function applyPromo() {
     const code = promoInput.trim();
@@ -468,47 +584,70 @@ export default function CheckoutScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Header */}
-      <View className="flex-row items-center bg-canvas border-b border-hairline px-4 pt-14 pb-4 gap-3">
+      <View
+        className="flex-row items-center bg-canvas border-b border-hairline px-4 pb-4 gap-3"
+        style={{ paddingTop: insets.top + 12 }}
+      >
         <Pressable
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          className="p-1"
+          hitSlop={8}
+          android_ripple={{ color: CHARCOAL_RIPPLE, borderless: true, radius: 20 }}
         >
-          <ChevronLeft size={24} color="#222222" />
+          {({ pressed }) => (
+            <View
+              className="p-1"
+              style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}
+            >
+              <ChevronLeft size={24} color={customerColors.charcoal.DEFAULT} />
+            </View>
+          )}
         </Pressable>
-        <Text className="text-xl font-semibold text-charcoal flex-1">Checkout</Text>
+        <Text className="text-xl font-bold text-charcoal font-display flex-1">Checkout</Text>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 120 }}
+        ref={scrollRef}
+        contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Fulfillment mode selector (shown when the chef offers more than
+        {/* ── Fulfilment segmented control (shown when the chef offers more than
             just 3PL delivery — i.e. pickup and/or self-delivery) ── */}
         {fulfillmentModes.length > 1 ? (
-          <View className="mx-4 mt-4 flex-row gap-2" accessibilityRole="radiogroup">
+          <View
+            className="mx-4 mt-4 flex-row bg-surface-soft rounded-lg p-1"
+            style={{ minHeight: 44 }}
+            accessibilityRole="radiogroup"
+          >
             {fulfillmentModes.map((mode) => (
               <Pressable
                 key={mode}
                 onPress={() => setFulfillment(mode)}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: fulfillment === mode }}
-                className={`flex-1 min-h-[44px] items-center justify-center rounded-lg border px-2 ${
-                  fulfillment === mode
-                    ? 'border-coral bg-coral-tint'
-                    : 'border-hairline bg-canvas'
-                }`}
+                accessibilityLabel={fulfillmentLabel[mode]}
+                className="flex-1"
+                android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
               >
-                <Text
-                  className={`text-sm font-semibold ${
-                    fulfillment === mode ? 'text-coral-pressed' : 'text-charcoal-soft'
-                  }`}
-                  numberOfLines={1}
-                >
-                  {fulfillmentLabel[mode]}
-                </Text>
+                {({ pressed }) => (
+                  <View
+                    className={`flex-1 items-center justify-center rounded-md ${
+                      fulfillment === mode ? 'bg-coral' : 'bg-transparent'
+                    } ${pressed && Platform.OS === 'ios' && fulfillment !== mode ? 'opacity-60' : ''}`}
+                    style={{ minHeight: 36 }}
+                  >
+                    <Text
+                      className={`text-sm font-semibold ${
+                        fulfillment === mode ? 'text-canvas' : 'text-charcoal-soft'
+                      }`}
+                      numberOfLines={1}
+                    >
+                      {fulfillmentLabel[mode]}
+                    </Text>
+                  </View>
+                )}
               </Pressable>
             ))}
           </View>
@@ -520,7 +659,7 @@ export default function CheckoutScreen() {
         {deliveryNeedsLocation ? (
           <View className="mx-4 mt-3 rounded-xl border border-coral/40 bg-coral-tint px-4 py-3">
             <View className="flex-row items-start gap-2">
-              <AlertTriangle size={16} color="#C2410C" style={{ marginTop: 1 }} />
+              <AlertTriangle size={16} color={customerColors.coral.pressed} style={{ marginTop: 1 }} />
               <View className="flex-1">
                 <Text className="text-sm font-semibold text-coral-pressed">
                   Address location needed
@@ -534,9 +673,17 @@ export default function CheckoutScreen() {
                     onPress={() => setFulfillment('pickup')}
                     accessibilityRole="button"
                     accessibilityLabel="Switch to pickup"
-                    className="mt-2 self-start rounded-lg bg-coral px-3 py-1.5"
+                    android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
                   >
-                    <Text className="text-xs font-semibold text-canvas">Switch to pickup</Text>
+                    {({ pressed }) => (
+                      <View
+                        className={`mt-2 self-start rounded-lg bg-coral px-3 py-1.5 ${
+                          pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : ''
+                        }`}
+                      >
+                        <Text className="text-xs font-semibold text-canvas">Switch to pickup</Text>
+                      </View>
+                    )}
                   </Pressable>
                 ) : null}
               </View>
@@ -547,7 +694,7 @@ export default function CheckoutScreen() {
         {deliveryOutOfRange ? (
           <View className="mx-4 mt-3 rounded-xl border border-coral/40 bg-coral-tint px-4 py-3">
             <View className="flex-row items-start gap-2">
-              <AlertTriangle size={16} color="#C2410C" style={{ marginTop: 1 }} />
+              <AlertTriangle size={16} color={customerColors.coral.pressed} style={{ marginTop: 1 }} />
               <View className="flex-1">
                 <Text className="text-sm font-semibold text-coral-pressed">
                   Outside delivery range
@@ -563,9 +710,17 @@ export default function CheckoutScreen() {
                     onPress={() => setFulfillment('pickup')}
                     accessibilityRole="button"
                     accessibilityLabel="Switch to pickup"
-                    className="mt-2 self-start rounded-lg bg-coral px-3 py-1.5"
+                    android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
                   >
-                    <Text className="text-xs font-semibold text-canvas">Switch to pickup</Text>
+                    {({ pressed }) => (
+                      <View
+                        className={`mt-2 self-start rounded-lg bg-coral px-3 py-1.5 ${
+                          pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : ''
+                        }`}
+                      >
+                        <Text className="text-xs font-semibold text-canvas">Switch to pickup</Text>
+                      </View>
+                    )}
                   </Pressable>
                 ) : null}
               </View>
@@ -584,31 +739,45 @@ export default function CheckoutScreen() {
             onPress={() => setFulfillment('pickup')}
             accessibilityRole="button"
             accessibilityLabel={`Switch to pickup and save ₹${pickupSaving.toFixed(0)}`}
-            className="mx-4 mt-3 flex-row items-center justify-between rounded-lg bg-coral-tint px-4 py-3"
+            android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
           >
-            <View className="flex-1 pr-3">
-              <Text className="text-sm font-semibold text-coral-pressed">
-                Pick up & save ₹{pickupSaving.toFixed(0)}
-              </Text>
-              <Text className="text-xs text-charcoal-soft mt-0.5">
-                Collect from the kitchen — no delivery fee.
-              </Text>
-            </View>
-            <Text className="text-sm font-semibold text-coral-pressed">Switch →</Text>
+            {({ pressed }) => (
+              <View
+                className={`mx-4 mt-3 flex-row items-center justify-between rounded-lg bg-coral-tint px-4 py-3 ${
+                  pressed && Platform.OS === 'ios' ? 'opacity-70' : ''
+                }`}
+              >
+                <View className="flex-1 pr-3">
+                  <Text className="text-sm font-semibold text-coral-pressed">
+                    Pick up & save ₹{pickupSaving.toFixed(0)}
+                  </Text>
+                  <Text className="text-xs text-charcoal-soft mt-0.5">
+                    Collect from the kitchen — no delivery fee.
+                  </Text>
+                </View>
+                <Text className="text-sm font-semibold text-coral-pressed">Switch →</Text>
+              </View>
+            )}
           </Pressable>
         ) : null}
 
         {/* ── Delivery Address ── */}
         {fulfillment !== 'pickup' ? (
-        <View className="bg-canvas border-t border-hairline">
+        <View
+          ref={addressSectionRef}
+          onLayout={(e) => {
+            addressSectionY.current = e.nativeEvent.layout.y;
+          }}
+          className="bg-canvas border-t border-hairline"
+        >
           <View className="flex-row items-center px-4 pt-4 pb-2 gap-2">
-            <MapPin size={18} color="#FF385C" />
+            <MapPin size={18} color={customerColors.coral.DEFAULT} />
             <Text className="text-base font-semibold text-charcoal">Delivery Address</Text>
           </View>
 
           {addressLoading ? (
             <View className="px-4 pb-4">
-              <ActivityIndicator size="small" color="#FF385C" />
+              <ActivityIndicator size="small" color={customerColors.coral.DEFAULT} />
             </View>
           ) : (
             <>
@@ -619,41 +788,44 @@ export default function CheckoutScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ checked: selectedAddressId === addr.id }}
                   accessibilityLabel={formatAddress(addr)}
+                  android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
                 >
-                  <View
-                    className={`mx-4 mb-2 p-3 rounded-xl border ${
-                      selectedAddressId === addr.id
-                        ? 'border-coral bg-coral-tint'
-                        : 'border-hairline bg-canvas'
-                    }`}
-                  >
-                    <View className="flex-row items-start gap-3">
-                      <View
-                        className={`w-4 h-4 rounded-full border-2 mt-0.5 ${
-                          selectedAddressId === addr.id
-                            ? 'border-coral bg-coral'
-                            : 'border-hairline bg-surface-soft'
-                        }`}
-                      />
-                      <View className="flex-1">
-                        {(addr.label || addr.isDefault) && (
-                          <View className="flex-row items-center gap-2 mb-1">
-                            {addr.label ? (
-                              <View className="bg-surface-soft rounded-md px-2 py-0.5">
-                                <Text className="text-[11px] font-semibold text-charcoal">
-                                  {addr.label}
-                                </Text>
-                              </View>
-                            ) : null}
-                            {addr.isDefault ? (
-                              <Text className="text-xs text-coral font-medium">Default</Text>
-                            ) : null}
-                          </View>
-                        )}
-                        <Text className="text-sm text-charcoal">{formatAddress(addr)}</Text>
+                  {({ pressed }) => (
+                    <View
+                      className={`mx-4 mb-2 p-3 rounded-xl border ${
+                        selectedAddressId === addr.id
+                          ? 'border-coral bg-coral-tint'
+                          : 'border-hairline bg-canvas'
+                      } ${pressed && Platform.OS === 'ios' && selectedAddressId !== addr.id ? 'bg-surface-soft' : ''}`}
+                    >
+                      <View className="flex-row items-start gap-3">
+                        <View
+                          className={`w-4 h-4 rounded-full border-2 mt-0.5 ${
+                            selectedAddressId === addr.id
+                              ? 'border-coral bg-coral'
+                              : 'border-hairline bg-surface-soft'
+                          }`}
+                        />
+                        <View className="flex-1">
+                          {(addr.label || addr.isDefault) && (
+                            <View className="flex-row items-center gap-2 mb-1">
+                              {addr.label ? (
+                                <View className="bg-surface-soft rounded-md px-2 py-0.5">
+                                  <Text className="text-[11px] font-semibold text-charcoal">
+                                    {addr.label}
+                                  </Text>
+                                </View>
+                              ) : null}
+                              {addr.isDefault ? (
+                                <Text className="text-xs text-coral font-medium">Default</Text>
+                              ) : null}
+                            </View>
+                          )}
+                          <Text className="text-sm text-charcoal">{formatAddress(addr)}</Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
+                  )}
                 </Pressable>
               ))}
 
@@ -662,11 +834,18 @@ export default function CheckoutScreen() {
                 onPress={() => setShowAddressForm((prev: boolean) => !prev)}
                 accessibilityRole="button"
                 accessibilityLabel="Add new address"
+                android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
               >
-                <View className="flex-row items-center gap-2 px-4 py-3">
-                  <Plus size={16} color="#FF385C" />
-                  <Text className="text-sm text-coral font-medium">Add New Address</Text>
-                </View>
+                {({ pressed }) => (
+                  <View
+                    className={`flex-row items-center gap-2 px-4 py-3 ${
+                      pressed && Platform.OS === 'ios' ? 'opacity-70' : ''
+                    }`}
+                  >
+                    <Plus size={16} color={customerColors.coral.DEFAULT} />
+                    <Text className="text-sm text-coral font-medium">Add New Address</Text>
+                  </View>
+                )}
               </Pressable>
 
               {showAddressForm && (
@@ -681,11 +860,11 @@ export default function CheckoutScreen() {
                   />
                   {/* Address autocomplete — fills the fields below (editable) */}
                   <View className="flex-row items-center bg-surface-soft rounded-xl px-3 gap-2">
-                    <Search size={16} color={'#717171'} />
+                    <Search size={16} color={customerColors.charcoal.soft} />
                     <TextInput
                       className="flex-1 h-11 text-sm text-charcoal"
                       placeholder="Search for your address"
-                      placeholderTextColor="#717171"
+                      placeholderTextColor={customerColors.charcoal.soft}
                       value={addrQuery}
                       onChangeText={(t) => {
                         setAddrQuery(t);
@@ -697,7 +876,7 @@ export default function CheckoutScreen() {
                       accessibilityLabel="Search for your address"
                     />
                     {addrSearching ? (
-                      <ActivityIndicator size="small" color={'#FF385C'} />
+                      <ActivityIndicator size="small" color={customerColors.coral.DEFAULT} />
                     ) : null}
                   </View>
                   {showAddrSuggestions && addrSuggestions.length > 0 && (
@@ -708,14 +887,15 @@ export default function CheckoutScreen() {
                           onPress={() => pickAddrSuggestion(s)}
                           accessibilityRole="button"
                           accessibilityLabel={`Use address ${s.description}`}
+                          android_ripple={{ color: CHARCOAL_RIPPLE, borderless: false }}
                         >
                           {({ pressed }) => (
                             <View
                               className={`flex-row items-start gap-2 px-3 py-2.5 ${
-                                pressed ? 'bg-surface-soft' : ''
+                                pressed && Platform.OS === 'ios' ? 'bg-surface-soft' : ''
                               } ${i < addrSuggestions.length - 1 ? 'border-b border-hairline' : ''}`}
                             >
-                              <MapPin size={16} color={'#717171'} style={{ marginTop: 2 }} />
+                              <MapPin size={16} color={customerColors.charcoal.soft} style={{ marginTop: 2 }} />
                               <Text className="flex-1 text-sm text-charcoal leading-5" numberOfLines={2}>
                                 {s.description}
                               </Text>
@@ -734,7 +914,7 @@ export default function CheckoutScreen() {
                           value={value}
                           onChangeText={onChange}
                           placeholder="Address line 1 *"
-                          placeholderTextColor="#717171"
+                          placeholderTextColor={customerColors.charcoal.soft}
                           className="bg-surface-soft rounded-xl px-3 py-2.5 text-sm text-charcoal"
                           accessibilityLabel="Address line 1"
                         />
@@ -754,7 +934,7 @@ export default function CheckoutScreen() {
                         value={value}
                         onChangeText={onChange}
                         placeholder="Flat / House / Floor no. (optional)"
-                        placeholderTextColor="#717171"
+                        placeholderTextColor={customerColors.charcoal.soft}
                         className="bg-surface-soft rounded-xl px-3 py-2.5 text-sm text-charcoal"
                         accessibilityLabel="Flat, house or floor number"
                       />
@@ -770,7 +950,7 @@ export default function CheckoutScreen() {
                             value={value}
                             onChangeText={onChange}
                             placeholder="City *"
-                            placeholderTextColor="#717171"
+                            placeholderTextColor={customerColors.charcoal.soft}
                             className="bg-surface-soft rounded-xl px-3 py-2.5 text-sm text-charcoal"
                             accessibilityLabel="City"
                           />
@@ -791,7 +971,7 @@ export default function CheckoutScreen() {
                             value={value}
                             onChangeText={onChange}
                             placeholder="State *"
-                            placeholderTextColor="#717171"
+                            placeholderTextColor={customerColors.charcoal.soft}
                             className="bg-surface-soft rounded-xl px-3 py-2.5 text-sm text-charcoal"
                             accessibilityLabel="State"
                           />
@@ -813,7 +993,7 @@ export default function CheckoutScreen() {
                           value={value}
                           onChangeText={onChange}
                           placeholder="Pincode *"
-                          placeholderTextColor="#717171"
+                          placeholderTextColor={customerColors.charcoal.soft}
                           keyboardType="numeric"
                           maxLength={6}
                           className="bg-surface-soft rounded-xl px-3 py-2.5 text-sm text-charcoal"
@@ -833,18 +1013,22 @@ export default function CheckoutScreen() {
                     disabled={addrSubmitting}
                     accessibilityRole="button"
                     accessibilityLabel="Save address"
+                    android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
                   >
-                    <View
-                      className={`rounded-xl py-2.5 items-center ${
-                        addrSubmitting ? 'bg-coral-tint' : 'bg-coral'
-                      }`}
-                    >
-                      {addrSubmitting ? (
-                        <ActivityIndicator size="small" color="#FF385C" />
-                      ) : (
-                        <Text className="text-canvas font-semibold text-sm">Save Address</Text>
-                      )}
-                    </View>
+                    {({ pressed }) => (
+                      <View
+                        className={`rounded-xl py-2.5 items-center ${
+                          addrSubmitting ? 'bg-coral-tint' : pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : 'bg-coral'
+                        }`}
+                        style={{ minHeight: 44, justifyContent: 'center' }}
+                      >
+                        {addrSubmitting ? (
+                          <ActivityIndicator size="small" color={customerColors.coral.DEFAULT} />
+                        ) : (
+                          <Text className="text-canvas font-semibold text-sm">Save Address</Text>
+                        )}
+                      </View>
+                    )}
                   </Pressable>
                 </View>
               )}
@@ -864,7 +1048,12 @@ export default function CheckoutScreen() {
               <View className="flex-row items-start px-4 py-2 gap-2">
                 {/* Quantity chip — coral-tint bg, coral text */}
                 <View className="w-6 h-6 rounded-full bg-coral-tint items-center justify-center mt-0.5">
-                  <Text className="text-xs font-medium text-coral">{item.quantity}</Text>
+                  <Text
+                    className="text-xs font-medium text-coral"
+                    style={{ fontVariant: ['tabular-nums'] }}
+                  >
+                    {item.quantity}
+                  </Text>
                 </View>
                 <View className="flex-1">
                   <Text className="text-sm text-charcoal">{item.name}</Text>
@@ -885,12 +1074,20 @@ export default function CheckoutScreen() {
                 <Text className="text-sm text-charcoal-soft">Your cart is empty.</Text>
               </View>
             }
+            contentContainerStyle={{ paddingBottom: 8 }}
           />
-          {/* Price breakdown */}
-          <View className="border-t border-hairline mx-4 mt-2 pt-3 pb-4 gap-2">
+        </View>
+
+        {/* ── Price Details (fees) ── */}
+        <View className="bg-canvas border-t border-hairline">
+          <Text className="text-base font-semibold text-charcoal px-4 pt-4 pb-2">Price Details</Text>
+          <View className="mx-4 pb-4 gap-2">
             <View className="flex-row justify-between">
               <Text className="text-sm text-charcoal-soft">Subtotal</Text>
-              <Text className="text-sm text-charcoal" style={{ fontVariant: ['tabular-nums'] }}>
+              <Text
+                className="text-sm text-charcoal"
+                style={{ fontVariant: ['tabular-nums'], minWidth: 64, textAlign: 'right' }}
+              >
                 ₹{subtotal.toFixed(2)}
               </Text>
             </View>
@@ -946,90 +1143,125 @@ export default function CheckoutScreen() {
                 ))
               : null}
 
-            {/* Self-delivery estimate (#702). When the chef delivers themselves,
-                show the itemised approx-MAX fee. It's a ceiling the chef can only
-                bring DOWN at accept — never a surprise increase — so we label it
-                clearly as an estimate rather than the charged amount. */}
+            {/* Self-delivery estimate (#702), collapsed behind a disclosure (R14):
+                itemised base+distance+surge detail is secondary — the header row
+                always shows the ceiling fee, the itemisation is opt-in. It's a
+                ceiling the chef can only bring DOWN at accept — never a surprise
+                increase — so it's still labelled as an estimate, not the charge. */}
             {fulfillment !== 'pickup' &&
             !deliveryOutOfRange &&
             quote?.offersSelfDelivery &&
-            quote?.selfDeliveryBreakdown ? (
+            selfDeliveryBreakdown ? (
               <View className="rounded-xl border border-hairline bg-surface-soft px-3.5 py-3 gap-2">
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-xs font-semibold text-charcoal">
-                    Delivery fee breakdown
-                  </Text>
-                  {quote.selfDeliveryBreakdown.fee > 0 ? (
-                    <Text
-                      className="text-xs font-semibold text-charcoal"
-                      style={{ fontVariant: ['tabular-nums'] }}
+                <Pressable
+                  onPress={toggleFeeBreakdown}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delivery fee breakdown"
+                  accessibilityState={{ expanded: feeBreakdownOpen }}
+                  android_ripple={{ color: CHARCOAL_RIPPLE, borderless: false }}
+                >
+                  {({ pressed }) => (
+                    <View
+                      className={`flex-row items-center justify-between ${
+                        pressed && Platform.OS === 'ios' ? 'opacity-70' : ''
+                      }`}
+                      style={{ minHeight: 28 }}
                     >
-                      up to ₹{quote.selfDeliveryBreakdown.fee.toFixed(2)}
-                    </Text>
-                  ) : (
-                    <Text className="text-xs font-semibold text-success">Free</Text>
-                  )}
-                </View>
-                {/* Itemised so the number is honest, not a black box. */}
-                <View className="gap-1.5">
-                  <View className="flex-row items-center justify-between">
-                    <Text className="text-xs text-charcoal-soft">Base fee</Text>
-                    <Text
-                      className="text-xs text-charcoal-soft"
-                      style={{ fontVariant: ['tabular-nums'] }}
-                    >
-                      ₹{quote.selfDeliveryBreakdown.baseFee.toFixed(2)}
-                    </Text>
-                  </View>
-                  {quote.selfDeliveryBreakdown.distanceKnown &&
-                  quote.selfDeliveryBreakdown.distanceComponent > 0 ? (
-                    <View className="flex-row items-start justify-between gap-3">
-                      <Text className="text-xs text-charcoal-soft flex-1 leading-4">
-                        Distance ·{' '}
-                        {quote.selfDeliveryBreakdown.billableKm.toFixed(1)} km beyond{' '}
-                        {quote.selfDeliveryBreakdown.freeRadiusKm.toFixed(0)} km free
+                      <Text className="text-xs font-semibold text-charcoal">
+                        Delivery fee breakdown
                       </Text>
+                      <View className="flex-row items-center gap-1.5">
+                        {selfDeliveryBreakdown.fee > 0 ? (
+                          <Text
+                            className="text-xs font-semibold text-charcoal"
+                            style={{ fontVariant: ['tabular-nums'] }}
+                          >
+                            up to ₹{selfDeliveryBreakdown.fee.toFixed(2)}
+                          </Text>
+                        ) : (
+                          <Text className="text-xs font-semibold text-success">Free</Text>
+                        )}
+                        <Animated.View style={feeChevronStyle}>
+                          <ChevronDown size={14} color={customerColors.charcoal.soft} />
+                        </Animated.View>
+                      </View>
+                    </View>
+                  )}
+                </Pressable>
+
+                {feeBreakdownOpen ? (
+                  <View className="gap-1.5">
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-xs text-charcoal-soft">Base fee</Text>
                       <Text
                         className="text-xs text-charcoal-soft"
                         style={{ fontVariant: ['tabular-nums'] }}
                       >
-                        ₹{quote.selfDeliveryBreakdown.distanceComponent.toFixed(2)}
+                        ₹{selfDeliveryBreakdown.baseFee.toFixed(2)}
                       </Text>
                     </View>
-                  ) : null}
-                  {quote.selfDeliveryBreakdown.surgeMultiplier > 1 &&
-                  quote.selfDeliveryBreakdown.distanceComponent > 0 ? (
-                    <Text className="text-xs text-charcoal-soft leading-4">
-                      Includes ×{quote.selfDeliveryBreakdown.surgeMultiplier.toFixed(2)} surge
-                      (fuel/peak conditions)
+                    {selfDeliveryBreakdown.distanceKnown &&
+                    selfDeliveryBreakdown.distanceComponent > 0 ? (
+                      <View className="flex-row items-start justify-between gap-3">
+                        <Text className="text-xs text-charcoal-soft flex-1 leading-4">
+                          Distance ·{' '}
+                          {selfDeliveryBreakdown.billableKm.toFixed(1)} km beyond{' '}
+                          {selfDeliveryBreakdown.freeRadiusKm.toFixed(0)} km free
+                        </Text>
+                        <Text
+                          className="text-xs text-charcoal-soft"
+                          style={{ fontVariant: ['tabular-nums'] }}
+                        >
+                          ₹{selfDeliveryBreakdown.distanceComponent.toFixed(2)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {selfDeliveryBreakdown.surgeMultiplier > 1 &&
+                    selfDeliveryBreakdown.distanceComponent > 0 ? (
+                      <Text className="text-xs text-charcoal-soft leading-4">
+                        Includes ×{selfDeliveryBreakdown.surgeMultiplier.toFixed(2)} surge
+                        (fuel/peak conditions)
+                      </Text>
+                    ) : null}
+                    {selfDeliveryBreakdown.withinFreeZone ? (
+                      <Text className="text-xs text-success leading-4">
+                        Within the chef's free-delivery radius
+                      </Text>
+                    ) : null}
+                    {selfDeliveryBreakdown.capped ? (
+                      <Text className="text-xs text-charcoal-soft leading-4">
+                        Capped at the chef's ₹{selfDeliveryBreakdown.maxFee.toFixed(0)} maximum
+                      </Text>
+                    ) : null}
+                    <Text className="text-xs text-charcoal-soft leading-4 pt-2 border-t border-hairline">
+                      Estimate — the chef sets the final fee at accept and can only lower it.
                     </Text>
-                  ) : null}
-                  {quote.selfDeliveryBreakdown.withinFreeZone ? (
-                    <Text className="text-xs text-success leading-4">
-                      Within the chef's free-delivery radius
-                    </Text>
-                  ) : null}
-                  {quote.selfDeliveryBreakdown.capped ? (
-                    <Text className="text-xs text-charcoal-soft leading-4">
-                      Capped at the chef's ₹{quote.selfDeliveryBreakdown.maxFee.toFixed(0)} maximum
-                    </Text>
-                  ) : null}
-                </View>
-                <Text className="text-xs text-charcoal-soft leading-4 pt-2 border-t border-hairline">
-                  Estimate — the chef sets the final fee at accept and can only lower it.
-                </Text>
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
-            {/* Promo code (#39) */}
+            {/* Promo code (#39) — ghost-style Apply button per spec §3 */}
             {appliedPromo ? (
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
                   <View className="rounded bg-coral/10 px-2 py-0.5">
                     <Text className="text-xs font-semibold text-coral">{appliedPromo.code}</Text>
                   </View>
-                  <Pressable onPress={removePromo} accessibilityRole="button" accessibilityLabel="Remove promo code">
-                    <Text className="text-xs text-charcoal-soft underline">Remove</Text>
+                  <Pressable
+                    onPress={removePromo}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove promo code"
+                    hitSlop={6}
+                  >
+                    {({ pressed }) => (
+                      <Text
+                        className="text-xs text-charcoal-soft underline"
+                        style={pressed ? { opacity: 0.6 } : undefined}
+                      >
+                        Remove
+                      </Text>
+                    )}
                   </Pressable>
                 </View>
                 <Text className="text-sm text-success font-medium" style={{ fontVariant: ['tabular-nums'] }}>
@@ -1043,25 +1275,42 @@ export default function CheckoutScreen() {
                     value={promoInput}
                     onChangeText={(t) => setPromoInput(t.toUpperCase())}
                     placeholder="Promo code"
-                    // #717171 (charcoal-soft) meets AA on canvas; #9CA3AF did not.
-                    placeholderTextColor="#717171"
+                    // charcoal-soft meets AA on canvas; the old placeholder grey did not.
+                    placeholderTextColor={customerColors.charcoal.soft}
                     autoCapitalize="characters"
                     autoCorrect={false}
                     accessibilityLabel="Promo code"
                     className="flex-1 rounded-lg border border-hairline bg-canvas px-3 py-2 text-sm text-charcoal"
                   />
+                  {/* Ghost/outline button per spec §3: white bg, hairline border,
+                      charcoal text — not a solid coral fill. */}
                   <Pressable
                     onPress={applyPromo}
                     disabled={!promoInput.trim() || validatePromo.isPending}
                     accessibilityRole="button"
                     accessibilityLabel="Apply promo code"
-                    className={`rounded-lg px-4 py-2 ${
-                      !promoInput.trim() || validatePromo.isPending ? 'bg-hairline' : 'bg-coral'
-                    }`}
+                    android_ripple={{ color: CHARCOAL_RIPPLE, borderless: false }}
                   >
-                    <Text className={`text-sm font-semibold ${!promoInput.trim() || validatePromo.isPending ? 'text-charcoal-soft' : 'text-canvas'}`}>
-                      {validatePromo.isPending ? '…' : 'Apply'}
-                    </Text>
+                    {({ pressed }) => (
+                      <View
+                        className={`rounded-lg border px-4 items-center justify-center ${
+                          !promoInput.trim() || validatePromo.isPending
+                            ? 'border-hairline'
+                            : 'border-charcoal'
+                        } ${pressed && Platform.OS === 'ios' ? 'bg-surface-soft' : 'bg-canvas'}`}
+                        style={{ minHeight: 40 }}
+                      >
+                        <Text
+                          className={`text-sm font-semibold ${
+                            !promoInput.trim() || validatePromo.isPending
+                              ? 'text-charcoal-soft'
+                              : 'text-charcoal'
+                          }`}
+                        >
+                          {validatePromo.isPending ? '…' : 'Apply'}
+                        </Text>
+                      </View>
+                    )}
                   </Pressable>
                 </View>
                 {promoError ? <Text className="text-xs text-destructive">{promoError}</Text> : null}
@@ -1076,24 +1325,33 @@ export default function CheckoutScreen() {
                 accessibilityRole="switch"
                 accessibilityState={{ checked: applyWallet }}
                 accessibilityLabel="Apply wallet credit"
-                className="flex-row items-center justify-between"
+                android_ripple={{ color: CHARCOAL_RIPPLE, borderless: false }}
               >
-                <View className="flex-row items-center gap-2">
+                {({ pressed }) => (
                   <View
-                    className={`h-5 w-5 items-center justify-center rounded border ${
-                      applyWallet ? 'border-coral bg-coral' : 'border-hairline bg-canvas'
+                    className={`flex-row items-center justify-between ${
+                      pressed && Platform.OS === 'ios' ? 'opacity-70' : ''
                     }`}
+                    style={{ minHeight: 44 }}
                   >
-                    {applyWallet && <Check size={14} color="#FFFFFF" />}
+                    <View className="flex-row items-center gap-2">
+                      <View
+                        className={`h-5 w-5 items-center justify-center rounded border ${
+                          applyWallet ? 'border-coral bg-coral' : 'border-hairline bg-canvas'
+                        }`}
+                      >
+                        {applyWallet && <Check size={14} color={customerColors.canvas} />}
+                      </View>
+                      <Text className="text-sm text-charcoal">
+                        Use wallet credit (₹{walletBalance.toFixed(2)})
+                      </Text>
+                    </View>
+                    {applyWallet && (
+                      <Text className="text-sm text-success font-medium" style={{ fontVariant: ['tabular-nums'] }}>
+                        −₹{walletApplied.toFixed(2)}
+                      </Text>
+                    )}
                   </View>
-                  <Text className="text-sm text-charcoal">
-                    Use wallet credit (₹{walletBalance.toFixed(2)})
-                  </Text>
-                </View>
-                {applyWallet && (
-                  <Text className="text-sm text-success font-medium" style={{ fontVariant: ['tabular-nums'] }}>
-                    −₹{walletApplied.toFixed(2)}
-                  </Text>
                 )}
               </Pressable>
             )}
@@ -1102,7 +1360,10 @@ export default function CheckoutScreen() {
               <Text className="text-base font-medium text-charcoal">
                 {walletApplied > 0 ? 'To pay' : 'Total'}
               </Text>
-              <Text className="text-base font-medium text-charcoal" style={{ fontVariant: ['tabular-nums'] }}>
+              <Text
+                className="text-base font-medium text-charcoal"
+                style={{ fontVariant: ['tabular-nums'], minWidth: 72, textAlign: 'right' }}
+              >
                 ₹{payable.toFixed(2)}
               </Text>
             </View>
@@ -1113,7 +1374,7 @@ export default function CheckoutScreen() {
         {dietaryWarnings.length > 0 && (
           <View className="mx-4 mt-4 bg-destructive-tint border border-destructive/30 rounded-2xl p-4">
             <View className="flex-row items-center gap-2 mb-1">
-              <AlertTriangle size={16} color="#B22B0E" />
+              <AlertTriangle size={16} color={customerColors.destructive.DEFAULT} />
               <Text className="text-sm font-semibold text-destructive">Check your order</Text>
             </View>
             <Text className="text-sm text-destructive leading-5 mb-2">
@@ -1139,22 +1400,36 @@ export default function CheckoutScreen() {
           <View className="bg-canvas border-t border-hairline p-4">
             <Text className="text-sm font-medium text-charcoal-soft mb-3">Delivery time</Text>
             <View className="flex-row flex-wrap gap-2">
-              {/* ASAP (default) */}
+              {/* ASAP (default) — selected chip = coral fill + white text per spec */}
               <Pressable
                 onPress={() => setSelectedSlot(null)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: selectedSlot === null }}
+                android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
               >
-                <View
-                  className={`px-3 py-2 rounded-xl border ${
-                    selectedSlot === null ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
-                  }`}
-                >
-                  <Text className={`text-sm font-medium ${selectedSlot === null ? 'text-coral' : 'text-charcoal'}`}>
-                    ASAP
-                  </Text>
-                  <Text className="text-xs text-charcoal-soft">After chef accepts</Text>
-                </View>
+                {({ pressed }) => (
+                  <View
+                    className={`px-3 py-2 rounded-xl border justify-center ${
+                      selectedSlot === null
+                        ? 'border-coral bg-coral'
+                        : 'border-hairline bg-surface-soft'
+                    } ${pressed && Platform.OS === 'ios' && selectedSlot !== null ? 'bg-hairline' : ''}`}
+                    style={{ minHeight: 44 }}
+                  >
+                    <Text
+                      className={`text-sm font-medium ${
+                        selectedSlot === null ? 'text-canvas' : 'text-charcoal'
+                      }`}
+                    >
+                      ASAP
+                    </Text>
+                    <Text
+                      className={`text-xs ${selectedSlot === null ? 'text-canvas/80' : 'text-charcoal-soft'}`}
+                    >
+                      After chef accepts
+                    </Text>
+                  </View>
+                )}
               </Pressable>
 
               {availableSlots.map((s: DeliverySlot) => {
@@ -1166,20 +1441,27 @@ export default function CheckoutScreen() {
                     accessibilityRole="radio"
                     accessibilityState={{ selected: sel }}
                     accessibilityLabel={`${slotDayLabel(s.date)} ${s.label} ${s.window}`}
+                    android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
                   >
-                    <View
-                      className={`px-3 py-2 rounded-xl border ${
-                        sel ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
-                      }`}
-                    >
-                      <Text className={`text-sm font-medium ${sel ? 'text-coral' : 'text-charcoal'}`}>
-                        {slotDayLabel(s.date)} · {s.label}
-                      </Text>
-                      <Text className="text-xs text-charcoal-soft" style={{ fontVariant: ['tabular-nums'] }}>
-                        {s.window}
-                        {s.remaining != null ? ` · ${s.remaining} left` : ''}
-                      </Text>
-                    </View>
+                    {({ pressed }) => (
+                      <View
+                        className={`px-3 py-2 rounded-xl border justify-center ${
+                          sel ? 'border-coral bg-coral' : 'border-hairline bg-surface-soft'
+                        } ${pressed && Platform.OS === 'ios' && !sel ? 'bg-hairline' : ''}`}
+                        style={{ minHeight: 44 }}
+                      >
+                        <Text className={`text-sm font-medium ${sel ? 'text-canvas' : 'text-charcoal'}`}>
+                          {slotDayLabel(s.date)} · {s.label}
+                        </Text>
+                        <Text
+                          className={`text-xs ${sel ? 'text-canvas/80' : 'text-charcoal-soft'}`}
+                          style={{ fontVariant: ['tabular-nums'] }}
+                        >
+                          {s.window}
+                          {s.remaining != null ? ` · ${s.remaining} left` : ''}
+                        </Text>
+                      </View>
+                    )}
                   </Pressable>
                 );
               })}
@@ -1197,32 +1479,36 @@ export default function CheckoutScreen() {
             </Text>
             <View className="gap-3">
               {/* As soon as ready (default) — recommended, full-width so it reads
-                  as the primary choice above the specific-time clusters. */}
+                  as the primary choice above the specific-time clusters (R14: the
+                  default hero option). */}
               <Pressable
                 onPress={() => setRequestedTime(null)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: requestedTime === null }}
                 accessibilityLabel="As soon as ready"
+                android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
               >
-                <View
-                  className={`flex-row items-center justify-between px-3.5 py-3 rounded-xl border ${
-                    requestedTime === null ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
-                  }`}
-                >
-                  <View className="flex-1">
-                    <Text className={`text-sm font-semibold ${requestedTime === null ? 'text-coral' : 'text-charcoal'}`}>
-                      As soon as ready
-                    </Text>
-                    <Text className="text-xs text-charcoal-soft mt-0.5">Chef decides when to start</Text>
-                  </View>
+                {({ pressed }) => (
                   <View
-                    className={`h-5 w-5 items-center justify-center rounded-full border ${
-                      requestedTime === null ? 'border-coral bg-coral' : 'border-hairline bg-canvas'
-                    }`}
+                    className={`flex-row items-center justify-between px-3.5 py-3 rounded-xl border ${
+                      requestedTime === null ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
+                    } ${pressed && Platform.OS === 'ios' && requestedTime !== null ? 'bg-hairline' : ''}`}
                   >
-                    {requestedTime === null ? <Check size={13} color="#FFFFFF" /> : null}
+                    <View className="flex-1">
+                      <Text className={`text-sm font-semibold ${requestedTime === null ? 'text-coral' : 'text-charcoal'}`}>
+                        As soon as ready
+                      </Text>
+                      <Text className="text-xs text-charcoal-soft mt-0.5">Chef decides when to start</Text>
+                    </View>
+                    <View
+                      className={`h-5 w-5 items-center justify-center rounded-full border ${
+                        requestedTime === null ? 'border-coral bg-coral' : 'border-hairline bg-canvas'
+                      }`}
+                    >
+                      {requestedTime === null ? <Check size={13} color={customerColors.canvas} /> : null}
+                    </View>
                   </View>
-                </View>
+                )}
               </Pressable>
 
               {/* Specific times, grouped into scannable day·meal clusters. Chips
@@ -1240,19 +1526,23 @@ export default function CheckoutScreen() {
                           accessibilityRole="radio"
                           accessibilityState={{ selected: sel }}
                           accessibilityLabel={`${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} around ${t.label}, ${t.day} ${t.meal}`}
+                          android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
                         >
-                          <View
-                            className={`min-w-[72px] items-center px-3 py-2 rounded-xl border ${
-                              sel ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
-                            }`}
-                          >
-                            <Text
-                              className={`text-sm font-medium ${sel ? 'text-coral' : 'text-charcoal'}`}
-                              style={{ fontVariant: ['tabular-nums'] }}
+                          {({ pressed }) => (
+                            <View
+                              className={`min-w-[72px] items-center justify-center px-3 py-2 rounded-xl border ${
+                                sel ? 'border-coral bg-coral' : 'border-hairline bg-surface-soft'
+                              } ${pressed && Platform.OS === 'ios' && !sel ? 'bg-hairline' : ''}`}
+                              style={{ minHeight: 44 }}
                             >
-                              {t.label}
-                            </Text>
-                          </View>
+                              <Text
+                                className={`text-sm font-medium ${sel ? 'text-canvas' : 'text-charcoal'}`}
+                                style={{ fontVariant: ['tabular-nums'] }}
+                              >
+                                {t.label}
+                              </Text>
+                            </View>
+                          )}
                         </Pressable>
                       );
                     })}
@@ -1268,7 +1558,7 @@ export default function CheckoutScreen() {
             as one line; full cancellation rules live behind the Refund Policy link. */}
         <View className="bg-canvas border-t border-hairline p-4 gap-2.5">
           <View className="flex-row items-start gap-2">
-            <Clock size={16} color="#FF385C" style={{ marginTop: 1 }} />
+            <Clock size={16} color={customerColors.coral.DEFAULT} style={{ marginTop: 1 }} />
             <Text className="text-sm text-charcoal-soft flex-1 leading-5">
               Estimated delivery 30–45 min after the chef accepts.
             </Text>
@@ -1289,34 +1579,49 @@ export default function CheckoutScreen() {
         </View>
 
         {/* ── T&C + Refund consent (CW-01d) ── */}
-        <View className="mx-4 mt-4">
-          {/* iOS Pressable inner-View pattern — visual styles on the inner View */}
+        <View
+          ref={termsSectionRef}
+          onLayout={(e) => {
+            termsSectionY.current = e.nativeEvent.layout.y;
+          }}
+          className="mx-4 mt-4"
+        >
+          {/* iOS Pressable inner-View pattern — visual styles on the inner View.
+              44pt row (R5), visual checkbox, label preserved verbatim. */}
           <Pressable
             onPress={() => setAcceptedTerms((prev: boolean) => !prev)}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: acceptedTerms }}
             accessibilityLabel="I agree to the Terms of Service and Refund Policy for this order"
+            android_ripple={{ color: CHARCOAL_RIPPLE, borderless: false }}
           >
-            <View className="flex-row items-start gap-3 bg-surface-soft rounded-2xl p-4">
+            {({ pressed }) => (
               <View
-                className={`w-5 h-5 rounded border-2 items-center justify-center mt-0.5 ${
-                  acceptedTerms ? 'border-coral bg-coral' : 'border-hairline bg-canvas'
+                className={`flex-row items-start gap-3 bg-surface-soft rounded-2xl p-4 ${
+                  pressed && Platform.OS === 'ios' ? 'bg-hairline' : ''
                 }`}
+                style={{ minHeight: 44 }}
               >
-                {acceptedTerms && <Check size={14} color="#FFFFFF" />}
+                <View
+                  className={`w-5 h-5 rounded border-2 items-center justify-center mt-0.5 ${
+                    acceptedTerms ? 'border-coral bg-coral' : 'border-hairline bg-canvas'
+                  }`}
+                >
+                  {acceptedTerms && <Check size={14} color={customerColors.canvas} />}
+                </View>
+                <Text className="flex-1 text-sm text-charcoal-soft leading-5">
+                  I agree to the{' '}
+                  <Link href={'/terms' as Href} className="text-coral">
+                    Terms of Service
+                  </Link>{' '}
+                  and{' '}
+                  <Link href={'/refund' as Href} className="text-coral">
+                    Refund Policy
+                  </Link>{' '}
+                  for this order.
+                </Text>
               </View>
-              <Text className="flex-1 text-sm text-charcoal-soft leading-5">
-                I agree to the{' '}
-                <Link href={'/terms' as Href} className="text-coral">
-                  Terms of Service
-                </Link>{' '}
-                and{' '}
-                <Link href={'/refund' as Href} className="text-coral">
-                  Refund Policy
-                </Link>{' '}
-                for this order.
-              </Text>
-            </View>
+            )}
           </Pressable>
         </View>
 
@@ -1327,10 +1632,12 @@ export default function CheckoutScreen() {
             value={note}
             onChangeText={setNote}
             placeholder="Any special instructions..."
-            placeholderTextColor="#717171"
+            placeholderTextColor={customerColors.charcoal.soft}
             multiline
             numberOfLines={2}
             maxLength={200}
+            returnKeyType="done"
+            blurOnSubmit
             className="bg-surface-soft rounded-xl px-3 py-2.5 text-sm text-charcoal min-h-[60px]"
             accessibilityLabel="Note to chef"
             textAlignVertical="top"
@@ -1346,49 +1653,63 @@ export default function CheckoutScreen() {
               className="mt-1"
               accessibilityRole="button"
               accessibilityLabel="Dismiss error"
+              hitSlop={6}
             >
-              <Text className="text-xs text-destructive underline">Dismiss</Text>
+              {({ pressed }) => (
+                <Text
+                  className="text-xs text-destructive underline"
+                  style={pressed ? { opacity: 0.6 } : undefined}
+                >
+                  Dismiss
+                </Text>
+              )}
             </Pressable>
           </View>
         )}
       </ScrollView>
 
-      {/* ── Place Order button — sticky bottom, coral filled, radius 8, 52pt, tabular total ── */}
+      {/* ── Place Order button — sticky bottom, coral filled, radius 8, 52pt,
+          tabular total. Distinct disabled state: reduced-opacity coral fill +
+          charcoal-soft label, never fully invisible-looking (spec §2.5). ── */}
       <View
         style={{
-          shadowColor: '#000',
+          shadowColor: customerTheme.shadow[2].shadowColor,
           shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.06,
-          shadowRadius: 6,
-          elevation: 4,
+          shadowOpacity: customerTheme.shadow[2].shadowOpacity,
+          shadowRadius: customerTheme.shadow[2].shadowRadius,
+          elevation: customerTheme.shadow[2].elevation,
+          paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 16,
         }}
-        className="absolute bottom-0 left-0 right-0 bg-canvas border-t border-hairline px-4 pt-3 pb-8"
+        className="absolute bottom-0 left-0 right-0 bg-canvas border-t border-hairline px-4 pt-3"
       >
         {/* iOS Pressable inner-View pattern */}
         <Pressable
           onPress={handlePlaceOrder}
-          disabled={!placeEnabled}
+          disabled={hardBlocked}
           accessibilityRole="button"
           accessibilityLabel="Place Order"
           accessibilityState={{ disabled: !placeEnabled }}
+          android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
         >
-          <View
-            className={`w-full rounded-lg items-center justify-center flex-row gap-2 ${
-              placeEnabled ? 'bg-coral' : 'bg-surface-soft'
-            }`}
-            style={{ minHeight: 52 }}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text
-                className={`text-base font-semibold ${placeEnabled ? 'text-canvas' : 'text-charcoal-soft'}`}
-                style={placeEnabled ? { fontVariant: ['tabular-nums'] } : undefined}
-              >
-                {isLoading ? 'Processing...' : `Place Order · ₹${payable.toFixed(2)}`}
-              </Text>
-            )}
-          </View>
+          {({ pressed }) => (
+            <View
+              className={`w-full rounded-lg items-center justify-center flex-row gap-2 bg-coral ${
+                placeEnabled && pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : ''
+              }`}
+              style={{ minHeight: 52, opacity: placeEnabled ? 1 : 0.4 }}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color={customerColors.canvas} />
+              ) : (
+                <Text
+                  className={`text-base font-semibold ${placeEnabled ? 'text-canvas' : 'text-charcoal-soft'}`}
+                  style={{ fontVariant: ['tabular-nums'], minWidth: 96, textAlign: 'center' }}
+                >
+                  {isLoading ? 'Processing...' : `Place Order · ₹${payable.toFixed(2)}`}
+                </Text>
+              )}
+            </View>
+          )}
         </Pressable>
       </View>
     </KeyboardAvoidingView>
