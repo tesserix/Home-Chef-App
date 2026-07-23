@@ -2,10 +2,19 @@
 // and a quick adherence + fulfillment glance. Orders are placed automatically by
 // the platform at the chef's cutoff — no daily tapping.
 
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
+import { AlertCircle, ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { friendlyErrorMessage } from '../lib/errors';
 import {
@@ -15,6 +24,11 @@ import {
   type MealFulfillment,
   type MealSubscription,
 } from '../hooks/useMealSubscription';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
+const CORAL_GHOST_RIPPLE = `${customerColors.coral.DEFAULT}14`;
 
 // How many upcoming days to surface per subscription. Enough to cover "I'm away
 // later this week" without turning the card into a calendar.
@@ -48,6 +62,48 @@ function money(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 
+// ─── Loading skeleton — matches SubCard proportions ──────────────────────────
+
+function SkeletonCard() {
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardTop}>
+        <View style={[styles.skeletonLine, { width: '50%', height: 15 }]} />
+        <View style={[styles.skeletonChip, { width: 64, height: 20 }]} />
+      </View>
+      <View style={[styles.skeletonLine, { width: '70%', height: 13, marginTop: 8 }]} />
+    </View>
+  );
+}
+
+// ─── Error state (R8) ─────────────────────────────────────────────────────────
+
+function ErrorState({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) {
+  return (
+    <View style={styles.centered}>
+      <View style={styles.emptyIconWrap}>
+        <AlertCircle size={28} color={customerColors.charcoal.soft} />
+      </View>
+      <Text style={styles.errorTitle}>Couldn&apos;t load your subscriptions</Text>
+      <Text style={styles.muted}>
+        This is a connection problem — your subscriptions and billing are unaffected.
+      </Text>
+      <Pressable
+        onPress={onRetry}
+        accessibilityRole="button"
+        accessibilityLabel="Retry loading subscriptions"
+        android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
+      >
+        {({ pressed }) => (
+          <View style={[styles.retryBtn, pressed && Platform.OS === 'ios' && styles.pressedSurface]}>
+            <Text style={styles.retryText}>{retrying ? 'Retrying…' : 'Try again'}</Text>
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 export default function SubscriptionsScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useMealSubscriptions();
   const subs = data?.data ?? [];
@@ -55,7 +111,13 @@ export default function SubscriptionsScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: ICON_RIPPLE, borderless: true }}
+        >
           <ChevronLeft size={26} color={customerColors.charcoal.DEFAULT} />
         </Pressable>
         <Text style={styles.headerTitle}>My subscriptions</Text>
@@ -63,30 +125,24 @@ export default function SubscriptionsScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.centered}><ActivityIndicator color={customerColors.coral.DEFAULT} /></View>
+        <View style={styles.scroll}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
       ) : isError ? (
         // A failed fetch used to fall through to the empty state below — so a
         // network blip told a PAYING customer their subscription did not exist.
         // Alarming, and a support call. Say what actually happened and offer a retry.
-        <View style={styles.centered}>
-          <Text style={styles.errorTitle}>Couldn&apos;t load your subscriptions</Text>
-          <Text style={styles.muted}>
-            This is a connection problem — your subscriptions and billing are unaffected.
-          </Text>
-          <Pressable
-            onPress={() => void refetch()}
-            accessibilityRole="button"
-            accessibilityLabel="Retry loading subscriptions"
-            style={({ pressed }) => [styles.retryBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.retryText}>{isRefetching ? 'Retrying…' : 'Try again'}</Text>
-          </Pressable>
-        </View>
+        <ErrorState onRetry={() => void refetch()} retrying={isRefetching} />
       ) : subs.length === 0 ? (
-        <View style={styles.centered}><Text style={styles.muted}>No tiffin subscriptions yet.</Text></View>
+        <View style={styles.centered}>
+          <Text style={styles.muted}>No tiffin subscriptions yet.</Text>
+        </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
-          {subs.map((s) => <SubCard key={s.id} sub={s} />)}
+          {subs.map((s) => (
+            <SubCard key={s.id} sub={s} />
+          ))}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -156,13 +212,35 @@ function SubCard({ sub }: { sub: MealSubscription }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardTop}>
-        <Text style={styles.cardTitle}>{sub.slots.map((x) => (x === 'lunch' ? 'Lunch' : 'Dinner')).join(' + ')} · {sub.variant === 'veg' ? 'Veg' : 'Non-veg'}</Text>
-        <View style={[styles.badge, active && styles.badgeActive, paused && styles.badgePaused]}>
-          <Text style={[styles.badgeText, active && styles.badgeTextActive]}>{STATUS_LABEL[sub.status]}</Text>
+        <Text style={styles.cardTitle}>
+          {sub.slots.map((x) => (x === 'lunch' ? 'Lunch' : 'Dinner')).join(' + ')} ·{' '}
+          {sub.variant === 'veg' ? 'Veg' : 'Non-veg'}
+        </Text>
+        {/* Status chip per spec §2.7 — active/trial reads as in-progress
+            (coral-tint), paused/past_due neutral, cancelled neutral. */}
+        <View
+          style={[
+            styles.badge,
+            (active || sub.status === 'trialing') && styles.badgeActive,
+          ]}
+        >
+          <Text
+            style={[
+              styles.badgeText,
+              (active || sub.status === 'trialing') && styles.badgeTextActive,
+            ]}
+          >
+            {STATUS_LABEL[sub.status]}
+          </Text>
         </View>
       </View>
-      <Text style={styles.sub}>{sub.days.length} days/week · {sub.cadence === 'monthly' ? 'Monthly' : 'Weekly'} · {money(sub.cycleAmount)}</Text>
-      {sub.creditBalance > 0 ? <Text style={styles.credit}>{money(sub.creditBalance)} credit applies to your next cycle</Text> : null}
+      <Text style={styles.sub}>
+        {sub.days.length} days/week · {sub.cadence === 'monthly' ? 'Monthly' : 'Weekly'} ·{' '}
+        {money(sub.cycleAmount)}
+      </Text>
+      {sub.creditBalance > 0 ? (
+        <Text style={styles.credit}>{money(sub.creditBalance)} credit applies to your next cycle</Text>
+      ) : null}
       {adherence ? (
         <Text style={styles.adherence}>
           {adherence.delivered} delivered · {adherence.skipped} skipped · {adherence.missed} missed
@@ -230,31 +308,71 @@ function ActionBtn({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: !!pending, busy: !!pending }}
-      style={({ pressed }) => [pressed && !pending && styles.pressed, pending && styles.actionPending]}
+      android_ripple={
+        pending ? undefined : { color: danger ? CORAL_GHOST_RIPPLE : GHOST_RIPPLE, borderless: false }
+      }
     >
-      <View style={[styles.actionBtn, danger && styles.actionBtnDanger]}>
-        <Text style={[styles.actionText, danger && styles.actionTextDanger]}>{label}</Text>
-      </View>
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.actionBtn,
+            danger && styles.actionBtnDanger,
+            pending && styles.actionPending,
+            pressed && Platform.OS === 'ios' && !pending && styles.pressedSurface,
+          ]}
+        >
+          <Text style={[styles.actionText, danger && styles.actionTextDanger]}>{label}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: customerColors.surface.soft },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  // White-first canvas per surface model §1 — cards separate by hairline, not
+  // a grey page background.
+  root: { flex: 1, backgroundColor: customerColors.canvas },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
   headerTitle: { fontFamily: 'Geist-Bold', fontSize: 20, color: customerColors.charcoal.DEFAULT },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: customerColors.surface.soft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
   scroll: { padding: 16, gap: 12 },
-  muted: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft },
-  card: { backgroundColor: customerColors.canvas, borderRadius: 12, padding: 16, gap: 6 },
+  muted: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft, textAlign: 'center' },
+  card: {
+    backgroundColor: customerColors.canvas,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    padding: 16,
+    gap: 6,
+  },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT, flex: 1 },
-  sub: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
-  credit: { fontFamily: 'Inter-SemiBold', fontSize: 12, color: customerColors.coral.pressed },
-  adherence: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft },
+  sub: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, fontVariant: ['tabular-nums'] },
+  credit: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: customerColors.coral.pressed,
+    fontVariant: ['tabular-nums'],
+  },
+  adherence: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft, fontVariant: ['tabular-nums'] },
+  // Status chip — tint bg + dark text of same family (spec §2.7 / §2 item 7).
   badge: { borderRadius: 9999, paddingHorizontal: 10, paddingVertical: 3, backgroundColor: customerColors.surface.soft },
   badgeActive: { backgroundColor: customerColors.coral.tint },
-  badgePaused: { backgroundColor: customerColors.surface.soft },
   badgeText: { fontFamily: 'Inter-SemiBold', fontSize: 11, color: customerColors.charcoal.soft },
   badgeTextActive: { color: customerColors.coral.pressed },
   actions: { flexDirection: 'row', gap: 8, marginTop: 8 },
@@ -271,7 +389,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionPending: { opacity: 0.5 },
-  pressed: { opacity: 0.7 },
+  pressedSurface: { backgroundColor: customerColors.surface.soft },
   errorTitle: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 15,
@@ -309,4 +427,6 @@ const styles = StyleSheet.create({
   actionBtnDanger: { borderColor: customerColors.coral.DEFAULT },
   actionText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: customerColors.charcoal.DEFAULT },
   actionTextDanger: { color: customerColors.coral.pressed },
+  skeletonLine: { borderRadius: 4, backgroundColor: customerColors.hairline },
+  skeletonChip: { borderRadius: 9999, backgroundColor: customerColors.surface.soft },
 });

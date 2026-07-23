@@ -24,6 +24,9 @@ const DOCS: { label: string; route: Href; icon: LucideIcon }[] = [
   { label: 'End User Licence', route: '/eula', icon: ScrollText },
 ];
 
+// Android ripple tint — translucent token, never a new literal colour.
+const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+
 export default function LegalScreen() {
   return (
     <SafeAreaView
@@ -41,6 +44,7 @@ export default function LegalScreen() {
                 onPress={() => router.push(doc.route)}
                 accessibilityRole="button"
                 accessibilityLabel={doc.label}
+                android_ripple={{ color: ROW_RIPPLE, borderless: false }}
               >
                 {({ pressed }) => (
                   <View
