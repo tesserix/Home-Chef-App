@@ -405,13 +405,13 @@ export default function CheckoutScreen() {
     setError(null);
 
     // R7 — light haptic the instant the customer commits to paying, fired
-    // before the async round-trip starts. Never let a haptics failure (e.g. on
-    // a simulator) interrupt the order flow.
-    try {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {
+    // before the async round-trip starts. impactAsync is async, so a
+    // synchronous try/catch never sees a rejection (e.g. on a simulator) —
+    // catch on the promise itself. Never let a haptics failure interrupt the
+    // order flow.
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
       // no-op — haptics are non-critical
-    }
+    });
 
     try {
       // Step 1: Create the order on the server
@@ -1688,7 +1688,11 @@ export default function CheckoutScreen() {
           disabled={hardBlocked}
           accessibilityRole="button"
           accessibilityLabel="Place Order"
-          accessibilityState={{ disabled: !placeEnabled }}
+          // Announced state must match actual tappability — VoiceOver suppresses
+          // activation on elements announced as disabled, which would silently
+          // block the R14 scroll-to-first-invalid path (missing address / unchecked
+          // terms) for screen-reader users, the audience it most serves.
+          accessibilityState={{ disabled: hardBlocked }}
           android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
         >
           {({ pressed }) => (
