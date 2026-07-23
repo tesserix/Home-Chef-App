@@ -541,6 +541,26 @@ function AppNavigator() {
       ? 'Setting up your kitchen…'
       : 'Loading…';
 
+  // Fonts must resolve BEFORE the Stack mounts. Rendering the tree under the
+  // routing overlay while fonts loaded measured every Text with the fallback
+  // font; when Geist/Inter swapped in, Fabric never re-measured — permanently
+  // clipped labels + a visible glyph snap. The routing overlay below still
+  // covers the auth/resolve phase (which requires the Stack to be mounted).
+  if (!fontsLoaded && !forceLift) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#FFFFFF',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <ActivityIndicator color="#0E0E0C" size="large" />
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <OfflineBanner />

@@ -243,6 +243,28 @@ export default function RootLayout() {
     }
   }, [isAuthenticated, isLoading, onboardingComplete, onboardingChecked]);
 
+  // Fonts must resolve BEFORE the tree mounts. The previous approach rendered
+  // the whole app under an opaque overlay while fonts loaded — every Text was
+  // measured with the fallback font (Roboto/SF), and when Inter/Geist swapped
+  // in, Fabric never re-measured, permanently clipping labels app-wide (the
+  // Home cuisine tabs rendered "Al"/"Chines"/"Continent") and producing a
+  // visible glyph snap. Mounting nothing until fonts resolve fixes both; this
+  // placeholder is visually identical to the old overlay.
+  if (!fontsLoaded) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: customerColors.canvas,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <ActivityIndicator color={customerColors.charcoal.DEFAULT} size="large" />
+      </View>
+    );
+  }
+
   return (
     // GestureHandlerRootView must wrap the whole app so @gorhom/bottom-sheet's
     // GestureDetector (used by CartSheet on the chef detail screen) works.
@@ -259,23 +281,6 @@ export default function RootLayout() {
             <View style={{ flex: 1 }}>
               <OfflineBanner />
               <Stack screenOptions={{ headerShown: false }} />
-              {!fontsLoaded && (
-                <View
-                  pointerEvents="auto"
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: customerColors.canvas,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <ActivityIndicator color={customerColors.charcoal.DEFAULT} size="large" />
-                </View>
-              )}
             </View>
           </QueryClientProvider>
         </AuthProvider>
