@@ -11,7 +11,7 @@
 // scrolls visibly through the gap beneath the dock — screens must pad their
 // scrollable bottom by useDockClearance() so the last row clears the dock.
 
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { Heart, Home, ShoppingBag, User, type LucideIcon } from 'lucide-react-native';
@@ -25,6 +25,11 @@ export { DOCK_BOTTOM_GAP, DOCK_HEIGHT, useDockClearance };
 
 // Entrances use the app-standard ease-out-quart — no bounce, no overshoot.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
+
+// Android ripple tint for the (icon-only) tab slots — translucent ink
+// derived from the charcoal token, borderless so it reads as an icon-button
+// ripple rather than filling the whole flex slot.
+const TAB_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 const TAB_ICONS: Record<string, LucideIcon> = {
   index: Home,
@@ -88,23 +93,32 @@ export function Dock({ state, descriptors, navigation }: DockProps) {
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={label}
               style={styles.slot}
+              android_ripple={{ color: TAB_RIPPLE, borderless: true, radius: 28 }}
             >
-              {isActive ? (
-                <Animated.View
-                  entering={
-                    reduceMotion
-                      ? undefined
-                      : FadeIn.duration(250).easing(ENTRANCE_EASING)
+              {({ pressed }) => (
+                <View
+                  style={
+                    pressed && Platform.OS === 'ios' ? styles.slotPressedIOS : undefined
                   }
-                  style={styles.activePill}
                 >
-                  <Icon size={20} color={customerColors.coral.DEFAULT} />
-                  <Text style={styles.activeLabel} numberOfLines={1}>
-                    {label}
-                  </Text>
-                </Animated.View>
-              ) : (
-                <Icon size={22} color={customerColors.charcoal.soft} />
+                  {isActive ? (
+                    <Animated.View
+                      entering={
+                        reduceMotion
+                          ? undefined
+                          : FadeIn.duration(250).easing(ENTRANCE_EASING)
+                      }
+                      style={styles.activePill}
+                    >
+                      <Icon size={20} color={customerColors.coral.DEFAULT} />
+                      <Text style={styles.activeLabel} numberOfLines={1}>
+                        {label}
+                      </Text>
+                    </Animated.View>
+                  ) : (
+                    <Icon size={22} color={customerColors.charcoal.soft} />
+                  )}
+                </View>
               )}
             </Pressable>
           );
@@ -147,6 +161,11 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // iOS-only pressed feedback (Android gets android_ripple on the Pressable
+  // above — layering both would read as a double, janky press).
+  slotPressedIOS: {
+    opacity: 0.6,
   },
   activePill: {
     flexDirection: 'row',

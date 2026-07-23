@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -52,6 +53,11 @@ import { useCustomerCoords, useActiveAddress } from '../../hooks/useCustomerCoor
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
+
+// Android ripple tint for pills/rows on white or light surfaces — translucent
+// ink derived from the charcoal token (never a new literal colour), matching
+// the primitive Button's `withAlpha` convention.
+const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 const CUISINES = [
   'All',
@@ -183,10 +189,18 @@ export default function HomeScreen() {
           onPress={() => router.push('/chefs-map')}
           accessibilityRole="button"
           accessibilityLabel="View chefs on a map"
+          android_ripple={{ color: ROW_RIPPLE, borderless: true, radius: 20 }}
         >
-          <View style={styles.mapButton}>
-            <Map size={18} color={customerColors.charcoal.DEFAULT} />
-          </View>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.mapButton,
+                pressed && Platform.OS === 'ios' && styles.pressedIOS,
+              ]}
+            >
+              <Map size={18} color={customerColors.charcoal.DEFAULT} />
+            </View>
+          )}
         </Pressable>
       </View>
 
@@ -198,15 +212,23 @@ export default function HomeScreen() {
           onPress={() => router.push('/search-dishes')}
           accessibilityRole="button"
           accessibilityLabel="Search dishes and chefs"
+          android_ripple={{ color: ROW_RIPPLE, borderless: false }}
         >
-          <View style={styles.searchPill}>
-            <Search
-              size={18}
-              color={customerColors.charcoal.soft}
-              accessibilityElementsHidden
-            />
-            <Text style={styles.searchPlaceholder}>What are you craving?</Text>
-          </View>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.searchPill,
+                pressed && Platform.OS === 'ios' && styles.pressedIOS,
+              ]}
+            >
+              <Search
+                size={18}
+                color={customerColors.charcoal.soft}
+                accessibilityElementsHidden
+              />
+              <Text style={styles.searchPlaceholder}>What are you craving?</Text>
+            </View>
+          )}
         </Pressable>
       </View>
 
@@ -237,17 +259,26 @@ export default function HomeScreen() {
               accessibilityRole="tab"
               accessibilityState={{ selected: isSelected }}
               accessibilityLabel={`Filter by ${cuisine}`}
+              android_ripple={{ color: ROW_RIPPLE, borderless: false }}
             >
-              <View style={[styles.chip, isSelected && styles.chipSelected]}>
-                <Text
+              {({ pressed }) => (
+                <View
                   style={[
-                    styles.chipLabel,
-                    isSelected ? styles.chipLabelSelected : styles.chipLabelDefault,
+                    styles.chip,
+                    isSelected && styles.chipSelected,
+                    pressed && Platform.OS === 'ios' && styles.chipPressedIOS,
                   ]}
                 >
-                  {cuisine}
-                </Text>
-              </View>
+                  <Text
+                    style={[
+                      styles.chipLabel,
+                      isSelected ? styles.chipLabelSelected : styles.chipLabelDefault,
+                    ]}
+                  >
+                    {cuisine}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
@@ -264,23 +295,32 @@ export default function HomeScreen() {
           accessibilityRole="button"
           accessibilityLabel={isOpenOnly ? 'Showing open chefs only' : 'Show open chefs only'}
           accessibilityState={{ checked: isOpenOnly }}
+          android_ripple={{ color: ROW_RIPPLE, borderless: false }}
         >
-          <View style={[styles.openNowPill, isOpenOnly && styles.openNowPillActive]}>
+          {({ pressed }) => (
             <View
               style={[
-                styles.openNowDot,
-                isOpenOnly ? styles.openNowDotActive : styles.openNowDotInactive,
-              ]}
-            />
-            <Text
-              style={[
-                styles.openNowLabel,
-                isOpenOnly ? styles.openNowLabelActive : styles.openNowLabelDefault,
+                styles.openNowPill,
+                isOpenOnly && styles.openNowPillActive,
+                pressed && Platform.OS === 'ios' && styles.pressedIOS,
               ]}
             >
-              Open Now
-            </Text>
-          </View>
+              <View
+                style={[
+                  styles.openNowDot,
+                  isOpenOnly ? styles.openNowDotActive : styles.openNowDotInactive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.openNowLabel,
+                  isOpenOnly ? styles.openNowLabelActive : styles.openNowLabelDefault,
+                ]}
+              >
+                Open Now
+              </Text>
+            </View>
+          )}
         </Pressable>
 
         {/* Filters pill — opens the sheet; badge shows count of active secondary filters */}
@@ -292,31 +332,40 @@ export default function HomeScreen() {
               ? `Filters — ${activeFilterCount} active`
               : 'Open filters'
           }
+          android_ripple={{ color: ROW_RIPPLE, borderless: false }}
         >
-          <View style={[styles.filtersPill, activeFilterCount > 0 && styles.filtersPillActive]}>
-            <SlidersHorizontal
-              size={14}
-              color={
-                activeFilterCount > 0
-                  ? customerColors.canvas
-                  : customerColors.charcoal.soft
-              }
-              accessibilityElementsHidden
-            />
-            <Text
+          {({ pressed }) => (
+            <View
               style={[
-                styles.filtersPillLabel,
-                activeFilterCount > 0 && styles.filtersPillLabelActive,
+                styles.filtersPill,
+                activeFilterCount > 0 && styles.filtersPillActive,
+                pressed && Platform.OS === 'ios' && styles.pressedIOS,
               ]}
             >
-              Filters
-            </Text>
-            {activeFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </View>
+              <SlidersHorizontal
+                size={14}
+                color={
+                  activeFilterCount > 0
+                    ? customerColors.canvas
+                    : customerColors.charcoal.soft
+                }
+                accessibilityElementsHidden
+              />
+              <Text
+                style={[
+                  styles.filtersPillLabel,
+                  activeFilterCount > 0 && styles.filtersPillLabelActive,
+                ]}
+              >
+                Filters
+              </Text>
+              {activeFilterCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                </View>
+              )}
+            </View>
+          )}
         </Pressable>
 
         {/* Right side: Social Feed + Catering — navigation, not filter controls.
@@ -328,10 +377,18 @@ export default function HomeScreen() {
               onPress={() => router.push('/social')}
               accessibilityRole="button"
               accessibilityLabel="Go to Social Feed"
+              android_ripple={{ color: ROW_RIPPLE, borderless: false }}
             >
-              <View style={styles.navLinkPill}>
-                <Text style={styles.navLinkLabel}>Social Feed</Text>
-              </View>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.navLinkPill,
+                    pressed && Platform.OS === 'ios' && styles.pressedIOS,
+                  ]}
+                >
+                  <Text style={styles.navLinkLabel}>Social Feed</Text>
+                </View>
+              )}
             </Pressable>
           ) : null}
           {/* Catering — DEFERRED for v1 (CATERING_DEPOSIT_ENABLED off). */}
@@ -340,10 +397,18 @@ export default function HomeScreen() {
               onPress={() => router.push('/catering')}
               accessibilityRole="button"
               accessibilityLabel="Go to Catering"
+              android_ripple={{ color: ROW_RIPPLE, borderless: false }}
             >
-              <View style={styles.navLinkPill}>
-                <Text style={styles.navLinkLabel}>Catering</Text>
-              </View>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.navLinkPill,
+                    pressed && Platform.OS === 'ios' && styles.pressedIOS,
+                  ]}
+                >
+                  <Text style={styles.navLinkLabel}>Catering</Text>
+                </View>
+              )}
             </Pressable>
           ) : null}
         </View>
@@ -384,7 +449,10 @@ export default function HomeScreen() {
               entering={
                 reduceMotion
                   ? undefined
-                  : FadeInDown.delay(Math.min(index, 8) * 60)
+                  // §3.5: stagger steps 40-60ms, max 3 steps — cap the delay
+                  // at the 3rd card so a long grid doesn't cascade for a full
+                  // second; every card past that fades in at the same delay.
+                  : FadeInDown.delay(Math.min(index, 2) * 60)
                       .duration(250)
                       .easing(ENTRANCE_EASING)
               }
@@ -470,6 +538,14 @@ const styles = StyleSheet.create({
     paddingBottom: 106,
   },
 
+  // Shared iOS-only pressed treatment for the header's button-like pills
+  // (Android relies on android_ripple on each Pressable instead). Per §3.5
+  // motion contract: pressed scale 0.97.
+  pressedIOS: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
+
   // Absolute anchor for the floating card — sits just above the tab bar.
   // `bottom` is set dynamically — anchored just above the floating dock.
   activeOrderAnchor: {
@@ -546,6 +622,11 @@ const styles = StyleSheet.create({
   chipSelected: {
     borderBottomWidth: 2,
     borderBottomColor: customerColors.charcoal.DEFAULT,
+  },
+  // iOS-only pressed treatment — opacity only (no scale) so the underline
+  // stays put under the moving text on a horizontal-scroll tab.
+  chipPressedIOS: {
+    opacity: 0.55,
   },
   chipLabel: {
     fontFamily: 'Inter',
