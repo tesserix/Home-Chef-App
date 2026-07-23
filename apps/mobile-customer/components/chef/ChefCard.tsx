@@ -337,11 +337,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 12,
     color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
   },
   ratingCount: {
     fontFamily: 'Inter',
     fontSize: 11,
     color: customerColors.charcoal.soft,
+    fontVariant: ['tabular-nums'],
   },
 
   cuisine: {
@@ -380,6 +382,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: customerColors.charcoal.soft,
     letterSpacing: 0,
+    fontVariant: ['tabular-nums'],
   },
   pickupOnly: {
     fontFamily: 'Inter',

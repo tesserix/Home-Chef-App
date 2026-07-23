@@ -301,6 +301,8 @@ export default function DashboardScreen() {
         <Pressable
           onPress={() => refetch()}
           style={styles.errorPrimary}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.retry')}
           android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           <Text style={styles.errorPrimaryText}>{t('common.retry')}</Text>
@@ -308,6 +310,8 @@ export default function DashboardScreen() {
         <Pressable
           onPress={() => router.replace('/(onboarding)/personal-info')}
           style={styles.errorSecondary}
+          accessibilityRole="button"
+          accessibilityLabel={t('dashboard.completeOnboarding')}
           android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
         >
           <Text style={styles.errorSecondaryText}>{t('dashboard.completeOnboarding')}</Text>
@@ -452,6 +456,7 @@ export default function DashboardScreen() {
                     })
                   : t('dashboard.kitchenAccessibilityClosed')
             }
+            hitSlop={8}
             android_ripple={{
               color: acceptingOrders
                 ? `${theme.colors.paper}33`
@@ -835,6 +840,7 @@ export default function DashboardScreen() {
                   hitSlop={6}
                   style={styles.seeMoreInline}
                   accessibilityRole="link"
+                  accessibilityLabel={t('dashboard.seeMore', { count: pendingOrders.length - 3 })}
                   android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
                 >
                   <Text style={styles.seeMoreInlineLabel}>

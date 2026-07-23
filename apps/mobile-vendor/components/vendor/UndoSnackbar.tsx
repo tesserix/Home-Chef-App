@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text } from "react-native";
 import { theme } from "@homechef/mobile-shared/theme";
 import type { PendingUndo } from "../../hooks/useVendorOrders";
 
@@ -34,14 +34,38 @@ export function UndoSnackbar({
   const translateY = useRef(new Animated.Value(120)).current;
   const isVisible = !!pendingUndo || !!errorMessage;
 
+  // No Reanimated dependency here, so Reduce Motion is read the same way
+  // the shared UI primitives (Skeleton/SheetBase/Toast/UndoSnackbar) do —
+  // via AccessibilityInfo.
+  const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      translateY.setValue(isVisible ? 0 : 120);
+      return;
+    }
     Animated.timing(translateY, {
       toValue: isVisible ? 0 : 120,
       duration: 250,
       easing: Easing.bezier(0.22, 1, 0.36, 1),
       useNativeDriver: true,
     }).start();
-  }, [isVisible, translateY]);
+  }, [isVisible, translateY, reduceMotion]);
 
   if (!isVisible) return null;
 

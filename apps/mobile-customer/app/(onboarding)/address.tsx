@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
+import type { FieldErrors } from 'react-hook-form';
+import type { MutableRefObject, RefObject } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -57,6 +59,32 @@ function fieldBorderStyle(hasError: boolean, isFocused: boolean) {
 export default function AddressScreen() {
   const draft = useCustomerOnboardingStore();
   const [focusedField, setFocusedField] = useState<OnboardingAddressField | null>(null);
+
+  // R14 — scroll to + focus the first invalid field on a failed submit,
+  // instead of leaving an already-scrolled-away user staring at nothing
+  // happening. One Y-offset + input ref per validated field, in field order.
+  const scrollRef = useRef<ScrollView>(null);
+  const addressLine1Y = useRef(0);
+  const cityY = useRef(0);
+  const stateY = useRef(0);
+  const pincodeY = useRef(0);
+  const addressLine1Ref = useRef<TextInput>(null);
+  const cityRef = useRef<TextInput>(null);
+  const stateRef = useRef<TextInput>(null);
+  const pincodeRef = useRef<TextInput>(null);
+
+  function onInvalid(errs: FieldErrors<AddressForm>) {
+    const order: { key: keyof AddressForm; y: MutableRefObject<number>; input: RefObject<TextInput | null> }[] = [
+      { key: 'addressLine1', y: addressLine1Y, input: addressLine1Ref },
+      { key: 'city', y: cityY, input: cityRef },
+      { key: 'state', y: stateY, input: stateRef },
+      { key: 'pincode', y: pincodeY, input: pincodeRef },
+    ];
+    const first = order.find((f) => errs[f.key]);
+    if (!first) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, first.y.current - 16), animated: true });
+    setTimeout(() => first.input.current?.focus(), 320);
+  }
 
   const {
     control,
@@ -130,6 +158,7 @@ export default function AddressScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
+          ref={scrollRef}
           className="flex-1"
           contentContainerStyle={{ padding: 24, paddingTop: 40 }}
           keyboardShouldPersistTaps="handled"
@@ -251,147 +280,159 @@ export default function AddressScreen() {
           />
 
           {/* ── Address Line 1 (building / society / area — autocompleted) ── */}
-          <Text className="text-sm font-medium text-charcoal mb-1">
-            Building / Society / Area
-          </Text>
-          <Controller
-            control={control}
-            name="addressLine1"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={fieldBorderStyle(Boolean(errors.addressLine1), focusedField === 'addressLine1')}
-                placeholder="House no., street, area"
-                placeholderTextColor={customerColors.charcoal.soft}
-                onFocus={() => setFocusedField('addressLine1')}
-                onBlur={() => {
-                  setFocusedField(null);
-                  onBlur();
-                }}
-                onChangeText={(t) => {
-                  // Manual edit invalidates the picked-suggestion geocode.
-                  // (pickSuggestion uses setValue, which doesn't fire this.)
-                  onChange(t);
-                  setCoords(null);
-                }}
-                value={value}
-                autoCapitalize="words"
-                returnKeyType="next"
-                accessibilityLabel="Address line 1"
-              />
-            )}
-          />
-          {errors.addressLine1 ? (
-            <Text className="text-xs text-destructive mb-3">
-              {errors.addressLine1.message}
+          <View onLayout={(e) => { addressLine1Y.current = e.nativeEvent.layout.y; }}>
+            <Text className="text-sm font-medium text-charcoal mb-1">
+              Building / Society / Area
             </Text>
-          ) : (
-            <View className="mb-4" />
-          )}
+            <Controller
+              control={control}
+              name="addressLine1"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  ref={addressLine1Ref}
+                  className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                  style={fieldBorderStyle(Boolean(errors.addressLine1), focusedField === 'addressLine1')}
+                  placeholder="House no., street, area"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  onFocus={() => setFocusedField('addressLine1')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
+                  onChangeText={(t) => {
+                    // Manual edit invalidates the picked-suggestion geocode.
+                    // (pickSuggestion uses setValue, which doesn't fire this.)
+                    onChange(t);
+                    setCoords(null);
+                  }}
+                  value={value}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  accessibilityLabel="Address line 1"
+                />
+              )}
+            />
+            {errors.addressLine1 ? (
+              <Text className="text-xs text-destructive mb-3">
+                {errors.addressLine1.message}
+              </Text>
+            ) : (
+              <View className="mb-4" />
+            )}
+          </View>
 
           {/* ── City ── */}
-          <Text className="text-sm font-medium text-charcoal mb-1">City</Text>
-          <Controller
-            control={control}
-            name="city"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={fieldBorderStyle(Boolean(errors.city), focusedField === 'city')}
-                placeholder="Enter your city"
-                placeholderTextColor={customerColors.charcoal.soft}
-                onFocus={() => setFocusedField('city')}
-                onBlur={() => {
-                  setFocusedField(null);
-                  onBlur();
-                }}
-                onChangeText={onChange}
-                value={value}
-                autoCapitalize="words"
-                returnKeyType="next"
-                accessibilityLabel="City"
-              />
+          <View onLayout={(e) => { cityY.current = e.nativeEvent.layout.y; }}>
+            <Text className="text-sm font-medium text-charcoal mb-1">City</Text>
+            <Controller
+              control={control}
+              name="city"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  ref={cityRef}
+                  className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                  style={fieldBorderStyle(Boolean(errors.city), focusedField === 'city')}
+                  placeholder="Enter your city"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  onFocus={() => setFocusedField('city')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
+                  onChangeText={onChange}
+                  value={value}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  accessibilityLabel="City"
+                />
+              )}
+            />
+            {errors.city ? (
+              <Text className="text-xs text-destructive mb-3">
+                {errors.city.message}
+              </Text>
+            ) : (
+              <View className="mb-4" />
             )}
-          />
-          {errors.city ? (
-            <Text className="text-xs text-destructive mb-3">
-              {errors.city.message}
-            </Text>
-          ) : (
-            <View className="mb-4" />
-          )}
+          </View>
 
           {/* ── State ── */}
-          <Text className="text-sm font-medium text-charcoal mb-1">State</Text>
-          <Controller
-            control={control}
-            name="state"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={fieldBorderStyle(Boolean(errors.state), focusedField === 'state')}
-                placeholder="Enter your state"
-                placeholderTextColor={customerColors.charcoal.soft}
-                onFocus={() => setFocusedField('state')}
-                onBlur={() => {
-                  setFocusedField(null);
-                  onBlur();
-                }}
-                onChangeText={onChange}
-                value={value}
-                autoCapitalize="words"
-                returnKeyType="next"
-                accessibilityLabel="State"
-              />
+          <View onLayout={(e) => { stateY.current = e.nativeEvent.layout.y; }}>
+            <Text className="text-sm font-medium text-charcoal mb-1">State</Text>
+            <Controller
+              control={control}
+              name="state"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  ref={stateRef}
+                  className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                  style={fieldBorderStyle(Boolean(errors.state), focusedField === 'state')}
+                  placeholder="Enter your state"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  onFocus={() => setFocusedField('state')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
+                  onChangeText={onChange}
+                  value={value}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  accessibilityLabel="State"
+                />
+              )}
+            />
+            {errors.state ? (
+              <Text className="text-xs text-destructive mb-3">
+                {errors.state.message}
+              </Text>
+            ) : (
+              <View className="mb-4" />
             )}
-          />
-          {errors.state ? (
-            <Text className="text-xs text-destructive mb-3">
-              {errors.state.message}
-            </Text>
-          ) : (
-            <View className="mb-4" />
-          )}
+          </View>
 
           {/* ── Pincode ── */}
-          <Text className="text-sm font-medium text-charcoal mb-1">
-            Pincode
-          </Text>
-          <Controller
-            control={control}
-            name="pincode"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={fieldBorderStyle(Boolean(errors.pincode), focusedField === 'pincode')}
-                placeholder="6-digit pincode"
-                placeholderTextColor={customerColors.charcoal.soft}
-                onFocus={() => setFocusedField('pincode')}
-                onBlur={() => {
-                  setFocusedField(null);
-                  onBlur();
-                }}
-                onChangeText={onChange}
-                value={value}
-                keyboardType="numeric"
-                maxLength={6}
-                returnKeyType="done"
-                accessibilityLabel="Pincode"
-              />
-            )}
-          />
-          {errors.pincode ? (
-            <Text className="text-xs text-destructive mb-3">
-              {errors.pincode.message}
+          <View onLayout={(e) => { pincodeY.current = e.nativeEvent.layout.y; }}>
+            <Text className="text-sm font-medium text-charcoal mb-1">
+              Pincode
             </Text>
-          ) : (
-            <View className="mb-4" />
-          )}
+            <Controller
+              control={control}
+              name="pincode"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  ref={pincodeRef}
+                  className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                  style={fieldBorderStyle(Boolean(errors.pincode), focusedField === 'pincode')}
+                  placeholder="6-digit pincode"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  onFocus={() => setFocusedField('pincode')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
+                  onChangeText={onChange}
+                  value={value}
+                  keyboardType="numeric"
+                  maxLength={6}
+                  returnKeyType="done"
+                  accessibilityLabel="Pincode"
+                />
+              )}
+            />
+            {errors.pincode ? (
+              <Text className="text-xs text-destructive mb-3">
+                {errors.pincode.message}
+              </Text>
+            ) : (
+              <View className="mb-4" />
+            )}
+          </View>
 
           {/* ── Primary CTA ── */}
           {/* iOS Pressable pattern: visual styles on inner View */}
           <Pressable
-            onPress={() => void handleSubmit(onSubmit)()}
+            onPress={() => void handleSubmit(onSubmit, onInvalid)()}
             accessibilityRole="button"
             accessibilityLabel="Continue to preferences"
             android_ripple={{ color: CTA_RIPPLE, borderless: false }}

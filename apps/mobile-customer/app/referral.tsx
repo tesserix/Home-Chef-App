@@ -245,8 +245,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroTitle: { fontFamily: 'Geist-Bold', fontSize: 22, color: customerColors.charcoal.DEFAULT, textAlign: 'center' },
-  heroSub: { fontFamily: 'Inter', fontSize: 14, lineHeight: 20, color: customerColors.charcoal.soft, textAlign: 'center' },
+  heroTitle: { fontFamily: 'Geist-Bold', fontSize: 22, color: customerColors.charcoal.DEFAULT, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  heroSub: { fontFamily: 'Inter', fontSize: 14, lineHeight: 20, color: customerColors.charcoal.soft, textAlign: 'center', fontVariant: ['tabular-nums'] },
 
   codeCard: { backgroundColor: customerColors.canvas, borderRadius: 16, padding: 20, alignItems: 'center', gap: 12 },
   codeLabel: { fontFamily: 'Inter-SemiBold', fontSize: 12, letterSpacing: 1.4, color: customerColors.charcoal.soft },

@@ -165,6 +165,7 @@ function FilterTab({ item, active, onPress }: FilterTabProps) {
       hitSlop={6}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={item.label}
       android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
@@ -384,6 +385,7 @@ export default function ReviewsScreen() {
           <Pressable
             onPress={() => refetch()}
             accessibilityRole="button"
+            accessibilityLabel="Retry loading reviews"
             android_ripple={{ color: `${theme.colors.paper}30`, borderless: false }}
           >
             {({ pressed }) => (
@@ -509,6 +511,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     color: theme.colors.ink.muted,
     marginTop: theme.spacing[1],
+    fontVariant: ['tabular-nums'],
   },
 
   // Filter chip row — horizontal scroll, no edge-to-edge hairline

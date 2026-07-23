@@ -529,6 +529,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
+    fontVariant: ['tabular-nums'],
   },
 
   // Hairline between card body and action area.

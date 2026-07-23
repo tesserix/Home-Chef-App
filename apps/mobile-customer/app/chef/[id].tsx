@@ -790,6 +790,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 13,
     color: customerColors.charcoal.soft,
+    fontVariant: ['tabular-nums'],
   },
   // R1 zero-review state — surface-soft bg + charcoal-soft text (never a
   // gold/coral badge; that budget stays with the accent). Matches ChefCard.

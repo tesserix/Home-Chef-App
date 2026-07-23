@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   Platform,
@@ -76,7 +77,32 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // No Reanimated dependency here (this predates it), so Reduce Motion is
+  // read the same way Skeleton/SheetBase/UndoSnackbar do — via
+  // AccessibilityInfo.
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
   const dismiss = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (reduceMotion) {
+      setToast(null);
+      return;
+    }
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 0,
@@ -89,33 +115,39 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         useNativeDriver: true,
       }),
     ]).start(() => setToast(null));
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-  }, [opacity, translateY]);
+  }, [opacity, translateY, reduceMotion]);
 
   const show = useCallback(
     (input: ToastInput) => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setToast(input);
-      Animated.parallel([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: theme.motion.duration.default,
-          easing: Easing.bezier(...theme.motion.easing.entrance),
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: theme.motion.duration.default,
-          easing: Easing.bezier(...theme.motion.easing.entrance),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      if (reduceMotion) {
+        opacity.setValue(1);
+        translateY.setValue(0);
+      } else {
+        opacity.setValue(0);
+        translateY.setValue(20);
+        Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: theme.motion.duration.default,
+            easing: Easing.bezier(...theme.motion.easing.entrance),
+            useNativeDriver: true,
+          }),
+          Animated.timing(translateY, {
+            toValue: 0,
+            duration: theme.motion.duration.default,
+            easing: Easing.bezier(...theme.motion.easing.entrance),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
       const duration = input.durationMs ?? 3500;
       if (duration !== null) {
         timeoutRef.current = setTimeout(dismiss, duration);
       }
     },
-    [opacity, translateY, dismiss],
+    [opacity, translateY, dismiss, reduceMotion],
   );
 
   useEffect(
@@ -145,6 +177,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <Pressable
             onPress={dismiss}
             accessibilityRole="alert"
+            accessibilityLabel={toast.message}
             accessibilityLiveRegion="polite"
             style={styles.pressableWrap}
             android_ripple={{ color: withAlpha(theme.colors.paper, '26'), borderless: false }}
@@ -167,6 +200,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                       dismiss();
                     }}
                     hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={toast.action.label}
                     android_ripple={{
                       color: withAlpha(theme.colors.paper, '26'),
                       borderless: true,

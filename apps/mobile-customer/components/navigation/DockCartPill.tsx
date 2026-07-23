@@ -8,6 +8,7 @@
 // every tab. Home lifts its active-order card when the cart is non-empty so
 // the two floating layers never overlap (see app/(tabs)/index.tsx).
 
+import { useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatMoney } from '../../lib/format';
 import { router } from 'expo-router';
@@ -31,9 +32,19 @@ export const CART_FAB_CLEARANCE = 44 + FAB_GAP + 6;
 export function CartFab() {
   const items = useCartStore((s) => s.items);
   const total = useCartStore((s) => s.total());
+  const hasHydrated = useCartStore((s) => s.hasHydrated);
   const reduceMotion = useReducedMotion();
 
-  if (items.length === 0) {
+  // R13: skip the entrance animation on the very first render after
+  // AsyncStorage rehydration — restoring a saved cart on cold start is not
+  // a "new" moment, so the FAB shouldn't visibly pop/fade in a beat after
+  // the screen has already settled. A genuine first add-to-cart *during*
+  // the session (after this ref is already set) still animates normally.
+  const hasHydratedOnceRef = useRef(false);
+  const skipEntranceForHydration = hasHydrated && !hasHydratedOnceRef.current;
+  if (hasHydrated) hasHydratedOnceRef.current = true;
+
+  if (!hasHydrated || items.length === 0) {
     return null;
   }
 
@@ -42,7 +53,9 @@ export function CartFab() {
   return (
     <Animated.View
       entering={
-        reduceMotion ? undefined : FadeIn.duration(250).easing(ENTRANCE_EASING)
+        reduceMotion || skipEntranceForHydration
+          ? undefined
+          : FadeIn.duration(250).easing(ENTRANCE_EASING)
       }
       style={styles.anchor}
       pointerEvents="box-none"
@@ -136,6 +149,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 9,
     color: customerColors.coral.DEFAULT,
+    fontVariant: ['tabular-nums'],
   },
   totalText: {
     fontFamily: 'Inter-SemiBold',

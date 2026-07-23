@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
   Animated,
@@ -216,6 +217,7 @@ function CategoryTab({ label, active, onPress }: CategoryTabProps) {
       hitSlop={6}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
       android_ripple={{
         color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
         borderless: false,
@@ -528,6 +530,26 @@ export function MenuItemForm({
     if (focusRef) setTimeout(() => focusRef.current?.focus(), 320);
   }
 
+  // No Reanimated dependency in this file, so Reduce Motion is read the same
+  // way the shared UI primitives (Skeleton/SheetBase/Toast) do — via
+  // AccessibilityInfo. Gates the sticky-footer slide-in below.
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
   // Form state — plain useState mirrors profile.tsx's EditableField pattern
   const [name, setName] = useState(initialValues.name);
   const [description, setDescription] = useState(initialValues.description);
@@ -630,11 +652,15 @@ export function MenuItemForm({
   const prevDirty = useRef(mode === 'new' ? true : false);
   if (prevDirty.current !== isDirty) {
     prevDirty.current = isDirty;
-    Animated.timing(footerTranslate, {
-      toValue: isDirty ? 0 : 80,
-      duration: theme.motion.duration.default,
-      useNativeDriver: true,
-    }).start();
+    if (reduceMotion) {
+      footerTranslate.setValue(isDirty ? 0 : 80);
+    } else {
+      Animated.timing(footerTranslate, {
+        toValue: isDirty ? 0 : 80,
+        duration: theme.motion.duration.default,
+        useNativeDriver: true,
+      }).start();
+    }
   }
 
   // ---- Validation -----------------------------------------------------------

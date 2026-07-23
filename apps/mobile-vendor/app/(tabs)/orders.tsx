@@ -536,6 +536,8 @@ function TabLabel({ label, badge, active, onPress }: TabLabelProps) {
       style={tabStyles.root}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={badge ? `${label}, ${badge}` : label}
+      hitSlop={7}
       android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {/* Inner-View pattern — visual styles live on View to dodge iOS
@@ -822,6 +824,7 @@ const historyRowStyles = StyleSheet.create({
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: 1,
+    fontVariant: ['tabular-nums'],
   },
   total: {
     fontFamily: 'Geist-Bold',

@@ -166,6 +166,7 @@ export default function CartScreen() {
   const items = useCartStore((s) => s.items);
   const total = useCartStore((s) => s.total());
   const chefName = useCartStore((s) => s.chefName);
+  const hasHydrated = useCartStore((s) => s.hasHydrated);
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'bottom']}>
@@ -190,7 +191,12 @@ export default function CartScreen() {
         </View>
       </View>
 
-      {items.length === 0 ? (
+      {!hasHydrated ? (
+        // R13: skip the empty state for one frame while AsyncStorage
+        // rehydrates — otherwise a cold start with a saved cart flashes
+        // "Your cart is empty" before popping the real items in.
+        <View className="flex-1" />
+      ) : items.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-charcoal-soft text-base">Your cart is empty</Text>
         </View>

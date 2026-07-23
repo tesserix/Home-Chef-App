@@ -340,7 +340,7 @@ export default function CateringDetailScreen() {
           {request.status === 'accepted' && request.depositStatus === 'pending' ? (
             <View className="bg-coral-tint rounded-xl p-4 mt-4">
               <Text className="text-sm font-semibold text-charcoal">Confirm your booking</Text>
-              <Text className="text-sm text-charcoal-soft mt-1">
+              <Text className="text-sm text-charcoal-soft mt-1 tabular-nums">
                 Pay a {money(request.depositAmount ?? 0)} deposit to lock in your chef. The balance is
                 settled after the event.
               </Text>
@@ -355,7 +355,7 @@ export default function CateringDetailScreen() {
                   {paying || createDeposit.isPending ? (
                     <ActivityIndicator size="small" color={customerColors.canvas} />
                   ) : (
-                    <Text className="text-canvas font-semibold text-base">
+                    <Text className="text-canvas font-semibold text-base tabular-nums">
                       Pay deposit · {money(request.depositAmount ?? 0)}
                     </Text>
                   )}

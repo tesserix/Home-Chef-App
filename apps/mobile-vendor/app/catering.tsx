@@ -595,9 +595,9 @@ const styles = StyleSheet.create({
     ...theme.shadow[1],
   },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing[2] },
-  cardTitle: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: theme.colors.ink.DEFAULT, flexShrink: 1 },
+  cardTitle: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: theme.colors.ink.DEFAULT, flexShrink: 1, fontVariant: ['tabular-nums'] },
   caption: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.muted, marginTop: 4 },
-  metaLine: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 4 },
+  metaLine: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 4, fontVariant: ['tabular-nums'] },
   metaStrong: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.ink.DEFAULT },
   descLine: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 6, lineHeight: 18 },
 

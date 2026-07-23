@@ -110,10 +110,12 @@ export function OnboardingScaffold({
           </Text>
         </View>
 
-        {/* Progress bar — one segment per step: done = ink, current = ink
-            ("you are here"), upcoming = mist. This scaffold is vendor-exclusive
-            (only vendor onboarding screens import it), so it stays on the
-            monochrome ink palette rather than the retired persimmon accent. */}
+        {/* Progress bar — one segment per step: done = ink.soft, current = full
+            ink AND a wider pill ("you are here" reads from both weight and
+            width, not just position), upcoming = mist. This scaffold is
+            vendor-exclusive (only vendor onboarding screens import it), so it
+            stays on the monochrome ink palette rather than the retired
+            persimmon accent. */}
         <View
           style={styles.progressRow}
           accessibilityRole="progressbar"
@@ -200,10 +202,13 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: theme.colors.mist.DEFAULT,
   },
-  dotDone: { backgroundColor: theme.colors.ink.DEFAULT },
-  // Current step — same ink fill as done (the vendor app carries zero
-  // persimmon); "you are here" reads from position, not a second accent.
-  dotCurrent: { backgroundColor: theme.colors.ink.DEFAULT },
+  // Done — soft ink, distinct from both the upcoming mist and the current
+  // step's full ink (the vendor app carries zero persimmon, so "done" vs
+  // "current" has to read from ink weight, not a second accent colour).
+  dotDone: { backgroundColor: theme.colors.ink.soft },
+  // Current step — full ink AND a wider pill than every other segment, so
+  // "you are here" is unambiguous even at a glance.
+  dotCurrent: { flex: 2.2, backgroundColor: theme.colors.ink.DEFAULT },
 
   scroll: { flex: 1 },
   scrollContent: {

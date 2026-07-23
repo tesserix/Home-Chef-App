@@ -298,5 +298,5 @@ const styles = StyleSheet.create({
   },
   ctaPressed: { backgroundColor: customerColors.coral.pressed },
   ctaDisabled: { backgroundColor: customerColors.charcoal.soft, opacity: 0.5 },
-  ctaText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.canvas },
+  ctaText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.canvas, fontVariant: ['tabular-nums'] },
 });

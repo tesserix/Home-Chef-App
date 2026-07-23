@@ -238,6 +238,7 @@ const styles = StyleSheet.create({
   ageChipLabel: {
     fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
+    fontVariant: ["tabular-nums"],
   },
   total: {
     fontFamily: "Geist-Bold",

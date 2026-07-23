@@ -373,7 +373,7 @@ export default function WeeklyMenuEditorScreen() {
                   operational-positive, so it reads success green. */}
               <View style={[styles.statusChip, published ? styles.statusChipLive : styles.statusChipDraft]}>
                 <Text style={[styles.statusChipText, published && styles.statusChipTextLive]}>
-                  {published ? 'Live' : 'Draft'}
+                  {published ? 'Published' : 'Draft'}
                 </Text>
               </View>
             </View>

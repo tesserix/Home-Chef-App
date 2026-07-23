@@ -62,6 +62,16 @@ interface CartState {
 
   /** Derived: total item count across all lines. */
   totalCount: () => number;
+
+  /**
+   * True once AsyncStorage rehydration has run (or resolved to "nothing
+   * saved"). R13: screens that branch on `items.length === 0` to show an
+   * empty state must gate on this first — otherwise a cold start with a
+   * saved non-empty cart renders "empty" for one frame, then pops the real
+   * cart in, which reads as a flicker.
+   */
+  hasHydrated: boolean;
+  setHasHydrated: (hasHydrated: boolean) => void;
 }
 
 export const useCartStore = create<CartState>()(
@@ -133,6 +143,9 @@ export const useCartStore = create<CartState>()(
       totalCount: () => {
         return get().items.reduce((sum, i) => sum + i.quantity, 0);
       },
+
+      hasHydrated: false,
+      setHasHydrated: (hasHydrated: boolean) => set({ hasHydrated }),
     }),
     {
       name: 'customer-cart',
@@ -143,6 +156,9 @@ export const useCartStore = create<CartState>()(
         chefName: state.chefName,
         items: state.items,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

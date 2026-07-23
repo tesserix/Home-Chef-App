@@ -54,6 +54,8 @@ function TabLabel({ label, active, onPress }: TabLabelProps) {
       style={tabStyles.root}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      hitSlop={7}
       android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
@@ -205,6 +207,7 @@ export default function AnalyticsScreen() {
           <Pressable
             onPress={() => refetch()}
             accessibilityRole="button"
+            accessibilityLabel="Retry"
             android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
             {({ pressed }) => (
@@ -474,8 +477,8 @@ const styles = StyleSheet.create({
     padding: theme.spacing[4],
     ...theme.shadow[1],
   },
-  forecastBig: { fontFamily: 'Geist-Bold', fontSize: 26, color: theme.colors.ink.DEFAULT },
-  forecastSub: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 4 },
+  forecastBig: { fontFamily: 'Geist-Bold', fontSize: 26, color: theme.colors.ink.DEFAULT, fontVariant: ['tabular-nums'] },
+  forecastSub: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 4, fontVariant: ['tabular-nums'] },
   forecastDishes: { fontFamily: 'Inter', fontSize: 12, color: theme.colors.ink.soft, marginTop: 6 },
   forecastBasis: { fontFamily: 'Inter', fontSize: 11, color: theme.colors.ink.muted, marginTop: 6 },
   // White group card for the popular-items rows (UI-V2-SPEC §1)

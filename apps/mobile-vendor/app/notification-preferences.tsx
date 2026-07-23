@@ -173,6 +173,7 @@ export default function NotificationPreferencesScreen() {
           <Pressable
             onPress={() => router.back()}
             accessibilityRole="button"
+            accessibilityLabel="Go back"
             android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
           >
             {({ pressed }) => (

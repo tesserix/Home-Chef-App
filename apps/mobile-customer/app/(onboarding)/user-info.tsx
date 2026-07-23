@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { MutableRefObject, RefObject } from 'react';
 import {
   View,
   Text,
@@ -10,7 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
@@ -71,6 +72,27 @@ export default function UserInfoScreen() {
 
   const email = user?.email ?? '';
   const [focusedField, setFocusedField] = useState<UserInfoField | null>(null);
+
+  // R14 — scroll to + focus the first invalid field on a failed submit.
+  const scrollRef = useRef<ScrollView>(null);
+  const firstNameY = useRef(0);
+  const lastNameY = useRef(0);
+  const phoneY = useRef(0);
+  const firstNameRef = useRef<TextInput>(null);
+  const lastNameRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+
+  function onInvalid(errs: FieldErrors<UserInfoForm>) {
+    const order: { key: keyof UserInfoForm; y: MutableRefObject<number>; input: RefObject<TextInput | null> }[] = [
+      { key: 'firstName', y: firstNameY, input: firstNameRef },
+      { key: 'lastName', y: lastNameY, input: lastNameRef },
+      { key: 'phone', y: phoneY, input: phoneRef },
+    ];
+    const first = order.find((f) => errs[f.key]);
+    if (!first) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, first.y.current - 16), animated: true });
+    setTimeout(() => first.input.current?.focus(), 320);
+  }
   const [emailVerified, setEmailVerified] = useState(draft.emailVerified);
   const [otpSent, setOtpSent] = useState(false);
   const [code, setCode] = useState('');
@@ -139,6 +161,7 @@ export default function UserInfoScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
+          ref={scrollRef}
           className="flex-1"
           contentContainerStyle={{ padding: 24, paddingTop: 40 }}
           keyboardShouldPersistTaps="handled"
@@ -160,107 +183,116 @@ export default function UserInfoScreen() {
           </Text>
 
           {/* ── First Name ── */}
-          <Text className="text-sm font-medium text-charcoal mb-1">
-            First Name
-          </Text>
-          <Controller
-            control={control}
-            name="firstName"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={fieldBorderStyle(Boolean(errors.firstName), focusedField === 'firstName')}
-                placeholder="Enter your first name"
-                placeholderTextColor={customerColors.charcoal.soft}
-                onFocus={() => setFocusedField('firstName')}
-                onBlur={() => {
-                  setFocusedField(null);
-                  onBlur();
-                }}
-                onChangeText={onChange}
-                value={value}
-                autoCapitalize="words"
-                returnKeyType="next"
-                accessibilityLabel="First name"
-              />
-            )}
-          />
-          {errors.firstName ? (
-            <Text className="text-xs text-destructive mb-3">
-              {errors.firstName.message}
+          <View onLayout={(e) => { firstNameY.current = e.nativeEvent.layout.y; }}>
+            <Text className="text-sm font-medium text-charcoal mb-1">
+              First Name
             </Text>
-          ) : (
-            <View className="mb-4" />
-          )}
+            <Controller
+              control={control}
+              name="firstName"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  ref={firstNameRef}
+                  className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                  style={fieldBorderStyle(Boolean(errors.firstName), focusedField === 'firstName')}
+                  placeholder="Enter your first name"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  onFocus={() => setFocusedField('firstName')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
+                  onChangeText={onChange}
+                  value={value}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  accessibilityLabel="First name"
+                />
+              )}
+            />
+            {errors.firstName ? (
+              <Text className="text-xs text-destructive mb-3">
+                {errors.firstName.message}
+              </Text>
+            ) : (
+              <View className="mb-4" />
+            )}
+          </View>
 
           {/* ── Last Name ── */}
-          <Text className="text-sm font-medium text-charcoal mb-1">
-            Last Name
-          </Text>
-          <Controller
-            control={control}
-            name="lastName"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={fieldBorderStyle(Boolean(errors.lastName), focusedField === 'lastName')}
-                placeholder="Enter your last name"
-                placeholderTextColor={customerColors.charcoal.soft}
-                onFocus={() => setFocusedField('lastName')}
-                onBlur={() => {
-                  setFocusedField(null);
-                  onBlur();
-                }}
-                onChangeText={onChange}
-                value={value}
-                autoCapitalize="words"
-                returnKeyType="next"
-                accessibilityLabel="Last name"
-              />
-            )}
-          />
-          {errors.lastName ? (
-            <Text className="text-xs text-destructive mb-3">
-              {errors.lastName.message}
+          <View onLayout={(e) => { lastNameY.current = e.nativeEvent.layout.y; }}>
+            <Text className="text-sm font-medium text-charcoal mb-1">
+              Last Name
             </Text>
-          ) : (
-            <View className="mb-4" />
-          )}
+            <Controller
+              control={control}
+              name="lastName"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  ref={lastNameRef}
+                  className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                  style={fieldBorderStyle(Boolean(errors.lastName), focusedField === 'lastName')}
+                  placeholder="Enter your last name"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  onFocus={() => setFocusedField('lastName')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
+                  onChangeText={onChange}
+                  value={value}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  accessibilityLabel="Last name"
+                />
+              )}
+            />
+            {errors.lastName ? (
+              <Text className="text-xs text-destructive mb-3">
+                {errors.lastName.message}
+              </Text>
+            ) : (
+              <View className="mb-4" />
+            )}
+          </View>
 
           {/* ── Phone ── */}
-          <Text className="text-sm font-medium text-charcoal mb-1">
-            Phone Number
-          </Text>
-          <Controller
-            control={control}
-            name="phone"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={fieldBorderStyle(Boolean(errors.phone), focusedField === 'phone')}
-                placeholder="10-digit mobile number"
-                placeholderTextColor={customerColors.charcoal.soft}
-                onFocus={() => setFocusedField('phone')}
-                onBlur={() => {
-                  setFocusedField(null);
-                  onBlur();
-                }}
-                onChangeText={onChange}
-                value={value}
-                keyboardType="phone-pad"
-                maxLength={10}
-                returnKeyType="done"
-                accessibilityLabel="Phone number"
-              />
-            )}
-          />
-          {errors.phone ? (
-            <Text className="text-xs text-destructive mb-3">
-              {errors.phone.message}
+          <View onLayout={(e) => { phoneY.current = e.nativeEvent.layout.y; }}>
+            <Text className="text-sm font-medium text-charcoal mb-1">
+              Phone Number
             </Text>
-          ) : (
-            <View className="mb-4" />
-          )}
+            <Controller
+              control={control}
+              name="phone"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  ref={phoneRef}
+                  className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                  style={fieldBorderStyle(Boolean(errors.phone), focusedField === 'phone')}
+                  placeholder="10-digit mobile number"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  onFocus={() => setFocusedField('phone')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
+                  onChangeText={onChange}
+                  value={value}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  returnKeyType="done"
+                  accessibilityLabel="Phone number"
+                />
+              )}
+            />
+            {errors.phone ? (
+              <Text className="text-xs text-destructive mb-3">
+                {errors.phone.message}
+              </Text>
+            ) : (
+              <View className="mb-4" />
+            )}
+          </View>
 
           {/* ── Email verification ── */}
           <Text className="text-sm font-medium text-charcoal mb-1">Email</Text>
@@ -340,9 +372,15 @@ export default function UserInfoScreen() {
                   className="mt-2 items-center min-h-[44px] justify-center"
                   android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
                 >
-                  <Text className="text-[13px] text-charcoal-soft">
-                    {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
-                  </Text>
+                  {({ pressed }) => (
+                    <Text
+                      className={`text-[13px] text-charcoal-soft ${
+                        pressed && Platform.OS === 'ios' ? 'opacity-70' : ''
+                      }`}
+                    >
+                      {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                    </Text>
+                  )}
                 </Pressable>
               </View>
             ))}
@@ -350,7 +388,7 @@ export default function UserInfoScreen() {
           {/* ── Primary CTA ── */}
           {/* iOS Pressable pattern: visual styles on inner View */}
           <Pressable
-            onPress={() => void handleSubmit(onSubmit)()}
+            onPress={() => void handleSubmit(onSubmit, onInvalid)()}
             accessibilityRole="button"
             accessibilityLabel="Continue to address"
             android_ripple={{ color: CTA_RIPPLE, borderless: false }}

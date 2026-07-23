@@ -356,6 +356,7 @@ export default function GroupOrderHubScreen() {
                             onPress={() => addItem.mutate({ menuItemId: item.id, quantity: 1 })}
                             accessibilityRole="button"
                             accessibilityLabel={`Add ${item.name}`}
+                            hitSlop={6}
                             android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
                           >
                             {({ pressed }) => (
@@ -559,7 +560,7 @@ function ParticipantBlock({
               <View style={styles.stepper}>
                 <Pressable
                   onPress={() => onRemove(ci.itemIds[ci.itemIds.length - 1]!)}
-                  hitSlop={6}
+                  hitSlop={10}
                   style={styles.stepperBtn}
                   accessibilityRole="button"
                   accessibilityLabel={`Remove one ${ci.name}`}
@@ -570,7 +571,7 @@ function ParticipantBlock({
                 <Text style={styles.stepperQty}>{ci.quantity}</Text>
                 <Pressable
                   onPress={() => onAdd(ci.menuItemId, ci.notes)}
-                  hitSlop={6}
+                  hitSlop={10}
                   style={styles.stepperBtn}
                   accessibilityRole="button"
                   accessibilityLabel={`Add one ${ci.name}`}
@@ -800,7 +801,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 12,
   },
-  inCartBadge: { fontFamily: 'Inter-Medium', fontSize: 12, color: customerColors.coral.DEFAULT },
+  inCartBadge: { fontFamily: 'Inter-Medium', fontSize: 12, color: customerColors.coral.DEFAULT, fontVariant: ['tabular-nums'] },
   menuName: { fontFamily: 'Inter-Medium', fontSize: 15, color: customerColors.charcoal.DEFAULT },
   menuPrice: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginTop: 2, fontVariant: ['tabular-nums'] },
   addBtn: {

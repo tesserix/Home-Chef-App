@@ -115,6 +115,11 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
                       disabled={disabled}
                       accessibilityRole={single ? 'radio' : 'checkbox'}
                       accessibilityState={{ selected: on, disabled }}
+                      accessibilityLabel={
+                        o.priceDelta !== 0
+                          ? `${o.name}, ${o.priceDelta > 0 ? '+' : ''}₹${o.priceDelta.toFixed(0)}`
+                          : `${o.name}, free`
+                      }
                       android_ripple={disabled ? undefined : { color: OPTION_RIPPLE }}
                     >
                       {({ pressed }) => (
@@ -207,7 +212,7 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
                   !valid ? 'opacity-50' : pressed && Platform.OS === 'ios' ? 'opacity-80' : ''
                 }`}
               >
-                <Text className="text-canvas font-semibold text-base">
+                <Text className="text-canvas font-semibold text-base tabular-nums">
                   Add {qty} · ₹{(unitPrice * qty).toFixed(0)}
                 </Text>
               </View>

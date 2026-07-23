@@ -11,8 +11,8 @@
 // Sensitive fields go straight to POST /chef/payout, which stores them in GCP
 // Secret Manager. Only a masked summary is kept in the onboarding draft.
 
-import { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { Landmark, ShieldCheck } from 'lucide-react-native';
@@ -38,6 +38,14 @@ export default function PayoutStep() {
   const [values, setValues] = useState<PayoutFormValues>(emptyPayoutForm);
   const [errors, setErrors] = useState<PayoutValidationError[]>([]);
 
+  // R14 — scroll to the first invalid field on a failed submit instead of
+  // leaving an already-scrolled-away chef staring at nothing happening.
+  // OnboardingScaffold owns the ScrollView, forwarded via `scrollRef`.
+  const scrollRef = useRef<ScrollView>(null);
+  const bankAccountNameY = useRef(0);
+  const bankAccountNumberY = useRef(0);
+  const bankIFSCY = useRef(0);
+
   const save = useMutation({
     mutationFn: () => api.post('/chef/payout', buildPayoutPayload(values)),
   });
@@ -57,6 +65,15 @@ export default function PayoutStep() {
     const found = validatePayoutInput(values);
     if (found.length > 0) {
       setErrors(found);
+      const order: { field: keyof PayoutFormValues; y: typeof bankAccountNameY }[] = [
+        { field: 'bankAccountName', y: bankAccountNameY },
+        { field: 'bankAccountNumber', y: bankAccountNumberY },
+        { field: 'bankIFSC', y: bankIFSCY },
+      ];
+      const first = order.find((f) => found.some((e) => e.field === f.field));
+      if (first) {
+        scrollRef.current?.scrollTo({ y: Math.max(0, first.y.current - 16), animated: true });
+      }
       return;
     }
 
@@ -90,6 +107,7 @@ export default function PayoutStep() {
       onPrimary={onNext}
       primaryLoading={save.isPending}
       onBack={() => router.back()}
+      scrollRef={scrollRef}
     >
       <View style={styles.methods}>
         <View style={[styles.method, styles.methodActive]}>
@@ -101,30 +119,36 @@ export default function PayoutStep() {
         </View>
       </View>
 
-      <Input
-        label="Account holder name"
-        value={values.bankAccountName}
-        onChangeText={(t) => set('bankAccountName', t)}
-        placeholder="As printed on your passbook"
-        autoCapitalize="words"
-        error={errorFor('bankAccountName')}
-      />
-      <Input
-        label="Account number"
-        value={values.bankAccountNumber}
-        onChangeText={(t) => set('bankAccountNumber', t)}
-        placeholder="e.g. 123456789012"
-        keyboardType="number-pad"
-        error={errorFor('bankAccountNumber')}
-      />
-      <Input
-        label="IFSC code"
-        value={values.bankIFSC}
-        onChangeText={(t) => set('bankIFSC', t)}
-        placeholder="e.g. HDFC0001234"
-        autoCapitalize="characters"
-        error={errorFor('bankIFSC')}
-      />
+      <View onLayout={(e) => { bankAccountNameY.current = e.nativeEvent.layout.y; }}>
+        <Input
+          label="Account holder name"
+          value={values.bankAccountName}
+          onChangeText={(t) => set('bankAccountName', t)}
+          placeholder="As printed on your passbook"
+          autoCapitalize="words"
+          error={errorFor('bankAccountName')}
+        />
+      </View>
+      <View onLayout={(e) => { bankAccountNumberY.current = e.nativeEvent.layout.y; }}>
+        <Input
+          label="Account number"
+          value={values.bankAccountNumber}
+          onChangeText={(t) => set('bankAccountNumber', t)}
+          placeholder="e.g. 123456789012"
+          keyboardType="number-pad"
+          error={errorFor('bankAccountNumber')}
+        />
+      </View>
+      <View onLayout={(e) => { bankIFSCY.current = e.nativeEvent.layout.y; }}>
+        <Input
+          label="IFSC code"
+          value={values.bankIFSC}
+          onChangeText={(t) => set('bankIFSC', t)}
+          placeholder="e.g. HDFC0001234"
+          autoCapitalize="characters"
+          error={errorFor('bankIFSC')}
+        />
+      </View>
 
       <View style={styles.assurance}>
         <ShieldCheck size={16} color={theme.colors.ink.muted} />

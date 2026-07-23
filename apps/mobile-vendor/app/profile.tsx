@@ -580,6 +580,7 @@ export default function ProfileScreen() {
         <Pressable
           onPress={() => refetch()}
           accessibilityRole="button"
+          accessibilityLabel="Retry loading profile"
           android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
@@ -670,6 +671,8 @@ export default function ProfileScreen() {
                     source={{ uri: data.bannerImage }}
                     style={styles.coverImage}
                     contentFit="cover"
+                    placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                    transition={150}
                   />
                 ) : (
                   <View style={styles.coverPlaceholder}>
@@ -719,6 +722,8 @@ export default function ProfileScreen() {
                       source={{ uri: data.profileImage }}
                       style={styles.avatarImage}
                       contentFit="cover"
+                      placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                      transition={150}
                     />
                   ) : (
                     <View style={styles.avatarFallback}>
@@ -996,6 +1001,8 @@ export default function ProfileScreen() {
                 source={{ uri: url }}
                 style={styles.photoThumb}
                 contentFit="cover"
+                placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                transition={150}
               />
             ))}
             {(data?.kitchenPhotos?.length ?? 0) < 5 && (
@@ -1035,6 +1042,7 @@ export default function ProfileScreen() {
               onPress={handleSave}
               disabled={updateMutation.isPending || !isDirty}
               accessibilityRole="button"
+              accessibilityLabel="Save profile"
               accessibilityState={{ disabled: !isDirty }}
               android_ripple={
                 updateMutation.isPending || !isDirty

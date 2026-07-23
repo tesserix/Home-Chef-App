@@ -310,6 +310,7 @@ function CategoryTab({ label, active, onPress }: CategoryTabProps) {
       hitSlop={6}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
       android_ripple={{
         color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
         borderless: false,

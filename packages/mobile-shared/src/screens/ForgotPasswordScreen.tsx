@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   Pressable,
@@ -58,6 +59,26 @@ export function ForgotPasswordScreen({
   const errorOpacity = useRef(new Animated.Value(0)).current;
   const errorTranslate = useRef(new Animated.Value(-8)).current;
 
+  // No Reanimated dependency on this screen, so Reduce Motion is read the
+  // same way the shared UI primitives (Skeleton/SheetBase/Toast) do — via
+  // AccessibilityInfo.
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
   const {
     control,
     handleSubmit,
@@ -68,6 +89,11 @@ export function ForgotPasswordScreen({
   });
 
   useEffect(() => {
+    if (reduceMotion) {
+      errorOpacity.setValue(error ? 1 : 0);
+      errorTranslate.setValue(error ? 0 : -8);
+      return;
+    }
     Animated.parallel([
       Animated.timing(errorOpacity, {
         toValue: error ? 1 : 0,
@@ -82,7 +108,7 @@ export function ForgotPasswordScreen({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [error, errorOpacity, errorTranslate]);
+  }, [error, errorOpacity, errorTranslate, reduceMotion]);
 
   const onSubmit = async (data: ForgotPasswordFormData) => {
     setError(null);
@@ -187,7 +213,12 @@ export function ForgotPasswordScreen({
 
       {onNavigateToLogin ? (
         <View style={styles.backRow}>
-          <Pressable onPress={onNavigateToLogin} hitSlop={8}>
+          <Pressable
+            onPress={onNavigateToLogin}
+            hitSlop={8}
+            accessibilityRole="link"
+            accessibilityLabel="Back to sign in"
+          >
             <Text
               style={[
                 styles.backText,

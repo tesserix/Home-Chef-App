@@ -143,6 +143,7 @@ function NavRow({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
+        accessibilityLabel={label}
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
@@ -396,6 +397,7 @@ export default function SettingsScreen() {
             onPress={() => router.back()}
             hitSlop={8}
             accessibilityRole="button"
+            accessibilityLabel="Go back"
             android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
           >
             {({ pressed }) => (

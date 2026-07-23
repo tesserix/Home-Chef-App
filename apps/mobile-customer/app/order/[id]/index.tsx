@@ -40,6 +40,9 @@ import type { Order } from '../../../types/customer';
 // Android ripple tint for coral-filled CTAs — translucent white derived from
 // the canvas token, never a new literal colour.
 const CONFIRM_RIPPLE = `${customerColors.canvas}33`;
+// Android ripple tint for outline/ghost buttons on canvas — translucent
+// charcoal, matching the photoRow ripple tint elsewhere on this screen.
+const SECONDARY_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 const ACTIVE_STATUSES: Order['status'][] = [
   'accepted',
@@ -536,9 +539,15 @@ export default function OrderDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Track your delivery live"
             style={styles.trackLiveBtn}
+            android_ripple={{ color: CONFIRM_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
-              <View style={[styles.trackLiveInner, pressed && { opacity: 0.85 }]}>
+              <View
+                style={[
+                  styles.trackLiveInner,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
                 <Text style={styles.trackLiveLabel}>Track live</Text>
               </View>
             )}
@@ -619,6 +628,7 @@ export default function OrderDetailScreen() {
                   source={{ uri: order.readyPhotoUrl }}
                   style={styles.photoThumb}
                   contentFit="cover"
+                  placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
                   transition={200}
                 />
                 <View style={styles.photoRowText}>
@@ -756,7 +766,11 @@ export default function OrderDetailScreen() {
                 onPress={() => router.push(`/order/${order.id}/messages` as never)}
                 accessibilityRole="button"
                 accessibilityLabel="Message support about this order"
-                style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                ]}
+                android_ripple={{ color: SECONDARY_RIPPLE, borderless: false }}
               >
                 <Text style={styles.secondaryButtonText}>Message support about this order</Text>
               </Pressable>
@@ -771,7 +785,11 @@ export default function OrderDetailScreen() {
               onPress={() => router.push(`/order/${order.id}/report-issue` as never)}
               accessibilityRole="button"
               accessibilityLabel="Report an issue with this order"
-              style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+              android_ripple={{ color: SECONDARY_RIPPLE, borderless: false }}
             >
               <Text style={styles.secondaryButtonText}>Report an issue with this order</Text>
             </Pressable>
@@ -996,6 +1014,7 @@ export default function OrderDetailScreen() {
               source={{ uri: order.readyPhotoUrl }}
               style={styles.lightboxImage}
               contentFit="contain"
+              placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
               transition={150}
               accessibilityLabel="Photo of your prepared order from the chef"
             />
@@ -1081,6 +1100,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
     color: customerColors.coral.pressed,
+    fontVariant: ['tabular-nums'],
     marginTop: 2,
   },
   // White-canvas root — spec §1

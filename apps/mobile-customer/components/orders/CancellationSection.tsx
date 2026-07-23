@@ -68,7 +68,11 @@ export function CancellationSection({ orderId, status }: { orderId: string; stat
   return (
     <View style={styles.card}>
       {!expanded ? (
-        <Pressable onPress={() => setExpanded(true)} accessibilityRole="button">
+        <Pressable
+          onPress={() => setExpanded(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Request cancellation"
+        >
           <Text style={styles.link}>Request cancellation</Text>
         </Pressable>
       ) : (
@@ -131,7 +135,11 @@ function StatusView({
             {money(request.refundTotalPaise)} refunded to your {dest}.
           </Text>
           {request.status === 'approved' ? (
-            <Pressable onPress={onDispute} accessibilityRole="button">
+            <Pressable
+              onPress={onDispute}
+              accessibilityRole="button"
+              accessibilityLabel="Dispute the refund amount"
+            >
               <Text style={styles.link}>Dispute the refund amount</Text>
             </Pressable>
           ) : null}
@@ -177,5 +185,5 @@ const styles = StyleSheet.create({
   btnPressed: { backgroundColor: customerColors.coral.pressed },
   btnText: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.canvas },
   statusTitle: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
-  statusBody: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
+  statusBody: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, fontVariant: ['tabular-nums'] },
 });

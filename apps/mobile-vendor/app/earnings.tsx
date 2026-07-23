@@ -97,6 +97,8 @@ function TabLabel({ label, active, onPress }: TabLabelProps) {
       style={tabStyles.root}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      hitSlop={7}
       android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
@@ -832,6 +834,7 @@ export default function EarningsScreen() {
         <Pressable
           onPress={() => refetchPayout()}
           accessibilityRole="button"
+          accessibilityLabel={t('common.retry')}
           android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (

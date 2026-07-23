@@ -39,7 +39,7 @@ function money(n: number): string {
 
 export default function MealSubscribeScreen() {
   const { chefId } = useLocalSearchParams<{ chefId: string }>();
-  const { data: offer, isLoading } = useMealChefOffer(chefId);
+  const { data: offer, isLoading, isError, refetch } = useMealChefOffer(chefId);
   const preview = usePreviewMealPrice();
   const subscribe = useSubscribeMeal();
 
@@ -120,6 +120,31 @@ export default function MealSubscribeScreen() {
               </View>
             </View>
           ))}
+        </View>
+      ) : isError ? (
+        // Distinct from "no offer" below — this is a failed fetch, not a chef
+        // that genuinely has no tiffin plan, so it gets a retry instead of a
+        // dead-end sentence.
+        <View style={styles.centered}>
+          <Text style={styles.muted}>Something went wrong. Please try again.</Text>
+          <Pressable
+            onPress={() => void refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading tiffin plan"
+            android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
+            style={styles.retryButton}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.retryButtonInner,
+                  pressed && Platform.OS === 'ios' && styles.retryButtonPressed,
+                ]}
+              >
+                <Text style={styles.retryButtonText}>Try again</Text>
+              </View>
+            )}
+          </Pressable>
         </View>
       ) : !offer?.available ? (
         <View style={styles.centered}>
@@ -262,7 +287,18 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.DEFAULT,
     fontVariant: ['tabular-nums'],
   },
-  muted: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginTop: 8, textAlign: 'center' },
+  muted: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginTop: 8, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  retryButton: { marginTop: 16 },
+  retryButtonInner: {
+    backgroundColor: customerColors.coral.DEFAULT,
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryButtonPressed: { backgroundColor: customerColors.coral.pressed },
+  retryButtonText: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.canvas },
   // Sticky CTA footer — white, top hairline + shadow[2] (spec §1 floating elements).
   footer: {
     paddingHorizontal: 16,

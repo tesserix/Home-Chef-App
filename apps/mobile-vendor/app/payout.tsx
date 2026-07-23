@@ -257,6 +257,7 @@ export default function PayoutScreen() {
           <Pressable
             onPress={() => refetch()}
             accessibilityRole="button"
+            accessibilityLabel="Retry loading payout details"
             android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
             {({ pressed }) => (
@@ -374,6 +375,7 @@ export default function PayoutScreen() {
               onPress={handleSave}
               disabled={saveMutation.isPending}
               accessibilityRole="button"
+              accessibilityLabel="Save payout details"
               android_ripple={
                 saveMutation.isPending
                   ? undefined

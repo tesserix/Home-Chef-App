@@ -214,6 +214,7 @@ export default function MoreScreen() {
             <Pressable
               onPress={handleLogout}
               accessibilityRole="button"
+              accessibilityLabel={t('more.logOut')}
               android_ripple={{ color: `${theme.colors.destructive.DEFAULT}14`, borderless: false }}
             >
               {({ pressed }) => (
@@ -257,6 +258,7 @@ function NavRowItem({ row, isLast }: NavRowItemProps) {
       <Pressable
         onPress={() => router.push(route as never)}
         accessibilityRole="button"
+        accessibilityLabel={t(`more.${labelKey}`)}
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (

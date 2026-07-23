@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   Platform,
@@ -79,7 +80,31 @@ export function UndoSnackbarProvider({ children }: { children: ReactNode }) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dismissedRef = useRef(false);
 
+  // No Reanimated dependency here (this predates it), so Reduce Motion is
+  // read the same way Skeleton/SheetBase do — via AccessibilityInfo.
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
   const hide = useCallback(() => {
+    if (reduceMotion) {
+      // Reduced motion: snap out instead of animating the slide/fade.
+      setCurrent(null);
+      return;
+    }
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 0,
@@ -92,7 +117,7 @@ export function UndoSnackbarProvider({ children }: { children: ReactNode }) {
         useNativeDriver: true,
       }),
     ]).start(() => setCurrent(null));
-  }, [opacity, translateY]);
+  }, [opacity, translateY, reduceMotion]);
 
   const show = useCallback(
     (input: UndoInput) => {
@@ -103,31 +128,44 @@ export function UndoSnackbarProvider({ children }: { children: ReactNode }) {
       }
       dismissedRef.current = false;
       setCurrent(input);
-      opacity.setValue(0);
-      translateY.setValue(20);
       progress.setValue(1);
 
       const duration = input.durationMs ?? 5000;
-      Animated.parallel([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: theme.motion.duration.default,
-          easing: Easing.bezier(...theme.motion.easing.entrance),
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: theme.motion.duration.default,
-          easing: Easing.bezier(...theme.motion.easing.entrance),
-          useNativeDriver: true,
-        }),
-        Animated.timing(progress, {
-          toValue: 0,
-          duration,
-          easing: Easing.linear,
-          useNativeDriver: false,
-        }),
-      ]).start();
+
+      if (reduceMotion) {
+        // Reduced motion: appear instantly, skip the slide/fade entrance.
+        opacity.setValue(1);
+        translateY.setValue(0);
+      } else {
+        opacity.setValue(0);
+        translateY.setValue(20);
+        Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: theme.motion.duration.default,
+            easing: Easing.bezier(...theme.motion.easing.entrance),
+            useNativeDriver: true,
+          }),
+          Animated.timing(translateY, {
+            toValue: 0,
+            duration: theme.motion.duration.default,
+            easing: Easing.bezier(...theme.motion.easing.entrance),
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+
+      // The depletion bar is a countdown of the real undo window (5-10s),
+      // not a decorative transition — it's exempt from the §3.5 motion
+      // duration bands (which govern transitions, not literal elapsed-time
+      // indicators) and keeps running under reduced motion since it's the
+      // user's only visual cue for how long they have left to tap Undo.
+      Animated.timing(progress, {
+        toValue: 0,
+        duration,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }).start();
 
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => {
@@ -137,7 +175,7 @@ export function UndoSnackbarProvider({ children }: { children: ReactNode }) {
         }
       }, duration);
     },
-    [current, opacity, translateY, progress, hide],
+    [current, opacity, translateY, progress, hide, reduceMotion],
   );
 
   const handleUndo = useCallback(() => {
@@ -179,6 +217,8 @@ export function UndoSnackbarProvider({ children }: { children: ReactNode }) {
             <Pressable
               onPress={handleUndo}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Undo"
               android_ripple={{ color: withAlpha(theme.colors.paper, '26'), borderless: true }}
             >
               {({ pressed }) => (
@@ -193,12 +233,10 @@ export function UndoSnackbarProvider({ children }: { children: ReactNode }) {
           <Animated.View
             style={[
               styles.progress,
-              {
-                width: progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                }),
-              },
+              // transform, not width — §3.5 forbids layout-property
+              // animation. scaleX anchored to the left edge via
+              // transformOrigin reproduces the same "depleting bar" visual.
+              { transform: [{ scaleX: progress }], transformOrigin: 'left' },
             ]}
           />
         </Animated.View>

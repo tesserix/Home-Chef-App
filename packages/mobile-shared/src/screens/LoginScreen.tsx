@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   Pressable,
@@ -89,6 +90,26 @@ export function LoginScreen({
   const errorOpacity = useRef(new Animated.Value(0)).current;
   const errorTranslate = useRef(new Animated.Value(-8)).current;
 
+  // No Reanimated dependency on this screen, so Reduce Motion is read the
+  // same way the shared UI primitives (Skeleton/SheetBase/Toast) do — via
+  // AccessibilityInfo.
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
   const {
     control,
     handleSubmit,
@@ -99,6 +120,11 @@ export function LoginScreen({
   });
 
   useEffect(() => {
+    if (reduceMotion) {
+      errorOpacity.setValue(error ? 1 : 0);
+      errorTranslate.setValue(error ? 0 : -8);
+      return;
+    }
     Animated.parallel([
       Animated.timing(errorOpacity, {
         toValue: error ? 1 : 0,
@@ -113,7 +139,7 @@ export function LoginScreen({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [error, errorOpacity, errorTranslate]);
+  }, [error, errorOpacity, errorTranslate, reduceMotion]);
 
   const onSubmit = async (data: LoginFormData) => {
     setError(null);
@@ -201,7 +227,12 @@ export function LoginScreen({
 
       {onNavigateToForgotPassword ? (
         <View style={styles.forgotRow}>
-          <Pressable onPress={onNavigateToForgotPassword} hitSlop={8}>
+          <Pressable
+            onPress={onNavigateToForgotPassword}
+            hitSlop={8}
+            accessibilityRole="link"
+            accessibilityLabel="Forgot password?"
+          >
             <Text
               style={[
                 styles.linkText,
@@ -262,7 +293,12 @@ export function LoginScreen({
 
       {onNavigateToRegister ? (
         <View style={styles.signupRow}>
-          <Pressable onPress={onNavigateToRegister} hitSlop={8}>
+          <Pressable
+            onPress={onNavigateToRegister}
+            hitSlop={8}
+            accessibilityRole="link"
+            accessibilityLabel="Don't have an account? Sign up"
+          >
             <Text style={styles.signupPrompt}>
               Don't have an account?{' '}
               <Text

@@ -168,9 +168,16 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
         accessibilityLabel="Retry search"
         android_ripple={{ color: CTA_RIPPLE, borderless: false }}
       >
-        <View style={styles.retryButton}>
-          <Text style={styles.retryLabel}>Try again</Text>
-        </View>
+        {({ pressed }) => (
+          <View
+            style={[
+              styles.retryButton,
+              pressed && Platform.OS === 'ios' && styles.retryButtonPressedIOS,
+            ]}
+          >
+            <Text style={styles.retryLabel}>Try again</Text>
+          </View>
+        )}
       </Pressable>
     </View>
   );
@@ -494,6 +501,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // iOS-only pressed treatment (Android gets android_ripple instead).
+  retryButtonPressedIOS: {
+    backgroundColor: customerColors.coral.pressed,
   },
   retryLabel: {
     fontFamily: 'Inter-SemiBold',

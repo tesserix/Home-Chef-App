@@ -74,6 +74,7 @@ export function Button({
   disabled,
   fullWidth = true,
   accentColor,
+  accessibilityLabel,
   ...pressable
 }: ButtonProps) {
   const v = variantStyles[variant];
@@ -102,6 +103,10 @@ export function Button({
       {...pressable}
       disabled={isInert}
       accessibilityRole="button"
+      // Falls back to the visible label so every call site gets a meaningful
+      // accessible name for free; callers can still override for a more
+      // specific announcement (e.g. "Accept ₹450 order from Priya").
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: isInert, busy: loading }}
       style={fullWidth ? styles.fullWidth : undefined}
       android_ripple={isInert ? undefined : { color: v.ripple, borderless: false }}

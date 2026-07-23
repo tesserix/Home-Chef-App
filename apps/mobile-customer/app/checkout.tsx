@@ -379,6 +379,14 @@ export default function CheckoutScreen() {
     }
   }
 
+  // R14 — an invalid "Add New Address" submit already shows inline errors
+  // per-field; this brings the (already-open) address section into view too,
+  // same as the "no address selected" guard above, instead of leaving a
+  // scrolled-away user staring at nothing happening.
+  function onSaveAddressError() {
+    focusSection(addressSectionRef, addressSectionY.current);
+  }
+
   // ─── Place Order flow ──────────────────────────────────────────────────────
 
   async function handlePlaceOrder() {
@@ -748,7 +756,7 @@ export default function CheckoutScreen() {
                 }`}
               >
                 <View className="flex-1 pr-3">
-                  <Text className="text-sm font-semibold text-coral-pressed">
+                  <Text className="text-sm font-semibold text-coral-pressed tabular-nums">
                     Pick up & save ₹{pickupSaving.toFixed(0)}
                   </Text>
                   <Text className="text-xs text-charcoal-soft mt-0.5">
@@ -1009,7 +1017,7 @@ export default function CheckoutScreen() {
                   />
                   {/* Save address button — coral filled, iOS Pressable inner-View pattern */}
                   <Pressable
-                    onPress={handleAddrSubmit(onSaveAddress)}
+                    onPress={handleAddrSubmit(onSaveAddress, onSaveAddressError)}
                     disabled={addrSubmitting}
                     accessibilityRole="button"
                     accessibilityLabel="Save address"
@@ -1158,6 +1166,7 @@ export default function CheckoutScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Delivery fee breakdown"
                   accessibilityState={{ expanded: feeBreakdownOpen }}
+                  hitSlop={8}
                   android_ripple={{ color: CHARCOAL_RIPPLE, borderless: false }}
                 >
                   {({ pressed }) => (
@@ -1229,7 +1238,7 @@ export default function CheckoutScreen() {
                       </Text>
                     ) : null}
                     {selfDeliveryBreakdown.capped ? (
-                      <Text className="text-xs text-charcoal-soft leading-4">
+                      <Text className="text-xs text-charcoal-soft leading-4 tabular-nums">
                         Capped at the chef's ₹{selfDeliveryBreakdown.maxFee.toFixed(0)} maximum
                       </Text>
                     ) : null}
@@ -1342,7 +1351,7 @@ export default function CheckoutScreen() {
                       >
                         {applyWallet && <Check size={14} color={customerColors.canvas} />}
                       </View>
-                      <Text className="text-sm text-charcoal">
+                      <Text className="text-sm text-charcoal tabular-nums">
                         Use wallet credit (₹{walletBalance.toFixed(2)})
                       </Text>
                     </View>
@@ -1405,6 +1414,7 @@ export default function CheckoutScreen() {
                 onPress={() => setSelectedSlot(null)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: selectedSlot === null }}
+                accessibilityLabel="ASAP, after chef accepts"
                 android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
               >
                 {({ pressed }) => (

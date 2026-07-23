@@ -302,6 +302,7 @@ export default function HomeScreen() {
           accessibilityRole="button"
           accessibilityLabel={isOpenOnly ? 'Showing open chefs only' : 'Show open chefs only'}
           accessibilityState={{ checked: isOpenOnly }}
+          hitSlop={5}
           android_ripple={{ color: ROW_RIPPLE, borderless: false }}
         >
           {({ pressed }) => (
@@ -339,6 +340,7 @@ export default function HomeScreen() {
               ? `Filters — ${activeFilterCount} active`
               : 'Open filters'
           }
+          hitSlop={5}
           android_ripple={{ color: ROW_RIPPLE, borderless: false }}
         >
           {({ pressed }) => (
@@ -384,6 +386,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/social')}
               accessibilityRole="button"
               accessibilityLabel="Go to Social Feed"
+              hitSlop={5}
               android_ripple={{ color: ROW_RIPPLE, borderless: false }}
             >
               {({ pressed }) => (
@@ -404,6 +407,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/catering')}
               accessibilityRole="button"
               accessibilityLabel="Go to Catering"
+              hitSlop={5}
               android_ripple={{ color: ROW_RIPPLE, borderless: false }}
             >
               {({ pressed }) => (

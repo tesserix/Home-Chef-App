@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { FlatList, Platform, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Heart, ChefHat } from 'lucide-react-native';
@@ -68,9 +68,15 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
         accessibilityLabel="Retry loading favorites"
         android_ripple={{ color: `${customerColors.canvas}33`, borderless: false }}
       >
-        <View className="bg-coral rounded-lg px-6 py-3 min-h-[44px] items-center justify-center">
-          <Text className="text-canvas font-semibold text-sm">Try again</Text>
-        </View>
+        {({ pressed }) => (
+          <View
+            className={`bg-coral rounded-lg px-6 py-3 min-h-[44px] items-center justify-center ${
+              pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : ''
+            }`}
+          >
+            <Text className="text-canvas font-semibold text-sm">Try again</Text>
+          </View>
+        )}
       </Pressable>
     </View>
   );
@@ -101,9 +107,15 @@ function EmptyState() {
         accessibilityLabel="Browse chefs"
         android_ripple={{ color: `${customerColors.canvas}33`, borderless: false }}
       >
-        <View className="bg-coral rounded-lg px-8 py-3 min-h-[44px] items-center justify-center mt-2">
-          <Text className="text-canvas font-semibold text-base">Browse chefs</Text>
-        </View>
+        {({ pressed }) => (
+          <View
+            className={`bg-coral rounded-lg px-8 py-3 min-h-[44px] items-center justify-center mt-2 ${
+              pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : ''
+            }`}
+          >
+            <Text className="text-canvas font-semibold text-base">Browse chefs</Text>
+          </View>
+        )}
       </Pressable>
     </View>
   );
@@ -131,9 +143,15 @@ function EmptyDishesState() {
         accessibilityLabel="Browse chefs"
         android_ripple={{ color: `${customerColors.canvas}33`, borderless: false }}
       >
-        <View className="bg-coral rounded-lg px-8 py-3 min-h-[44px] items-center justify-center mt-2">
-          <Text className="text-canvas font-semibold text-base">Browse chefs</Text>
-        </View>
+        {({ pressed }) => (
+          <View
+            className={`bg-coral rounded-lg px-8 py-3 min-h-[44px] items-center justify-center mt-2 ${
+              pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : ''
+            }`}
+          >
+            <Text className="text-canvas font-semibold text-base">Browse chefs</Text>
+          </View>
+        )}
       </Pressable>
     </View>
   );

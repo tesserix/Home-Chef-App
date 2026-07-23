@@ -71,6 +71,7 @@ export const AddressSwitcherSheet = forwardRef<SheetHandle>((_props, ref) => {
             onPress={handleClose}
             accessibilityRole="button"
             accessibilityLabel="Close"
+            hitSlop={4}
           >
             <View style={styles.doneButton}>
               <Text style={styles.doneLabel}>Done</Text>

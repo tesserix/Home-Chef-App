@@ -93,6 +93,7 @@ function FilterChip({ label, isSelected, onPress, accessibilityLabel }: FilterCh
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
       accessibilityLabel={accessibilityLabel ?? label}
+      hitSlop={4}
     >
       <View style={[styles.chip, isSelected && styles.chipActive]}>
         <Text style={[styles.chipLabel, isSelected && styles.chipLabelActive]}>
@@ -141,6 +142,7 @@ export const FilterSheet = forwardRef<SheetHandle, FilterSheetProps>(
               onPress={handleClose}
               accessibilityRole="button"
               accessibilityLabel="Close filters"
+              hitSlop={4}
             >
               <View style={styles.doneButton}>
                 <Text style={styles.doneLabel}>Done</Text>

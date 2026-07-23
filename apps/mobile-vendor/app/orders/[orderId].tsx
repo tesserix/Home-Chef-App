@@ -255,6 +255,7 @@ function Chip({ label, selected, onPress, grow }: ChipProps) {
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
+      accessibilityLabel={label}
       style={[styles.chip, grow && styles.chipGrow, selected && styles.chipSelected]}
       android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
@@ -528,6 +529,7 @@ function FooterActions({
           disabled={disabled}
           style={styles.flex1}
           accessibilityRole="button"
+          accessibilityLabel="Mark preparing"
           android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
@@ -637,6 +639,7 @@ function FooterActions({
           onPress={onMarkReady}
           disabled={disabled}
           accessibilityRole="button"
+          accessibilityLabel={isPickup ? 'Mark ready for pickup' : 'Mark ready'}
           android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
@@ -1147,6 +1150,7 @@ export default function OrderDetailScreen() {
           <Pressable
             onPress={() => refetch()}
             accessibilityRole="button"
+            accessibilityLabel="Retry loading order"
             android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
             {({ pressed }) => (
@@ -2073,6 +2077,7 @@ const styles = StyleSheet.create({
     marginHorizontal: theme.spacing[4],
     marginTop: -theme.spacing[2],
     marginBottom: theme.spacing[4],
+    fontVariant: ['tabular-nums'],
   },
 
   // Home-tiffin scheduling (#709) — propose-time controls. The controls sit in
@@ -2375,6 +2380,7 @@ const styles = StyleSheet.create({
     color: theme.colors.destructive.DEFAULT,
     marginTop: 2,
     letterSpacing: 0.2,
+    fontVariant: ['tabular-nums'],
   },
   primaryBtn: {
     flex: 1,
