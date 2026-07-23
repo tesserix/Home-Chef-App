@@ -156,8 +156,16 @@ export const useCartStore = create<CartState>()(
         chefName: state.chefName,
         items: state.items,
       }),
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => (state, error) => {
         state?.setHasHydrated(true);
+        // Hydration can finish with `state` undefined (nothing persisted yet,
+        // or a storage read error) — the optional chain above then silently
+        // no-ops and the gate never opens, leaving the cart screen blank
+        // forever. Always open the gate; on error we just proceed with the
+        // in-memory cart.
+        if (!state || error) {
+          useCartStore.setState({ hasHydrated: true });
+        }
       },
     }
   )
