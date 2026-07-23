@@ -86,7 +86,13 @@ export const SheetBase = forwardRef<SheetHandle, SheetBaseProps>(function SheetB
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const translateY = useRef(new Animated.Value(0)).current;
+  // Starts off-screen (not 0/open) — the Modal's very first paint happens
+  // before the mount effect below has a chance to run `runEnter()`, so an
+  // initial value of 0 rendered one full-open frame (panel fully in place)
+  // before snapping off-screen and animating back in. windowHeight is
+  // already known synchronously from useWindowDimensions above, so this
+  // needs no layout measurement round-trip.
+  const translateY = useRef(new Animated.Value(windowHeight)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

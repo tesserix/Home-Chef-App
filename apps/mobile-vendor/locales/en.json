@@ -144,7 +144,7 @@
     "annualSummary": "Annual summary (Section 194-O)",
     "payoutAccountLabel": "PAYOUT ACCOUNT",
     "noPayoutAccount": "No payout account",
-    "addPayoutHint": "Tap to add a bank account or UPI ID",
+    "addPayoutHint": "Tap to add a bank account",
     "ifsc": "IFSC {{ifsc}}",
     "bankAccount": "Bank account",
     "upi": "UPI",

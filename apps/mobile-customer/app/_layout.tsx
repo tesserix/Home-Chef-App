@@ -3,7 +3,6 @@ import '../global.css';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, type AppStateStatus, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { Stack, router } from 'expo-router';
 import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
@@ -230,6 +229,11 @@ export default function RootLayout() {
   }, [isAuthenticated, isLoading, onboardingComplete, setOnboardingComplete]);
 
   useEffect(() => {
+    // Fonts gate whether the Stack below is even mounted (see the early
+    // return a few lines down) — router.replace() before that happens throws
+    // an expo-router "Attempted to navigate before mounting" error. Bail
+    // until fonts resolve so this effect never fires ahead of the Stack.
+    if (!fontsLoaded) return;
     if (isLoading) return;
     if (!isAuthenticated) {
       router.replace('/(auth)/login');
@@ -241,7 +245,7 @@ export default function RootLayout() {
     } else {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isLoading, onboardingComplete, onboardingChecked]);
+  }, [fontsLoaded, isAuthenticated, isLoading, onboardingComplete, onboardingChecked]);
 
   // Fonts must resolve BEFORE the tree mounts. The previous approach rendered
   // the whole app under an opaque overlay while fonts loaded — every Text was
@@ -267,24 +271,23 @@ export default function RootLayout() {
 
   return (
     // GestureHandlerRootView must wrap the whole app so @gorhom/bottom-sheet's
-    // GestureDetector (used by CartSheet on the chef detail screen) works.
+    // GestureDetector (used by the live order-tracking sheet, app/order/[id]/track.tsx)
+    // works. The shared <Sheet> primitive (e.g. the "Show my plan" sheet on the
+    // chef page) no longer needs a BottomSheetModalProvider — it's built on a
+    // plain React Native Modal (see packages/mobile-shared/src/ui/SheetBase.tsx),
+    // not gorhom's BottomSheetModal.
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* BottomSheetModalProvider is required by the shared <Sheet> (a
-          BottomSheetModal) — e.g. the "Show my plan" sheet on the chef page.
-          Without it, mounting a BottomSheetModal crashes the app. */}
-      <BottomSheetModalProvider>
-        <AuthProvider
-          bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
-          tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
-        >
-          <QueryClientProvider client={queryClient}>
-            <View style={{ flex: 1 }}>
-              <OfflineBanner />
-              <Stack screenOptions={{ headerShown: false }} />
-            </View>
-          </QueryClientProvider>
-        </AuthProvider>
-      </BottomSheetModalProvider>
+      <AuthProvider
+        bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
+        tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
+      >
+        <QueryClientProvider client={queryClient}>
+          <View style={{ flex: 1 }}>
+            <OfflineBanner />
+            <Stack screenOptions={{ headerShown: false }} />
+          </View>
+        </QueryClientProvider>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }

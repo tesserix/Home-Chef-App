@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   FadeInDown,
@@ -148,7 +148,7 @@ export function PendingOrderCard({
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.root, pressed && { opacity: 0.9 }]}>
+          <View style={[styles.root, pressed && Platform.OS === 'ios' && { opacity: 0.9 }]}>
             {topRowContent}
 
             {showInstructions && order.specialInstructions ? (

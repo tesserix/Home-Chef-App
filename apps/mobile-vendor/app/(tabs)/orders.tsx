@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -242,7 +243,7 @@ function ErrorRetry({ onRetry }: ErrorRetryProps) {
         android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.retryBtn, pressed && { opacity: 0.85 }]}>
+          <View style={[styles.retryBtn, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}>
             <Text style={styles.retryLabel}>Retry</Text>
           </View>
         )}
@@ -488,7 +489,7 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
             <View
               style={[
                 historyRowStyles.root,
-                pressed && { backgroundColor: theme.colors.bone },
+                pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
               ]}
             >
               <View

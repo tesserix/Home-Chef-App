@@ -144,7 +144,7 @@
     "annualSummary": "वार्षिक सारांश (धारा 194-O)",
     "payoutAccountLabel": "भुगतान खाता",
     "noPayoutAccount": "कोई भुगतान खाता नहीं",
-    "addPayoutHint": "बैंक खाता या UPI ID जोड़ने के लिए टैप करें",
+    "addPayoutHint": "बैंक खाता जोड़ने के लिए टैप करें",
     "ifsc": "IFSC {{ifsc}}",
     "bankAccount": "बैंक खाता",
     "upi": "UPI",

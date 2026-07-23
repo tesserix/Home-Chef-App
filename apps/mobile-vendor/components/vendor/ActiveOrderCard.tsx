@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   FadeInDown,
@@ -338,7 +338,7 @@ export function ActiveOrderCard({
         {({ pressed }) => (
           // Inner-View pattern — visual styles (bg, radius) on View,
           // not on Pressable, to avoid the iOS function-style style drop.
-          <View style={[styles.body, pressed && { opacity: 0.85 }]}>
+          <View style={[styles.body, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}>
             {/* Header row: customer name + status chip left, total right */}
             <View style={styles.topRow}>
               <View style={styles.nameWithChip}>

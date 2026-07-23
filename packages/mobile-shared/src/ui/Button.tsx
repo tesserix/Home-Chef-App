@@ -109,7 +109,18 @@ export function Button({
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: isInert, busy: loading }}
       style={fullWidth ? styles.fullWidth : undefined}
-      android_ripple={isInert ? undefined : { color: v.ripple, borderless: false }}
+      // `foreground: true` on filled variants (primary/secondary/destructive)
+      // draws the ripple as an overlay ON TOP of the opaque inner container
+      // instead of beneath it — without it, Android's ripple renders on the
+      // Pressable's own background, which the opaque View child then covers,
+      // producing a dead-looking press. `ghost` has a transparent container,
+      // so the ripple (drawn under the Pressable) is already visible and
+      // doesn't need `foreground`. Still bounded (`borderless: false`).
+      android_ripple={
+        isInert
+          ? undefined
+          : { color: v.ripple, borderless: false, foreground: variant !== 'ghost' }
+      }
     >
       {({ pressed }) => (
         <View
