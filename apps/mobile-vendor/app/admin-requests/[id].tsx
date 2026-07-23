@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ActionSheetIOS,
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -14,12 +13,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { theme } from '@homechef/mobile-shared/theme';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { EmptyState, Skeleton, useToast } from '@homechef/mobile-shared/ui';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { AdminRequest, useAdminRequests } from '../../hooks/useAdminRequests';
@@ -37,10 +36,11 @@ function useAdminRequest(id: string): {
   request: AdminRequest | null;
   isLoading: boolean;
   isError: boolean;
+  refetch: () => void;
 } {
-  const { data, isLoading, isError } = useAdminRequests();
+  const { data, isLoading, isError, refetch } = useAdminRequests();
   const request = (data ?? []).find((r) => r.id === id) ?? null;
-  return { request, isLoading, isError };
+  return { request, isLoading, isError, refetch };
 }
 
 function useRespondToRequest(id: string) {
@@ -90,7 +90,7 @@ function formatDate(iso: string): string {
 export default function AdminRequestDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const requestId = typeof id === 'string' ? id : '';
-  const { request, isLoading, isError } = useAdminRequest(requestId);
+  const { request, isLoading, isError, refetch } = useAdminRequest(requestId);
 
   const [responseText, setResponseText] = useState('');
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
@@ -207,8 +207,13 @@ export default function AdminRequestDetailScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.colors.ink.DEFAULT} />
+        <View style={styles.commandBar}>
+          <View style={styles.backBtnSpacer} />
+        </View>
+        <View style={styles.skeletonStack}>
+          <Skeleton height={16} style={{ width: '40%', marginBottom: theme.spacing[2] }} />
+          <Skeleton height={40} style={{ marginBottom: theme.spacing[4] }} />
+          <Skeleton height={140} />
         </View>
       </SafeAreaView>
     );
@@ -218,13 +223,26 @@ export default function AdminRequestDetailScreen() {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
         <View style={styles.commandBar}>
-          <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button">
-            <ChevronLeft size={26} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+          >
+            {({ pressed }) => (
+              <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+                <ChevronLeft size={26} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+              </View>
+            )}
           </Pressable>
         </View>
-        <View style={styles.center}>
-          <Text style={styles.muted}>This request couldn't be loaded.</Text>
-        </View>
+        <EmptyState
+          title="This request couldn't be loaded"
+          body="Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => refetch()}
+        />
       </SafeAreaView>
     );
   }
@@ -243,8 +261,13 @@ export default function AdminRequestDetailScreen() {
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Back"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
-            <ChevronLeft size={26} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+            {({ pressed }) => (
+              <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+                <ChevronLeft size={26} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+              </View>
+            )}
           </Pressable>
           <Text style={styles.commandTitle} numberOfLines={1}>
             Admin request
@@ -291,8 +314,20 @@ export default function AdminRequestDetailScreen() {
                 onPress={() => setAttachedFile(null)}
                 disabled={submitting}
                 hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Remove attachment"
+                android_ripple={{ color: `${theme.colors.destructive.DEFAULT}14`, borderless: true }}
               >
-                <Text style={styles.attachmentRemove}>Remove</Text>
+                {({ pressed }) => (
+                  <Text
+                    style={[
+                      styles.attachmentRemove,
+                      pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                    ]}
+                  >
+                    Remove
+                  </Text>
+                )}
               </Pressable>
             </View>
           ) : (
@@ -301,9 +336,18 @@ export default function AdminRequestDetailScreen() {
               disabled={submitting}
               accessibilityRole="button"
               accessibilityLabel="Attach a file"
-              style={styles.attachLinkWrap}
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
             >
-              <Text style={styles.attachLinkLabel}>+ Attach a file (optional)</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.attachLinkWrap,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={styles.attachLinkLabel}>+ Attach a file (optional)</Text>
+                </View>
+              )}
             </Pressable>
           )}
 
@@ -312,12 +356,17 @@ export default function AdminRequestDetailScreen() {
             disabled={submitting || responseText.trim().length === 0}
             accessibilityRole="button"
             accessibilityLabel="Send response to admin"
+            android_ripple={
+              submitting || responseText.trim().length === 0
+                ? undefined
+                : { color: `${theme.colors.paper}30`, borderless: false }
+            }
           >
             {({ pressed }) => (
               <View
                 style={[
                   styles.submitBtn,
-                  pressed && { opacity: 0.85 },
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
                   (submitting || responseText.trim().length === 0) && {
                     opacity: 0.4,
                   },
@@ -351,6 +400,11 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     letterSpacing: -0.2,
     color: theme.colors.ink.DEFAULT,
+  },
+  backBtnSpacer: { width: 26, height: 26 },
+  skeletonStack: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[2],
   },
   scroll: { flex: 1 },
   scrollContent: {
@@ -466,18 +520,5 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.paper,
     letterSpacing: 0.3,
-  },
-
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing[6],
-  },
-  muted: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.muted,
-    textAlign: 'center',
   },
 });

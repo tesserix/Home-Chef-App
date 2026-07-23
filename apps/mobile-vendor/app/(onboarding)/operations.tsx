@@ -4,6 +4,8 @@
 
 import {
   Alert,
+  Platform,
+  Pressable,
   StyleSheet,
   Switch,
   Text,
@@ -190,18 +192,33 @@ export default function OperationsScreen() {
         {PREP_TIME_OPTIONS.map((option) => {
           const selected = prepTime === option;
           return (
-            <View
+            <Pressable
               key={option}
-              style={[styles.chip, selected && styles.chipActive]}
+              onPress={() => setPrepTime(option)}
+              accessibilityRole="button"
+              accessibilityLabel={option}
+              accessibilityState={{ selected }}
+              android_ripple={{
+                color: selected
+                  ? `${theme.colors.paper}30`
+                  : `${theme.colors.ink.DEFAULT}14`,
+                borderless: false,
+              }}
             >
-              <Text
-                style={[styles.chipLabel, selected && styles.chipLabelActive]}
-                onPress={() => setPrepTime(option)}
-                suppressHighlighting
-              >
-                {option}
-              </Text>
-            </View>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.chip,
+                    selected && styles.chipActive,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.75 },
+                  ]}
+                >
+                  <Text style={[styles.chipLabel, selected && styles.chipLabelActive]}>
+                    {option}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
           );
         })}
       </View>

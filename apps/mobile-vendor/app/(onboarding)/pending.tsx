@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -113,8 +114,20 @@ export default function PendingScreen() {
       {/* Header bar */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('onboarding.applicationStatus')}</Text>
-        <Pressable onPress={handleLogout} hitSlop={8} style={styles.logoutBtn}>
-          <Text style={styles.logoutLabel}>{t('onboarding.logout')}</Text>
+        <Pressable
+          onPress={handleLogout}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('onboarding.logout')}
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+        >
+          {({ pressed }) => (
+            <View
+              style={[styles.logoutBtn, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}
+            >
+              <Text style={styles.logoutLabel}>{t('onboarding.logout')}</Text>
+            </View>
+          )}
         </Pressable>
       </View>
 
@@ -155,13 +168,20 @@ export default function PendingScreen() {
 
             <Pressable
               onPress={handleReapply}
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                pressed && { opacity: 0.85 },
-              ]}
               accessibilityRole="button"
+              accessibilityLabel={t('onboarding.reapply')}
+              android_ripple={{ color: `${theme.colors.paper}30`, borderless: false }}
             >
-              <Text style={styles.primaryBtnLabel}>{t('onboarding.reapply')}</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.primaryBtn,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                  ]}
+                >
+                  <Text style={styles.primaryBtnLabel}>{t('onboarding.reapply')}</Text>
+                </View>
+              )}
             </Pressable>
           </>
         ) : (
@@ -180,7 +200,7 @@ export default function PendingScreen() {
               {t('onboarding.reviewingBody')}
             </Text>
 
-            {/* Application timeline — three steps, current in persimmon.
+            {/* Application timeline — three steps, current step in ink.
                 Gives a sense of forward motion without faking progress. */}
             <View style={styles.timeline}>
               <TimelineStep
@@ -216,18 +236,26 @@ export default function PendingScreen() {
             <Pressable
               onPress={() => refetch()}
               disabled={isRefetching}
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                pressed && { opacity: 0.85 },
-                isRefetching && { opacity: 0.5 },
-              ]}
               accessibilityRole="button"
               accessibilityLabel={t('onboarding.checkStatus')}
+              android_ripple={
+                isRefetching ? undefined : { color: `${theme.colors.paper}30`, borderless: false }
+              }
             >
-              {isRefetching ? (
-                <ActivityIndicator color={theme.colors.paper} />
-              ) : (
-                <Text style={styles.primaryBtnLabel}>{t('onboarding.checkStatus')}</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.primaryBtn,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                    isRefetching && { opacity: 0.5 },
+                  ]}
+                >
+                  {isRefetching ? (
+                    <ActivityIndicator color={theme.colors.paper} />
+                  ) : (
+                    <Text style={styles.primaryBtnLabel}>{t('onboarding.checkStatus')}</Text>
+                  )}
+                </View>
               )}
             </Pressable>
 

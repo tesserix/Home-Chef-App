@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { AlertTriangle, BellRing, ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
+import { EmptyState, Skeleton } from '@homechef/mobile-shared/ui';
 import {
   AdminRequest,
   useAdminRequests,
@@ -83,19 +84,29 @@ function RemindControl({ request, now }: { request: AdminRequest; now: number })
             : `Remind admin about ${request.title}. Available in ${waitingFor}`
         }
         accessibilityState={{ disabled: !unlocked || remind.isPending, busy: remind.isPending }}
-        style={({ pressed }) => [
-          styles.remindBtn,
-          !unlocked && styles.remindBtnLocked,
-          pressed && unlocked && styles.remindBtnPressed,
-        ]}
+        android_ripple={
+          unlocked ? { color: `${theme.colors.ink.DEFAULT}14`, borderless: false } : undefined
+        }
       >
-        <BellRing
-          size={14}
-          color={unlocked ? theme.colors.ink.DEFAULT : theme.colors.ink.soft}
-        />
-        <Text style={[styles.remindBtnText, !unlocked && styles.remindBtnTextLocked]}>
-          {remind.isPending ? 'Sending…' : unlocked ? 'Remind' : waitingFor}
-        </Text>
+        {({ pressed }) => (
+          // Inner-View pattern — a function-style `style` prop returning an
+          // array drops flex/bg/padding on iOS.
+          <View
+            style={[
+              styles.remindBtn,
+              !unlocked && styles.remindBtnLocked,
+              pressed && unlocked && Platform.OS === 'ios' && styles.remindBtnPressed,
+            ]}
+          >
+            <BellRing
+              size={14}
+              color={unlocked ? theme.colors.ink.DEFAULT : theme.colors.ink.soft}
+            />
+            <Text style={[styles.remindBtnText, !unlocked && styles.remindBtnTextLocked]}>
+              {remind.isPending ? 'Sending…' : unlocked ? 'Remind' : waitingFor}
+            </Text>
+          </View>
+        )}
       </Pressable>
     </View>
   );
@@ -208,14 +219,19 @@ function RequestCard({ request, now }: { request: AdminRequest; now: number }) {
       onPress={() => router.push(`/admin-requests/${request.id}`)}
       accessibilityRole="button"
       accessibilityLabel={`Respond to ${request.title}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}0F`, borderless: false }}
     >
-      {inner}
+      {({ pressed }) => (
+        <View style={pressed && Platform.OS === 'ios' && styles.cardPressed}>
+          {inner}
+        </View>
+      )}
     </Pressable>
   );
 }
 
 export default function AdminRequestsScreen() {
-  const { data, isLoading, isError } = useAdminRequests();
+  const { data, isLoading, isError, refetch } = useAdminRequests();
   const now = useNowEveryMinute();
 
   // Reminded requests float to the top of the CHEF's list too, not just the
@@ -239,27 +255,41 @@ export default function AdminRequestsScreen() {
         <Pressable
           onPress={() => router.back()}
           hitSlop={8}
-          style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={26} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.backBtn,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+            >
+              <ChevronLeft size={26} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.commandTitle}>Admin requests</Text>
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.colors.ink.DEFAULT} />
+        <View style={styles.skeletonStack}>
+          <Skeleton height={140} style={{ borderRadius: theme.radius.lg, marginBottom: theme.spacing[3] }} />
+          <Skeleton height={140} style={{ borderRadius: theme.radius.lg }} />
         </View>
       ) : isError ? (
-        <View style={styles.center}>
-          <Text style={styles.muted}>Could not load your admin requests.</Text>
-        </View>
+        <EmptyState
+          title="Couldn't load your requests"
+          body="Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => refetch()}
+        />
       ) : (data?.length ?? 0) === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.muted}>No admin requests yet.</Text>
-        </View>
+        <EmptyState
+          title="No admin requests yet"
+          body="When admin needs something from you, it shows up here."
+        />
       ) : (
         <ScrollView
           style={styles.scroll}
@@ -338,7 +368,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[10],
   },
+  skeletonStack: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[1],
+  },
 
+  cardPressed: { opacity: 0.85 },
   // Request card — white surface on the bone canvas (spec §1)
   card: {
     backgroundColor: theme.colors.paper,
@@ -403,7 +438,7 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
     lineHeight: 20,
   },
-  // Text link per spec §3 — herb, no underline
+  // Text link per spec §3 — ink, no underline
   cardCta: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
@@ -411,16 +446,4 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[1],
   },
 
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing[6],
-  },
-  muted: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.muted,
-    textAlign: 'center',
-  },
 });

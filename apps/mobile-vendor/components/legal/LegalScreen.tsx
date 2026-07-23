@@ -6,7 +6,7 @@
 // NativeWind className support. headerShown is false app-wide, so this draws its
 // own back command bar (copied from settings.tsx).
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -33,11 +33,17 @@ export function LegalScreen({ title, lastUpdated, intro, sections }: LegalScreen
         <Pressable
           onPress={() => router.back()}
           hitSlop={8}
-          style={styles.backBtn}
           accessibilityLabel="Go back"
           accessibilityRole="button"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+          {({ pressed }) => (
+            <View
+              style={[styles.backBtn, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}
+            >
+              <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.commandTitle} numberOfLines={1}>
           {title}

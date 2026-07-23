@@ -3,9 +3,9 @@
 
 import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,7 +19,7 @@ import { Redirect, router } from 'expo-router';
 import { CATERING_ENABLED } from '../constants/features';
 import { ChevronLeft, X } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button, KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { Button, EmptyState, KeyboardAwareScrollView, Skeleton } from '@homechef/mobile-shared/ui';
 import {
   useAvailableCateringRequests,
   useCateringBookings,
@@ -43,11 +43,13 @@ function fmtDate(d?: string): string {
 
 // ─── Status chip ────────────────────────────────────────────────────────────
 
+// "accent" tone reads as "in flight, needs attention" (awaiting response) —
+// per spec §2 that's amber, not ink/persimmon (reserved for actions/selection).
 function StatusChip({ label, tone }: { label: string; tone: 'neutral' | 'accent' | 'success' }) {
   const bg =
-    tone === 'success' ? theme.colors.success.tint : tone === 'accent' ? theme.colors.herb.tint : theme.colors.bone;
+    tone === 'success' ? theme.colors.success.tint : tone === 'accent' ? theme.colors.amber.tint : theme.colors.bone;
   const fg =
-    tone === 'success' ? theme.colors.success.soft : tone === 'accent' ? theme.colors.herb.soft : theme.colors.ink.soft;
+    tone === 'success' ? theme.colors.success.soft : tone === 'accent' ? theme.colors.ink.DEFAULT : theme.colors.ink.soft;
   return (
     <View style={[styles.chip, { backgroundColor: bg }]}>
       <Text style={[styles.chipText, { color: fg }]}>{label}</Text>
@@ -242,8 +244,18 @@ function QuoteModal({
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <Text style={styles.title}>Submit a quote</Text>
-          <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
-            <X size={24} color={theme.colors.ink.DEFAULT} />
+          <Pressable
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+          >
+            {({ pressed }) => (
+              <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+                <X size={24} color={theme.colors.ink.DEFAULT} />
+              </View>
+            )}
           </Pressable>
         </View>
         <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
@@ -318,7 +330,9 @@ function QuoteModal({
               <Switch
                 value={val as boolean}
                 onValueChange={set as (v: boolean) => void}
-                trackColor={{ true: theme.colors.herb.DEFAULT }}
+                trackColor={{ false: theme.colors.mist.strong, true: theme.colors.ink.DEFAULT }}
+                thumbColor={theme.colors.paper}
+                ios_backgroundColor={theme.colors.mist.strong}
               />
             </View>
           ))}
@@ -328,10 +342,28 @@ function QuoteModal({
             {[3, 7, 14].map((d) => {
               const sel = validDays === d;
               return (
-                <Pressable key={d} onPress={() => setValidDays(d)} accessibilityRole="button" accessibilityState={{ selected: sel }}>
-                  <View style={[styles.validChip, sel && styles.validChipSel]}>
-                    <Text style={[styles.validChipText, sel && styles.validChipTextSel]}>{d} days</Text>
-                  </View>
+                <Pressable
+                  key={d}
+                  onPress={() => setValidDays(d)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${d} days`}
+                  accessibilityState={{ selected: sel }}
+                  android_ripple={{
+                    color: sel ? `${theme.colors.paper}30` : `${theme.colors.ink.DEFAULT}14`,
+                    borderless: false,
+                  }}
+                >
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.validChip,
+                        sel && styles.validChipSel,
+                        pressed && Platform.OS === 'ios' && { opacity: 0.75 },
+                      ]}
+                    >
+                      <Text style={[styles.validChipText, sel && styles.validChipTextSel]}>{d} days</Text>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
@@ -388,6 +420,17 @@ function VendorCateringScreen() {
     (tab === 'quotes' && quotes.isLoading) ||
     (tab === 'bookings' && bookings.isLoading);
 
+  const isError =
+    (tab === 'open' && requests.isError) ||
+    (tab === 'quotes' && quotes.isError) ||
+    (tab === 'bookings' && bookings.isError);
+
+  function retryActiveTab(): void {
+    if (tab === 'open') requests.refetch();
+    else if (tab === 'quotes') quotes.refetch();
+    else bookings.refetch();
+  }
+
   function completeBooking(requestId: string) {
     Alert.alert('Mark this event completed?', 'Do this after the event has been catered.', [
       { text: 'Not yet', style: 'cancel' },
@@ -402,8 +445,18 @@ function VendorCateringScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
-          <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+        >
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+              <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.title}>Catering</Text>
         <View style={{ width: 24 }} />
@@ -414,27 +467,54 @@ function VendorCateringScreen() {
         {tabs.map((t) => {
           const sel = tab === t.key;
           return (
-            <Pressable key={t.key} style={styles.tabItem} onPress={() => setTab(t.key)} accessibilityRole="tab" accessibilityState={{ selected: sel }}>
-              <View style={[styles.tabInner, sel && styles.tabInnerSel]}>
-                <Text style={[styles.tabText, sel && styles.tabTextSel]}>
-                  {t.label}
-                  {t.count > 0 ? ` (${t.count})` : ''}
-                </Text>
-              </View>
+            <Pressable
+              key={t.key}
+              style={styles.tabItem}
+              onPress={() => setTab(t.key)}
+              accessibilityRole="tab"
+              accessibilityLabel={t.label}
+              accessibilityState={{ selected: sel }}
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+            >
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.tabInner,
+                    sel && styles.tabInnerSel,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.75 },
+                  ]}
+                >
+                  <Text style={[styles.tabText, sel && styles.tabTextSel]}>
+                    {t.label}
+                    {t.count > 0 ? ` (${t.count})` : ''}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
       </View>
 
       {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={theme.colors.herb.DEFAULT} />
+        <View style={styles.scroll}>
+          <Skeleton height={120} style={{ borderRadius: theme.radius.md, marginBottom: theme.spacing[3] }} />
+          <Skeleton height={120} style={{ borderRadius: theme.radius.md }} />
         </View>
+      ) : isError ? (
+        <EmptyState
+          title="Couldn't load this"
+          body="Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={retryActiveTab}
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
           {tab === 'open' &&
             (openList.length === 0 ? (
-              <EmptyState text="No open catering requests right now. Check back soon." />
+              <EmptyState
+                title="No open requests"
+                body="No open catering requests right now. Check back soon."
+              />
             ) : (
               openList.map((r) => (
                 <RequestCard key={r.id} request={r} onQuote={() => setQuoteTarget(r)} />
@@ -443,14 +523,17 @@ function VendorCateringScreen() {
 
           {tab === 'quotes' &&
             (quoteList.length === 0 ? (
-              <EmptyState text="You haven't sent any quotes yet." />
+              <EmptyState title="No quotes yet" body="You haven't sent any quotes yet." />
             ) : (
               quoteList.map((q) => <QuoteCard key={q.id} quote={q} />)
             ))}
 
           {tab === 'bookings' &&
             (bookingList.length === 0 ? (
-              <EmptyState text="No confirmed bookings yet. Accepted quotes appear here once the customer pays the deposit." />
+              <EmptyState
+                title="No bookings yet"
+                body="Accepted quotes appear here once the customer pays the deposit."
+              />
             ) : (
               bookingList.map((b) => (
                 <BookingCard
@@ -478,17 +561,8 @@ function VendorCateringScreen() {
   );
 }
 
-function EmptyState({ text }: { text: string }) {
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.emptyText}>{text}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bone },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -534,9 +608,6 @@ const styles = StyleSheet.create({
   tag: { backgroundColor: theme.colors.bone, borderRadius: theme.radius.full, paddingHorizontal: 10, paddingVertical: 4 },
   tagText: { fontFamily: 'Inter', fontSize: 12, color: theme.colors.ink.soft },
 
-  empty: { paddingVertical: theme.spacing[10], paddingHorizontal: theme.spacing[6], alignItems: 'center' },
-  emptyText: { fontFamily: 'Inter', fontSize: 14, color: theme.colors.ink.muted, textAlign: 'center', lineHeight: 20 },
-
   // Quote modal form
   label: {
     fontFamily: 'Inter-SemiBold',
@@ -572,7 +643,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.mist.DEFAULT,
   },
-  validChipSel: { borderColor: theme.colors.herb.DEFAULT, backgroundColor: theme.colors.herb.tint },
+  validChipSel: { borderColor: theme.colors.ink.DEFAULT, backgroundColor: theme.colors.ink.DEFAULT },
   validChipText: { fontFamily: 'Inter', fontSize: 14, color: theme.colors.ink.soft },
-  validChipTextSel: { fontFamily: 'Inter-SemiBold', color: theme.colors.herb.soft },
+  validChipTextSel: { fontFamily: 'Inter-SemiBold', color: theme.colors.paper },
 });

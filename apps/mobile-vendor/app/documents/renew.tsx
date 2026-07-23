@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ActionSheetIOS,
-  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -19,7 +18,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { theme } from '@homechef/mobile-shared/theme';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { EmptyState, Skeleton, useToast } from '@homechef/mobile-shared/ui';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { describeDocumentType } from '../../hooks/useExpiringDocuments';
@@ -115,12 +114,16 @@ function useReplaceDocument() {
   });
 }
 
+// Status chip per spec §2 — tint bg + darker text of the same hue, never a
+// solid fill. Verified is operational-positive → functional success green
+// (the vendor app carries zero persimmon; ink handles actions, this handles
+// status) — mirrors profile.tsx's verified chip.
 function StatusBadge({ status }: { status: ChefDocument['status'] }) {
   const palette = {
-    verified: { bg: theme.colors.diet.veg, fg: theme.colors.paper, text: 'Verified' },
-    pending: { bg: theme.colors.amber.DEFAULT, fg: theme.colors.ink.DEFAULT, text: 'Under review' },
-    rejected: { bg: theme.colors.destructive.DEFAULT, fg: theme.colors.paper, text: 'Needs re-upload' },
-  }[status] ?? { bg: theme.colors.bone, fg: theme.colors.ink.muted, text: status };
+    verified: { bg: theme.colors.success.tint, fg: theme.colors.success.soft, text: 'Verified' },
+    pending: { bg: theme.colors.amber.tint, fg: theme.colors.ink.DEFAULT, text: 'Under review' },
+    rejected: { bg: theme.colors.destructive.tint, fg: theme.colors.destructive.DEFAULT, text: 'Needs re-upload' },
+  }[status] ?? { bg: theme.colors.mist.DEFAULT, fg: theme.colors.ink.muted, text: status };
   return (
     <View style={[styles.badge, { backgroundColor: palette.bg }]}>
       <Text style={[styles.badgeText, { color: palette.fg }]}>{palette.text}</Text>
@@ -141,7 +144,7 @@ function expiryHint(doc: ChefDocument): { text: string; isUrgent: boolean } | nu
 }
 
 export default function DocumentsRenewScreen() {
-  const { data: docs, isLoading, isError } = useChefDocuments();
+  const { data: docs, isLoading, isError, refetch } = useChefDocuments();
   const replace = useReplaceDocument();
   const { show: showToast } = useToast();
   const [busyDocId, setBusyDocId] = useState<string | null>(null);
@@ -326,24 +329,36 @@ export default function DocumentsRenewScreen() {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={26} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+              <ChevronLeft size={26} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.commandTitle}>Documents</Text>
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.colors.ink.DEFAULT} />
+        <View style={styles.skeletonStack}>
+          <Skeleton height={16} style={{ width: '80%', marginBottom: theme.spacing[4] }} />
+          <Skeleton height={56} style={{ marginBottom: 1 }} />
+          <Skeleton height={56} style={{ marginBottom: 1 }} />
+          <Skeleton height={56} />
         </View>
       ) : isError ? (
-        <View style={styles.center}>
-          <Text style={styles.muted}>Could not load your documents.</Text>
-        </View>
+        <EmptyState
+          title="Couldn't load your documents"
+          body="Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => refetch()}
+        />
       ) : (docs?.length ?? 0) === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.muted}>You haven't uploaded any documents yet.</Text>
-        </View>
+        <EmptyState
+          title="No documents yet"
+          body="You haven't uploaded any documents yet."
+        />
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <Text style={styles.helperText}>
@@ -387,12 +402,15 @@ export default function DocumentsRenewScreen() {
                     disabled={isBusy}
                     accessibilityRole="button"
                     accessibilityLabel={`Replace ${describeDocumentType(doc.type)}`}
+                    android_ripple={
+                      isBusy ? undefined : { color: `${theme.colors.paper}30`, borderless: false }
+                    }
                   >
                     {({ pressed }) => (
                       <View
                         style={[
                           styles.replaceBtn,
-                          pressed && { opacity: 0.85 },
+                          pressed && Platform.OS === 'ios' && { opacity: 0.85 },
                           isBusy && { opacity: 0.5 },
                         ]}
                       >
@@ -442,9 +460,15 @@ export default function DocumentsRenewScreen() {
                 onPress={() => setExpiryPrompt(null)}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
+                android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
               >
                 {({ pressed }) => (
-                  <View style={[styles.modalBtnGhost, pressed && { opacity: 0.7 }]}>
+                  <View
+                    style={[
+                      styles.modalBtnGhost,
+                      pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                    ]}
+                  >
                     <Text style={styles.modalBtnGhostLabel}>Cancel</Text>
                   </View>
                 )}
@@ -453,9 +477,15 @@ export default function DocumentsRenewScreen() {
                 onPress={confirmExpiry}
                 accessibilityRole="button"
                 accessibilityLabel="Confirm and upload"
+                android_ripple={{ color: `${theme.colors.paper}30`, borderless: false }}
               >
                 {({ pressed }) => (
-                  <View style={[styles.modalBtn, pressed && { opacity: 0.85 }]}>
+                  <View
+                    style={[
+                      styles.modalBtn,
+                      pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                    ]}
+                  >
                     <Text style={styles.modalBtnLabel}>Confirm & upload</Text>
                   </View>
                 )}
@@ -559,6 +589,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[10],
   },
+  skeletonStack: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[1],
+  },
 
   helperText: {
     fontFamily: 'Inter',
@@ -615,9 +649,9 @@ const styles = StyleSheet.create({
   },
 
   badge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: theme.spacing[2],
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: theme.radius.full,
   },
   badgeText: {
     fontFamily: 'Inter-SemiBold',
@@ -635,18 +669,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.paper,
-  },
-
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing[6],
-  },
-  muted: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.muted,
-    textAlign: 'center',
   },
 });

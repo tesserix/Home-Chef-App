@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +13,7 @@ import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button } from '@homechef/mobile-shared/ui';
+import { Button, EmptyState, Skeleton } from '@homechef/mobile-shared/ui';
 import {
   CANCEL_REASONS,
   useCancellationRequests,
@@ -25,28 +25,45 @@ import {
 // screen: a customer asked to cancel; the chef picks the reason and the API
 // issues the tiered refund. Same API + same CANCEL_REASONS as web.
 export default function CancelRequestsScreen() {
-  const { data, isLoading } = useCancellationRequests('pending_vendor');
+  const { data, isLoading, isError, refetch } = useCancellationRequests('pending_vendor');
   const requests = data?.data ?? [];
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
-          <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+        >
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+              <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.title}>Cancellation requests</Text>
         <View style={{ width: 24 }} />
       </View>
 
       {isLoading ? (
-        <ActivityIndicator style={{ marginTop: theme.spacing[6] }} color={theme.colors.ink.DEFAULT} />
-      ) : requests.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No requests right now</Text>
-          <Text style={styles.emptyBody}>
-            When a customer asks to cancel an order you're preparing, it appears here for you to confirm.
-          </Text>
+        <View style={styles.skeletonStack}>
+          <Skeleton height={160} style={{ borderRadius: theme.radius.lg }} />
         </View>
+      ) : isError ? (
+        <EmptyState
+          title="Couldn't load requests"
+          body="Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => refetch()}
+        />
+      ) : requests.length === 0 ? (
+        <EmptyState
+          title="No requests right now"
+          body="When a customer asks to cancel an order you're preparing, it appears here for you to confirm."
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
           {requests.map((r) => (
@@ -85,12 +102,23 @@ function RequestCard({ req }: { req: CancellationRequest }) {
           <Pressable
             key={r.value}
             onPress={() => setReason(r.value)}
-            style={[styles.reason, active && styles.reasonActive]}
             accessibilityRole="radio"
+            accessibilityLabel={r.label}
             accessibilityState={{ selected: active }}
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}0F`, borderless: false }}
           >
-            <Text style={[styles.reasonLabel, active && styles.reasonLabelActive]}>{r.label}</Text>
-            <Text style={styles.reasonHint}>{r.hint}</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.reason,
+                  active && styles.reasonActive,
+                  pressed && Platform.OS === 'ios' && styles.reasonPressed,
+                ]}
+              >
+                <Text style={styles.reasonLabel}>{r.label}</Text>
+                <Text style={styles.reasonHint}>{r.hint}</Text>
+              </View>
+            )}
           </Pressable>
         );
       })}
@@ -115,9 +143,7 @@ const styles = StyleSheet.create({
   },
   title: { fontFamily: 'Geist-Bold', fontSize: 20, color: theme.colors.ink.DEFAULT },
   scroll: { padding: theme.spacing[4], gap: theme.spacing[3] },
-  empty: { padding: theme.spacing[6], alignItems: 'center', gap: theme.spacing[2] },
-  emptyTitle: { fontFamily: 'Geist-Bold', fontSize: 18, color: theme.colors.ink.DEFAULT },
-  emptyBody: { fontFamily: 'Inter', fontSize: 14, color: theme.colors.ink.soft, textAlign: 'center' },
+  skeletonStack: { padding: theme.spacing[4] },
   card: {
     backgroundColor: theme.colors.paper,
     borderRadius: theme.radius.lg,
@@ -135,8 +161,8 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     padding: theme.spacing[3],
   },
-  reasonActive: { borderColor: theme.colors.herb.DEFAULT, backgroundColor: theme.colors.herb.tint },
+  reasonActive: { borderColor: theme.colors.ink.DEFAULT, backgroundColor: theme.colors.bone },
+  reasonPressed: { backgroundColor: theme.colors.bone },
   reasonLabel: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: theme.colors.ink.DEFAULT },
-  reasonLabelActive: { color: theme.colors.herb.DEFAULT },
   reasonHint: { fontFamily: 'Inter', fontSize: 12, color: theme.colors.ink.soft, marginTop: 2 },
 });

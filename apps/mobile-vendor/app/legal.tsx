@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -42,11 +42,17 @@ export default function LegalScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
           hitSlop={8}
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
           {({ pressed }) => (
             // Inner-View pattern — visual styles on the View, never a
             // function-style array on the Pressable (iOS drops them).
-            <View style={[styles.backButton, pressed && { opacity: 0.6 }]}>
+            <View
+              style={[
+                styles.backButton,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+            >
               <ChevronLeft
                 size={22}
                 color={theme.colors.ink.DEFAULT}
@@ -91,9 +97,13 @@ function LegalRowItem({ row, isLast }: LegalRowItemProps) {
       <Pressable
         onPress={() => router.push(route as never)}
         accessibilityRole="button"
+        accessibilityLabel={t(`more.${labelKey}`)}
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}0F`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.navRow, pressed && styles.rowPressed]}>
+          <View
+            style={[styles.navRow, pressed && Platform.OS === 'ios' && styles.rowPressed]}
+          >
             <View style={styles.navIcon}>
               <Icon size={20} color={theme.colors.ink.soft} strokeWidth={1.75} />
             </View>

@@ -114,9 +114,15 @@ export default function ReviewDetailScreen() {
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Go back"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
             {({ pressed }) => (
-              <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
+              <View
+                style={[
+                  styles.backBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                ]}
+              >
                 <ChevronLeft
                   size={22}
                   color={theme.colors.ink.DEFAULT}
@@ -226,13 +232,18 @@ export default function ReviewDetailScreen() {
               disabled={sendDisabled}
               accessibilityRole="button"
               accessibilityLabel="Send reply"
+              android_ripple={
+                sendDisabled
+                  ? undefined
+                  : { color: `${theme.colors.paper}30`, borderless: false }
+              }
             >
               {({ pressed }) => (
                 <View
                   style={[
                     styles.sendBtn,
                     sendDisabled && styles.sendBtnDisabled,
-                    pressed && !sendDisabled && { opacity: 0.88 },
+                    pressed && !sendDisabled && Platform.OS === 'ios' && { opacity: 0.88 },
                   ]}
                 >
                   {replyMutation.isPending ? (
@@ -375,7 +386,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
   },
   inputContainerFocused: {
-    borderColor: theme.colors.ink.DEFAULT, // persimmon focus ring — only usage on screen
+    borderColor: theme.colors.ink.DEFAULT, // ink focus ring — only accented element on screen
   },
   inputContainerError: {
     borderColor: theme.colors.destructive.DEFAULT,

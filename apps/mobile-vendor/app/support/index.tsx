@@ -1,5 +1,5 @@
 import {
-  ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
+import { Skeleton } from '@homechef/mobile-shared/ui';
 import {
   CATEGORY_LABEL,
   useSupportTickets,
@@ -48,9 +49,15 @@ function TicketRow({ ticket }: { ticket: SupportTicket }) {
       onPress={() => router.push(`/support/${ticket.id}`)}
       accessibilityRole="button"
       accessibilityLabel={`Open ticket: ${ticket.subject}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}0F`, borderless: false }}
     >
       {({ pressed }) => (
-        <View style={[styles.card, pressed && styles.cardPressed]}>
+        <View
+          style={[
+            styles.card,
+            pressed && Platform.OS === 'ios' && styles.cardPressed,
+          ]}
+        >
           <View style={styles.cardMain}>
             <View style={styles.subjectRow}>
               {isUrgent(ticket) ? <View style={styles.urgentDot} /> : null}
@@ -89,28 +96,54 @@ export default function SupportTicketsScreen() {
         <Pressable
           onPress={() => router.back()}
           hitSlop={8}
-          style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft
-            size={26}
-            color={theme.colors.ink.DEFAULT}
-            strokeWidth={1.75}
-          />
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.backBtn,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+            >
+              <ChevronLeft
+                size={26}
+                color={theme.colors.ink.DEFAULT}
+                strokeWidth={1.75}
+              />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.commandTitle}>Support</Text>
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.colors.ink.DEFAULT} />
+        <View style={styles.skeletonStack}>
+          <Skeleton height={90} style={{ borderRadius: theme.radius.lg, marginBottom: theme.spacing[3] }} />
+          <Skeleton height={90} style={{ borderRadius: theme.radius.lg, marginBottom: theme.spacing[3] }} />
+          <Skeleton height={90} style={{ borderRadius: theme.radius.lg }} />
         </View>
       ) : isError ? (
         <View style={styles.center}>
           <Text style={styles.muted}>Couldn't load your tickets.</Text>
-          <Pressable onPress={() => refetch()} hitSlop={8} style={styles.retry}>
-            <Text style={styles.retryLabel}>Retry</Text>
+          <Pressable
+            onPress={() => refetch()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Retry"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.retry,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={styles.retryLabel}>Retry</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       ) : tickets.length === 0 ? (
@@ -124,9 +157,15 @@ export default function SupportTicketsScreen() {
             accessibilityRole="button"
             accessibilityLabel="New ticket"
             style={styles.emptyCta}
+            android_ripple={{ color: `${theme.colors.paper}30`, borderless: false }}
           >
             {({ pressed }) => (
-              <View style={[styles.primaryBtn, pressed && styles.btnPressed]}>
+              <View
+                style={[
+                  styles.primaryBtn,
+                  pressed && Platform.OS === 'ios' && styles.btnPressed,
+                ]}
+              >
                 <Plus size={18} color={theme.colors.paper} strokeWidth={2} />
                 <Text style={styles.primaryLabel}>New ticket</Text>
               </View>
@@ -152,9 +191,15 @@ export default function SupportTicketsScreen() {
             onPress={() => router.push('/support/new')}
             accessibilityRole="button"
             accessibilityLabel="New ticket"
+            android_ripple={{ color: `${theme.colors.paper}30`, borderless: false }}
           >
             {({ pressed }) => (
-              <View style={[styles.primaryBtn, pressed && styles.btnPressed]}>
+              <View
+                style={[
+                  styles.primaryBtn,
+                  pressed && Platform.OS === 'ios' && styles.btnPressed,
+                ]}
+              >
                 <Plus size={18} color={theme.colors.paper} strokeWidth={2} />
                 <Text style={styles.primaryLabel}>New ticket</Text>
               </View>
@@ -189,6 +234,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[10],
+  },
+  skeletonStack: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[1],
   },
 
   card: {

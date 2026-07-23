@@ -6,6 +6,7 @@
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -86,12 +87,18 @@ function Section({
         <Pressable
           onPress={() => router.push(editRoute as Parameters<typeof router.push>[0])}
           hitSlop={8}
-          style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.6 }]}
           accessibilityRole="button"
           accessibilityLabel={`${t('onboarding.edit')} ${title}`}
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
         >
-          <Pencil size={12} color={theme.colors.ink.soft} strokeWidth={2} />
-          <Text style={styles.editBtnLabel}>{t('onboarding.edit')}</Text>
+          {({ pressed }) => (
+            <View
+              style={[styles.editBtn, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}
+            >
+              <Pencil size={12} color={theme.colors.ink.soft} strokeWidth={2} />
+              <Text style={styles.editBtnLabel}>{t('onboarding.edit')}</Text>
+            </View>
+          )}
         </Pressable>
       </View>
       <View style={styles.sectionBody}>{children}</View>
@@ -334,7 +341,7 @@ const styles = StyleSheet.create({
   },
   readinessComplete: {
     borderColor: theme.colors.success.DEFAULT,
-    backgroundColor: 'rgba(0, 138, 5, 0.08)',
+    backgroundColor: theme.colors.success.tint,
   },
   readinessText: {
     flex: 1,

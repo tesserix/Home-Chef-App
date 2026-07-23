@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -15,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { EmptyState, Skeleton, useToast } from '@homechef/mobile-shared/ui';
 import {
   CATEGORY_LABEL,
   useAddMessage,
@@ -80,7 +79,7 @@ function MessageBubble({
 export default function TicketDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const ticketId = typeof id === 'string' ? id : '';
-  const { data: ticket, isLoading, isError } = useTicket(ticketId);
+  const { data: ticket, isLoading, isError, refetch } = useTicket(ticketId);
   const addMessage = useAddMessage(ticketId);
   const closeTicket = useCloseTicket(ticketId);
   const { show: showToast } = useToast();
@@ -127,8 +126,14 @@ export default function TicketDetailScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.colors.ink.DEFAULT} />
+        <View style={styles.commandBar}>
+          <View style={styles.backBtnSpacer} />
+        </View>
+        <View style={styles.skeletonStack}>
+          <Skeleton height={16} style={{ width: '30%', marginBottom: theme.spacing[2] }} />
+          <Skeleton height={24} style={{ width: '70%', marginBottom: theme.spacing[5] }} />
+          <Skeleton height={64} style={{ marginBottom: theme.spacing[4] }} />
+          <Skeleton height={80} />
         </View>
       </SafeAreaView>
     );
@@ -142,17 +147,26 @@ export default function TicketDetailScreen() {
             onPress={() => router.back()}
             hitSlop={8}
             accessibilityRole="button"
+            accessibilityLabel="Back"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
-            <ChevronLeft
-              size={26}
-              color={theme.colors.ink.DEFAULT}
-              strokeWidth={1.75}
-            />
+            {({ pressed }) => (
+              <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+                <ChevronLeft
+                  size={26}
+                  color={theme.colors.ink.DEFAULT}
+                  strokeWidth={1.75}
+                />
+              </View>
+            )}
           </Pressable>
         </View>
-        <View style={styles.center}>
-          <Text style={styles.muted}>This ticket couldn't be loaded.</Text>
-        </View>
+        <EmptyState
+          title="This ticket couldn't be loaded"
+          body="Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => refetch()}
+        />
       </SafeAreaView>
     );
   }
@@ -173,12 +187,17 @@ export default function TicketDetailScreen() {
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Back"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
-            <ChevronLeft
-              size={26}
-              color={theme.colors.ink.DEFAULT}
-              strokeWidth={1.75}
-            />
+            {({ pressed }) => (
+              <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+                <ChevronLeft
+                  size={26}
+                  color={theme.colors.ink.DEFAULT}
+                  strokeWidth={1.75}
+                />
+              </View>
+            )}
           </Pressable>
           <Text style={styles.commandTitle} numberOfLines={1}>
             {ticket.ticketNumber ?? 'Ticket'}
@@ -233,11 +252,20 @@ export default function TicketDetailScreen() {
               disabled={closeTicket.isPending}
               accessibilityRole="button"
               accessibilityLabel="Close ticket"
-              style={styles.closeWrap}
+              android_ripple={{ color: `${theme.colors.destructive.DEFAULT}14`, borderless: false }}
             >
-              <Text style={styles.closeLabel}>
-                {closeTicket.isPending ? 'Closing…' : 'Close ticket'}
-              </Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.closeWrap,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={styles.closeLabel}>
+                    {closeTicket.isPending ? 'Closing…' : 'Close ticket'}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           ) : null}
         </ScrollView>
@@ -261,19 +289,29 @@ export default function TicketDetailScreen() {
               disabled={addMessage.isPending || reply.trim().length === 0}
               accessibilityRole="button"
               accessibilityLabel="Send reply"
+              android_ripple={
+                addMessage.isPending || reply.trim().length === 0
+                  ? undefined
+                  : { color: `${theme.colors.paper}30`, borderless: false }
+              }
             >
-              <View
-                style={[
-                  styles.sendBtn,
-                  (addMessage.isPending || reply.trim().length === 0) && {
-                    opacity: 0.4,
-                  },
-                ]}
-              >
-                <Text style={styles.sendLabel}>
-                  {addMessage.isPending ? '…' : 'Send'}
-                </Text>
-              </View>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.sendBtn,
+                    (addMessage.isPending || reply.trim().length === 0) && {
+                      opacity: 0.4,
+                    },
+                    !(addMessage.isPending || reply.trim().length === 0) &&
+                      pressed &&
+                      Platform.OS === 'ios' && { opacity: 0.85 },
+                  ]}
+                >
+                  <Text style={styles.sendLabel}>
+                    {addMessage.isPending ? '…' : 'Send'}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           </View>
         ) : null}
@@ -299,6 +337,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     color: theme.colors.ink.DEFAULT,
     fontVariant: ['tabular-nums'],
+  },
+  backBtnSpacer: { width: 26, height: 26 },
+  skeletonStack: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[2],
   },
   scroll: { flex: 1 },
   scrollContent: {
@@ -452,18 +495,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.body.size,
     color: theme.colors.paper,
-  },
-
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing[6],
-  },
-  muted: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.muted,
-    textAlign: 'center',
   },
 });

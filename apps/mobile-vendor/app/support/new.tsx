@@ -156,12 +156,17 @@ export default function NewTicketScreen() {
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Back"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
-            <ChevronLeft
-              size={26}
-              color={theme.colors.ink.DEFAULT}
-              strokeWidth={1.75}
-            />
+            {({ pressed }) => (
+              <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+                <ChevronLeft
+                  size={26}
+                  color={theme.colors.ink.DEFAULT}
+                  strokeWidth={1.75}
+                />
+              </View>
+            )}
           </Pressable>
           <Text style={styles.commandTitle}>New ticket</Text>
         </View>
@@ -181,18 +186,33 @@ export default function NewTicketScreen() {
                   key={chip.id}
                   onPress={() => setCategoryId(chip.id)}
                   accessibilityRole="button"
+                  accessibilityLabel={chip.label}
                   accessibilityState={{ selected }}
+                  android_ripple={{
+                    color: selected
+                      ? `${theme.colors.paper}30`
+                      : `${theme.colors.ink.DEFAULT}14`,
+                    borderless: false,
+                  }}
                 >
-                  <View style={[styles.chip, selected && styles.chipSelected]}>
-                    <Text
+                  {({ pressed }) => (
+                    <View
                       style={[
-                        styles.chipText,
-                        selected && styles.chipTextSelected,
+                        styles.chip,
+                        selected && styles.chipSelected,
+                        pressed && Platform.OS === 'ios' && { opacity: 0.75 },
                       ]}
                     >
-                      {chip.label}
-                    </Text>
-                  </View>
+                      <Text
+                        style={[
+                          styles.chipText,
+                          selected && styles.chipTextSelected,
+                        ]}
+                      >
+                        {chip.label}
+                      </Text>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
@@ -232,18 +252,33 @@ export default function NewTicketScreen() {
                   key={p.value}
                   onPress={() => setPriority(p.value)}
                   accessibilityRole="button"
+                  accessibilityLabel={p.label}
                   accessibilityState={{ selected }}
+                  android_ripple={{
+                    color: selected
+                      ? `${theme.colors.paper}30`
+                      : `${theme.colors.ink.DEFAULT}14`,
+                    borderless: false,
+                  }}
                 >
-                  <View style={[styles.chip, selected && styles.chipSelected]}>
-                    <Text
+                  {({ pressed }) => (
+                    <View
                       style={[
-                        styles.chipText,
-                        selected && styles.chipTextSelected,
+                        styles.chip,
+                        selected && styles.chipSelected,
+                        pressed && Platform.OS === 'ios' && { opacity: 0.75 },
                       ]}
                     >
-                      {p.label}
-                    </Text>
-                  </View>
+                      <Text
+                        style={[
+                          styles.chipText,
+                          selected && styles.chipTextSelected,
+                        ]}
+                      >
+                        {p.label}
+                      </Text>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
@@ -254,12 +289,23 @@ export default function NewTicketScreen() {
             disabled={!canSubmit}
             accessibilityRole="button"
             accessibilityLabel="Submit ticket"
+            android_ripple={
+              canSubmit ? { color: `${theme.colors.paper}30`, borderless: false } : undefined
+            }
           >
-            <View style={[styles.submitBtn, !canSubmit && { opacity: 0.4 }]}>
-              <Text style={styles.submitLabel}>
-                {create.isPending ? 'Sending…' : 'Submit ticket'}
-              </Text>
-            </View>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.submitBtn,
+                  !canSubmit && { opacity: 0.4 },
+                  canSubmit && pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
+                <Text style={styles.submitLabel}>
+                  {create.isPending ? 'Sending…' : 'Submit ticket'}
+                </Text>
+              </View>
+            )}
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
