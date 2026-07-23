@@ -241,13 +241,15 @@ function AppNavigator() {
         await Notifications.setNotificationChannelAsync('new-orders', {
           name: 'New Orders',
           importance: Notifications.AndroidImportance.MAX,
-          sound: 'default',
+          // No sound key → default notification sound. Passing the string
+          // 'default' makes expo-notifications look for a bundled custom sound
+          // file named 'default' and log a dev warning when it's absent.
           vibrationPattern: [0, 250, 250, 250],
         });
         await Notifications.setNotificationChannelAsync('order-updates', {
           name: 'Order Updates',
           importance: Notifications.AndroidImportance.HIGH,
-          sound: 'default',
+          // No sound key → default notification sound (see new-orders above).
         });
       }
 
