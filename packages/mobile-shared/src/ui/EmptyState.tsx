@@ -11,7 +11,7 @@ interface EmptyStateProps {
   title: string;
   /** Optional supporting copy. Keep to 1-2 lines. */
   body?: string;
-  /** Optional primary action. The CTA is always persimmon — never
+  /** Optional primary action. Ink by default (see `accentColor`) — never
    *  competes with the title. */
   ctaLabel?: string;
   onCtaPress?: () => void;
@@ -19,6 +19,12 @@ interface EmptyStateProps {
    *  button beneath the primary CTA. */
   secondaryLabel?: string;
   onSecondaryPress?: () => void;
+  /** Optional accent override for the primary CTA only — lets the customer
+   *  app paint its Airbnb coral CTA without forking this primitive.
+   *  Undefined → default ink palette (vendor/driver unchanged). The
+   *  secondary action and icon tint never take the accent — one accent
+   *  element per screen. */
+  accentColor?: string;
 }
 
 /**
@@ -27,7 +33,9 @@ interface EmptyStateProps {
  *
  * Centred composition: icon → title → body → CTA. The icon is gently
  * tinted (mist surface, ink glyph). No big stock illustrations, no
- * "We searched everywhere..." copy. One sentence, one action.
+ * "We searched everywhere..." copy. One sentence, one action. The CTA is
+ * ink by default (never competes with the title); pass `accentColor` to
+ * repaint it per app.
  */
 export function EmptyState({
   icon,
@@ -37,6 +45,7 @@ export function EmptyState({
   onCtaPress,
   secondaryLabel,
   onSecondaryPress,
+  accentColor,
 }: EmptyStateProps) {
   return (
     <View style={styles.root}>
@@ -45,7 +54,12 @@ export function EmptyState({
       {body ? <Text style={styles.body}>{body}</Text> : null}
       {ctaLabel && onCtaPress ? (
         <View style={styles.cta}>
-          <Button label={ctaLabel} onPress={onCtaPress} fullWidth={false} />
+          <Button
+            label={ctaLabel}
+            onPress={onCtaPress}
+            fullWidth={false}
+            accentColor={accentColor}
+          />
         </View>
       ) : null}
       {secondaryLabel && onSecondaryPress ? (

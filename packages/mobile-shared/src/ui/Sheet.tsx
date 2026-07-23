@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomSheetModal as _BottomSheetModal } from '@gorhom/bottom-sheet';
 
 // The @gorhom/bottom-sheet types drift against the duplicated @types/react
@@ -78,6 +79,11 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const modalRef = useRef<any>(null);
   const snaps = useMemo(() => snapPoints ?? ['40%'], [snapPoints]);
+  // @gorhom/bottom-sheet doesn't pad its content for the bottom safe area
+  // on its own (its own `bottomInset` prop shifts the whole sheet, not just
+  // its content) — without this, the Cancel button sits flush against the
+  // home indicator on notched iPhones. No-op on devices with no bottom inset.
+  const insets = useSafeAreaInsets();
 
   useImperativeHandle(
     ref,
@@ -112,7 +118,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
       backgroundStyle={styles.background}
       enableDynamicSizing={!snapPoints}
     >
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingBottom: theme.spacing[5] + insets.bottom }]}>
         <Text style={styles.title}>{title}</Text>
         {body ? <Text style={styles.body}>{body}</Text> : null}
         {children}

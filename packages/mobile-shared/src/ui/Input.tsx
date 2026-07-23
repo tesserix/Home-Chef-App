@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import {
+  Platform,
   Pressable,
   StyleSheet,
   type StyleProp,
@@ -11,13 +12,20 @@ import {
 } from 'react-native';
 import { theme } from '../theme/tokens';
 
+// See Button.tsx for the full rationale — an 8-digit hex alpha channel
+// appended to an existing token colour, never a new literal colour.
+function withAlpha(hex: string, alphaHex: string): string {
+  return `${hex}${alphaHex}`;
+}
+
 interface InputProps extends Omit<TextInputProps, 'style'> {
   /** Label rendered above the field. Pass an empty string to hide. */
   label: string;
   /** Helper text under the field. Shown unless `error` is set. */
   helper?: string;
   /** Error message — when present, takes precedence over `helper`, recolours
-   *  the border, and announces via `accessibilityHint`. */
+   *  the border, and is announced to assistive tech via `accessibilityHint`
+   *  on the field plus a `role="alert"` live region on the footer text. */
   error?: string;
   /** Show a character counter in the footer (right-aligned). Useful for
    *  bio/description fields with a maxLength. */
@@ -36,14 +44,24 @@ interface InputProps extends Omit<TextInputProps, 'style'> {
    *  Pass `{ minHeight: N, textAlignVertical: 'top' }` to grow a textarea
    *  in `multiline` fields. */
   inputStyle?: StyleProp<TextStyle>;
+  /** Optional accent override for the focused-field 2px border. Lets the
+   *  customer app paint its Airbnb coral focus ring without forking this
+   *  primitive. Undefined → default ink focus border (vendor/driver
+   *  unchanged). */
+  accentColor?: string;
 }
 
 /**
  * <Input> — the only TextInput wrapper we ship.
  *
  * Owns: label, helper/error/counter triad, focus styling, password peek.
- * Field height matches the 44pt touch target. Persimmon focus ring per
- * .impeccable.md §Accessibility.
+ * Field height matches the 44pt touch target. A visible 2px focus border
+ * (ink by default, `accentColor` to repaint) per .impeccable.md
+ * §Accessibility. This RN version's `AccessibilityState`/`aria-*` surface
+ * has no `invalid` field, so the error state is wired through the two
+ * channels RN actually ships: `accessibilityHint` on the field (read on
+ * focus) and `accessibilityRole="alert"` + `accessibilityLiveRegion="polite"`
+ * on the footer error text (announced the moment it appears).
  */
 export function Input({
   label,
@@ -55,6 +73,7 @@ export function Input({
   leading,
   trailing,
   inputStyle,
+  accentColor,
   secureTextEntry,
   maxLength,
   value,
@@ -89,6 +108,7 @@ export function Input({
         style={[
           styles.field,
           focused && styles.fieldFocused,
+          focused && accentColor ? { borderColor: accentColor } : null,
           hasError && styles.fieldError,
           isDisabled && styles.fieldDisabled,
         ]}
@@ -109,17 +129,29 @@ export function Input({
           }}
           placeholderTextColor={theme.colors.ink.muted}
           style={[styles.input, isDisabled && styles.inputDisabled, inputStyle]}
+          accessibilityState={{ disabled: isDisabled }}
           accessibilityHint={error || undefined}
         />
         {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
         {passwordPeek && secureTextEntry ? (
           <Pressable
             onPress={() => setPeek((p) => !p)}
+            accessibilityRole="button"
             accessibilityLabel={peek ? 'Hide password' : 'Show password'}
             hitSlop={8}
             style={styles.peekToggle}
+            android_ripple={{ color: withAlpha(theme.colors.ink.DEFAULT, '14'), borderless: true }}
           >
-            <Text style={styles.peekText}>{peek ? 'Hide' : 'Show'}</Text>
+            {({ pressed }) => (
+              <Text
+                style={[
+                  styles.peekText,
+                  pressed && Platform.OS === 'ios' && styles.peekPressedIOS,
+                ]}
+              >
+                {peek ? 'Hide' : 'Show'}
+              </Text>
+            )}
           </Pressable>
         ) : null}
       </View>
@@ -130,7 +162,13 @@ export function Input({
             {footer ? (
               footer
             ) : error ? (
-              <Text style={styles.errorText}>{error}</Text>
+              <Text
+                style={styles.errorText}
+                accessibilityLiveRegion="polite"
+                accessibilityRole="alert"
+              >
+                {error}
+              </Text>
             ) : helper ? (
               <Text style={styles.helperText}>{helper}</Text>
             ) : null}
@@ -191,6 +229,8 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
     textDecorationLine: 'underline',
   },
+  // iOS-only pressed treatment (Android relies on android_ripple instead).
+  peekPressedIOS: { opacity: 0.6 },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -11,6 +11,7 @@ import {
 import {
   Animated,
   Easing,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -18,6 +19,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme/tokens';
+
+// See Button.tsx for the full rationale — an 8-digit hex alpha channel
+// appended to an existing token colour, never a new literal colour.
+function withAlpha(hex: string, alphaHex: string): string {
+  return `${hex}${alphaHex}`;
+}
 
 type ToastTone = 'success' | 'info' | 'error';
 
@@ -30,6 +37,11 @@ interface ToastInput {
   /** Auto-dismiss timeout in ms. Default 3500. Pass `null` to require
    *  manual dismissal via the action button. */
   durationMs?: number | null;
+  /** Extra bottom clearance in points, on top of the safe-area inset +
+   *  default spacing. Pass a floating dock/tab bar's height (+ gap) so the
+   *  toast stacks above it instead of overlapping (THE SPEC R4). Default 0
+   *  — unchanged bottom position when omitted. */
+  bottomOffset?: number;
 }
 
 interface ToastContextValue {
@@ -47,6 +59,10 @@ const ToastContext = createContext<ToastContextValue | null>(null);
  * Usage:
  *   const { show } = useToast();
  *   show({ message: 'Profile saved', tone: 'success' });
+ *
+ * On a screen with a floating dock/tab bar, pass `bottomOffset` (dock
+ * height + gap) so the toast clears it instead of overlapping (THE SPEC
+ * R4): `show({ message: '…', bottomOffset: DOCK_HEIGHT + DOCK_BOTTOM_GAP })`.
  *
  * Use this for non-blocking confirmations. For blocking confirmations
  * (delete? cancel? confirm?), use <Sheet> instead. Alert.alert is the
@@ -119,29 +135,57 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           pointerEvents="box-none"
           style={[
             styles.wrap,
-            { bottom: insets.bottom + theme.spacing[4], opacity, transform: [{ translateY }] },
+            {
+              bottom: insets.bottom + theme.spacing[4] + (toast.bottomOffset ?? 0),
+              opacity,
+              transform: [{ translateY }],
+            },
           ]}
         >
           <Pressable
             onPress={dismiss}
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
-            style={[styles.toast, toneStyles[toast.tone ?? 'info']]}
+            style={styles.pressableWrap}
+            android_ripple={{ color: withAlpha(theme.colors.paper, '26'), borderless: false }}
           >
-            <Text style={styles.message} numberOfLines={2}>
-              {toast.message}
-            </Text>
-            {toast.action ? (
-              <Pressable
-                onPress={() => {
-                  toast.action?.onPress();
-                  dismiss();
-                }}
-                hitSlop={8}
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.toast,
+                  toneStyles[toast.tone ?? 'info'],
+                  pressed && Platform.OS === 'ios' && styles.pressedIOS,
+                ]}
               >
-                <Text style={styles.actionLabel}>{toast.action.label}</Text>
-              </Pressable>
-            ) : null}
+                <Text style={styles.message} numberOfLines={2}>
+                  {toast.message}
+                </Text>
+                {toast.action ? (
+                  <Pressable
+                    onPress={() => {
+                      toast.action?.onPress();
+                      dismiss();
+                    }}
+                    hitSlop={8}
+                    android_ripple={{
+                      color: withAlpha(theme.colors.paper, '26'),
+                      borderless: true,
+                    }}
+                  >
+                    {({ pressed: actionPressed }) => (
+                      <Text
+                        style={[
+                          styles.actionLabel,
+                          actionPressed && Platform.OS === 'ios' && styles.actionPressedIOS,
+                        ]}
+                      >
+                        {toast.action?.label}
+                      </Text>
+                    )}
+                  </Pressable>
+                ) : null}
+              </View>
+            )}
           </Pressable>
         </Animated.View>
       ) : null}
@@ -164,6 +208,10 @@ const styles = StyleSheet.create({
     right: theme.spacing[4],
     alignItems: 'center',
   },
+  // The Pressable itself stays a plain, non-function style (the iOS
+  // backgroundColor/borderWidth-drop gotcha — see Button.tsx); the tone
+  // fill and pressed treatment live on the inner View instead.
+  pressableWrap: { width: '100%', borderRadius: theme.radius.md },
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -174,6 +222,8 @@ const styles = StyleSheet.create({
     minWidth: '100%',
     ...theme.shadow[3],
   },
+  // iOS-only pressed treatment (Android relies on android_ripple instead).
+  pressedIOS: { opacity: 0.85 },
   message: {
     flex: 1,
     fontFamily: 'Inter-Medium',
@@ -185,6 +235,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.paper,
   },
+  actionPressedIOS: { opacity: 0.6 },
 });
 
 const toneStyles: Record<ToastTone, { backgroundColor: string }> = {

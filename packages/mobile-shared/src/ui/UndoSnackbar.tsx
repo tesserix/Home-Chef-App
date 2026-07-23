@@ -11,6 +11,7 @@ import {
 import {
   Animated,
   Easing,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -18,6 +19,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme/tokens';
+
+// See Button.tsx for the full rationale — an 8-digit hex alpha channel
+// appended to an existing token colour, never a new literal colour.
+function withAlpha(hex: string, alphaHex: string): string {
+  return `${hex}${alphaHex}`;
+}
 
 interface UndoInput {
   message: string;
@@ -30,6 +37,11 @@ interface UndoInput {
   /** Default 5000ms — Material guidance is 4–10s; 5s is the sweet spot
    *  for vendor / customer apps. Driver app should override to 7s. */
   durationMs?: number;
+  /** Extra bottom clearance in points, on top of the safe-area inset. Pass
+   *  a floating dock/tab bar's height (+ gap) so the snackbar stacks above
+   *  it instead of overlapping (THE SPEC R4). Default 0 — unchanged bottom
+   *  position when omitted. */
+  bottomOffset?: number;
 }
 
 interface UndoContextValue {
@@ -53,6 +65,10 @@ const UndoContext = createContext<UndoContextValue | null>(null);
  * Why this beats a confirm dialog: zero friction for the 99% case, full
  * recovery for the 1% mistake case. .impeccable.md #3: confidence
  * through restraint.
+ *
+ * On a screen with a floating dock/tab bar, pass `bottomOffset` (dock
+ * height + gap) so the snackbar clears it instead of overlapping (THE
+ * SPEC R4).
  */
 export function UndoSnackbarProvider({ children }: { children: ReactNode }) {
   const [current, setCurrent] = useState<UndoInput | null>(null);
@@ -149,15 +165,29 @@ export function UndoSnackbarProvider({ children }: { children: ReactNode }) {
           pointerEvents="box-none"
           style={[
             styles.wrap,
-            { bottom: insets.bottom + theme.spacing[4], opacity, transform: [{ translateY }] },
+            {
+              bottom: insets.bottom + theme.spacing[4] + (current.bottomOffset ?? 0),
+              opacity,
+              transform: [{ translateY }],
+            },
           ]}
         >
           <View style={styles.snackbar}>
             <Text style={styles.message} numberOfLines={1}>
               {current.message}
             </Text>
-            <Pressable onPress={handleUndo} hitSlop={8}>
-              <Text style={styles.undo}>Undo</Text>
+            <Pressable
+              onPress={handleUndo}
+              hitSlop={8}
+              android_ripple={{ color: withAlpha(theme.colors.paper, '26'), borderless: true }}
+            >
+              {({ pressed }) => (
+                <Text
+                  style={[styles.undo, pressed && Platform.OS === 'ios' && styles.undoPressedIOS]}
+                >
+                  Undo
+                </Text>
+              )}
             </Pressable>
           </View>
           <Animated.View
@@ -214,6 +244,8 @@ const styles = StyleSheet.create({
     color: theme.colors.paper,
     letterSpacing: 0.5,
   },
+  // iOS-only pressed treatment (Android relies on android_ripple instead).
+  undoPressedIOS: { opacity: 0.6 },
   progress: {
     height: 2,
     backgroundColor: theme.colors.mist.strong,
