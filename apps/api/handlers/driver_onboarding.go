@@ -322,24 +322,18 @@ func (h *DriverOnboardingHandler) DriverOnboardingPayout(c *gin.Context) {
 		return
 	}
 
-	// Validate payout method
-	if req.PayoutMethod != "bank_transfer" && req.PayoutMethod != "upi" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "payoutMethod must be 'bank_transfer' or 'upi'"})
+	// UPI is not an accepted payout destination (#767). Razorpay Route settles
+	// by NEFT/IMPS to a bank account and has no VPA destination, so a driver who
+	// nominated UPI could never be paid — accepting it only strands their
+	// earnings. Reject anything but bank_transfer at the edge.
+	if req.PayoutMethod != "bank_transfer" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payoutMethod must be 'bank_transfer'; UPI payouts are not supported"})
 		return
 	}
 
-	if req.PayoutMethod == "bank_transfer" {
-		if req.BankAccountNumber == "" || req.BankIFSC == "" || req.BankAccountName == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "bankAccountNumber, bankIFSC, and bankAccountName are required for bank_transfer"})
-			return
-		}
-	}
-
-	if req.PayoutMethod == "upi" {
-		if req.UpiID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "upiId is required for upi payout method"})
-			return
-		}
+	if req.BankAccountNumber == "" || req.BankIFSC == "" || req.BankAccountName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bankAccountNumber, bankIFSC, and bankAccountName are required for bank_transfer"})
+		return
 	}
 
 	var partner models.DeliveryPartner

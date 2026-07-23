@@ -17,37 +17,32 @@ import { api } from '../../lib/api';
 import { useDriverOnboardingStore } from '../../store/onboarding-store';
 
 const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-const upiRegex = /@/;
 
+// UPI is not an accepted payout method (#767): Razorpay Route settles by
+// NEFT/IMPS to a bank account and has no VPA destination, so a driver who
+// nominated UPI could never be paid. Payouts are bank transfer only.
 const payoutSchema = z
   .object({
-    payoutMethod: z.enum(['bank', 'upi']),
+    payoutMethod: z.literal('bank'),
     bankAccountNumber: z.string().optional(),
     confirmAccountNumber: z.string().optional(),
     bankIFSC: z.string().optional(),
     bankName: z.string().optional(),
-    upiId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.payoutMethod === 'bank') {
-      if (!data.bankAccountNumber || data.bankAccountNumber.length === 0) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Account number is required', path: ['bankAccountNumber'] });
-      }
-      if (!data.confirmAccountNumber || data.confirmAccountNumber.length === 0) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Please confirm account number', path: ['confirmAccountNumber'] });
-      } else if (data.bankAccountNumber !== data.confirmAccountNumber) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Account numbers do not match', path: ['confirmAccountNumber'] });
-      }
-      if (!data.bankIFSC || !ifscRegex.test(data.bankIFSC)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Enter a valid IFSC code (e.g. HDFC0001234)', path: ['bankIFSC'] });
-      }
-      if (!data.bankName || data.bankName.length === 0) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Bank name is required', path: ['bankName'] });
-      }
-    } else if (data.payoutMethod === 'upi') {
-      if (!data.upiId || !upiRegex.test(data.upiId)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Enter a valid UPI ID (must contain @)', path: ['upiId'] });
-      }
+    if (!data.bankAccountNumber || data.bankAccountNumber.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Account number is required', path: ['bankAccountNumber'] });
+    }
+    if (!data.confirmAccountNumber || data.confirmAccountNumber.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Please confirm account number', path: ['confirmAccountNumber'] });
+    } else if (data.bankAccountNumber !== data.confirmAccountNumber) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Account numbers do not match', path: ['confirmAccountNumber'] });
+    }
+    if (!data.bankIFSC || !ifscRegex.test(data.bankIFSC)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Enter a valid IFSC code (e.g. HDFC0001234)', path: ['bankIFSC'] });
+    }
+    if (!data.bankName || data.bankName.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Bank name is required', path: ['bankName'] });
     }
   });
 
@@ -56,53 +51,37 @@ type PayoutFormData = z.infer<typeof payoutSchema>;
 export default function PayoutScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { payoutDetails, updatePayoutDetails, setStep } = useDriverOnboardingStore();
-  const [selectedMethod, setSelectedMethod] = useState<'bank' | 'upi'>(
-    payoutDetails.payoutMethod
-  );
 
   const {
     control,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm<PayoutFormData>({
     resolver: zodResolver(payoutSchema),
     defaultValues: {
-      payoutMethod: payoutDetails.payoutMethod,
+      payoutMethod: 'bank',
       bankAccountNumber: payoutDetails.bankAccountNumber,
       confirmAccountNumber: payoutDetails.bankAccountNumber,
       bankIFSC: payoutDetails.bankIFSC,
       bankName: '',
-      upiId: payoutDetails.upiId,
     },
   });
-
-  const onSelectMethod = (method: 'bank' | 'upi') => {
-    setSelectedMethod(method);
-    setValue('payoutMethod', method);
-  };
 
   const onSubmit = async (data: PayoutFormData) => {
     setIsSubmitting(true);
     try {
-      const payload =
-        data.payoutMethod === 'bank'
-          ? {
-              payoutMethod: 'bank' as const,
-              bankAccountNumber: data.bankAccountNumber,
-              bankIFSC: data.bankIFSC,
-            }
-          : {
-              payoutMethod: 'upi' as const,
-              upiId: data.upiId,
-            };
-
-      await api.post('/driver/onboarding/payout', payload);
+      // Route settles to a bank account only — post the API's `bank_transfer`
+      // method with the required account holder name (#767).
+      await api.post('/driver/onboarding/payout', {
+        payoutMethod: 'bank_transfer',
+        bankAccountName: data.bankName,
+        bankAccountNumber: data.bankAccountNumber,
+        bankIFSC: data.bankIFSC,
+      });
       updatePayoutDetails({
-        payoutMethod: data.payoutMethod,
-        bankAccountNumber: data.payoutMethod === 'bank' ? (data.bankAccountNumber ?? '') : '',
-        bankIFSC: data.payoutMethod === 'bank' ? (data.bankIFSC ?? '') : '',
-        upiId: data.payoutMethod === 'upi' ? (data.upiId ?? '') : '',
+        payoutMethod: 'bank',
+        bankAccountNumber: data.bankAccountNumber ?? '',
+        bankIFSC: data.bankIFSC ?? '',
       });
       setStep(5);
       router.push('/(onboarding)/subscription');
@@ -125,167 +104,111 @@ export default function PayoutScreen() {
 
         <Text className="font-display text-2xl font-semibold text-ink mb-2">Payout Details</Text>
         <Text className="text-ink-muted mb-6">
-          Choose how you would like to receive your earnings
+          Earnings are paid to your bank account by NEFT/IMPS
         </Text>
 
-        {/* Method selector */}
-        <View className="flex-row mb-6 border border-mist rounded-xl overflow-hidden">
-          <TouchableOpacity
-            onPress={() => onSelectMethod('bank')}
-            className={`flex-1 py-3 items-center ${selectedMethod === 'bank' ? 'bg-herb' : 'bg-bone'}`}
-          >
-            <Text
-              className={`font-semibold ${selectedMethod === 'bank' ? 'text-paper' : 'text-ink-soft'}`}
-            >
-              Bank Account
+        {/* Hidden payoutMethod field (bank only) */}
+        <Controller control={control} name="payoutMethod" render={() => <View />} />
+
+        {/* Account Number */}
+        <View className="mb-4">
+          <Text className="text-sm font-medium text-ink-soft mb-1">
+            Account Number <Text className="text-paprika">*</Text>
+          </Text>
+          <Controller
+            control={control}
+            name="bankAccountNumber"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className={`border rounded-lg px-4 py-3 text-ink ${errors.bankAccountNumber ? 'border-paprika' : 'border-mist-strong'}`}
+                placeholder="Enter account number"
+                keyboardType="numeric"
+                secureTextEntry
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value ?? ''}
+              />
+            )}
+          />
+          {errors.bankAccountNumber && (
+            <Text className="text-paprika text-sm mt-1">
+              {errors.bankAccountNumber.message}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => onSelectMethod('upi')}
-            className={`flex-1 py-3 items-center ${selectedMethod === 'upi' ? 'bg-herb' : 'bg-bone'}`}
-          >
-            <Text
-              className={`font-semibold ${selectedMethod === 'upi' ? 'text-paper' : 'text-ink-soft'}`}
-            >
-              UPI
-            </Text>
-          </TouchableOpacity>
+          )}
         </View>
 
-        {/* Hidden payoutMethod controller */}
-        <Controller
-          control={control}
-          name="payoutMethod"
-          render={() => <View />}
-        />
-
-        {selectedMethod === 'bank' ? (
-          <>
-            {/* Account Number */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-ink-soft mb-1">
-                Account Number <Text className="text-paprika">*</Text>
-              </Text>
-              <Controller
-                control={control}
-                name="bankAccountNumber"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    className={`border rounded-lg px-4 py-3 text-ink ${errors.bankAccountNumber ? 'border-paprika' : 'border-mist-strong'}`}
-                    placeholder="Enter account number"
-                    keyboardType="numeric"
-                    secureTextEntry
-                    onBlur={onBlur}
-                    onChangeText={onChange}
-                    value={value ?? ''}
-                  />
-                )}
+        {/* Confirm Account Number */}
+        <View className="mb-4">
+          <Text className="text-sm font-medium text-ink-soft mb-1">
+            Confirm Account Number <Text className="text-paprika">*</Text>
+          </Text>
+          <Controller
+            control={control}
+            name="confirmAccountNumber"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className={`border rounded-lg px-4 py-3 text-ink ${errors.confirmAccountNumber ? 'border-paprika' : 'border-mist-strong'}`}
+                placeholder="Re-enter account number"
+                keyboardType="numeric"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value ?? ''}
               />
-              {errors.bankAccountNumber && (
-                <Text className="text-paprika text-sm mt-1">
-                  {errors.bankAccountNumber.message}
-                </Text>
-              )}
-            </View>
-
-            {/* Confirm Account Number */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-ink-soft mb-1">
-                Confirm Account Number <Text className="text-paprika">*</Text>
-              </Text>
-              <Controller
-                control={control}
-                name="confirmAccountNumber"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    className={`border rounded-lg px-4 py-3 text-ink ${errors.confirmAccountNumber ? 'border-paprika' : 'border-mist-strong'}`}
-                    placeholder="Re-enter account number"
-                    keyboardType="numeric"
-                    onBlur={onBlur}
-                    onChangeText={onChange}
-                    value={value ?? ''}
-                  />
-                )}
-              />
-              {errors.confirmAccountNumber && (
-                <Text className="text-paprika text-sm mt-1">
-                  {errors.confirmAccountNumber.message}
-                </Text>
-              )}
-            </View>
-
-            {/* IFSC */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-ink-soft mb-1">
-                IFSC Code <Text className="text-paprika">*</Text>
-              </Text>
-              <Controller
-                control={control}
-                name="bankIFSC"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    className={`border rounded-lg px-4 py-3 text-ink ${errors.bankIFSC ? 'border-paprika' : 'border-mist-strong'}`}
-                    placeholder="e.g. HDFC0001234"
-                    autoCapitalize="characters"
-                    onBlur={onBlur}
-                    onChangeText={onChange}
-                    value={value ?? ''}
-                  />
-                )}
-              />
-              {errors.bankIFSC && (
-                <Text className="text-paprika text-sm mt-1">{errors.bankIFSC.message}</Text>
-              )}
-            </View>
-
-            {/* Bank Name */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-ink-soft mb-1">
-                Bank Name <Text className="text-paprika">*</Text>
-              </Text>
-              <Controller
-                control={control}
-                name="bankName"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    className={`border rounded-lg px-4 py-3 text-ink ${errors.bankName ? 'border-paprika' : 'border-mist-strong'}`}
-                    placeholder="e.g. HDFC Bank"
-                    onBlur={onBlur}
-                    onChangeText={onChange}
-                    value={value ?? ''}
-                  />
-                )}
-              />
-              {errors.bankName && (
-                <Text className="text-paprika text-sm mt-1">{errors.bankName.message}</Text>
-              )}
-            </View>
-          </>
-        ) : (
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-ink-soft mb-1">
-              UPI ID <Text className="text-paprika">*</Text>
-            </Text>
-            <Controller
-              control={control}
-              name="upiId"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <TextInput
-                  className={`border rounded-lg px-4 py-3 text-ink ${errors.upiId ? 'border-paprika' : 'border-mist-strong'}`}
-                  placeholder="e.g. yourname@upi"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  onBlur={onBlur}
-                  onChangeText={onChange}
-                  value={value ?? ''}
-                />
-              )}
-            />
-            {errors.upiId && (
-              <Text className="text-paprika text-sm mt-1">{errors.upiId.message}</Text>
             )}
-          </View>
-        )}
+          />
+          {errors.confirmAccountNumber && (
+            <Text className="text-paprika text-sm mt-1">
+              {errors.confirmAccountNumber.message}
+            </Text>
+          )}
+        </View>
+
+        {/* IFSC */}
+        <View className="mb-4">
+          <Text className="text-sm font-medium text-ink-soft mb-1">
+            IFSC Code <Text className="text-paprika">*</Text>
+          </Text>
+          <Controller
+            control={control}
+            name="bankIFSC"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className={`border rounded-lg px-4 py-3 text-ink ${errors.bankIFSC ? 'border-paprika' : 'border-mist-strong'}`}
+                placeholder="e.g. HDFC0001234"
+                autoCapitalize="characters"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value ?? ''}
+              />
+            )}
+          />
+          {errors.bankIFSC && (
+            <Text className="text-paprika text-sm mt-1">{errors.bankIFSC.message}</Text>
+          )}
+        </View>
+
+        {/* Bank Name */}
+        <View className="mb-4">
+          <Text className="text-sm font-medium text-ink-soft mb-1">
+            Bank Name <Text className="text-paprika">*</Text>
+          </Text>
+          <Controller
+            control={control}
+            name="bankName"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className={`border rounded-lg px-4 py-3 text-ink ${errors.bankName ? 'border-paprika' : 'border-mist-strong'}`}
+                placeholder="e.g. HDFC Bank"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value ?? ''}
+              />
+            )}
+          />
+          {errors.bankName && (
+            <Text className="text-paprika text-sm mt-1">{errors.bankName.message}</Text>
+          )}
+        </View>
 
         {/* Security note */}
         <View className="bg-herb-tint border border-herb-tint rounded-lg px-4 py-3 mb-8">

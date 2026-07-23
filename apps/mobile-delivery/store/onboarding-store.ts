@@ -27,7 +27,9 @@ interface Documents {
 }
 
 interface PayoutDetails {
-  payoutMethod: 'bank' | 'upi';
+  // UPI is not an accepted payout method (#767): Route settles to a bank
+  // account only. Bank transfer is the only option.
+  payoutMethod: 'bank';
   bankAccountNumber: string;
   bankIFSC: string;
   upiId: string;

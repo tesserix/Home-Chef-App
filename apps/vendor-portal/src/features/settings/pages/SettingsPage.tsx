@@ -51,7 +51,8 @@ export default function SettingsPage() {
   const [localSettings, setLocalSettings] = useState<SettingsData | null>(null);
 
   const [payoutForm, setPayoutForm] = useState({
-    payoutMethod: 'bank_transfer' as 'bank_transfer' | 'upi',
+    // UPI is not an accepted payout method (#767) — bank transfer only.
+    payoutMethod: 'bank_transfer' as const,
     bankAccountName: '',
     bankAccountNumber: '',
     bankIFSC: '',
@@ -66,11 +67,14 @@ export default function SettingsPage() {
   useEffect(() => {
     if (payoutData) {
       setPayoutForm({
-        payoutMethod: (payoutData.payoutMethod || 'bank_transfer') as 'bank_transfer' | 'upi',
+        // UPI is no longer an accepted payout method (#767): Route settles to a
+        // bank account only. The edit form is always bank transfer, even for a
+        // legacy chef whose saved method is UPI.
+        payoutMethod: 'bank_transfer',
         bankAccountName: payoutData.bankAccountName || '',
         bankAccountNumber: '',  // Don't populate masked value
         bankIFSC: payoutData.bankIFSC || '',
-        upiId: '',  // Don't populate masked value
+        upiId: '',
       });
     }
   }, [payoutData]);
@@ -274,16 +278,12 @@ export default function SettingsPage() {
                 </div>
               </>
             ) : (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-ink-muted">Method</span>
-                  <span className="font-medium text-ink">UPI</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-ink-muted">UPI ID</span>
-                  <span className="font-medium text-ink">{payoutData.upiId}</span>
-                </div>
-              </>
+              // Legacy UPI row (#767): UPI can no longer be paid on Route. Nudge
+              // the chef to add a bank account so they aren't silently unpayable.
+              <div className="rounded-lg border border-amber/40 bg-amber-tint p-3 text-sm text-ink-soft">
+                UPI payouts are no longer supported. Add a bank account below to
+                receive your payouts.
+              </div>
             )}
             <Button
               size="sm"
@@ -307,33 +307,11 @@ export default function SettingsPage() {
           </div>
         ) : (
           <div className="mt-4 max-w-md space-y-4">
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPayoutForm({ ...payoutForm, payoutMethod: 'bank_transfer' })}
-                className={`relative inline-flex items-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  payoutForm.payoutMethod === 'bank_transfer'
-                    ? 'bg-herb text-paper'
-                    : 'bg-mist text-ink-soft hover:bg-mist-strong'
-                }`}
-              >
-                Bank Transfer
-              </button>
-              <button
-                type="button"
-                onClick={() => setPayoutForm({ ...payoutForm, payoutMethod: 'upi' })}
-                className={`relative inline-flex items-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  payoutForm.payoutMethod === 'upi'
-                    ? 'bg-herb text-paper'
-                    : 'bg-mist text-ink-soft hover:bg-mist-strong'
-                }`}
-              >
-                UPI
-              </button>
-            </div>
+            <p className="text-sm text-ink-muted">
+              Payouts are sent by bank transfer (NEFT/IMPS) to the account below.
+            </p>
 
-            {payoutForm.payoutMethod === 'bank_transfer' ? (
-              <div className="space-y-4">
+            <div className="space-y-4">
                 <div>
                   <label htmlFor="payout-bank-name" className="block text-sm font-medium text-ink-soft">Account Holder Name</label>
                   <input
@@ -370,19 +348,6 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
-            ) : (
-              <div>
-                <label htmlFor="payout-upi-id" className="block text-sm font-medium text-ink-soft">UPI ID</label>
-                <input
-                  id="payout-upi-id"
-                  type="text"
-                  value={payoutForm.upiId}
-                  onChange={(e) => setPayoutForm({ ...payoutForm, upiId: e.target.value })}
-                  placeholder="yourname@upi"
-                  className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
-                />
-              </div>
-            )}
 
             <div className="flex gap-2">
               <Button
@@ -399,7 +364,7 @@ export default function SettingsPage() {
                   setPayoutEditing(false);
                   if (payoutData) {
                     setPayoutForm({
-                      payoutMethod: (payoutData.payoutMethod || 'bank_transfer') as 'bank_transfer' | 'upi',
+                      payoutMethod: 'bank_transfer',
                       bankAccountName: payoutData.bankAccountName || '',
                       bankAccountNumber: '',
                       bankIFSC: payoutData.bankIFSC || '',
