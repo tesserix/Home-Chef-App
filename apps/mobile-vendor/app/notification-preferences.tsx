@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Switch,
@@ -169,8 +170,21 @@ export default function NotificationPreferencesScreen() {
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>Could not load preferences.</Text>
-          <Pressable onPress={() => router.back()} style={styles.errorBack}>
-            <Text style={styles.errorBackLabel}>Go back</Text>
+          <Pressable
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.errorBack,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={styles.errorBackLabel}>Go back</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       </SafeAreaView>
@@ -183,11 +197,20 @@ export default function NotificationPreferencesScreen() {
         <Pressable
           onPress={() => router.back()}
           hitSlop={8}
-          style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={26} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.backBtn,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+            >
+              <ChevronLeft size={26} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.commandTitle}>Notifications</Text>
       </View>
@@ -373,6 +396,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.bone,
+    fontVariant: ['tabular-nums'],
   },
   quietErrorText: {
     fontFamily: 'Inter',

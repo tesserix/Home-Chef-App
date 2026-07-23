@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft, Check } from 'lucide-react-native';
@@ -43,11 +43,20 @@ export default function LanguageScreen() {
         <Pressable
           onPress={() => router.back()}
           hitSlop={8}
-          style={styles.backButton}
           accessibilityRole="button"
           accessibilityLabel={t('common.close')}
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} />
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.backButton,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+            >
+              <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.commandTitle}>{t('language.title')}</Text>
       </View>
@@ -65,10 +74,14 @@ export default function LanguageScreen() {
                     accessibilityRole="radio"
                     accessibilityState={{ selected: active }}
                     accessibilityLabel={t(opt.labelKey)}
+                    android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
                   >
                     {({ pressed }) => (
                       <View
-                        style={[styles.row, pressed && styles.rowPressed]}
+                        style={[
+                          styles.row,
+                          pressed && Platform.OS === 'ios' && styles.rowPressed,
+                        ]}
                       >
                         <Text style={styles.rowLabel}>{t(opt.labelKey)}</Text>
                         {active ? (

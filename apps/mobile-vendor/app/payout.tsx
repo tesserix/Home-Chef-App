@@ -64,6 +64,31 @@ function usePayoutDetails() {
   });
 }
 
+// Settlement status chip (UI-V2-SPEC §2) — the bank card already carries
+// `razorpayConnected` from GET /chef/payout (whether the Route linked
+// account is live), it just wasn't surfaced. Connected is operational-
+// positive (vendor reconciliation → success green); not-yet-connected reads
+// as pending, not an error, so it gets the amber tint.
+interface SettlementChip {
+  label: string;
+  bg: string;
+  fg: string;
+}
+
+function settlementChipMeta(connected: boolean): SettlementChip {
+  return connected
+    ? {
+        label: 'Connected · ready for payouts',
+        bg: theme.colors.success.tint,
+        fg: theme.colors.success.soft,
+      }
+    : {
+        label: 'Activation pending',
+        bg: theme.colors.amber.tint,
+        fg: theme.colors.ink.DEFAULT,
+      };
+}
+
 function useSavePayout() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -231,12 +256,19 @@ export default function PayoutScreen() {
           <Text style={styles.errorBody}>Failed to load payout details</Text>
           <Pressable
             onPress={() => refetch()}
-            style={({ pressed }) => [
-              styles.errorBtn,
-              pressed && { opacity: 0.85 },
-            ]}
+            accessibilityRole="button"
+            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
-            <Text style={styles.errorBtnLabel}>Retry</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.errorBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
+                <Text style={styles.errorBtnLabel}>Retry</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       </SafeAreaView>
@@ -263,7 +295,19 @@ export default function PayoutScreen() {
           {/* Currently-saved method summary */}
           {data?.payoutMethod === 'bank_transfer' ? (
             <View style={styles.currentBanner}>
-              <Text style={styles.currentBannerLabel}>Currently using Bank transfer</Text>
+              <View style={styles.currentBannerHeader}>
+                <Text style={styles.currentBannerLabel}>Currently using Bank transfer</Text>
+                {(() => {
+                  const chip = settlementChipMeta(Boolean(data.razorpayConnected));
+                  return (
+                    <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
+                      <Text style={[styles.statusChipLabel, { color: chip.fg }]}>
+                        {chip.label}
+                      </Text>
+                    </View>
+                  );
+                })()}
+              </View>
               {data.bankAccountNumber ? (
                 <Text style={styles.currentBannerSub}>
                   {data.bankAccountName} · {data.bankAccountNumber}
@@ -329,18 +373,29 @@ export default function PayoutScreen() {
             <Pressable
               onPress={handleSave}
               disabled={saveMutation.isPending}
-              style={({ pressed }) => [
-                styles.saveBtn,
-                (pressed || saveMutation.isPending) && { opacity: 0.85 },
-              ]}
               accessibilityRole="button"
+              android_ripple={
+                saveMutation.isPending
+                  ? undefined
+                  : { color: `${theme.colors.paper}33`, borderless: false }
+              }
             >
-              {saveMutation.isPending ? (
-                <ActivityIndicator color={theme.colors.paper} />
-              ) : (
-                <Text style={styles.saveBtnLabel}>
-                  {isDirty ? 'Save changes' : 'Save payout details'}
-                </Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.saveBtn,
+                    (pressed || saveMutation.isPending) &&
+                      Platform.OS === 'ios' && { opacity: 0.85 },
+                  ]}
+                >
+                  {saveMutation.isPending ? (
+                    <ActivityIndicator color={theme.colors.paper} />
+                  ) : (
+                    <Text style={styles.saveBtnLabel}>
+                      {isDirty ? 'Save changes' : 'Save payout details'}
+                    </Text>
+                  )}
+                </View>
               )}
             </Pressable>
           </SafeAreaView>
@@ -364,9 +419,15 @@ function CommandBar({ onBack }: CommandBarProps) {
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="Go back"
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
       >
         {({ pressed }) => (
-          <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
+          <View
+            style={[
+              styles.backBtn,
+              pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+            ]}
+          >
             <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
           </View>
         )}
@@ -428,7 +489,14 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[4],
     ...theme.shadow[1],
   },
+  currentBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing[2],
+  },
   currentBannerLabel: {
+    flexShrink: 1,
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
@@ -438,6 +506,16 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     marginTop: 2,
+  },
+  // Settlement status pill (UI-V2-SPEC §2) — tint bg + colour-matched text.
+  statusChip: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+    borderRadius: theme.radius.full,
+  },
+  statusChipLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
   },
 
   // Section label
@@ -586,6 +664,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[6],
     paddingVertical: theme.spacing[3],
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorBtnLabel: {
     fontFamily: 'Inter-SemiBold',

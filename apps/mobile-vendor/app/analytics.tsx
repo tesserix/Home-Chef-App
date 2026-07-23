@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -53,14 +54,23 @@ function TabLabel({ label, active, onPress }: TabLabelProps) {
       style={tabStyles.root}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
-      {/* Inner-View pattern — visual styles live on the View, not the
-          Pressable, to dodge the iOS function-style style drop. */}
-      <View style={[tabStyles.segment, active && tabStyles.segmentActive]}>
-        <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
-          {label}
-        </Text>
-      </View>
+      {({ pressed }) => (
+        // Inner-View pattern — visual styles live on the View, not the
+        // Pressable, to dodge the iOS function-style style drop.
+        <View
+          style={[
+            tabStyles.segment,
+            active && tabStyles.segmentActive,
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+          ]}
+        >
+          <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
+            {label}
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -139,11 +149,17 @@ export default function AnalyticsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
           hitSlop={8}
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
           {({ pressed }) => (
             // Inner-View pattern — visual styles on the View, never a
             // function-style array on the Pressable (iOS drops them).
-            <View style={[styles.backButton, pressed && { opacity: 0.6 }]}>
+            <View
+              style={[
+                styles.backButton,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+            >
               <ChevronLeft
                 size={22}
                 color={theme.colors.ink.DEFAULT}
@@ -186,9 +202,18 @@ export default function AnalyticsScreen() {
           <Text style={styles.errorBody}>
             Check your connection and try again.
           </Text>
-          <Pressable onPress={() => refetch()} accessibilityRole="button">
+          <Pressable
+            onPress={() => refetch()}
+            accessibilityRole="button"
+            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+          >
             {({ pressed }) => (
-              <View style={[styles.errorButton, pressed && { opacity: 0.85 }]}>
+              <View
+                style={[
+                  styles.errorButton,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
                 <Text style={styles.errorButtonText}>Retry</Text>
               </View>
             )}
@@ -426,7 +451,9 @@ const styles = StyleSheet.create({
   barFill: {
     width: '70%',
     alignSelf: 'center',
-    backgroundColor: theme.colors.herb.DEFAULT,
+    // Vendor reconciliation: persimmon → ink (charts stay untouched
+    // structurally; only the token backing the fill colour moves).
+    backgroundColor: theme.colors.ink.DEFAULT,
     borderRadius: 3,
     minHeight: 3,
   },
@@ -437,11 +464,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // Demand forecast card (#230)
+  // Demand forecast card (#230) — canvas+cards white surface (spec §1).
+  // Was a persimmon-tint highlight; vendor reconciliation drops tint
+  // callouts that aren't operational-positive status down to the plain
+  // card treatment used elsewhere on this screen.
   forecastCard: {
-    backgroundColor: theme.colors.herb.tint,
+    backgroundColor: theme.colors.paper,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[4],
+    ...theme.shadow[1],
   },
   forecastBig: { fontFamily: 'Geist-Bold', fontSize: 26, color: theme.colors.ink.DEFAULT },
   forecastSub: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 4 },
@@ -511,6 +542,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[6],
     paddingVertical: theme.spacing[3],
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorButtonText: {
     color: theme.colors.paper,
