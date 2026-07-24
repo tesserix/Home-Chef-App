@@ -141,6 +141,13 @@ type Config struct {
 	// saga end-to-end on the cluster; the saga's activities are idempotent so
 	// enabling it never double-acts alongside residual handler logic.
 	OrderSagaEnabled bool
+	// ConfirmReceiptFlowEnabled gates running the auto-confirm-delivery reminder
+	// flow as a durable Temporal workflow: up to 3 reminders (10 min apart) after
+	// a delivery, then auto-confirms on the customer's behalf via the existing
+	// ConfirmOrderHold transition. Default OFF — the existing 24h
+	// payout-auto-confirm cron remains the fallback either way; this flow only
+	// shortens the wait when Temporal + this flag are both on.
+	ConfirmReceiptFlowEnabled bool
 	// OnboardingWorkflowEnabled gates running chef-onboarding activation as a
 	// durable Temporal workflow (#126) instead of the inline approval side
 	// effects. Default OFF — the inline activation stays authoritative until ops
@@ -215,6 +222,7 @@ func Load() {
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
 	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
 	orderSaga, _ := strconv.ParseBool(getEnv("ORDER_SAGA_ENABLED", "false"))
+	confirmReceiptFlow, _ := strconv.ParseBool(getEnv("CONFIRM_RECEIPT_FLOW_ENABLED", "false"))
 	onboardingWorkflow, _ := strconv.ParseBool(getEnv("ONBOARDING_WORKFLOW_ENABLED", "false"))
 	piiEncryption, _ := strconv.ParseBool(getEnv("PII_ENCRYPTION_ENABLED", "false"))
 	emailOTP, _ := strconv.ParseBool(getEnv("EMAIL_OTP_ENABLED", "true"))
@@ -344,6 +352,7 @@ func Load() {
 		OrderPayoutAutoReleaseEnabled:   orderPayoutAutoRelease,
 		CateringDepositEnabled:          cateringDeposit,
 		OrderSagaEnabled:                orderSaga,
+		ConfirmReceiptFlowEnabled:       confirmReceiptFlow,
 		OnboardingWorkflowEnabled:       onboardingWorkflow,
 		PIIEncryptionEnabled:            piiEncryption,
 		EmailOTPEnabled:                 emailOTP,
