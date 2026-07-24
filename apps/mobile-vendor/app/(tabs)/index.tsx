@@ -22,6 +22,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Bell } from 'lucide-react-native';
+import {
+  useUnreadCount,
+  useNotificationSocket,
+} from '@homechef/mobile-shared/hooks';
+import { api } from '../../lib/api';
 import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
@@ -129,6 +135,15 @@ export default function DashboardScreen() {
     isError,
     error,
   } = useVendorDashboard();
+
+  // Notification bell — unread badge + live socket so a new order or meal-plan
+  // request lights the hero bell instantly.
+  const { data: unreadCount = 0 } = useUnreadCount(api);
+  useNotificationSocket({
+    apiBaseUrl: process.env.EXPO_PUBLIC_API_URL,
+    getToken: () => useAuthStore.getState().accessToken,
+  });
+
   const { data: pendingResp, refetch: refetchPending } =
     useVendorPendingOrders();
   const updateStatus = useUpdateOrderStatus();
@@ -385,6 +400,25 @@ export default function DashboardScreen() {
                 {displayName}
               </Text>
             </View>
+            <Pressable
+              onPress={() => router.push('/notifications')}
+              accessibilityRole="button"
+              accessibilityLabel={
+                unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'
+              }
+              hitSlop={8}
+              android_ripple={{ color: `${theme.colors.paper}22`, borderless: true, radius: 22 }}
+              style={styles.heroBellBtn}
+            >
+              <Bell size={22} color={theme.colors.paper} />
+              {unreadCount > 0 ? (
+                <View style={styles.heroBellBadge}>
+                  <Text style={styles.heroBellBadgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
             <Pressable
               onPress={openStatusMenu}
               disabled={statusBusy}
@@ -989,10 +1023,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
   },
   heroGreetingBlock: {
     flex: 1,
+  },
+  heroBellBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroBellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.success.DEFAULT,
+    borderWidth: 1.5,
+    borderColor: theme.colors.ink.DEFAULT,
+  },
+  heroBellBadgeText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    lineHeight: 12,
+    color: theme.colors.paper,
+    fontVariant: ['tabular-nums'],
   },
   heroGreeting: {
     fontFamily: 'Inter',

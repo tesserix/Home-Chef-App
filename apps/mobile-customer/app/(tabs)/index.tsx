@@ -31,7 +31,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Map, Search, SlidersHorizontal } from 'lucide-react-native';
+import { Bell, Map, Search, SlidersHorizontal } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { AddressSwitcher } from '../../components/address/AddressSwitcher';
 import { AddressSwitcherSheet } from '../../components/address/AddressSwitcherSheet';
@@ -47,6 +47,12 @@ import { CATERING_ENABLED, SOCIAL_ENABLED } from '../../lib/features';
 import { type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
 import { useOrderStatusWS } from '../../hooks/useOrderStatusWS';
+import {
+  useUnreadCount,
+  useNotificationSocket,
+} from '@homechef/mobile-shared/hooks';
+import { api } from '../../lib/api';
+import { useAuthStore } from '../../store/auth-store';
 import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
 import { useCustomerCoords, useActiveAddress } from '../../hooks/useCustomerCoords';
@@ -121,6 +127,14 @@ export default function HomeScreen() {
   // Only while an order is actually in flight, so we don't hold a socket open
   // on an idle Home screen; useActiveOrder's poll stays as the fallback.
   useOrderStatusWS(undefined, activeOrders.length > 0);
+
+  // Notification bell — unread count + live socket so the badge lights the
+  // moment a chef advances an order or a meal-plan day updates.
+  const { data: unreadCount = 0 } = useUnreadCount(api);
+  useNotificationSocket({
+    apiBaseUrl: process.env.EXPO_PUBLIC_API_URL,
+    getToken: () => useAuthStore.getState().accessToken,
+  });
 
   // Ref for opening the FilterSheet imperatively on Filters pill tap.
   const filterSheetRef = useRef<SheetHandle>(null);
@@ -199,6 +213,32 @@ export default function HomeScreen() {
               ]}
             >
               <Map size={18} color={customerColors.charcoal.DEFAULT} />
+            </View>
+          )}
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/notifications')}
+          accessibilityRole="button"
+          accessibilityLabel={
+            unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'
+          }
+          android_ripple={{ color: ROW_RIPPLE, borderless: true, radius: 20 }}
+        >
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.mapButton,
+                pressed && Platform.OS === 'ios' && styles.pressedIOS,
+              ]}
+            >
+              <Bell size={18} color={customerColors.charcoal.DEFAULT} />
+              {unreadCount > 0 ? (
+                <View style={styles.bellBadge}>
+                  <Text style={styles.bellBadgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           )}
         </Pressable>
@@ -585,6 +625,27 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.surface.DEFAULT,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: customerColors.hairline,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: customerColors.coral.DEFAULT,
+    borderWidth: 1.5,
+    borderColor: customerColors.canvas,
+  },
+  bellBadgeText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    lineHeight: 12,
+    color: customerColors.canvas,
+    fontVariant: ['tabular-nums'],
   },
 
   searchPillWrapper: {
