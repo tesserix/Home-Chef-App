@@ -234,6 +234,16 @@ func runLedgerReconcileScan(_ context.Context) {
 	if !LedgerShadowActive() {
 		return // shadow off → nothing to reconcile
 	}
+	// Self-seed openings so a wallet that existed before dual-write reconciles. Idempotent (one
+	// opening per user, keyed ledger-opening:<uid>) — it posts nothing once every wallet is
+	// seeded — so running it each cycle just guarantees the shadow phase CONVERGES on its own,
+	// without a separate manual backfill call. (POST /admin/ledger/backfill triggers it
+	// immediately when the operator wants the seed the moment the flag flips.)
+	if n, err := BackfillLedgerOpeningBalances(database.DB); err != nil {
+		log.Printf("ledger-reconcile: opening backfill failed: %v", err)
+	} else if n > 0 {
+		log.Printf("ledger-reconcile: seeded %d wallet opening balance(s)", n)
+	}
 	drift, err := ReconcileLedgerVsWallet(database.DB)
 	if err != nil {
 		log.Printf("ledger-reconcile: scan failed: %v", err)
