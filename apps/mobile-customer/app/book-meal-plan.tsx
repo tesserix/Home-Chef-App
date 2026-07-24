@@ -30,9 +30,9 @@ import {
 import { bookingEmptyState } from '../lib/booking-empty-state';
 import {
   WeeklyMenuDayHeader,
-  WeeklyMenuDishCard,
   istTodayIso,
 } from '../components/chef/WeeklyMenuDishCard';
+import { MealPlanBookRow } from '../components/chef/MealPlanBookRow';
 
 const HORIZON_DAYS = 14; // how far ahead a customer can pre-book
 const LEAD_MS = 12 * 60 * 60 * 1000; // server's booking lead time (mealPlanLeadTime)
@@ -354,38 +354,54 @@ export default function BookMealPlanScreen() {
               non-veg for each — send your plan and the chef confirms the days
               they can cook.
             </Text>
-            {dates.map((d) => (
-              <View key={d.date} style={styles.daySection}>
-                <WeeklyMenuDayHeader title={d.label} isToday={d.date === todayIso} />
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.dayRow}
-                  contentContainerStyle={styles.dayRowContent}
-                >
-                  {d.cells.map((cell) => {
-                    const sel = selection[selKey(d.date, cell.slot)];
-                    const active = isSameCell(sel, cell);
-                    return (
-                      <WeeklyMenuDishCard
-                        key={cell.dailyMenuItemId ?? `${cell.slot}-${cell.variant}`}
-                        name={cell.name}
-                        slot={cell.slot}
-                        variant={cell.variant}
-                        price={cell.price}
-                        imageUrl={cell.imageUrl}
-                        description={cell.description}
-                        isCombo={cell.isCombo}
-                        comboComponents={cell.comboComponents}
-                        selectable
-                        selected={active}
-                        onPress={() => toggle(d.date, cell)}
-                      />
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            ))}
+            {dates.map((d) => {
+              // Group the day's cells by slot so "pick one per slot" reads
+              // clearly (lunch first, then dinner). Combos are already floated
+              // ahead within each slot by the `dates` builder.
+              const groups = (['lunch', 'dinner'] as MealSlot[])
+                .map((slot) => ({
+                  slot,
+                  label: slot === 'lunch' ? 'Lunch' : 'Dinner',
+                  cells: d.cells.filter((c) => c.slot === slot),
+                }))
+                .filter((g) => g.cells.length > 0);
+              return (
+                <View key={d.date} style={styles.daySection}>
+                  <WeeklyMenuDayHeader title={d.label} isToday={d.date === todayIso} />
+                  <View style={styles.dayCard}>
+                    {groups.map((g, gi) => (
+                      <View key={g.slot}>
+                        <View
+                          style={[styles.slotHeader, gi > 0 && styles.slotHeaderDivided]}
+                        >
+                          <Text style={styles.slotLabel}>{g.label}</Text>
+                          {g.cells.length > 1 ? (
+                            <Text style={styles.slotHint}>pick one</Text>
+                          ) : null}
+                        </View>
+                        {g.cells.map((cell, ci) => {
+                          const sel = selection[selKey(d.date, cell.slot)];
+                          const active = isSameCell(sel, cell);
+                          return (
+                            <MealPlanBookRow
+                              key={cell.dailyMenuItemId ?? `${cell.slot}-${cell.variant}`}
+                              name={cell.name}
+                              variant={cell.variant}
+                              price={cell.price}
+                              isCombo={cell.isCombo}
+                              comboComponents={cell.comboComponents}
+                              selected={active}
+                              divided={ci > 0}
+                              onPress={() => toggle(d.date, cell)}
+                            />
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              );
+            })}
           </ScrollView>
 
           {/* Sticky CTA bar per spec §2.5 — white, top hairline + shadow[2],
@@ -512,12 +528,41 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 20,
   },
-  daySection: { marginBottom: 24 },
-  // Day rows bleed to the screen edge so a peeking card invites the scroll.
-  // flexGrow: 0 — RN's ScrollView base style is flexGrow: 1, so a horizontal row
-  // grows into free vertical space unless pinned (see orders.tsx filterRow).
-  dayRow: { marginHorizontal: -16, flexGrow: 0 },
-  dayRowContent: { paddingHorizontal: 16, gap: 12 },
+  daySection: { marginBottom: 20 },
+  // Each day is one hairline-bordered group; rows inside are separated by
+  // hairlines (chrome-light — no per-row card borders). overflow:hidden clips
+  // the coral selected-row tint to the rounded corners.
+  dayCard: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    backgroundColor: customerColors.canvas,
+    overflow: 'hidden',
+  },
+  slotHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  slotHeaderDivided: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: customerColors.hairline,
+  },
+  slotLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: customerColors.charcoal.soft,
+  },
+  slotHint: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: customerColors.charcoal.soft,
+  },
   footer: {
     paddingHorizontal: 16,
     paddingTop: 12,
