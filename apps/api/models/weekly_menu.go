@@ -42,6 +42,12 @@ type WeeklyMenuItem struct {
 	Allergens   pq.StringArray `gorm:"type:text[]" json:"allergens"`
 	// MenuItemID optionally links the cell to an à-la-carte MenuItem (reuse its image).
 	MenuItemID *uuid.UUID `gorm:"type:uuid" json:"menuItemId,omitempty"`
-	CreatedAt  time.Time  `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt  time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
+	// IsCombo marks this cell as a bundled thali/combo — one set Price covering
+	// ComboComponents (the dishes it includes, e.g. rice + dal + sabji + roti).
+	// Neutral API term ("combo"); clients localize the label — "Thali" in India,
+	// "Combo" elsewhere. Mirrors DailyMenuItem (#406).
+	IsCombo         bool           `gorm:"default:false" json:"isCombo"`
+	ComboComponents pq.StringArray `gorm:"type:text[]" json:"comboComponents"`
+	CreatedAt       time.Time      `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt       time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 }

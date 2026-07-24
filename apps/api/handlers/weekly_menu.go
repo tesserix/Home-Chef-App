@@ -29,6 +29,10 @@ type weeklyMenuCellInput struct {
 	DietaryTags []string `json:"dietaryTags"` // #41
 	Allergens   []string `json:"allergens"`   // #41
 	MenuItemID  *string  `json:"menuItemId"`
+	// Thali/combo: when true the cell is a bundled set (ComboComponents) at the
+	// one Price, rather than a single dish.
+	IsCombo         bool     `json:"isCombo"`
+	ComboComponents []string `json:"comboComponents"`
 }
 
 type weeklyMenuUpsertRequest struct {
@@ -107,9 +111,11 @@ func (h *ChefHandler) PutWeeklyMenu(c *gin.Context) {
 			Description: in.Description,
 			Price:       in.Price,
 			ImageURL:    in.ImageURL,
-			DietaryTags: ensureStringArray(in.DietaryTags),
-			Allergens:   ensureStringArray(in.Allergens),
-			MenuItemID:  menuItemID,
+			DietaryTags:     ensureStringArray(in.DietaryTags),
+			Allergens:       ensureStringArray(in.Allergens),
+			MenuItemID:      menuItemID,
+			IsCombo:         in.IsCombo,
+			ComboComponents: ensureStringArray(in.ComboComponents),
 		})
 	}
 
