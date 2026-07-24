@@ -40,3 +40,16 @@ func ClassifyOrderSources(db *gorm.DB, orderIDs []uuid.UUID) map[uuid.UUID]model
 	assign(&models.GroupOrder{}, models.OrderSourceGroup)
 	return out
 }
+
+// WalletRefundEligible reports whether an order may be refunded to the store-credit WALLET. Per
+// policy (docs/meal-plan-refund-flow-design.md), only meal-plan orders (incl. the recurring
+// subscription variant) and group orders are wallet-eligible; a plain à-la-carte "menu" order
+// refunds ONLY to its original payment method. Used to reject a wallet refund on an on-demand order.
+func WalletRefundEligible(db *gorm.DB, orderID uuid.UUID) bool {
+	switch ClassifyOrderSources(db, []uuid.UUID{orderID})[orderID] {
+	case models.OrderSourceMealPlan, models.OrderSourceSubscription, models.OrderSourceGroup:
+		return true
+	default:
+		return false
+	}
+}

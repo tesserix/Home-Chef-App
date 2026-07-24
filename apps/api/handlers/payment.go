@@ -1037,6 +1037,14 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	// yet a legitimate second partial refund still credits (#549). Doesn't touch the
 	// chef/driver splits — the original payment already settled.
 	if req.ToWallet {
+		// On-demand guard (refund-v2 policy): a plain à-la-carte "menu" order NEVER refunds to
+		// the wallet — only meal-plan and group orders are wallet-eligible. Reject and require the
+		// original payment method. Gated so behaviour is unchanged until the v2 flow is enabled.
+		if services.MealPlanRefundFlowV2Active() && !services.WalletRefundEligible(database.DB, order.ID) {
+			releaseReservation()
+			c.JSON(http.StatusBadRequest, gin.H{"error": "This order can only be refunded to the original payment method, not the wallet"})
+			return
+		}
 		txn, werr := services.CreditWallet(database.DB, order.CustomerID, refundAmount,
 			models.WalletSourceRefund, &order.ID,
 			fmt.Sprintf("Refund for order %s: %s", order.OrderNumber, req.Reason),
