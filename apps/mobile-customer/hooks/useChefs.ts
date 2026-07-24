@@ -49,6 +49,11 @@ interface ApiChefProfile {
   totalReviews?: number;
   isOnline?: boolean;
   acceptingOrders?: boolean;
+  // Real-time availability computed server-side (mirrors the exact gates the order
+  // path enforces + next open/close). When present it is authoritative for open
+  // status — the legacy isOnline/acceptingOrders flags miss the daily cutoff and
+  // platform hours, which is how a "Open" card could still be rejected at checkout.
+  availability?: import('../types/customer').ChefAvailability;
   latitude?: number;
   longitude?: number;
   foodSafetyBadge?: boolean;
@@ -93,8 +98,11 @@ export function mapChef(c: ApiChefProfile): Chef {
     cuisine: (c.cuisines ?? []).filter(Boolean).join(' · '),
     rating: c.rating ?? 0,
     reviewCount: c.totalReviews ?? 0,
-    // Open to customers only when the kitchen is online AND accepting orders.
-    isOpen: Boolean(c.isOnline && c.acceptingOrders),
+    // Server-computed availability is authoritative when present (it accounts for
+    // the daily cutoff + platform hours the flags miss); fall back to the flags for
+    // older API responses.
+    isOpen: c.availability ? c.availability.orderable : Boolean(c.isOnline && c.acceptingOrders),
+    availability: c.availability,
     // Photo-led card: prefer the wide cover (bannerImage), then a kitchen
     // photo, and only fall back to the avatar (a face crop makes a weak 4:3
     // hero). The avatar still surfaces separately where an identity glyph is

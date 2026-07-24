@@ -40,10 +40,34 @@ describe('mapChef', () => {
     });
   });
 
-  it('is open only when online AND accepting orders', () => {
+  it('is open only when online AND accepting orders (no server availability)', () => {
     expect(mapChef({ id: 'c', isOnline: true, acceptingOrders: false }).isOpen).toBe(false);
     expect(mapChef({ id: 'c', isOnline: false, acceptingOrders: true }).isOpen).toBe(false);
     expect(mapChef({ id: 'c', isOnline: true, acceptingOrders: true }).isOpen).toBe(true);
+  });
+
+  it('server availability overrides the flags — past-cutoff chef reads closed', () => {
+    // The prod bug: accepting_orders is true, but the daily cutoff has passed. The
+    // server-computed availability is authoritative, so the card must read closed.
+    const chef = mapChef({
+      id: 'c',
+      isOnline: true,
+      acceptingOrders: true,
+      availability: { orderable: false, status: 'closed', label: 'Closed' },
+    });
+    expect(chef.isOpen).toBe(false);
+    expect(chef.availability?.status).toBe('closed');
+  });
+
+  it('server availability drives isOpen when orderable', () => {
+    const chef = mapChef({
+      id: 'c',
+      isOnline: false,
+      acceptingOrders: false,
+      availability: { orderable: true, status: 'closing_soon', label: 'Closing soon · 20 min', minutesToChange: 20 },
+    });
+    expect(chef.isOpen).toBe(true);
+    expect(chef.availability?.minutesToChange).toBe(20);
   });
 
   it('prefers banner > kitchen photo > avatar for the card image', () => {

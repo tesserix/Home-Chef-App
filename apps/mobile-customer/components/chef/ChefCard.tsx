@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { Heart, UtensilsCrossed } from 'lucide-react-native';
+import { Clock, Heart, UtensilsCrossed } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import type { Chef } from '../../types/customer';
@@ -56,6 +56,29 @@ export function ChefCard({ chef }: ChefCardProps) {
   }
 
   const hasImage = Boolean(chef.imageUrl);
+
+  // Real-time availability presentation (server-computed). The dot + word reflect
+  // the SAME gates the order path enforces (accepting + live schedule + daily
+  // cutoff + platform hours), so an "Open" card can no longer be rejected at
+  // checkout. Falls back to the boolean isOpen when the API omits availability.
+  const av = chef.availability;
+  const availStatus = av?.status;
+  const isClosingSoon = availStatus === 'closing_soon';
+  const isOpeningSoon = availStatus === 'opening_soon';
+  const orderableNow = av ? av.orderable : chef.isOpen;
+  const statusWord = av
+    ? av.orderable
+      ? 'Open'
+      : isOpeningSoon
+        ? 'Opening soon'
+        : availStatus === 'paused'
+          ? 'Paused'
+          : 'Closed'
+    : chef.isOpen
+      ? 'Open'
+      : 'Closed';
+  // The Uber-Eats-style "soon" pill text (with the countdown) is the server label.
+  const soonLabel = av && (isClosingSoon || isOpeningSoon) ? av.label : null;
 
   return (
     // Outer View: shadow lives here so it's not clipped.
@@ -172,19 +195,53 @@ export function ChefCard({ chef }: ChefCardProps) {
                   </Text>
                 )}
 
+                {/* "Opening soon" / "Closing soon · N min" pill (Uber-Eats style),
+                    shown only inside the 30-min window. Coral (attention) when the
+                    kitchen is closing, neutral when it's about to open. */}
+                {soonLabel && (
+                  <View
+                    style={[
+                      styles.soonPill,
+                      isClosingSoon ? styles.soonPillClosing : styles.soonPillOpening,
+                    ]}
+                  >
+                    <Clock
+                      size={11}
+                      strokeWidth={2.2}
+                      color={
+                        isClosingSoon
+                          ? customerColors.coral.pressed
+                          : customerColors.charcoal.soft
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.soonPillText,
+                        isClosingSoon
+                          ? styles.soonPillTextClosing
+                          : styles.soonPillTextOpening,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {soonLabel}
+                    </Text>
+                  </View>
+                )}
+
                 {/* One meta line: open-state dot + delivery time · min-order.
                     Open/Closed folds in here instead of its own row — tighter
-                    card, same information. */}
+                    card, same information. The dot + word reflect real-time
+                    availability, not just the accepting flag. */}
                 <View style={styles.metaRow}>
                   <View
                     style={[
                       styles.openDot,
-                      chef.isOpen ? styles.openDotOpen : styles.openDotClosed,
+                      orderableNow ? styles.openDotOpen : styles.openDotClosed,
                     ]}
                   />
                   <Text style={styles.meta} numberOfLines={1}>
                     {[
-                      chef.isOpen ? 'Open' : 'Closed',
+                      statusWord,
                       chef.deliveryTime,
                       chef.minimumOrder != null
                         ? `Min ₹${chef.minimumOrder}`
@@ -376,6 +433,26 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.charcoal.soft,
     opacity: 0.4,
   },
+  soonPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  soonPillClosing: { backgroundColor: customerColors.coral.tint },
+  soonPillOpening: { backgroundColor: customerColors.surface.soft },
+  soonPillText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  soonPillTextClosing: { color: customerColors.coral.pressed },
+  soonPillTextOpening: { color: customerColors.charcoal.soft },
   meta: {
     flex: 1,
     fontFamily: 'Inter',

@@ -267,9 +267,17 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		badged := services.ChefsWithValidFSSAI(chefIDs)
 		// Verified-Pro badge (#44) — one batched lookup for the whole page.
 		premium := services.PremiumChefIDs(chefIDs)
+		// Real-time availability (open/closed + opening/closing-soon) — one batched
+		// lookup (today's schedules + capacity cutoffs) so the card shows the same
+		// truth the order path enforces, no N+1.
+		avail := services.ChefAvailabilityBatch(chefs, time.Now())
 		for i := range responses {
 			responses[i].FoodSafetyBadge = badged[responses[i].ID]
 			responses[i].ProBadge = premium[responses[i].ID]
+			if a, ok := avail[responses[i].ID]; ok {
+				ac := a
+				responses[i].Availability = &ac
+			}
 		}
 	}
 
@@ -403,6 +411,10 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 	// offset) so the exact address is never exposed to customers.
 	resp.Latitude, resp.Longitude =
 		services.FuzzCoordinate(chef.Latitude, chef.Longitude, chef.ID.String())
+	// Real-time availability (open/closed + opening/closing-soon), same computation
+	// as the list so the detail screen and card agree, and both agree with checkout.
+	av := services.ChefAvailabilityOne(&chef, schedules, time.Now())
+	resp.Availability = &av
 	c.JSON(http.StatusOK, resp)
 }
 

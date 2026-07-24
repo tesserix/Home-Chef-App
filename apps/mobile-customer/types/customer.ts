@@ -3,6 +3,26 @@
 
 import type { PayoutHoldStatus } from '../lib/payout-hold';
 
+/** The kitchen's real-time availability status (server-computed, mirrors the order
+ *  gates: accepting flag + live schedule window + daily cutoff + platform hours).
+ *  `status` drives the dot colour + "opening/closing soon" pill. */
+export type ChefAvailabilityStatus =
+  | 'open'
+  | 'closing_soon'
+  | 'opening_soon'
+  | 'paused'
+  | 'closed';
+
+export interface ChefAvailability {
+  /** Can a customer place an order right now (same predicate the API's CreateOrder applies). */
+  orderable: boolean;
+  status: ChefAvailabilityStatus;
+  /** Ready-to-render label, e.g. "Open", "Closing soon · 20 min", "Opens at 6:00 pm". */
+  label: string;
+  /** Minutes to the next open/close when status is *_soon (absent otherwise). */
+  minutesToChange?: number;
+}
+
 export interface Chef {
   id: string;
   name: string;
@@ -18,6 +38,10 @@ export interface Chef {
   rating: number;
   reviewCount: number;
   isOpen: boolean;
+  /** Real-time availability (open/closed + opening/closing-soon), server-computed.
+   *  When present, `isOpen` is derived from `availability.orderable`. Absent on
+   *  older API responses (fall back to `isOpen`). */
+  availability?: ChefAvailability;
   imageUrl?: string;
   latitude?: number;
   longitude?: number;

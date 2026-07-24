@@ -414,14 +414,16 @@ export default function ChefDetailScreen() {
               <Text style={styles.chefName} numberOfLines={1}>
                 {chef.name}
               </Text>
-              {/* Open / closed as small text (spec: not a loud badge) */}
+              {/* Open / closed as small text (spec: not a loud badge). Uses the
+                  server-computed real-time label ("Closing soon · 20 min",
+                  "Opens at 6:00 pm") so it matches the card and checkout. */}
               <Text
                 style={[
                   styles.openStatus,
                   chef.isOpen ? styles.openStatusOpen : styles.openStatusClosed,
                 ]}
               >
-                {chef.isOpen ? 'Open' : 'Closed'}
+                {chef.availability?.label ?? (chef.isOpen ? 'Open' : 'Closed')}
               </Text>
             </View>
 

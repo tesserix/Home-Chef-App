@@ -333,7 +333,29 @@ type ChefProfileResponse struct {
 	Latitude        float64                `json:"latitude"`
 	Longitude       float64                `json:"longitude"`
 	OperatingHours  map[string]interface{} `json:"operatingHours,omitempty"`
-	CreatedAt       time.Time              `json:"createdAt"`
+	// Availability is the chef's REAL-TIME open/closed status (computed by
+	// services.ComputeChefAvailability), mirroring the exact gates the order path
+	// enforces — accepting flag + live schedule window + daily cutoff + platform
+	// hours — plus the next open/close so the app can show "opening/closing soon"
+	// pills. nil on responses that don't compute it (older callers); the app then
+	// falls back to acceptingOrders.
+	Availability *ChefAvailability `json:"availability,omitempty"`
+	CreatedAt    time.Time         `json:"createdAt"`
+}
+
+// ChefAvailability is the customer-facing real-time availability of a kitchen. Its Status is one of
+// the services.Avail* constants ("open" | "closing_soon" | "opening_soon" | "paused" | "closed").
+// Lives in models (not services) so it can hang off ChefProfileResponse without an import cycle;
+// services.ComputeChefAvailability builds it.
+type ChefAvailability struct {
+	// Orderable — can a customer place an order right now (same predicate CreateOrder applies).
+	Orderable bool `json:"orderable"`
+	// Status — drives the dot colour + pill.
+	Status string `json:"status"`
+	// Label — ready-to-render, e.g. "Open", "Closing soon · 20 min", "Opens at 6:00 pm".
+	Label string `json:"label"`
+	// MinutesToChange — minutes to the next open/close when Status is *_soon (0 otherwise).
+	MinutesToChange int `json:"minutesToChange,omitempty"`
 }
 
 // priceRangeFromMinOrder derives a display-friendly price range string.

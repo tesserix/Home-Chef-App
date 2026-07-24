@@ -228,6 +228,10 @@ func parseHHMM(s string) (hhmm, error) {
 
 func loadPlatformPolicyFromDB() PlatformPolicy {
 	def := DefaultPlatformPolicy()
+	// No DB configured (unit tests, early startup) → unconfigured defaults (always open).
+	if database.DB == nil {
+		return def
+	}
 	var setting models.PlatformSettings
 	err := database.DB.Where("key = ?", platformPolicyKey).First(&setting).Error
 	if err != nil {
