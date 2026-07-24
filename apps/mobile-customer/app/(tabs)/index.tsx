@@ -31,7 +31,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Bell, Map, Search, SlidersHorizontal } from 'lucide-react-native';
+import { Bell, Map, Search, SlidersHorizontal, Wallet } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { AddressSwitcher } from '../../components/address/AddressSwitcher';
 import { AddressSwitcherSheet } from '../../components/address/AddressSwitcherSheet';
@@ -42,7 +42,7 @@ import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { FilterSheet } from '../../components/home/FilterSheet';
-import { CATERING_ENABLED, SOCIAL_ENABLED } from '../../lib/features';
+import { CATERING_ENABLED, SOCIAL_ENABLED, WALLET_ENABLED } from '../../lib/features';
 import { type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
 import { useOrderStatusWS } from '../../hooks/useOrderStatusWS';
@@ -55,6 +55,7 @@ import { useAuthStore } from '../../store/auth-store';
 import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
 import { useCustomerCoords, useActiveAddress } from '../../hooks/useCustomerCoords';
+import { useWallet } from '../../hooks/useWallet';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -63,6 +64,15 @@ const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 // ink derived from the charcoal token (never a new literal colour), matching
 // the primitive Button's `withAlpha` convention.
 const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+
+// Compact rupee label for the header wallet chip — whole rupees show without
+// decimals, paise show two places; tabular numerals keep it steady. The precise
+// balance + history live on the wallet screen this chip taps through to.
+function walletChipLabel(n: number): string {
+  return n % 1 === 0
+    ? `₹${n.toLocaleString('en-IN')}`
+    : `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 const CUISINES = [
   'All',
@@ -135,6 +145,10 @@ export default function HomeScreen() {
     getToken: () => useAuthStore.getState().accessToken,
   });
 
+  // Header wallet chip (only when the wallet surface is enabled) — glanceable
+  // available balance that taps through to the full wallet screen.
+  const { data: wallet } = useWallet();
+
   // Ref for opening the FilterSheet imperatively on Filters pill tap.
   const filterSheetRef = useRef<SheetHandle>(null);
   const addressSheetRef = useRef<SheetHandle>(null);
@@ -198,6 +212,28 @@ export default function HomeScreen() {
         <View style={styles.addressRowPill}>
           <AddressSwitcher onOpen={() => addressSheetRef.current?.present()} />
         </View>
+        {WALLET_ENABLED ? (
+          <Pressable
+            onPress={() => router.push('/wallet')}
+            accessibilityRole="button"
+            accessibilityLabel={`Wallet, balance ${walletChipLabel(wallet?.balance ?? 0)}`}
+            android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.walletPill,
+                  pressed && Platform.OS === 'ios' && styles.pressedIOS,
+                ]}
+              >
+                <Wallet size={15} color={customerColors.charcoal.DEFAULT} />
+                <Text style={styles.walletPillText}>
+                  {walletChipLabel(wallet?.balance ?? 0)}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={() => router.push('/chefs-map')}
           accessibilityRole="button"
@@ -610,6 +646,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingRight: 16,
+    gap: 8,
   },
   addressRowPill: {
     flex: 1,
@@ -623,6 +660,25 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.surface.DEFAULT,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: customerColors.hairline,
+  },
+  // Wallet chip — a glanceable available-balance pill sized to match the round
+  // map/bell buttons (same surface + hairline), widened for the amount.
+  walletPill: {
+    height: 40,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    backgroundColor: customerColors.surface.DEFAULT,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+  },
+  walletPillText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
   },
   bellBadge: {
     position: 'absolute',
