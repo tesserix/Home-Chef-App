@@ -13,6 +13,7 @@ import { ScrollView, StyleSheet } from 'react-native';
 import { Sheet, type SheetHandle } from '@homechef/mobile-shared/ui';
 
 import { type MealPlan } from '../../hooks/useMealPlans';
+import { useSkipDayFlow } from '../../hooks/useSkipDayFlow';
 import { formatDateRange } from '../../lib/meal-plan';
 import { MealPlanDayList } from './MealPlanDayList';
 
@@ -25,6 +26,12 @@ export const MealPlanSheet = forwardRef<SheetHandle, MealPlanSheetProps>(functio
   { summary },
   ref,
 ) {
+  // Per-day skip, right from the sheet (the primary way a plan is viewed from a chef page).
+  // Same flow as the detail screen; MealPlanDayList only renders the Skip link on still-skippable
+  // (confirmed, no order) days, and the server enforces the exact 12h-before-cooking guardrail.
+  const { confirmSkip, skipping } = useSkipDayFlow(summary.id);
+  const canSkip = summary.status === 'confirmed' || summary.status === 'active';
+
   return (
     <Sheet
       ref={ref}
@@ -33,9 +40,14 @@ export const MealPlanSheet = forwardRef<SheetHandle, MealPlanSheetProps>(functio
       snapPoints={['70%']}
     >
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {/* Read-only in the sheet: no Skip, no price column — a glanceable
-            fulfilment view. The full detail screen keeps those actions. */}
-        <MealPlanDayList days={summary.days ?? []} showPrice={false} />
+        {/* Glanceable fulfilment view, now with the per-day Skip action for
+            future confirmed days (price column stays off — that's detail-only). */}
+        <MealPlanDayList
+          days={summary.days ?? []}
+          showPrice={false}
+          onSkip={canSkip ? confirmSkip : undefined}
+          skipping={skipping}
+        />
       </ScrollView>
     </Sheet>
   );

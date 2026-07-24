@@ -21,10 +21,10 @@ import {
   canCancelMealPlan,
   useCancelMealPlan,
   useMealPlan,
-  useSkipMealPlanDay,
   type MealPlanDay,
 } from '../../hooks/useMealPlans';
 import { useMealPlanApproval } from '../../hooks/useMealPlanApproval';
+import { useSkipDayFlow } from '../../hooks/useSkipDayFlow';
 import {
   useConfirmMealPlanDayReceived,
   useConfirmTodaysTiffin,
@@ -40,11 +40,11 @@ import { MealPlanDayList } from '../../components/meal-plan/MealPlanDayList';
 export default function MealPlanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useMealPlan(id);
-  const skipDay = useSkipMealPlanDay();
   const cancel = useCancelMealPlan();
   const confirmDay = useConfirmMealPlanDayReceived();
   const confirmTiffin = useConfirmTodaysTiffin();
   const plan = data?.mealPlan;
+  const { confirmSkip, skipping } = useSkipDayFlow(plan?.id);
   // Approve & pay / reject — the shared flow, identical to the Home card + chef sheet.
   const approval = useMealPlanApproval(plan, { onDone: () => router.back() });
 
@@ -96,37 +96,6 @@ export default function MealPlanDetailScreen() {
   const days = plan.days ?? [];
   const acceptedDays = days.filter((d) => !isDeclinedDayStatus(d.status));
   const acceptedTotal = acceptedDays.reduce((s, d) => s + (d.price ?? 0), 0);
-
-  function confirmSkip(dayId: string) {
-    if (!plan) return;
-    Alert.alert(
-      'Skip this day?',
-      'We’ll send a refund request for review. Once approved you get that day’s food back (minus the platform fee) to your wallet — GST and delivery aren’t refunded. This can’t be undone.',
-      [
-        { text: 'Back', style: 'cancel' },
-        {
-          text: 'Request skip',
-          style: 'destructive',
-          onPress: () =>
-            skipDay.mutate(
-              { planId: plan.id, dayId },
-              {
-                onSuccess: () =>
-                  Alert.alert(
-                    'Skip requested',
-                    'Your request is in for review. If approved, the day’s food (minus the platform fee) is refunded to your wallet and your chef won’t cook it.',
-                  ),
-                onError: () =>
-                  Alert.alert(
-                    'Could not request skip',
-                    'It may be too close to when your chef starts cooking this day.',
-                  ),
-              },
-            ),
-        },
-      ],
-    );
-  }
 
   // #617 — escrow fulfilment confirmation for delivered days awaiting the
   // customer's confirmation. The bulk banner is scoped to TODAY's awaiting days
@@ -268,7 +237,7 @@ export default function MealPlanDetailScreen() {
         <MealPlanDayList
           days={days}
           onSkip={canSkip ? confirmSkip : undefined}
-          skipping={skipDay.isPending}
+          skipping={skipping}
           onConfirmReceived={confirmReceipt}
           confirming={confirmDay.isPending}
           onReportIssue={reportIssue}
