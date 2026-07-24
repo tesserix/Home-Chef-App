@@ -119,6 +119,15 @@ func applyWalletTxn(db *gorm.DB, userID uuid.UUID, amount float64, txnType model
 		if err := tx.Model(w).Update("balance", newBalance).Error; err != nil {
 			return err
 		}
+		// Ledger shadow (gated, default off): mirror this credit/debit into the
+		// double-entry ledger in the SAME tx, so the ledger and the legacy balance
+		// commit atomically. Reconciled against the legacy balance before any read
+		// flips over — see docs/wallet-ledger-plan.md.
+		if LedgerShadowActive() {
+			if err := mirrorWalletTxnToLedger(tx, entry); err != nil {
+				return err
+			}
+		}
 		result = entry
 		return nil
 	})

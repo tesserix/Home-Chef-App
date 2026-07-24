@@ -68,6 +68,10 @@ func cronJobs() []cronJob {
 		// chef payouts OUTSIDE the confirm tx; this completes the hold for any confirmed,
 		// captured plan whose days aren't held yet (crash between confirm and hold).
 		{"meal-plan-hold-reconcile", mealPlanHoldReconcileInterval, runMealPlanHoldReconcileScan, StartMealPlanHoldReconcileCron},
+		// Wallet→ledger shadow reconcile (docs/wallet-ledger-plan.md): assert the
+		// double-entry ledger balance == the legacy float balance per wallet. No-op
+		// unless LEDGER_SHADOW_ENABLED. Drift is surfaced, never auto-corrected.
+		{"ledger-reconcile", ledgerReconcileInterval, runLedgerReconcileScan, StartLedgerReconcileCron},
 	}
 }
 

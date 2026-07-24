@@ -122,6 +122,12 @@ type Config struct {
 	// release on delivery. Default OFF — the negotiation handshake (#195/#196) works
 	// without it; flip on only after the Razorpay escrow paths are sandbox-verified.
 	MealPlanEscrowEnabled bool
+	// LedgerShadowEnabled dual-writes every wallet credit/debit into the double-entry
+	// ledger (same DB tx) so the ledger can be reconciled against the legacy float
+	// balance before reads flip over. Default OFF — enable only after the ledger schema
+	// is deployed (tesserix-k8s) and opening balances are backfilled. See
+	// docs/wallet-ledger-plan.md.
+	LedgerShadowEnabled bool
 	// MealSubscriptionAutoActivate gates whether a new tiffin subscription starts
 	// ACTIVE (so the daily-order generator + pause/resume/skip work end-to-end) vs
 	// TRIALING. Default OFF: real recurring CHARGING (Razorpay UPI-Autopay mandate,
@@ -217,6 +223,7 @@ func Load() {
 	enableMock, _ := strconv.ParseBool(getEnv("ENABLE_MOCK_MODE", "false"))
 	walletCheckout, _ := strconv.ParseBool(getEnv("WALLET_CHECKOUT_ENABLED", "false"))
 	mealPlanEscrow, _ := strconv.ParseBool(getEnv("MEAL_PLAN_ESCROW_ENABLED", "false"))
+	ledgerShadow, _ := strconv.ParseBool(getEnv("LEDGER_SHADOW_ENABLED", "false"))
 	mealSubAutoActivate, _ := strconv.ParseBool(getEnv("MEAL_SUBSCRIPTION_AUTO_ACTIVATE", "false"))
 	groupOrders, _ := strconv.ParseBool(getEnv("GROUP_ORDERS_ENABLED", "false"))
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
@@ -344,6 +351,7 @@ func Load() {
 		EnableMockMode:                  enableMock,
 		WalletCheckoutEnabled:           walletCheckout,
 		MealPlanEscrowEnabled:           mealPlanEscrow,
+		LedgerShadowEnabled:             ledgerShadow,
 		MealSubscriptionAutoActivate:    mealSubAutoActivate,
 		GroupOrdersEnabled:              groupOrders,
 		DeliveryDistancePricePerCallUSD: distancePricePerCall,
