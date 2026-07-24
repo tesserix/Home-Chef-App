@@ -466,10 +466,22 @@ func RefundDeclinedDays(tx *gorm.DB, plan *models.MealPlan, reason string) error
 }
 
 // RefundUndeliveredDays refunds every still-in-scope (not delivered, not already
-// refunded) day — used on expiry / customer-reject for a full refund. No-op when
-// escrow is off.
+// refunded) day — used on expiry / customer-reject / cancel-before-start for a full
+// refund. No-op when escrow is off, OR when this plan never captured an advance.
+//
+// Capture-at-approval guard: payment now happens AFTER the customer approves the
+// chef's response, so a plan reaches reject / cancel / expiry while still
+// pending_chef or awaiting_customer with NO money captured (EscrowPaymentID blank —
+// nothing ever reached the platform). Escrow being globally ON does not mean THIS
+// plan was charged. Crediting the wallet then is free money the customer never paid.
+// EscrowPaymentID is stamped only at VerifyMealPlanPayment (capture), so gating the
+// whole-plan refund on it credits only genuinely-paid plans and no-ops the
+// never-charged exit paths. (A payment captured at the gateway but not yet verified
+// is intentionally not wallet-credited from here — that is reconciled through the
+// gateway, never minted from an empty ledger.) Symmetric to HoldChefPayouts, which
+// already refuses to hold a payout for a plan with a blank escrow_payment_id.
 func RefundUndeliveredDays(tx *gorm.DB, plan *models.MealPlan, reason string) error {
-	if !MealPlanEscrowActive() {
+	if !MealPlanEscrowActive() || plan.EscrowPaymentID == "" {
 		return nil
 	}
 	for i := range plan.Days {
