@@ -256,13 +256,13 @@ func ReleaseDayPayout(tx *gorm.DB, day *models.MealPlanDay) error {
 		return fmt.Errorf("release payout %s: %w", day.PayoutTransferID, err)
 	}
 	auditTransferMovement(auditTransferRelease, aggTypeMealPlanDay, day.ID, day.PayoutTransferID, 0, "meal-plan day delivered — chef payout released")
-	// Best-effort: tell the chef their tiffin payout was released. Reached only on
-	// a FRESH release (the idempotent already-released path returned above), so the
-	// chef is notified exactly once per real release. The money already moved — a
-	// failed notification must never surface as a money-seam failure.
-	if err := notifyChefDayPayoutReleased(tx, day); err != nil {
-		log.Printf("meal-plan release: notify chef payout released for day %s: %v", day.ID, err)
-	}
+	// NOTE: the chef "payout released" notification is NOT emitted here. This seam
+	// is re-driven by the payout-reconcile cron (via settlePayout), and Razorpay's
+	// release PATCH is a silent 200 no-op on an already-released transfer, so a
+	// re-drive reaches this point again and would double-notify. The notification is
+	// fired from the once-only release_eligible→released transition instead — see
+	// the auto-release sweep (payout_mealplan_release_cron.go) calling
+	// notifyChefDayPayoutReleased after a successful ReleaseHold.
 	return nil
 }
 

@@ -267,23 +267,29 @@ func completeFinishedPlans() {
 	for i := range plans {
 		p := &plans[i]
 		if allDaysTerminal(p) {
-			// Guard on the loaded status so a concurrent action (generate → Active) wins.
-			res := database.DB.Model(&models.MealPlan{}).
-				Where("id = ? AND status = ?", p.ID, p.Status).
-				Update("status", models.MealPlanCompleted)
-			if res.Error != nil {
-				log.Printf("meal-plan fulfillment: complete plan %s: %v", p.ID, res.Error)
-				continue
-			}
-			// Only the goroutine that actually flips the status notifies. Best-effort:
-			// completion is not money movement, so a missed notification must never
-			// roll back the completion — log and move on.
-			if res.RowsAffected > 0 {
-				if err := EnqueueEvent(database.DB, SubjectMealPlanCompleted, "meal_plan.completed", p.CustomerID, map[string]any{
-					"meal_plan_id": p.ID.String(), "meal_plan_no": p.MealPlanNumber,
-				}); err != nil {
-					log.Printf("meal-plan fulfillment: notify completed plan %s: %v", p.ID, err)
+			// Flip status + stage the completion notification ATOMICALLY in one tx
+			// (transactional outbox), so a crash between them can't leave a plan
+			// Completed with the customer never told — once Completed, the sweep never
+			// re-selects it (it only loads Confirmed/Active), so a lost emit is
+			// permanent. The guarded UPDATE (status = the loaded status) means only the
+			// goroutine that wins the flip (RowsAffected>0) emits — exactly once under
+			// concurrent cron runs. If the outbox insert fails the whole tx rolls back
+			// and the next tick retries the completion cleanly.
+			if err := database.DB.Transaction(func(tx *gorm.DB) error {
+				res := tx.Model(&models.MealPlan{}).
+					Where("id = ? AND status = ?", p.ID, p.Status).
+					Update("status", models.MealPlanCompleted)
+				if res.Error != nil {
+					return res.Error
 				}
+				if res.RowsAffected == 0 {
+					return nil // a concurrent action moved it first
+				}
+				return EnqueueEvent(tx, SubjectMealPlanCompleted, "meal_plan.completed", p.CustomerID, map[string]any{
+					"meal_plan_id": p.ID.String(), "meal_plan_no": p.MealPlanNumber,
+				})
+			}); err != nil {
+				log.Printf("meal-plan fulfillment: complete plan %s: %v", p.ID, err)
 			}
 		}
 	}

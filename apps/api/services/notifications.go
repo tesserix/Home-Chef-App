@@ -1253,8 +1253,12 @@ func (s *NotificationService) handleApprovalCreated(event Event) error {
 // event.UserID directly; no chef-profile→user resolution is needed here.
 
 // notifyMealPlan persists an in-app notification and emits a push to the event's
-// target user. A nil target is dropped (unresolvable → not retryable). Idempotency
-// is handled upstream by the durable consumer (msg-id dedup).
+// target user. A nil target is dropped (unresolvable → not retryable). NOTE: this
+// is NOT idempotent across consumer redelivery — Nats-Msg-Id dedup only collapses
+// duplicate PUBLISHES of the same outbox row, not a redelivery after an ack loss /
+// AckWait expiry / consumer restart, which would re-run this and create a second
+// in-app row + push. Duplicates are tolerated (redelivery is rare; the happy path
+// acks fast) rather than deduped on an event key.
 func (s *NotificationService) notifyMealPlan(event Event, notifType, title, message string) error {
 	if event.UserID == uuid.Nil {
 		log.Printf("meal-plan notification %q: nil target user (dropping)", notifType)

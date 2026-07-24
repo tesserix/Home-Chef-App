@@ -35,8 +35,8 @@ func setupStuckDayDB(t *testing.T) *gorm.DB {
 		payout_hold_status TEXT DEFAULT '', refund_txn_id TEXT, date DATETIME,
 		created_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, event_type TEXT,
-		user_id TEXT, aggregate_type TEXT, aggregate_id TEXT, payload TEXT, status TEXT, attempts INT,
-		next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`).Error)
+		msg_id TEXT, user_id TEXT, aggregate_type TEXT, aggregate_id TEXT, payload TEXT, status TEXT, attempts INT,
+		last_error TEXT, next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`).Error)
 	prev := database.DB
 	database.DB = db
 	t.Cleanup(func() { database.DB = prev })

@@ -60,11 +60,20 @@ const defaultMealPlanMaturation = 24 * time.Hour
 // (case-insensitive) disables it. Deliberately NOT settingBool, which defaults
 // false — here the safe/default state is ON.
 func mealPlanAutoReleaseEnabled(db *gorm.DB) bool {
-	switch strings.ToLower(strings.TrimSpace(settingValue(db, "payout.mealplan_auto_release_enabled"))) {
-	case "false", "0", "off":
+	v := strings.ToLower(strings.TrimSpace(settingValue(db, "payout.mealplan_auto_release_enabled")))
+	switch v {
+	case "":
+		return true // unset → default ON (opt-out)
+	case "true", "1", "on", "yes", "enabled":
+		return true
+	case "false", "0", "off", "no", "disabled":
 		return false
 	default:
-		return true
+		// A non-empty, non-canonical value is almost certainly an ops typo. For a
+		// money mover, fail toward HOLDING money: treat it as OFF and log, rather
+		// than silently keeping payouts flowing when an admin tried to pause them.
+		log.Printf("mealplan-release-sweep: payout.mealplan_auto_release_enabled=%q not recognized — treating as OFF (paused). Use true/1/on to enable.", v)
+		return false
 	}
 }
 
@@ -95,10 +104,18 @@ func sweepMaturedMealPlanDays(db *gorm.DB, now time.Time) int {
 	}
 	cutoff := now.Add(-mealPlanReleaseMaturation(db))
 
+	// Maturation anchor = COALESCE(customer_confirmed_at, delivered_at). A normal day
+	// anchors on customer_confirmed_at (stamped at the customer's confirm or the 24h
+	// auto-confirm). An admin-resolved customer-fault delivery-failed day reaches
+	// release_eligible via releaseDisputedDayHoldForCustomerFault WITHOUT a
+	// customer_confirmed_at (the customer never confirmed) but WITH delivered_at
+	// stamped at resolution — anchoring those on delivered_at auto-releases the
+	// legitimately-owed chef payout ~maturation after resolution, instead of
+	// stranding it out of the auto path and relying on a manual admin release.
 	var days []models.MealPlanDay
 	if err := db.
 		Where("payout_hold_status = ? AND payout_settled_at IS NULL AND "+
-			"customer_confirmed_at IS NOT NULL AND customer_confirmed_at <= ?",
+			"COALESCE(customer_confirmed_at, delivered_at) <= ?",
 			models.PayoutHoldReleaseEligible, cutoff).
 		Limit(sweepBatchLimit).Find(&days).Error; err != nil {
 		log.Printf("mealplan-release-sweep: query matured days failed: %v", err)
@@ -106,11 +123,21 @@ func sweepMaturedMealPlanDays(db *gorm.DB, now time.Time) int {
 	}
 
 	for i := range days {
-		if err := ReleaseHold(db, aggTypeMealPlanDay, days[i].ID); err != nil {
-			if errors.Is(err, ErrHoldNotEligible) {
-				continue // a guard refused (refund/dispute/race) — ordinary skip
+		err := ReleaseHold(db, aggTypeMealPlanDay, days[i].ID)
+		if err != nil {
+			if !errors.Is(err, ErrHoldNotEligible) {
+				// ErrHoldNotEligible = a guard refused (refund/dispute/race) — ordinary
+				// skip. Anything else is a real error worth logging. Either way: no notify.
+				log.Printf("mealplan-release-sweep: release day %s failed: %v", days[i].ID, err)
 			}
-			log.Printf("mealplan-release-sweep: release day %s failed: %v", days[i].ID, err)
+			continue
+		}
+		// Released just now. ReleaseHold's release_eligible→released flip is a single
+		// guarded UPDATE (once-only per day), so this notifies the chef exactly once
+		// per real release — the reconcile re-drive path goes through settlePayout,
+		// not ReleaseHold, so it can't double-notify. Best-effort (logged, swallowed).
+		if e := notifyChefDayPayoutReleased(db, &days[i]); e != nil {
+			log.Printf("mealplan-release-sweep: notify chef for day %s: %v", days[i].ID, e)
 		}
 	}
 	return len(days)

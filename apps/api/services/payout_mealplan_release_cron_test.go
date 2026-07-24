@@ -47,6 +47,7 @@ func TestMealPlanDayReleaseSweep(t *testing.T) {
 	confirmed25h := now.Add(-25 * time.Hour) // matured (past the 24h default)
 	confirmed1h := now.Add(-1 * time.Hour)   // still maturing
 	deliveredRecent := now.Add(-2 * time.Hour)
+	delivered25h := now.Add(-25 * time.Hour) // matured, for a customer-fault day with no confirm
 	alreadySettled := now.Add(-10 * time.Hour)
 
 	cases := []struct {
@@ -97,6 +98,18 @@ func TestMealPlanDayReleaseSweep(t *testing.T) {
 			wantHold:    models.PayoutHoldReleaseEligible,
 			wantSettled: "unchanged",
 		},
+		{
+			// (e) customer-fault-resolved day: release_eligible with NO
+			// customer_confirmed_at but a matured delivered_at → RELEASED via the
+			// COALESCE(customer_confirmed_at, delivered_at) anchor (else it would
+			// strand out of the auto path).
+			name:        "customer_fault_no_confirm_matured_delivered_releases",
+			hold:        models.PayoutHoldReleaseEligible,
+			deliveredAt: &delivered25h,
+			wantCount:   1,
+			wantHold:    models.PayoutHoldReleased,
+			wantSettled: "set",
+		},
 	}
 
 	for _, tc := range cases {
@@ -138,8 +151,10 @@ func TestMealPlanDayReleaseSweep_DisabledReturnsZero(t *testing.T) {
 	require.Nil(t, mplrDaySettledAt(t, db, id))
 }
 
-// TestMealPlanAutoReleaseEnabled — opt-OUT semantics: unset defaults true; only an
-// explicit false/0/off (case-insensitive) turns it off; anything else is on.
+// TestMealPlanAutoReleaseEnabled — opt-OUT semantics: unset/empty defaults true;
+// explicit affirmatives (true/1/on/yes/enabled) enable; explicit negatives
+// (false/0/off/no/disabled) disable; AND any unrecognized non-empty value fails
+// SAFE to disabled (a typo when pausing a money mover must not keep paying).
 func TestMealPlanAutoReleaseEnabled(t *testing.T) {
 	cases := []struct {
 		name string
@@ -154,9 +169,13 @@ func TestMealPlanAutoReleaseEnabled(t *testing.T) {
 		{"zero_disables", true, "0", false},
 		{"off_disables", true, "off", false},
 		{"mixed_case_off_disables", true, "Off", false},
+		{"no_disables", true, "no", false},
+		{"disabled_disables", true, "disabled", false},
 		{"true_enabled", true, "true", true},
 		{"on_enabled", true, "on", true},
-		{"other_value_enabled", true, "yes", true},
+		{"yes_enabled", true, "yes", true},
+		{"enabled_enabled", true, "enabled", true},
+		{"unrecognized_fails_safe_to_disabled", true, "paused", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

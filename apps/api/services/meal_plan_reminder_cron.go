@@ -7,9 +7,9 @@ package services
 // committed to cook on a given date. This sweep tells each chef, twice a day, how
 // many tiffin meals they must cook, split by slot:
 //
-//   - Night-before window: at 20:00 IST it looks at TOMORROW's confirmed days
+//   - Night-before window: 20:00–21:59 IST it looks at TOMORROW's confirmed days
 //     (window="tomorrow") so the chef can shop/prep the evening before.
-//   - Morning-of window:   at 07:00 IST it looks at TODAY's confirmed days
+//   - Morning-of window:   07:00–08:59 IST it looks at TODAY's confirmed days
 //     (window="today") as a start-of-day cook list.
 //
 // Outside those two IST hours the scan is a no-op. Only status=confirmed days are
@@ -65,6 +65,13 @@ var chefCookReminderNotifier = func(db *gorm.DB, chefUserID uuid.UUID, targetDat
 	})
 }
 
+// chefReminderDedupKey is the single source of truth for the dedup key so the
+// claim (reminderAlreadySent) and the release-on-failure (reminderReleaseDedup)
+// can never drift apart.
+func chefReminderDedupKey(chefUserID uuid.UUID, targetDate, window string) string {
+	return fmt.Sprintf("mpchefreminder:%s:%s:%s", chefUserID, targetDate, window)
+}
+
 // reminderAlreadySent reports whether this (chef, targetDate, window) reminder has
 // already fired within the TTL, so a re-tick in the same window does not re-notify.
 // A package var so tests can force it on/off. Default: Redis SETNX with a ~20h TTL
@@ -76,16 +83,30 @@ var reminderAlreadySent = func(chefUserID uuid.UUID, targetDate, window string) 
 	if !r.IsConnected() {
 		return false // fail-open: fire rather than silently suppress
 	}
-	key := fmt.Sprintf("mpchefreminder:%s:%s:%s", chefUserID, targetDate, window)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	acquired, err := r.SetNX(ctx, key, "1", 20*time.Hour)
+	acquired, err := r.SetNX(ctx, chefReminderDedupKey(chefUserID, targetDate, window), "1", 20*time.Hour)
 	if err != nil {
 		return false // fail-open on a Redis error
 	}
 	// acquired == true means WE set the key first (not yet sent); false means the
 	// key already existed (already sent).
 	return !acquired
+}
+
+// reminderReleaseDedup releases a claim made by reminderAlreadySent's SETNX when
+// the send that followed it FAILED — otherwise the claim would suppress this
+// window's reminder for the full 20h TTL and the chef would silently never be told
+// what to cook. Best-effort (Redis down → no-op; the claim's TTL will expire). A
+// package var so tests can observe it.
+var reminderReleaseDedup = func(chefUserID uuid.UUID, targetDate, window string) {
+	r := GetRedisClient()
+	if !r.IsConnected() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	_ = r.Del(ctx, chefReminderDedupKey(chefUserID, targetDate, window))
 }
 
 // istDayWindow returns the YYYY-MM-DD label and the [start, end) UTC instants of
@@ -105,12 +126,17 @@ func istDayWindow(now time.Time, offsetDays int) (string, time.Time, time.Time) 
 // chef. Returns the number of chefs notified. Takes now from the caller — never
 // calls time.Now() itself.
 func scanChefCookReminders(db *gorm.DB, now time.Time) int {
+	// Window is a 2-hour band, not an exact hour, so a late scheduler tick or a
+	// worker that was down across the top of the hour still fires within the band.
+	// Per-(chef,date,window) dedup collapses the extra ticks to one send, so the
+	// wider band cannot double-notify. Night-before 20:00–21:59 IST → tomorrow;
+	// morning-of 07:00–08:59 IST → today.
 	var window string
 	var offsetDays int
-	switch now.In(scheduleIST).Hour() {
-	case 20:
+	switch h := now.In(scheduleIST).Hour(); {
+	case h >= 20 && h < 22:
 		window, offsetDays = "tomorrow", 1
-	case 7:
+	case h >= 7 && h < 9:
 		window, offsetDays = "today", 0
 	default:
 		return 0 // no window active at this hour
@@ -128,10 +154,13 @@ func scanChefCookReminders(db *gorm.DB, now time.Time) int {
 			models.MealSlotLunch, models.MealSlotDinner).
 		Joins("JOIN meal_plans mp ON mp.id = d.meal_plan_id").
 		Joins("JOIN chef_profiles cp ON cp.id = mp.chef_id").
-		Where("d.status = ? AND d.date >= ? AND d.date < ?",
+		Where("d.status = ? AND d.date >= ? AND d.date < ? AND cp.user_id IS NOT NULL",
 			models.MealPlanDayConfirmed, startUTC, endUTC).
 		Group("cp.user_id").
-		Limit(sweepBatchLimit).
+		// No LIMIT: one aggregated row per chef, bounded by the count of chefs with
+		// confirmed tiffin days for a single date. Unlike the payout sweeps this scan
+		// mutates nothing (dedup lives in Redis), so a LIMIT would NOT drain across
+		// ticks — it would silently drop the same over-limit chefs every window.
 		Scan(&rows).Error; err != nil {
 		log.Printf("meal-plan-reminder: query failed: %v", err)
 		return 0
@@ -146,7 +175,11 @@ func scanChefCookReminders(db *gorm.DB, now time.Time) int {
 			continue
 		}
 		if err := chefCookReminderNotifier(db, row.ChefUserID, targetDate, window, row.Lunch, row.Dinner); err != nil {
-			// Log-and-continue: one chef's failed notify must not abort the batch.
+			// Release the SETNX claim so the next tick in this window retries — else
+			// the claim would suppress this chef's reminder for the full TTL after a
+			// transient enqueue failure. Log-and-continue: one chef's failure must not
+			// abort the batch.
+			reminderReleaseDedup(row.ChefUserID, targetDate, window)
 			log.Printf("meal-plan-reminder: notify chef=%s failed: %v", row.ChefUserID, err)
 			continue
 		}
