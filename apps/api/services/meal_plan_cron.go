@@ -61,6 +61,17 @@ func expireMealPlans(now time.Time, status models.MealPlanStatus, cutoffWhere, r
 	}
 	for i := range plans {
 		p := plans[i]
+		// GAP 1 interlock (#395·3): never expire a plan whose advance was actually
+		// captured. The client verify + webhook may both have been lost; expiring here
+		// would terminally strand the capture — RefundUndeliveredDays no-ops on a blank
+		// escrow_payment_id, and once `expired` the advance-reconcile can't re-select it
+		// (money taken, chef unpaid, no refund). Ask the gateway first; if paid, confirm
+		// instead of expiring; if the gateway is unreachable, DEFER (never expire a plan
+		// we couldn't verify — the reconcile will handle it).
+		if status == models.MealPlanAwaitingCustomer && p.RazorpayOrderID != "" && p.EscrowPaymentID == "" &&
+			rescueCapturedBeforeExpiry(&p) {
+			continue
+		}
 		// When an awaiting_customer plan expires, the chef cherry-picked and was
 		// waiting too — notify both parties (not just the customer).
 		var chefUserID uuid.UUID
@@ -110,4 +121,35 @@ func expireMealPlans(now time.Time, status models.MealPlanStatus, cutoffWhere, r
 			log.Printf("meal-plan-sweep: expire %s failed: %v", p.ID, err)
 		}
 	}
+}
+
+// rescueCapturedBeforeExpiry asks Razorpay whether an about-to-expire plan's advance was
+// actually captured; if so it confirms the plan (via the shared ConfirmMealPlanAdvance)
+// and returns true so the sweep skips the expiry. It ALSO returns true (defer expiry)
+// when the gateway can't be reached or the confirm errors — expiring a plan we couldn't
+// verify is exactly the money hole this closes, and the advance-reconcile will retry.
+// Returns false only when the gateway confirms there is NO captured payment.
+func rescueCapturedBeforeExpiry(p *models.MealPlan) bool {
+	if !MealPlanEscrowActive() {
+		return false
+	}
+	rz := GetRazorpay()
+	if rz == nil {
+		return false
+	}
+	pays, err := rz.FetchOrderPayments(p.RazorpayOrderID)
+	if err != nil {
+		log.Printf("meal-plan-sweep: gateway check for %s failed — deferring expiry: %v", p.ID, err)
+		return true
+	}
+	captured := capturedPaymentFor(pays, p.RazorpayOrderID)
+	if captured == "" {
+		return false // gateway confirms unpaid → safe to expire
+	}
+	if _, err := ConfirmMealPlanAdvance(database.DB, p, captured, ""); err != nil {
+		log.Printf("meal-plan-sweep: confirm captured plan %s failed — deferring expiry: %v", p.ID, err)
+		return true
+	}
+	log.Printf("meal-plan-sweep: plan %s was captured — confirmed instead of expiring", p.ID)
+	return true
 }
