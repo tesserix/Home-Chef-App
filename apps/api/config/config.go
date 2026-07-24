@@ -128,6 +128,11 @@ type Config struct {
 	// is deployed (tesserix-k8s) and opening balances are backfilled. See
 	// docs/wallet-ledger-plan.md.
 	LedgerShadowEnabled bool
+	// MealPlanRefundFlowV2Enabled gates the v2 meal-plan / group-order refund workflow
+	// (docs/meal-plan-refund-flow-design.md): 12h auto-approve vs chef Full/Half/None,
+	// admin pay to wallet or original method, and the fee/GST-excluded refund base.
+	// Default OFF — the current skip/cancel behaviour is unchanged until this is on.
+	MealPlanRefundFlowV2Enabled bool
 	// WalletPaymentFlowEnabled gates the durable mixed wallet + external payment
 	// Temporal workflow (docs/wallet-ledger-plan.md, Phase 5): reserve the wallet
 	// portion as a ledger hold, await the gateway leg, then capture on success or
@@ -231,6 +236,7 @@ func Load() {
 	mealPlanEscrow, _ := strconv.ParseBool(getEnv("MEAL_PLAN_ESCROW_ENABLED", "false"))
 	ledgerShadow, _ := strconv.ParseBool(getEnv("LEDGER_SHADOW_ENABLED", "false"))
 	walletPaymentFlow, _ := strconv.ParseBool(getEnv("WALLET_PAYMENT_FLOW_ENABLED", "false"))
+	mealPlanRefundV2, _ := strconv.ParseBool(getEnv("MEALPLAN_REFUND_FLOW_V2_ENABLED", "false"))
 	mealSubAutoActivate, _ := strconv.ParseBool(getEnv("MEAL_SUBSCRIPTION_AUTO_ACTIVATE", "false"))
 	groupOrders, _ := strconv.ParseBool(getEnv("GROUP_ORDERS_ENABLED", "false"))
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
@@ -360,6 +366,7 @@ func Load() {
 		MealPlanEscrowEnabled:           mealPlanEscrow,
 		LedgerShadowEnabled:             ledgerShadow,
 		WalletPaymentFlowEnabled:        walletPaymentFlow,
+		MealPlanRefundFlowV2Enabled:     mealPlanRefundV2,
 		MealSubscriptionAutoActivate:    mealSubAutoActivate,
 		GroupOrdersEnabled:              groupOrders,
 		DeliveryDistancePricePerCallUSD: distancePricePerCall,
