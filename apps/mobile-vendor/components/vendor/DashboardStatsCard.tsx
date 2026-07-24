@@ -8,10 +8,11 @@ interface DashboardStatsCardProps {
 }
 
 /**
- * <DashboardStatsCard> — a single tile in the dashboard 2x2 grid.
+ * <DashboardStatsCard> — a single tile in the Analytics summary grid.
  *
- * Uber-like: ink semibold numerals (was persimmon), hairline border (was
- * `shadow-sm`), tabular-nums so digits line up across cards. The card is
+ * Uber-like: ink semibold numerals (was persimmon), tabular-nums so digits
+ * line up across cards. Canvas+cards surface model (UI-V2-SPEC §1): white
+ * card lifted off the bone canvas with a shadow, no border. The card is
  * quiet; the value's weight does the work.
  */
 export function DashboardStatsCard({ title, value, subtitle }: DashboardStatsCardProps) {
@@ -28,11 +29,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.mist.DEFAULT,
     backgroundColor: theme.colors.paper,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[4],
+    ...theme.shadow[1],
   },
   title: {
     fontFamily: 'Inter-SemiBold',

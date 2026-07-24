@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import {
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -96,14 +97,25 @@ function TabLabel({ label, active, onPress }: TabLabelProps) {
       style={tabStyles.root}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      hitSlop={7}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
-      {/* Inner-View pattern — visual styles live on the View, not the
-          Pressable, to dodge the iOS function-style style drop. */}
-      <View style={[tabStyles.segment, active && tabStyles.segmentActive]}>
-        <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
-          {label}
-        </Text>
-      </View>
+      {({ pressed }) => (
+        // Inner-View pattern — visual styles live on the View, not the
+        // Pressable, to dodge the iOS function-style style drop.
+        <View
+          style={[
+            tabStyles.segment,
+            active && tabStyles.segmentActive,
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+          ]}
+        >
+          <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
+            {label}
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -207,12 +219,13 @@ function PayoutAccountRow({
       onPress={() => router.push('/payout')}
       accessibilityRole="button"
       accessibilityLabel={`Payout account: ${label}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
         <View
           style={[
             accountRowStyles.root,
-            pressed && { backgroundColor: theme.colors.bone },
+            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={accountRowStyles.textBlock}>
@@ -352,12 +365,13 @@ function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Open order ${order.orderNumber}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
         <View
           style={[
             orderRowStyles.root,
-            pressed && { backgroundColor: theme.colors.bone },
+            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={orderRowStyles.leftBlock}>
@@ -473,12 +487,13 @@ function StatementRow({ statement, onPress }: StatementRowProps) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Download settlement statement for ${fmtWeekRange(statement.weekStart, statement.weekEnd)}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
         <View
           style={[
             orderRowStyles.root,
-            pressed && { backgroundColor: theme.colors.bone },
+            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={orderRowStyles.leftBlock}>
@@ -544,12 +559,13 @@ function TaxDocumentRow({ fyLabel, onPress }: TaxDocumentRowProps) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Download TDS certificate for ${fyLabel}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
         <View
           style={[
             accountRowStyles.root,
-            pressed && { backgroundColor: theme.colors.bone },
+            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={accountRowStyles.textBlock}>
@@ -587,12 +603,13 @@ function RefundRow({ refund, onPress }: RefundRowProps) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Refund on order ${refund.orderNumber}, ${fmtInr(refund.amount)}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
         <View
           style={[
             orderRowStyles.root,
-            pressed && { backgroundColor: theme.colors.bone },
+            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={orderRowStyles.leftBlock}>
@@ -779,11 +796,20 @@ export default function EarningsScreen() {
           <Pressable
             onPress={() => router.back()}
             hitSlop={8}
-            style={styles.backButton}
             accessibilityLabel={t('earnings.goBack')}
             accessibilityRole="button"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
-            <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} />
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.backButton,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                ]}
+              >
+                <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} />
+              </View>
+            )}
           </Pressable>
           <Text style={styles.commandTitle}>{t('earnings.title')}</Text>
         </View>
@@ -807,10 +833,20 @@ export default function EarningsScreen() {
         </Text>
         <Pressable
           onPress={() => refetchPayout()}
-          style={styles.errorPrimary}
           accessibilityRole="button"
+          accessibilityLabel={t('common.retry')}
+          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
-          <Text style={styles.errorPrimaryText}>{t('common.retry')}</Text>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.errorPrimary,
+                pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+              ]}
+            >
+              <Text style={styles.errorPrimaryText}>{t('common.retry')}</Text>
+            </View>
+          )}
         </Pressable>
       </SafeAreaView>
     );
@@ -1063,11 +1099,20 @@ export default function EarningsScreen() {
         <Pressable
           onPress={() => router.back()}
           hitSlop={8}
-          style={styles.backButton}
           accessibilityLabel={t('earnings.goBack')}
           accessibilityRole="button"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} />
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.backButton,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+            >
+              <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.commandTitle}>{t('earnings.title')}</Text>
       </View>

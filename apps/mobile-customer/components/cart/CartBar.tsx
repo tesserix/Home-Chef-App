@@ -11,8 +11,11 @@ interface CartBarProps {
 export function CartBar({ onPress, bottomOffset = 0 }: CartBarProps) {
   const items = useCartStore((s) => s.items);
   const total = useCartStore((s) => s.total());
+  const hasHydrated = useCartStore((s) => s.hasHydrated);
 
-  if (items.length === 0) {
+  // R13: don't render "no cart" for one frame while AsyncStorage rehydrates
+  // — wait for the real answer before deciding whether the bar exists.
+  if (!hasHydrated || items.length === 0) {
     return null;
   }
 
@@ -43,7 +46,7 @@ export function CartBar({ onPress, bottomOffset = 0 }: CartBarProps) {
           <View className="flex-1 flex-row items-center gap-3">
             {/* Count badge — coral-tint bg, coral text */}
             <View className="w-8 h-8 bg-coral-tint rounded-full items-center justify-center">
-              <Text className="text-coral text-sm font-semibold">{itemCount}</Text>
+              <Text className="text-coral text-sm font-semibold tabular-nums">{itemCount}</Text>
             </View>
             <View>
               <Text className="text-charcoal text-sm font-semibold">

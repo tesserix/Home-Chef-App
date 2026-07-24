@@ -1,35 +1,10 @@
-import {
-  forwardRef,
-  useCallback,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  type ReactNode,
-} from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { BottomSheetModal as _BottomSheetModal } from '@gorhom/bottom-sheet';
-
-// The @gorhom/bottom-sheet types drift against the duplicated @types/react
-// in this monorepo (the workspace has two copies — one in mobile-shared/
-// node_modules and one at the root). Casting to any sidesteps the JSX
-// element-class incompatibility. Runtime behavior is identical.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BottomSheetModal = _BottomSheetModal as any;
+import { forwardRef, type ReactNode } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '../theme/tokens';
 import { Button } from './Button';
+import { SheetBase, type SheetHandle } from './SheetBase';
 
-// Type-loose backdrop component prop. The full BottomSheetBackdropProps
-// type isn't re-exported from the package root in some versions; we only
-// need `animatedIndex` for opacity interpolation.
-interface BackdropComponentProps {
-  animatedIndex: Animated.Value;
-  style: object;
-}
-
-export interface SheetHandle {
-  present: () => void;
-  dismiss: () => void;
-}
+export type { SheetHandle };
 
 interface SheetProps {
   title: string;
@@ -42,9 +17,16 @@ interface SheetProps {
   onPrimaryPress?: () => void;
   /** Cancel / dismiss label. Defaults to "Cancel". */
   cancelLabel?: string;
-  /** Snap points for the gorhom bottom sheet. Defaults sized for a single
-   *  title + body + 2 action buttons. */
+  /** Accepted for call-site compatibility with the previous gorhom-backed
+   *  implementation, which sized the sheet to fixed snap-point percentages.
+   *  The Modal-based shell is content-height with an internal max-height
+   *  scroll instead, so this value is accepted and intentionally ignored —
+   *  every existing call site (including ones passing e.g. `['70%']`)
+   *  continues to compile and renders a sensibly-sized, scrollable sheet. */
   snapPoints?: string[] | number[];
+  /** Passed straight through to SheetBase — turn off when `children` already
+   *  renders its own scroll container, to avoid nesting two ScrollViews. */
+  scrollable?: boolean;
 }
 
 /**
@@ -61,6 +43,12 @@ interface SheetProps {
  *   ...
  *   <Pressable onPress={() => sheetRef.current?.present()} />
  *   <Sheet ref={sheetRef} title="Delete item?" ... />
+ *
+ * Built on <SheetBase> — a plain React Native Modal + Animated
+ * implementation with no @gorhom/bottom-sheet dependency (that library
+ * silently no-ops `.present()`/`.expand()` on this app's gorhom 5.2.8 +
+ * reanimated 4.4.1 pairing, confirmed on-device). The public API here is
+ * unchanged from the previous gorhom-backed version.
  */
 export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
   {
@@ -71,47 +59,19 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     primaryDestructive = false,
     onPrimaryPress,
     cancelLabel = 'Cancel',
-    snapPoints,
+    scrollable,
   }: SheetProps,
   ref,
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const modalRef = useRef<any>(null);
-  const snaps = useMemo(() => snapPoints ?? ['40%'], [snapPoints]);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      present: () => modalRef.current?.present(),
-      dismiss: () => modalRef.current?.dismiss(),
-    }),
-    [],
-  );
-
-  // Inline custom backdrop — tap to dismiss, ink at 35% opacity.
-  // Avoids depending on @gorhom/bottom-sheet's BottomSheetBackdrop export,
-  // which isn't re-exported from the package root in some workspace
-  // configurations.
-  const renderBackdrop = useCallback(
-    (props: BackdropComponentProps) => (
-      <Pressable
-        accessibilityLabel="Dismiss"
-        onPress={() => modalRef.current?.dismiss()}
-        style={[props.style, { backgroundColor: 'rgba(26, 26, 24, 0.35)' }]}
-      />
-    ),
-    [],
-  );
+  // `ref` is always a plain RefObject in every call site in this codebase
+  // (`useRef<SheetHandle>(null)`), but guard the callback-ref case too —
+  // mirrors the exact guard FilterSheet/AddressSwitcherSheet already use.
+  const dismiss = () => {
+    if (ref && 'current' in ref && ref.current) ref.current.dismiss();
+  };
 
   return (
-    <BottomSheetModal
-      ref={modalRef}
-      snapPoints={snaps}
-      backdropComponent={renderBackdrop}
-      handleIndicatorStyle={styles.handle}
-      backgroundStyle={styles.background}
-      enableDynamicSizing={!snapPoints}
-    >
+    <SheetBase ref={ref} scrollable={scrollable}>
       <View style={styles.content}>
         <Text style={styles.title}>{title}</Text>
         {body ? <Text style={styles.body}>{body}</Text> : null}
@@ -123,31 +83,18 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
               variant={primaryDestructive ? 'destructive' : 'primary'}
               onPress={() => {
                 onPrimaryPress();
-                modalRef.current?.dismiss();
+                dismiss();
               }}
             />
           ) : null}
-          <Button
-            label={cancelLabel}
-            variant="ghost"
-            onPress={() => modalRef.current?.dismiss()}
-          />
+          <Button label={cancelLabel} variant="ghost" onPress={dismiss} />
         </View>
       </View>
-    </BottomSheetModal>
+    </SheetBase>
   );
 });
 
 const styles = StyleSheet.create({
-  background: {
-    backgroundColor: theme.colors.bone,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
-  },
-  handle: {
-    backgroundColor: theme.colors.mist.strong,
-    width: 40,
-  },
   content: {
     padding: theme.spacing[5],
     gap: theme.spacing[3],

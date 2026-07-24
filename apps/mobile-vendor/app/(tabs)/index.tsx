@@ -202,13 +202,6 @@ export default function DashboardScreen() {
     );
   }, [pendingOrders, dashboard?.recentOrders]);
 
-  const minutesSinceLastOrder = useMemo(() => {
-    if (!lastOrderIso) return null;
-    const t = new Date(lastOrderIso).getTime();
-    if (Number.isNaN(t)) return null;
-    return Math.floor((Date.now() - t) / 60_000);
-  }, [lastOrderIso]);
-
   // 404 with "Chef profile not found" → user signed in but never
   // completed onboarding. Auto-route to the wizard. Preserved from v2.
   useEffect(() => {
@@ -298,12 +291,21 @@ export default function DashboardScreen() {
         <Text style={styles.errorBody}>
           {t('dashboard.errorBody')}
         </Text>
-        <Pressable onPress={() => refetch()} style={styles.errorPrimary}>
+        <Pressable
+          onPress={() => refetch()}
+          style={styles.errorPrimary}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.retry')}
+          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+        >
           <Text style={styles.errorPrimaryText}>{t('common.retry')}</Text>
         </Pressable>
         <Pressable
           onPress={() => router.replace('/(onboarding)/personal-info')}
           style={styles.errorSecondary}
+          accessibilityRole="button"
+          accessibilityLabel={t('dashboard.completeOnboarding')}
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
         >
           <Text style={styles.errorSecondaryText}>{t('dashboard.completeOnboarding')}</Text>
         </Pressable>
@@ -319,23 +321,33 @@ export default function DashboardScreen() {
       pendingOrders.map((o) => orderSourceLabel(o.source)).filter((l): l is string => !!l),
     ),
   );
-  const isQuiet =
-    !isLoading &&
-    pendingOrders.length === 0 &&
-    inFlightOrders.length === 0 &&
-    (minutesSinceLastOrder === null || minutesSinceLastOrder > 120);
-
   const hasAlerts =
     pendingCancellations.length > 0 ||
     pendingMealPlans.length > 0 ||
     (actionRequests?.length ?? 0) > 0 ||
     expiringDocs.length > 0;
 
+  // Nothing to act on → fill the empty space with the status prompt instead of a
+  // blank screen. Broadened from the old 120-min "quiet" rule: a closed or idle
+  // kitchen should always show where it stands (the copy already points at the
+  // Closed pill to reopen). Any pending / in-flight order or alert pre-empts it.
+  const isQuiet =
+    !isLoading &&
+    pendingOrders.length === 0 &&
+    inFlightOrders.length === 0 &&
+    !hasAlerts;
+
   // Today card visibility — hidden when the chef has truly zero history
   // (new install): `₹0 | 0 orders | 0.0★` reads as a broken screen.
   const showToday =
     !isLoading &&
-    ((dashboard?.todayOrders ?? 0) > 0 || (dashboard?.totalReviews ?? 0) > 0);
+    ((dashboard?.totalOrders ?? 0) > 0 || (dashboard?.totalReviews ?? 0) > 0);
+
+  // Dark hero banner (reinstated): greeting + status pill + today's numbers
+  // folded into one ink card — the single statement piece; everything below is
+  // calm white-on-bone. R1: a chef with zero reviews sees a "New" chip instead
+  // of a misleading "0.0★".
+  const hasReviews = (dashboard?.totalReviews ?? 0) > 0;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -352,10 +364,12 @@ export default function DashboardScreen() {
           />
         }
       >
-        {/* Zone A — Hero header. Dark ink card: greeting + name, persimmon
-            Open pill with a live pulse dot, and today's numbers in light
-            numerals on near-black. The one statement piece on the screen —
-            everything below it is calm white-on-bone. */}
+        {/* Zone A — Dark hero banner (UI-V2 §4, reinstated). Greeting + name,
+            the Open/Closed status pill, and today's numbers folded into one ink
+            card — the single statement piece; everything below is calm
+            white-on-bone. Open pill = green fill + paper text; Closed =
+            transparent + ink.soft border + mist text. Stats sit under a hairline
+            in light numerals: earnings prominent, orders + rating beside it. */}
         <Animated.View
           style={styles.hero}
           entering={
@@ -384,12 +398,18 @@ export default function DashboardScreen() {
                       })
                     : t('dashboard.kitchenAccessibilityClosed')
               }
+              hitSlop={8}
+              android_ripple={{
+                color: acceptingOrders
+                  ? `${theme.colors.paper}33`
+                  : `${theme.colors.paper}14`,
+                borderless: false,
+              }}
             >
               {({ pressed }) => (
-                // Visual layer on an inner View. iOS occasionally drops
-                // backgroundColor + borderWidth from Pressable with a
-                // function-based `style` prop — same trick the shared
-                // <Button> primitive uses.
+                // Visual layer on an inner View — iOS occasionally drops
+                // backgroundColor + borderWidth from a Pressable with a
+                // function-style `style` prop.
                 <View
                   style={[
                     styles.statusPill,
@@ -397,9 +417,7 @@ export default function DashboardScreen() {
                       ? styles.statusPillOpen
                       : styles.statusPillClosed,
                     pressed && { opacity: 0.85 },
-                    statusBusy && {
-                      opacity: 0.5,
-                    },
+                    statusBusy && { opacity: 0.5 },
                   ]}
                 >
                   <Animated.View
@@ -429,48 +447,81 @@ export default function DashboardScreen() {
               )}
             </Pressable>
           </View>
-          {/* Each stat is a doorway to the screen that explains it — a number
-              the chef can't drill into is a dead end. Earnings → payouts and
-              transactions, Orders → today's list, Rating → the reviews behind
-              it. Routes match More's menu so both surfaces agree. */}
+          {/* Each stat is a doorway to the screen that explains it: Earnings →
+              payouts, Orders → today's list, Rating → reviews. */}
           {showToday && (
             <View style={styles.heroStatsRow}>
               <Pressable
                 onPress={() => router.push('/earnings')}
                 accessibilityRole="button"
-                accessibilityLabel={`Today's earnings: ₹${(dashboard?.todayEarnings ?? 0).toFixed(0)}. Tap to see payouts and transactions.`}
+                accessibilityLabel={`Total earnings: ₹${(dashboard?.totalEarnings ?? 0).toFixed(0)}. Tap to see payouts and transactions.`}
+                hitSlop={8}
                 style={({ pressed }) => [styles.heroStatMain, pressed && styles.heroStatPressed]}
               >
-                <Text style={styles.heroEarnings}>
-                  ₹{(dashboard?.todayEarnings ?? 0).toFixed(0)}
+                <Text style={styles.heroEarnings} numberOfLines={1}>
+                  ₹{Math.round(dashboard?.totalEarnings ?? 0).toLocaleString('en-IN')}
                 </Text>
-                <Text style={styles.heroStatLabel}>{t('dashboard.todaysEarnings')}</Text>
+                <Text style={styles.heroStatLabel} numberOfLines={1}>
+                  {t('dashboard.totalEarnings')}
+                </Text>
               </Pressable>
               <Pressable
                 onPress={() => router.push('/(tabs)/orders')}
                 accessibilityRole="button"
-                accessibilityLabel={`${dashboard?.todayOrders ?? 0} orders today. Tap to see them.`}
+                accessibilityLabel={`${dashboard?.totalOrders ?? 0} orders in total. Tap to see them.`}
+                hitSlop={8}
                 style={({ pressed }) => [styles.heroStatCol, pressed && styles.heroStatPressed]}
               >
-                <Text style={styles.heroStatValue}>
-                  {dashboard?.todayOrders ?? 0}
+                <Text style={styles.heroStatValue}>{dashboard?.totalOrders ?? 0}</Text>
+                <Text style={styles.heroStatLabel} numberOfLines={1}>
+                  {t('dashboard.totalOrders')}
                 </Text>
-                <Text style={styles.heroStatLabel}>{t('dashboard.orders')}</Text>
               </Pressable>
               <Pressable
                 onPress={() => router.push('/reviews')}
                 accessibilityRole="button"
-                accessibilityLabel={`Rating: ${(dashboard?.rating ?? 0).toFixed(1)} out of 5. Tap to read your reviews.`}
+                accessibilityLabel={
+                  hasReviews
+                    ? `Rating: ${(dashboard?.rating ?? 0).toFixed(1)} out of 5. Tap to read your reviews.`
+                    : 'No reviews yet. Tap to read your reviews.'
+                }
+                hitSlop={8}
                 style={({ pressed }) => [styles.heroStatCol, pressed && styles.heroStatPressed]}
               >
-                <Text style={styles.heroStatValue}>
-                  {(dashboard?.rating ?? 0).toFixed(1)}★
+                {hasReviews ? (
+                  <Text style={styles.heroStatValue}>
+                    {(dashboard?.rating ?? 0).toFixed(1)}★
+                  </Text>
+                ) : (
+                  <View style={styles.heroNewChip}>
+                    <Text style={styles.heroNewChipText}>
+                      {t('dashboard.ratingNew')}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.heroStatLabel} numberOfLines={1}>
+                  {t('dashboard.rating')}
                 </Text>
-                <Text style={styles.heroStatLabel}>{t('dashboard.rating')}</Text>
               </Pressable>
             </View>
           )}
         </Animated.View>
+
+        {/* This-week snapshot — one quiet line of trend context beyond today's
+            numbers, only when there's a week to show. */}
+        {(dashboard?.weekOrders ?? 0) > 0 && (
+          <View style={styles.weekRow}>
+            <Text style={styles.weekLabel}>{t('dashboard.thisWeek')}</Text>
+            <Text style={styles.weekValue} numberOfLines={1}>
+              {t('dashboard.weekSummary', {
+                amount: Math.round(
+                  dashboard?.weekRevenue ?? 0,
+                ).toLocaleString('en-IN'),
+                count: dashboard?.weekOrders ?? 0,
+              })}
+            </Text>
+          </View>
+        )}
 
         {/* FSSAI lockout (#92): a lapsed food-safety licence pauses the
             kitchen entirely (orders blocked + payouts frozen server-side).
@@ -491,12 +542,13 @@ export default function DashboardScreen() {
                 onPress={() => router.push('/documents/renew')}
                 accessibilityRole="button"
                 accessibilityLabel={t('dashboard.fssaiLockedTitle')}
+                android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
               >
                 {({ pressed }) => (
                   <View
                     style={[
                       styles.alertCard,
-                      { borderLeftColor: theme.colors.destructive.DEFAULT },
+                      styles.alertCardSevere,
                       pressed && { opacity: 0.85 },
                     ]}
                   >
@@ -552,12 +604,12 @@ export default function DashboardScreen() {
                       ? 'A customer asked to cancel an order. Tap to review and confirm.'
                       : `${pendingCancellations.length} customers asked to cancel orders. Tap to review.`
                   }
+                  android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
                 >
                   {({ pressed }) => (
                     <View
                       style={[
                         styles.alertCard,
-                        { borderLeftColor: theme.colors.destructive.DEFAULT },
                         pressed && { opacity: 0.85 },
                       ]}
                     >
@@ -599,12 +651,12 @@ export default function DashboardScreen() {
                         )}. Tap to review and confirm the days.`
                       : `${pendingMealPlans.length} meal plan requests awaiting your confirmation. Tap to review.`
                   }
+                  android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
                 >
                   {({ pressed }) => (
                     <View
                       style={[
                         styles.alertCard,
-                        { borderLeftColor: theme.colors.herb.DEFAULT },
                         pressed && { opacity: 0.85 },
                       ]}
                     >
@@ -612,7 +664,7 @@ export default function DashboardScreen() {
                         <View
                           style={[
                             styles.alertDot,
-                            { backgroundColor: theme.colors.herb.DEFAULT },
+                            { backgroundColor: theme.colors.ink.DEFAULT },
                           ]}
                         />
                         <Text style={styles.alertLabel} numberOfLines={1}>
@@ -644,12 +696,12 @@ export default function DashboardScreen() {
                   onPress={() => router.push('/admin-requests')}
                   accessibilityRole="button"
                   accessibilityLabel={`Admin needs information for ${req.title}. Tap to view.`}
+                  android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
                 >
                   {({ pressed }) => (
                     <View
                       style={[
                         styles.alertCard,
-                        { borderLeftColor: theme.colors.amber.DEFAULT },
                         pressed && { opacity: 0.85 },
                       ]}
                     >
@@ -690,12 +742,12 @@ export default function DashboardScreen() {
                   onPress={() => router.push('/documents/renew')}
                   accessibilityRole="button"
                   accessibilityLabel={`${describeDocumentType(doc.type)} expires in ${doc.daysUntilExpiry} days. Tap to re-upload.`}
+                  android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
                 >
                   {({ pressed }) => (
                     <View
                       style={[
                         styles.alertCard,
-                        { borderLeftColor: accent },
                         pressed && { opacity: 0.85 },
                       ]}
                     >
@@ -768,6 +820,7 @@ export default function DashboardScreen() {
               accessibilityRole="button"
               accessibilityLabel={t('dashboard.ordersAwaiting', { count: pendingOrders.length })}
               style={styles.surgeBanner}
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
             >
               <View
                 style={[
@@ -801,6 +854,8 @@ export default function DashboardScreen() {
                   hitSlop={6}
                   style={styles.seeMoreInline}
                   accessibilityRole="link"
+                  accessibilityLabel={t('dashboard.seeMore', { count: pendingOrders.length - 3 })}
+                  android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
                 >
                   <Text style={styles.seeMoreInlineLabel}>
                     {t('dashboard.seeMore', { count: pendingOrders.length - 3 })}
@@ -854,6 +909,7 @@ export default function DashboardScreen() {
                   style={styles.seeMoreInline}
                   accessibilityRole="link"
                   accessibilityLabel={`See all ${inFlightOrders.length} orders in progress`}
+                  android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
                 >
                   <Text style={styles.seeMoreInlineLabel}>
                     {t('dashboard.seeMore', {
@@ -866,11 +922,14 @@ export default function DashboardScreen() {
           </Animated.View>
         )}
 
+        {/* Today's numbers now live in the dark hero banner above (Zone A). */}
+
         {/* Quiet state — dead-screen reassurance pushed to the visible
             bottom of the viewport via marginTop:auto on the contentContainer's
             flexGrow:1. A chef staring at an empty screen at 3am needs to
-            know it's quiet, not that the platform broke. (Today's numbers
-            live in the hero, so this zone is reassurance copy only.) */}
+            know it's quiet, not that the platform broke. The "TODAY" stat
+            card bottom-anchors here too (UI-V2 spec §7) — it only lives in
+            the hero-adjacent inline slot above when there's active content. */}
         {isQuiet && (
           <View style={styles.bottomZone}>
             <View style={styles.quietBlock}>
@@ -905,6 +964,7 @@ const styles = StyleSheet.create({
   },
   bottomZone: {
     marginTop: 'auto',
+    gap: theme.spacing[4],
   },
   sectionLabel: {
     fontFamily: 'Inter-SemiBold',
@@ -914,7 +974,8 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
 
-  // Zone A — Hero header (dark ink card)
+  // Zone A — Dark hero banner (reinstated): greeting + status + today's numbers
+  // folded into one ink card. The single statement piece.
   hero: {
     backgroundColor: theme.colors.ink.DEFAULT,
     borderRadius: theme.radius.lg,
@@ -946,6 +1007,88 @@ const styles = StyleSheet.create({
     color: theme.colors.paper,
     letterSpacing: -0.3,
   },
+  // Stats under a hairline: earnings takes the remaining width (flex), orders +
+  // rating sit compact beside it; alignItems flex-end lands all three labels on
+  // one baseline despite the taller earnings figure.
+  heroStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: theme.spacing[5],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.ink.soft,
+    paddingTop: theme.spacing[4],
+  },
+  heroStatMain: {
+    flex: 1,
+  },
+  heroStatCol: {
+    alignItems: 'flex-start',
+  },
+  heroStatPressed: {
+    opacity: 0.6,
+  },
+  heroEarnings: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 30,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+    color: theme.colors.paper,
+    fontVariant: ['tabular-nums'],
+  },
+  heroStatValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    lineHeight: 22,
+    color: theme.colors.paper,
+    fontVariant: ['tabular-nums'],
+  },
+  heroStatLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.2,
+    color: theme.colors.ink.muted,
+    marginTop: theme.spacing[1],
+  },
+  // R1 rating zero-state chip on the dark banner — light chip, not a broken "0.0★".
+  heroNewChip: {
+    backgroundColor: theme.colors.ink.soft,
+    borderRadius: theme.radius.full,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+  },
+  heroNewChipText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.paper,
+  },
+  // This-week snapshot — a quiet caption row under the hero. Pulled up close to
+  // the banner (negative top) so it reads as part of the header, not a section.
+  weekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: -theme.spacing[4],
+    marginBottom: theme.spacing[6],
+    paddingHorizontal: theme.spacing[1],
+  },
+  weekLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.6,
+    color: theme.colors.ink.muted,
+  },
+  weekValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+    flexShrink: 1,
+    textAlign: 'right',
+    marginLeft: theme.spacing[3],
+  },
+  // Open/Closed status pill on the dark banner. Open = green fill + paper text
+  // (green is the operational-positive exception); Closed = transparent +
+  // ink.soft border + mist text.
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -975,46 +1118,88 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.label.size,
     letterSpacing: 0.2,
   },
-  heroStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: theme.spacing[5],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.ink.soft,
-    paddingTop: theme.spacing[4],
+
+  // "TODAY" stat card (UI-V2 spec §7) — white card, 3 columns.
+  todaySection: {
+    marginTop: theme.spacing[6],
   },
-  heroStatMain: {
-    flex: 1,
+  todayCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    paddingVertical: theme.spacing[4],
+    paddingHorizontal: theme.spacing[3],
+    ...theme.shadow[1],
+  },
+  // Plain flex:1 View — the equal-thirds distribution lives here, not on the
+  // Pressable (which ignored flexGrow and collapsed to content width). minWidth:0
+  // lets a long label ("Today's earnings") shrink instead of forcing the column
+  // wider than its third.
+  todayCol: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+  },
+  // The tap surface fills its column (alignSelf stretch) so the ripple covers the
+  // full third and the value/label center within it.
+  todayColTap: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    paddingVertical: theme.spacing[1],
+  },
+  // Fixed-height value slot so every stat's label sits on the same line. The
+  // earnings value is 24px and orders/rating are 16px — without a common slot
+  // height the taller earnings pushed its label down, leaving the three labels
+  // (Today's earnings / Orders / Rating) at three different heights.
+  todayValueSlot: {
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   // Touch feedback for the stat tiles. Opacity only — the design system animates
   // opacity/transform and nothing else.
-  heroStatPressed: {
+  todayColPressed: {
     opacity: 0.6,
   },
-  heroEarnings: {
+  todayDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginVertical: theme.spacing[1],
+  },
+  todayEarnings: {
     fontFamily: 'Geist-Bold',
-    fontSize: 30,
-    lineHeight: 34,
-    letterSpacing: -0.5,
-    color: theme.colors.paper,
+    fontSize: 24,
+    lineHeight: 28,
+    letterSpacing: -0.3,
+    color: theme.colors.ink.DEFAULT,
     fontVariant: ['tabular-nums'],
   },
-  heroStatCol: {
-    alignItems: 'flex-start',
-  },
-  heroStatValue: {
+  todayValue: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     lineHeight: 22,
-    color: theme.colors.paper,
+    color: theme.colors.ink.DEFAULT,
     fontVariant: ['tabular-nums'],
   },
-  heroStatLabel: {
+  todayLabel: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 0.2,
     color: theme.colors.ink.muted,
     marginTop: theme.spacing[1],
+  },
+  // R1 rating zero-state chip — vendor: mist bg + ink.soft text.
+  newChip: {
+    backgroundColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.full,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+  },
+  newChipText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
   },
 
   // Zone B' — merged ACTION REQUIRED alert stack
@@ -1024,18 +1209,20 @@ const styles = StyleSheet.create({
   alertCards: {
     gap: theme.spacing[2],
   },
+  // Compact alert card (UI-V2 spec §7): amber.tint bg, radius.md. Severity
+  // is carried by the leading dot's colour, not the card chrome.
   alertCard: {
-    backgroundColor: theme.colors.bone,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.mist.DEFAULT,
-    // Bold accent stripe down the left edge — colour is set per card by
-    // severity (red ≤7d / amber ≤30d / grey >30d) so the stack triages at a
-    // glance. Card body stays calm.
-    borderLeftWidth: 3,
+    backgroundColor: theme.colors.amber.tint,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     gap: theme.spacing[1],
+  },
+  // FSSAI lockout banner — a blocking condition (kitchen offline to
+  // customers), one severity level above routine action items, so it gets
+  // the destructive tint instead of the shared amber.tint default.
+  alertCardSevere: {
+    backgroundColor: theme.colors.destructive.tint,
   },
   alertRowTop: {
     flexDirection: 'row',

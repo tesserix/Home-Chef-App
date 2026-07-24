@@ -21,7 +21,6 @@ import {
 } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { AuthProvider } from '@homechef/mobile-shared/auth';
 import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
@@ -471,12 +470,29 @@ function AppNavigator() {
   // login, making "Create account" impossible (it bounces straight to login).
   const AUTH_SCREENS = ['/login', '/register', '/forgot-password'];
 
+  // Splash safety net: if any of the auth/routing conditions never settle
+  // (status webhook race, slow network, edge case in the routing effect),
+  // force-lift after 5s instead of holding the user hostage on a spinner.
+  // Worst case is a brief flash of the wrong screen, which the routing
+  // effect will then correct. Declared above the routing effect below
+  // because that effect's fonts/mount guard reads `forceLift`.
+  const [forceLift, setForceLift] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setForceLift(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
+
   // Single routing effect — fires on every pathname / expectedPath
   // change. If the user is where they should be we update routedFor
   // and lift the splash. If they've drifted (back gesture, deep link,
   // status change mid-session) we replace back to expectedPath. This is
   // the hard lock that keeps a non-verified chef out of the tabs.
   useEffect(() => {
+    // Mirrors the `!fontsLoaded && !forceLift` early return below, which
+    // holds the Stack unmounted until fonts resolve (or the 5s safety net
+    // fires). Calling router.replace() before the Stack mounts throws an
+    // expo-router "Attempted to navigate before mounting" error.
+    if (!fontsLoaded && !forceLift) return;
     if (upgradeRequired) {
       if (normalize(pathname || '') !== '/upgrade-required') {
         const qs = new URLSearchParams();
@@ -509,22 +525,20 @@ function AppNavigator() {
     } else {
       router.replace(expectedPath as never);
     }
-  }, [pathname, expectedPath, authKey, upgradeRequired, minVersion, storeUrl]);
+  }, [
+    fontsLoaded,
+    forceLift,
+    pathname,
+    expectedPath,
+    authKey,
+    upgradeRequired,
+    minVersion,
+    storeUrl,
+  ]);
 
   // Keep splash up until the OTF/TTF files are available — otherwise we
   // render a frame of System font then snap to Geist/Inter when fonts
   // arrive, which is jarringly visible on the login + dashboard.
-  //
-  // Splash safety net: if any of the auth/routing conditions never
-  // settle (status webhook race, slow network, edge case in the routing
-  // effect), force-lift after 5s instead of holding the user hostage on
-  // a spinner. Worst case is a brief flash of the wrong screen, which
-  // the routing effect will then correct.
-  const [forceLift, setForceLift] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setForceLift(true), 5000);
-    return () => clearTimeout(t);
-  }, []);
 
   const isRouting =
     !forceLift &&
@@ -540,6 +554,26 @@ function AppNavigator() {
     : isAuthenticated && (onboardingLoading || routedFor.current !== authKey)
       ? 'Setting up your kitchen…'
       : 'Loading…';
+
+  // Fonts must resolve BEFORE the Stack mounts. Rendering the tree under the
+  // routing overlay while fonts loaded measured every Text with the fallback
+  // font; when Geist/Inter swapped in, Fabric never re-measured — permanently
+  // clipped labels + a visible glyph snap. The routing overlay below still
+  // covers the auth/resolve phase (which requires the Stack to be mounted).
+  if (!fontsLoaded && !forceLift) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#FFFFFF',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <ActivityIndicator color="#0E0E0C" size="large" />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -588,13 +622,11 @@ function RootLayout() {
       >
         <GestureHandlerRootView style={{ flex: 1 }}>
           <QueryClientProvider client={queryClient}>
-            <BottomSheetModalProvider>
-              <ToastProvider>
-                <UndoSnackbarProvider>
-                  <AppNavigator />
-                </UndoSnackbarProvider>
-              </ToastProvider>
-            </BottomSheetModalProvider>
+            <ToastProvider>
+              <UndoSnackbarProvider>
+                <AppNavigator />
+              </UndoSnackbarProvider>
+            </ToastProvider>
           </QueryClientProvider>
         </GestureHandlerRootView>
       </AuthProvider>

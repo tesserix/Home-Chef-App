@@ -26,6 +26,11 @@ import {
 } from '../../hooks/useCatering';
 import { friendlyErrorMessage } from '../../lib/errors';
 
+// Android ripple tints — translucent tokens, never a new literal colour.
+const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CANVAS_RIPPLE = `${customerColors.canvas}33`;
+const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
+
 function money(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
@@ -150,12 +155,26 @@ function QuoteCard({
         </View>
       ) : actionable ? (
         <View className="flex-row gap-2 mt-3">
-          <Pressable className="flex-1" onPress={onAccept} disabled={busy} accessibilityRole="button" accessibilityLabel="Accept quote">
+          <Pressable
+            className="flex-1"
+            onPress={onAccept}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Accept quote"
+            android_ripple={busy ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
+          >
             <View className={`rounded-lg min-h-[44px] items-center justify-center bg-coral ${busy ? 'opacity-60' : ''}`}>
               <Text className="text-canvas font-semibold text-sm">Accept</Text>
             </View>
           </Pressable>
-          <Pressable className="flex-1" onPress={onDecline} disabled={busy} accessibilityRole="button" accessibilityLabel="Decline quote">
+          <Pressable
+            className="flex-1"
+            onPress={onDecline}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Decline quote"
+            android_ripple={busy ? undefined : { color: GHOST_RIPPLE, borderless: false }}
+          >
             <View className="rounded-lg min-h-[44px] items-center justify-center border border-hairline bg-canvas">
               <Text className="text-charcoal-soft font-semibold text-sm">Decline</Text>
             </View>
@@ -245,15 +264,26 @@ export default function CateringDetailScreen() {
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
       {/* Header */}
       <View className="flex-row items-center px-4 pt-3 pb-2 gap-3">
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: ICON_RIPPLE, borderless: true }}
+        >
           <ChevronLeft size={24} color={customerColors.charcoal.DEFAULT} />
         </Pressable>
         <Text className="text-xl font-bold text-charcoal font-display flex-1">Catering request</Text>
       </View>
 
       {isLoading || !request ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
+        <View className="px-4 pt-1">
+          <View className="bg-canvas rounded-xl border border-hairline p-4">
+            <View className="h-5 rounded bg-hairline" style={{ width: '50%' }} />
+            <View className="h-3 rounded bg-hairline mt-3" style={{ width: '70%' }} />
+            <View className="h-3 rounded bg-hairline mt-2" style={{ width: '40%' }} />
+            <View className="h-3 rounded bg-hairline mt-2" style={{ width: '80%' }} />
+          </View>
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
@@ -310,16 +340,22 @@ export default function CateringDetailScreen() {
           {request.status === 'accepted' && request.depositStatus === 'pending' ? (
             <View className="bg-coral-tint rounded-xl p-4 mt-4">
               <Text className="text-sm font-semibold text-charcoal">Confirm your booking</Text>
-              <Text className="text-sm text-charcoal-soft mt-1">
+              <Text className="text-sm text-charcoal-soft mt-1 tabular-nums">
                 Pay a {money(request.depositAmount ?? 0)} deposit to lock in your chef. The balance is
                 settled after the event.
               </Text>
-              <Pressable onPress={payDeposit} disabled={paying || createDeposit.isPending} accessibilityRole="button" accessibilityLabel="Pay deposit">
+              <Pressable
+                onPress={payDeposit}
+                disabled={paying || createDeposit.isPending}
+                accessibilityRole="button"
+                accessibilityLabel="Pay deposit"
+                android_ripple={paying || createDeposit.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
+              >
                 <View className={`mt-3 rounded-lg min-h-[48px] items-center justify-center bg-coral ${paying || createDeposit.isPending ? 'opacity-60' : ''}`}>
                   {paying || createDeposit.isPending ? (
                     <ActivityIndicator size="small" color={customerColors.canvas} />
                   ) : (
-                    <Text className="text-canvas font-semibold text-base">
+                    <Text className="text-canvas font-semibold text-base tabular-nums">
                       Pay deposit · {money(request.depositAmount ?? 0)}
                     </Text>
                   )}

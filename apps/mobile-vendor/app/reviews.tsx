@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -164,6 +165,8 @@ function FilterTab({ item, active, onPress }: FilterTabProps) {
       hitSlop={6}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={item.label}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
         // Inner-View pattern — visual styles on the View, never a
@@ -172,7 +175,7 @@ function FilterTab({ item, active, onPress }: FilterTabProps) {
           style={[
             filterTabStyles.chip,
             active ? filterTabStyles.chipActive : filterTabStyles.chipInactive,
-            pressed && { opacity: 0.85 },
+            pressed && Platform.OS === 'ios' && { opacity: 0.85 },
           ]}
         >
           <Text
@@ -219,10 +222,14 @@ function ReviewRow({ review, first, last }: ReviewRowProps) {
           onPress={() => router.push({ pathname: '/review/[reviewId]', params: { reviewId: review.id } })}
           accessibilityRole="button"
           accessibilityLabel={`Review by ${review.customerName}, ${review.rating} stars. Tap to reply.`}
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
         >
           {({ pressed }) => (
             <View
-              style={[rowStyles.root, pressed && rowStyles.rootPressed]}
+              style={[
+                rowStyles.root,
+                pressed && Platform.OS === 'ios' && rowStyles.rootPressed,
+              ]}
             >
               {/* Leading — star count */}
               <View style={rowStyles.starBlock}>
@@ -306,9 +313,15 @@ export default function ReviewsScreen() {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Go back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
           {({ pressed }) => (
-            <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
+            <View
+              style={[
+                styles.backBtn,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+            >
               <ChevronLeft
                 size={22}
                 color={theme.colors.ink.DEFAULT}
@@ -369,10 +382,18 @@ export default function ReviewsScreen() {
           <Text style={styles.emptyBody}>
             Check your connection and try again.
           </Text>
-          <Pressable onPress={() => refetch()} accessibilityRole="button">
+          <Pressable
+            onPress={() => refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading reviews"
+            android_ripple={{ color: `${theme.colors.paper}30`, borderless: false }}
+          >
             {({ pressed }) => (
               <View
-                style={[styles.retryButton, pressed && { opacity: 0.85 }]}
+                style={[
+                  styles.retryButton,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
               >
                 <Text style={styles.retryButtonLabel}>Retry</Text>
               </View>
@@ -490,6 +511,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     color: theme.colors.ink.muted,
     marginTop: theme.spacing[1],
+    fontVariant: ['tabular-nums'],
   },
 
   // Filter chip row — horizontal scroll, no edge-to-edge hairline

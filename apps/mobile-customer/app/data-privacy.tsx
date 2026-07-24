@@ -6,6 +6,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   Share,
   Text,
@@ -23,6 +24,10 @@ import { useProfile } from '../hooks/useProfile';
 import { useExportMyData, useDeleteAccount } from '../hooks/useDataPrivacy';
 import { friendlyErrorMessage } from '../lib/errors';
 import { useAuthStore } from '../store/auth-store';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const CANVAS_RIPPLE = `${customerColors.canvas}33`;
+const DESTRUCTIVE_RIPPLE = `${customerColors.destructive.DEFAULT}14`;
 
 export default function DataPrivacyScreen() {
   const router = useRouter();
@@ -118,15 +123,16 @@ export default function DataPrivacyScreen() {
             disabled={exportData.isPending}
             accessibilityRole="button"
             accessibilityLabel="Download my data"
+            android_ripple={exportData.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
               <View
                 className={`mt-3 rounded-lg min-h-[48px] items-center justify-center ${
-                  pressed ? 'bg-coral-pressed' : 'bg-coral'
+                  pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : 'bg-coral'
                 }`}
               >
                 {exportData.isPending ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={customerColors.canvas} />
                 ) : (
                   <Text className="text-base font-semibold text-white">Download</Text>
                 )}
@@ -138,7 +144,7 @@ export default function DataPrivacyScreen() {
         {/* ── Right to Erasure ── */}
         <View className="mx-4 mt-6 rounded-xl overflow-hidden border border-destructive/30 bg-canvas p-4">
           <View className="flex-row items-center gap-2">
-            <ShieldAlert size={18} color={customerColors.destructive?.DEFAULT ?? '#B22B0E'} />
+            <ShieldAlert size={18} color={customerColors.destructive.DEFAULT} />
             <Text className="text-base font-semibold text-destructive">Delete my account</Text>
           </View>
           <Text className="text-sm text-charcoal-soft mt-1">
@@ -160,19 +166,24 @@ export default function DataPrivacyScreen() {
             disabled={!canDelete || deleteAccount.isPending}
             accessibilityRole="button"
             accessibilityLabel="Delete my account"
+            android_ripple={
+              !canDelete || deleteAccount.isPending
+                ? undefined
+                : { color: DESTRUCTIVE_RIPPLE, borderless: false }
+            }
           >
             {({ pressed }) => (
               <View
                 className={`mt-3 rounded-lg min-h-[48px] items-center justify-center border ${
                   !canDelete
                     ? 'border-hairline bg-surface-soft'
-                    : pressed
+                    : pressed && Platform.OS === 'ios'
                       ? 'border-destructive bg-surface-soft'
                       : 'border-destructive bg-canvas'
                 }`}
               >
                 {deleteAccount.isPending ? (
-                  <ActivityIndicator color={customerColors.destructive?.DEFAULT ?? '#B22B0E'} />
+                  <ActivityIndicator color={customerColors.destructive.DEFAULT} />
                 ) : (
                   <Text
                     className={`text-base font-semibold ${

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View, type ViewStyle } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, Animated, StyleSheet, View, type ViewStyle } from 'react-native';
 import { theme } from '../theme/tokens';
 
 interface SkeletonProps {
@@ -18,7 +18,10 @@ interface SkeletonProps {
  * spinners on top.
  *
  * Animates opacity only (1.0 → 0.4 → 1.0 over 1100ms) per the motion
- * tokens — no scale, no slide.
+ * tokens — no scale, no slide. Runs on the UI thread (`useNativeDriver`).
+ * Respects the OS Reduce Motion setting: when enabled, the loop never
+ * starts and the block holds its resting opacity as a static placeholder
+ * instead of shimmering.
  */
 export function Skeleton({
   width = '100%',
@@ -27,8 +30,31 @@ export function Skeleton({
   style,
 }: SkeletonProps) {
   const opacity = useRef(new Animated.Value(0.6)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      // Reduced motion: hold a static block, no shimmer loop.
+      opacity.stopAnimation();
+      opacity.setValue(0.6);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, {
@@ -45,7 +71,7 @@ export function Skeleton({
     );
     loop.start();
     return () => loop.stop();
-  }, [opacity]);
+  }, [opacity, reduceMotion]);
 
   return (
     <Animated.View

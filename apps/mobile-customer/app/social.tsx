@@ -6,6 +6,7 @@ import React, { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   Text,
@@ -13,13 +14,21 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { Camera, Heart } from 'lucide-react-native';
+import { AlertCircle, Camera, Heart } from 'lucide-react-native';
 import { useSocialFeed, useLikePost } from '../hooks/useSocial';
 import type { SocialPost } from '../hooks/useSocial';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 
 const PAGE_LIMIT = 20;
+
+// Same neutral placeholder blurhash used elsewhere in the app (R2 image
+// pop-in fix — a tinted placeholder + fade instead of a white/grey flash).
+const PHOTO_BLURHASH = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const LIKE_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
+const CANVAS_RIPPLE = `${customerColors.canvas}33`;
 
 // ─── Post card ───────────────────────────────────────────────────────────────
 
@@ -65,13 +74,14 @@ function PostCard({ post }: { post: SocialPost }) {
         </View>
       </View>
 
-      {/* Post image — full width, 4:3 ratio */}
+      {/* Post image — full width, 4:3 ratio. R2: blurhash placeholder + fade. */}
       {post.images && post.images.length > 0 ? (
         <Image
           source={{ uri: post.images[0] }}
-          style={{ width: '100%', aspectRatio: 4 / 3 }}
+          style={{ width: '100%', aspectRatio: 4 / 3, backgroundColor: customerColors.surface.soft }}
           contentFit="cover"
-          transition={200}
+          placeholder={{ blurhash: PHOTO_BLURHASH }}
+          transition={150}
           accessibilityLabel={`Photo by ${post.chefName}`}
         />
       ) : null}
@@ -98,19 +108,27 @@ function PostCard({ post }: { post: SocialPost }) {
           accessibilityRole="button"
           accessibilityLabel={optimisticLiked ? 'Unlike post' : 'Like post'}
           accessibilityState={{ selected: optimisticLiked }}
+          android_ripple={{ color: LIKE_RIPPLE, borderless: false }}
         >
-          <View className="flex-row items-center gap-1.5 py-1 px-2">
-            <Heart
-              size={18}
-              color={optimisticLiked ? customerColors.coral.DEFAULT : customerColors.charcoal.soft}
-              fill={optimisticLiked ? customerColors.coral.DEFAULT : 'transparent'}
-            />
-            <Text
-              className={`text-sm font-medium ${optimisticLiked ? 'text-coral' : 'text-charcoal-soft'}`}
+          {({ pressed }) => (
+            <View
+              className={`flex-row items-center gap-1.5 py-1 px-2 rounded-full min-h-[44px] ${
+                pressed && Platform.OS === 'ios' ? 'bg-surface-soft' : ''
+              }`}
             >
-              {optimisticCount}
-            </Text>
-          </View>
+              <Heart
+                size={18}
+                color={optimisticLiked ? customerColors.coral.DEFAULT : customerColors.charcoal.soft}
+                fill={optimisticLiked ? customerColors.coral.DEFAULT : 'transparent'}
+              />
+              <Text
+                className={`text-sm font-medium ${optimisticLiked ? 'text-coral' : 'text-charcoal-soft'}`}
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
+                {optimisticCount}
+              </Text>
+            </View>
+          )}
         </Pressable>
       </View>
 
@@ -148,7 +166,7 @@ export default function SocialScreen() {
   const [allPosts, setAllPosts] = useState<SocialPost[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const { data, isLoading, isRefetching, refetch } = useSocialFeed({
+  const { data, isLoading, isError, isRefetching, refetch } = useSocialFeed({
     page,
     limit: PAGE_LIMIT,
   });
@@ -182,12 +200,55 @@ export default function SocialScreen() {
     }
   }
 
-  // ── Loading ──────────────────────────────────────────────────────────────
+  // ── Loading (R8: skeleton, not a full-screen spinner) ──────────────────────
   if (isLoading && page === 1) {
     return (
       <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
+        <ScreenHeader title="Social Feed" />
+        <View>
+          {[0, 1, 2].map((i) => (
+            <View key={i} className="bg-canvas">
+              <View className="flex-row items-center px-4 pt-4 pb-3 gap-3">
+                <View className="w-10 h-10 rounded-full bg-surface-soft" />
+                <View className="gap-2">
+                  <View className="h-3.5 rounded bg-hairline" style={{ width: 120 }} />
+                  <View className="h-3 rounded bg-hairline" style={{ width: 60 }} />
+                </View>
+              </View>
+              <View className="w-full bg-surface-soft" style={{ aspectRatio: 4 / 3 }} />
+              <View className="h-px bg-hairline mt-3" />
+            </View>
+          ))}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Error (R8) ───────────────────────────────────────────────────────────
+  if (isError && page === 1 && allPosts.length === 0) {
+    return (
+      <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
+        <ScreenHeader title="Social Feed" />
+        <View className="flex-1 items-center justify-center px-8 gap-4">
+          <View className="w-16 h-16 rounded-full bg-surface-soft items-center justify-center">
+            <AlertCircle size={28} color={customerColors.charcoal.soft} />
+          </View>
+          <Text className="text-lg font-semibold text-charcoal text-center font-display">
+            Something went wrong
+          </Text>
+          <Text className="text-sm text-charcoal-soft text-center">
+            We could not load the feed. Please try again.
+          </Text>
+          <Pressable
+            onPress={() => void refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading the feed"
+            android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
+          >
+            <View className="bg-coral rounded-lg px-6 py-3 min-h-[44px] items-center justify-center">
+              <Text className="text-canvas font-semibold text-sm">Try again</Text>
+            </View>
+          </Pressable>
         </View>
       </SafeAreaView>
     );

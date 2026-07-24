@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -31,6 +32,12 @@ const REASONS: { value: IssueReason; label: string }[] = [
   { value: 'quality_issue', label: 'Quality issue' },
   { value: 'other', label: 'Something else' },
 ];
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const BACK_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const REASON_RIPPLE = `${customerColors.coral.DEFAULT}1F`;
+const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
+const CTA_RIPPLE = `${customerColors.canvas}33`;
 
 function money(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -176,8 +183,18 @@ export default function ReportIssueScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back">
-          <ChevronLeft size={26} color={customerColors.charcoal.DEFAULT} />
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: BACK_RIPPLE, borderless: true, radius: 20 }}
+        >
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' ? styles.iconPressed : undefined}>
+              <ChevronLeft size={26} color={customerColors.charcoal.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.headerTitle}>Report an issue</Text>
         <View style={{ width: 26 }} />
@@ -194,10 +211,25 @@ export default function ReportIssueScreen() {
             {REASONS.map((r) => {
               const active = reason === r.value;
               return (
-                <Pressable key={r.value} onPress={() => setReason(r.value)} accessibilityRole="button">
-                  <View style={[styles.reasonChip, active && styles.reasonChipActive]}>
-                    <Text style={[styles.reasonText, active && styles.reasonTextActive]}>{r.label}</Text>
-                  </View>
+                <Pressable
+                  key={r.value}
+                  onPress={() => setReason(r.value)}
+                  accessibilityRole="button"
+                  accessibilityLabel={r.label}
+                  accessibilityState={{ selected: active }}
+                  android_ripple={{ color: REASON_RIPPLE, borderless: false }}
+                >
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.reasonChip,
+                        active && styles.reasonChipActive,
+                        pressed && Platform.OS === 'ios' && styles.reasonChipPressed,
+                      ]}
+                    >
+                      <Text style={[styles.reasonText, active && styles.reasonTextActive]}>{r.label}</Text>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
@@ -216,16 +248,26 @@ export default function ReportIssueScreen() {
                       onPress={() => itemId && toggleItem(itemId)}
                       disabled={!itemId}
                       accessibilityRole="checkbox"
+                      accessibilityLabel={`${it.quantity}× ${it.name}`}
                       accessibilityState={{ checked: sel }}
+                      android_ripple={itemId ? { color: ROW_RIPPLE, borderless: false } : undefined}
                     >
-                      <View style={[styles.itemRow, i === items.length - 1 && styles.itemRowLast]}>
-                        <View style={[styles.checkbox, sel && styles.checkboxOn]}>
-                          {sel ? <Check size={14} color={customerColors.canvas} strokeWidth={3} /> : null}
+                      {({ pressed }) => (
+                        <View
+                          style={[
+                            styles.itemRow,
+                            i === items.length - 1 && styles.itemRowLast,
+                            pressed && Platform.OS === 'ios' && styles.itemRowPressed,
+                          ]}
+                        >
+                          <View style={[styles.checkbox, sel && styles.checkboxOn]}>
+                            {sel ? <Check size={14} color={customerColors.canvas} strokeWidth={3} /> : null}
+                          </View>
+                          <Text style={styles.itemName} numberOfLines={1}>
+                            {it.quantity}× {it.name}
+                          </Text>
                         </View>
-                        <Text style={styles.itemName} numberOfLines={1}>
-                          {it.quantity}× {it.name}
-                        </Text>
-                      </View>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -253,39 +295,70 @@ export default function ReportIssueScreen() {
                 onPress={() => removePhoto(uri)}
                 accessibilityRole="button"
                 accessibilityLabel="Remove photo"
+                android_ripple={{ color: ROW_RIPPLE, borderless: true, radius: 40 }}
               >
-                <View>
-                  <Image source={{ uri }} style={styles.photoThumb} />
-                  <View style={styles.photoRemove}>
-                    <Text style={styles.photoRemoveText}>×</Text>
+                {({ pressed }) => (
+                  <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.7 } : undefined}>
+                    <Image source={{ uri }} style={styles.photoThumb} />
+                    <View style={styles.photoRemove}>
+                      <Text style={styles.photoRemoveText}>×</Text>
+                    </View>
                   </View>
-                </View>
+                )}
               </Pressable>
             ))}
             {photoUris.length < MAX_PHOTOS ? (
-              <Pressable onPress={pickPhoto} accessibilityRole="button" accessibilityLabel="Add a photo">
-                <View style={styles.photoAddSquare}>
-                  <Camera size={22} color={customerColors.charcoal.soft} />
-                </View>
+              <Pressable
+                onPress={pickPhoto}
+                accessibilityRole="button"
+                accessibilityLabel="Add a photo"
+                android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+              >
+                {({ pressed }) => (
+                  <View
+                    style={[
+                      styles.photoAddSquare,
+                      pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                    ]}
+                  >
+                    <Camera size={22} color={customerColors.charcoal.soft} />
+                  </View>
+                )}
               </Pressable>
             ) : null}
           </View>
 
-          <Pressable onPress={submit} disabled={!reason || report.isPending} accessibilityRole="button" accessibilityLabel="Submit report">
-            <View style={[styles.submit, (!reason || report.isPending) && styles.submitDisabled]}>
-              {report.isPending ? (
-                <ActivityIndicator color={customerColors.canvas} />
-              ) : (
-                <Text
-                  style={[
-                    styles.submitText,
-                    !reason && styles.submitTextDisabled,
-                  ]}
-                >
-                  Submit report
-                </Text>
-              )}
-            </View>
+          <Pressable
+            onPress={submit}
+            disabled={!reason || report.isPending}
+            accessibilityRole="button"
+            accessibilityLabel="Submit report"
+            android_ripple={
+              !reason || report.isPending ? undefined : { color: CTA_RIPPLE, borderless: false }
+            }
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.submit,
+                  (!reason || report.isPending) && styles.submitDisabled,
+                  pressed && Platform.OS === 'ios' && !!reason && !report.isPending && styles.submitPressed,
+                ]}
+              >
+                {report.isPending ? (
+                  <ActivityIndicator color={customerColors.canvas} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.submitText,
+                      !reason && styles.submitTextDisabled,
+                    ]}
+                  >
+                    Submit report
+                  </Text>
+                )}
+              </View>
+            )}
           </Pressable>
         </KeyboardAwareScrollView>
       )}
@@ -303,6 +376,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   headerTitle: { fontFamily: 'Geist-Bold', fontSize: 20, color: customerColors.charcoal.DEFAULT },
+  iconPressed: { opacity: 0.6 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { padding: 16, paddingBottom: 40, gap: 8 },
 
@@ -314,15 +388,19 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   reasonWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  // R5 — 44pt min touch height, content-sized width (R3, no truncation).
   reasonChip: {
     borderWidth: 1,
     borderColor: customerColors.hairline,
     borderRadius: 9999,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: customerColors.canvas,
   },
   reasonChipActive: { borderColor: customerColors.coral.DEFAULT, backgroundColor: customerColors.coral.tint },
+  reasonChipPressed: { opacity: 0.7 },
   reasonText: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT },
   reasonTextActive: { color: customerColors.coral.pressed, fontFamily: 'Inter-SemiBold' },
 
@@ -335,6 +413,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: customerColors.hairline,
   },
+  itemRowPressed: { opacity: 0.6 },
   itemRowLast: { borderBottomWidth: 0 },
   checkbox: {
     width: 22,
@@ -385,14 +464,16 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.canvas,
   },
 
+  // Spec §3 primary button: radius 8, 52pt min-height.
   submit: {
     marginTop: 20,
     backgroundColor: customerColors.coral.DEFAULT,
-    borderRadius: 12,
+    borderRadius: 8,
     minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  submitPressed: { backgroundColor: customerColors.coral.pressed },
   submitDisabled: { backgroundColor: customerColors.surface.soft, borderWidth: 1, borderColor: customerColors.hairline },
   submitText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.canvas },
   // Disabled (no reason picked) uses the light surface bg, so the white label is

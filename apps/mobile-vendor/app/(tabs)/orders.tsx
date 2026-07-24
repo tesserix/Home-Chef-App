@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -131,7 +132,7 @@ function dateBucketFor(iso: string): string {
 
 function NewTab() {
   const { t } = useTranslation();
-  const { data, isLoading, refetch } = useVendorPendingOrders();
+  const { data, isLoading, isError, refetch } = useVendorPendingOrders();
   const { triggerAction, handleUndo, pendingUndo, isLoading: actionLoading } =
     useOrderAction();
   const orders = data?.orders ?? [];
@@ -162,6 +163,10 @@ function NewTab() {
         />
       </View>
     );
+  }
+
+  if (isError) {
+    return <ErrorRetry onRetry={() => refetch()} />;
   }
 
   return (
@@ -218,6 +223,35 @@ function NewEmpty() {
   );
 }
 
+// ----- R8 retry error state (shared by all three tabs) -----------------------
+// Every list screen needs a distinct error state — without it, a failed fetch
+// silently fell through to the empty-state copy ("Queue is clear!" on a
+// network error reads as reassurance, not a problem to retry).
+interface ErrorRetryProps {
+  onRetry: () => void;
+}
+
+function ErrorRetry({ onRetry }: ErrorRetryProps) {
+  return (
+    <View style={styles.emptyBlock}>
+      <Text style={styles.emptyHeadline}>Couldn't load orders</Text>
+      <Text style={styles.emptyBody}>Check your connection and try again.</Text>
+      <Pressable
+        onPress={onRetry}
+        accessibilityRole="button"
+        accessibilityLabel="Retry loading orders"
+        android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+      >
+        {({ pressed }) => (
+          <View style={[styles.retryBtn, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}>
+            <Text style={styles.retryLabel}>Retry</Text>
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 // ----- Active tab (the kitchen queue) ---------------------------------------
 
 function ActiveEmpty() {
@@ -231,7 +265,7 @@ function ActiveEmpty() {
 }
 
 function ActiveOrdersTab() {
-  const { data, isLoading, refetch } = useVendorDashboard();
+  const { data, isLoading, isError, refetch } = useVendorDashboard();
   const updateStatus = useUpdateOrderStatus();
   const dockClearance = useDockClearance();
 
@@ -258,6 +292,10 @@ function ActiveOrdersTab() {
     );
   }
 
+  if (isError) {
+    return <ErrorRetry onRetry={() => refetch()} />;
+  }
+
   return (
     <FlatList<ActiveOrderCardOrder>
       data={orders as ActiveOrderCardOrder[]}
@@ -271,6 +309,7 @@ function ActiveOrdersTab() {
         />
       }
       ListEmptyComponent={<ActiveEmpty />}
+      ItemSeparatorComponent={() => <View style={{ height: theme.spacing[2] }} />}
       renderItem={({ item }) => (
         <ActiveOrderCard
           order={item}
@@ -301,7 +340,7 @@ interface HistoryListItem {
 function HistoryTab() {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
-  const { data, isLoading, refetch } = useVendorOrderHistory(page);
+  const { data, isLoading, isError, refetch } = useVendorOrderHistory(page);
 
   // Filter to past/terminal statuses only — live orders belong to the Active
   // tab. Client-side filter avoids an extra API parameter.
@@ -355,6 +394,10 @@ function HistoryTab() {
         <Skeleton height={56} />
       </View>
     );
+  }
+
+  if (isError) {
+    return <ErrorRetry onRetry={() => refetch()} />;
   }
 
   return (
@@ -439,13 +482,14 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
           onPress={() => router.push(`/orders/${order.id}`)}
           accessibilityRole="button"
           accessibilityLabel={`Open order details for ${order.customerName}`}
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
         >
           {({ pressed }) => (
             // Inner-View pattern — keeps flex layout under iOS Pressable bug.
             <View
               style={[
                 historyRowStyles.root,
-                pressed && { backgroundColor: theme.colors.bone },
+                pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
               ]}
             >
               <View
@@ -493,6 +537,9 @@ function TabLabel({ label, badge, active, onPress }: TabLabelProps) {
       style={tabStyles.root}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={badge ? `${label}, ${badge}` : label}
+      hitSlop={7}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {/* Inner-View pattern — visual styles live on View to dodge iOS
           function-style style drop. */}
@@ -659,6 +706,23 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.soft,
     lineHeight: 20,
     maxWidth: 320,
+    marginBottom: theme.spacing[4],
+  },
+
+  // R8 retry error state
+  retryBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[6],
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.paper,
   },
 });
 
@@ -761,6 +825,7 @@ const historyRowStyles = StyleSheet.create({
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: 1,
+    fontVariant: ['tabular-nums'],
   },
   total: {
     fontFamily: 'Geist-Bold',

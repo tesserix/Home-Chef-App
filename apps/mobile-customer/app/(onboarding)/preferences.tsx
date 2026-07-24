@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   View,
   Text,
+  Platform,
   Pressable,
   ScrollView,
   Alert,
@@ -25,6 +26,11 @@ const CUISINE_OPTIONS = [
   'Street Food',
   'Desserts',
 ] as const;
+
+// Android ripple tints — translucent tokens derived from existing colours,
+// never a new literal colour (matches the ChefCard `withAlpha` convention).
+const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CTA_RIPPLE = `${customerColors.canvas}33`;
 
 export default function PreferencesScreen() {
   const draft = useCustomerOnboardingStore();
@@ -120,22 +126,26 @@ export default function PreferencesScreen() {
                 accessibilityRole="checkbox"
                 accessibilityLabel={cuisine}
                 accessibilityState={{ checked: isActive }}
+                android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
               >
-                <View
-                  className={`px-4 py-2 rounded-full border ${
-                    isActive
-                      ? 'bg-coral-tint border-coral'
-                      : 'bg-canvas border-hairline'
-                  }`}
-                >
-                  <Text
-                    className={`text-sm font-medium ${
-                      isActive ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                {({ pressed }) => (
+                  <View
+                    className={`px-4 py-2 rounded-full border ${
+                      isActive
+                        ? 'bg-coral-tint border-coral'
+                        : 'bg-canvas border-hairline'
                     }`}
+                    style={pressed && Platform.OS === 'ios' ? { opacity: 0.7 } : undefined}
                   >
-                    {cuisine}
-                  </Text>
-                </View>
+                    <Text
+                      className={`text-sm font-medium ${
+                        isActive ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                      }`}
+                    >
+                      {cuisine}
+                    </Text>
+                  </View>
+                )}
               </Pressable>
             );
           })}
@@ -147,6 +157,7 @@ export default function PreferencesScreen() {
           disabled={isSubmitting}
           accessibilityRole="button"
           accessibilityLabel="Finish setup"
+          android_ripple={{ color: CTA_RIPPLE, borderless: false }}
         >
           {({ pressed }) => (
             <View

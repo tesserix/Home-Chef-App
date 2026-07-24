@@ -4,12 +4,15 @@
 
 import {
   Alert,
+  Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Clock, Timer, MapPin } from 'lucide-react-native';
@@ -57,6 +60,13 @@ export default function OperationsScreen() {
     operations.offersSelfDelivery,
   );
 
+  // R14 — scroll the section with the validation problem into view instead
+  // of leaving the alert as the only signal. OnboardingScaffold owns the
+  // ScrollView, so we forward a ref into it via its `scrollRef` prop.
+  const scrollRef = useRef<ScrollView>(null);
+  const fulfillmentFieldY = useRef(0);
+  const radiusFieldY = useRef(0);
+
   function updateDay(day: Day, field: 'open' | 'close', value: string): void {
     setHours((prev) => ({
       ...prev,
@@ -75,12 +85,14 @@ export default function OperationsScreen() {
     // At least one fulfillment method — a kitchen offering neither can't be
     // activated by admin, so block it here with a clear reason instead.
     if (!offersPickup && !offersSelfDelivery) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, fulfillmentFieldY.current - 16), animated: true });
       Alert.alert(t('onboarding.validationError'), t('onboarding.fulfillmentError'));
       return;
     }
     // Radius only matters when the chef self-delivers.
     const radius = parseInt(serviceRadius, 10);
     if (offersSelfDelivery && (Number.isNaN(radius) || radius < 1 || radius > 50)) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, radiusFieldY.current - 16), animated: true });
       Alert.alert(t('onboarding.validationError'), t('onboarding.radiusError'));
       return;
     }
@@ -104,6 +116,7 @@ export default function OperationsScreen() {
       subtitle={t('onboarding.operationsSubtitle')}
       primaryLabel={t('onboarding.continue')}
       onPrimary={onNext}
+      scrollRef={scrollRef}
     >
       {/* ── WHEN YOU COOK ──────────────────────────────────────── */}
       <View style={styles.sectionLabel}>
@@ -190,18 +203,33 @@ export default function OperationsScreen() {
         {PREP_TIME_OPTIONS.map((option) => {
           const selected = prepTime === option;
           return (
-            <View
+            <Pressable
               key={option}
-              style={[styles.chip, selected && styles.chipActive]}
+              onPress={() => setPrepTime(option)}
+              accessibilityRole="button"
+              accessibilityLabel={option}
+              accessibilityState={{ selected }}
+              android_ripple={{
+                color: selected
+                  ? `${theme.colors.paper}30`
+                  : `${theme.colors.ink.DEFAULT}14`,
+                borderless: false,
+              }}
             >
-              <Text
-                style={[styles.chipLabel, selected && styles.chipLabelActive]}
-                onPress={() => setPrepTime(option)}
-                suppressHighlighting
-              >
-                {option}
-              </Text>
-            </View>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.chip,
+                    selected && styles.chipActive,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.75 },
+                  ]}
+                >
+                  <Text style={[styles.chipLabel, selected && styles.chipLabelActive]}>
+                    {option}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
           );
         })}
       </View>
@@ -217,7 +245,12 @@ export default function OperationsScreen() {
         <Text style={styles.hintText}>{t('onboarding.fulfillmentHint')}</Text>
       </View>
 
-      <View style={styles.fieldCard}>
+      <View
+        style={styles.fieldCard}
+        onLayout={(e) => {
+          fulfillmentFieldY.current = e.nativeEvent.layout.y;
+        }}
+      >
         <View style={styles.fulfillRow}>
           <View style={styles.fulfillText}>
             <Text style={styles.fulfillTitle}>{t('onboarding.pickupTitle')}</Text>
@@ -257,7 +290,12 @@ export default function OperationsScreen() {
             <MapPin size={12} color={theme.colors.ink.muted} strokeWidth={2} />
             <Text style={styles.sectionLabelText}>{t('onboarding.deliveryArea')}</Text>
           </View>
-          <View style={styles.fieldCard}>
+          <View
+            style={styles.fieldCard}
+            onLayout={(e) => {
+              radiusFieldY.current = e.nativeEvent.layout.y;
+            }}
+          >
             <Input
               label={t('onboarding.serviceRadius')}
               placeholder={t('onboarding.serviceRadiusPlaceholder')}

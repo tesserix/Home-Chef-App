@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -18,7 +19,7 @@ import { router } from 'expo-router';
 import { z } from 'zod';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronRight, UtensilsCrossed } from 'lucide-react-native';
+import { AlertCircle, ChevronRight, UtensilsCrossed } from 'lucide-react-native';
 import { ScreenHeader } from '../components/ScreenHeader';
 import {
   useCateringRequests,
@@ -29,6 +30,12 @@ import { friendlyErrorMessage } from '../lib/errors';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const CARD_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
+const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const TAB_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CANVAS_RIPPLE = `${customerColors.canvas}33`;
 
 // Threat model T-02-05-02: Zod validates required fields before POST
 const cateringSchema = z.object({
@@ -161,41 +168,93 @@ function RequestCard({ request }: { request: CateringRequest }) {
         onPress={() => router.push(`/catering/${request.id}` as never)}
         accessibilityRole="button"
         accessibilityLabel={`${request.eventType} catering request — view details`}
+        android_ripple={{ color: CARD_RIPPLE, borderless: false }}
       >
-        <View className="bg-canvas rounded-xl overflow-hidden">
-          <View className="p-4">
-            {/* Header row: event type + status chip */}
-            <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-base font-bold text-charcoal font-display flex-1 mr-2">
-                {request.eventType}
-              </Text>
-              <View className="rounded-full px-3 py-1" style={{ backgroundColor: bg }}>
-                <Text className="text-xs font-semibold" style={{ color: text }}>
-                  {label}
+        {({ pressed }) => (
+          <View
+            className={`rounded-xl overflow-hidden ${
+              pressed && Platform.OS === 'ios' ? 'bg-surface-soft' : 'bg-canvas'
+            }`}
+          >
+            <View className="p-4">
+              {/* Header row: event type + status chip */}
+              <View className="flex-row items-center justify-between mb-2">
+                <Text className="text-base font-bold text-charcoal font-display flex-1 mr-2">
+                  {request.eventType}
                 </Text>
+                <View className="rounded-full px-3 py-1" style={{ backgroundColor: bg }}>
+                  <Text className="text-xs font-semibold" style={{ color: text }}>
+                    {label}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Meta info — tabular guest count */}
+              <Text className="text-sm text-charcoal-soft" style={{ fontVariant: ['tabular-nums'] }}>
+                {request.guestCount} guests · {eventDate} · {request.city}, {request.state}
+              </Text>
+
+              {/* Budget — tabular numerals (R6) */}
+              {request.budget != null ? (
+                <Text className="text-sm text-charcoal mt-1" style={{ fontVariant: ['tabular-nums'] }}>
+                  Budget: ₹{request.budget.toLocaleString('en-IN')}
+                </Text>
+              ) : null}
+
+              {/* Status hint + chevron */}
+              <View className="flex-row items-center justify-between mt-2">
+                {hint ? (
+                  <Text className="text-xs text-coral font-medium flex-1">{hint}</Text>
+                ) : (
+                  <Text className="text-xs text-charcoal-soft flex-1">Tap to view details</Text>
+                )}
+                <ChevronRight size={16} color={customerColors.charcoal.soft} />
               </View>
             </View>
-
-            {/* Meta info */}
-            <Text className="text-sm text-charcoal-soft">
-              {request.guestCount} guests · {eventDate} · {request.city}, {request.state}
-            </Text>
-
-            {/* Budget */}
-            {request.budget != null ? (
-              <Text className="text-sm text-charcoal mt-1">Budget: ₹{request.budget}</Text>
-            ) : null}
-
-            {/* Status hint + chevron */}
-            <View className="flex-row items-center justify-between mt-2">
-              {hint ? (
-                <Text className="text-xs text-coral font-medium flex-1">{hint}</Text>
-              ) : (
-                <Text className="text-xs text-charcoal-soft flex-1">Tap to view details</Text>
-              )}
-              <ChevronRight size={16} color={customerColors.charcoal.soft} />
-            </View>
           </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── Loading skeleton — matches RequestCard proportions (R8) ─────────────────
+
+function SkeletonRequestCard() {
+  return (
+    <View className="bg-canvas rounded-xl border border-hairline overflow-hidden mb-3 p-4">
+      <View className="flex-row items-center justify-between mb-2">
+        <View className="h-4 rounded bg-hairline" style={{ width: '45%' }} />
+        <View className="h-5 rounded-full bg-surface-soft" style={{ width: 64 }} />
+      </View>
+      <View className="h-3 rounded bg-hairline mt-1" style={{ width: '70%' }} />
+      <View className="h-3 rounded bg-hairline mt-2" style={{ width: '40%' }} />
+    </View>
+  );
+}
+
+// ─── Error state (R8) ─────────────────────────────────────────────────────────
+
+function RequestsErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View className="flex-1 items-center justify-center px-8 gap-4 pt-20">
+      <View className="w-16 h-16 rounded-full bg-surface-soft items-center justify-center">
+        <AlertCircle size={28} color={customerColors.charcoal.soft} />
+      </View>
+      <Text className="text-lg font-semibold text-charcoal text-center font-display">
+        Something went wrong
+      </Text>
+      <Text className="text-sm text-charcoal-soft text-center">
+        We could not load your catering requests. Please try again.
+      </Text>
+      <Pressable
+        onPress={onRetry}
+        accessibilityRole="button"
+        accessibilityLabel="Retry loading catering requests"
+        android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
+      >
+        <View className="bg-coral rounded-lg px-6 py-3 min-h-[44px] items-center justify-center">
+          <Text className="text-canvas font-semibold text-sm">Try again</Text>
         </View>
       </Pressable>
     </View>
@@ -269,9 +328,10 @@ function ChipGroup({
             accessibilityRole="button"
             accessibilityLabel={opt}
             accessibilityState={{ selected: isSelected }}
+            android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
           >
             <View
-              className={`px-3 py-2 rounded-full border ${
+              className={`px-3 py-2 rounded-full border min-h-[44px] items-center justify-center ${
                 isSelected ? 'bg-coral-tint border-coral' : 'bg-canvas border-hairline'
               }`}
             >
@@ -448,9 +508,10 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
               accessibilityRole="button"
               accessibilityLabel={t}
               accessibilityState={{ selected: isSelected }}
+              android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
             >
               <View
-                className={`px-4 py-2 rounded-full border ${
+                className={`px-4 py-2 rounded-full border min-h-[44px] items-center justify-center ${
                   isSelected
                     ? 'bg-coral-tint border-coral'
                     : 'bg-canvas border-hairline'
@@ -690,6 +751,7 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
         disabled={createRequest.isPending}
         accessibilityRole="button"
         accessibilityLabel="Submit catering request"
+        android_ripple={createRequest.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
       >
         {({ pressed }) => (
           <View
@@ -715,7 +777,7 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
 
 export default function CateringScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('request');
-  const { data, isLoading, refetch } = useCateringRequests();
+  const { data, isLoading, isError, refetch } = useCateringRequests();
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
@@ -732,6 +794,7 @@ export default function CateringScreen() {
           accessibilityRole="tab"
           accessibilityLabel="Request Catering"
           accessibilityState={{ selected: activeTab === 'request' }}
+          android_ripple={{ color: TAB_RIPPLE, borderless: false }}
         >
           <View
             className={`flex-1 py-2 items-center rounded-md ${
@@ -771,6 +834,7 @@ export default function CateringScreen() {
           accessibilityRole="tab"
           accessibilityLabel="My Requests"
           accessibilityState={{ selected: activeTab === 'my-requests' }}
+          android_ripple={{ color: TAB_RIPPLE, borderless: false }}
         >
           <View
             className={`flex-1 py-2 items-center rounded-md ${
@@ -805,9 +869,13 @@ export default function CateringScreen() {
       {activeTab === 'request' ? (
         <RequestForm onSuccess={() => setActiveTab('my-requests')} />
       ) : isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
+        <View className="px-4 pt-1">
+          <SkeletonRequestCard />
+          <SkeletonRequestCard />
+          <SkeletonRequestCard />
         </View>
+      ) : isError ? (
+        <RequestsErrorState onRetry={() => void refetch()} />
       ) : (
         <FlatList<CateringRequest>
           data={data?.data ?? []}

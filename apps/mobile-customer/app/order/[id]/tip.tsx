@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -17,6 +18,11 @@ import { useCreateTip } from '../../../hooks/useTip';
 import { friendlyErrorMessage } from '../../../lib/errors';
 
 const PRESETS = [20, 50, 100];
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const BACK_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CHIP_RIPPLE = `${customerColors.coral.DEFAULT}1F`;
+const CTA_RIPPLE = `${customerColors.canvas}33`;
 
 // Post-delivery tip screen (#45): pick an amount for the chef and/or rider;
 // 100% pass-through. Creates the charge then opens the shared Razorpay sheet.
@@ -56,8 +62,18 @@ export default function TipScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
-          <ChevronLeft size={24} color={customerColors.charcoal.DEFAULT} />
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: BACK_RIPPLE, borderless: true, radius: 20 }}
+        >
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' ? styles.iconPressed : undefined}>
+              <ChevronLeft size={24} color={customerColors.charcoal.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.title}>Add a tip</Text>
         <View style={{ width: 24 }} />
@@ -91,14 +107,30 @@ export default function TipScreen() {
           onPress={send}
           disabled={total < 1 || createTip.isPending}
           accessibilityRole="button"
+          accessibilityLabel={total < 1 ? 'Choose a tip amount' : `Tip ₹${total}`}
+          android_ripple={
+            total < 1 || createTip.isPending ? undefined : { color: CTA_RIPPLE, borderless: false }
+          }
         >
-          <View style={[styles.cta, (total < 1 || createTip.isPending) && styles.ctaDisabled]}>
-            {createTip.isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.ctaText}>{total < 1 ? 'Choose an amount' : `Tip ₹${total}`}</Text>
-            )}
-          </View>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.cta,
+                (total < 1 || createTip.isPending) && styles.ctaDisabled,
+                pressed &&
+                  Platform.OS === 'ios' &&
+                  total >= 1 &&
+                  !createTip.isPending &&
+                  styles.ctaPressed,
+              ]}
+            >
+              {createTip.isPending ? (
+                <ActivityIndicator color={customerColors.canvas} />
+              ) : (
+                <Text style={styles.ctaText}>{total < 1 ? 'Choose an amount' : `Tip ₹${total}`}</Text>
+              )}
+            </View>
+          )}
         </Pressable>
       </View>
     </SafeAreaView>
@@ -150,10 +182,24 @@ function Chip({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: active }}>
-      <View style={[styles.chip, active && styles.chipActive]}>
-        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-      </View>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.chip,
+            active && styles.chipActive,
+            pressed && Platform.OS === 'ios' && styles.chipPressed,
+          ]}
+        >
+          <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -168,6 +214,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   title: { fontFamily: 'Inter-SemiBold', fontSize: 18, color: customerColors.charcoal.DEFAULT },
+  iconPressed: { opacity: 0.6 },
   scroll: { padding: 16, paddingBottom: 24 },
   intro: {
     fontFamily: 'Inter',
@@ -192,15 +239,24 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  // R3 chip: content-sized (no fixed width) + R5 44pt min touch height.
   chip: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 999,
     borderWidth: 1,
     borderColor: customerColors.hairline,
   },
   chipActive: { backgroundColor: customerColors.coral.tint, borderColor: customerColors.coral.DEFAULT },
-  chipText: { fontFamily: 'Inter-Medium', fontSize: 14, color: customerColors.charcoal.DEFAULT },
+  chipPressed: { opacity: 0.7 },
+  chipText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
   chipTextActive: { color: customerColors.coral.DEFAULT },
   custom: {
     marginTop: 12,
@@ -226,14 +282,21 @@ const styles = StyleSheet.create({
   },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   totalLabel: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft },
-  totalValue: { fontFamily: 'Inter-SemiBold', fontSize: 20, color: customerColors.charcoal.DEFAULT },
+  totalValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 20,
+    color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  // Spec §3 primary button: radius 8, 52pt min-height.
   cta: {
     height: 52,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: customerColors.coral.DEFAULT,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  ctaPressed: { backgroundColor: customerColors.coral.pressed },
   ctaDisabled: { backgroundColor: customerColors.charcoal.soft, opacity: 0.5 },
-  ctaText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: '#fff' },
+  ctaText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.canvas, fontVariant: ['tabular-nums'] },
 });

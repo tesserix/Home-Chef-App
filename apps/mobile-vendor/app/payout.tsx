@@ -1,13 +1,14 @@
 /**
- * PayoutScreen — chef payout details (bank transfer or UPI).
+ * PayoutScreen — chef payout details (bank transfer only).
  *
  * Backend exposes GET /chef/payout and POST /chef/payout. GET returns the
- * currently selected method plus masked values for already-saved fields.
- * POST validates the chosen method's required inputs and stores sensitive
- * fields in GCP Secret Manager (so server-side reads are masked too).
+ * currently saved method plus masked values for already-saved fields. POST
+ * validates the bank details and stores sensitive fields in GCP Secret Manager
+ * (so server-side reads are masked too).
  *
- * UX: a method toggle (Bank / UPI) drives which fields render. Saving
- * confirms via toast and pops back to Earnings.
+ * UPI is not an accepted payout method (#767): Razorpay Route settles by
+ * NEFT/IMPS to a bank account and has no VPA destination, so a chef who
+ * nominated UPI could never be paid. Only bank transfer is offered.
  */
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -33,7 +34,7 @@ import { api } from '../lib/api';
 
 // ---- Data types -----------------------------------------------------------
 
-type PayoutMethod = 'bank_transfer' | 'upi';
+type PayoutMethod = 'bank_transfer';
 
 interface PayoutDetailsResponse {
   payoutMethod: string;
@@ -52,7 +53,6 @@ interface SavePayoutPayload {
   bankAccountNumber?: string;
   bankIFSC?: string;
   bankAccountName?: string;
-  upiId?: string;
 }
 
 function usePayoutDetails() {
@@ -62,6 +62,31 @@ function usePayoutDetails() {
       api.get<PayoutDetailsResponse>('/chef/payout').then((r) => r.data),
     staleTime: 30_000,
   });
+}
+
+// Settlement status chip (UI-V2-SPEC §2) — the bank card already carries
+// `razorpayConnected` from GET /chef/payout (whether the Route linked
+// account is live), it just wasn't surfaced. Connected is operational-
+// positive (vendor reconciliation → success green); not-yet-connected reads
+// as pending, not an error, so it gets the amber tint.
+interface SettlementChip {
+  label: string;
+  bg: string;
+  fg: string;
+}
+
+function settlementChipMeta(connected: boolean): SettlementChip {
+  return connected
+    ? {
+        label: 'Connected · ready for payouts',
+        bg: theme.colors.success.tint,
+        fg: theme.colors.success.soft,
+      }
+    : {
+        label: 'Activation pending',
+        bg: theme.colors.amber.tint,
+        fg: theme.colors.ink.DEFAULT,
+      };
 }
 
 function useSavePayout() {
@@ -75,62 +100,6 @@ function useSavePayout() {
 }
 
 // ---- Sub-components -------------------------------------------------------
-
-interface MethodTabProps {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}
-
-// Segment of the iOS-style segmented control (spec §5): mist track,
-// active segment = paper pill with shadow[1]. Visual styles live on the
-// inner View (iOS Pressable inner-View pattern).
-function MethodTab({ label, active, onPress }: MethodTabProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      accessibilityRole="radio"
-      accessibilityState={{ checked: active }}
-      style={tabStyles.pressable}
-    >
-      {({ pressed }) => (
-        <View
-          style={[
-            tabStyles.segment,
-            active && tabStyles.segmentActive,
-            pressed && !active && { opacity: 0.7 },
-          ]}
-        >
-          <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
-            {label}
-          </Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}
-
-const tabStyles = StyleSheet.create({
-  pressable: { flex: 1 },
-  segment: {
-    minHeight: 34,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: theme.spacing[2],
-  },
-  segmentActive: {
-    backgroundColor: theme.colors.paper,
-    ...theme.shadow[1],
-  },
-  label: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.muted,
-  },
-  labelActive: { color: theme.colors.ink.DEFAULT },
-});
 
 interface FieldProps {
   label: string;
@@ -186,7 +155,6 @@ export default function PayoutScreen() {
   const [bankAccountName, setBankAccountName] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [bankIFSC, setBankIFSC] = useState('');
-  const [upiId, setUpiId] = useState('');
 
   // Track whether a successful save has already cleared the dirty state so
   // the back handler doesn't re-prompt after the toast confirms success.
@@ -194,8 +162,8 @@ export default function PayoutScreen() {
 
   useEffect(() => {
     if (!data) return;
-    if (data.payoutMethod === 'upi') setMethod('upi');
-    else setMethod('bank_transfer');
+    // UPI is no longer accepted (#767) — the editable form is always bank transfer.
+    setMethod('bank_transfer');
     // Pre-fill the non-sensitive fields so the chef sees what's saved
     // and doesn't have to retype to make a small change. The masked
     // account number / UPI ID intentionally stay blank — those are
@@ -211,9 +179,7 @@ export default function PayoutScreen() {
   // Dirty against the un-pre-filled sensitive fields (the chef typed them
   // in this session) plus a possible method change. If anything is in
   // flight, back prompts to save or discard.
-  const hasUnsavedSensitive =
-    (method === 'bank_transfer' && bankAccountNumber.trim() !== '') ||
-    (method === 'upi' && upiId.trim() !== '');
+  const hasUnsavedSensitive = bankAccountNumber.trim() !== '';
   const methodChanged = data && data.payoutMethod !== method;
   const isDirty = !savedRef.current && (hasUnsavedSensitive || Boolean(methodChanged));
 
@@ -239,29 +205,20 @@ export default function PayoutScreen() {
   }
 
   function handleSave(): void {
-    if (method === 'bank_transfer') {
-      if (!bankAccountName.trim() || !bankAccountNumber.trim() || !bankIFSC.trim()) {
-        Alert.alert(
-          'Bank details required',
-          'Enter account name, number, and IFSC to save bank transfer payout.',
-        );
-        return;
-      }
-    } else {
-      if (!upiId.trim()) {
-        Alert.alert('UPI ID required', 'Enter your UPI ID (e.g. name@bank).');
-        return;
-      }
+    if (!bankAccountName.trim() || !bankAccountNumber.trim() || !bankIFSC.trim()) {
+      Alert.alert(
+        'Bank details required',
+        'Enter account name, number, and IFSC to save your payout.',
+      );
+      return;
     }
 
-    const payload: SavePayoutPayload = { payoutMethod: method };
-    if (method === 'bank_transfer') {
-      payload.bankAccountName = bankAccountName.trim();
-      payload.bankAccountNumber = bankAccountNumber.trim();
-      payload.bankIFSC = bankIFSC.trim().toUpperCase();
-    } else {
-      payload.upiId = upiId.trim();
-    }
+    const payload: SavePayoutPayload = {
+      payoutMethod: 'bank_transfer',
+      bankAccountName: bankAccountName.trim(),
+      bankAccountNumber: bankAccountNumber.trim(),
+      bankIFSC: bankIFSC.trim().toUpperCase(),
+    };
 
     saveMutation.mutate(payload, {
       onSuccess: () => {
@@ -299,12 +256,20 @@ export default function PayoutScreen() {
           <Text style={styles.errorBody}>Failed to load payout details</Text>
           <Pressable
             onPress={() => refetch()}
-            style={({ pressed }) => [
-              styles.errorBtn,
-              pressed && { opacity: 0.85 },
-            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading payout details"
+            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
-            <Text style={styles.errorBtnLabel}>Retry</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.errorBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
+                <Text style={styles.errorBtnLabel}>Retry</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       </SafeAreaView>
@@ -329,90 +294,70 @@ export default function PayoutScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Currently-saved method summary */}
-          {data?.payoutMethod ? (
+          {data?.payoutMethod === 'bank_transfer' ? (
             <View style={styles.currentBanner}>
-              <Text style={styles.currentBannerLabel}>
-                Currently using{' '}
-                {data.payoutMethod === 'upi' ? 'UPI' : 'Bank transfer'}
-              </Text>
-              {data.payoutMethod === 'bank_transfer' && data.bankAccountNumber ? (
+              <View style={styles.currentBannerHeader}>
+                <Text style={styles.currentBannerLabel}>Currently using Bank transfer</Text>
+                {(() => {
+                  const chip = settlementChipMeta(Boolean(data.razorpayConnected));
+                  return (
+                    <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
+                      <Text style={[styles.statusChipLabel, { color: chip.fg }]}>
+                        {chip.label}
+                      </Text>
+                    </View>
+                  );
+                })()}
+              </View>
+              {data.bankAccountNumber ? (
                 <Text style={styles.currentBannerSub}>
                   {data.bankAccountName} · {data.bankAccountNumber}
                 </Text>
               ) : null}
-              {data.payoutMethod === 'upi' && data.upiId ? (
-                <Text style={styles.currentBannerSub}>{data.upiId}</Text>
-              ) : null}
+            </View>
+          ) : data?.payoutMethod ? (
+            // Legacy UPI row (#767): UPI can no longer be paid on Route — nudge
+            // the chef to add a bank account so they aren't silently unpayable.
+            <View style={styles.currentBanner}>
+              <Text style={styles.currentBannerLabel}>
+                UPI payouts are no longer supported
+              </Text>
+              <Text style={styles.currentBannerSub}>
+                Add your bank account below to keep receiving payouts.
+              </Text>
             </View>
           ) : null}
 
-          {/* Method segmented control (spec §5) */}
-          <Text style={styles.sectionLabel}>PAYOUT METHOD</Text>
-          <View style={styles.segmentTrack}>
-            <MethodTab
-              label="Bank transfer"
-              active={method === 'bank_transfer'}
-              onPress={() => setMethod('bank_transfer')}
+          {/* Bank account fields — UPI payouts are not supported (#767) */}
+          <Text style={styles.sectionLabel}>BANK ACCOUNT</Text>
+          <View style={styles.hairlineGroup}>
+            <Field
+              label="Account holder name"
+              value={bankAccountName}
+              onChangeText={setBankAccountName}
+              placeholder="Name as on bank records"
+              autoCapitalize="words"
             />
-            <MethodTab
-              label="UPI"
-              active={method === 'upi'}
-              onPress={() => setMethod('upi')}
+            <Field
+              label="Account number"
+              value={bankAccountNumber}
+              onChangeText={setBankAccountNumber}
+              placeholder="11–18 digit account number"
+              keyboardType="number-pad"
+            />
+            {data && (
+              <Text style={styles.reentryHelper}>(re-enter required)</Text>
+            )}
+            <Field
+              label="IFSC code"
+              value={bankIFSC}
+              onChangeText={setBankIFSC}
+              placeholder="HDFC0001234"
+              autoCapitalize="characters"
+              caption="11 characters · uppercase letters and numbers"
+              hasBorderBottom={false}
             />
           </View>
-
-          {/* Method-specific fields */}
-          {method === 'bank_transfer' ? (
-            <>
-              <Text style={styles.sectionLabel}>BANK ACCOUNT</Text>
-              <View style={styles.hairlineGroup}>
-                <Field
-                  label="Account holder name"
-                  value={bankAccountName}
-                  onChangeText={setBankAccountName}
-                  placeholder="Name as on bank records"
-                  autoCapitalize="words"
-                />
-                <Field
-                  label="Account number"
-                  value={bankAccountNumber}
-                  onChangeText={setBankAccountNumber}
-                  placeholder="11–18 digit account number"
-                  keyboardType="number-pad"
-                />
-                {data && (
-                  <Text style={styles.reentryHelper}>(re-enter required)</Text>
-                )}
-                <Field
-                  label="IFSC code"
-                  value={bankIFSC}
-                  onChangeText={setBankIFSC}
-                  placeholder="HDFC0001234"
-                  autoCapitalize="characters"
-                  caption="11 characters · uppercase letters and numbers"
-                  hasBorderBottom={false}
-                />
-              </View>
-            </>
-          ) : (
-            <>
-              <Text style={styles.sectionLabel}>UPI</Text>
-              <View style={styles.hairlineGroup}>
-                <Field
-                  label="UPI ID"
-                  value={upiId}
-                  onChangeText={setUpiId}
-                  placeholder="yourname@bank"
-                  keyboardType="email-address"
-                  caption="Example: 9876543210@upi or name@hdfcbank"
-                  hasBorderBottom={false}
-                />
-                {data && (
-                  <Text style={styles.reentryHelper}>(re-enter required)</Text>
-                )}
-              </View>
-            </>
-          )}
 
           <View style={styles.helperBlock}>
             <Text style={styles.helperHeadline}>How payouts work</Text>
@@ -429,18 +374,30 @@ export default function PayoutScreen() {
             <Pressable
               onPress={handleSave}
               disabled={saveMutation.isPending}
-              style={({ pressed }) => [
-                styles.saveBtn,
-                (pressed || saveMutation.isPending) && { opacity: 0.85 },
-              ]}
               accessibilityRole="button"
+              accessibilityLabel="Save payout details"
+              android_ripple={
+                saveMutation.isPending
+                  ? undefined
+                  : { color: `${theme.colors.paper}33`, borderless: false }
+              }
             >
-              {saveMutation.isPending ? (
-                <ActivityIndicator color={theme.colors.paper} />
-              ) : (
-                <Text style={styles.saveBtnLabel}>
-                  {isDirty ? 'Save changes' : 'Save payout details'}
-                </Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.saveBtn,
+                    (pressed || saveMutation.isPending) &&
+                      Platform.OS === 'ios' && { opacity: 0.85 },
+                  ]}
+                >
+                  {saveMutation.isPending ? (
+                    <ActivityIndicator color={theme.colors.paper} />
+                  ) : (
+                    <Text style={styles.saveBtnLabel}>
+                      {isDirty ? 'Save changes' : 'Save payout details'}
+                    </Text>
+                  )}
+                </View>
               )}
             </Pressable>
           </SafeAreaView>
@@ -464,9 +421,15 @@ function CommandBar({ onBack }: CommandBarProps) {
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="Go back"
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
       >
         {({ pressed }) => (
-          <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
+          <View
+            style={[
+              styles.backBtn,
+              pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+            ]}
+          >
             <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
           </View>
         )}
@@ -528,7 +491,14 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[4],
     ...theme.shadow[1],
   },
+  currentBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing[2],
+  },
   currentBannerLabel: {
+    flexShrink: 1,
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
@@ -538,6 +508,16 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     marginTop: 2,
+  },
+  // Settlement status pill (UI-V2-SPEC §2) — tint bg + colour-matched text.
+  statusChip: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+    borderRadius: theme.radius.full,
+  },
+  statusChipLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
   },
 
   // Section label
@@ -686,6 +666,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[6],
     paddingVertical: theme.spacing[3],
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorBtnLabel: {
     fontFamily: 'Inter-SemiBold',

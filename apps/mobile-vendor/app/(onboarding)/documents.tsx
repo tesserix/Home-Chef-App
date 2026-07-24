@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -381,14 +382,20 @@ export default function DocumentsScreen() {
             <Pressable
               onPress={() => removeDocument(docType)}
               hitSlop={8}
-              style={({ pressed }) => [
-                styles.removeBtn,
-                pressed && styles.removeBtnPressed,
-              ]}
               accessibilityLabel={`Remove ${title}`}
               accessibilityRole="button"
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}1F`, borderless: true }}
             >
-              <X size={14} color={theme.colors.ink.soft} strokeWidth={2.5} />
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.removeBtn,
+                    pressed && Platform.OS === 'ios' && styles.removeBtnPressed,
+                  ]}
+                >
+                  <X size={14} color={theme.colors.ink.soft} strokeWidth={2.5} />
+                </View>
+              )}
             </Pressable>
           </View>
 
@@ -411,11 +418,20 @@ export default function DocumentsScreen() {
           <View style={styles.replaceRow}>
             <Pressable
               onPress={() => handleGallery(docType)}
-              style={({ pressed }) => [styles.replaceBtn, pressed && { opacity: 0.7 }]}
               accessibilityRole="button"
               accessibilityLabel={`Replace ${title} with gallery photo`}
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
             >
-              <Text style={styles.replaceBtnLabel}>{t('onboarding.replace')}</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.replaceBtn,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={styles.replaceBtnLabel}>{t('onboarding.replace')}</Text>
+                </View>
+              )}
             </Pressable>
           </View>
         </View>
@@ -442,39 +458,57 @@ export default function DocumentsScreen() {
         <View style={styles.actionRow}>
           <Pressable
             onPress={() => handleCamera(docType)}
-            style={({ pressed }) => [
-              styles.actionBtnPrimary,
-              pressed && { opacity: 0.85 },
-            ]}
             accessibilityRole="button"
             accessibilityLabel={`Take photo for ${title}`}
+            android_ripple={{ color: `${theme.colors.paper}30`, borderless: false }}
           >
-            <Camera size={15} color={theme.colors.paper} strokeWidth={2} />
-            <Text style={styles.actionBtnPrimaryLabel}>{t('onboarding.camera')}</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.actionBtnPrimary,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
+                <Camera size={15} color={theme.colors.paper} strokeWidth={2} />
+                <Text style={styles.actionBtnPrimaryLabel}>{t('onboarding.camera')}</Text>
+              </View>
+            )}
           </Pressable>
           <Pressable
             onPress={() => handleGallery(docType)}
-            style={({ pressed }) => [
-              styles.actionBtnSecondary,
-              pressed && styles.actionBtnSecondaryPressed,
-            ]}
             accessibilityRole="button"
             accessibilityLabel={`Choose from gallery for ${title}`}
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
           >
-            <ImageIcon size={15} color={theme.colors.ink.soft} strokeWidth={2} />
-            <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.gallery')}</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.actionBtnSecondary,
+                  pressed && Platform.OS === 'ios' && styles.actionBtnSecondaryPressed,
+                ]}
+              >
+                <ImageIcon size={15} color={theme.colors.ink.soft} strokeWidth={2} />
+                <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.gallery')}</Text>
+              </View>
+            )}
           </Pressable>
           <Pressable
             onPress={() => handlePdf(docType)}
-            style={({ pressed }) => [
-              styles.actionBtnSecondary,
-              pressed && styles.actionBtnSecondaryPressed,
-            ]}
             accessibilityRole="button"
             accessibilityLabel={`Upload PDF for ${title}`}
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
           >
-            <FileText size={15} color={theme.colors.ink.soft} strokeWidth={2} />
-            <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.pdf')}</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.actionBtnSecondary,
+                  pressed && Platform.OS === 'ios' && styles.actionBtnSecondaryPressed,
+                ]}
+              >
+                <FileText size={15} color={theme.colors.ink.soft} strokeWidth={2} />
+                <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.pdf')}</Text>
+              </View>
+            )}
           </Pressable>
         </View>
 
@@ -672,14 +706,20 @@ export default function DocumentsScreen() {
                 <Pressable
                   onPress={() => removeKitchenMedia(m.url)}
                   hitSlop={8}
-                  style={({ pressed }) => [
-                    styles.kitchenThumbRemove,
-                    pressed && styles.removeBtnPressed,
-                  ]}
                   accessibilityRole="button"
                   accessibilityLabel={`Remove ${m.type}`}
+                  android_ripple={{ color: `${theme.colors.paper}30`, borderless: true }}
                 >
-                  <X size={12} color={theme.colors.paper} strokeWidth={2.5} />
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.kitchenThumbRemove,
+                        pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                      ]}
+                    >
+                      <X size={12} color={theme.colors.paper} strokeWidth={2.5} />
+                    </View>
+                  )}
                 </Pressable>
               </View>
             ))}
@@ -699,36 +739,57 @@ export default function DocumentsScreen() {
           <View style={styles.actionRow}>
             <Pressable
               onPress={handleKitchenPhoto}
-              style={({ pressed }) => [styles.actionBtnPrimary, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
               accessibilityLabel={t('onboarding.kitchenPhotoAction')}
+              android_ripple={{ color: `${theme.colors.paper}30`, borderless: false }}
             >
-              <Camera size={15} color={theme.colors.paper} strokeWidth={2} />
-              <Text style={styles.actionBtnPrimaryLabel}>{t('onboarding.kitchenPhotoAction')}</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.actionBtnPrimary,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                  ]}
+                >
+                  <Camera size={15} color={theme.colors.paper} strokeWidth={2} />
+                  <Text style={styles.actionBtnPrimaryLabel}>{t('onboarding.kitchenPhotoAction')}</Text>
+                </View>
+              )}
             </Pressable>
             <Pressable
               onPress={handleKitchenVideo}
-              style={({ pressed }) => [
-                styles.actionBtnSecondary,
-                pressed && styles.actionBtnSecondaryPressed,
-              ]}
               accessibilityRole="button"
               accessibilityLabel={t('onboarding.kitchenVideoAction')}
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
             >
-              <Video size={15} color={theme.colors.ink.soft} strokeWidth={2} />
-              <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.kitchenVideoAction')}</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.actionBtnSecondary,
+                    pressed && Platform.OS === 'ios' && styles.actionBtnSecondaryPressed,
+                  ]}
+                >
+                  <Video size={15} color={theme.colors.ink.soft} strokeWidth={2} />
+                  <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.kitchenVideoAction')}</Text>
+                </View>
+              )}
             </Pressable>
             <Pressable
               onPress={handleKitchenGallery}
-              style={({ pressed }) => [
-                styles.actionBtnSecondary,
-                pressed && styles.actionBtnSecondaryPressed,
-              ]}
               accessibilityRole="button"
               accessibilityLabel={t('onboarding.gallery')}
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
             >
-              <ImageIcon size={15} color={theme.colors.ink.soft} strokeWidth={2} />
-              <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.gallery')}</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.actionBtnSecondary,
+                    pressed && Platform.OS === 'ios' && styles.actionBtnSecondaryPressed,
+                  ]}
+                >
+                  <ImageIcon size={15} color={theme.colors.ink.soft} strokeWidth={2} />
+                  <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.gallery')}</Text>
+                </View>
+              )}
             </Pressable>
           </View>
         )}
@@ -889,7 +950,7 @@ const styles = StyleSheet.create({
     gap: 0,
   },
 
-  // Uploaded tile gets a hairline persimmon tint on the top edge
+  // Uploaded tile gets a hairline success-green top edge
   tileUploaded: {
     borderTopWidth: 2,
     borderTopColor: theme.colors.success.DEFAULT,
@@ -913,8 +974,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
+  // Operational-positive (uploaded) → functional success tint, not ink/persimmon.
   tileIconSuccess: {
-    backgroundColor: 'rgba(194, 65, 12, 0.08)',
+    backgroundColor: theme.colors.success.tint,
   },
 
   tileTitleGroup: {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   FadeInDown,
@@ -145,9 +145,10 @@ export function PendingOrderCard({
         accessibilityRole="button"
         accessibilityLabel={`Review order from ${order.customerName}, ₹${order.total.toFixed(0)}`}
         accessibilityHint="Opens the order to review and respond"
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.root, pressed && { opacity: 0.9 }]}>
+          <View style={[styles.root, pressed && Platform.OS === 'ios' && { opacity: 0.9 }]}>
             {topRowContent}
 
             {showInstructions && order.specialInstructions ? (
@@ -237,6 +238,7 @@ const styles = StyleSheet.create({
   ageChipLabel: {
     fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
+    fontVariant: ["tabular-nums"],
   },
   total: {
     fontFamily: "Geist-Bold",

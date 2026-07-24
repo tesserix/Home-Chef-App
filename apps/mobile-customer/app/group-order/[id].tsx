@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -13,7 +13,30 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, Minus, Plus, Share2, Users } from 'lucide-react-native';
-import { customerColors } from '@homechef/mobile-shared/theme';
+import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CANVAS_RIPPLE = `${customerColors.canvas}33`;
+const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
+const DESTRUCTIVE_RIPPLE = `${customerColors.destructive.DEFAULT}14`;
+
+// Status chip per spec §2.7 — tint bg + dark text of same family.
+// open (neutral) · locked/placed/confirmed (in-progress → coral) ·
+// delivered (success) · cancelled/expired (neutral).
+function statusChipStyle(status: string): { bg: string; text: string } {
+  switch (status) {
+    case 'delivered':
+      return { bg: customerColors.success.tint, text: customerColors.success.DEFAULT };
+    case 'cancelled':
+    case 'expired':
+      return { bg: customerColors.surface.soft, text: customerColors.charcoal.soft };
+    case 'open':
+      return { bg: customerColors.surface.soft, text: customerColors.charcoal.DEFAULT };
+    default:
+      return { bg: customerColors.coral.tint, text: customerColors.coral.pressed };
+  }
+}
 import {
   useAddGroupItem,
   useCancelGroup,
@@ -160,14 +183,26 @@ export default function GroupOrderHubScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: ICON_RIPPLE, borderless: true }}
+        >
           <ChevronLeft size={24} color={customerColors.charcoal.DEFAULT} />
         </Pressable>
         <Text style={styles.title} numberOfLines={1}>
           {g.title || (g.type === 'office' ? 'Office order' : 'Group order')}
         </Text>
         {isHost && open ? (
-          <Pressable onPress={share} hitSlop={8} accessibilityLabel="Share invite">
+          <Pressable
+            onPress={share}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Share invite"
+            android_ripple={{ color: ICON_RIPPLE, borderless: true }}
+          >
             <Share2 size={22} color={customerColors.coral.DEFAULT} />
           </Pressable>
         ) : (
@@ -177,7 +212,11 @@ export default function GroupOrderHubScreen() {
 
       <View style={styles.statusBar}>
         <Text style={styles.chefName}>{g.chef?.businessName ?? 'Chef'}</Text>
-        <Text style={styles.statusText}>{STATUS_LABEL[g.status] ?? g.status}</Text>
+        <View style={[styles.statusChip, { backgroundColor: statusChipStyle(g.status).bg }]}>
+          <Text style={[styles.statusChipText, { color: statusChipStyle(g.status).text }]}>
+            {STATUS_LABEL[g.status] ?? g.status}
+          </Text>
+        </View>
       </View>
 
       {placed ? (
@@ -186,8 +225,17 @@ export default function GroupOrderHubScreen() {
           <Text style={styles.placedTitle}>Order placed!</Text>
           <Text style={styles.placedBody}>Everyone paid — it's on its way to the chef.</Text>
           {g.orderId ? (
-            <Pressable onPress={() => router.replace(`/order/${g.orderId}` as never)} style={styles.primaryBtn}>
-              <Text style={styles.primaryBtnText}>View order</Text>
+            <Pressable
+              onPress={() => router.replace(`/order/${g.orderId}` as never)}
+              accessibilityRole="button"
+              accessibilityLabel="View order"
+              android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
+            >
+              {({ pressed }) => (
+                <View style={[styles.primaryBtn, pressed && Platform.OS === 'ios' && styles.primaryBtnPressed]}>
+                  <Text style={styles.primaryBtnText}>View order</Text>
+                </View>
+              )}
             </Pressable>
           ) : null}
           {/* #649 — escrow fulfilment confirmation (host only) */}
@@ -195,14 +243,24 @@ export default function GroupOrderHubScreen() {
             <Pressable
               onPress={confirmReceived}
               disabled={confirmGroup.isPending}
-              style={[styles.primaryBtn, { marginTop: 12 }]}
               accessibilityRole="button"
               accessibilityLabel="Confirm your group received this order"
+              android_ripple={confirmGroup.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
             >
-              {confirmGroup.isPending ? (
-                <ActivityIndicator color={customerColors.canvas} />
-              ) : (
-                <Text style={styles.primaryBtnText}>Confirm received</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.primaryBtn,
+                    { marginTop: 12 },
+                    pressed && Platform.OS === 'ios' && !confirmGroup.isPending && styles.primaryBtnPressed,
+                  ]}
+                >
+                  {confirmGroup.isPending ? (
+                    <ActivityIndicator color={customerColors.canvas} />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Confirm received</Text>
+                  )}
+                </View>
               )}
             </Pressable>
           ) : holdMeta.label ? (
@@ -291,15 +349,23 @@ export default function GroupOrderHubScreen() {
                         {inCart > 0 ? <Text style={styles.inCartBadge}>{inCart} in cart</Text> : null}
                         {item.soldOut ? (
                           <View style={[styles.addBtn, styles.addBtnDisabled]}>
-                            <Plus size={18} color="#fff" strokeWidth={2.5} />
+                            <Plus size={18} color={customerColors.canvas} strokeWidth={2.5} />
                           </View>
                         ) : (
                           <Pressable
                             onPress={() => addItem.mutate({ menuItemId: item.id, quantity: 1 })}
-                            style={styles.addBtn}
+                            accessibilityRole="button"
                             accessibilityLabel={`Add ${item.name}`}
+                            hitSlop={6}
+                            android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
                           >
-                            <Plus size={18} color="#fff" strokeWidth={2.5} />
+                            {({ pressed }) => (
+                              <View
+                                style={[styles.addBtn, pressed && Platform.OS === 'ios' && styles.addBtnPressed]}
+                              >
+                                <Plus size={18} color={customerColors.canvas} strokeWidth={2.5} />
+                              </View>
+                            )}
                           </Pressable>
                         )}
                       </View>
@@ -312,15 +378,26 @@ export default function GroupOrderHubScreen() {
         </ScrollView>
       )}
 
-      {/* Footer CTAs */}
+      {/* Footer CTAs — sticky bar per spec §2.5: white, top hairline + shadow[2],
+          coral filled, radius 8, 52pt, tabular total. */}
       {!placed ? (
         <View style={styles.footer}>
           {locked && me.paymentStatus === 'pending' && me.shareAmount > 0 ? (
-            <Pressable onPress={pay} disabled={payShare.isPending} style={styles.cta}>
-              {payShare.isPending ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.ctaText}>Pay your share · ₹{me.shareAmount.toFixed(0)}</Text>
+            <Pressable
+              onPress={pay}
+              disabled={payShare.isPending}
+              accessibilityRole="button"
+              accessibilityLabel={`Pay your share · ₹${me.shareAmount.toFixed(0)}`}
+              android_ripple={payShare.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
+            >
+              {({ pressed }) => (
+                <View style={[styles.cta, pressed && Platform.OS === 'ios' && !payShare.isPending && styles.ctaPressed]}>
+                  {payShare.isPending ? (
+                    <ActivityIndicator color={customerColors.canvas} />
+                  ) : (
+                    <Text style={styles.ctaText}>Pay your share · ₹{me.shareAmount.toFixed(0)}</Text>
+                  )}
+                </View>
               )}
             </Pressable>
           ) : null}
@@ -328,15 +405,44 @@ export default function GroupOrderHubScreen() {
             <Text style={styles.waiting}>You're paid — waiting on the rest of the group…</Text>
           ) : null}
           {open && isHost ? (
-            <Pressable onPress={lock} disabled={lockGroup.isPending || items.length === 0} style={[styles.cta, items.length === 0 && styles.ctaDisabled]}>
-              <Text style={styles.ctaText}>
-                {items.length === 0 ? 'Add items to continue' : `Lock & collect · ₹${itemsSubtotal.toFixed(0)}`}
-              </Text>
+            <Pressable
+              onPress={lock}
+              disabled={lockGroup.isPending || items.length === 0}
+              accessibilityRole="button"
+              accessibilityLabel={items.length === 0 ? 'Add items to continue' : `Lock and collect · ₹${itemsSubtotal.toFixed(0)}`}
+              android_ripple={
+                lockGroup.isPending || items.length === 0
+                  ? undefined
+                  : { color: CANVAS_RIPPLE, borderless: false }
+              }
+            >
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.cta,
+                    items.length === 0 && styles.ctaDisabled,
+                    pressed && Platform.OS === 'ios' && items.length > 0 && !lockGroup.isPending && styles.ctaPressed,
+                  ]}
+                >
+                  <Text style={styles.ctaText}>
+                    {items.length === 0 ? 'Add items to continue' : `Lock & collect · ₹${itemsSubtotal.toFixed(0)}`}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           ) : null}
           {open && !isHost ? (
-            <Pressable onPress={() => leaveGroup.mutate(undefined)} style={styles.secondaryBtn}>
-              <Text style={styles.secondaryBtnText}>Leave group</Text>
+            <Pressable
+              onPress={() => leaveGroup.mutate(undefined)}
+              accessibilityRole="button"
+              accessibilityLabel="Leave group"
+              android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
+            >
+              {({ pressed }) => (
+                <View style={[styles.secondaryBtn, pressed && Platform.OS === 'ios' && styles.secondaryBtnPressed]}>
+                  <Text style={styles.secondaryBtnText}>Leave group</Text>
+                </View>
+              )}
             </Pressable>
           ) : null}
           {isHost && (open || locked) ? (
@@ -347,9 +453,13 @@ export default function GroupOrderHubScreen() {
                   { text: 'Cancel order', style: 'destructive', onPress: () => cancelGroup.mutate(undefined) },
                 ])
               }
-              style={styles.cancelLink}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel group order"
+              android_ripple={{ color: DESTRUCTIVE_RIPPLE, borderless: false }}
             >
-              <Text style={styles.cancelLinkText}>Cancel group order</Text>
+              <View style={styles.cancelLink}>
+                <Text style={styles.cancelLinkText}>Cancel group order</Text>
+              </View>
             </Pressable>
           ) : null}
         </View>
@@ -450,18 +560,22 @@ function ParticipantBlock({
               <View style={styles.stepper}>
                 <Pressable
                   onPress={() => onRemove(ci.itemIds[ci.itemIds.length - 1]!)}
-                  hitSlop={6}
+                  hitSlop={10}
                   style={styles.stepperBtn}
+                  accessibilityRole="button"
                   accessibilityLabel={`Remove one ${ci.name}`}
+                  android_ripple={{ color: GHOST_RIPPLE, borderless: true }}
                 >
                   <Minus size={15} color={customerColors.charcoal.DEFAULT} strokeWidth={2.5} />
                 </Pressable>
                 <Text style={styles.stepperQty}>{ci.quantity}</Text>
                 <Pressable
                   onPress={() => onAdd(ci.menuItemId, ci.notes)}
-                  hitSlop={6}
+                  hitSlop={10}
                   style={styles.stepperBtn}
+                  accessibilityRole="button"
                   accessibilityLabel={`Add one ${ci.name}`}
+                  android_ripple={{ color: GHOST_RIPPLE, borderless: true }}
                 >
                   <Plus size={15} color={customerColors.charcoal.DEFAULT} strokeWidth={2.5} />
                 </Pressable>
@@ -569,7 +683,9 @@ const styles = StyleSheet.create({
     borderBottomColor: customerColors.hairline,
   },
   chefName: { fontFamily: 'Inter-Medium', fontSize: 14, color: customerColors.charcoal.DEFAULT },
-  statusText: { fontFamily: 'Inter', fontSize: 13, color: customerColors.coral.DEFAULT },
+  // Status chip per spec §2.7 — tint bg + dark text, radius-full.
+  statusChip: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 9999 },
+  statusChipText: { fontFamily: 'Inter-SemiBold', fontSize: 12 },
   scroll: { padding: 16, paddingBottom: 24 },
   countRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   countChip: {
@@ -621,7 +737,13 @@ const styles = StyleSheet.create({
   pAvatarText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: customerColors.charcoal.soft },
   pAvatarTextMe: { color: customerColors.coral.DEFAULT },
   pName: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT },
-  pShareLine: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft, marginTop: 1 },
+  pShareLine: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    marginTop: 1,
+    fontVariant: ['tabular-nums'],
+  },
   pSubtotal: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT, fontVariant: ['tabular-nums'] },
   pPaid: { color: customerColors.success.DEFAULT, fontFamily: 'Inter-SemiBold' },
   pEmpty: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
@@ -679,7 +801,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 12,
   },
-  inCartBadge: { fontFamily: 'Inter-Medium', fontSize: 12, color: customerColors.coral.DEFAULT },
+  inCartBadge: { fontFamily: 'Inter-Medium', fontSize: 12, color: customerColors.coral.DEFAULT, fontVariant: ['tabular-nums'] },
   menuName: { fontFamily: 'Inter-Medium', fontSize: 15, color: customerColors.charcoal.DEFAULT },
   menuPrice: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginTop: 2, fontVariant: ['tabular-nums'] },
   addBtn: {
@@ -690,7 +812,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  addBtnPressed: { backgroundColor: customerColors.coral.pressed },
   addBtnDisabled: { backgroundColor: customerColors.charcoal.soft, opacity: 0.5 },
+  // Sticky footer — white, top hairline + shadow[2] (spec §1 floating elements).
   footer: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -699,38 +823,51 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: customerColors.hairline,
     gap: 10,
+    shadowColor: customerTheme.shadow[2].shadowColor,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: customerTheme.shadow[2].shadowOpacity,
+    shadowRadius: customerTheme.shadow[2].shadowRadius,
+    elevation: customerTheme.shadow[2].elevation,
   },
   cta: {
     height: 52,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: customerColors.coral.DEFAULT,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  ctaPressed: { backgroundColor: customerColors.coral.pressed },
   ctaDisabled: { backgroundColor: customerColors.charcoal.soft, opacity: 0.5 },
-  ctaText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: '#fff' },
+  ctaText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: customerColors.canvas,
+    fontVariant: ['tabular-nums'],
+  },
   waiting: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft, textAlign: 'center' },
   secondaryBtn: {
     height: 48,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: customerColors.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  secondaryBtnPressed: { backgroundColor: customerColors.surface.soft },
   secondaryBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
-  cancelLink: { alignItems: 'center', paddingVertical: 4 },
+  cancelLink: { alignItems: 'center', paddingVertical: 4, minHeight: 44, justifyContent: 'center' },
   cancelLinkText: { fontFamily: 'Inter', fontSize: 13, color: customerColors.destructive.DEFAULT },
   primaryBtn: {
     height: 52,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: customerColors.coral.DEFAULT,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
     marginTop: 12,
   },
-  primaryBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: '#fff' },
+  primaryBtnPressed: { backgroundColor: customerColors.coral.pressed },
+  primaryBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.canvas },
   // #649 — confirmed / disputed escrow pill shown once the CTA is no longer actionable.
   holdPill: {
     marginTop: 12,

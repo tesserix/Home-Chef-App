@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,7 +12,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { CalendarDays, ChevronLeft } from 'lucide-react-native';
-import { customerColors } from '@homechef/mobile-shared/theme';
+import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CANVAS_RIPPLE = `${customerColors.canvas}33`;
+const GHOST_RIPPLE = `${customerColors.coral.DEFAULT}14`;
 import {
   mealPlanAdvanceBreakdown,
   useChefDailyMenu,
@@ -266,7 +272,13 @@ export default function BookMealPlanScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: ICON_RIPPLE, borderless: true }}
+        >
           <ChevronLeft size={24} color={customerColors.charcoal.DEFAULT} />
         </Pressable>
         <Text style={styles.title}>Plan your week</Text>
@@ -274,8 +286,17 @@ export default function BookMealPlanScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={customerColors.coral.DEFAULT} />
+        <View style={styles.scroll}>
+          <View style={[styles.skeletonLine, { width: '80%', height: 14, marginBottom: 20 }]} />
+          {[0, 1].map((i) => (
+            <View key={i} style={styles.daySection}>
+              <View style={[styles.skeletonLine, { width: 120, height: 16, marginBottom: 12 }]} />
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={styles.skeletonCard} />
+                <View style={styles.skeletonCard} />
+              </View>
+            </View>
+          ))}
         </View>
       ) : isError ? (
         // The request failed (network/server) — don't masquerade as "no menu",
@@ -290,9 +311,14 @@ export default function BookMealPlanScreen() {
           <Pressable
             onPress={() => void refetch()}
             accessibilityRole="button"
-            style={styles.retryBtn}
+            accessibilityLabel="Retry loading the weekly menu"
+            android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
           >
-            <Text style={styles.retryText}>Retry</Text>
+            {({ pressed }) => (
+              <View style={[styles.retryBtn, pressed && Platform.OS === 'ios' && styles.retryBtnPressed]}>
+                <Text style={styles.retryText}>Retry</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       ) : emptyState === 'no-menu' ? (
@@ -355,6 +381,8 @@ export default function BookMealPlanScreen() {
             ))}
           </ScrollView>
 
+          {/* Sticky CTA bar per spec §2.5 — white, top hairline + shadow[2],
+              coral filled, radius 8, 52pt. Distinct disabled state. */}
           <View style={styles.footer}>
             <View style={styles.footerSummary}>
               <Text style={styles.footerCount}>
@@ -370,23 +398,40 @@ export default function BookMealPlanScreen() {
               onPress={submit}
               disabled={selected.length === 0 || create.isPending}
               accessibilityRole="button"
+              accessibilityLabel={
+                selected.length === 0
+                  ? 'Select meals to continue'
+                  : `Request ${selected.length} meal${selected.length === 1 ? '' : 's'}`
+              }
+              android_ripple={
+                selected.length === 0 || create.isPending
+                  ? undefined
+                  : { color: CANVAS_RIPPLE, borderless: false }
+              }
             >
-              <View
-                style={[
-                  styles.cta,
-                  (selected.length === 0 || create.isPending) && styles.ctaDisabled,
-                ]}
-              >
-                {create.isPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.ctaText}>
-                    {selected.length === 0
-                      ? 'Select meals to continue'
-                      : `Request ${selected.length} meal${selected.length === 1 ? '' : 's'}`}
-                  </Text>
-                )}
-              </View>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.cta,
+                    (selected.length === 0 || create.isPending) && styles.ctaDisabled,
+                    pressed &&
+                      Platform.OS === 'ios' &&
+                      selected.length > 0 &&
+                      !create.isPending &&
+                      styles.ctaPressed,
+                  ]}
+                >
+                  {create.isPending ? (
+                    <ActivityIndicator color={customerColors.canvas} />
+                  ) : (
+                    <Text style={styles.ctaText}>
+                      {selected.length === 0
+                        ? 'Select meals to continue'
+                        : `Request ${selected.length} meal${selected.length === 1 ? '' : 's'}`}
+                    </Text>
+                  )}
+                </View>
+              )}
             </Pressable>
           </View>
         </>
@@ -431,18 +476,28 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     marginTop: 16,
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: customerColors.coral.DEFAULT,
   },
+  retryBtnPressed: { backgroundColor: customerColors.coral.tint },
   retryText: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 15,
     color: customerColors.coral.pressed,
+    textAlign: 'center',
   },
-  scroll: { paddingHorizontal: 16, paddingBottom: 24 },
+  scroll: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 },
+  skeletonLine: { borderRadius: 4, backgroundColor: customerColors.hairline },
+  skeletonCard: {
+    width: 148,
+    height: 176,
+    borderRadius: 12,
+    backgroundColor: customerColors.surface.soft,
+  },
   intro: {
     fontFamily: 'Inter',
     fontSize: 14,
@@ -464,6 +519,11 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: customerColors.hairline,
     gap: 12,
+    shadowColor: customerTheme.shadow[2].shadowColor,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: customerTheme.shadow[2].shadowOpacity,
+    shadowRadius: customerTheme.shadow[2].shadowRadius,
+    elevation: customerTheme.shadow[2].elevation,
   },
   footerSummary: {
     flexDirection: 'row',
@@ -474,6 +534,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 14,
     color: customerColors.charcoal.soft,
+    fontVariant: ['tabular-nums'],
   },
   footerTotal: {
     fontFamily: 'Inter-SemiBold',
@@ -488,11 +549,12 @@ const styles = StyleSheet.create({
   },
   cta: {
     height: 52,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: customerColors.coral.DEFAULT,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  ctaPressed: { backgroundColor: customerColors.coral.pressed },
   ctaDisabled: { backgroundColor: customerColors.charcoal.soft, opacity: 0.5 },
-  ctaText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: '#fff' },
+  ctaText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.canvas },
 });

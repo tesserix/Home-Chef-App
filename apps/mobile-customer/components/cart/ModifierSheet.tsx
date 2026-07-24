@@ -4,11 +4,18 @@
 // line to the cart. Self-contained RN Modal for reliability.
 
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, Minus, Plus, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { MenuItem, SelectedModifier } from '../../types/customer';
+
+// Android ripple tints — translucent colours derived from existing tokens
+// (never a new literal colour), matching the ChefCard `withAlpha` convention.
+const CLOSE_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const OPTION_RIPPLE = `${customerColors.coral.DEFAULT}14`;
+const STEPPER_RIPPLE = `${customerColors.coral.DEFAULT}22`;
+const CTA_RIPPLE = `${customerColors.canvas}40`;
 
 interface ModifierSheetProps {
   item: MenuItem;
@@ -70,8 +77,18 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
           <Text className="text-lg font-bold text-charcoal font-display flex-1" numberOfLines={1}>
             {item.name}
           </Text>
-          <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close">
-            <X size={24} color={customerColors.charcoal.DEFAULT} />
+          <Pressable
+            onPress={onClose}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            android_ripple={{ color: CLOSE_RIPPLE, borderless: true, radius: 20 }}
+          >
+            {({ pressed }) => (
+              <View className={pressed && Platform.OS === 'ios' ? 'opacity-60' : ''}>
+                <X size={24} color={customerColors.charcoal.DEFAULT} />
+              </View>
+            )}
           </Pressable>
         </View>
 
@@ -98,28 +115,38 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
                       disabled={disabled}
                       accessibilityRole={single ? 'radio' : 'checkbox'}
                       accessibilityState={{ selected: on, disabled }}
+                      accessibilityLabel={
+                        o.priceDelta !== 0
+                          ? `${o.name}, ${o.priceDelta > 0 ? '+' : ''}₹${o.priceDelta.toFixed(0)}`
+                          : `${o.name}, free`
+                      }
+                      android_ripple={disabled ? undefined : { color: OPTION_RIPPLE }}
                     >
-                      <View
-                        className={`flex-row items-center gap-3 rounded-xl border px-4 py-3 mb-2 ${
-                          on ? 'border-coral bg-coral-tint' : 'border-hairline bg-canvas'
-                        } ${disabled ? 'opacity-40' : ''}`}
-                      >
+                      {({ pressed }) => (
                         <View
-                          className={`w-5 h-5 items-center justify-center ${single ? 'rounded-full' : 'rounded'} border ${
-                            on ? 'border-coral bg-coral' : 'border-hairline'
+                          className={`flex-row items-center gap-3 rounded-xl border px-4 py-3 mb-2 ${
+                            on ? 'border-coral bg-coral-tint' : 'border-hairline bg-canvas'
+                          } ${disabled ? 'opacity-40' : ''} ${
+                            !disabled && pressed && Platform.OS === 'ios' ? 'opacity-70' : ''
                           }`}
                         >
-                          {on ? <Check size={13} color={customerColors.canvas} /> : null}
+                          <View
+                            className={`w-5 h-5 items-center justify-center ${single ? 'rounded-full' : 'rounded'} border ${
+                              on ? 'border-coral bg-coral' : 'border-hairline'
+                            }`}
+                          >
+                            {on ? <Check size={13} color={customerColors.canvas} /> : null}
+                          </View>
+                          <Text className="flex-1 text-sm text-charcoal">{o.name}</Text>
+                          {o.priceDelta !== 0 ? (
+                            <Text className="text-sm text-charcoal-soft" style={{ fontVariant: ['tabular-nums'] }}>
+                              {o.priceDelta > 0 ? '+' : ''}₹{o.priceDelta.toFixed(0)}
+                            </Text>
+                          ) : (
+                            <Text className="text-xs text-charcoal-soft">Free</Text>
+                          )}
                         </View>
-                        <Text className="flex-1 text-sm text-charcoal">{o.name}</Text>
-                        {o.priceDelta !== 0 ? (
-                          <Text className="text-sm text-charcoal-soft" style={{ fontVariant: ['tabular-nums'] }}>
-                            {o.priceDelta > 0 ? '+' : ''}₹{o.priceDelta.toFixed(0)}
-                          </Text>
-                        ) : (
-                          <Text className="text-xs text-charcoal-soft">Free</Text>
-                        )}
-                      </View>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -131,14 +158,40 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
           <View className="flex-row items-center justify-between mt-2">
             <Text className="text-base font-semibold text-charcoal">Quantity</Text>
             <View className="flex-row items-center border border-coral rounded-lg overflow-hidden">
-              <Pressable onPress={() => setQty((q) => Math.max(1, q - 1))} className="w-10 h-10 items-center justify-center" accessibilityRole="button" accessibilityLabel="Decrease quantity" hitSlop={6}>
-                <Minus size={16} color={customerColors.coral.DEFAULT} strokeWidth={2.5} />
+              <Pressable
+                onPress={() => setQty((q) => Math.max(1, q - 1))}
+                accessibilityRole="button"
+                accessibilityLabel="Decrease quantity"
+                android_ripple={{ color: STEPPER_RIPPLE }}
+              >
+                {({ pressed }) => (
+                  <View
+                    className={`w-11 h-11 items-center justify-center ${
+                      pressed && Platform.OS === 'ios' ? 'opacity-60' : ''
+                    }`}
+                  >
+                    <Minus size={16} color={customerColors.coral.DEFAULT} strokeWidth={2.5} />
+                  </View>
+                )}
               </Pressable>
               <Text className="min-w-[28px] text-center text-charcoal font-semibold" style={{ fontVariant: ['tabular-nums'] }}>
                 {qty}
               </Text>
-              <Pressable onPress={() => setQty((q) => q + 1)} className="w-10 h-10 items-center justify-center" accessibilityRole="button" accessibilityLabel="Increase quantity" hitSlop={6}>
-                <Plus size={16} color={customerColors.coral.DEFAULT} strokeWidth={2.5} />
+              <Pressable
+                onPress={() => setQty((q) => q + 1)}
+                accessibilityRole="button"
+                accessibilityLabel="Increase quantity"
+                android_ripple={{ color: STEPPER_RIPPLE }}
+              >
+                {({ pressed }) => (
+                  <View
+                    className={`w-11 h-11 items-center justify-center ${
+                      pressed && Platform.OS === 'ios' ? 'opacity-60' : ''
+                    }`}
+                  >
+                    <Plus size={16} color={customerColors.coral.DEFAULT} strokeWidth={2.5} />
+                  </View>
+                )}
               </Pressable>
             </View>
           </View>
@@ -146,12 +199,24 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
 
         {/* Add CTA */}
         <View className="px-4 pb-2 pt-2 border-t border-hairline">
-          <Pressable onPress={confirm} disabled={!valid} accessibilityRole="button" accessibilityLabel="Add to cart">
-            <View className={`rounded-lg min-h-[52px] items-center justify-center bg-coral ${!valid ? 'opacity-50' : ''}`}>
-              <Text className="text-canvas font-semibold text-base">
-                Add {qty} · ₹{(unitPrice * qty).toFixed(0)}
-              </Text>
-            </View>
+          <Pressable
+            onPress={confirm}
+            disabled={!valid}
+            accessibilityRole="button"
+            accessibilityLabel="Add to cart"
+            android_ripple={valid ? { color: CTA_RIPPLE } : undefined}
+          >
+            {({ pressed }) => (
+              <View
+                className={`rounded-lg min-h-[52px] items-center justify-center bg-coral ${
+                  !valid ? 'opacity-50' : pressed && Platform.OS === 'ios' ? 'opacity-80' : ''
+                }`}
+              >
+                <Text className="text-canvas font-semibold text-base tabular-nums">
+                  Add {qty} · ₹{(unitPrice * qty).toFixed(0)}
+                </Text>
+              </View>
+            )}
           </Pressable>
           {!valid ? (
             <Text className="text-center text-xs text-charcoal-soft mt-1">Choose the required options to continue</Text>

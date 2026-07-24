@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
   Animated,
@@ -46,6 +47,11 @@ type PrepTime = (typeof PREP_TIME_OPTIONS)[number];
 // Keep menu photos light — reject anything over 5 MB after the picker's own
 // compression. (Images are captured/picked at quality 0.6.)
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+// Generic neutral-grey blurhash — no per-photo hash is computed server-side,
+// so every thumbnail fades in against the same soft placeholder instead of a
+// hard white/grey flash (R2/R13).
+const PHOTO_BLURHASH = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
 
 // Diet tags the chef adds beyond the veg/non-veg toggle (#41). "vegetarian" is
 // excluded — that's the DIET toggle's job.
@@ -211,13 +217,18 @@ function CategoryTab({ label, active, onPress }: CategoryTabProps) {
       hitSlop={6}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      android_ripple={{
+        color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         <View
           style={[
             chipStyles.root,
             active && chipStyles.rootActive,
-            pressed && { opacity: 0.7 },
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
           ]}
         >
           <Text style={[chipStyles.label, active && chipStyles.labelActive]}>
@@ -245,13 +256,17 @@ function PrepTab({ value, active, onPress }: PrepTabProps) {
       accessibilityRole="radio"
       accessibilityState={{ checked: active }}
       accessibilityLabel={`${value} minutes`}
+      android_ripple={{
+        color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         <View
           style={[
             chipStyles.root,
             active && chipStyles.rootActive,
-            pressed && { opacity: 0.7 },
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
           ]}
         >
           <Text
@@ -288,13 +303,17 @@ function DietTab({ label, optionIsVeg, active, onPress }: DietTabProps) {
       accessibilityRole="radio"
       accessibilityState={{ checked: active }}
       accessibilityLabel={label}
+      android_ripple={{
+        color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         <View
           style={[
             chipStyles.root,
             active && chipStyles.rootActive,
-            pressed && { opacity: 0.7 },
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
           ]}
         >
           <DietIcon isVeg={optionIsVeg} size={12} />
@@ -323,9 +342,19 @@ function MultiChip({ label, active, onPress }: MultiChipProps) {
       accessibilityRole="checkbox"
       accessibilityState={{ checked: active }}
       accessibilityLabel={label}
+      android_ripple={{
+        color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
-        <View style={[chipStyles.root, active && chipStyles.rootActive, pressed && { opacity: 0.7 }]}>
+        <View
+          style={[
+            chipStyles.root,
+            active && chipStyles.rootActive,
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+          ]}
+        >
           <Text style={[chipStyles.label, active && chipStyles.labelActive]}>{label}</Text>
         </View>
       )}
@@ -347,6 +376,9 @@ function PhotoThumb({ uri, onRemove }: PhotoThumbProps) {
         source={{ uri }}
         style={photoStyles.thumbImg}
         contentFit="cover"
+        placeholder={{ blurhash: PHOTO_BLURHASH }}
+        transition={150}
+        accessibilityLabel="Dish photo"
       />
       {onRemove ? (
         <Pressable
@@ -355,9 +387,15 @@ function PhotoThumb({ uri, onRemove }: PhotoThumbProps) {
           accessibilityRole="button"
           accessibilityLabel="Remove photo"
           style={photoStyles.removeBtnWrap}
+          android_ripple={{ color: `${theme.colors.paper}55`, borderless: true }}
         >
           {({ pressed }) => (
-            <View style={[photoStyles.removeBtn, pressed && { opacity: 0.75 }]}>
+            <View
+              style={[
+                photoStyles.removeBtn,
+                pressed && Platform.OS === 'ios' && { opacity: 0.75 },
+              ]}
+            >
               <Text style={photoStyles.removeBtnText}>×</Text>
             </View>
           )}
@@ -374,6 +412,7 @@ function PhotoAddTile({ onPress, uploading }: { onPress: () => void; uploading?:
       disabled={uploading}
       accessibilityRole="button"
       accessibilityLabel="Add photo"
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
         <View
@@ -459,6 +498,58 @@ export function MenuItemForm({
   // would otherwise read the previous render's value.
   const errorsRef = useRef<Partial<Record<keyof MenuItemFormValues, string>>>({});
 
+  // R14: scroll-to-first-error + focus on a failed save. name/description/price
+  // all live in the DETAILS card; categoryId's error surfaces in the CATEGORY
+  // card. Section y-offsets are captured via onLayout as each card is a direct
+  // ScrollView child, so the layout y is already content-relative.
+  const scrollRef = useRef<ScrollView>(null);
+  const nameInputRef = useRef<TextInput>(null);
+  const descriptionInputRef = useRef<TextInput>(null);
+  const priceInputRef = useRef<TextInput>(null);
+  const sectionOffsets = useRef<{ details?: number; category?: number }>({});
+
+  function scrollToFirstError(errs: Partial<Record<keyof MenuItemFormValues, string>>) {
+    const order: (keyof MenuItemFormValues)[] = ['name', 'description', 'price', 'categoryId'];
+    const firstKey = order.find((k) => errs[k]);
+    if (!firstKey) return;
+    const offset =
+      firstKey === 'categoryId' ? sectionOffsets.current.category : sectionOffsets.current.details;
+    if (offset != null) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, offset - theme.spacing[4]), animated: true });
+    }
+    const focusRef =
+      firstKey === 'name'
+        ? nameInputRef
+        : firstKey === 'description'
+          ? descriptionInputRef
+          : firstKey === 'price'
+            ? priceInputRef
+            : null;
+    // Delay the focus call until after the scroll animation settles so the
+    // keyboard doesn't yank the layout mid-scroll.
+    if (focusRef) setTimeout(() => focusRef.current?.focus(), 320);
+  }
+
+  // No Reanimated dependency in this file, so Reduce Motion is read the same
+  // way the shared UI primitives (Skeleton/SheetBase/Toast) do — via
+  // AccessibilityInfo. Gates the sticky-footer slide-in below.
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
   // Form state — plain useState mirrors profile.tsx's EditableField pattern
   const [name, setName] = useState(initialValues.name);
   const [description, setDescription] = useState(initialValues.description);
@@ -520,6 +611,17 @@ export function MenuItemForm({
   // Validation errors (surface on Save attempt)
   const [errors, setErrors] = useState<Partial<Record<keyof MenuItemFormValues, string>>>({});
 
+  // Input polish: a visible 2px focus ring per field, error taking precedence
+  // over focus so a red border never flickers to ink mid-correction.
+  const [focusedField, setFocusedField] = useState<
+    'name' | 'description' | 'price' | 'hsn' | 'newCat' | null
+  >(null);
+  function fieldBorderStyle(field: typeof focusedField, hasError: boolean) {
+    if (hasError) return { borderColor: theme.colors.destructive.DEFAULT };
+    if (focusedField === field) return { borderColor: theme.colors.ink.DEFAULT };
+    return undefined;
+  }
+
   // New category inline input
   const [showNewCatInput, setShowNewCatInput] = useState(false);
   const [newCatName, setNewCatName] = useState('');
@@ -550,11 +652,15 @@ export function MenuItemForm({
   const prevDirty = useRef(mode === 'new' ? true : false);
   if (prevDirty.current !== isDirty) {
     prevDirty.current = isDirty;
-    Animated.timing(footerTranslate, {
-      toValue: isDirty ? 0 : 80,
-      duration: theme.motion.duration.default,
-      useNativeDriver: true,
-    }).start();
+    if (reduceMotion) {
+      footerTranslate.setValue(isDirty ? 0 : 80);
+    } else {
+      Animated.timing(footerTranslate, {
+        toValue: isDirty ? 0 : 80,
+        duration: theme.motion.duration.default,
+        useNativeDriver: true,
+      }).start();
+    }
   }
 
   // ---- Validation -----------------------------------------------------------
@@ -583,6 +689,9 @@ export function MenuItemForm({
       // usually scrolled out of view, so nothing visibly happens.
       const summary = validationSummary(errorsRef.current);
       if (summary) showToast({ message: summary, tone: 'error' });
+      // R14: also scroll to and focus the first invalid field so the chef
+      // lands directly on what needs fixing instead of hunting for it.
+      scrollToFirstError(errorsRef.current);
       return;
     }
     onSave(
@@ -766,9 +875,12 @@ export function MenuItemForm({
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Go back"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
             {({ pressed }) => (
-              <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
+              <View
+                style={[styles.backBtn, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}
+              >
                 <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
               </View>
             )}
@@ -786,6 +898,7 @@ export function MenuItemForm({
               accessibilityRole="button"
               accessibilityLabel="Delete this item"
               style={styles.rightSlot}
+              android_ripple={{ color: `${theme.colors.destructive.DEFAULT}14`, borderless: true }}
             >
               {({ pressed }) => (
                 <Text
@@ -805,6 +918,7 @@ export function MenuItemForm({
         </View>
 
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -849,10 +963,16 @@ export function MenuItemForm({
 
           {/* DETAILS section */}
           <Text style={styles.sectionLabel}>DETAILS</Text>
-          <View style={styles.card}>
+          <View
+            style={styles.card}
+            onLayout={(e) => {
+              sectionOffsets.current.details = e.nativeEvent.layout.y;
+            }}
+          >
             {/* Name */}
             <FormField label="Item name" error={errors.name}>
               <TextInput
+                ref={nameInputRef}
                 value={name}
                 onChangeText={(t) => {
                   setName(t);
@@ -860,15 +980,22 @@ export function MenuItemForm({
                 }}
                 placeholder="e.g. Butter Chicken"
                 placeholderTextColor={theme.colors.ink.muted}
-                style={[styles.textInput, errors.name && styles.textInputError]}
+                style={[
+                  styles.textInput,
+                  errors.name && styles.textInputError,
+                  fieldBorderStyle('name', !!errors.name),
+                ]}
                 autoCapitalize="words"
                 returnKeyType="next"
+                onFocus={() => setFocusedField('name')}
+                onBlur={() => setFocusedField((f) => (f === 'name' ? null : f))}
               />
             </FormField>
 
             {/* Description */}
             <FormField label="Description" error={errors.description}>
               <TextInput
+                ref={descriptionInputRef}
                 value={description}
                 onChangeText={(t) => {
                   setDescription(t);
@@ -879,7 +1006,14 @@ export function MenuItemForm({
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
-                style={[styles.textInput, styles.textInputMultiline, errors.description && styles.textInputError]}
+                style={[
+                  styles.textInput,
+                  styles.textInputMultiline,
+                  errors.description && styles.textInputError,
+                  fieldBorderStyle('description', !!errors.description),
+                ]}
+                onFocus={() => setFocusedField('description')}
+                onBlur={() => setFocusedField((f) => (f === 'description' ? null : f))}
               />
             </FormField>
 
@@ -888,9 +1022,12 @@ export function MenuItemForm({
                 hero treatments are where the Geist-Bold display weight
                 lives, not here on an inline form field. */}
             <FormField label="Price" error={errors.price}>
-              <View style={styles.priceRow}>
+              <View
+                style={[styles.priceRow, fieldBorderStyle('price', !!errors.price)]}
+              >
                 <Text style={styles.pricePrefix}>₹</Text>
                 <TextInput
+                  ref={priceInputRef}
                   value={price}
                   onChangeText={(t) => {
                     setPrice(t);
@@ -904,6 +1041,8 @@ export function MenuItemForm({
                     styles.priceInput,
                     errors.price && styles.textInputError,
                   ]}
+                  onFocus={() => setFocusedField('price')}
+                  onBlur={() => setFocusedField((f) => (f === 'price' ? null : f))}
                 />
               </View>
               {/* Always-on positioning guidance, plus a louder nudge once the
@@ -922,7 +1061,12 @@ export function MenuItemForm({
 
           {/* CATEGORY section */}
           <Text style={styles.sectionLabel}>CATEGORY</Text>
-          <View style={styles.card}>
+          <View
+            style={styles.card}
+            onLayout={(e) => {
+              sectionOffsets.current.category = e.nativeEvent.layout.y;
+            }}
+          >
             {categories.length > 0 ? (
               <View style={styles.tabBarWrap}>
                 <ScrollView
@@ -966,23 +1110,26 @@ export function MenuItemForm({
                   onChangeText={setNewCatName}
                   placeholder="Category name (e.g. Starters)"
                   placeholderTextColor={theme.colors.ink.muted}
-                  style={styles.newCatInput}
+                  style={[styles.newCatInput, fieldBorderStyle('newCat', false)]}
                   autoCapitalize="words"
                   maxLength={40}
                   autoFocus
+                  onFocus={() => setFocusedField('newCat')}
+                  onBlur={() => setFocusedField((f) => (f === 'newCat' ? null : f))}
                 />
                 <Pressable
                   onPress={handleCreateCategory}
                   disabled={isCreatingCategory || newCatName.trim().length < 2}
                   accessibilityRole="button"
                   accessibilityLabel="Add category"
+                  android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
                 >
                   {({ pressed }) => (
                     <View
                       style={[
                         styles.newCatAdd,
                         (isCreatingCategory || newCatName.trim().length < 2) && styles.newCatAddDisabled,
-                        pressed && { opacity: 0.8 },
+                        pressed && Platform.OS === 'ios' && { opacity: 0.8 },
                       ]}
                     >
                       {isCreatingCategory ? (
@@ -1130,7 +1277,9 @@ export function MenuItemForm({
               keyboardType="number-pad"
               maxLength={8}
               autoCorrect={false}
-              style={[styles.textInput, styles.hsnInput]}
+              style={[styles.textInput, styles.hsnInput, fieldBorderStyle('hsn', false)]}
+              onFocus={() => setFocusedField('hsn')}
+              onBlur={() => setFocusedField((f) => (f === 'hsn' ? null : f))}
             />
           </View>
 
@@ -1149,6 +1298,7 @@ export function MenuItemForm({
               disabled={isSaving}
               accessibilityRole="button"
               accessibilityLabel={mode === 'new' ? 'Add item' : 'Save changes'}
+              android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
             >
               {({ pressed }) => (
                 <View
@@ -1248,7 +1398,9 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[4],
   },
 
-  // Text inputs — bone fill inside the white cards, no border.
+  // Text inputs — bone fill inside the white cards. Transparent 1.5px border
+  // by default; a focus ring (ink) or error ring (destructive) fills it in —
+  // see fieldBorderStyle.
   textInput: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.body.size,
@@ -1256,6 +1408,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     backgroundColor: theme.colors.bone,
     borderRadius: theme.radius.md,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
   },
@@ -1278,6 +1432,8 @@ const styles = StyleSheet.create({
     gap: theme.spacing[2],
     backgroundColor: theme.colors.bone,
     borderRadius: theme.radius.md,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
     paddingHorizontal: theme.spacing[3],
     minHeight: 44,
   },
@@ -1297,7 +1453,7 @@ const styles = StyleSheet.create({
   priceWarn: {
     fontFamily: 'Inter-Medium',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.amber?.DEFAULT ?? '#B45309',
+    color: theme.colors.amber.DEFAULT,
     marginTop: theme.spacing[2],
     lineHeight: 18,
   },
@@ -1352,6 +1508,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     backgroundColor: theme.colors.bone,
     borderRadius: theme.radius.md,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
   },

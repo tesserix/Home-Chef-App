@@ -1,4 +1,4 @@
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -64,7 +64,7 @@ const ALL_SECTIONS: NavSection[] = [
       // open — and the payout gate (#739) blocks them from accepting orders
       // until a method exists, so "add your payout details" has to lead
       // somewhere findable.
-      { labelKey: 'payout', caption: 'Bank account or UPI for your earnings', route: '/payout', Icon: Landmark },
+      { labelKey: 'payout', caption: 'Bank account for your earnings', route: '/payout', Icon: Landmark },
       { labelKey: 'analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
     ],
   },
@@ -211,11 +211,19 @@ export default function MoreScreen() {
             Matches the Delete-account row pattern in Settings. */}
         <View style={[styles.card, styles.logoutCard]}>
           <View style={styles.cardInner}>
-            <Pressable onPress={handleLogout} accessibilityRole="button">
+            <Pressable
+              onPress={handleLogout}
+              accessibilityRole="button"
+              accessibilityLabel={t('more.logOut')}
+              android_ripple={{ color: `${theme.colors.destructive.DEFAULT}14`, borderless: false }}
+            >
               {({ pressed }) => (
                 // Inner-View pattern — keeps iOS Pressable flex layout intact.
                 <View
-                  style={[styles.navRow, pressed && styles.rowPressed]}
+                  style={[
+                    styles.navRow,
+                    pressed && Platform.OS === 'ios' && styles.rowPressed,
+                  ]}
                 >
                   <View style={styles.navIcon}>
                     <LogOut
@@ -250,12 +258,19 @@ function NavRowItem({ row, isLast }: NavRowItemProps) {
       <Pressable
         onPress={() => router.push(route as never)}
         accessibilityRole="button"
+        accessibilityLabel={t(`more.${labelKey}`)}
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
           // Visual layer on an inner View. iOS Pressable with a
           // function-based `style` prop strips flexbox under some
           // conditions — same trick used by the dashboard status button.
-          <View style={[styles.navRow, pressed && styles.rowPressed]}>
+          <View
+            style={[
+              styles.navRow,
+              pressed && Platform.OS === 'ios' && styles.rowPressed,
+            ]}
+          >
             <View style={styles.navIcon}>
               <Icon
                 size={20}

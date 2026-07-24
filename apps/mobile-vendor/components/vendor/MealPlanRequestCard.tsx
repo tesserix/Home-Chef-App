@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CalendarDays, ChevronRight } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import type { MealPlan } from '../../hooks/useMealPlans';
@@ -30,9 +30,14 @@ export function MealPlanRequestCard({ plan, onPress }: Props) {
   const nonVeg = days.length - veg;
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button">
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Review meal plan from ${customerName(plan)}, ₹${plan.total.toFixed(0)}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+    >
       {({ pressed }) => (
-        <View style={[styles.card, pressed && styles.pressed]}>
+        <View style={[styles.card, pressed && Platform.OS === 'ios' && styles.pressed]}>
           <View style={styles.header}>
             <Text style={styles.name} numberOfLines={1}>
               {customerName(plan)}
@@ -75,7 +80,7 @@ export function MealPlanRequestCard({ plan, onPress }: Props) {
               <Text style={styles.ctaText}>Review</Text>
               <ChevronRight
                 size={16}
-                color={theme.colors.herb.DEFAULT}
+                color={theme.colors.ink.DEFAULT}
                 strokeWidth={2}
               />
             </View>
@@ -89,12 +94,10 @@ export function MealPlanRequestCard({ plan, onPress }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.paper,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.lg,
     padding: theme.spacing[4],
     marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[3],
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.mist.DEFAULT,
     ...theme.shadow[1],
   },
   pressed: { backgroundColor: theme.colors.bone },
@@ -115,6 +118,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: theme.colors.ink.DEFAULT,
     marginLeft: theme.spacing[2],
+    fontVariant: ['tabular-nums'],
   },
   metaRow: {
     flexDirection: 'row',
@@ -145,6 +149,6 @@ const styles = StyleSheet.create({
   ctaText: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
   },
 });

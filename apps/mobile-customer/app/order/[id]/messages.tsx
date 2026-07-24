@@ -130,12 +130,25 @@ export default function MessagesScreen() {
             disabled={!text.trim() || send.isPending}
             accessibilityRole="button"
             accessibilityLabel="Send message"
+            android_ripple={
+              text.trim() && !send.isPending
+                ? { color: `${customerColors.canvas}33`, borderless: true }
+                : undefined
+            }
             className={`h-11 w-11 items-center justify-center rounded-full ${text.trim() ? 'bg-coral' : 'bg-surface-soft'}`}
           >
-            {send.isPending ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Send size={18} color={text.trim() ? '#FFFFFF' : customerColors.charcoal.soft} />
+            {({ pressed }) => (
+              <View
+                className={
+                  pressed && Platform.OS === 'ios' && text.trim() && !send.isPending ? 'opacity-70' : ''
+                }
+              >
+                {send.isPending ? (
+                  <ActivityIndicator color={customerColors.canvas} size="small" />
+                ) : (
+                  <Send size={18} color={text.trim() ? customerColors.canvas : customerColors.charcoal.soft} />
+                )}
+              </View>
             )}
           </Pressable>
         </View>

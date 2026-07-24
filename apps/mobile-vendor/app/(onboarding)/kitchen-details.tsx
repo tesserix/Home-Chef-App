@@ -6,10 +6,11 @@
 // PIN field carries an autocomplete that resolves to a full (state, city,
 // PIN) triple in one tap.
 
-import { useState as useReactState } from 'react';
+import { useRef, useState as useReactState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -123,6 +124,12 @@ export default function KitchenDetailsScreen() {
   // Geolocation auto-fill state — drives the spinner on the CTA.
   const [locating, setLocating] = useReactState(false);
   const { show: showToast } = useToast();
+
+  // R14 — scroll the section with the first invalid field into view.
+  const scrollRef = useRef<ScrollView>(null);
+  const identityFieldY = useRef(0);
+  const addressFieldY = useRef(0);
+  const IDENTITY_FIELDS = new Set(['businessName', 'cuisines', 'description']);
 
   function toggleCuisine(cuisine: string): void {
     const current = selectedCuisines ?? [];
@@ -287,6 +294,9 @@ export default function KitchenDetailsScreen() {
   }
 
   function onInvalid(errs: typeof errors): void {
+    const firstKey = Object.keys(errs)[0];
+    const y = firstKey && IDENTITY_FIELDS.has(firstKey) ? identityFieldY.current : addressFieldY.current;
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
     const firstError = Object.values(errs)[0];
     if (firstError?.message) Alert.alert(t('onboarding.checkDetails'), t(firstError.message));
   }
@@ -300,6 +310,7 @@ export default function KitchenDetailsScreen() {
       subtitle={t('onboarding.kitchenSubtitle')}
       primaryLabel={t('onboarding.continue')}
       onPrimary={handleSubmit(onSubmit, onInvalid)}
+      scrollRef={scrollRef}
     >
       {/* ── IDENTITY ──────────────────────────────────────────── */}
       <View style={styles.sectionLabel}>
@@ -307,7 +318,12 @@ export default function KitchenDetailsScreen() {
         <Text style={styles.sectionLabelText}>{t('onboarding.kitchenIdentity')}</Text>
       </View>
 
-      <View style={styles.fieldCard}>
+      <View
+        style={styles.fieldCard}
+        onLayout={(e) => {
+          identityFieldY.current = e.nativeEvent.layout.y;
+        }}
+      >
         {/* Business name */}
         <Controller
           control={control}
@@ -334,18 +350,35 @@ export default function KitchenDetailsScreen() {
             {CUISINE_OPTIONS.map((cuisine) => {
               const selected = selectedCuisines?.includes(cuisine) ?? false;
               return (
-                <View
+                <Pressable
                   key={cuisine}
-                  style={[styles.chip, selected && styles.chipActive]}
+                  onPress={() => toggleCuisine(cuisine)}
+                  accessibilityRole="button"
+                  accessibilityLabel={cuisine}
+                  accessibilityState={{ selected }}
+                  android_ripple={{
+                    color: selected
+                      ? `${theme.colors.paper}30`
+                      : `${theme.colors.ink.DEFAULT}14`,
+                    borderless: false,
+                  }}
                 >
-                  <Text
-                    style={[styles.chipLabel, selected && styles.chipLabelActive]}
-                    onPress={() => toggleCuisine(cuisine)}
-                    suppressHighlighting
-                  >
-                    {cuisine}
-                  </Text>
-                </View>
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.chip,
+                        selected && styles.chipActive,
+                        pressed && Platform.OS === 'ios' && { opacity: 0.75 },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.chipLabel, selected && styles.chipLabelActive]}
+                      >
+                        {cuisine}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
               );
             })}
           </View>
@@ -393,12 +426,15 @@ export default function KitchenDetailsScreen() {
         disabled={locating}
         accessibilityRole="button"
         accessibilityLabel={t('onboarding.useCurrentLocation')}
+        android_ripple={
+          locating ? undefined : { color: `${theme.colors.paper}30`, borderless: false }
+        }
       >
         {({ pressed }) => (
           <View
             style={[
               styles.locateCta,
-              pressed && { opacity: 0.85 },
+              pressed && Platform.OS === 'ios' && { opacity: 0.85 },
               locating && { opacity: 0.7 },
             ]}
           >
@@ -444,12 +480,14 @@ export default function KitchenDetailsScreen() {
                     key={`pin-${item.code}`}
                     onPress={() => pickPostcodeSuggestion(item)}
                     accessibilityRole="button"
+                    accessibilityLabel={`${item.code}, ${item.areaName}, ${item.cityName}, ${item.stateName}`}
+                    android_ripple={{ color: `${theme.colors.ink.DEFAULT}0F`, borderless: false }}
                   >
                     {({ pressed }) => (
                       <View
                         style={[
                           styles.suggestionRow,
-                          pressed && { backgroundColor: theme.colors.bone },
+                          pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
                         ]}
                       >
                         <Text style={styles.suggestionCode}>{item.code}</Text>
@@ -467,12 +505,13 @@ export default function KitchenDetailsScreen() {
                     onPress={() => { void pickAddressSuggestion(item); }}
                     accessibilityRole="button"
                     accessibilityLabel={item.description}
+                    android_ripple={{ color: `${theme.colors.ink.DEFAULT}0F`, borderless: false }}
                   >
                     {({ pressed }) => (
                       <View
                         style={[
                           styles.suggestionRow,
-                          pressed && { backgroundColor: theme.colors.bone },
+                          pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
                         ]}
                       >
                         <MapPin size={16} color={theme.colors.ink.DEFAULT} strokeWidth={2.2} />
@@ -499,7 +538,12 @@ export default function KitchenDetailsScreen() {
       </View>
 
       {/* Manual address fields grouped in a card */}
-      <View style={styles.fieldCard}>
+      <View
+        style={styles.fieldCard}
+        onLayout={(e) => {
+          addressFieldY.current = e.nativeEvent.layout.y;
+        }}
+      >
         <Controller
           control={control}
           name="addressLine1"
@@ -566,14 +610,21 @@ export default function KitchenDetailsScreen() {
                     onPress={() => pickState(s)}
                     hitSlop={4}
                     accessibilityRole="button"
+                    accessibilityLabel={s.name}
                     accessibilityState={{ selected }}
+                    android_ripple={{
+                      color: selected
+                        ? `${theme.colors.paper}30`
+                        : `${theme.colors.ink.DEFAULT}14`,
+                      borderless: false,
+                    }}
                   >
                     {({ pressed }) => (
                       <View
                         style={[
                           styles.pickerChip,
                           selected && styles.pickerChipActive,
-                          pressed && { opacity: 0.7 },
+                          pressed && Platform.OS === 'ios' && { opacity: 0.7 },
                         ]}
                       >
                         <Text
@@ -629,13 +680,22 @@ export default function KitchenDetailsScreen() {
                     key={c.id}
                     onPress={() => pickCity(c)}
                     hitSlop={4}
+                    accessibilityRole="button"
+                    accessibilityLabel={c.name}
+                    accessibilityState={{ selected }}
+                    android_ripple={{
+                      color: selected
+                        ? `${theme.colors.paper}30`
+                        : `${theme.colors.ink.DEFAULT}14`,
+                      borderless: false,
+                    }}
                   >
                     {({ pressed }) => (
                       <View
                         style={[
                           styles.pickerChip,
                           selected && styles.pickerChipActive,
-                          pressed && { opacity: 0.7 },
+                          pressed && Platform.OS === 'ios' && { opacity: 0.7 },
                         ]}
                       >
                         <Text

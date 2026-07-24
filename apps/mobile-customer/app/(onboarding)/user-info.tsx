@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { MutableRefObject, RefObject } from 'react';
 import {
   View,
   Text,
@@ -10,7 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
@@ -28,6 +29,25 @@ const schema = z.object({
 });
 
 type UserInfoForm = z.infer<typeof schema>;
+
+// Android ripple tints — translucent tokens derived from existing colours,
+// never a new literal colour (matches the ChefCard `withAlpha` convention).
+const CTA_RIPPLE = `${customerColors.canvas}33`;
+const GHOST_RIPPLE = `${customerColors.coral.DEFAULT}22`;
+
+type UserInfoField = 'firstName' | 'lastName' | 'phone';
+
+// 2px coral focus ring (falls back to the destructive border on error),
+// matching the Input primitive's focus treatment (Task 1).
+function fieldBorderStyle(hasError: boolean, isFocused: boolean) {
+  if (hasError) {
+    return { borderWidth: 1.5, borderColor: customerColors.destructive.DEFAULT };
+  }
+  if (isFocused) {
+    return { borderWidth: 2, borderColor: customerColors.coral.DEFAULT };
+  }
+  return { borderWidth: 0, borderColor: 'transparent' };
+}
 
 export default function UserInfoScreen() {
   // Prefill from whatever the user already gave at sign-up (email signup
@@ -51,9 +71,32 @@ export default function UserInfoScreen() {
   });
 
   const email = user?.email ?? '';
+  const [focusedField, setFocusedField] = useState<UserInfoField | null>(null);
+
+  // R14 — scroll to + focus the first invalid field on a failed submit.
+  const scrollRef = useRef<ScrollView>(null);
+  const firstNameY = useRef(0);
+  const lastNameY = useRef(0);
+  const phoneY = useRef(0);
+  const firstNameRef = useRef<TextInput>(null);
+  const lastNameRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+
+  function onInvalid(errs: FieldErrors<UserInfoForm>) {
+    const order: { key: keyof UserInfoForm; y: MutableRefObject<number>; input: RefObject<TextInput | null> }[] = [
+      { key: 'firstName', y: firstNameY, input: firstNameRef },
+      { key: 'lastName', y: lastNameY, input: lastNameRef },
+      { key: 'phone', y: phoneY, input: phoneRef },
+    ];
+    const first = order.find((f) => errs[f.key]);
+    if (!first) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, first.y.current - 16), animated: true });
+    setTimeout(() => first.input.current?.focus(), 320);
+  }
   const [emailVerified, setEmailVerified] = useState(draft.emailVerified);
   const [otpSent, setOtpSent] = useState(false);
   const [code, setCode] = useState('');
+  const [codeFocused, setCodeFocused] = useState(false);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -118,6 +161,7 @@ export default function UserInfoScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
+          ref={scrollRef}
           className="flex-1"
           contentContainerStyle={{ padding: 24, paddingTop: 40 }}
           keyboardShouldPersistTaps="handled"
@@ -139,110 +183,116 @@ export default function UserInfoScreen() {
           </Text>
 
           {/* ── First Name ── */}
-          <Text className="text-sm font-medium text-charcoal mb-1">
-            First Name
-          </Text>
-          <Controller
-            control={control}
-            name="firstName"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={{
-                  borderWidth: errors.firstName ? 1.5 : 0,
-                  borderColor: errors.firstName
-                    ? customerColors.destructive.DEFAULT
-                    : 'transparent',
-                }}
-                placeholder="Enter your first name"
-                placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
-                onChangeText={onChange}
-                value={value}
-                autoCapitalize="words"
-                returnKeyType="next"
-                accessibilityLabel="First name"
-              />
-            )}
-          />
-          {errors.firstName ? (
-            <Text className="text-xs text-destructive mb-3">
-              {errors.firstName.message}
+          <View onLayout={(e) => { firstNameY.current = e.nativeEvent.layout.y; }}>
+            <Text className="text-sm font-medium text-charcoal mb-1">
+              First Name
             </Text>
-          ) : (
-            <View className="mb-4" />
-          )}
+            <Controller
+              control={control}
+              name="firstName"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  ref={firstNameRef}
+                  className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                  style={fieldBorderStyle(Boolean(errors.firstName), focusedField === 'firstName')}
+                  placeholder="Enter your first name"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  onFocus={() => setFocusedField('firstName')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
+                  onChangeText={onChange}
+                  value={value}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  accessibilityLabel="First name"
+                />
+              )}
+            />
+            {errors.firstName ? (
+              <Text className="text-xs text-destructive mb-3">
+                {errors.firstName.message}
+              </Text>
+            ) : (
+              <View className="mb-4" />
+            )}
+          </View>
 
           {/* ── Last Name ── */}
-          <Text className="text-sm font-medium text-charcoal mb-1">
-            Last Name
-          </Text>
-          <Controller
-            control={control}
-            name="lastName"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={{
-                  borderWidth: errors.lastName ? 1.5 : 0,
-                  borderColor: errors.lastName
-                    ? customerColors.destructive.DEFAULT
-                    : 'transparent',
-                }}
-                placeholder="Enter your last name"
-                placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
-                onChangeText={onChange}
-                value={value}
-                autoCapitalize="words"
-                returnKeyType="next"
-                accessibilityLabel="Last name"
-              />
-            )}
-          />
-          {errors.lastName ? (
-            <Text className="text-xs text-destructive mb-3">
-              {errors.lastName.message}
+          <View onLayout={(e) => { lastNameY.current = e.nativeEvent.layout.y; }}>
+            <Text className="text-sm font-medium text-charcoal mb-1">
+              Last Name
             </Text>
-          ) : (
-            <View className="mb-4" />
-          )}
+            <Controller
+              control={control}
+              name="lastName"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  ref={lastNameRef}
+                  className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                  style={fieldBorderStyle(Boolean(errors.lastName), focusedField === 'lastName')}
+                  placeholder="Enter your last name"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  onFocus={() => setFocusedField('lastName')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
+                  onChangeText={onChange}
+                  value={value}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  accessibilityLabel="Last name"
+                />
+              )}
+            />
+            {errors.lastName ? (
+              <Text className="text-xs text-destructive mb-3">
+                {errors.lastName.message}
+              </Text>
+            ) : (
+              <View className="mb-4" />
+            )}
+          </View>
 
           {/* ── Phone ── */}
-          <Text className="text-sm font-medium text-charcoal mb-1">
-            Phone Number
-          </Text>
-          <Controller
-            control={control}
-            name="phone"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
-                style={{
-                  borderWidth: errors.phone ? 1.5 : 0,
-                  borderColor: errors.phone
-                    ? customerColors.destructive.DEFAULT
-                    : 'transparent',
-                }}
-                placeholder="10-digit mobile number"
-                placeholderTextColor={customerColors.charcoal.soft}
-                onBlur={onBlur}
-                onChangeText={onChange}
-                value={value}
-                keyboardType="phone-pad"
-                maxLength={10}
-                returnKeyType="done"
-                accessibilityLabel="Phone number"
-              />
-            )}
-          />
-          {errors.phone ? (
-            <Text className="text-xs text-destructive mb-3">
-              {errors.phone.message}
+          <View onLayout={(e) => { phoneY.current = e.nativeEvent.layout.y; }}>
+            <Text className="text-sm font-medium text-charcoal mb-1">
+              Phone Number
             </Text>
-          ) : (
-            <View className="mb-4" />
-          )}
+            <Controller
+              control={control}
+              name="phone"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <TextInput
+                  ref={phoneRef}
+                  className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                  style={fieldBorderStyle(Boolean(errors.phone), focusedField === 'phone')}
+                  placeholder="10-digit mobile number"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  onFocus={() => setFocusedField('phone')}
+                  onBlur={() => {
+                    setFocusedField(null);
+                    onBlur();
+                  }}
+                  onChangeText={onChange}
+                  value={value}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  returnKeyType="done"
+                  accessibilityLabel="Phone number"
+                />
+              )}
+            />
+            {errors.phone ? (
+              <Text className="text-xs text-destructive mb-3">
+                {errors.phone.message}
+              </Text>
+            ) : (
+              <View className="mb-4" />
+            )}
+          </View>
 
           {/* ── Email verification ── */}
           <Text className="text-sm font-medium text-charcoal mb-1">Email</Text>
@@ -257,7 +307,13 @@ export default function UserInfoScreen() {
 
           {!emailVerified &&
             (!otpSent ? (
-              <Pressable onPress={() => void sendCode()} disabled={sending || !email}>
+              <Pressable
+                onPress={() => void sendCode()}
+                disabled={sending || !email}
+                accessibilityRole="button"
+                accessibilityLabel="Send verification code"
+                android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
+              >
                 {({ pressed }) => (
                   <View
                     className={`rounded-lg min-h-[44px] items-center justify-center mt-2 mb-4 border border-coral ${
@@ -277,10 +333,13 @@ export default function UserInfoScreen() {
                 </Text>
                 <TextInput
                   className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal tracking-[8px] mb-2"
+                  style={fieldBorderStyle(false, codeFocused)}
                   placeholder="000000"
                   placeholderTextColor={customerColors.charcoal.soft}
                   value={code}
                   onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+                  onFocus={() => setCodeFocused(true)}
+                  onBlur={() => setCodeFocused(false)}
                   keyboardType="number-pad"
                   maxLength={6}
                   accessibilityLabel="Verification code"
@@ -288,6 +347,9 @@ export default function UserInfoScreen() {
                 <Pressable
                   onPress={() => void confirmCode()}
                   disabled={verifying || code.length !== 6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Verify code"
+                  android_ripple={{ color: CTA_RIPPLE, borderless: false }}
                 >
                   {({ pressed }) => (
                     <View
@@ -304,11 +366,21 @@ export default function UserInfoScreen() {
                 <Pressable
                   onPress={() => void sendCode()}
                   disabled={cooldown > 0 || sending}
-                  className="mt-2 items-center"
+                  accessibilityRole="button"
+                  accessibilityLabel={cooldown > 0 ? `Resend code in ${cooldown} seconds` : 'Resend code'}
+                  hitSlop={8}
+                  className="mt-2 items-center min-h-[44px] justify-center"
+                  android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
                 >
-                  <Text className="text-[13px] text-charcoal-soft">
-                    {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
-                  </Text>
+                  {({ pressed }) => (
+                    <Text
+                      className={`text-[13px] text-charcoal-soft ${
+                        pressed && Platform.OS === 'ios' ? 'opacity-70' : ''
+                      }`}
+                    >
+                      {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                    </Text>
+                  )}
                 </Pressable>
               </View>
             ))}
@@ -316,9 +388,10 @@ export default function UserInfoScreen() {
           {/* ── Primary CTA ── */}
           {/* iOS Pressable pattern: visual styles on inner View */}
           <Pressable
-            onPress={() => void handleSubmit(onSubmit)()}
+            onPress={() => void handleSubmit(onSubmit, onInvalid)()}
             accessibilityRole="button"
             accessibilityLabel="Continue to address"
+            android_ripple={{ color: CTA_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
               <View

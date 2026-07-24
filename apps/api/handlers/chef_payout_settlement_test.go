@@ -222,11 +222,16 @@ func TestSavePayoutDetails_NeedsClarificationPersistsRequirements(t *testing.T) 
 	require.Equal(t, "needs_clarification", body["razorpaySettlementStatus"])
 }
 
-func TestSavePayoutDetails_UpiChefIsNotMarkedPayable(t *testing.T) {
+// TestSavePayoutDetails_UpiRejected pins #767: UPI is not an accepted payout
+// method. Route settles by NEFT/IMPS to a bank account and has no VPA
+// destination, so a chef who picks UPI could never be paid — accepting it only
+// strands their earnings behind an "onboarded" facade. The handler must reject
+// the request at the edge (400) before touching the DB or the gateway, and must
+// never persist "upi" as the payout method.
+func TestSavePayoutDetails_UpiRejected(t *testing.T) {
 	db, userID, chefID := setupChefPayoutSettlementDB(t)
-	// If the handler ever calls the gateway for a UPI-only chef, this server
-	// would happily report "activated" — the test must catch that via calls,
-	// not rely on the stub refusing the request.
+	// If the handler wrongly proceeded, this stub would report "activated" —
+	// assert the gateway is never reached via calls, not via a refusing stub.
 	srv, calls := settlementRouteServer(t, `{"id":"acc_prd_1","activation_status":"activated"}`)
 	services.SetRazorpayClient(services.NewRazorpayTestClient(srv.URL, "k", "s", ""))
 	t.Cleanup(func() { services.SetRazorpayClient(nil) })
@@ -235,33 +240,30 @@ func TestSavePayoutDetails_UpiChefIsNotMarkedPayable(t *testing.T) {
 		"payoutMethod": "upi",
 		"upiId":        "chef@upi",
 	})
-	require.Equal(t, http.StatusOK, w.Code, "a UPI-only chef choosing UPI is a valid state, not a crash")
+	require.Equal(t, http.StatusBadRequest, w.Code, "UPI is not payable on Route — it must be rejected, not accepted")
 
-	require.Empty(t, *calls, "Route has no UPI destination — the gateway must never be called")
+	require.Empty(t, *calls, "a rejected request must never reach the gateway")
 
 	_, _, status, _ := chefSettlementRow(t, db, chefID)
-	require.Empty(t, status, "a UPI-only chef must not be reported as payable on Route")
+	require.Empty(t, status, "a rejected UPI save must not persist any settlement status")
 
-	var body map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	require.NotEqual(t, "activated", body["razorpaySettlementStatus"])
+	var method string
+	require.NoError(t, db.Raw(`SELECT payout_method FROM chef_profiles WHERE id = ?`, chefID.String()).Row().Scan(&method))
+	require.NotEqual(t, "upi", method, "the rejected UPI method must never be persisted")
 }
 
-// TestSavePayoutDetails_SwitchingToUpiClearsStaleActivatedStatus pins review
-// finding 2's handler half: a chef who was activated on bank transfer and
-// then switches to UPI must not keep razorpay_settlement_status="activated"
-// in the DB — the automated release sweep (BuildReleaseInput) trusts that
-// column, and a stale "activated" would let it release money toward a bank
-// account the chef has already abandoned. razorpay_account_id/
-// razorpay_product_id must survive the switch so a later switch back to bank
-// reuses them instead of minting a new linked account.
-func TestSavePayoutDetails_SwitchingToUpiClearsStaleActivatedStatus(t *testing.T) {
+// TestSavePayoutDetails_CannotSwitchToUpi pins #767 for an already-payable
+// chef: a chef activated on bank transfer cannot switch to UPI. The switch is
+// rejected (400) and their existing bank settlement — linked account, product
+// and "activated" status — is left fully intact, so they stay payable rather
+// than being silently stranded on a rail Route can never settle.
+func TestSavePayoutDetails_CannotSwitchToUpi(t *testing.T) {
 	db, userID, chefID := setupChefPayoutSettlementDB(t)
 	require.NoError(t, db.Exec(
-		`UPDATE chef_profiles SET razorpay_account_id = ?, razorpay_product_id = ?, razorpay_settlement_status = ? WHERE id = ?`,
+		`UPDATE chef_profiles SET razorpay_account_id = ?, razorpay_product_id = ?, razorpay_settlement_status = ?, payout_method = 'bank_transfer' WHERE id = ?`,
 		"acc_existing", "prd_existing", "activated", chefID.String()).Error)
 
-	// No stub server needed — a UPI save must never touch the gateway at all.
+	// No stub server needed — a rejected switch must never touch the gateway.
 	services.SetRazorpayClient(services.NewRazorpayTestClient("http://unused.invalid", "k", "s", ""))
 	t.Cleanup(func() { services.SetRazorpayClient(nil) })
 
@@ -269,16 +271,16 @@ func TestSavePayoutDetails_SwitchingToUpiClearsStaleActivatedStatus(t *testing.T
 		"payoutMethod": "upi",
 		"upiId":        "chef@upi",
 	})
-	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, http.StatusBadRequest, w.Code, "switching an activated chef to UPI must be rejected")
 
 	accountID, productID, status, _ := chefSettlementRow(t, db, chefID)
-	require.Equal(t, "acc_existing", accountID, "the linked account must survive a switch to UPI so switching back to bank reuses it")
-	require.Equal(t, "prd_existing", productID, "the product configuration must survive a switch to UPI so switching back to bank reuses it")
-	require.Empty(t, status, "a stale activated status must be cleared — the release sweep trusts this column")
+	require.Equal(t, "acc_existing", accountID, "a rejected switch must leave the linked account intact")
+	require.Equal(t, "prd_existing", productID, "a rejected switch must leave the product configuration intact")
+	require.Equal(t, "activated", status, "the chef stays payable on bank transfer — a rejected switch must not clear their status")
 
-	var body map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	require.NotEqual(t, "activated", body["razorpaySettlementStatus"])
+	var method string
+	require.NoError(t, db.Raw(`SELECT payout_method FROM chef_profiles WHERE id = ?`, chefID.String()).Row().Scan(&method))
+	require.Equal(t, "bank_transfer", method, "the chef's payout method must remain bank_transfer")
 }
 
 func TestSavePayoutDetails_PartialFailurePersistsWhatWasCreated(t *testing.T) {

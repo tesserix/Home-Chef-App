@@ -1,6 +1,7 @@
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +11,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
-import { customerColors } from '@homechef/mobile-shared/theme';
+import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CANVAS_RIPPLE = `${customerColors.canvas}33`;
+const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
 import {
   canCancelMealPlan,
   useCancelMealPlan,
@@ -263,14 +269,23 @@ export default function MealPlanDetailScreen() {
             <Pressable
               onPress={confirmToday}
               disabled={confirmTiffin.isPending}
-              style={styles.confirmTodayBtn}
               accessibilityRole="button"
               accessibilityLabel="Confirm today's delivered meals"
+              android_ripple={confirmTiffin.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
             >
-              {confirmTiffin.isPending ? (
-                <ActivityIndicator color={customerColors.canvas} size="small" />
-              ) : (
-                <Text style={styles.confirmTodayText}>Confirm today</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.confirmTodayBtn,
+                    pressed && Platform.OS === 'ios' && !confirmTiffin.isPending && styles.confirmTodayBtnPressed,
+                  ]}
+                >
+                  {confirmTiffin.isPending ? (
+                    <ActivityIndicator color={customerColors.canvas} size="small" />
+                  ) : (
+                    <Text style={styles.confirmTodayText}>Confirm today</Text>
+                  )}
+                </View>
               )}
             </Pressable>
           </View>
@@ -300,21 +315,41 @@ export default function MealPlanDetailScreen() {
           <Pressable
             onPress={() => act(false)}
             disabled={finalize.isPending}
-            style={styles.rejectBtn}
             accessibilityRole="button"
+            accessibilityLabel="Reject plan"
+            android_ripple={finalize.isPending ? undefined : { color: GHOST_RIPPLE, borderless: false }}
           >
-            <Text style={styles.rejectText}>Reject</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.rejectBtn,
+                  pressed && Platform.OS === 'ios' && !finalize.isPending && styles.rejectBtnPressed,
+                ]}
+              >
+                <Text style={styles.rejectText}>Reject</Text>
+              </View>
+            )}
           </Pressable>
           <Pressable
             onPress={() => act(true)}
             disabled={finalize.isPending}
-            style={styles.approveBtn}
             accessibilityRole="button"
+            accessibilityLabel={`Approve ${acceptedDays.length} days`}
+            android_ripple={finalize.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
           >
-            {finalize.isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.approveText}>Approve {acceptedDays.length} days</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.approveBtn,
+                  pressed && Platform.OS === 'ios' && !finalize.isPending && styles.approveBtnPressed,
+                ]}
+              >
+                {finalize.isPending ? (
+                  <ActivityIndicator color={customerColors.canvas} />
+                ) : (
+                  <Text style={styles.approveText}>Approve {acceptedDays.length} days</Text>
+                )}
+              </View>
             )}
           </Pressable>
         </View>
@@ -323,13 +358,23 @@ export default function MealPlanDetailScreen() {
           <Pressable
             onPress={handleCancel}
             disabled={cancel.isPending}
-            style={styles.rejectBtn}
             accessibilityRole="button"
+            accessibilityLabel="Cancel plan"
+            android_ripple={cancel.isPending ? undefined : { color: GHOST_RIPPLE, borderless: false }}
           >
-            {cancel.isPending ? (
-              <ActivityIndicator color={customerColors.destructive.DEFAULT} />
-            ) : (
-              <Text style={styles.rejectText}>Cancel plan</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.rejectBtn,
+                  pressed && Platform.OS === 'ios' && !cancel.isPending && styles.rejectBtnPressed,
+                ]}
+              >
+                {cancel.isPending ? (
+                  <ActivityIndicator color={customerColors.destructive.DEFAULT} />
+                ) : (
+                  <Text style={styles.rejectText}>Cancel plan</Text>
+                )}
+              </View>
             )}
           </Pressable>
         </View>
@@ -341,7 +386,13 @@ export default function MealPlanDetailScreen() {
 function Header() {
   return (
     <View style={styles.header}>
-      <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
+      <Pressable
+        onPress={() => router.back()}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        android_ripple={{ color: ICON_RIPPLE, borderless: true }}
+      >
         <ChevronLeft size={24} color={customerColors.charcoal.DEFAULT} />
       </Pressable>
       <Text style={styles.title}>Meal plan</Text>
@@ -430,6 +481,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  confirmTodayBtnPressed: { backgroundColor: customerColors.coral.pressed },
   confirmTodayText: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
@@ -447,7 +499,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 22,
     color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
   },
+  // Sticky action bar — white, top hairline + shadow[2] (spec §1 floating elements).
   footer: {
     flexDirection: 'row',
     gap: 12,
@@ -457,16 +511,22 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.canvas,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: customerColors.hairline,
+    shadowColor: customerTheme.shadow[2].shadowColor,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: customerTheme.shadow[2].shadowOpacity,
+    shadowRadius: customerTheme.shadow[2].shadowRadius,
+    elevation: customerTheme.shadow[2].elevation,
   },
   rejectBtn: {
     flex: 1,
     height: 52,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: customerColors.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  rejectBtnPressed: { backgroundColor: customerColors.surface.soft },
   rejectText: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
@@ -475,10 +535,11 @@ const styles = StyleSheet.create({
   approveBtn: {
     flex: 2,
     height: 52,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: customerColors.coral.DEFAULT,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  approveText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: '#fff' },
+  approveBtnPressed: { backgroundColor: customerColors.coral.pressed },
+  approveText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.canvas },
 });

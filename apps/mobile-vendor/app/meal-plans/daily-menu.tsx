@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -75,7 +76,7 @@ export default function DailyMenuScreen() {
     return out;
   }, []);
   const [selected, setSelected] = useState(dates[0]!);
-  const { data, isLoading } = useMyDailyMenu(dates[0]!, dates[dates.length - 1]!);
+  const { data, isLoading, isError, refetch } = useMyDailyMenu(dates[0]!, dates[dates.length - 1]!);
   const { data: menu } = useVendorMenu();
   const menuItems = useMemo(
     () => (menu?.items ?? []).map((m) => ({ id: m.id, name: m.name })),
@@ -86,11 +87,23 @@ export default function DailyMenuScreen() {
   const [rows, setRows] = useState<DailyMenuItemInput[]>([]);
   const [isPublished, setIsPublished] = useState(false);
 
+  // R13: row keys are stable client-only identities, kept in lockstep with
+  // `rows` but never sent to the API (DailyMenuItemInput carries no id until
+  // the server assigns one) — index-keying would misattribute Reanimated
+  // entrance state / TextInput focus after a mid-list remove.
+  const rowKeySeq = useRef(0);
+  const [rowKeys, setRowKeys] = useState<string[]>([]);
+  function nextRowKey(): string {
+    rowKeySeq.current += 1;
+    return `row-${rowKeySeq.current}`;
+  }
+
   // Seed the editor from the selected date's saved menu.
   useEffect(() => {
     const day = data?.days.find((d) => d.date === selected);
+    const items = day?.items ?? [];
     setRows(
-      (day?.items ?? []).map((it, i) => ({
+      items.map((it, i) => ({
         slot: it.slot,
         variant: it.variant,
         name: it.name,
@@ -101,7 +114,9 @@ export default function DailyMenuScreen() {
         sortOrder: i,
       })),
     );
+    setRowKeys(items.map(() => nextRowKey()));
     setIsPublished(day?.isPublished ?? false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, data]);
 
   function patchRow(i: number, patch: Partial<DailyMenuItemInput>) {
@@ -140,8 +155,18 @@ export default function DailyMenuScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
-          <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+        >
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+              <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.title}>Daily menu</Text>
         <View style={{ width: 24 }} />
@@ -153,9 +178,29 @@ export default function DailyMenuScreen() {
           const active = iso === selected;
           const l = labelFor(iso);
           return (
-            <Pressable key={iso} onPress={() => setSelected(iso)} style={[styles.dateChip, active && styles.dateChipActive]}>
-              <Text style={[styles.dateDow, active && styles.dateTextActive]}>{l.dow}</Text>
-              <Text style={[styles.dateDay, active && styles.dateTextActive]}>{l.day}</Text>
+            <Pressable
+              key={iso}
+              onPress={() => setSelected(iso)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${l.dow} ${l.day}`}
+              android_ripple={{
+                color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
+                borderless: false,
+              }}
+            >
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.dateChip,
+                    active && styles.dateChipActive,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={[styles.dateDow, active && styles.dateTextActive]}>{l.dow}</Text>
+                  <Text style={[styles.dateDay, active && styles.dateTextActive]}>{l.day}</Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
@@ -163,6 +208,27 @@ export default function DailyMenuScreen() {
 
       {isLoading ? (
         <ActivityIndicator style={{ marginTop: theme.spacing[6] }} color={theme.colors.ink.DEFAULT} />
+      ) : isError ? (
+        <View style={styles.errorBlock}>
+          <Text style={styles.empty}>Couldn't load this day's menu.</Text>
+          <Pressable
+            onPress={() => refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading menu"
+            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.retryBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
+                <Text style={styles.retryLabel}>Retry</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
       ) : (
         <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
           {rows.length === 0 ? (
@@ -170,7 +236,7 @@ export default function DailyMenuScreen() {
           ) : null}
 
           {rows.map((row, i) => (
-            <View key={i} style={styles.card}>
+            <View key={rowKeys[i] ?? `row-fallback-${i}`} style={styles.card}>
               <View style={styles.cardTop}>
                 <TextInput
                   value={row.name}
@@ -179,22 +245,81 @@ export default function DailyMenuScreen() {
                   placeholderTextColor={theme.colors.ink.muted}
                   style={styles.nameInput}
                 />
-                <Pressable onPress={() => setRows((p) => p.filter((_, idx) => idx !== i))} hitSlop={8} accessibilityLabel="Remove dish">
-                  <Trash2 size={18} color={theme.colors.destructive.DEFAULT} />
+                <Pressable
+                  onPress={() => {
+                    setRows((p) => p.filter((_, idx) => idx !== i));
+                    setRowKeys((p) => p.filter((_, idx) => idx !== i));
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={row.name ? `Remove ${row.name}` : 'Remove dish'}
+                  android_ripple={{ color: `${theme.colors.destructive.DEFAULT}14`, borderless: true }}
+                >
+                  {({ pressed }) => (
+                    <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+                      <Trash2 size={18} color={theme.colors.destructive.DEFAULT} />
+                    </View>
+                  )}
                 </Pressable>
               </View>
 
               <View style={styles.pillRow}>
-                {SLOTS.map((s) => (
-                  <Pressable key={s.slot} onPress={() => patchRow(i, { slot: s.slot })} style={[styles.pill, row.slot === s.slot && styles.pillActive]}>
-                    <Text style={[styles.pillText, row.slot === s.slot && styles.pillTextActive]}>{s.label}</Text>
-                  </Pressable>
-                ))}
-                {VARIANTS.map((v) => (
-                  <Pressable key={v.variant} onPress={() => patchRow(i, { variant: v.variant })} style={[styles.pill, row.variant === v.variant && styles.pillActive]}>
-                    <Text style={[styles.pillText, row.variant === v.variant && styles.pillTextActive]}>{v.label}</Text>
-                  </Pressable>
-                ))}
+                {SLOTS.map((s) => {
+                  const active = row.slot === s.slot;
+                  return (
+                    <Pressable
+                      key={s.slot}
+                      onPress={() => patchRow(i, { slot: s.slot })}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: active }}
+                      accessibilityLabel={s.label}
+                      android_ripple={{
+                        color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
+                        borderless: false,
+                      }}
+                    >
+                      {({ pressed }) => (
+                        <View
+                          style={[
+                            styles.pill,
+                            active && styles.pillActive,
+                            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                          ]}
+                        >
+                          <Text style={[styles.pillText, active && styles.pillTextActive]}>{s.label}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+                {VARIANTS.map((v) => {
+                  const active = row.variant === v.variant;
+                  return (
+                    <Pressable
+                      key={v.variant}
+                      onPress={() => patchRow(i, { variant: v.variant })}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: active }}
+                      accessibilityLabel={v.label}
+                      android_ripple={{
+                        color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
+                        borderless: false,
+                      }}
+                    >
+                      {({ pressed }) => (
+                        <View
+                          style={[
+                            styles.pill,
+                            active && styles.pillActive,
+                            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                          ]}
+                        >
+                          <Text style={[styles.pillText, active && styles.pillTextActive]}>{v.label}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
               </View>
 
               <View style={styles.priceRow}>
@@ -208,7 +333,12 @@ export default function DailyMenuScreen() {
                   style={styles.priceInput}
                 />
                 <Text style={styles.comboLabel}>Combo / Thali</Text>
-                <Switch value={row.isCombo} onValueChange={(v) => patchRow(i, { isCombo: v })} />
+                <Switch
+                  value={row.isCombo}
+                  onValueChange={(v) => patchRow(i, { isCombo: v })}
+                  trackColor={{ true: theme.colors.ink.DEFAULT }}
+                  accessibilityLabel={`${row.name || 'This dish'} is a combo or thali, tap to toggle`}
+                />
               </View>
 
               {row.isCombo ? (
@@ -221,23 +351,52 @@ export default function DailyMenuScreen() {
             </View>
           ))}
 
-          <Pressable onPress={() => setRows((p) => [...p, blankRow(p.length)])} style={styles.addBtn} accessibilityLabel="Add a dish">
-            <Plus size={18} color={theme.colors.herb.DEFAULT} />
-            <Text style={styles.addBtnText}>Add dish</Text>
+          <Pressable
+            onPress={() => {
+              setRows((p) => [...p, blankRow(p.length)]);
+              setRowKeys((p) => [...p, nextRowKey()]);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Add a dish"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[styles.addBtn, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}
+              >
+                <Plus size={18} color={theme.colors.ink.DEFAULT} />
+                <Text style={styles.addBtnText}>Add dish</Text>
+              </View>
+            )}
           </Pressable>
 
           <View style={styles.publishRow}>
-            <Text style={styles.publishLabel}>{isPublished ? 'Published — customers can book this day' : 'Draft — not visible to customers'}</Text>
+            {/* Status chip (UI-V2-SPEC §2 pill language) — tint bg + dark text
+                of the same hue; published is operational-positive (success). */}
+            <View style={[styles.statusChip, isPublished ? styles.statusChipLive : styles.statusChipDraft]}>
+              <Text style={[styles.statusChipText, isPublished && styles.statusChipTextLive]}>
+                {isPublished ? 'Published' : 'Draft'}
+              </Text>
+            </View>
+            <Text style={styles.publishLabel}>
+              {isPublished ? 'Customers can book this day' : 'Not visible to customers'}
+            </Text>
           </View>
         </KeyboardAwareScrollView>
       )}
 
       <View style={styles.footer}>
         <View style={{ flex: 1 }}>
-          <Button label="Save draft" variant="secondary" onPress={() => onSave(false)} loading={save.isPending} />
+          <Button
+            label="Save draft"
+            variant="secondary"
+            size="lg"
+            onPress={() => onSave(false)}
+            loading={save.isPending}
+          />
         </View>
         <View style={{ flex: 1 }}>
-          <Button label="Publish" onPress={() => onSave(true)} loading={save.isPending} />
+          <Button label="Publish" size="lg" onPress={() => onSave(true)} loading={save.isPending} />
         </View>
       </View>
     </SafeAreaView>
@@ -275,9 +434,18 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     padding: theme.spacing[3],
     gap: theme.spacing[2],
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.mist.DEFAULT,
+    ...theme.shadow[1],
   },
+  errorBlock: { alignItems: 'center', gap: theme.spacing[3], marginTop: theme.spacing[6] },
+  retryBtn: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[6],
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryLabel: { fontFamily: 'Inter-SemiBold', fontSize: theme.typography.size.bodySm.size, color: theme.colors.paper },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   nameInput: { flex: 1, fontFamily: 'Inter-SemiBold', fontSize: 16, color: theme.colors.ink.DEFAULT, paddingVertical: theme.spacing[1] },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] },
@@ -288,16 +456,35 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.mist.DEFAULT,
   },
-  pillActive: { backgroundColor: theme.colors.herb.tint, borderColor: theme.colors.herb.DEFAULT },
+  pillActive: { backgroundColor: theme.colors.ink.DEFAULT, borderColor: theme.colors.ink.DEFAULT },
   pillText: { fontFamily: 'Inter', fontSize: theme.typography.size.bodySm.size, color: theme.colors.ink.muted },
-  pillTextActive: { color: theme.colors.herb.DEFAULT, fontFamily: 'Inter-SemiBold' },
+  pillTextActive: { color: theme.colors.paper, fontFamily: 'Inter-SemiBold' },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
-  priceLabel: { fontFamily: 'Inter-SemiBold', color: theme.colors.ink.DEFAULT },
+  priceLabel: { fontFamily: 'Inter-SemiBold', color: theme.colors.ink.DEFAULT, fontVariant: ['tabular-nums'] },
   priceInput: { width: 80, fontFamily: 'Inter', color: theme.colors.ink.DEFAULT, fontVariant: ['tabular-nums'] },
   comboLabel: { marginLeft: 'auto', fontFamily: 'Inter', fontSize: theme.typography.size.bodySm.size, color: theme.colors.ink.soft },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingVertical: theme.spacing[2] },
-  addBtnText: { fontFamily: 'Inter-SemiBold', color: theme.colors.herb.DEFAULT },
-  publishRow: { marginTop: theme.spacing[2] },
+  addBtnText: { fontFamily: 'Inter-SemiBold', color: theme.colors.ink.DEFAULT },
+  publishRow: {
+    marginTop: theme.spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[2],
+  },
   publishLabel: { fontFamily: 'Inter', fontSize: theme.typography.size.bodySm.size, color: theme.colors.ink.soft },
+  statusChip: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.mist.DEFAULT,
+  },
+  statusChipDraft: { backgroundColor: theme.colors.mist.DEFAULT },
+  statusChipLive: { backgroundColor: theme.colors.success.tint },
+  statusChipText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+  },
+  statusChipTextLive: { color: theme.colors.success.soft },
   footer: { flexDirection: 'row', gap: theme.spacing[3], padding: theme.spacing[4], borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.mist.DEFAULT },
 });

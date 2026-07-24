@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   dayStatusPill: { borderRadius: 9999, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start' },
   dayStatusText: { fontFamily: 'Inter-SemiBold', fontSize: 11, letterSpacing: 0.2 },
   daySub: { flex: 1, fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
-  price: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
+  price: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT, fontVariant: ['tabular-nums'] },
   dim: { color: customerColors.charcoal.soft, textDecorationLine: 'line-through' },
   // WCAG 2.2 target floor. These were 12px text + hitSlop 8 -> ~32px: the
   // most-used controls in the product (Skip / Confirm / Report) were the

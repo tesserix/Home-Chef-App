@@ -6,9 +6,9 @@
 //   3. Slim filter bar — Open Now pill (most-used quick toggle) + "Filters"
 //      pill with an active-count badge + Social Feed & Catering nav entries
 //
-// Secondary filters (diet, price, sort) live in FilterSheet — a @gorhom/
-// bottom-sheet that opens on the "Filters" tap and drives the SAME state
-// variables/setters that previously powered three separate chip rows.
+// Secondary filters (diet, price, sort) live in FilterSheet — a bottom sheet
+// that opens on the "Filters" tap and drives the SAME state variables/setters
+// that previously powered three separate chip rows.
 //
 // ALL filter state (selectedDiet, maxPrice, sort, isOpenOnly) is defined
 // here and passed down — FilterSheet holds zero state of its own.
@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -43,7 +44,7 @@ import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { ActivePlanChip } from '../../components/meal-plan/ActivePlanChip';
 import { FilterSheet } from '../../components/home/FilterSheet';
 import { CATERING_ENABLED, SOCIAL_ENABLED } from '../../lib/features';
-import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
+import { type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
 import { useOrderStatusWS } from '../../hooks/useOrderStatusWS';
 import { useChefs } from '../../hooks/useChefs';
@@ -52,6 +53,11 @@ import { useCustomerCoords, useActiveAddress } from '../../hooks/useCustomerCoor
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
+
+// Android ripple tint for pills/rows on white or light surfaces — translucent
+// ink derived from the charcoal token (never a new literal colour), matching
+// the primitive Button's `withAlpha` convention.
+const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 const CUISINES = [
   'All',
@@ -117,8 +123,8 @@ export default function HomeScreen() {
   useOrderStatusWS(undefined, activeOrders.length > 0);
 
   // Ref for opening the FilterSheet imperatively on Filters pill tap.
-  const filterSheetRef = useRef<BottomSheetMethods>(null);
-  const addressSheetRef = useRef<BottomSheetMethods>(null);
+  const filterSheetRef = useRef<SheetHandle>(null);
+  const addressSheetRef = useRef<SheetHandle>(null);
 
   // ── Data fetching ────────────────────────────────────────────────────────
   // Customer location drives the chef delivery-area gate: a chef who only
@@ -166,7 +172,7 @@ export default function HomeScreen() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   function handleOpenFilters() {
-    filterSheetRef.current?.expand();
+    filterSheetRef.current?.present();
   }
 
   // ── Header component ─────────────────────────────────────────────────────
@@ -177,16 +183,24 @@ export default function HomeScreen() {
           old "Map view →" text link. ── */}
       <View style={styles.addressRow}>
         <View style={styles.addressRowPill}>
-          <AddressSwitcher onOpen={() => addressSheetRef.current?.expand()} />
+          <AddressSwitcher onOpen={() => addressSheetRef.current?.present()} />
         </View>
         <Pressable
           onPress={() => router.push('/chefs-map')}
           accessibilityRole="button"
           accessibilityLabel="View chefs on a map"
+          android_ripple={{ color: ROW_RIPPLE, borderless: true, radius: 20 }}
         >
-          <View style={styles.mapButton}>
-            <Map size={18} color={customerColors.charcoal.DEFAULT} />
-          </View>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.mapButton,
+                pressed && Platform.OS === 'ios' && styles.pressedIOS,
+              ]}
+            >
+              <Map size={18} color={customerColors.charcoal.DEFAULT} />
+            </View>
+          )}
         </Pressable>
       </View>
 
@@ -198,15 +212,23 @@ export default function HomeScreen() {
           onPress={() => router.push('/search-dishes')}
           accessibilityRole="button"
           accessibilityLabel="Search dishes and chefs"
+          android_ripple={{ color: ROW_RIPPLE, borderless: false }}
         >
-          <View style={styles.searchPill}>
-            <Search
-              size={18}
-              color={customerColors.charcoal.soft}
-              accessibilityElementsHidden
-            />
-            <Text style={styles.searchPlaceholder}>What are you craving?</Text>
-          </View>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.searchPill,
+                pressed && Platform.OS === 'ios' && styles.pressedIOS,
+              ]}
+            >
+              <Search
+                size={18}
+                color={customerColors.charcoal.soft}
+                accessibilityElementsHidden
+              />
+              <Text style={styles.searchPlaceholder}>What are you craving?</Text>
+            </View>
+          )}
         </Pressable>
       </View>
 
@@ -230,24 +252,40 @@ export default function HomeScreen() {
         {CUISINES.map((cuisine) => {
           const isSelected = selectedCuisine === cuisine;
           return (
-            // iOS Pressable inner-View pattern: no style array on Pressable
+            // iOS Pressable inner-View pattern: visual styles stay on the
+            // inner View. `style` here is a static object (not a function),
+            // so it's safe under the array-style bug — and it's REQUIRED:
+            // without it, this Pressable is the actual flex-row child inside
+            // the ScrollView's contentContainerStyle, and on-device it was
+            // being treated as shrinkable, compressing every chip below its
+            // label's natural width instead of letting the row scroll (R3).
             <Pressable
               key={cuisine}
               onPress={() => setSelectedCuisine(cuisine)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isSelected }}
               accessibilityLabel={`Filter by ${cuisine}`}
+              android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+              style={styles.chipPressable}
             >
-              <View style={[styles.chip, isSelected && styles.chipSelected]}>
-                <Text
+              {({ pressed }) => (
+                <View
                   style={[
-                    styles.chipLabel,
-                    isSelected ? styles.chipLabelSelected : styles.chipLabelDefault,
+                    styles.chip,
+                    isSelected && styles.chipSelected,
+                    pressed && Platform.OS === 'ios' && styles.chipPressedIOS,
                   ]}
                 >
-                  {cuisine}
-                </Text>
-              </View>
+                  <Text
+                    style={[
+                      styles.chipLabel,
+                      isSelected ? styles.chipLabelSelected : styles.chipLabelDefault,
+                    ]}
+                  >
+                    {cuisine}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
@@ -264,23 +302,33 @@ export default function HomeScreen() {
           accessibilityRole="button"
           accessibilityLabel={isOpenOnly ? 'Showing open chefs only' : 'Show open chefs only'}
           accessibilityState={{ checked: isOpenOnly }}
+          hitSlop={5}
+          android_ripple={{ color: ROW_RIPPLE, borderless: false }}
         >
-          <View style={[styles.openNowPill, isOpenOnly && styles.openNowPillActive]}>
+          {({ pressed }) => (
             <View
               style={[
-                styles.openNowDot,
-                isOpenOnly ? styles.openNowDotActive : styles.openNowDotInactive,
-              ]}
-            />
-            <Text
-              style={[
-                styles.openNowLabel,
-                isOpenOnly ? styles.openNowLabelActive : styles.openNowLabelDefault,
+                styles.openNowPill,
+                isOpenOnly && styles.openNowPillActive,
+                pressed && Platform.OS === 'ios' && styles.pressedIOS,
               ]}
             >
-              Open Now
-            </Text>
-          </View>
+              <View
+                style={[
+                  styles.openNowDot,
+                  isOpenOnly ? styles.openNowDotActive : styles.openNowDotInactive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.openNowLabel,
+                  isOpenOnly ? styles.openNowLabelActive : styles.openNowLabelDefault,
+                ]}
+              >
+                Open Now
+              </Text>
+            </View>
+          )}
         </Pressable>
 
         {/* Filters pill — opens the sheet; badge shows count of active secondary filters */}
@@ -292,31 +340,41 @@ export default function HomeScreen() {
               ? `Filters — ${activeFilterCount} active`
               : 'Open filters'
           }
+          hitSlop={5}
+          android_ripple={{ color: ROW_RIPPLE, borderless: false }}
         >
-          <View style={[styles.filtersPill, activeFilterCount > 0 && styles.filtersPillActive]}>
-            <SlidersHorizontal
-              size={14}
-              color={
-                activeFilterCount > 0
-                  ? customerColors.canvas
-                  : customerColors.charcoal.soft
-              }
-              accessibilityElementsHidden
-            />
-            <Text
+          {({ pressed }) => (
+            <View
               style={[
-                styles.filtersPillLabel,
-                activeFilterCount > 0 && styles.filtersPillLabelActive,
+                styles.filtersPill,
+                activeFilterCount > 0 && styles.filtersPillActive,
+                pressed && Platform.OS === 'ios' && styles.pressedIOS,
               ]}
             >
-              Filters
-            </Text>
-            {activeFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </View>
+              <SlidersHorizontal
+                size={14}
+                color={
+                  activeFilterCount > 0
+                    ? customerColors.canvas
+                    : customerColors.charcoal.soft
+                }
+                accessibilityElementsHidden
+              />
+              <Text
+                style={[
+                  styles.filtersPillLabel,
+                  activeFilterCount > 0 && styles.filtersPillLabelActive,
+                ]}
+              >
+                Filters
+              </Text>
+              {activeFilterCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                </View>
+              )}
+            </View>
+          )}
         </Pressable>
 
         {/* Right side: Social Feed + Catering — navigation, not filter controls.
@@ -328,10 +386,19 @@ export default function HomeScreen() {
               onPress={() => router.push('/social')}
               accessibilityRole="button"
               accessibilityLabel="Go to Social Feed"
+              hitSlop={5}
+              android_ripple={{ color: ROW_RIPPLE, borderless: false }}
             >
-              <View style={styles.navLinkPill}>
-                <Text style={styles.navLinkLabel}>Social Feed</Text>
-              </View>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.navLinkPill,
+                    pressed && Platform.OS === 'ios' && styles.pressedIOS,
+                  ]}
+                >
+                  <Text style={styles.navLinkLabel}>Social Feed</Text>
+                </View>
+              )}
             </Pressable>
           ) : null}
           {/* Catering — DEFERRED for v1 (CATERING_DEPOSIT_ENABLED off). */}
@@ -340,10 +407,19 @@ export default function HomeScreen() {
               onPress={() => router.push('/catering')}
               accessibilityRole="button"
               accessibilityLabel="Go to Catering"
+              hitSlop={5}
+              android_ripple={{ color: ROW_RIPPLE, borderless: false }}
             >
-              <View style={styles.navLinkPill}>
-                <Text style={styles.navLinkLabel}>Catering</Text>
-              </View>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.navLinkPill,
+                    pressed && Platform.OS === 'ios' && styles.pressedIOS,
+                  ]}
+                >
+                  <Text style={styles.navLinkLabel}>Catering</Text>
+                </View>
+              )}
             </Pressable>
           ) : null}
         </View>
@@ -384,7 +460,10 @@ export default function HomeScreen() {
               entering={
                 reduceMotion
                   ? undefined
-                  : FadeInDown.delay(Math.min(index, 8) * 60)
+                  // §3.5: stagger steps 40-60ms, max 3 steps — cap the delay
+                  // at the 3rd card so a long grid doesn't cascade for a full
+                  // second; every card past that fades in at the same delay.
+                  : FadeInDown.delay(Math.min(index, 2) * 60)
                       .duration(250)
                       .easing(ENTRANCE_EASING)
               }
@@ -429,8 +508,8 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* FilterSheet — mounts always so @gorhom can manage its own gesture
-            state; hidden at index -1 until the Filters pill is tapped. */}
+        {/* FilterSheet — mounts a Modal only once presented (SheetBase's
+            `present()`); nothing renders until the Filters pill is tapped. */}
         <FilterSheet
           ref={filterSheetRef}
           selectedDiet={selectedDiet}
@@ -444,9 +523,10 @@ export default function HomeScreen() {
         />
 
         {/* AddressSwitcherSheet — mounted at the screen root (sibling of the
-            FlatList), NOT inside the list header, so @gorhom overlays the whole
-            screen instead of being trapped in the header's layout box. Hidden at
-            index -1 until the address pill is tapped (addressSheetRef.expand). */}
+            FlatList), NOT inside the list header, so its Modal overlays the
+            whole screen instead of being trapped in the header's layout box.
+            Renders nothing until the address pill is tapped
+            (addressSheetRef.present()). */}
         <AddressSwitcherSheet ref={addressSheetRef} />
       </View>
     </SafeAreaView>
@@ -468,6 +548,14 @@ const styles = StyleSheet.create({
   // chef card isn't obscured behind it (card ~90pt + 16pt gap = ~106pt).
   listContentWithCard: {
     paddingBottom: 106,
+  },
+
+  // Shared iOS-only pressed treatment for the header's button-like pills
+  // (Android relies on android_ripple on each Pressable instead). Per §3.5
+  // motion contract: pressed scale 0.97.
+  pressedIOS: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
   },
 
   // Absolute anchor for the floating card — sits just above the tab bar.
@@ -533,13 +621,36 @@ const styles = StyleSheet.create({
     // a horizontal chip row grows into any free vertical space it is offered.
     // Keep it content-height.
     flexGrow: 0,
+    // Belt-and-suspenders: never let the ScrollView itself be compressed by
+    // an ancestor — a horizontal ScrollView must always measure at its full
+    // natural/available width so its CONTENT can legitimately exceed it and
+    // scroll (that's the whole point of it being a ScrollView).
+    flexShrink: 0,
   },
+  // Explicit row direction + no-wrap: a horizontal ScrollView already
+  // defaults to this, but leaving it implicit is exactly how the previous
+  // clipping regression went unnoticed by a static styles read — spelling
+  // it out removes any doubt about how these chips are meant to lay out.
   chipRowContent: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
     gap: 0,
     paddingHorizontal: 16,
     paddingBottom: 4,
   },
+  // This is the Pressable's OWN style (not the inner `chip` View below) —
+  // the Pressable is the actual flex item living inside chipRowContent's
+  // row. Root cause of the on-device truncation: this Pressable had no
+  // style at all, so Yoga's flex algorithm was free to compress it (and
+  // everything inside it) once the row's total content width exceeded the
+  // viewport, instead of leaving that overflow to the ScrollView's own
+  // horizontal scroll. flexShrink: 0 makes every chip's true content width
+  // non-negotiable.
+  chipPressable: {
+    flexShrink: 0,
+  },
   chip: {
+    flexShrink: 0,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -547,7 +658,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: customerColors.charcoal.DEFAULT,
   },
+  // iOS-only pressed treatment — opacity only (no scale) so the underline
+  // stays put under the moving text on a horizontal-scroll tab.
+  chipPressedIOS: {
+    opacity: 0.55,
+  },
   chipLabel: {
+    flexShrink: 0,
     fontFamily: 'Inter',
     fontSize: 14,
     letterSpacing: 0,

@@ -140,11 +140,21 @@ function NavRow({
 }: NavRowProps) {
   return (
     <>
-      <Pressable onPress={onPress} accessibilityRole="button">
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      >
         {({ pressed }) => (
           // Visual layer on the inner View — iOS Pressable with a
           // function-based `style` prop can strip flex/bg styles.
-          <View style={[styles.navRow, pressed && styles.rowPressed]}>
+          <View
+            style={[
+              styles.navRow,
+              pressed && Platform.OS === 'ios' && styles.rowPressed,
+            ]}
+          >
             <Text
               style={[styles.rowLabel, destructive && styles.destructiveLabel]}
             >
@@ -325,15 +335,24 @@ export default function SettingsScreen() {
           <Pressable
             onPress={() => router.back()}
             hitSlop={8}
-            style={styles.backBtn}
             accessibilityLabel="Go back"
             accessibilityRole="button"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
-            <ChevronLeft
-              size={24}
-              color={theme.colors.ink.DEFAULT}
-              strokeWidth={1.75}
-            />
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.backBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                ]}
+              >
+                <ChevronLeft
+                  size={24}
+                  color={theme.colors.ink.DEFAULT}
+                  strokeWidth={1.75}
+                />
+              </View>
+            )}
           </Pressable>
           <Text style={styles.commandTitle}>Settings</Text>
         </View>
@@ -351,15 +370,24 @@ export default function SettingsScreen() {
           <Pressable
             onPress={() => router.back()}
             hitSlop={8}
-            style={styles.backBtn}
             accessibilityLabel="Go back"
             accessibilityRole="button"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
-            <ChevronLeft
-              size={24}
-              color={theme.colors.ink.DEFAULT}
-              strokeWidth={1.75}
-            />
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.backBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                ]}
+              >
+                <ChevronLeft
+                  size={24}
+                  color={theme.colors.ink.DEFAULT}
+                  strokeWidth={1.75}
+                />
+              </View>
+            )}
           </Pressable>
           <Text style={styles.commandTitle}>Settings</Text>
         </View>
@@ -368,10 +396,20 @@ export default function SettingsScreen() {
           <Pressable
             onPress={() => router.back()}
             hitSlop={8}
-            style={styles.errorBack}
             accessibilityRole="button"
+            accessibilityLabel="Go back"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
           >
-            <Text style={styles.errorBackLabel}>Go back</Text>
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.errorBack,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={styles.errorBackLabel}>Go back</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       </SafeAreaView>
@@ -385,15 +423,24 @@ export default function SettingsScreen() {
         <Pressable
           onPress={() => router.back()}
           hitSlop={8}
-          style={styles.backBtn}
           accessibilityLabel="Go back"
           accessibilityRole="button"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft
-            size={24}
-            color={theme.colors.ink.DEFAULT}
-            strokeWidth={1.75}
-          />
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.backBtn,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+            >
+              <ChevronLeft
+                size={24}
+                color={theme.colors.ink.DEFAULT}
+                strokeWidth={1.75}
+              />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.commandTitle}>Settings</Text>
       </View>

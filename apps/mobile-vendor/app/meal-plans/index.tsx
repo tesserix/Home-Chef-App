@@ -1,4 +1,12 @@
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import {
+  FlatList,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { CalendarDays, ChefHat, ChevronLeft, Inbox, UtensilsCrossed } from 'lucide-react-native';
@@ -10,7 +18,7 @@ import { MealPlanRequestCard } from '../../components/vendor/MealPlanRequestCard
 // Vendor tiffin hub (#195): pending meal-plan requests the chef must respond to
 // (24h window), plus the entry point to edit the weekly menu the plans book from.
 export default function MealPlansScreen() {
-  const { data, isLoading, refetch, isRefetching } = useChefMealPlanRequests();
+  const { data, isLoading, isError, refetch, isRefetching } = useChefMealPlanRequests();
   const requests = data?.data ?? [];
 
   return (
@@ -21,8 +29,13 @@ export default function MealPlansScreen() {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Go back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+              <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.title}>Tiffin plans</Text>
         <View style={{ width: 24 }} />
@@ -32,13 +45,20 @@ export default function MealPlansScreen() {
       <Pressable
         onPress={() => router.push('/meal-plans/weekly-menu' as never)}
         accessibilityRole="button"
+        accessibilityLabel="Weekly menu — set the dishes customers can pre-book, per day"
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.menuCta, pressed && styles.pressed]}>
+          <View
+            style={[
+              styles.menuCta,
+              pressed && Platform.OS === 'ios' && styles.pressed,
+            ]}
+          >
             <View style={styles.menuIcon}>
               <UtensilsCrossed
                 size={20}
-                color={theme.colors.herb.DEFAULT}
+                color={theme.colors.ink.soft}
                 strokeWidth={1.75}
               />
             </View>
@@ -57,13 +77,20 @@ export default function MealPlansScreen() {
       <Pressable
         onPress={() => router.push('/meal-plans/daily-menu' as never)}
         accessibilityRole="button"
+        accessibilityLabel="Daily menu — different dishes each day, plus a combo or thali per day"
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.menuCta, pressed && styles.pressed]}>
+          <View
+            style={[
+              styles.menuCta,
+              pressed && Platform.OS === 'ios' && styles.pressed,
+            ]}
+          >
             <View style={styles.menuIcon}>
               <UtensilsCrossed
                 size={20}
-                color={theme.colors.herb.DEFAULT}
+                color={theme.colors.ink.soft}
                 strokeWidth={1.75}
               />
             </View>
@@ -82,11 +109,18 @@ export default function MealPlansScreen() {
       <Pressable
         onPress={() => router.push('/meal-plans/prep' as never)}
         accessibilityRole="button"
+        accessibilityLabel="Tomorrow's prep — what you owe tomorrow, by dish, with a packing list"
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.menuCta, pressed && styles.pressed]}>
+          <View
+            style={[
+              styles.menuCta,
+              pressed && Platform.OS === 'ios' && styles.pressed,
+            ]}
+          >
             <View style={styles.menuIcon}>
-              <ChefHat size={20} color={theme.colors.herb.DEFAULT} strokeWidth={1.75} />
+              <ChefHat size={20} color={theme.colors.ink.soft} strokeWidth={1.75} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.menuCtaTitle}>Tomorrow's prep</Text>
@@ -105,6 +139,28 @@ export default function MealPlansScreen() {
         <View style={{ paddingHorizontal: theme.spacing[4], gap: theme.spacing[3] }}>
           <Skeleton style={styles.skeleton} />
           <Skeleton style={styles.skeleton} />
+        </View>
+      ) : isError ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>Couldn't load requests</Text>
+          <Text style={styles.emptyText}>Check your connection and try again.</Text>
+          <Pressable
+            onPress={() => refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading requests"
+            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.retryBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
+                <Text style={styles.retryLabel}>Retry</Text>
+              </View>
+            )}
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -170,7 +226,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.herb.tint,
+    backgroundColor: theme.colors.bone,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -214,5 +270,19 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.muted,
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: theme.spacing[4],
+  },
+  retryBtn: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[6],
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.paper,
   },
 });

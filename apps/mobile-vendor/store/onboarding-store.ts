@@ -71,7 +71,7 @@ interface Policies {
 interface Payout {
   /** True once /chef/payout has accepted the details. */
   configured: boolean;
-  /** 'bank_transfer' | 'upi' — the selector, which is not sensitive. */
+  /** Always 'bank_transfer' (#767) — the selector, which is not sensitive. */
   method: string;
   /** Masked summary for the Review step, e.g. "Bank ••••9012". */
   summary: string;

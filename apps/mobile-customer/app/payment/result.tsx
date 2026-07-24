@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -26,6 +27,10 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../hooks/useOrderHistory';
 import { startOrderPayment } from '../../lib/payment';
 import { useCartStore } from '../../store/cart-store';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const PRIMARY_RIPPLE = `${customerColors.canvas}33`;
+const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 interface PaymentParams {
   razorpay_payment_id?: string;
@@ -105,9 +110,17 @@ export default function PaymentResult() {
             Thank you for supporting your chef and rider — 100% of your tip goes
             straight to them.
           </Text>
-          <Pressable onPress={handleViewOrder} accessibilityRole="button" accessibilityLabel="Back to order" style={styles.ctaWrapper}>
+          <Pressable
+            onPress={handleViewOrder}
+            accessibilityRole="button"
+            accessibilityLabel="Back to order"
+            style={styles.ctaWrapper}
+            android_ripple={{ color: PRIMARY_RIPPLE, borderless: false }}
+          >
             {({ pressed }) => (
-              <View style={[styles.ctaPrimary, pressed && styles.ctaPressed]}>
+              <View
+                style={[styles.ctaPrimary, pressed && Platform.OS === 'ios' && styles.ctaPressed]}
+              >
                 <Text style={styles.ctaPrimaryLabel}>Done</Text>
               </View>
             )}
@@ -118,11 +131,16 @@ export default function PaymentResult() {
   }
 
   // ── Checking (polling) ──────────────────────────────────────────────────────
+  // Branded pending state — same 96pt circle language as success/failure below,
+  // holding a spinner instead of a static glyph while the outcome is unknown.
+  // Copy unchanged (Global Constraints §2).
   if (state === 'checking') {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right', 'bottom']}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
+          <View style={styles.pendingCircle}>
+            <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
+          </View>
           <Text style={styles.pendingLabel}>Confirming your payment…</Text>
         </View>
       </SafeAreaView>
@@ -141,17 +159,36 @@ export default function PaymentResult() {
           <Text style={styles.successBody}>
             Your order has been placed successfully. We'll notify you when the chef starts preparing.
           </Text>
-          <Pressable onPress={handleViewOrder} accessibilityRole="button" accessibilityLabel="View order details" style={styles.ctaWrapper}>
+          {/* Primary CTA — coral, radius 8, 52pt (R14: post-payment success always
+              routes forward via "View order", never a dead end). */}
+          <Pressable
+            onPress={handleViewOrder}
+            accessibilityRole="button"
+            accessibilityLabel="View order details"
+            style={styles.ctaWrapper}
+            android_ripple={{ color: PRIMARY_RIPPLE, borderless: false }}
+          >
             {({ pressed }) => (
-              <View style={[styles.ctaPrimary, pressed && styles.ctaPressed]}>
+              <View
+                style={[styles.ctaPrimary, pressed && Platform.OS === 'ios' && styles.ctaPressed]}
+              >
                 <Text style={styles.ctaPrimaryLabel}>View order</Text>
               </View>
             )}
           </Pressable>
-          <Pressable onPress={() => router.replace('/(tabs)/orders')} accessibilityRole="button" accessibilityLabel="Go to My Orders">
-            <View style={styles.ctaGhost}>
-              <Text style={styles.ctaGhostLabel}>My orders</Text>
-            </View>
+          <Pressable
+            onPress={() => router.replace('/(tabs)/orders')}
+            accessibilityRole="button"
+            accessibilityLabel="Go to My Orders"
+            android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[styles.ctaGhost, pressed && Platform.OS === 'ios' && styles.ctaGhostPressed]}
+              >
+                <Text style={styles.ctaGhostLabel}>My orders</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       </SafeAreaView>
@@ -159,11 +196,14 @@ export default function PaymentResult() {
   }
 
   // ── Failure ─────────────────────────────────────────────────────────────────
+  // Unified iconography: the same 96pt circle as success, coloured with the
+  // functional destructive token (never brand coral) so all three states read
+  // as one system.
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.centered}>
         <View style={styles.failureCircle}>
-          <XCircle size={48} color={customerColors.charcoal.soft} strokeWidth={1.5} />
+          <XCircle size={48} color={customerColors.destructive.DEFAULT} strokeWidth={1.5} />
         </View>
         <Text style={styles.failureTitle}>Payment not completed</Text>
         <Text style={styles.failureBody}>
@@ -176,9 +216,15 @@ export default function PaymentResult() {
           accessibilityRole="button"
           accessibilityLabel="Retry payment"
           style={styles.ctaWrapper}
+          android_ripple={retrying ? undefined : { color: PRIMARY_RIPPLE, borderless: false }}
         >
           {({ pressed }) => (
-            <View style={[styles.ctaPrimary, pressed && styles.ctaPressed, retrying && styles.ctaPressed]}>
+            <View
+              style={[
+                styles.ctaPrimary,
+                (retrying || (pressed && Platform.OS === 'ios')) && styles.ctaPressed,
+              ]}
+            >
               {retrying ? (
                 <ActivityIndicator color={customerColors.canvas} />
               ) : (
@@ -187,10 +233,19 @@ export default function PaymentResult() {
             </View>
           )}
         </Pressable>
-        <Pressable onPress={handleViewOrder} accessibilityRole="button" accessibilityLabel="Go to the order">
-          <View style={styles.ctaGhost}>
-            <Text style={styles.ctaGhostLabel}>{orderId ? 'View order' : 'My orders'}</Text>
-          </View>
+        <Pressable
+          onPress={handleViewOrder}
+          accessibilityRole="button"
+          accessibilityLabel="Go to the order"
+          android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
+        >
+          {({ pressed }) => (
+            <View
+              style={[styles.ctaGhost, pressed && Platform.OS === 'ios' && styles.ctaGhostPressed]}
+            >
+              <Text style={styles.ctaGhostLabel}>{orderId ? 'View order' : 'My orders'}</Text>
+            </View>
+          )}
         </Pressable>
       </View>
     </SafeAreaView>
@@ -201,14 +256,21 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: customerColors.canvas },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 },
   pendingLabel: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft, marginTop: 12 },
+  // Same 96pt circle language as success/failure — holds the spinner while
+  // the outcome is unresolved (unifies iconography across all three states).
+  pendingCircle: {
+    width: 96, height: 96, borderRadius: 48, backgroundColor: customerColors.coral.tint,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+  },
   successCircle: {
     width: 96, height: 96, borderRadius: 48, backgroundColor: customerColors.success.tint,
     alignItems: 'center', justifyContent: 'center', marginBottom: 8,
   },
   successTitle: { fontFamily: 'Geist-Bold', fontSize: 24, color: customerColors.charcoal.DEFAULT, textAlign: 'center', letterSpacing: -0.3 },
   successBody: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft, textAlign: 'center', lineHeight: 21, paddingHorizontal: 8 },
+  // Destructive tint/colour — a functional error signal, never decorative.
   failureCircle: {
-    width: 96, height: 96, borderRadius: 48, backgroundColor: customerColors.surface.soft,
+    width: 96, height: 96, borderRadius: 48, backgroundColor: customerColors.destructive.tint,
     alignItems: 'center', justifyContent: 'center', marginBottom: 8,
   },
   failureTitle: { fontFamily: 'Geist-Bold', fontSize: 24, color: customerColors.charcoal.DEFAULT, textAlign: 'center', letterSpacing: -0.3 },
@@ -224,5 +286,6 @@ const styles = StyleSheet.create({
     borderRadius: 8, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24,
     borderWidth: 1, borderColor: customerColors.hairline, backgroundColor: customerColors.canvas, width: '100%', maxWidth: 320,
   },
+  ctaGhostPressed: { backgroundColor: customerColors.surface.soft },
   ctaGhostLabel: { fontFamily: 'Inter', fontSize: 15, color: customerColors.charcoal.DEFAULT },
 });

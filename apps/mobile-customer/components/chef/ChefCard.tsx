@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useReducedMotion,
   useSharedValue,
@@ -8,10 +8,17 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { Heart } from 'lucide-react-native';
+import { Heart, UtensilsCrossed } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import type { Chef } from '../../types/customer';
+
+// Android ripple tints — translucent colours derived from existing tokens
+// (never a new literal colour), matching the primitive Button's `withAlpha`
+// convention: card body gets an ink tint, the heart (on a dark photo scrim)
+// gets a white tint.
+const CARD_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const HEART_RIPPLE = `${customerColors.canvas}59`;
 
 interface ChefCardProps {
   chef: Chef;
@@ -60,9 +67,15 @@ export function ChefCard({ chef }: ChefCardProps) {
           onPress={handlePress}
           accessibilityLabel={`View ${chef.name}`}
           accessibilityRole="button"
+          android_ripple={{ color: CARD_RIPPLE, borderless: false }}
         >
           {({ pressed }) => (
-            <View style={[styles.card, pressed && styles.cardPressed]}>
+            <View
+              style={[
+                styles.card,
+                pressed && Platform.OS === 'ios' && styles.cardPressed,
+              ]}
+            >
               {/* --- Photo area: 4:3, full-width --- */}
               <View style={styles.photoContainer}>
                 {hasImage ? (
@@ -71,20 +84,19 @@ export function ChefCard({ chef }: ChefCardProps) {
                     style={styles.photo}
                     contentFit="cover"
                     placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
-                    transition={200}
+                    transition={150}
                     accessibilityElementsHidden
                   />
                 ) : (
-                  // Missing image → soft placeholder with the chef's initial.
-                  // Reads intentional (a monogram) instead of broken (the old
-                  // flat gray utensil glyph).
+                  // Missing image → surface-soft placeholder + utensil glyph
+                  // per rubric R2 — required, not optional. No grey void, no
+                  // letter-avatar substitute on a photo surface.
                   <View style={styles.photoPlaceholder}>
-                    <Text
-                      style={styles.photoPlaceholderInitial}
+                    <UtensilsCrossed
+                      size={32}
+                      color={customerColors.charcoal.soft}
                       accessibilityElementsHidden
-                    >
-                      {(chef.name?.trim()[0] ?? '·').toUpperCase()}
-                    </Text>
+                    />
                   </View>
                 )}
 
@@ -107,11 +119,12 @@ export function ChefCard({ chef }: ChefCardProps) {
                       isFavorited ? `Remove ${chef.name} from saved` : `Save ${chef.name}`
                     }
                     accessibilityState={{ checked: isFavorited }}
+                    android_ripple={{ color: HEART_RIPPLE, borderless: true, radius: 20 }}
                   >
                     <Animated.View style={[styles.heartButton, heartAnimStyle]}>
                       <Heart
                         size={18}
-                        color={isFavorited ? customerColors.coral.DEFAULT : '#FFFFFF'}
+                        color={isFavorited ? customerColors.coral.DEFAULT : customerColors.canvas}
                         fill={isFavorited ? customerColors.coral.DEFAULT : 'transparent'}
                       />
                     </Animated.View>
@@ -126,16 +139,24 @@ export function ChefCard({ chef }: ChefCardProps) {
                   <Text style={styles.chefName} numberOfLines={1}>
                     {chef.name}
                   </Text>
-                  <View style={styles.ratingBlock}>
-                    {/* Star is charcoal, NOT gold per spec */}
-                    <Text style={styles.ratingStar}>★</Text>
-                    <Text style={styles.ratingValue}>
-                      {chef.rating.toFixed(1)}
-                    </Text>
-                    <Text style={styles.ratingCount}>
-                      ({chef.reviewCount})
-                    </Text>
-                  </View>
+                  {chef.reviewCount === 0 ? (
+                    // R1 — never render "★ 0.0 (0)". Zero reviews reads as
+                    // "New" instead, so a fresh chef isn't shown as a bad one.
+                    <View style={styles.newChip}>
+                      <Text style={styles.newChipText}>New</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.ratingBlock}>
+                      {/* Star is charcoal, NOT gold per spec */}
+                      <Text style={styles.ratingStar}>★</Text>
+                      <Text style={styles.ratingValue}>
+                        {chef.rating.toFixed(1)}
+                      </Text>
+                      <Text style={styles.ratingCount}>
+                        ({chef.reviewCount})
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Cuisine line */}
@@ -213,8 +234,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: customerColors.surface.DEFAULT,
   },
+  // iOS-only pressed treatment (Android gets android_ripple instead — see
+  // the Pressable above). Per §3.5 motion contract: pressed scale 0.97.
   cardPressed: {
     opacity: 0.95,
+    transform: [{ scale: 0.97 }],
   },
 
   // --- Photo --- 4:3 aspect ratio
@@ -233,13 +257,6 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.surface.soft,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // Monogram initial — quiet, oversized, deliberately low-contrast.
-  photoPlaceholderInitial: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 44,
-    color: customerColors.charcoal.soft,
-    opacity: 0.45,
   },
   // Subtle charcoal scrim — only enough to make the white heart legible.
   photoScrim: {
@@ -290,6 +307,20 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.DEFAULT,
     letterSpacing: -0.1,
   },
+  // R1 zero-review state — surface-soft bg + charcoal-soft text, never a
+  // gold/coral badge (that's reserved for the accent).
+  newChip: {
+    flexShrink: 0,
+    backgroundColor: customerColors.surface.soft,
+    borderRadius: 9999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  newChipText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    color: customerColors.charcoal.soft,
+  },
   ratingBlock: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -306,11 +337,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 12,
     color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
   },
   ratingCount: {
     fontFamily: 'Inter',
     fontSize: 11,
     color: customerColors.charcoal.soft,
+    fontVariant: ['tabular-nums'],
   },
 
   cuisine: {
@@ -349,6 +382,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: customerColors.charcoal.soft,
     letterSpacing: 0,
+    fontVariant: ['tabular-nums'],
   },
   pickupOnly: {
     fontFamily: 'Inter',

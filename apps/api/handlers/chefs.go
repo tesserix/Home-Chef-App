@@ -683,6 +683,18 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		Where("chef_id = ? AND created_at >= ? AND payment_status = ?", chef.ID, weekStart, models.PaymentCompleted).
 		Select("COALESCE(SUM(total), 0)").Scan(&weekRevenue)
 
+	// Lifetime totals for the dashboard hero — computed from the orders table, not
+	// the denormalized chef.TotalOrders/earnings counters (which drift: TotalOrders
+	// read 0 for chefs with live orders). Earnings is completed-only (captured
+	// money), mirroring the today/week revenue queries; the order count uses the
+	// same chefVisibleOrders scope as today/week so the three periods agree.
+	var totalEarnings float64
+	database.DB.Model(&models.Order{}).
+		Where("chef_id = ? AND payment_status = ?", chef.ID, models.PaymentCompleted).
+		Select("COALESCE(SUM(total), 0)").Scan(&totalEarnings)
+	var totalOrdersCount int64
+	chefVisibleOrders(chef.ID).Count(&totalOrdersCount)
+
 	// Recent orders — a RECENCY GLANCE, not the source of truth for what the chef
 	// is cooking. Mobile reads `recentOrders` for the dead-screen reassurance copy
 	// (`lastOrderIso` from `createdAt`). Preload Customer for `customerName`.
@@ -752,9 +764,14 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"pendingOrders":   pendingOrders,
 		"weekOrders":      weekOrders,
 		"weekRevenue":     weekRevenue,
-		"rating":          chef.Rating,
-		"totalReviews":    chef.TotalReviews,
-		"totalOrders":     chef.TotalOrders,
+		// Lifetime totals — the hero shows these (all-time), with today/this-week
+		// as the recent breakdown.
+		"totalEarnings": totalEarnings,
+		"rating":        chef.Rating,
+		"totalReviews":  chef.TotalReviews,
+		// Computed lifetime count, not chef.TotalOrders — that denormalized
+		// counter drifted to 0 for chefs with live orders.
+		"totalOrders": totalOrdersCount,
 		"acceptingOrders": chef.AcceptingOrders,
 		"pausedUntil":     chef.PausedUntil,
 		// FSSAI lockout (#92): drives the vendor dashboard's "orders paused —
@@ -2128,23 +2145,20 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		return
 	}
 
-	if req.PayoutMethod != "bank_transfer" && req.PayoutMethod != "upi" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "payoutMethod must be 'bank_transfer' or 'upi'"})
+	// UPI is not an accepted payout destination (#767). Razorpay Route settles
+	// by NEFT/IMPS to a bank account and has no VPA destination, so a chef who
+	// nominated UPI could never be paid — accepting it only strands their
+	// earnings behind an "onboarded" facade. Reject anything but bank_transfer
+	// at the edge; UPI stays available for collection (customers paying), never
+	// for disbursement.
+	if req.PayoutMethod != "bank_transfer" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payoutMethod must be 'bank_transfer'; UPI payouts are not supported"})
 		return
 	}
 
-	if req.PayoutMethod == "bank_transfer" {
-		if req.BankAccountNumber == "" || req.BankIFSC == "" || req.BankAccountName == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "bankAccountNumber, bankIFSC, and bankAccountName are required for bank_transfer"})
-			return
-		}
-	}
-
-	if req.PayoutMethod == "upi" {
-		if req.UpiID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "upiId is required for upi payout method"})
-			return
-		}
+	if req.BankAccountNumber == "" || req.BankIFSC == "" || req.BankAccountName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bankAccountNumber, bankIFSC, and bankAccountName are required for bank_transfer"})
+		return
 	}
 
 	var chef models.ChefProfile
@@ -2293,21 +2307,6 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 				chef.RazorpaySettlementStatus = settlementResult.ActivationStatus
 				chef.RazorpaySettlementRequirements = string(reqJSON)
 			}
-		} else if req.PayoutMethod != "bank_transfer" && chef.RazorpaySettlementStatus != "" {
-			// Switching away from bank transfer must not leave a stale
-			// "activated" status the automated release sweep trusts
-			// (BuildReleaseInput also independently requires
-			// payout_method=="bank_transfer" as defense in depth — review
-			// finding 2). razorpay_account_id/razorpay_product_id are left
-			// intact so a later switch back to bank reuses them instead of
-			// minting a new linked account.
-			if uErr := tx.Model(&models.ChefProfile{}).Where("id = ?", chef.ID).
-				Update("razorpay_settlement_status", "").Error; uErr != nil {
-				log.Printf("payout-settlement: failed to clear stale settlement status for vendor %s: %v", vendorID, uErr)
-				services.CaptureBackgroundError(uErr)
-			} else {
-				chef.RazorpaySettlementStatus = ""
-			}
 		}
 
 		return nil
@@ -2327,11 +2326,11 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 	case settlementErr == nil:
 		log.Printf("payout-settlement: registered vendor %s (account=%s status=%s)", vendorID, chef.RazorpayAccountID, chef.RazorpaySettlementStatus)
 	case errors.Is(settlementErr, services.ErrNoSettlementAccount):
-		// Expected for a chef who chose UPI — Route settles by NEFT/IMPS and
-		// has no VPA destination. Not a crash, but the response must not
-		// silently look like a payable account was configured.
-		settlementErrorCode = "upi_not_supported_for_route_settlement"
-		log.Printf("payout-settlement: vendor %s has no Route settlement destination (upi payout method)", vendorID)
+		// Safety net: bank details are required above, so this should not fire —
+		// but if a registration ever reports no settlement destination, the
+		// response must not silently look like a payable account was configured.
+		settlementErrorCode = "no_settlement_account"
+		log.Printf("payout-settlement: vendor %s has no Route settlement destination", vendorID)
 	default:
 		settlementErrorCode = "settlement_registration_failed"
 		log.Printf("payout-settlement: registration failed for vendor %s: %v", vendorID, settlementErr)

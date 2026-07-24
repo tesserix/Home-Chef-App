@@ -36,7 +36,7 @@ export function WinbackBanner() {
       </View>
       <Pressable
         onPress={() => setDismissed(true)}
-        hitSlop={10}
+        hitSlop={13}
         accessibilityRole="button"
         accessibilityLabel="Dismiss offer"
       >

@@ -1,8 +1,8 @@
 import React from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Award, Flame, Sparkles, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
+import { AlertCircle, Award, Flame, Sparkles, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import {
@@ -11,6 +11,10 @@ import {
   useRedeemLoyalty,
   loyaltyErrorMessage,
 } from '../hooks/useLoyalty';
+
+// Android ripple tint — translucent token, never a new literal colour.
+const CANVAS_RIPPLE = `${customerColors.canvas}33`;
+const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 function formatMoney(amount: number): string {
   try {
@@ -40,8 +44,8 @@ const cardShadow = {
 
 export default function LoyaltyScreen() {
   const router = useRouter();
-  const { data: loyalty, isLoading } = useLoyalty();
-  const { data: txns = [], isLoading: txnLoading } = useLoyaltyTransactions();
+  const { data: loyalty, isLoading, isError, refetch } = useLoyalty();
+  const { data: txns = [], isLoading: txnLoading, isError: txnError, refetch: refetchTxns } = useLoyaltyTransactions();
   const redeem = useRedeemLoyalty();
 
   const balance = loyalty?.balance ?? 0;
@@ -88,9 +92,39 @@ export default function LoyaltyScreen() {
   return (
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-canvas">
       <ScreenHeader title="Rewards" />
-      {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color={customerColors.charcoal.soft} />
+      {isError ? (
+        <View className="flex-1 items-center justify-center px-8 gap-4 pt-16">
+          <View className="w-16 h-16 rounded-full bg-surface-soft items-center justify-center">
+            <AlertCircle size={28} color={customerColors.charcoal.soft} />
+          </View>
+          <Text className="text-lg font-semibold text-charcoal text-center font-display">
+            Something went wrong
+          </Text>
+          <Text className="text-sm text-charcoal-soft text-center">
+            We could not load your rewards. Please try again.
+          </Text>
+          <Pressable
+            onPress={() => void refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading rewards"
+            android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                className={`bg-coral rounded-lg px-6 py-3 min-h-[44px] items-center justify-center ${
+                  pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : ''
+                }`}
+              >
+                <Text className="text-canvas font-semibold text-sm">Try again</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
+      ) : isLoading ? (
+        <View className="p-4 gap-3">
+          <View className="rounded-2xl bg-surface-soft" style={{ height: 120 }} />
+          <View className="rounded-2xl bg-surface-soft" style={{ height: 76 }} />
+          <View className="rounded-2xl bg-surface-soft" style={{ height: 56 }} />
         </View>
       ) : (
         <ScrollView>
@@ -108,7 +142,12 @@ export default function LoyaltyScreen() {
                   </Text>
                 </View>
               </View>
-              <Text className="mt-1 text-4xl font-bold text-charcoal">{formatPoints(balance)}</Text>
+              <Text
+                className="mt-1 text-4xl font-bold text-charcoal"
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
+                {formatPoints(balance)}
+              </Text>
               <Text className="mt-1 text-sm text-charcoal-soft">
                 Worth {formatMoney(redeemValue)} in wallet credit
               </Text>
@@ -133,25 +172,42 @@ export default function LoyaltyScreen() {
               </View>
             </View>
 
-            {/* Redeem */}
+            {/* Redeem — coral filled, radius 8, 52pt (spec §3) */}
             <Pressable
               onPress={onRedeem}
               disabled={!canRedeem || redeem.isPending}
               accessibilityRole="button"
-              accessibilityLabel="Redeem points to wallet"
-              className={`mt-3 flex-row items-center justify-center rounded-2xl px-5 py-4 ${canRedeem ? 'bg-coral' : 'bg-surface-soft'}`}
+              accessibilityLabel={
+                canRedeem
+                  ? `Redeem ${formatPoints(redeemable)} points for ${formatMoney(redeemValue)}`
+                  : 'Redeem points to wallet'
+              }
+              android_ripple={
+                !canRedeem || redeem.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }
+              }
             >
-              {redeem.isPending ? (
-                <ActivityIndicator color={canRedeem ? '#FFFFFF' : customerColors.charcoal.soft} />
-              ) : (
-                <>
-                  <Sparkles size={18} color={canRedeem ? '#FFFFFF' : customerColors.charcoal.soft} />
-                  <Text className={`ml-2 text-base font-semibold ${canRedeem ? 'text-white' : 'text-charcoal-soft'}`}>
-                    {canRedeem
-                      ? `Redeem ${formatPoints(redeemable)} pts → ${formatMoney(redeemValue)}`
-                      : `Earn ${formatPoints(pointsToMin)} more to redeem`}
-                  </Text>
-                </>
+              {({ pressed }) => (
+                <View
+                  className={`mt-3 min-h-[52px] flex-row items-center justify-center rounded-lg px-5 ${
+                    canRedeem ? 'bg-coral' : 'bg-surface-soft'
+                  } ${canRedeem && pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : ''}`}
+                >
+                  {redeem.isPending ? (
+                    <ActivityIndicator color={canRedeem ? customerColors.canvas : customerColors.charcoal.soft} />
+                  ) : (
+                    <>
+                      <Sparkles size={18} color={canRedeem ? customerColors.canvas : customerColors.charcoal.soft} />
+                      <Text
+                        className={`ml-2 text-base font-semibold ${canRedeem ? 'text-white' : 'text-charcoal-soft'}`}
+                        style={{ fontVariant: ['tabular-nums'] }}
+                      >
+                        {canRedeem
+                          ? `Redeem ${formatPoints(redeemable)} pts → ${formatMoney(redeemValue)}`
+                          : `Earn ${formatPoints(pointsToMin)} more to redeem`}
+                      </Text>
+                    </>
+                  )}
+                </View>
               )}
             </Pressable>
 
@@ -160,7 +216,34 @@ export default function LoyaltyScreen() {
             </Text>
 
             {txnLoading ? (
-              <ActivityIndicator className="mt-4" color={customerColors.charcoal.soft} />
+              <View className="overflow-hidden rounded-xl bg-canvas" style={cardShadow}>
+                {[0, 1].map((i) => (
+                  <View key={i}>
+                    {i > 0 && <View className="ml-16 h-px bg-hairline" />}
+                    <View className="min-h-[56px] flex-row items-center px-4 py-3">
+                      <View className="mr-3 h-9 w-9 rounded-full bg-surface-soft" />
+                      <View className="flex-1 gap-2">
+                        <View className="h-3.5 rounded bg-hairline" style={{ width: '55%' }} />
+                        <View className="h-3 rounded bg-hairline" style={{ width: '35%' }} />
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : txnError ? (
+              <View className="items-center rounded-xl bg-canvas p-6 gap-3" style={cardShadow}>
+                <Text className="text-charcoal-soft text-center">Could not load your history.</Text>
+                <Pressable
+                  onPress={() => void refetchTxns()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading rewards history"
+                  android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
+                >
+                  <View className="min-h-[40px] px-4 items-center justify-center rounded-lg border border-hairline">
+                    <Text className="text-sm font-semibold text-charcoal">Try again</Text>
+                  </View>
+                </Pressable>
+              </View>
             ) : txns.length === 0 ? (
               <View className="items-center rounded-xl bg-canvas p-8" style={cardShadow}>
                 <Text className="text-charcoal-soft">
@@ -189,7 +272,10 @@ export default function LoyaltyScreen() {
                             {t.reason ? ` · ${t.reason}` : ''}
                           </Text>
                         </View>
-                        <Text className={`text-base font-semibold ${credit ? 'text-success' : 'text-charcoal'}`}>
+                        <Text
+                          className={`text-base font-semibold ${credit ? 'text-success' : 'text-charcoal'}`}
+                          style={{ fontVariant: ['tabular-nums'] }}
+                        >
                           {credit ? '+' : '−'}
                           {formatPoints(t.points)}
                         </Text>

@@ -89,10 +89,8 @@ export default function ReviewScreen() {
     [documents.drivingLicenseUri, documents.idProofUri].filter(Boolean).length;
   const totalDocsRequired = 2;
 
-  const payoutSummary =
-    payoutDetails.payoutMethod === 'bank'
-      ? `Bank Account: ${maskAccountNumber(payoutDetails.bankAccountNumber)}`
-      : `UPI: ${payoutDetails.upiId}`;
+  // UPI is not an accepted payout method (#767) — payouts are bank transfer only.
+  const payoutSummary = `Bank Account: ${maskAccountNumber(payoutDetails.bankAccountNumber)}`;
 
   const handleSubmit = async () => {
     if (!termsAccepted) {

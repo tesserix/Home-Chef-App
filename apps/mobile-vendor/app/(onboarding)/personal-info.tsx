@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -46,6 +46,13 @@ export default function PersonalInfoScreen() {
       email: personalInfo.email || (user?.email ?? ''),
     },
   });
+
+  // R14 — scroll the section with the first invalid field into view instead
+  // of leaving the alert as the only signal. OnboardingScaffold owns the
+  // ScrollView, so we forward a ref into it via its `scrollRef` prop.
+  const scrollRef = useRef<ScrollView>(null);
+  const nameFieldY = useRef(0);
+  const contactFieldY = useRef(0);
 
   const email = personalInfo.email || user?.email || '';
   const [emailVerified, setEmailVerified] = useState(personalInfo.emailVerified ?? false);
@@ -105,6 +112,9 @@ export default function PersonalInfoScreen() {
   }
 
   function onInvalid(errs: typeof errors): void {
+    const firstKey = Object.keys(errs)[0];
+    const y = firstKey === 'fullName' ? nameFieldY.current : contactFieldY.current;
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
     const firstError = Object.values(errs)[0];
     if (firstError?.message) Alert.alert(t('onboarding.checkDetails'), t(firstError.message));
   }
@@ -118,6 +128,7 @@ export default function PersonalInfoScreen() {
       subtitle={t('onboarding.personalSubtitle')}
       primaryLabel={t('onboarding.continue')}
       onPrimary={handleSubmit(onSubmit, onInvalid)}
+      scrollRef={scrollRef}
     >
       {/* ── WHO YOU ARE ─────────────────────────────────────── */}
       <View style={styles.sectionLabel}>
@@ -125,7 +136,12 @@ export default function PersonalInfoScreen() {
         <Text style={styles.sectionLabelText}>{t('onboarding.identity')}</Text>
       </View>
 
-      <View style={styles.fieldCard}>
+      <View
+        style={styles.fieldCard}
+        onLayout={(e) => {
+          nameFieldY.current = e.nativeEvent.layout.y;
+        }}
+      >
         <Controller
           control={control}
           name="fullName"
@@ -151,7 +167,12 @@ export default function PersonalInfoScreen() {
         <Text style={styles.sectionLabelText}>{t('onboarding.contact')}</Text>
       </View>
 
-      <View style={styles.fieldCard}>
+      <View
+        style={styles.fieldCard}
+        onLayout={(e) => {
+          contactFieldY.current = e.nativeEvent.layout.y;
+        }}
+      >
         <Controller
           control={control}
           name="phone"
@@ -354,7 +375,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[2],
     paddingVertical: 3,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.herb.DEFAULT,
+    // Operational-positive status → functional success green, not ink
+    // (the vendor app carries zero persimmon; ink is reserved for actions).
+    backgroundColor: theme.colors.success.DEFAULT,
   },
   verifiedBadgeText: {
     fontFamily: 'Inter-SemiBold',

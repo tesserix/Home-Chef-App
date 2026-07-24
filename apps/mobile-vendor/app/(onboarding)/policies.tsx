@@ -5,6 +5,7 @@
 import {
   Alert,
   Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -116,10 +117,11 @@ export default function PoliciesScreen() {
           styles when applied via the Pressable's function-style prop. */}
       <Pressable
         onPress={() => setAcceptedTerms((prev) => !prev)}
-        style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+        style={({ pressed }) => ({ opacity: pressed && Platform.OS === 'ios' ? 0.75 : 1 })}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: acceptedTerms }}
         accessibilityLabel={t('onboarding.acceptTerms')}
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}0F`, borderless: false }}
       >
         <View style={[styles.checkRow, acceptedTerms && styles.checkRowAccepted]}>
           <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
@@ -157,11 +159,12 @@ export default function PoliciesScreen() {
               key={option.value}
               onPress={() => setCancellationPolicy(option.value)}
               style={({ pressed }) => ({
-                opacity: pressed && !selected ? 0.85 : 1,
+                opacity: pressed && !selected && Platform.OS === 'ios' ? 0.85 : 1,
               })}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
               accessibilityLabel={optionLabel}
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}0F`, borderless: false }}
             >
               <View
                 style={[

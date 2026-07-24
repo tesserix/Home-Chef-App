@@ -11,11 +11,11 @@
 // Sensitive fields go straight to POST /chef/payout, which stores them in GCP
 // Secret Manager. Only a masked summary is kept in the onboarding draft.
 
-import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
-import { Landmark, Smartphone, ShieldCheck } from 'lucide-react-native';
+import { Landmark, ShieldCheck } from 'lucide-react-native';
 import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
@@ -27,31 +27,27 @@ import {
   summarisePayout,
   validatePayoutInput,
   type PayoutFormValues,
-  type PayoutMethod,
   type PayoutValidationError,
 } from '../../lib/payout';
 
-const METHODS: Array<{ value: PayoutMethod; label: string; hint: string; Icon: typeof Landmark }> = [
-  {
-    value: 'bank_transfer',
-    label: 'Bank account',
-    hint: 'Recommended — settles directly to your account',
-    Icon: Landmark,
-  },
-  { value: 'upi', label: 'UPI', hint: 'Paid to your UPI ID', Icon: Smartphone },
-];
-
+// UPI is not an accepted payout method (#767): Route settles to a bank account
+// only. Bank transfer is the only option.
 export default function PayoutStep() {
-  const { payout, updatePayout, setStep } = useVendorOnboardingStore();
+  const { updatePayout, setStep } = useVendorOnboardingStore();
 
-  const [method, setMethod] = useState<PayoutMethod>(
-    payout.method === 'upi' ? 'upi' : 'bank_transfer',
-  );
   const [values, setValues] = useState<PayoutFormValues>(emptyPayoutForm);
   const [errors, setErrors] = useState<PayoutValidationError[]>([]);
 
+  // R14 — scroll to the first invalid field on a failed submit instead of
+  // leaving an already-scrolled-away chef staring at nothing happening.
+  // OnboardingScaffold owns the ScrollView, forwarded via `scrollRef`.
+  const scrollRef = useRef<ScrollView>(null);
+  const bankAccountNameY = useRef(0);
+  const bankAccountNumberY = useRef(0);
+  const bankIFSCY = useRef(0);
+
   const save = useMutation({
-    mutationFn: () => api.post('/chef/payout', buildPayoutPayload(method, values)),
+    mutationFn: () => api.post('/chef/payout', buildPayoutPayload(values)),
   });
 
   function set(field: keyof PayoutFormValues, value: string): void {
@@ -66,9 +62,18 @@ export default function PayoutStep() {
   }
 
   function onNext(): void {
-    const found = validatePayoutInput(method, values);
+    const found = validatePayoutInput(values);
     if (found.length > 0) {
       setErrors(found);
+      const order: { field: keyof PayoutFormValues; y: typeof bankAccountNameY }[] = [
+        { field: 'bankAccountName', y: bankAccountNameY },
+        { field: 'bankAccountNumber', y: bankAccountNumberY },
+        { field: 'bankIFSC', y: bankIFSCY },
+      ];
+      const first = order.find((f) => found.some((e) => e.field === f.field));
+      if (first) {
+        scrollRef.current?.scrollTo({ y: Math.max(0, first.y.current - 16), animated: true });
+      }
       return;
     }
 
@@ -77,8 +82,8 @@ export default function PayoutStep() {
         // Persist only the masked summary — never the account number.
         updatePayout({
           configured: true,
-          method,
-          summary: summarisePayout(method, values),
+          method: 'bank_transfer',
+          summary: summarisePayout(values),
         });
         setStep(7);
         router.push('/(onboarding)/review');
@@ -102,77 +107,48 @@ export default function PayoutStep() {
       onPrimary={onNext}
       primaryLoading={save.isPending}
       onBack={() => router.back()}
+      scrollRef={scrollRef}
     >
       <View style={styles.methods}>
-        {METHODS.map(({ value, label, hint, Icon }) => {
-          const active = method === value;
-          return (
-            <Pressable
-              key={value}
-              style={[styles.method, active && styles.methodActive]}
-              onPress={() => {
-                setMethod(value);
-                // Switching method makes the other method's errors meaningless.
-                setErrors([]);
-              }}
-              hitSlop={4}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: active }}
-              accessibilityLabel={`${label}. ${hint}`}
-            >
-              <Icon
-                size={20}
-                color={active ? theme.colors.ink.DEFAULT : theme.colors.ink.muted}
-              />
-              <View style={styles.methodText}>
-                <Text style={[styles.methodLabel, active && styles.methodLabelActive]}>
-                  {label}
-                </Text>
-                <Text style={styles.methodHint}>{hint}</Text>
-              </View>
-            </Pressable>
-          );
-        })}
+        <View style={[styles.method, styles.methodActive]}>
+          <Landmark size={20} color={theme.colors.ink.DEFAULT} />
+          <View style={styles.methodText}>
+            <Text style={[styles.methodLabel, styles.methodLabelActive]}>Bank account</Text>
+            <Text style={styles.methodHint}>Settled directly to your account by NEFT/IMPS</Text>
+          </View>
+        </View>
       </View>
 
-      {method === 'bank_transfer' ? (
-        <>
-          <Input
-            label="Account holder name"
-            value={values.bankAccountName}
-            onChangeText={(t) => set('bankAccountName', t)}
-            placeholder="As printed on your passbook"
-            autoCapitalize="words"
-            error={errorFor('bankAccountName')}
-          />
-          <Input
-            label="Account number"
-            value={values.bankAccountNumber}
-            onChangeText={(t) => set('bankAccountNumber', t)}
-            placeholder="e.g. 123456789012"
-            keyboardType="number-pad"
-            error={errorFor('bankAccountNumber')}
-          />
-          <Input
-            label="IFSC code"
-            value={values.bankIFSC}
-            onChangeText={(t) => set('bankIFSC', t)}
-            placeholder="e.g. HDFC0001234"
-            autoCapitalize="characters"
-            error={errorFor('bankIFSC')}
-          />
-        </>
-      ) : (
+      <View onLayout={(e) => { bankAccountNameY.current = e.nativeEvent.layout.y; }}>
         <Input
-          label="UPI ID"
-          value={values.upiId}
-          onChangeText={(t) => set('upiId', t)}
-          placeholder="name@bank"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          error={errorFor('upiId')}
+          label="Account holder name"
+          value={values.bankAccountName}
+          onChangeText={(t) => set('bankAccountName', t)}
+          placeholder="As printed on your passbook"
+          autoCapitalize="words"
+          error={errorFor('bankAccountName')}
         />
-      )}
+      </View>
+      <View onLayout={(e) => { bankAccountNumberY.current = e.nativeEvent.layout.y; }}>
+        <Input
+          label="Account number"
+          value={values.bankAccountNumber}
+          onChangeText={(t) => set('bankAccountNumber', t)}
+          placeholder="e.g. 123456789012"
+          keyboardType="number-pad"
+          error={errorFor('bankAccountNumber')}
+        />
+      </View>
+      <View onLayout={(e) => { bankIFSCY.current = e.nativeEvent.layout.y; }}>
+        <Input
+          label="IFSC code"
+          value={values.bankIFSC}
+          onChangeText={(t) => set('bankIFSC', t)}
+          placeholder="e.g. HDFC0001234"
+          autoCapitalize="characters"
+          error={errorFor('bankIFSC')}
+        />
+      </View>
 
       <View style={styles.assurance}>
         <ShieldCheck size={16} color={theme.colors.ink.muted} />

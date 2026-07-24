@@ -1,10 +1,16 @@
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { Image } from "expo-image";
+import { UtensilsCrossed } from "lucide-react-native";
 import { theme } from "@homechef/mobile-shared/theme";
 import { useToast } from "@homechef/mobile-shared/ui";
 import type { MenuItem } from "../../hooks/useVendorMenu";
 import { useToggleAvailability } from "../../hooks/useVendorMenu";
 import { DietIcon } from "./DietIcon";
+
+// Generic neutral-grey blurhash — the backend doesn't compute per-photo
+// hashes, so every dish thumbnail fades in against the same soft placeholder
+// rather than a hard white/grey flash (R2/R13).
+const PHOTO_BLURHASH = "L6PZfSi_.AyE_3t7t7R**0o#DgR4";
 
 interface MenuItemRowProps {
   item: MenuItem;
@@ -36,6 +42,7 @@ export function MenuItemRow({ item, onPress }: MenuItemRowProps) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Edit ${item.name}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
         // Inner View carries the flex layout. iOS Pressable's
@@ -47,7 +54,7 @@ export function MenuItemRow({ item, onPress }: MenuItemRowProps) {
           <View
             style={[
               styles.root,
-              pressed && { backgroundColor: theme.colors.bone },
+              pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
               isDimmed && { opacity: 0.55 },
             ]}
           >
@@ -57,8 +64,20 @@ export function MenuItemRow({ item, onPress }: MenuItemRowProps) {
                   source={{ uri: photo }}
                   style={styles.thumbImg}
                   contentFit="cover"
+                  placeholder={{ blurhash: PHOTO_BLURHASH }}
+                  transition={150}
+                  accessible={false}
                 />
-              ) : null}
+              ) : (
+                // R2: no photo — bone field + utensil glyph, never a blank void.
+                <View style={styles.thumbFallback} accessible={false}>
+                  <UtensilsCrossed
+                    size={18}
+                    color={theme.colors.ink.soft}
+                    strokeWidth={1.5}
+                  />
+                </View>
+              )}
             </View>
 
             <View style={styles.body}>
@@ -132,6 +151,12 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   thumbImg: { width: 44, height: 44 },
+  thumbFallback: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   body: { flex: 1 },
   nameRow: {
     flexDirection: "row",

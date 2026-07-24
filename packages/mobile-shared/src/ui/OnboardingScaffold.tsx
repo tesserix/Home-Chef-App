@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -35,6 +35,11 @@ interface OnboardingScaffoldProps {
   /** Optional back action. When provided, renders a top-left chevron text
    *  link "Back". */
   onBack?: () => void;
+  /** Optional ref to the internal form ScrollView. Forms with react-hook-form
+   *  validation pass this so an invalid submit can scroll the first errored
+   *  field into view (R14) — the ScrollView otherwise isn't reachable from
+   *  the screen since this component owns it. */
+  scrollRef?: RefObject<ScrollView | null>;
 }
 
 /**
@@ -68,6 +73,7 @@ export function OnboardingScaffold({
   primaryLoading = false,
   primaryDisabled = false,
   onBack,
+  scrollRef,
 }: OnboardingScaffoldProps) {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -78,8 +84,23 @@ export function OnboardingScaffold({
         {/* Top bar */}
         <View style={styles.topBar}>
           {onBack ? (
-            <Pressable onPress={onBack} hitSlop={12}>
-              <Text style={styles.backLink}>← Back</Text>
+            <Pressable
+              onPress={onBack}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+            >
+              {({ pressed }) => (
+                <Text
+                  style={[
+                    styles.backLink,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                  ]}
+                >
+                  ← Back
+                </Text>
+              )}
             </Pressable>
           ) : (
             <View />
@@ -89,9 +110,12 @@ export function OnboardingScaffold({
           </Text>
         </View>
 
-        {/* Progress bar — one segment per step: done = ink, current = persimmon
-            ("you are here"), upcoming = mist. The single accent segment makes the
-            position obvious at a glance. */}
+        {/* Progress bar — one segment per step: done = ink.soft, current = full
+            ink AND a wider pill ("you are here" reads from both weight and
+            width, not just position), upcoming = mist. This scaffold is
+            vendor-exclusive (only vendor onboarding screens import it), so it
+            stays on the monochrome ink palette rather than the retired
+            persimmon accent. */}
         <View
           style={styles.progressRow}
           accessibilityRole="progressbar"
@@ -114,6 +138,7 @@ export function OnboardingScaffold({
         </View>
 
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -177,9 +202,13 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: theme.colors.mist.DEFAULT,
   },
-  dotDone: { backgroundColor: theme.colors.ink.DEFAULT },
-  // Current step in persimmon — the single "you are here" accent.
-  dotCurrent: { backgroundColor: theme.colors.herb.DEFAULT },
+  // Done — soft ink, distinct from both the upcoming mist and the current
+  // step's full ink (the vendor app carries zero persimmon, so "done" vs
+  // "current" has to read from ink weight, not a second accent colour).
+  dotDone: { backgroundColor: theme.colors.ink.soft },
+  // Current step — full ink AND a wider pill than every other segment, so
+  // "you are here" is unambiguous even at a glance.
+  dotCurrent: { flex: 2.2, backgroundColor: theme.colors.ink.DEFAULT },
 
   scroll: { flex: 1 },
   scrollContent: {
@@ -189,7 +218,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.muted,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
     marginTop: theme.spacing[2],

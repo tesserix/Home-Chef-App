@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+
+// Android ripple tint — translucent token, never a new literal colour.
+const BTN_RIPPLE = `${customerColors.canvas}33`;
 import {
   orderCancellable,
   useCancellationRequest,
@@ -65,7 +68,11 @@ export function CancellationSection({ orderId, status }: { orderId: string; stat
   return (
     <View style={styles.card}>
       {!expanded ? (
-        <Pressable onPress={() => setExpanded(true)} accessibilityRole="button">
+        <Pressable
+          onPress={() => setExpanded(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Request cancellation"
+        >
           <Text style={styles.link}>Request cancellation</Text>
         </Pressable>
       ) : (
@@ -76,11 +83,23 @@ export function CancellationSection({ orderId, status }: { orderId: string; stat
             appear. The chef confirms and issues the right refund based on how far along the order
             is. The platform fee isn't refundable.
           </Text>
-          <Pressable onPress={onRequest} disabled={req.isPending} style={styles.btn} accessibilityRole="button">
-            {req.isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.btnText}>Request cancellation</Text>
+          <Pressable
+            onPress={onRequest}
+            disabled={req.isPending}
+            accessibilityRole="button"
+            accessibilityLabel="Request cancellation"
+            android_ripple={req.isPending ? undefined : { color: BTN_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[styles.btn, pressed && Platform.OS === 'ios' && !req.isPending && styles.btnPressed]}
+              >
+                {req.isPending ? (
+                  <ActivityIndicator color={customerColors.canvas} />
+                ) : (
+                  <Text style={styles.btnText}>Request cancellation</Text>
+                )}
+              </View>
             )}
           </Pressable>
         </>
@@ -116,7 +135,11 @@ function StatusView({
             {money(request.refundTotalPaise)} refunded to your {dest}.
           </Text>
           {request.status === 'approved' ? (
-            <Pressable onPress={onDispute} accessibilityRole="button">
+            <Pressable
+              onPress={onDispute}
+              accessibilityRole="button"
+              accessibilityLabel="Dispute the refund amount"
+            >
               <Text style={styles.link}>Dispute the refund amount</Text>
             </Pressable>
           ) : null}
@@ -149,14 +172,18 @@ const styles = StyleSheet.create({
   link: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.coral.DEFAULT },
   label: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT },
   hint: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft, lineHeight: 16 },
+  // Spec §3 primary button radius (8) — was 10.
   btn: {
     marginTop: 4,
-    borderRadius: 10,
+    borderRadius: 8,
+    minHeight: 44,
     backgroundColor: customerColors.coral.DEFAULT,
     paddingVertical: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  btnText: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: '#fff' },
+  btnPressed: { backgroundColor: customerColors.coral.pressed },
+  btnText: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.canvas },
   statusTitle: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
-  statusBody: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
+  statusBody: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, fontVariant: ['tabular-nums'] },
 });

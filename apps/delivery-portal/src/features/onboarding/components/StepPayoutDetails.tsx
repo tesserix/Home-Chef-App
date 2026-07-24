@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Banknote, Smartphone } from 'lucide-react';
+import { Banknote } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { toast } from 'sonner';
 import { getCachedFormData, setCachedFormData } from '@/shared/utils/form-cache';
 
-type PayoutMethod = 'bank_transfer' | 'upi';
-
+// UPI is not an accepted payout method (#767): Razorpay Route settles by
+// NEFT/IMPS to a bank account and has no VPA destination, so a driver who
+// nominated UPI could never be paid. Bank transfer is the only option.
 interface PayoutData {
-  payoutMethod: PayoutMethod;
+  payoutMethod: 'bank_transfer';
   bankAccountNumber: string;
   bankIFSC: string;
   bankAccountName: string;
-  upiId: string;
 }
 
 interface StepPayoutDetailsProps {
@@ -24,11 +24,10 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
   const cached = getCachedFormData('payout');
 
   const [form, setForm] = useState<PayoutData>({
-    payoutMethod: (cached?.payoutMethod ?? initialData?.payoutMethod ?? 'bank_transfer') as PayoutMethod,
+    payoutMethod: 'bank_transfer',
     bankAccountNumber: cached?.bankAccountNumber ?? initialData?.bankAccountNumber ?? '',
     bankIFSC: cached?.bankIFSC ?? initialData?.bankIFSC ?? '',
     bankAccountName: cached?.bankAccountName ?? initialData?.bankAccountName ?? '',
-    upiId: cached?.upiId ?? initialData?.upiId ?? '',
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -42,26 +41,18 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
   };
 
   const handleSubmit = async () => {
-    if (form.payoutMethod === 'bank_transfer') {
-      if (!form.bankAccountName.trim() || !form.bankAccountNumber.trim() || !form.bankIFSC.trim()) {
-        toast.error('Please fill in all bank details');
-        return;
-      }
-    } else {
-      if (!form.upiId.trim()) {
-        toast.error('Please enter your UPI ID');
-        return;
-      }
+    if (!form.bankAccountName.trim() || !form.bankAccountNumber.trim() || !form.bankIFSC.trim()) {
+      toast.error('Please fill in all bank details');
+      return;
     }
 
     setSubmitting(true);
     try {
       await apiClient.post('/driver/onboarding/payout', {
-        payoutMethod: form.payoutMethod,
-        bankAccountNumber: form.payoutMethod === 'bank_transfer' ? form.bankAccountNumber : undefined,
-        bankIFSC: form.payoutMethod === 'bank_transfer' ? form.bankIFSC : undefined,
-        bankAccountName: form.payoutMethod === 'bank_transfer' ? form.bankAccountName : undefined,
-        upiId: form.payoutMethod === 'upi' ? form.upiId : undefined,
+        payoutMethod: 'bank_transfer',
+        bankAccountNumber: form.bankAccountNumber,
+        bankIFSC: form.bankIFSC,
+        bankAccountName: form.bankAccountName,
       });
       // Keep the draft until the whole application is submitted so editing
       // this step from Review re-seeds the entered values instead of a blank
@@ -76,121 +67,70 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
   };
 
   const isValid =
-    form.payoutMethod === 'bank_transfer'
-      ? form.bankAccountName.trim() && form.bankAccountNumber.trim() && form.bankIFSC.trim()
-      : form.upiId.trim();
+    form.bankAccountName.trim() && form.bankAccountNumber.trim() && form.bankIFSC.trim();
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold text-foreground">Payout Details</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          How would you like to receive your earnings?
+          Earnings are paid to your bank account by NEFT/IMPS.
         </p>
       </div>
 
       <div className="space-y-4">
-        <div role="radiogroup" aria-labelledby="payout-method-label">
-          <span id="payout-method-label" className="block text-sm font-medium text-foreground mb-3">Payout Method</span>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={form.payoutMethod === 'bank_transfer'}
-              onClick={() => updateField('payoutMethod', 'bank_transfer')}
-              className={`flex items-center gap-3 rounded-xl border-2 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                form.payoutMethod === 'bank_transfer'
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-border hover:border-primary/30'
-              }`}
-            >
-              <Banknote aria-hidden="true" className="h-5 w-5" />
-              <span className="text-sm font-medium">Bank Transfer</span>
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={form.payoutMethod === 'upi'}
-              onClick={() => updateField('payoutMethod', 'upi')}
-              className={`flex items-center gap-3 rounded-xl border-2 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                form.payoutMethod === 'upi'
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-border hover:border-primary/30'
-              }`}
-            >
-              <Smartphone aria-hidden="true" className="h-5 w-5" />
-              <span className="text-sm font-medium">UPI</span>
-            </button>
-          </div>
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary/40 p-4">
+          <Banknote aria-hidden="true" className="h-5 w-5 text-primary" />
+          <span className="text-sm font-medium text-foreground">Bank Transfer</span>
         </div>
 
-        {form.payoutMethod === 'bank_transfer' ? (
-          <>
-            <div>
-              <label htmlFor="payout-bank-name" className="block text-sm font-medium text-foreground mb-1.5">
-                Account Holder Name <span aria-hidden="true" className="text-muted-foreground">*</span>
-              </label>
-              <input
-                id="payout-bank-name"
-                type="text"
-                autoComplete="name"
-                required
-                aria-required="true"
-                value={form.bankAccountName}
-                onChange={(e) => updateField('bankAccountName', e.target.value)}
-                placeholder="Name as on bank account"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label htmlFor="payout-bank-number" className="block text-sm font-medium text-foreground mb-1.5">
-                Account Number <span aria-hidden="true" className="text-muted-foreground">*</span>
-              </label>
-              <input
-                id="payout-bank-number"
-                type="text"
-                inputMode="numeric"
-                required
-                aria-required="true"
-                value={form.bankAccountNumber}
-                onChange={(e) => updateField('bankAccountNumber', e.target.value)}
-                placeholder="Enter account number"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label htmlFor="payout-bank-ifsc" className="block text-sm font-medium text-foreground mb-1.5">
-                IFSC Code <span aria-hidden="true" className="text-muted-foreground">*</span>
-              </label>
-              <input
-                id="payout-bank-ifsc"
-                type="text"
-                required
-                aria-required="true"
-                value={form.bankIFSC}
-                onChange={(e) => updateField('bankIFSC', e.target.value)}
-                placeholder="e.g., SBIN0001234"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-          </>
-        ) : (
-          <div>
-            <label htmlFor="payout-upi-id" className="block text-sm font-medium text-foreground mb-1.5">
-              UPI ID <span aria-hidden="true" className="text-muted-foreground">*</span>
-            </label>
-            <input
-              id="payout-upi-id"
-              type="text"
-              required
-              aria-required="true"
-              value={form.upiId}
-              onChange={(e) => updateField('upiId', e.target.value)}
-              placeholder="e.g., name@upi"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-        )}
+        <div>
+          <label htmlFor="payout-bank-name" className="block text-sm font-medium text-foreground mb-1.5">
+            Account Holder Name <span aria-hidden="true" className="text-muted-foreground">*</span>
+          </label>
+          <input
+            id="payout-bank-name"
+            type="text"
+            autoComplete="name"
+            required
+            aria-required="true"
+            value={form.bankAccountName}
+            onChange={(e) => updateField('bankAccountName', e.target.value)}
+            placeholder="Name as on bank account"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <div>
+          <label htmlFor="payout-bank-number" className="block text-sm font-medium text-foreground mb-1.5">
+            Account Number <span aria-hidden="true" className="text-muted-foreground">*</span>
+          </label>
+          <input
+            id="payout-bank-number"
+            type="text"
+            inputMode="numeric"
+            required
+            aria-required="true"
+            value={form.bankAccountNumber}
+            onChange={(e) => updateField('bankAccountNumber', e.target.value)}
+            placeholder="Enter account number"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <div>
+          <label htmlFor="payout-bank-ifsc" className="block text-sm font-medium text-foreground mb-1.5">
+            IFSC Code <span aria-hidden="true" className="text-muted-foreground">*</span>
+          </label>
+          <input
+            id="payout-bank-ifsc"
+            type="text"
+            required
+            aria-required="true"
+            value={form.bankIFSC}
+            onChange={(e) => updateField('bankIFSC', e.target.value)}
+            placeholder="e.g., SBIN0001234"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
       </div>
 
       <div className="flex gap-3">

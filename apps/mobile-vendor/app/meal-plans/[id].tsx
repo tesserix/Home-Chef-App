@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -47,7 +48,7 @@ export default function MealPlanRespondScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.centered}>
-        <ActivityIndicator color={theme.colors.herb.DEFAULT} />
+        <ActivityIndicator color={theme.colors.ink.DEFAULT} />
       </SafeAreaView>
     );
   }
@@ -185,8 +186,9 @@ export default function MealPlanRespondScreen() {
                 <Switch
                   value={on}
                   onValueChange={() => toggle(d.id)}
-                  trackColor={{ true: theme.colors.herb.DEFAULT }}
+                  trackColor={{ true: theme.colors.ink.DEFAULT }}
                   style={styles.switch}
+                  accessibilityLabel={`${dayLabel(d)} ${d.slot === 'lunch' ? 'lunch' : 'dinner'}, ${on ? 'cooking' : 'declined'}, tap to toggle`}
                 />
               </View>
             );
@@ -204,6 +206,7 @@ export default function MealPlanRespondScreen() {
         <Button
           label={acceptAll ? 'Accept all days' : `Confirm ${acceptedDays.length} days`}
           variant="primary"
+          size="lg"
           loading={respond.isPending}
           onPress={submit}
         />
@@ -220,8 +223,13 @@ function Header() {
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="Go back"
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
       >
-        <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+        {({ pressed }) => (
+          <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+            <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+          </View>
+        )}
       </Pressable>
       <Text style={styles.title}>Review request</Text>
       <View style={{ width: 24 }} />
@@ -236,6 +244,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing[6],
+    backgroundColor: theme.colors.bone,
   },
   muted: {
     fontFamily: 'Inter',
@@ -266,6 +275,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: theme.colors.ink.DEFAULT,
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
   hint: {
     fontFamily: 'Inter',
@@ -277,7 +287,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: theme.colors.paper,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.lg,
     paddingHorizontal: theme.spacing[4],
     ...theme.shadow[1],
   },
@@ -322,6 +332,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 15,
     color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
   },
   switch: { marginLeft: theme.spacing[1] },
   dimmed: { color: theme.colors.ink.muted, textDecorationLine: 'line-through' },
@@ -348,5 +359,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist-Bold',
     fontSize: 20,
     color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
   },
 });

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   Pressable,
@@ -39,9 +40,19 @@ interface LoginScreenProps {
   /** Optional brand wordmark. When provided, renders above the title — the
    *  only persimmon-coloured element above the fold. */
   brand?: string;
-  /** Optional accent colour for the primary CTA + links. The customer app
-   *  passes its Airbnb coral; vendor/driver omit it and keep the ink palette. */
+  /** Optional accent colour for the primary CTA + focus rings. The customer
+   *  app passes its Airbnb coral; vendor/driver omit it and keep the ink
+   *  palette. */
   accent?: string;
+  /** Optional colour override for text LINKS only ("Forgot password?",
+   *  "Sign up") — distinct from `accent` (CTA fill + Input focus ring).
+   *  THE SPEC's AA micro-adjustment: the customer's coral fill (#FF385C)
+   *  reads ~3.9:1 at link/body text size (fails AA), so the customer wrapper
+   *  passes `coral-pressed` (#E00B41, ~4.9:1) here while `accent` stays
+   *  coral for fills. Also drops the underline when set, matching the
+   *  customer spec's "coral, no underline" link style. Defaults to `accent`
+   *  when omitted, so vendor/driver are unaffected. */
+  linkColor?: string;
 }
 
 /**
@@ -72,10 +83,32 @@ export function LoginScreen({
   subtitle = 'Sign in to continue',
   brand,
   accent,
+  linkColor,
 }: LoginScreenProps) {
+  const resolvedLinkColor = linkColor ?? accent;
   const [error, setError] = useState<string | null>(null);
   const errorOpacity = useRef(new Animated.Value(0)).current;
   const errorTranslate = useRef(new Animated.Value(-8)).current;
+
+  // No Reanimated dependency on this screen, so Reduce Motion is read the
+  // same way the shared UI primitives (Skeleton/SheetBase/Toast) do — via
+  // AccessibilityInfo.
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
 
   const {
     control,
@@ -87,6 +120,11 @@ export function LoginScreen({
   });
 
   useEffect(() => {
+    if (reduceMotion) {
+      errorOpacity.setValue(error ? 1 : 0);
+      errorTranslate.setValue(error ? 0 : -8);
+      return;
+    }
     Animated.parallel([
       Animated.timing(errorOpacity, {
         toValue: error ? 1 : 0,
@@ -101,7 +139,7 @@ export function LoginScreen({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [error, errorOpacity, errorTranslate]);
+  }, [error, errorOpacity, errorTranslate, reduceMotion]);
 
   const onSubmit = async (data: LoginFormData) => {
     setError(null);
@@ -163,6 +201,7 @@ export function LoginScreen({
             onChangeText={onChange}
             value={value}
             error={errors.email?.message}
+            accentColor={accent}
           />
         )}
       />
@@ -181,14 +220,27 @@ export function LoginScreen({
             onChangeText={onChange}
             value={value}
             error={errors.password?.message}
+            accentColor={accent}
           />
         )}
       />
 
       {onNavigateToForgotPassword ? (
         <View style={styles.forgotRow}>
-          <Pressable onPress={onNavigateToForgotPassword} hitSlop={8}>
-            <Text style={[styles.linkText, accent ? { color: accent } : null]}>
+          <Pressable
+            onPress={onNavigateToForgotPassword}
+            hitSlop={8}
+            accessibilityRole="link"
+            accessibilityLabel="Forgot password?"
+          >
+            <Text
+              style={[
+                styles.linkText,
+                resolvedLinkColor
+                  ? { color: resolvedLinkColor, textDecorationLine: 'none' }
+                  : null,
+              ]}
+            >
               Forgot password?
             </Text>
           </Pressable>
@@ -241,10 +293,22 @@ export function LoginScreen({
 
       {onNavigateToRegister ? (
         <View style={styles.signupRow}>
-          <Pressable onPress={onNavigateToRegister} hitSlop={8}>
+          <Pressable
+            onPress={onNavigateToRegister}
+            hitSlop={8}
+            accessibilityRole="link"
+            accessibilityLabel="Don't have an account? Sign up"
+          >
             <Text style={styles.signupPrompt}>
               Don't have an account?{' '}
-              <Text style={[styles.signupCTA, accent ? { color: accent } : null]}>
+              <Text
+                style={[
+                  styles.signupCTA,
+                  resolvedLinkColor
+                    ? { color: resolvedLinkColor, textDecorationLine: 'none' }
+                    : null,
+                ]}
+              >
                 Sign up
               </Text>
             </Text>

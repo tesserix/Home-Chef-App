@@ -201,13 +201,14 @@ function Chip({ label, selected, onPress }: ChipProps) {
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={label}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
         <View
           style={[
             chipStyles.root,
             selected && chipStyles.rootSelected,
-            pressed && { opacity: 0.7 },
+            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
           ]}
         >
           <Text
@@ -578,9 +579,20 @@ export default function ProfileScreen() {
         <Text style={styles.errorBody}>Failed to load profile</Text>
         <Pressable
           onPress={() => refetch()}
-          style={({ pressed }) => [styles.errorBtn, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading profile"
+          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
-          <Text style={styles.errorBtnLabel}>Retry</Text>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.errorBtn,
+                pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+              ]}
+            >
+              <Text style={styles.errorBtnLabel}>Retry</Text>
+            </View>
+          )}
         </Pressable>
       </SafeAreaView>
     );
@@ -606,9 +618,15 @@ export default function ProfileScreen() {
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Go back"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
           >
             {({ pressed }) => (
-              <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
+              <View
+                style={[
+                  styles.backBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                ]}
+              >
                 <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
               </View>
             )}
@@ -636,17 +654,25 @@ export default function ProfileScreen() {
             disabled={uploadBannerImageMutation.isPending}
             accessibilityRole="button"
             accessibilityLabel="Change cover photo"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
           >
             {({ pressed }) => (
               // Layout lives on this inner View — a Pressable with a
               // function `style` returning an array drops height/bg/border
               // on iOS, which collapsed (or blew out) the cover box.
-              <View style={[styles.coverWrapper, pressed && { opacity: 0.9 }]}>
+              <View
+                style={[
+                  styles.coverWrapper,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.9 },
+                ]}
+              >
                 {data?.bannerImage ? (
                   <Image
                     source={{ uri: data.bannerImage }}
                     style={styles.coverImage}
                     contentFit="cover"
+                    placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                    transition={150}
                   />
                 ) : (
                   <View style={styles.coverPlaceholder}>
@@ -680,40 +706,71 @@ export default function ProfileScreen() {
             <Pressable
               onPress={handlePickProfileImage}
               disabled={uploadProfileImageMutation.isPending}
-              style={({ pressed }) => [
-                styles.avatarWrapper,
-                pressed && { opacity: 0.85 },
-              ]}
               accessibilityRole="button"
               accessibilityLabel="Change profile photo"
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
             >
-              {data?.profileImage ? (
-                <Image
-                  source={{ uri: data.profileImage }}
-                  style={styles.avatarImage}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarInitials}>{initials}</Text>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.avatarWrapper,
+                    pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                  ]}
+                >
+                  {data?.profileImage ? (
+                    <Image
+                      source={{ uri: data.profileImage }}
+                      style={styles.avatarImage}
+                      contentFit="cover"
+                      placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                      transition={150}
+                    />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarInitials}>{initials}</Text>
+                    </View>
+                  )}
+                  <View style={styles.avatarBadge}>
+                    {uploadProfileImageMutation.isPending ? (
+                      <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} />
+                    ) : (
+                      <Camera size={14} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
+                    )}
+                  </View>
                 </View>
               )}
-              <View style={styles.avatarBadge}>
-                {uploadProfileImageMutation.isPending ? (
-                  <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} />
-                ) : (
-                  <Camera size={14} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
-                )}
-              </View>
             </Pressable>
 
             <View style={styles.identityText}>
               <Text style={styles.identityName} numberOfLines={1}>
                 {data?.businessName || 'Your kitchen'}
               </Text>
-              <Text style={styles.identityCaption} numberOfLines={1}>
-                {data?.verified ? 'Verified chef' : 'Pending verification'}
-              </Text>
+              {/* Verified is operational-positive status → success green;
+                  pending is neutral, not an error (spec §2 / vendor
+                  reconciliation). */}
+              <View
+                style={[
+                  styles.verifiedChip,
+                  {
+                    backgroundColor: data?.verified
+                      ? theme.colors.success.tint
+                      : theme.colors.mist.DEFAULT,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.verifiedChipLabel,
+                    {
+                      color: data?.verified
+                        ? theme.colors.success.soft
+                        : theme.colors.ink.soft,
+                    },
+                  ]}
+                >
+                  {data?.verified ? 'Verified chef' : 'Pending verification'}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -944,23 +1001,31 @@ export default function ProfileScreen() {
                 source={{ uri: url }}
                 style={styles.photoThumb}
                 contentFit="cover"
+                placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                transition={150}
               />
             ))}
             {(data?.kitchenPhotos?.length ?? 0) < 5 && (
               <Pressable
                 onPress={handleAddKitchenPhoto}
                 disabled={uploadKitchenPhotoMutation.isPending}
-                style={({ pressed }) => [
-                  styles.photoAddSlot,
-                  pressed && { opacity: 0.7 },
-                ]}
                 accessibilityRole="button"
                 accessibilityLabel="Add kitchen photo"
+                android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
               >
-                {uploadKitchenPhotoMutation.isPending ? (
-                  <ActivityIndicator size="small" color={theme.colors.ink.soft} />
-                ) : (
-                  <Plus size={22} color={theme.colors.ink.muted} strokeWidth={1.75} />
+                {({ pressed }) => (
+                  <View
+                    style={[
+                      styles.photoAddSlot,
+                      pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+                    ]}
+                  >
+                    {uploadKitchenPhotoMutation.isPending ? (
+                      <ActivityIndicator size="small" color={theme.colors.ink.soft} />
+                    ) : (
+                      <Plus size={22} color={theme.colors.ink.muted} strokeWidth={1.75} />
+                    )}
+                  </View>
                 )}
               </Pressable>
             )}
@@ -976,25 +1041,37 @@ export default function ProfileScreen() {
             <Pressable
               onPress={handleSave}
               disabled={updateMutation.isPending || !isDirty}
-              style={({ pressed }) => [
-                styles.saveBtn,
-                !isDirty && styles.saveBtnDisabled,
-                (pressed || updateMutation.isPending) && { opacity: 0.85 },
-              ]}
               accessibilityRole="button"
+              accessibilityLabel="Save profile"
               accessibilityState={{ disabled: !isDirty }}
+              android_ripple={
+                updateMutation.isPending || !isDirty
+                  ? undefined
+                  : { color: `${theme.colors.paper}33`, borderless: false }
+              }
             >
-              {updateMutation.isPending ? (
-                <ActivityIndicator color={theme.colors.paper} />
-              ) : (
-                <Text
+              {({ pressed }) => (
+                <View
                   style={[
-                    styles.saveBtnLabel,
-                    !isDirty && styles.saveBtnLabelDisabled,
+                    styles.saveBtn,
+                    !isDirty && styles.saveBtnDisabled,
+                    (pressed || updateMutation.isPending) &&
+                      Platform.OS === 'ios' && { opacity: 0.85 },
                   ]}
                 >
-                  {isDirty ? 'Save changes' : 'No changes to save'}
-                </Text>
+                  {updateMutation.isPending ? (
+                    <ActivityIndicator color={theme.colors.paper} />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.saveBtnLabel,
+                        !isDirty && styles.saveBtnLabelDisabled,
+                      ]}
+                    >
+                      {isDirty ? 'Save changes' : 'No changes to save'}
+                    </Text>
+                  )}
+                </View>
               )}
             </Pressable>
           </SafeAreaView>
@@ -1156,11 +1233,17 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
   },
-  identityCaption: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.muted,
-    marginTop: 2,
+  // Verification status pill (UI-V2-SPEC §2) — replaces the plain caption.
+  verifiedChip: {
+    alignSelf: 'flex-start',
+    marginTop: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+    borderRadius: theme.radius.full,
+  },
+  verifiedChipLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
   },
 
   // Section label
@@ -1357,6 +1440,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[6],
     paddingVertical: theme.spacing[3],
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorBtnLabel: {
     fontFamily: 'Inter-SemiBold',

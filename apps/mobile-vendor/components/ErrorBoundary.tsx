@@ -34,7 +34,12 @@ export class ErrorBoundary extends Component<Props, State> {
           {__DEV__ && this.state.error.stack ? (
             <Text style={styles.stack}>{this.state.error.stack}</Text>
           ) : null}
-          <Pressable onPress={this.reset} style={styles.button}>
+          <Pressable
+            onPress={this.reset}
+            style={styles.button}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+          >
             <Text style={styles.buttonText}>Try again</Text>
           </Pressable>
         </ScrollView>

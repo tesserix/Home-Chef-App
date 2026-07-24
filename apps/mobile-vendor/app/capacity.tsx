@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Switch,
@@ -139,7 +140,7 @@ export default function CapacityScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.centered}>
-        <ActivityIndicator color={theme.colors.herb.DEFAULT} />
+        <ActivityIndicator color={theme.colors.ink.DEFAULT} />
       </SafeAreaView>
     );
   }
@@ -149,8 +150,18 @@ export default function CapacityScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityLabel="Go back">
-          <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+        >
+          {({ pressed }) => (
+            <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+              <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.title}>Capacity & cutoffs</Text>
         <View style={{ width: 24 }} />
@@ -169,7 +180,7 @@ export default function CapacityScreen() {
             <Switch
               value={cutoffEnabled}
               onValueChange={setCutoffEnabled}
-              trackColor={{ true: theme.colors.herb.DEFAULT }}
+              trackColor={{ true: theme.colors.ink.DEFAULT }}
             />
           </View>
 
@@ -193,7 +204,7 @@ export default function CapacityScreen() {
             <Switch
               value={autoSoldOut}
               onValueChange={setAutoSoldOut}
-              trackColor={{ true: theme.colors.herb.DEFAULT }}
+              trackColor={{ true: theme.colors.ink.DEFAULT }}
             />
           </View>
         </View>
@@ -210,7 +221,7 @@ export default function CapacityScreen() {
             <Switch
               value={slotsEnabled}
               onValueChange={setSlotsEnabled}
-              trackColor={{ true: theme.colors.herb.DEFAULT }}
+              trackColor={{ true: theme.colors.ink.DEFAULT }}
             />
           </View>
 
@@ -245,6 +256,7 @@ export default function CapacityScreen() {
         <Button
           label="Save settings"
           variant="primary"
+          size="lg"
           loading={updateSettings.isPending}
           onPress={saveSettings}
         />
@@ -281,13 +293,33 @@ export default function CapacityScreen() {
                         keyboardType="number-pad"
                         autoFocus
                       />
-                      <Pressable onPress={() => saveCap(it.id)} hitSlop={8}>
-                        <Text style={styles.edit}>Save</Text>
+                      <Pressable
+                        onPress={() => saveCap(it.id)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Save daily cap for ${it.name}`}
+                        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+                      >
+                        {({ pressed }) => (
+                          <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+                            <Text style={styles.edit}>Save</Text>
+                          </View>
+                        )}
                       </Pressable>
                     </View>
                   ) : (
-                    <Pressable onPress={() => startEdit(it.id, it.dailyCapacity)} hitSlop={8}>
-                      <Text style={styles.edit}>Edit</Text>
+                    <Pressable
+                      onPress={() => startEdit(it.id, it.dailyCapacity)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit daily cap for ${it.name}`}
+                      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+                    >
+                      {({ pressed }) => (
+                        <View style={pressed && Platform.OS === 'ios' && { opacity: 0.6 }}>
+                          <Text style={styles.edit}>Edit</Text>
+                        </View>
+                      )}
                     </Pressable>
                   )}
                 </View>
@@ -404,7 +436,12 @@ const styles = StyleSheet.create({
     padding: theme.spacing[4],
     ...theme.shadow[1],
   },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    minHeight: 56,
+  },
   cardTitle: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: theme.colors.ink.DEFAULT },
   caption: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.muted, marginTop: 2 },
   cutoffRow: {
@@ -448,14 +485,25 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: theme.colors.ink.soft,
   },
-  itemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing[3] },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: theme.spacing[3],
+    minHeight: 56,
+  },
   itemDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.mist.DEFAULT,
   },
   itemName: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.ink.DEFAULT },
-  itemSub: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.muted, marginTop: 2 },
-  edit: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: theme.colors.herb.DEFAULT },
+  itemSub: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: theme.colors.ink.muted,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  edit: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: theme.colors.ink.DEFAULT },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] },
   capInput: {
     width: 56,

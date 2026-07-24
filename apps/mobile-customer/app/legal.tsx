@@ -3,7 +3,7 @@
 // instead of four separate ones; "Your Data" stays top-level in Profile
 // because it's a DPDP action center (export/delete), not reading material.
 
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, type Href } from 'expo-router';
 import {
@@ -24,6 +24,9 @@ const DOCS: { label: string; route: Href; icon: LucideIcon }[] = [
   { label: 'End User Licence', route: '/eula', icon: ScrollText },
 ];
 
+// Android ripple tint — translucent token, never a new literal colour.
+const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+
 export default function LegalScreen() {
   return (
     <SafeAreaView
@@ -41,10 +44,14 @@ export default function LegalScreen() {
                 onPress={() => router.push(doc.route)}
                 accessibilityRole="button"
                 accessibilityLabel={doc.label}
+                android_ripple={{ color: ROW_RIPPLE, borderless: false }}
               >
                 {({ pressed }) => (
                   <View
-                    style={[styles.row, pressed && styles.rowPressed]}
+                    style={[
+                      styles.row,
+                      pressed && Platform.OS === 'ios' && styles.rowPressed,
+                    ]}
                   >
                     <View style={styles.iconCircle}>
                       <Icon size={18} color={customerColors.charcoal.soft} />

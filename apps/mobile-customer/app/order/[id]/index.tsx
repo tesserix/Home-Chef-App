@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,9 +13,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter, useIsFocused } from 'expo-router';
 import { Check, ChevronLeft, ChevronRight, Receipt, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { Sheet, type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReorder } from '../../../hooks/useReorder';
 import { useConfirmOrderReceived } from '../../../hooks/useConfirmReceived';
@@ -33,6 +36,13 @@ import { useOrderStatusWS } from '../../../hooks/useOrderStatusWS';
 import { getChipLabel, getStatusLine } from '../../../lib/orderSteps';
 import { MESSAGING_ENABLED } from '../../../lib/features';
 import type { Order } from '../../../types/customer';
+
+// Android ripple tint for coral-filled CTAs — translucent white derived from
+// the canvas token, never a new literal colour.
+const CONFIRM_RIPPLE = `${customerColors.canvas}33`;
+// Android ripple tint for outline/ghost buttons on canvas — translucent
+// charcoal, matching the photoRow ripple tint elsewhere on this screen.
+const SECONDARY_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 const ACTIVE_STATUSES: Order['status'][] = [
   'accepted',
@@ -182,6 +192,12 @@ export default function OrderDetailScreen() {
   const [photoOpen, setPhotoOpen] = React.useState(false);
   const reorder = useReorder();
   const confirmReceived = useConfirmOrderReceived();
+  // Escrow confirmation (#617) — branded Sheet replaces the old Alert.alert
+  // confirm dialog; a local success flag drives an in-screen "Thanks" state
+  // instead of a second Alert once the mutation resolves.
+  const confirmSheetRef = React.useRef<SheetHandle>(null);
+  const [confirmDone, setConfirmDone] = React.useState(false);
+  const [confirmMessage, setConfirmMessage] = React.useState<string | null>(null);
 
   // Tracking hooks — mirror exact wiring from track.tsx.
   // Both hooks are always called (React hook rules); they short-circuit
@@ -241,28 +257,29 @@ export default function OrderDetailScreen() {
   // primary action, so "Leave a Review" demotes to the secondary (outline) style.
   const showConfirm = canConfirmReceipt(order);
   const holdMeta = payoutHoldMeta(order.payoutHoldStatus);
+  // Opens the branded confirm Sheet — replaces the old Alert.alert confirm
+  // dialog. Cancel (the Sheet's own "Not yet" button) is a no-op dismiss.
   const handleConfirmReceived = () => {
-    Alert.alert(
-      'Confirm your order?',
-      `Let us know you received your order${
-        order.chef?.name ? ` from ${order.chef.name}` : ''
-      }. You can still report an issue if something's wrong.`,
-      [
-        { text: 'Not yet', style: 'cancel' },
-        {
-          text: 'Confirm received',
-          onPress: () =>
-            confirmReceived.mutate(order.id, {
-              onSuccess: (res) => Alert.alert('Thanks!', res.message),
-              onError: (err) =>
-                Alert.alert(
-                  'Something went wrong',
-                  friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
-                ),
-            }),
-        },
-      ],
-    );
+    confirmSheetRef.current?.present();
+  };
+  // Runs the same confirm-then-POST sequence as before; only the UI around it
+  // changed (Sheet instead of Alert, in-screen success instead of a second
+  // Alert). Haptics are semantic (R7) — notificationSuccess on confirmed,
+  // guarded with .catch since impactAsync/notificationAsync are async and
+  // never throw synchronously.
+  const handleConfirmPrimary = () => {
+    confirmReceived.mutate(order.id, {
+      onSuccess: (res) => {
+        setConfirmMessage(res.message);
+        setConfirmDone(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      },
+      onError: (err) =>
+        Alert.alert(
+          'Something went wrong',
+          friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
+        ),
+    });
   };
 
   // Derive effective driver coords — same logic as track.tsx.
@@ -522,9 +539,15 @@ export default function OrderDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Track your delivery live"
             style={styles.trackLiveBtn}
+            android_ripple={{ color: CONFIRM_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
-              <View style={[styles.trackLiveInner, pressed && { opacity: 0.85 }]}>
+              <View
+                style={[
+                  styles.trackLiveInner,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                ]}
+              >
                 <Text style={styles.trackLiveLabel}>Track live</Text>
               </View>
             )}
@@ -595,13 +618,17 @@ export default function OrderDetailScreen() {
             onPress={() => setPhotoOpen(true)}
             accessibilityRole="button"
             accessibilityLabel="View the photo of your prepared order"
+            android_ripple={{ color: `${customerColors.charcoal.DEFAULT}14`, borderless: false }}
           >
             {({ pressed }) => (
-              <View style={[styles.photoRow, pressed && { opacity: 0.7 }]}>
+              <View
+                style={[styles.photoRow, pressed && Platform.OS === 'ios' && { opacity: 0.7 }]}
+              >
                 <Image
                   source={{ uri: order.readyPhotoUrl }}
                   style={styles.photoThumb}
                   contentFit="cover"
+                  placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
                   transition={200}
                 />
                 <View style={styles.photoRowText}>
@@ -625,26 +652,49 @@ export default function OrderDetailScreen() {
                 order awaits the customer's confirmation. Inert (never rendered)
                 when the escrow flags are off, since the hold never reaches
                 awaiting. Once confirmed/disputed, a pill replaces it. */}
-            {showConfirm ? (
+            {showConfirm && !confirmDone ? (
               <>
                 <Pressable
                   onPress={handleConfirmReceived}
                   disabled={confirmReceived.isPending}
                   accessibilityRole="button"
                   accessibilityLabel="Confirm you received this order"
+                  android_ripple={
+                    confirmReceived.isPending ? undefined : { color: CONFIRM_RIPPLE, borderless: false }
+                  }
                 >
-                  <View style={styles.trackButton}>
-                    {confirmReceived.isPending ? (
-                      <ActivityIndicator color={customerColors.canvas} />
-                    ) : (
-                      <Text style={styles.trackButtonText}>Confirm received</Text>
-                    )}
-                  </View>
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.trackButton,
+                        pressed &&
+                          Platform.OS === 'ios' &&
+                          !confirmReceived.isPending &&
+                          styles.trackButtonPressed,
+                      ]}
+                    >
+                      {confirmReceived.isPending ? (
+                        <ActivityIndicator color={customerColors.canvas} />
+                      ) : (
+                        <Text style={styles.trackButtonText}>Confirm received</Text>
+                      )}
+                    </View>
+                  )}
                 </Pressable>
                 <Text style={styles.confirmHint}>
                   Only confirm once your order has arrived.
                 </Text>
               </>
+            ) : confirmDone ? (
+              // In-screen success state — replaces the old "Thanks!" Alert.
+              // Quiet centered mark, same treatment as the persisted holdMeta
+              // pill below so the layout doesn't jump once the order refetches.
+              <View style={styles.statusRow}>
+                <Check size={16} color={customerColors.success.DEFAULT} strokeWidth={2.5} />
+                <Text style={[styles.statusText, { color: customerColors.success.DEFAULT }]}>
+                  {confirmMessage ?? 'Thanks — order confirmed received.'}
+                </Text>
+              </View>
             ) : holdMeta.label ? (
               // Quiet inline confirmation — a status, not an action, so it stays
               // a small centered mark rather than a full-width pill competing
@@ -716,7 +766,11 @@ export default function OrderDetailScreen() {
                 onPress={() => router.push(`/order/${order.id}/messages` as never)}
                 accessibilityRole="button"
                 accessibilityLabel="Message support about this order"
-                style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                ]}
+                android_ripple={{ color: SECONDARY_RIPPLE, borderless: false }}
               >
                 <Text style={styles.secondaryButtonText}>Message support about this order</Text>
               </Pressable>
@@ -731,7 +785,11 @@ export default function OrderDetailScreen() {
               onPress={() => router.push(`/order/${order.id}/report-issue` as never)}
               accessibilityRole="button"
               accessibilityLabel="Report an issue with this order"
-              style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+              android_ripple={{ color: SECONDARY_RIPPLE, borderless: false }}
             >
               <Text style={styles.secondaryButtonText}>Report an issue with this order</Text>
             </Pressable>
@@ -956,6 +1014,7 @@ export default function OrderDetailScreen() {
               source={{ uri: order.readyPhotoUrl }}
               style={styles.lightboxImage}
               contentFit="contain"
+              placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
               transition={150}
               accessibilityLabel="Photo of your prepared order from the chef"
             />
@@ -965,6 +1024,20 @@ export default function OrderDetailScreen() {
           </Pressable>
         </Modal>
       ) : null}
+
+      {/* Confirm-received — branded Sheet (replaces the old Alert.alert confirm
+          dialog). Same confirm-then-POST sequence; Cancel/"Not yet" dismisses
+          with no side effect. */}
+      <Sheet
+        ref={confirmSheetRef}
+        title="Confirm your order?"
+        body={`Let us know you received your order${
+          order.chef?.name ? ` from ${order.chef.name}` : ''
+        }. You can still report an issue if something's wrong.`}
+        primaryLabel="Confirm received"
+        onPrimaryPress={handleConfirmPrimary}
+        cancelLabel="Not yet"
+      />
     </SafeAreaView>
   );
 }
@@ -1027,6 +1100,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
     color: customerColors.coral.pressed,
+    fontVariant: ['tabular-nums'],
     marginTop: 2,
   },
   // White-canvas root — spec §1
@@ -1179,6 +1253,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   // Food-ready photo — compact tappable thumbnail row, opens a lightbox.
+  // Radius 12 — spec §1 content-card radius (16 is reserved for sheets/modals).
   photoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1186,7 +1261,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
     padding: 10,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: customerColors.hairline,
     backgroundColor: customerColors.surface.DEFAULT,
@@ -1344,6 +1419,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     color: customerColors.canvas,
+  },
+  trackButtonPressed: {
+    backgroundColor: customerColors.coral.pressed,
   },
   // Secondary CTA (coral outline) — tip sits below the filled review button.
   tipButton: {

@@ -1,5 +1,5 @@
 import {
-  ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
+import { EmptyState, Skeleton } from '@homechef/mobile-shared/ui';
 import {
   CATEGORY_LABEL,
   useSupportTickets,
@@ -48,9 +49,15 @@ function TicketRow({ ticket }: { ticket: SupportTicket }) {
       onPress={() => router.push(`/support/${ticket.id}`)}
       accessibilityRole="button"
       accessibilityLabel={`Open ticket: ${ticket.subject}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}0F`, borderless: false }}
     >
       {({ pressed }) => (
-        <View style={[styles.card, pressed && styles.cardPressed]}>
+        <View
+          style={[
+            styles.card,
+            pressed && Platform.OS === 'ios' && styles.cardPressed,
+          ]}
+        >
           <View style={styles.cardMain}>
             <View style={styles.subjectRow}>
               {isUrgent(ticket) ? <View style={styles.urgentDot} /> : null}
@@ -89,50 +96,50 @@ export default function SupportTicketsScreen() {
         <Pressable
           onPress={() => router.back()}
           hitSlop={8}
-          style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Back"
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
         >
-          <ChevronLeft
-            size={26}
-            color={theme.colors.ink.DEFAULT}
-            strokeWidth={1.75}
-          />
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.backBtn,
+                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+              ]}
+            >
+              <ChevronLeft
+                size={26}
+                color={theme.colors.ink.DEFAULT}
+                strokeWidth={1.75}
+              />
+            </View>
+          )}
         </Pressable>
         <Text style={styles.commandTitle}>Support</Text>
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.colors.ink.DEFAULT} />
+        <View style={styles.skeletonStack}>
+          <Skeleton height={90} style={{ borderRadius: theme.radius.lg, marginBottom: theme.spacing[3] }} />
+          <Skeleton height={90} style={{ borderRadius: theme.radius.lg, marginBottom: theme.spacing[3] }} />
+          <Skeleton height={90} style={{ borderRadius: theme.radius.lg }} />
         </View>
       ) : isError ? (
-        <View style={styles.center}>
-          <Text style={styles.muted}>Couldn't load your tickets.</Text>
-          <Pressable onPress={() => refetch()} hitSlop={8} style={styles.retry}>
-            <Text style={styles.retryLabel}>Retry</Text>
-          </Pressable>
-        </View>
+        // Shared triad primitive — consistent with the rest of the app's
+        // list screens (cancel-requests, admin-requests, reviews, etc.).
+        <EmptyState
+          title="Couldn't load your tickets"
+          body="Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => refetch()}
+        />
       ) : tickets.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.emptyTitle}>No tickets yet</Text>
-          <Text style={styles.muted}>
-            Raise an issue or request a feature — tap New ticket to start.
-          </Text>
-          <Pressable
-            onPress={() => router.push('/support/new')}
-            accessibilityRole="button"
-            accessibilityLabel="New ticket"
-            style={styles.emptyCta}
-          >
-            {({ pressed }) => (
-              <View style={[styles.primaryBtn, pressed && styles.btnPressed]}>
-                <Plus size={18} color={theme.colors.paper} strokeWidth={2} />
-                <Text style={styles.primaryLabel}>New ticket</Text>
-              </View>
-            )}
-          </Pressable>
-        </View>
+        <EmptyState
+          title="No tickets yet"
+          body="Raise an issue or request a feature — tap New ticket to start."
+          ctaLabel="New ticket"
+          onCtaPress={() => router.push('/support/new')}
+        />
       ) : (
         <ScrollView
           style={styles.scroll}
@@ -152,9 +159,15 @@ export default function SupportTicketsScreen() {
             onPress={() => router.push('/support/new')}
             accessibilityRole="button"
             accessibilityLabel="New ticket"
+            android_ripple={{ color: `${theme.colors.paper}30`, borderless: false }}
           >
             {({ pressed }) => (
-              <View style={[styles.primaryBtn, pressed && styles.btnPressed]}>
+              <View
+                style={[
+                  styles.primaryBtn,
+                  pressed && Platform.OS === 'ios' && styles.btnPressed,
+                ]}
+              >
                 <Plus size={18} color={theme.colors.paper} strokeWidth={2} />
                 <Text style={styles.primaryLabel}>New ticket</Text>
               </View>
@@ -189,6 +202,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[10],
+  },
+  skeletonStack: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[1],
   },
 
   card: {
@@ -262,32 +279,5 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.paper,
     letterSpacing: 0.3,
-  },
-
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing[6],
-    gap: theme.spacing[3],
-  },
-  emptyTitle: {
-    fontFamily: 'Geist-Bold',
-    fontSize: theme.typography.size.h2.size,
-    color: theme.colors.ink.DEFAULT,
-  },
-  emptyCta: { alignSelf: 'stretch', marginTop: theme.spacing[2] },
-  muted: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.muted,
-    textAlign: 'center',
-  },
-  retry: { paddingVertical: theme.spacing[2] },
-  retryLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.DEFAULT,
-    textDecorationLine: 'underline',
   },
 });

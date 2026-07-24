@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,13 +12,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ShoppingBag } from 'lucide-react-native';
+import { AlertCircle, ShoppingBag } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { ScreenTitle } from '../../components/shared/ScreenTitle';
 import { useOrders } from '../../hooks/useOrderHistory';
 import { OrderCard } from '../../components/orders/OrderCard';
 import type { Order } from '../../types/customer';
+
+// Android ripple tints — translucent tokens, never a new literal colour.
+const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
+const CTA_RIPPLE = `${customerColors.canvas}33`;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -100,6 +105,39 @@ const skeletonStyles = StyleSheet.create({
   },
 });
 
+// ─── Error state — mirrors favorites' ErrorState pattern (R8 triad) ───────────
+
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View style={emptyStyles.container}>
+      <View style={emptyStyles.iconCircle}>
+        <AlertCircle size={34} color={customerColors.charcoal.soft} />
+      </View>
+      <View style={emptyStyles.textGroup}>
+        <Text style={emptyStyles.title}>Something went wrong</Text>
+        <Text style={emptyStyles.body}>We could not load your orders. Please try again.</Text>
+      </View>
+      <Pressable
+        onPress={onRetry}
+        accessibilityRole="button"
+        accessibilityLabel="Retry loading orders"
+        android_ripple={{ color: CTA_RIPPLE, borderless: false }}
+      >
+        {({ pressed }) => (
+          <View
+            style={[
+              emptyStyles.cta,
+              pressed && Platform.OS === 'ios' && emptyStyles.ctaPressed,
+            ]}
+          >
+            <Text style={emptyStyles.ctaLabel}>Try again</Text>
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 // ─── Empty state — mirrors favorites empty state pattern exactly ──────────────
 
 function EmptyState({ filter }: { filter: StatusFilter }) {
@@ -135,10 +173,18 @@ function EmptyState({ filter }: { filter: StatusFilter }) {
           onPress={() => router.push('/(tabs)')}
           accessibilityRole="button"
           accessibilityLabel="Browse chefs"
+          android_ripple={{ color: CTA_RIPPLE, borderless: false }}
         >
-          <View style={emptyStyles.cta}>
-            <Text style={emptyStyles.ctaLabel}>Browse chefs</Text>
-          </View>
+          {({ pressed }) => (
+            <View
+              style={[
+                emptyStyles.cta,
+                pressed && Platform.OS === 'ios' && emptyStyles.ctaPressed,
+              ]}
+            >
+              <Text style={emptyStyles.ctaLabel}>Browse chefs</Text>
+            </View>
+          )}
         </Pressable>
       )}
     </View>
@@ -196,6 +242,9 @@ const emptyStyles = StyleSheet.create({
     fontSize: 15,
     color: customerColors.canvas,
   },
+  ctaPressed: {
+    backgroundColor: customerColors.coral.pressed,
+  },
 });
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
@@ -213,7 +262,7 @@ export default function OrdersScreen() {
     status: STATUS_MAP[activeFilter],
   };
 
-  const { data, isLoading, isRefetching, refetch } = useOrders(params);
+  const { data, isLoading, isError, isRefetching, refetch } = useOrders(params);
 
   // Accumulate pages into a de-duped local list (immutable merge)
   useEffect(() => {
@@ -272,17 +321,26 @@ export default function OrdersScreen() {
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={`Filter orders: ${f.label}`}
+            android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
           >
-            <View style={[styles.filterChip, isActive && styles.filterChipActive]}>
-              <Text
+            {({ pressed }) => (
+              <View
                 style={[
-                  styles.filterChipLabel,
-                  isActive ? styles.filterChipLabelActive : styles.filterChipLabelDefault,
+                  styles.filterChip,
+                  isActive && styles.filterChipActive,
+                  pressed && Platform.OS === 'ios' && styles.filterChipPressed,
                 ]}
               >
-                {f.label}
-              </Text>
-            </View>
+                <Text
+                  style={[
+                    styles.filterChipLabel,
+                    isActive ? styles.filterChipLabelActive : styles.filterChipLabelDefault,
+                  ]}
+                >
+                  {f.label}
+                </Text>
+              </View>
+            )}
           </Pressable>
         );
       })}
@@ -303,6 +361,17 @@ export default function OrdersScreen() {
           <SkeletonCard />
           <SkeletonCard />
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Error + retry (R8 triad) — first page failed and nothing cached to show. ──
+  if (isError && page === 1 && allOrders.length === 0) {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <ScreenTitle title="Orders" />
+        {renderFilterBar()}
+        <ErrorState onRetry={handleRefresh} />
       </SafeAreaView>
     );
   }
@@ -383,6 +452,9 @@ const styles = StyleSheet.create({
   filterChipActive: {
     borderBottomWidth: 2,
     borderBottomColor: customerColors.charcoal.DEFAULT,
+  },
+  filterChipPressed: {
+    opacity: 0.6,
   },
   filterChipLabel: {
     fontFamily: 'Inter',

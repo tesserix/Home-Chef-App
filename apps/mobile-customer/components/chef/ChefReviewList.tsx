@@ -7,17 +7,65 @@
 // ScrollView without nested-VirtualizedList warnings; review lists are small.
 
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import Animated, { Easing, FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { Image } from 'expo-image';
+import { Star } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { EmptyState } from '@homechef/mobile-shared/ui';
 import { useChefReviews, type ChefReview } from '../../hooks/useChefs';
 
-function formatDate(iso: string): string {
+// Entrance easing — ease-out-quart, matches the app-wide motion spec (§3.5).
+const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
+
+// Relative date — "Today" / "3 days ago" / "2 weeks ago" — reads calmer than
+// an absolute date in a review feed (spec: "relative dates charcoal-soft").
+function formatRelativeDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  const diffDays = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+  }
+  if (diffDays < 365) {
+    const months = Math.floor(diffDays / 30);
+    return months === 1 ? '1 month ago' : `${months} months ago`;
+  }
+  const years = Math.floor(diffDays / 365);
+  return years === 1 ? '1 year ago' : `${years} years ago`;
+}
+
+interface ReviewerAvatarProps {
+  name: string;
+  avatarUrl?: string;
+}
+
+// Reviewer identity — photo when the API has one, otherwise a letter avatar
+// (R2 exception: letter avatars stay fine for *people*, unlike photo surfaces).
+function ReviewerAvatar({ name, avatarUrl }: ReviewerAvatarProps) {
+  const initial = (name || 'C').trim().charAt(0).toUpperCase() || 'C';
+  if (avatarUrl) {
+    return (
+      // surface-soft backgroundColor (on the Image itself) + blurhash
+      // placeholder — no blank flash before the 150ms fade-in (R2).
+      <Image
+        source={{ uri: avatarUrl }}
+        style={styles.avatarPhoto}
+        contentFit="cover"
+        placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+        transition={150}
+        accessibilityElementsHidden
+      />
+    );
+  }
+  return (
+    <View style={styles.avatarLetter} accessibilityElementsHidden>
+      <Text style={styles.avatarLetterText}>{initial}</Text>
+    </View>
+  );
 }
 
 interface ReviewRowProps {
@@ -28,10 +76,13 @@ function ReviewRow({ review }: ReviewRowProps) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.customerName} numberOfLines={1}>
-          {review.customerName || 'Customer'}
-        </Text>
-        <Text style={styles.date}>{formatDate(review.createdAt)}</Text>
+        <ReviewerAvatar name={review.customerName} avatarUrl={review.customerAvatar} />
+        <View style={styles.headerTextCol}>
+          <Text style={styles.customerName} numberOfLines={1}>
+            {review.customerName || 'Customer'}
+          </Text>
+          <Text style={styles.date}>{formatRelativeDate(review.createdAt)}</Text>
+        </View>
       </View>
       <View style={styles.starRow}>
         <Text style={styles.star}>★</Text>
@@ -54,11 +105,21 @@ function ReviewRow({ review }: ReviewRowProps) {
 
 export interface ChefReviewListProps {
   chefId: string;
+  /**
+   * Whether rows should play their entrance stagger on this mount. Defaults
+   * to true (the standalone `/chef/reviews/[id]` route always wants it on
+   * its one-and-only mount). The chef-detail Reviews tab remounts this list
+   * every time the tab is revealed (conditional render) — pass `false` after
+   * the first reveal so revisiting the tab doesn't replay the stagger.
+   */
+  animateOnMount?: boolean;
 }
 
-export function ChefReviewList({ chefId }: ChefReviewListProps) {
+export function ChefReviewList({ chefId, animateOnMount = true }: ChefReviewListProps) {
   const { data, isLoading, isError } = useChefReviews(chefId);
   const reviews = data?.data ?? [];
+  const reduceMotion = useReducedMotion();
+  const shouldAnimate = animateOnMount && !reduceMotion;
 
   if (isLoading) {
     return (
@@ -77,17 +138,33 @@ export function ChefReviewList({ chefId }: ChefReviewListProps) {
   }
 
   if (reviews.length === 0) {
+    // R8 — branded empty state, calm sentence, no raw "No data" string.
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>No reviews yet.</Text>
-      </View>
+      <EmptyState
+        icon={<Star size={26} color={customerColors.charcoal.soft} strokeWidth={1.5} />}
+        title="No reviews yet"
+        body="Once customers review this kitchen, their feedback shows up here."
+        accentColor={customerColors.coral.DEFAULT}
+      />
     );
   }
 
   return (
     <View style={styles.list}>
-      {reviews.map((review) => (
-        <ReviewRow key={review.id} review={review} />
+      {reviews.map((review, index) => (
+        <Animated.View
+          key={review.id}
+          entering={
+            shouldAnimate
+              ? // §3.5: stagger steps 40-60ms, max 3 steps.
+                FadeInDown.delay(Math.min(index, 2) * 60)
+                  .duration(250)
+                  .easing(ENTRANCE_EASING)
+              : undefined
+          }
+        >
+          <ReviewRow review={review} />
+        </Animated.View>
       ))}
     </View>
   );
@@ -95,7 +172,8 @@ export function ChefReviewList({ chefId }: ChefReviewListProps) {
 
 const styles = StyleSheet.create({
   list: {
-    gap: 12,
+    // Rows sit flat on white, separated by hairline — spec §1: separation by
+    // hairline, not card-soup.
   },
   centered: {
     alignItems: 'center',
@@ -111,19 +189,40 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: customerColors.canvas,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: customerColors.hairline,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: customerColors.hairline,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
+  },
+  avatarPhoto: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    // Neutral fill behind the photo so there's no blank flash before the
+    // blurhash placeholder/fade resolves (R2).
+    backgroundColor: customerColors.surface.soft,
+  },
+  avatarLetter: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: customerColors.surface.soft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarLetterText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.charcoal.DEFAULT,
+  },
+  headerTextCol: {
+    flex: 1,
   },
   customerName: {
-    flex: 1,
     fontFamily: 'Inter-SemiBold',
     fontSize: 15,
     color: customerColors.charcoal.DEFAULT,
@@ -132,8 +231,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 12,
     color: customerColors.charcoal.soft,
+    marginTop: 1,
   },
-  starRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  starRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   star: { fontSize: 14, color: customerColors.charcoal.DEFAULT },
   ratingValue: {
     fontFamily: 'Inter-SemiBold',

@@ -14,9 +14,10 @@ import * as Sharing from 'expo-sharing';
 import * as SecureStore from 'expo-secure-store';
 import * as ImagePicker from 'expo-image-picker';
 import * as Device from 'expo-device';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
+import { Check, ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { KeyboardAwareScrollView, Skeleton, useToast } from '@homechef/mobile-shared/ui';
 import { DietIcon } from '../../components/vendor/DietIcon';
@@ -133,6 +134,16 @@ const STATUS_CHIP_FALLBACK: StatusChipColors = {
 
 // ---- Helpers ------------------------------------------------------------------
 
+// R7: light haptic on every chef-initiated status advance (Mark preparing,
+// Mark ready, Out for delivery, Mark handed over, Mark delivered). Accept/
+// reject already get their own (medium) impact from useOrderAction — this
+// covers the rest of the lifecycle. Guarded with .catch: impactAsync can
+// reject on a simulator with no haptic engine, and that must never surface
+// as an unhandled rejection or block the actual status mutation.
+function fireHaptic(): void {
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+}
+
 function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -190,6 +201,7 @@ function CommandBar({
         hitSlop={8}
         accessibilityLabel="Go back"
         accessibilityRole="button"
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
       >
         {({ pressed }) => (
           <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
@@ -243,7 +255,9 @@ function Chip({ label, selected, onPress, grow }: ChipProps) {
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
+      accessibilityLabel={label}
       style={[styles.chip, grow && styles.chipGrow, selected && styles.chipSelected]}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
     </Pressable>
@@ -271,6 +285,59 @@ function TotalRow({
       <Text style={[styles.totalValue, emphasis && styles.totalValueStrong]}>
         ₹{value.toLocaleString('en-IN', { minimumFractionDigits: 0 })}
       </Text>
+    </View>
+  );
+}
+
+interface TimelineStep {
+  label: string;
+  timestamp?: string | null;
+}
+
+interface OrderStatusTimelineProps {
+  steps: TimelineStep[];
+}
+
+/**
+ * Read-only status timeline (Task 9): Ordered → Accepted → Preparing →
+ * Ready → Out for delivery → Delivered/Collected, each row stamped with the
+ * real transition time. Purely a receipt — nothing here is pressable and
+ * nothing mutates order state.
+ *
+ * Only steps the order data already carries are rendered; a step with no
+ * timestamp is omitted entirely rather than shown as a greyed "upcoming"
+ * placeholder (unlike ActiveOrderCard's stepper, this is a history log, not
+ * a progress indicator — the backend has no "started preparing" timestamp
+ * today, so "Preparing" never renders, and that is correct, not a bug).
+ */
+function OrderStatusTimeline({ steps }: OrderStatusTimelineProps) {
+  const known = steps.filter((s): s is TimelineStep & { timestamp: string } => !!s.timestamp);
+  if (known.length === 0) {
+    return <Text style={styles.bodyMuted}>No timeline yet</Text>;
+  }
+  return (
+    <View accessibilityRole="none">
+      {known.map((step, idx) => {
+        const isLast = idx === known.length - 1;
+        const isReady = step.label === 'Ready';
+        const dotColor = isReady ? theme.colors.success.DEFAULT : theme.colors.ink.DEFAULT;
+        return (
+          <View key={step.label} style={styles.timelineRow}>
+            <View style={styles.timelineRail}>
+              <View style={[styles.timelineDot, { backgroundColor: dotColor }]}>
+                <Check size={10} color={theme.colors.paper} strokeWidth={3} />
+              </View>
+              {!isLast && <View style={styles.timelineConnector} />}
+            </View>
+            <View style={[styles.timelineContent, !isLast && styles.rowBorderBottom]}>
+              <Text style={styles.timelineLabel}>{step.label}</Text>
+              <Text style={styles.timelineTimestamp}>
+                {formatDateTime(step.timestamp)}
+              </Text>
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -371,6 +438,7 @@ function FooterActions({
       accessibilityRole="button"
       accessibilityLabel="Cancel this order"
       style={styles.cancelLinkWrap}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       <Text style={styles.cancelLinkLabel}>Cancel order</Text>
     </Pressable>
@@ -389,6 +457,7 @@ function FooterActions({
         accessibilityRole="button"
         accessibilityLabel="Report that you couldn't deliver this order"
         style={styles.cancelLinkWrap}
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
         <Text style={styles.cancelLinkLabel}>Couldn&apos;t deliver this order</Text>
       </Pressable>
@@ -414,6 +483,7 @@ function FooterActions({
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={`Reject order from ${customerName}`}
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
         >
           {({ pressed }) => (
             <View
@@ -433,6 +503,7 @@ function FooterActions({
           style={styles.flex1}
           accessibilityRole="button"
           accessibilityLabel={`Accept ₹${total.toFixed(0)} order from ${customerName}`}
+          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
             <View
@@ -458,6 +529,8 @@ function FooterActions({
           disabled={disabled}
           style={styles.flex1}
           accessibilityRole="button"
+          accessibilityLabel="Mark preparing"
+          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
             <View
@@ -497,6 +570,12 @@ function FooterActions({
             disabled={disabled}
             accessibilityRole="button"
             accessibilityLabel="Mark ready, I will deliver it myself"
+            android_ripple={{
+              color: emphasizeRider
+                ? `${theme.colors.ink.DEFAULT}14`
+                : `${theme.colors.paper}33`,
+              borderless: false,
+            }}
           >
             {({ pressed }) => (
               <View
@@ -520,6 +599,12 @@ function FooterActions({
               disabled={disabled}
               accessibilityRole="button"
               accessibilityLabel="Mark ready, hand to a rider"
+              android_ripple={{
+                color: emphasizeRider
+                  ? `${theme.colors.paper}33`
+                  : `${theme.colors.ink.DEFAULT}14`,
+                borderless: false,
+              }}
             >
               {({ pressed }) => (
                 <View
@@ -538,17 +623,24 @@ function FooterActions({
               )}
             </Pressable>
           ) : null}
+          {/* Photo-required Ready step (Task 9): both carrier choices route
+              through captureAndAdvanceWithCarrier, which opens the camera
+              before advancing — name the requirement up front. */}
+          <Text style={styles.photoCaption}>
+            You&apos;ll attach a photo of the prepared order
+          </Text>
           {cancelLink}
         </View>
       );
     }
     return (
-      <View style={styles.footer}>
+      <View style={[styles.footer, styles.footerColumn]}>
         <Pressable
           onPress={onMarkReady}
           disabled={disabled}
-          style={styles.flex1}
           accessibilityRole="button"
+          accessibilityLabel={isPickup ? 'Mark ready for pickup' : 'Mark ready'}
+          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
             <View
@@ -564,6 +656,11 @@ function FooterActions({
             </View>
           )}
         </Pressable>
+        {/* Photo-required Ready step (Task 9): onMarkReady routes through
+            captureAndAdvance, which opens the camera before advancing. */}
+        <Text style={styles.photoCaption}>
+          You&apos;ll attach a photo of the prepared order
+        </Text>
         {cancelLink}
       </View>
     );
@@ -584,6 +681,7 @@ function FooterActions({
             style={styles.flex1}
             accessibilityRole="button"
             accessibilityLabel={`Mark order handed over to ${customerName}`}
+            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
             {({ pressed }) => (
               <View
@@ -611,6 +709,7 @@ function FooterActions({
             disabled={disabled}
             accessibilityRole="button"
             accessibilityLabel="Mark order out for delivery"
+            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
             {({ pressed }) => (
               <View
@@ -632,6 +731,7 @@ function FooterActions({
               accessibilityRole="button"
               accessibilityLabel="Hand this order to a rider instead"
               style={styles.switchLinkWrap}
+              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
             >
               <Text style={styles.switchLinkLabel}>Hand to a rider instead</Text>
             </Pressable>
@@ -653,6 +753,7 @@ function FooterActions({
             accessibilityRole="button"
             accessibilityLabel="Deliver this order yourself instead"
             style={styles.switchLinkWrap}
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
           >
             <Text style={styles.switchLinkLabel}>I&apos;ll deliver this instead</Text>
           </Pressable>
@@ -672,6 +773,7 @@ function FooterActions({
           disabled={disabled}
           accessibilityRole="button"
           accessibilityLabel={`Mark order delivered to ${customerName}`}
+          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
             <View
@@ -706,6 +808,7 @@ function FooterActions({
           accessibilityRole="button"
           accessibilityLabel="Download invoice PDF"
           style={styles.cancelLinkWrap}
+          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
         >
           <Text style={styles.invoiceLinkLabel}>Download invoice (PDF)</Text>
         </Pressable>
@@ -782,6 +885,7 @@ export default function OrderDetailScreen() {
     try {
       await uploadPhoto.mutateAsync({ orderId: order.id, kind, uri: asset.uri });
       await updateStatus.mutateAsync({ orderId: order.id, status: nextStatus });
+      fireHaptic();
     } catch {
       showToast({
         message: 'Could not upload the photo. Please try again.',
@@ -811,6 +915,7 @@ export default function OrderDetailScreen() {
         status: 'ready',
         carrier,
       });
+      fireHaptic();
     } catch {
       showToast({
         message: 'Could not update the order. Please try again.',
@@ -1045,6 +1150,8 @@ export default function OrderDetailScreen() {
           <Pressable
             onPress={() => refetch()}
             accessibilityRole="button"
+            accessibilityLabel="Retry loading order"
+            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
           >
             {({ pressed }) => (
               <View style={[styles.retryBtn, pressed && { opacity: 0.85 }]}>
@@ -1185,6 +1292,7 @@ export default function OrderDetailScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={`Mark ${item.name} as unfulfillable`}
                         style={styles.itemCancelLinkWrap}
+                        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
                       >
                         <Text style={styles.itemCancelLinkLabel}>
                           Can't make this?
@@ -1409,31 +1517,28 @@ export default function OrderDetailScreen() {
           </>
         ) : null}
 
-        {/* TIMING section */}
+        {/* TIMING section — read-only status timeline (Task 9). Only steps the
+            order data already carries render; "Preparing" has no dedicated
+            backend timestamp (only the ready transition is stamped), so it is
+            naturally absent rather than fabricated. */}
         <SectionLabel>TIMING</SectionLabel>
         <View style={styles.card}>
-          {([
-            ['Ordered', timing.orderedAt],
-            ['Accepted', timing.acceptedAt],
-            ['Prepared', timing.preparedAt],
-            ['Picked up', timing.pickedUpAt],
-            [isPickup ? 'Collected' : 'Delivered', timing.deliveredAt],
-          ] as [string, string | null | undefined][])
-            .filter(([, ts]) => !!ts)
-            .map(([label, ts], idx, arr) => (
-              <View
-                key={label}
-                style={[
-                  styles.timingRow,
-                  idx < arr.length - 1 && styles.rowBorderBottom,
-                ]}
-              >
-                <Text style={styles.timingLabel}>{label}</Text>
-                <Text style={styles.timingValue}>
-                  {formatDateTime(ts ?? '')}
-                </Text>
-              </View>
-            ))}
+          <OrderStatusTimeline
+            steps={[
+              { label: 'Ordered', timestamp: timing.orderedAt },
+              { label: 'Accepted', timestamp: timing.acceptedAt },
+              { label: 'Preparing', timestamp: null },
+              { label: 'Ready', timestamp: timing.preparedAt },
+              {
+                label: 'Out for delivery',
+                timestamp: isPickup ? null : timing.pickedUpAt,
+              },
+              {
+                label: isPickup ? 'Collected' : 'Delivered',
+                timestamp: timing.deliveredAt,
+              },
+            ]}
+          />
         </View>
 
         {/* PRICING section */}
@@ -1503,19 +1608,22 @@ export default function OrderDetailScreen() {
           triggerAction(order.id, 'accepted', undefined, confirmedAt, deliveryFee);
         }}
         onReject={() => triggerAction(order.id, 'rejected')}
-        onMarkPreparing={() =>
-          updateStatus.mutate({ orderId: order.id, status: 'preparing' })
-        }
+        onMarkPreparing={() => {
+          fireHaptic();
+          updateStatus.mutate({ orderId: order.id, status: 'preparing' });
+        }}
         onMarkReady={() => captureAndAdvance('ready', 'ready')}
         onReadyCarrier={(carrier) => captureAndAdvanceWithCarrier(carrier)}
         onSwitchCarrier={(carrier) => switchReadyCarrier(carrier)}
         onMarkHandedOver={() => captureAndAdvance('handover', 'delivered')}
-        onMarkOutForDelivery={() =>
-          updateStatus.mutate({ orderId: order.id, status: 'picked_up' })
-        }
-        onMarkDelivered={() =>
-          updateStatus.mutate({ orderId: order.id, status: 'delivered' })
-        }
+        onMarkOutForDelivery={() => {
+          fireHaptic();
+          updateStatus.mutate({ orderId: order.id, status: 'picked_up' });
+        }}
+        onMarkDelivered={() => {
+          fireHaptic();
+          updateStatus.mutate({ orderId: order.id, status: 'delivered' });
+        }}
         onCancel={openCancelSheet}
         onReportDeliveryFailure={openDeliveryFailureSheet}
         deliveryFailureReported={order.deliveryFailureReported}
@@ -1875,6 +1983,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  // Read-only status timeline (Task 9) — dot + connector rail on the left,
+  // label + timestamp on the right. Only rendered rows are ones the order
+  // data actually has a timestamp for.
+  timelineRow: {
+    flexDirection: 'row',
+    paddingHorizontal: theme.spacing[4],
+    gap: theme.spacing[3],
+  },
+  timelineRail: {
+    width: 20,
+    alignItems: 'center',
+  },
+  timelineDot: {
+    width: 20,
+    height: 20,
+    borderRadius: theme.radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: theme.spacing[3],
+  },
+  timelineConnector: {
+    flex: 1,
+    width: 2,
+    minHeight: theme.spacing[3],
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginVertical: 2,
+  },
+  timelineContent: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: theme.spacing[3],
+    minHeight: 40,
+  },
+  timelineLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  timelineTimestamp: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+    fontVariant: ['tabular-nums'],
+  },
+
   // Delivery-fee input (#703)
   deliveryFeeRow: {
     flexDirection: 'row',
@@ -1922,6 +2077,7 @@ const styles = StyleSheet.create({
     marginHorizontal: theme.spacing[4],
     marginTop: -theme.spacing[2],
     marginBottom: theme.spacing[4],
+    fontVariant: ['tabular-nums'],
   },
 
   // Home-tiffin scheduling (#709) — propose-time controls. The controls sit in
@@ -2130,6 +2286,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
   },
+  // Photo-required Ready step affordance (Task 9) — sits under the action
+  // that leads into the camera so the chef isn't surprised mid-tap.
+  photoCaption: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    textAlign: 'center',
+  },
   // Ghost Reject button (~96 wide) beside the full-flex Accept primary
   // (UI-V2-SPEC §3).
   rejectBtn: {
@@ -2148,7 +2312,9 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.1,
   },
-  // Cancel-order link — herb text link, no underline (UI-V2-SPEC §3).
+  // Cancel-order link — ink text link, no underline (UI-V2-SPEC §3, vendor
+  // reconciliation: every accent text link in the canonical spec resolves to
+  // ink here — the app carries zero brand-accent color).
   cancelLinkWrap: {
     alignSelf: 'center',
     paddingVertical: theme.spacing[2],
@@ -2160,8 +2326,8 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
   },
   // Quiet carrier-switch link (deliver↔rider) in the `ready` footer — same
-  // low-affordance treatment as the cancel link but in muted ink so it reads
-  // as a secondary "actually, do it the other way" affordance.
+  // ink-link treatment as the cancel link (Task 9: link text stays ink, no
+  // muted variant; weight comes from position/order, not a dimmer color).
   switchLinkWrap: {
     alignSelf: 'center',
     paddingVertical: theme.spacing[2],
@@ -2170,23 +2336,22 @@ const styles = StyleSheet.create({
   switchLinkLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.soft,
+    color: theme.colors.ink.DEFAULT,
   },
-  // Per-line cancel — smaller, lower-affordance link inside the item
-  // row. The whole-order cancel is the loud one; this is for the chef
-  // mid-prep who only needs to drop one line.
+  // Per-line cancel — smaller link inside the item row. The whole-order
+  // cancel is the loud one; this is for the chef mid-prep who only needs to
+  // drop one line. Task 9: ink link per §3 (was ink.muted — that read as
+  // disabled, not as a quiet tappable action; SemiBold ink keeps it calm
+  // without the alarm of red, since this isn't an error/alarm state).
   itemCancelLinkWrap: {
     marginTop: 4,
     paddingVertical: 4,
     alignSelf: 'flex-start',
   },
   itemCancelLinkLabel: {
-    // Muted, not red — this is an optional per-item action ("I can't make
-    // this one"), not an error/alarm. Red under every line read as "the whole
-    // order failed". SemiBold keeps it discoverable as a tappable link.
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,
-    color: theme.colors.ink.muted,
+    color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.2,
   },
   invoiceLinkLabel: {
@@ -2215,6 +2380,7 @@ const styles = StyleSheet.create({
     color: theme.colors.destructive.DEFAULT,
     marginTop: 2,
     letterSpacing: 0.2,
+    fontVariant: ['tabular-nums'],
   },
   primaryBtn: {
     flex: 1,
