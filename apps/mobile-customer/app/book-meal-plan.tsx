@@ -408,11 +408,12 @@ export default function BookMealPlanScreen() {
               coral filled, radius 8, 52pt. Distinct disabled state. */}
           <View style={styles.footer}>
             <View style={styles.footerSummary}>
-              <Text style={styles.footerCount}>
-                {selected.length} meal{selected.length === 1 ? '' : 's'} · food
-                subtotal
-              </Text>
-              <Text style={styles.footerTotal}>₹{total.toFixed(0)}</Text>
+              <View style={styles.footerRow}>
+                <Text style={styles.footerCount}>
+                  {selected.length} meal{selected.length === 1 ? '' : 's'} · food subtotal
+                </Text>
+                <Text style={styles.footerTotal}>₹{total.toFixed(0)}</Text>
+              </View>
               <Text style={styles.footerNote}>
                 GST &amp; delivery shown before you pay
               </Text>
@@ -577,12 +578,15 @@ const styles = StyleSheet.create({
     shadowRadius: customerTheme.shadow[2].shadowRadius,
     elevation: customerTheme.shadow[2].elevation,
   },
-  footerSummary: {
+  footerSummary: { gap: 2 },
+  footerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'baseline',
+    gap: 12,
   },
   footerCount: {
+    flexShrink: 1,
     fontFamily: 'Inter',
     fontSize: 14,
     color: customerColors.charcoal.soft,
