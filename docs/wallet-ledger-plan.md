@@ -4,6 +4,13 @@
 
 This plan adapts the target wallet-ledger architecture to the **actual HomeChef codebase** (`apps/api`, Go 1.26 / Gin / GORM / PostgreSQL / Temporal / NATS JetStream). It is grounded in what exists today, calls out the migration risk of a **live money system**, and sequences the work so nothing money-critical is rewritten in a big bang.
 
+**Shipped so far (all behind `LEDGER_SHADOW_ENABLED`, default off — zero behaviour change until the ledger schema is deployed and the flag is on):**
+- **Phase 1 · Financial core** — `Money` paise type, double-entry ledger (`ledger_transactions`/`ledger_entries`), posting API + balance projection, dual-write from every `CreditWallet`/`DebitWallet`, opening-balance backfill, and a shadow reconcile cron asserting `ledger == legacy` to the paise.
+- **Phase 2 · Buckets** — user value split into provenance buckets (refund/referral/promo/goodwill/cashback) while the customer keeps ONE balance; credits route by source, debits drain in spending priority (promo/cashback first, refund last).
+- **Phase 3 · Holds** — generic wallet hold (available/held) with reserve/capture/release, expressed entirely in the ledger, per-user row lock, available-balance guard, idempotent, captured-XOR-released, source-preserving release.
+
+**Customer wallet is also live end-to-end (independent of the shadow ledger):** the balance view is on for all customers (`WALLET_ENABLED`), a home-header balance chip taps through to it, and applying wallet credit at checkout is enabled (`WALLET_CHECKOUT_ENABLED`, API + mobile). Refund credit from cancelled/undelivered meal-plan days lands in the wallet and is spend-on-HomeChef-only (non-withdrawable) — within the pre-regulatory scope of §1.1.
+
 ---
 
 ## 0. Current state (grounded in code)
