@@ -31,6 +31,8 @@
     "orders": "Orders",
     "rating": "Rating",
     "ratingNew": "New",
+    "thisWeek": "THIS WEEK",
+    "weekSummary": "₹{{amount}} · {{count}} orders",
     "today": "TODAY",
     "actionRequired": "ACTION REQUIRED",
     "inProgress": "IN PROGRESS",

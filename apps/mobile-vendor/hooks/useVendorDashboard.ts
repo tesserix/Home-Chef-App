@@ -4,6 +4,11 @@ import { api } from '../lib/api';
 export interface DashboardData {
   todayOrders: number;
   todayEarnings: number;
+  /** Rolling 7-day order count (IST week window). Optional: a client can outrun
+   * the API deploy that added it. */
+  weekOrders?: number;
+  /** Rolling 7-day captured revenue (IST week window). */
+  weekRevenue?: number;
   rating: number;
   totalReviews: number;
   acceptingOrders: boolean;

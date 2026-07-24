@@ -202,13 +202,6 @@ export default function DashboardScreen() {
     );
   }, [pendingOrders, dashboard?.recentOrders]);
 
-  const minutesSinceLastOrder = useMemo(() => {
-    if (!lastOrderIso) return null;
-    const t = new Date(lastOrderIso).getTime();
-    if (Number.isNaN(t)) return null;
-    return Math.floor((Date.now() - t) / 60_000);
-  }, [lastOrderIso]);
-
   // 404 with "Chef profile not found" → user signed in but never
   // completed onboarding. Auto-route to the wizard. Preserved from v2.
   useEffect(() => {
@@ -328,17 +321,21 @@ export default function DashboardScreen() {
       pendingOrders.map((o) => orderSourceLabel(o.source)).filter((l): l is string => !!l),
     ),
   );
-  const isQuiet =
-    !isLoading &&
-    pendingOrders.length === 0 &&
-    inFlightOrders.length === 0 &&
-    (minutesSinceLastOrder === null || minutesSinceLastOrder > 120);
-
   const hasAlerts =
     pendingCancellations.length > 0 ||
     pendingMealPlans.length > 0 ||
     (actionRequests?.length ?? 0) > 0 ||
     expiringDocs.length > 0;
+
+  // Nothing to act on → fill the empty space with the status prompt instead of a
+  // blank screen. Broadened from the old 120-min "quiet" rule: a closed or idle
+  // kitchen should always show where it stands (the copy already points at the
+  // Closed pill to reopen). Any pending / in-flight order or alert pre-empts it.
+  const isQuiet =
+    !isLoading &&
+    pendingOrders.length === 0 &&
+    inFlightOrders.length === 0 &&
+    !hasAlerts;
 
   // Today card visibility — hidden when the chef has truly zero history
   // (new install): `₹0 | 0 orders | 0.0★` reads as a broken screen.
@@ -509,6 +506,22 @@ export default function DashboardScreen() {
             </View>
           )}
         </Animated.View>
+
+        {/* This-week snapshot — one quiet line of trend context beyond today's
+            numbers, only when there's a week to show. */}
+        {(dashboard?.weekOrders ?? 0) > 0 && (
+          <View style={styles.weekRow}>
+            <Text style={styles.weekLabel}>{t('dashboard.thisWeek')}</Text>
+            <Text style={styles.weekValue} numberOfLines={1}>
+              {t('dashboard.weekSummary', {
+                amount: Math.round(
+                  dashboard?.weekRevenue ?? 0,
+                ).toLocaleString('en-IN'),
+                count: dashboard?.weekOrders ?? 0,
+              })}
+            </Text>
+          </View>
+        )}
 
         {/* FSSAI lockout (#92): a lapsed food-safety licence pauses the
             kitchen entirely (orders blocked + payouts frozen server-side).
@@ -1047,6 +1060,31 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.paper,
+  },
+  // This-week snapshot — a quiet caption row under the hero. Pulled up close to
+  // the banner (negative top) so it reads as part of the header, not a section.
+  weekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: -theme.spacing[4],
+    marginBottom: theme.spacing[6],
+    paddingHorizontal: theme.spacing[1],
+  },
+  weekLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.6,
+    color: theme.colors.ink.muted,
+  },
+  weekValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+    flexShrink: 1,
+    textAlign: 'right',
+    marginLeft: theme.spacing[3],
   },
   // Open/Closed status pill on the dark banner. Open = green fill + paper text
   // (green is the operational-positive exception); Closed = transparent +
