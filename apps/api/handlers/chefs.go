@@ -683,6 +683,18 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		Where("chef_id = ? AND created_at >= ? AND payment_status = ?", chef.ID, weekStart, models.PaymentCompleted).
 		Select("COALESCE(SUM(total), 0)").Scan(&weekRevenue)
 
+	// Lifetime totals for the dashboard hero — computed from the orders table, not
+	// the denormalized chef.TotalOrders/earnings counters (which drift: TotalOrders
+	// read 0 for chefs with live orders). Earnings is completed-only (captured
+	// money), mirroring the today/week revenue queries; the order count uses the
+	// same chefVisibleOrders scope as today/week so the three periods agree.
+	var totalEarnings float64
+	database.DB.Model(&models.Order{}).
+		Where("chef_id = ? AND payment_status = ?", chef.ID, models.PaymentCompleted).
+		Select("COALESCE(SUM(total), 0)").Scan(&totalEarnings)
+	var totalOrdersCount int64
+	chefVisibleOrders(chef.ID).Count(&totalOrdersCount)
+
 	// Recent orders — a RECENCY GLANCE, not the source of truth for what the chef
 	// is cooking. Mobile reads `recentOrders` for the dead-screen reassurance copy
 	// (`lastOrderIso` from `createdAt`). Preload Customer for `customerName`.
@@ -752,9 +764,14 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"pendingOrders":   pendingOrders,
 		"weekOrders":      weekOrders,
 		"weekRevenue":     weekRevenue,
-		"rating":          chef.Rating,
-		"totalReviews":    chef.TotalReviews,
-		"totalOrders":     chef.TotalOrders,
+		// Lifetime totals — the hero shows these (all-time), with today/this-week
+		// as the recent breakdown.
+		"totalEarnings": totalEarnings,
+		"rating":        chef.Rating,
+		"totalReviews":  chef.TotalReviews,
+		// Computed lifetime count, not chef.TotalOrders — that denormalized
+		// counter drifted to 0 for chefs with live orders.
+		"totalOrders": totalOrdersCount,
 		"acceptingOrders": chef.AcceptingOrders,
 		"pausedUntil":     chef.PausedUntil,
 		// FSSAI lockout (#92): drives the vendor dashboard's "orders paused —

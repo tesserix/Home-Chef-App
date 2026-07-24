@@ -341,7 +341,7 @@ export default function DashboardScreen() {
   // (new install): `₹0 | 0 orders | 0.0★` reads as a broken screen.
   const showToday =
     !isLoading &&
-    ((dashboard?.todayOrders ?? 0) > 0 || (dashboard?.totalReviews ?? 0) > 0);
+    ((dashboard?.totalOrders ?? 0) > 0 || (dashboard?.totalReviews ?? 0) > 0);
 
   // Dark hero banner (reinstated): greeting + status pill + today's numbers
   // folded into one ink card — the single statement piece; everything below is
@@ -454,27 +454,27 @@ export default function DashboardScreen() {
               <Pressable
                 onPress={() => router.push('/earnings')}
                 accessibilityRole="button"
-                accessibilityLabel={`Today's earnings: ₹${(dashboard?.todayEarnings ?? 0).toFixed(0)}. Tap to see payouts and transactions.`}
+                accessibilityLabel={`Total earnings: ₹${(dashboard?.totalEarnings ?? 0).toFixed(0)}. Tap to see payouts and transactions.`}
                 hitSlop={8}
                 style={({ pressed }) => [styles.heroStatMain, pressed && styles.heroStatPressed]}
               >
                 <Text style={styles.heroEarnings} numberOfLines={1}>
-                  ₹{(dashboard?.todayEarnings ?? 0).toFixed(0)}
+                  ₹{Math.round(dashboard?.totalEarnings ?? 0).toLocaleString('en-IN')}
                 </Text>
                 <Text style={styles.heroStatLabel} numberOfLines={1}>
-                  {t('dashboard.todaysEarnings')}
+                  {t('dashboard.totalEarnings')}
                 </Text>
               </Pressable>
               <Pressable
                 onPress={() => router.push('/(tabs)/orders')}
                 accessibilityRole="button"
-                accessibilityLabel={`${dashboard?.todayOrders ?? 0} orders today. Tap to see them.`}
+                accessibilityLabel={`${dashboard?.totalOrders ?? 0} orders in total. Tap to see them.`}
                 hitSlop={8}
                 style={({ pressed }) => [styles.heroStatCol, pressed && styles.heroStatPressed]}
               >
-                <Text style={styles.heroStatValue}>{dashboard?.todayOrders ?? 0}</Text>
+                <Text style={styles.heroStatValue}>{dashboard?.totalOrders ?? 0}</Text>
                 <Text style={styles.heroStatLabel} numberOfLines={1}>
-                  {t('dashboard.orders')}
+                  {t('dashboard.totalOrders')}
                 </Text>
               </Pressable>
               <Pressable

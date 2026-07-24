@@ -31,6 +31,8 @@
     "orders": "ऑर्डर",
     "rating": "रेटिंग",
     "ratingNew": "नया",
+    "totalEarnings": "कुल कमाई",
+    "totalOrders": "कुल ऑर्डर",
     "thisWeek": "इस हफ़्ते",
     "weekSummary": "₹{{amount}} · {{count}} ऑर्डर",
     "today": "आज",

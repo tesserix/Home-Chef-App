@@ -31,6 +31,8 @@
     "orders": "Orders",
     "rating": "Rating",
     "ratingNew": "New",
+    "totalEarnings": "Total earnings",
+    "totalOrders": "Total orders",
     "thisWeek": "THIS WEEK",
     "weekSummary": "₹{{amount}} · {{count}} orders",
     "today": "TODAY",
