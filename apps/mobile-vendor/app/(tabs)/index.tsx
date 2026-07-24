@@ -356,52 +356,74 @@ export default function DashboardScreen() {
     const hasReviews = (dashboard?.totalReviews ?? 0) > 0;
     return (
       <View style={styles.todayCard}>
-        <Pressable
-          onPress={() => router.push('/earnings')}
-          accessibilityRole="button"
-          accessibilityLabel={`Today's earnings: ₹${(dashboard?.todayEarnings ?? 0).toFixed(0)}. Tap to see payouts and transactions.`}
-          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
-          style={({ pressed }) => [styles.todayCol, pressed && styles.todayColPressed]}
-        >
-          <Text style={styles.todayEarnings} numberOfLines={1}>
-            ₹{(dashboard?.todayEarnings ?? 0).toFixed(0)}
-          </Text>
-          <Text style={styles.todayLabel}>{t('dashboard.todaysEarnings')}</Text>
-        </Pressable>
-        <View style={styles.todayDivider} />
-        <Pressable
-          onPress={() => router.push('/(tabs)/orders')}
-          accessibilityRole="button"
-          accessibilityLabel={`${dashboard?.todayOrders ?? 0} orders today. Tap to see them.`}
-          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
-          style={({ pressed }) => [styles.todayCol, pressed && styles.todayColPressed]}
-        >
-          <Text style={styles.todayValue}>{dashboard?.todayOrders ?? 0}</Text>
-          <Text style={styles.todayLabel}>{t('dashboard.orders')}</Text>
-        </Pressable>
-        <View style={styles.todayDivider} />
-        <Pressable
-          onPress={() => router.push('/reviews')}
-          accessibilityRole="button"
-          accessibilityLabel={
-            hasReviews
-              ? `Rating: ${(dashboard?.rating ?? 0).toFixed(1)} out of 5. Tap to read your reviews.`
-              : 'No reviews yet. Tap to read your reviews.'
-          }
-          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
-          style={({ pressed }) => [styles.todayCol, pressed && styles.todayColPressed]}
-        >
-          {hasReviews ? (
-            <Text style={styles.todayValue}>
-              {(dashboard?.rating ?? 0).toFixed(1)}★
-            </Text>
-          ) : (
-            <View style={styles.newChip}>
-              <Text style={styles.newChipText}>{t('dashboard.ratingNew')}</Text>
+        {/* Each column is a plain flex:1 View wrapping the Pressable. The flex
+            lives on the View — a Pressable with a function-style prop did not
+            distribute (columns collapsed to content width, bunched left), so
+            the tap surface stretches to fill the equal third via alignSelf. */}
+        <View style={styles.todayCol}>
+          <Pressable
+            onPress={() => router.push('/earnings')}
+            accessibilityRole="button"
+            accessibilityLabel={`Today's earnings: ₹${(dashboard?.todayEarnings ?? 0).toFixed(0)}. Tap to see payouts and transactions.`}
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+            style={({ pressed }) => [styles.todayColTap, pressed && styles.todayColPressed]}
+          >
+            <View style={styles.todayValueSlot}>
+              <Text style={styles.todayEarnings} numberOfLines={1}>
+                ₹{(dashboard?.todayEarnings ?? 0).toFixed(0)}
+              </Text>
             </View>
-          )}
-          <Text style={styles.todayLabel}>{t('dashboard.rating')}</Text>
-        </Pressable>
+            <Text style={styles.todayLabel} numberOfLines={1}>
+              {t('dashboard.todaysEarnings')}
+            </Text>
+          </Pressable>
+        </View>
+        <View style={styles.todayDivider} />
+        <View style={styles.todayCol}>
+          <Pressable
+            onPress={() => router.push('/(tabs)/orders')}
+            accessibilityRole="button"
+            accessibilityLabel={`${dashboard?.todayOrders ?? 0} orders today. Tap to see them.`}
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+            style={({ pressed }) => [styles.todayColTap, pressed && styles.todayColPressed]}
+          >
+            <View style={styles.todayValueSlot}>
+              <Text style={styles.todayValue}>{dashboard?.todayOrders ?? 0}</Text>
+            </View>
+            <Text style={styles.todayLabel} numberOfLines={1}>
+              {t('dashboard.orders')}
+            </Text>
+          </Pressable>
+        </View>
+        <View style={styles.todayDivider} />
+        <View style={styles.todayCol}>
+          <Pressable
+            onPress={() => router.push('/reviews')}
+            accessibilityRole="button"
+            accessibilityLabel={
+              hasReviews
+                ? `Rating: ${(dashboard?.rating ?? 0).toFixed(1)} out of 5. Tap to read your reviews.`
+                : 'No reviews yet. Tap to read your reviews.'
+            }
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+            style={({ pressed }) => [styles.todayColTap, pressed && styles.todayColPressed]}
+          >
+            <View style={styles.todayValueSlot}>
+              {hasReviews ? (
+                <Text style={styles.todayValue}>
+                  {(dashboard?.rating ?? 0).toFixed(1)}★
+                </Text>
+              ) : (
+                <View style={styles.newChip}>
+                  <Text style={styles.newChipText}>{t('dashboard.ratingNew')}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.todayLabel} numberOfLines={1}>
+              {t('dashboard.rating')}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -1053,8 +1075,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[3],
     ...theme.shadow[1],
   },
+  // Plain flex:1 View — the equal-thirds distribution lives here, not on the
+  // Pressable (which ignored flexGrow and collapsed to content width). minWidth:0
+  // lets a long label ("Today's earnings") shrink instead of forcing the column
+  // wider than its third.
   todayCol: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+  },
+  // The tap surface fills its column (alignSelf stretch) so the ripple covers the
+  // full third and the value/label center within it.
+  todayColTap: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    paddingVertical: theme.spacing[1],
+  },
+  // Fixed-height value slot so every stat's label sits on the same line. The
+  // earnings value is 24px and orders/rating are 16px — without a common slot
+  // height the taller earnings pushed its label down, leaving the three labels
+  // (Today's earnings / Orders / Rating) at three different heights.
+  todayValueSlot: {
+    height: 32,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   // Touch feedback for the stat tiles. Opacity only — the design system animates
