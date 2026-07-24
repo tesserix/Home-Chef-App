@@ -54,7 +54,13 @@ const (
 	MealPlanDayConfirmed MealPlanDayStatus = "confirmed"
 	MealPlanDayPrepared  MealPlanDayStatus = "prepared"
 	MealPlanDayDelivered MealPlanDayStatus = "delivered" // releases the held payout
-	MealPlanDaySkipped   MealPlanDayStatus = "skipped"   // customer skipped before cutoff → refunded
+	// MealPlanDaySkipRequested marks a day the customer asked to skip. It is a
+	// NON-terminal, still-in-scope holding state (fits varchar(12)): the day's payout
+	// hold is frozen `disputed` and the plan stays open until an ADMIN approves (→
+	// skipped + partial refund) or rejects (→ confirmed). Not auto-refunded — the
+	// customer no longer self-credits a skip (#422 policy change).
+	MealPlanDaySkipRequested MealPlanDayStatus = "skip_req"
+	MealPlanDaySkipped       MealPlanDayStatus = "skipped" // admin approved a skip → partial refund
 	MealPlanDayCancelled MealPlanDayStatus = "cancelled"
 	MealPlanDayRefunded  MealPlanDayStatus = "refunded"
 	// MealPlanDayFailed marks a day whose delivery terminally failed (#393). It is

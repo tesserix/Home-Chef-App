@@ -13,16 +13,14 @@ import (
 )
 
 // meal_plan_fulfillment.go — turns confirmed tiffin plans into the normal order
-// pipeline (#197). A cron generates one scheduled Order per confirmed day as its
-// date approaches (orderGenLeadTime); the existing prep/deliver flow then drives
-// it, and the delivery hook (MarkMealPlanDayDelivered) marks the day delivered +
-// releases its escrow payout. A plan flips active on first generation and
-// completed once every day reaches a terminal state.
-const (
-	mealPlanFulfillmentInterval = 15 * time.Minute
-	// Generate a day's order this far ahead of its date so the chef sees it in time.
-	orderGenLeadTime = 24 * time.Hour
-)
+// pipeline (#197). A cron generates (LOCKS) one scheduled Order per confirmed day
+// exactly mealPlanLockLead before that day's cook-start (MealPlanDayStartIST) —
+// the SAME instant the customer's skip window closes (#422 unified boundary), so
+// the chef only ever preps locked, un-skippable days. The existing prep/deliver
+// flow then drives it, and the delivery hook (MarkMealPlanDayDelivered) marks the
+// day delivered + releases its escrow payout. A plan flips active on first
+// generation and completed once every day reaches a terminal state.
+const mealPlanFulfillmentInterval = 15 * time.Minute
 
 // StartMealPlanFulfillmentCron is the legacy in-process fallback (Temporal off).
 func StartMealPlanFulfillmentCron(ctx context.Context) {
@@ -57,7 +55,7 @@ func runMealPlanFulfillment(_ context.Context) {
 // generateDueDayOrders creates an Order for each confirmed day coming due that
 // doesn't yet have one, and flips the plan active.
 func generateDueDayOrders() {
-	due := time.Now().Add(orderGenLeadTime)
+	now := time.Now()
 	var plans []models.MealPlan
 	if err := database.DB.
 		Where("status IN ?", []models.MealPlanStatus{models.MealPlanConfirmed, models.MealPlanActive}).
@@ -68,10 +66,21 @@ func generateDueDayOrders() {
 	for i := range plans {
 		p := &plans[i]
 		addr, hasAddr := defaultAddress(p.CustomerID)
+		// The chef's schedule anchors each day's cook-start (MealPlanDayStartIST);
+		// no rows → per-slot defaults. Loaded once per plan.
+		var schedules []models.ChefSchedule
+		database.DB.Where("chef_id = ?", p.ChefID).Find(&schedules)
 		generated := 0
 		for j := range p.Days {
 			d := &p.Days[j]
-			if d.OrderID != nil || d.Status != models.MealPlanDayConfirmed || d.Date.After(due) {
+			if d.OrderID != nil || d.Status != models.MealPlanDayConfirmed {
+				continue
+			}
+			// UNIFIED skip/lock boundary (#422): generate (lock) the order exactly
+			// mealPlanLockLead before the day's cook-start — the SAME instant the
+			// customer's skip window closes. A day whose start is still further out
+			// waits (the customer can still request a skip until then).
+			if MealPlanDayStartIST(schedules, d).After(now.Add(mealPlanLockLead)) {
 				continue
 			}
 			if !hasAddr {

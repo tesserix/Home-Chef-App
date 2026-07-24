@@ -157,20 +157,25 @@ export default function MealPlanDetailScreen() {
     if (!plan) return;
     Alert.alert(
       'Skip this day?',
-      'You won’t be charged for it. This can’t be undone, but you can book again any time.',
+      'We’ll send a refund request for review. Once approved you get that day’s food back (minus the platform fee) to your wallet — GST and delivery aren’t refunded. This can’t be undone.',
       [
         { text: 'Back', style: 'cancel' },
         {
-          text: 'Skip day',
+          text: 'Request skip',
           style: 'destructive',
           onPress: () =>
             skipDay.mutate(
               { planId: plan.id, dayId },
               {
+                onSuccess: () =>
+                  Alert.alert(
+                    'Skip requested',
+                    'Your request is in for review. If approved, the day’s food (minus the platform fee) is refunded to your wallet and your chef won’t cook it.',
+                  ),
                 onError: () =>
                   Alert.alert(
-                    'Could not skip',
-                    'It may be too close to the delivery day.',
+                    'Could not request skip',
+                    'It may be too close to when your chef starts cooking this day.',
                   ),
               },
             ),

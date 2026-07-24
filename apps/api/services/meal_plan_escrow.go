@@ -80,6 +80,20 @@ func perDayFoodGST(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 	return plan.Tax * (day.Price / plan.Subtotal)
 }
 
+// perDaySkipRefund is the amount refunded to the customer when an ADMIN approves a
+// customer's day-skip (#422 policy change): the day's FOOD price minus the platform
+// commission on that food. The customer forfeits GST + delivery + commission; the chef,
+// who never cooked the meal, gets 0 (the full held transfer is reversed by
+// refundDayAmount). Distinct from perDayGross (the FULL make-whole refund used for
+// declined/undelivered/failed days). A missing/legacy rate falls back to the flat
+// DefaultCommissionRate, matching perDayNetPayout.
+func perDaySkipRefund(_ *models.MealPlan, day *models.MealPlanDay, rate float64) float64 {
+	if rate <= 0 || rate >= 1 {
+		rate = DefaultCommissionRate
+	}
+	return Round2(day.Price - rate*day.Price)
+}
+
 // perDayNetPayout is the chef's NET payout for a single day — the amount the held
 // Route transfer must carry (#518). It mirrors ComputeOrderEarnings per-day so the
 // meal-plan escrow pays the chef on the SAME basis as regular orders:
@@ -320,11 +334,25 @@ func isAlreadyReversedErr(err error) bool {
 		strings.Contains(msg, "not reversible")
 }
 
-// RefundDay refunds a single day to the customer's wallet (idempotent on the
-// day id) and stamps RefundTxnID. If the day's payout was already held, the
-// held transfer is reversed first so the chef isn't paid for a refunded day.
-// No-op when escrow is off.
+// RefundDay refunds a single day to the customer's wallet for the FULL amount the
+// customer paid for that day (perDayGross: food + proportional GST + delivery) —
+// used for declined / undelivered / delivery-failed days that must make the customer
+// whole. Idempotent on the day id; stamps RefundTxnID; reverses any held chef
+// transfer first. No-op when escrow is off. Thin wrapper over refundDayAmount — its
+// callers (RefundDeclinedDays / RefundUndeliveredDays / sweepStuckDays /
+// ResolveMealPlanDayFailure) keep refunding the full perDayGross.
 func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reason string) error {
+	return refundDayAmount(tx, plan, day, perDayGross(plan, day), reason)
+}
+
+// refundDayAmount is the shared per-day refund money seam: it credits `amount` to the
+// customer's wallet (idempotent on the day id, keyed dayRefundKey), FULLY reverses any
+// held chef transfer (the chef is paid 0 for a day that is refunded), stamps RefundTxnID
+// with a FOR UPDATE lock, mirrors the refund onto any linked shell Order, and drives the
+// day's payout hold out of the releasable set. RefundDay passes perDayGross (full
+// make-whole); the admin-approved skip passes perDaySkipRefund (food minus the platform
+// fee). The hold claw-back is IDENTICAL in both cases. No-op when escrow is off.
+func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, amount float64, reason string) error {
 	if !MealPlanEscrowActive() {
 		return nil
 	}
@@ -380,9 +408,9 @@ func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reas
 			auditTransferMovement(auditTransferReverse, aggTypeMealPlanDay, day.ID, day.PayoutTransferID, 0, "meal-plan day refunded — chef payout clawed back")
 		}
 	}
-	// Refund the FULL amount the customer paid for the day (food + GST + delivery),
-	// not just the food price — otherwise they'd lose the fees on an unserved day.
-	txn, err := CreditWallet(tx, plan.CustomerID, perDayGross(plan, day), models.WalletSourceRefund, nil,
+	// Credit the caller-chosen refund amount (perDayGross for a make-whole refund;
+	// perDaySkipRefund = food − platform fee for an approved skip) to the wallet.
+	txn, err := CreditWallet(tx, plan.CustomerID, amount, models.WalletSourceRefund, nil,
 		fmt.Sprintf("Tiffin %s — %s", plan.MealPlanNumber, reason), dayRefundKey(day.ID), nil)
 	if err != nil {
 		return fmt.Errorf("refund day %s to wallet: %w", day.ID, err)
@@ -404,7 +432,7 @@ func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reas
 	if day.OrderID != nil {
 		if err := tx.Model(&models.Order{}).Where("id = ?", *day.OrderID).Updates(map[string]any{
 			"status":              models.OrderStatusRefunded,
-			"refund_amount":       perDayGross(plan, day),
+			"refund_amount":       amount,
 			"refunded_at":         time.Now(),
 			"refund_reason":       reason,
 			"refund_initiated_by": "system",

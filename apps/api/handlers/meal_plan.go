@@ -67,6 +67,45 @@ func dayBeforeCutoff(dateStr string, now time.Time) (bool, error) {
 	return d.Before(now.Add(mealPlanLeadTime)), nil
 }
 
+// parseClockHHMM parses an "HH:MM" 24-hour clock string into (hour, minute, ok). ok is
+// false for any malformed or out-of-range value so callers fall back to a slot default.
+func parseClockHHMM(s string) (int, int, bool) {
+	var hh, mm int
+	if n, err := fmt.Sscanf(s, "%d:%d", &hh, &mm); err != nil || n != 2 {
+		return 0, 0, false
+	}
+	if hh < 0 || hh > 23 || mm < 0 || mm > 59 {
+		return 0, 0, false
+	}
+	return hh, mm, true
+}
+
+// mealPlanDayStartIST approximates the IST start time of a plan day's cooking — the
+// anchor for the 12h-before-start skip gate (#422). There is no exact per-slot start
+// time stored, so it uses the chef's ChefSchedule OpenTime for that IST weekday (an
+// open row carrying a valid HH:MM). Fallback order: (1) that schedule row's OpenTime;
+// (2) a per-slot default — lunch 12:00 IST, dinner 19:00 IST — when there is no
+// schedule row for the weekday, the row is marked closed, or its OpenTime is
+// missing/malformed. Pure (no DB) so it is unit-tested directly.
+func mealPlanDayStartIST(schedules []models.ChefSchedule, day *models.MealPlanDay) time.Time {
+	d := day.Date.In(istLoc)
+	weekday := int(d.Weekday()) // 0=Sunday .. 6=Saturday — matches ChefSchedule.DayOfWeek
+	for i := range schedules {
+		s := schedules[i]
+		if s.DayOfWeek != weekday || s.IsClosed {
+			continue
+		}
+		if hh, mm, ok := parseClockHHMM(s.OpenTime); ok {
+			return time.Date(d.Year(), d.Month(), d.Day(), hh, mm, 0, 0, istLoc)
+		}
+	}
+	hh := 12 // lunch default
+	if day.Slot == models.MealSlotDinner {
+		hh = 19 // dinner default
+	}
+	return time.Date(d.Year(), d.Month(), d.Day(), hh, 0, 0, 0, istLoc)
+}
+
 // MealPlanHandler owns the customer + chef meal-plan endpoints.
 type MealPlanHandler struct{}
 
@@ -624,9 +663,12 @@ func (h *MealPlanHandler) CancelMealPlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
-// SkipMealPlanDay — PUT /meal-plans/:id/days/:dayId/skip. The customer skips a
-// confirmed day whose order hasn't been generated yet, before the lead-time
-// cutoff; the day is refunded to wallet (escrow; gated).
+// SkipMealPlanDay — PUT /meal-plans/:id/days/:dayId/skip. The customer REQUESTS to skip
+// a confirmed day whose order hasn't been generated yet, at least 12h before that day's
+// cooking start (approximated from the chef's schedule). This no longer auto-credits the
+// customer (#422 policy change): it flips the day to `skip_req`, freezes the chef's payout
+// hold to `disputed`, and notifies the chef the skip is pending. An admin then approves
+// (partial refund — food minus the platform fee) or rejects it (day returns to confirmed).
 func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 	customerID, _ := middleware.GetUserID(c)
 	plan, ok := loadScopedPlan(c.Param("id"), "customer_id", customerID)
@@ -650,13 +692,19 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Day not found in this plan"})
 		return
 	}
-	// Only a confirmed day whose order hasn't been generated, before the cutoff.
+	// Only a confirmed day whose order hasn't been generated yet.
 	if day.Status != models.MealPlanDayConfirmed || day.OrderID != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "This day can no longer be skipped"})
 		return
 	}
-	if day.Date.Before(time.Now().Add(mealPlanLeadTime)) {
-		c.JSON(http.StatusConflict, gin.H{"error": "Too late to skip this day"})
+	// 12h-before-START gate (#422): a skip must land at least the lead time before that
+	// day's cooking begins. There is no exact per-slot start, so approximate it from the
+	// chef's weekly schedule OpenTime (a per-slot default when there's no usable row).
+	var schedules []models.ChefSchedule
+	database.DB.Where("chef_id = ?", plan.ChefID).Find(&schedules)
+	start := mealPlanDayStartIST(schedules, day)
+	if !time.Now().Before(start.Add(-mealPlanLeadTime)) {
+		c.JSON(http.StatusConflict, gin.H{"error": "Too late to skip this day — the kitchen is about to start cooking it"})
 		return
 	}
 
@@ -668,29 +716,28 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 	defer release()
 
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Confirmed → skip_req: RAISE the request (no auto-credit). Guarded so a race
+		// can't re-request or transition past a concurrent change (#422 policy).
 		res := tx.Model(&models.MealPlanDay{}).
 			Where("id = ? AND status = ?", day.ID, models.MealPlanDayConfirmed).
-			Update("status", models.MealPlanDaySkipped)
+			Update("status", models.MealPlanDaySkipRequested)
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
 			return errPlanConflict
 		}
-		day.Status = models.MealPlanDaySkipped
-		if err := services.RefundDay(tx, &plan, day, "customer skipped this day"); err != nil {
+		day.Status = models.MealPlanDaySkipRequested
+		// Freeze the chef's payout so it can't be released while the skip is under review.
+		if err := services.SetMealPlanDayHoldDisputed(tx, day.ID); err != nil {
 			return err
 		}
-		if err := services.EnqueueEvent(tx, services.SubjectMealPlanDayRefunded, "meal_plan_day.skipped", customerID, map[string]any{
-			"meal_plan_id": plan.ID.String(), "day_id": day.ID.String(),
-		}); err != nil {
-			return err
-		}
-		// Also tell the chef the day was skipped, so they don't cook it (#422).
-		var chefUserID uuid.UUID
-		if err := tx.Model(&models.ChefProfile{}).Where("id = ?", plan.ChefID).
-			Select("user_id").Scan(&chefUserID).Error; err == nil && chefUserID != uuid.Nil {
-			return services.EnqueueEvent(tx, services.SubjectMealPlanDaySkippedChef, "meal_plan_day.skipped_chef", chefUserID, map[string]any{
+		// Tell the chef a skip is PENDING review (hold off cooking it). No RefundDay here —
+		// money moves only if an admin approves. Load the chef through a struct (not a bare
+		// Scan into uuid.UUID) so GORM handles the uuid column on Postgres and sqlite alike.
+		var chef models.ChefProfile
+		if err := tx.Select("id", "user_id").First(&chef, "id = ?", plan.ChefID).Error; err == nil && chef.UserID != uuid.Nil {
+			return services.EnqueueEvent(tx, services.SubjectMealPlanDaySkipRequested, "meal_plan_day.skip_requested", chef.UserID, map[string]any{
 				"meal_plan_id": plan.ID.String(), "day_id": day.ID.String(),
 				"date": day.Date.Format("2006-01-02"),
 			})
@@ -701,11 +748,15 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "This day can no longer be skipped"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to skip day"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to request skip"})
 		return
 	}
 	plan.ProjectForCustomer()
-	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
+	c.JSON(http.StatusOK, gin.H{
+		"status":   "skip_requested",
+		"message":  "Skip requested — pending review",
+		"mealPlan": plan,
+	})
 }
 
 type verifyMealPlanPaymentRequest struct {
@@ -1026,6 +1077,61 @@ func (h *MealPlanHandler) AdminResolveDayDeliveryFailure(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not resolve the delivery failure"})
 	default:
 		c.JSON(http.StatusOK, gin.H{"status": "resolved", "fault": string(req.Fault)})
+	}
+}
+
+// AdminApproveMealPlanDaySkip — POST /admin/meal-plan-days/:dayId/approve-skip. Approves
+// a customer's pending skip (#422): the day becomes terminally `skipped`, the customer is
+// refunded the FOOD price minus the platform commission (they forfeit GST + delivery +
+// commission), the chef's held transfer is fully reversed, and the plan completes if every
+// day is now terminal. Mirrors AdminResolveDayDeliveryFailure.
+func (h *MealPlanHandler) AdminApproveMealPlanDaySkip(c *gin.Context) {
+	h.resolveDaySkip(c, true)
+}
+
+// AdminRejectMealPlanDaySkip — POST /admin/meal-plan-days/:dayId/reject-skip. Rejects a
+// pending skip: the day returns to `confirmed`, its frozen hold is restored, and the
+// customer is told the skip was declined. No money moves.
+func (h *MealPlanHandler) AdminRejectMealPlanDaySkip(c *gin.Context) {
+	h.resolveDaySkip(c, false)
+}
+
+// resolveDaySkip is the shared body for the approve/reject admin skip endpoints: it loads
+// the day + its plan (with snapshotted totals for the refund basis) and runs
+// ResolveMealPlanDaySkip in a transaction.
+func (h *MealPlanHandler) resolveDaySkip(c *gin.Context, approve bool) {
+	adminID, _ := middleware.GetUserID(c)
+	dayID, err := uuid.Parse(c.Param("dayId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid day id"})
+		return
+	}
+	var day models.MealPlanDay
+	if err := database.DB.First(&day, "id = ?", dayID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal-plan day not found"})
+		return
+	}
+	// Load the plan WITH its days + snapshotted totals — perDaySkipRefund derives from the
+	// day's price and the plan is needed for completion re-check.
+	var plan models.MealPlan
+	if err := database.DB.Preload("Days").First(&plan, "id = ?", day.MealPlanID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
+		return
+	}
+
+	switch err := services.ResolveMealPlanDaySkip(database.DB, &plan, &day, approve, adminID); {
+	case errors.Is(err, services.ErrNotSkipRequest):
+		c.JSON(http.StatusConflict, gin.H{"error": "This day has no pending skip request"})
+	case errors.Is(err, services.ErrIssueAlreadyHandled):
+		c.JSON(http.StatusConflict, gin.H{"error": "This skip request has already been resolved"})
+	case err != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not resolve the skip request"})
+	default:
+		decision := "approved"
+		if !approve {
+			decision = "rejected"
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "resolved", "decision": decision})
 	}
 }
 

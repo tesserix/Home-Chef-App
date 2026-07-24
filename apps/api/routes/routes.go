@@ -948,6 +948,10 @@ func SetupRouter() *gin.Engine {
 			// Delivery-failed meal-plan day resolution (#393 slice B) — admin confirms
 			// fault; money executes (chef paid vs full day refund) + plan completes.
 			admin.POST("/meal-plan-days/:dayId/resolve-delivery-failure", mealPlanHandler.AdminResolveDayDeliveryFailure)
+			// Customer day-skip review (#422) — admin approves (partial refund: food minus
+			// the platform fee) or rejects (day returns to confirmed) a pending skip.
+			admin.POST("/meal-plan-days/:dayId/approve-skip", mealPlanHandler.AdminApproveMealPlanDaySkip)
+			admin.POST("/meal-plan-days/:dayId/reject-skip", mealPlanHandler.AdminRejectMealPlanDaySkip)
 
 			// Promotions (featured ads)
 			admin.GET("/promotions", promotionHandler.AdminListPromotions)

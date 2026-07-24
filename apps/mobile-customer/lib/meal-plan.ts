@@ -162,6 +162,9 @@ export function mealPlanDayStatusMeta(status: string): DayStatusMeta {
       return { ...base, cooking: true, label: 'Being prepared', color: customerColors.coral.pressed, bg: customerColors.coral.tint };
     case 'delivered':
       return { ...base, label: 'Delivered', color: customerColors.success.DEFAULT, bg: customerColors.success.tint };
+    case 'skip_req':
+      // Customer asked to skip; awaiting admin review (not yet refunded, still in scope).
+      return { ...base, label: 'Skip requested', color: customerColors.coral.pressed, bg: customerColors.coral.tint };
     case 'declined':
     case 'skipped':
     case 'cancelled':

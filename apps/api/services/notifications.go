@@ -129,7 +129,7 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
 			Subjects: []string{SubjectApprovalApproved, SubjectApprovalRejected, SubjectApprovalInfoRequested, SubjectApprovalCreated}},
 		{Stream: "MEAL_PLANS", Durable: "notify-meal-plans", Handler: h,
-			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayPrepared, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded, SubjectMealPlanDaySkippedChef, SubjectMealPlanDayFailed, SubjectMealPlanCompleted, SubjectMealPlanChefReminder, SubjectMealPlanPayoutReleased}},
+			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayPrepared, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded, SubjectMealPlanDaySkippedChef, SubjectMealPlanDaySkipRequested, SubjectMealPlanDaySkipDeclined, SubjectMealPlanDayFailed, SubjectMealPlanCompleted, SubjectMealPlanChefReminder, SubjectMealPlanPayoutReleased}},
 		{Stream: "GROUP_ORDERS", Durable: "notify-group-orders", Handler: h,
 			Subjects: []string{SubjectGroupOrderLocked, SubjectGroupOrderPlaced, SubjectGroupOrderCancelled}},
 	}
@@ -176,6 +176,10 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleReviewPosted)
 	case SubjectMealPlanDaySkippedChef:
 		return decodeThen(data, s.handleMealPlanDaySkippedChef)
+	case SubjectMealPlanDaySkipRequested:
+		return decodeThen(data, s.handleMealPlanDaySkipRequested)
+	case SubjectMealPlanDaySkipDeclined:
+		return decodeThen(data, s.handleMealPlanDaySkipDeclined)
 	case SubjectReferralRewarded:
 		return decodeThen(data, s.handleReferralRewarded)
 	case SubjectLoyaltyEarned:
@@ -1376,11 +1380,30 @@ func (s *NotificationService) handleMealPlanDayRefunded(event Event) error {
 }
 
 // handleMealPlanDaySkippedChef notifies the CHEF that a customer skipped a plan
-// day, so they don't cook it (#422). The event targets the chef's user id.
+// day, so they don't cook it (#422). The event targets the chef's user id. Fired only
+// once an ADMIN approves the skip (the day is now terminally `skipped`).
 func (s *NotificationService) handleMealPlanDaySkippedChef(event Event) error {
 	return s.notifyMealPlan(event, "meal_plan_day_skipped_chef",
 		"A plan day was skipped",
 		"A customer skipped a day in their tiffin plan — no need to cook that meal.")
+}
+
+// handleMealPlanDaySkipRequested notifies the CHEF that a customer REQUESTED to skip a
+// plan day, pending admin review (#422 policy change). Until it's approved the meal is
+// on hold — the chef shouldn't start cooking it. The event targets the chef's user id.
+func (s *NotificationService) handleMealPlanDaySkipRequested(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_day_skip_requested",
+		"A skip was requested",
+		"A customer asked to skip a day in their tiffin plan. Our team is reviewing it — hold off on cooking that meal for now.")
+}
+
+// handleMealPlanDaySkipDeclined notifies the CUSTOMER that their skip request was
+// declined by the platform, so the day still stands and will be cooked/delivered as
+// planned. In-app + push (they were expecting a refund). Targets the customer's user id.
+func (s *NotificationService) handleMealPlanDaySkipDeclined(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_day_skip_declined",
+		"Skip request declined",
+		"Your request to skip a tiffin day couldn't be approved, so that day stands and will be delivered as planned.")
 }
 
 // handleMealPlanCancelled → chef or customer (event.UserID), tailored by cause:
