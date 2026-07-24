@@ -61,18 +61,31 @@ interface Selected {
   dailyMenuItemId?: string;
 }
 
-function isoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+// IST (UTC+5:30, no DST) date helpers so the client's bookable-day set matches the
+// server, which interprets each YYYY-MM-DD as IST-midnight and applies the 12h lead
+// from there. Using device-local midnight instead offered days the server then
+// rejected as "too soon" (client/server lead-time mismatch).
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// The IST calendar date `offsetDays` from `now`: its YYYY-MM-DD and the real (UTC)
+// instant of that IST midnight.
+function istDay(now: Date, offsetDays: number): { iso: string; midnightMs: number } {
+  const wall = new Date(now.getTime() + IST_OFFSET_MS);
+  wall.setUTCDate(wall.getUTCDate() + offsetDays);
+  const y = wall.getUTCFullYear();
+  const m = String(wall.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(wall.getUTCDate()).padStart(2, '0');
+  const iso = `${y}-${m}-${d}`;
+  return { iso, midnightMs: Date.parse(`${iso}T00:00:00+05:30`) };
 }
 
-function dayLabel(d: Date): string {
-  return d.toLocaleDateString(undefined, {
+// Human label ("Mon, 28 Jul") for an ISO date, rendered in IST so it matches the iso.
+function istDayLabel(iso: string): string {
+  return new Date(`${iso}T12:00:00+05:30`).toLocaleDateString(undefined, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
+    timeZone: 'Asia/Kolkata',
   });
 }
 
@@ -86,14 +99,10 @@ export default function BookMealPlanScreen() {
   const { chefId } = useLocalSearchParams<{ chefId: string }>();
   const { data: menu, isLoading, isError, refetch } = useChefWeeklyMenu(chefId);
 
-  // The horizon window (tomorrow .. +HORIZON_DAYS) for the per-date menu.
+  // The horizon window (tomorrow .. +HORIZON_DAYS) for the per-date menu, in IST.
   const window = useMemo(() => {
-    const base = new Date();
-    const from = new Date(base);
-    from.setDate(base.getDate() + 1);
-    const to = new Date(base);
-    to.setDate(base.getDate() + HORIZON_DAYS);
-    return { from: isoDate(from), to: isoDate(to) };
+    const now = new Date();
+    return { from: istDay(now, 1).iso, to: istDay(now, HORIZON_DAYS).iso };
   }, []);
   const { data: daily } = useChefDailyMenu(chefId, window.from, window.to);
   const create = useCreateMealPlan();
@@ -110,19 +119,21 @@ export default function BookMealPlanScreen() {
     );
     if (weekly.length === 0 && dailyByDate.size === 0) return [];
     const out: { date: string; label: string; cells: BookableCell[] }[] = [];
-    const base = new Date();
-    const cutoff = base.getTime() + LEAD_MS;
+    const now = new Date();
+    const cutoffMs = now.getTime() + LEAD_MS;
     const bySlotVariant = (a: BookableCell, b: BookableCell) =>
       a.slot === b.slot
         ? a.variant.localeCompare(b.variant)
         : a.slot.localeCompare(b.slot);
 
     for (let i = 1; i <= HORIZON_DAYS; i++) {
-      const d = new Date(base);
-      d.setDate(base.getDate() + i);
-      d.setHours(0, 0, 0, 0);
-      if (d.getTime() < cutoff) continue;
-      const iso = isoDate(d);
+      const { iso, midnightMs } = istDay(now, i);
+      // IST-midnight within the 12h lead → the server rejects the day, so don't
+      // offer it (matches the server's mealPlanLeadTime cutoff).
+      if (midnightMs < cutoffMs) continue;
+      // Weekday of THIS calendar date (IST), for the weekly-template match — a date
+      // is a fixed weekday regardless of device tz.
+      const dow = new Date(`${iso}T00:00:00Z`).getUTCDay();
 
       let cells: BookableCell[];
       const dayItems = dailyByDate.get(iso);
@@ -148,7 +159,7 @@ export default function BookMealPlanScreen() {
         // combo) so a weekly combo renders as one on the card, and — like the
         // per-date branch — float combos ahead of à-la-carte within a slot.
         cells = weekly
-          .filter((it) => it.dayOfWeek === d.getDay())
+          .filter((it) => it.dayOfWeek === dow)
           .map((it) => ({
             slot: it.slot,
             variant: it.variant,
@@ -164,7 +175,7 @@ export default function BookMealPlanScreen() {
           );
       }
       if (cells.length > 0) {
-        out.push({ date: iso, label: dayLabel(d), cells });
+        out.push({ date: iso, label: istDayLabel(iso), cells });
       }
     }
     return out;
