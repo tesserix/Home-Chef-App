@@ -906,6 +906,11 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/wallet/:userId", adminHandler.GetCustomerWallet)
 			admin.POST("/wallet/:userId/adjust", adminHandler.AdjustWallet)
 
+			// Wallet -> ledger migration (docs/wallet-ledger-plan.md): one-time opening
+			// backfill (idempotent) + shadow-phase reconcile status (read-only). Audited.
+			admin.POST("/ledger/backfill", adminHandler.BackfillLedger)
+			admin.GET("/ledger/reconcile", adminHandler.LedgerReconcileStatus)
+
 			// Payout release queue (#388) — list eligible holds + release / withhold
 			// / reverse (single + bulk). Money stays behind the escrow flags; audited.
 			// Cancellation arbitration queue (#480): disputes + vendor timeouts.
