@@ -20,27 +20,17 @@ func MealPlanRefundFlowV2Active() bool {
 	return config.AppConfig != nil && config.AppConfig.MealPlanRefundFlowV2Enabled
 }
 
-// RefundProportion is how much of a day's fee/GST-excluded food base is refunded: the >12h
-// auto path and a chef "accept full" refund 100%; "half" refunds 50%; "none" refunds nothing.
-type RefundProportion string
-
-const (
-	RefundProportionFull RefundProportion = "full"
-	RefundProportionHalf RefundProportion = "half"
-	RefundProportionNone RefundProportion = "none"
-)
-
 // ValidRefundProportion reports whether p is one of the three allowed decisions.
-func ValidRefundProportion(p RefundProportion) bool {
-	return p == RefundProportionFull || p == RefundProportionHalf || p == RefundProportionNone
+func ValidRefundProportion(p models.RefundProportion) bool {
+	return p == models.RefundProportionFull || p == models.RefundProportionHalf || p == models.RefundProportionNone
 }
 
 // refundProportionFactor maps a proportion to its multiplier; anything unknown → 0 (safe).
-func refundProportionFactor(p RefundProportion) float64 {
+func refundProportionFactor(p models.RefundProportion) float64 {
 	switch p {
-	case RefundProportionFull:
+	case models.RefundProportionFull:
 		return 1.0
-	case RefundProportionHalf:
+	case models.RefundProportionHalf:
 		return 0.5
 	default:
 		return 0.0
@@ -50,7 +40,7 @@ func refundProportionFactor(p RefundProportion) float64 {
 // MealPlanRefundAmount is the customer refund for one day at the given proportion, computed off
 // the fee/GST-EXCLUDED base (food − commission via perDaySkipRefund). It NEVER includes the
 // platform fee, GST, or delivery. This is the single amount seam every v2 refund path uses.
-func MealPlanRefundAmount(plan *models.MealPlan, day *models.MealPlanDay, p RefundProportion) float64 {
+func MealPlanRefundAmount(plan *models.MealPlan, day *models.MealPlanDay, p models.RefundProportion) float64 {
 	// Basis: the day's frozen commission rate (what the held transfer was sized at);
 	// perDaySkipRefund falls back to DefaultCommissionRate for legacy days (rate 0).
 	base := perDaySkipRefund(plan, day, day.CommissionRate) // food − commission (no GST, no delivery)

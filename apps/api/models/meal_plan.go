@@ -192,6 +192,17 @@ type MealPlanDay struct {
 	DeliveredAt *time.Time `gorm:"" json:"deliveredAt,omitempty"`
 	RefundTxnID *uuid.UUID `gorm:"type:uuid" json:"refundTxnId,omitempty"`
 
+	// v2 meal-plan refund workflow (docs/meal-plan-refund-flow-design.md), gated by
+	// MEALPLAN_REFUND_FLOW_V2_ENABLED. The day stays in `skip_req` status through the flow;
+	// these fields track the sub-state (the Status column is varchar(12), too short for the
+	// stage names). RefundStage: pending_chef (≤12h, awaiting the chef's Full/Half/None),
+	// pending_admin (chef chose, awaiting admin pay), resolved (terminal). ChefRefundChoice is
+	// the chef's proportion; RefundDestination is the admin's payout target. Empty when the day
+	// is not in the v2 flow (or was auto-approved >12h, which resolves straight to refunded).
+	RefundStage       MealPlanRefundStage `gorm:"type:varchar(16);default:''" json:"refundStage,omitempty"`
+	ChefRefundChoice  RefundProportion    `gorm:"type:varchar(6);default:''" json:"chefRefundChoice,omitempty"`
+	RefundDestination RefundDestination   `gorm:"type:varchar(8);default:''" json:"refundDestination,omitempty"`
+
 	// Payout hold (#387). Same semantics as Order: on delivery the day's hold
 	// becomes awaiting_customer_confirmation (no release); the customer confirming
 	// advances it to release_eligible for the admin payout queue (#388).
@@ -208,6 +219,37 @@ type MealPlanDay struct {
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
+
+// RefundProportion is how much of a day's fee/GST-excluded food base is refunded in the v2
+// meal-plan refund workflow: Full (100%; also the >12h auto-approve), Half (50%), None (0 — the
+// chef started prep and keeps full payout). Empty means no decision yet.
+type RefundProportion string
+
+const (
+	RefundProportionFull RefundProportion = "full"
+	RefundProportionHalf RefundProportion = "half"
+	RefundProportionNone RefundProportion = "none"
+)
+
+// MealPlanRefundStage is the v2 sub-state of a skip_req day (the Status column is too short to
+// hold these names, so they live in their own column).
+type MealPlanRefundStage string
+
+const (
+	MPRefundPendingChef  MealPlanRefundStage = "pending_chef"  // ≤12h, awaiting chef Full/Half/None
+	MPRefundPendingAdmin MealPlanRefundStage = "pending_admin" // chef chose Full/Half, awaiting admin pay
+	MPRefundResolved     MealPlanRefundStage = "resolved"      // terminal (refunded, or no-refund)
+)
+
+// RefundDestination is where the admin pays a meal-plan / group-order refund. Wallet is instant
+// (closed-loop, spend-on-HomeChef, non-withdrawable); Source reverses to the original card/UPI
+// via the gateway (RBI ~5–7 business days).
+type RefundDestination string
+
+const (
+	RefundDestinationWallet RefundDestination = "wallet"
+	RefundDestinationSource RefundDestination = "source"
+)
 
 // AcceptedTotal sums the price of the days the chef accepted/confirmed — the
 // amount that stays in escrow (the rest is refunded).
