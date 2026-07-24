@@ -32,13 +32,17 @@ func (m Money) Rupees() float64 { return float64(m) / 100 }
 type LedgerAccountKind string
 
 const (
-	// User-side buckets (all scoped by UserID; sum = the customer's spendable balance).
+	// User-side spendable buckets (all scoped by UserID; sum = available balance).
 	LedgerAcctUserWallet   LedgerAccountKind = "user_wallet"          // generic / opening / unclassified
 	LedgerAcctUserRefund   LedgerAccountKind = "user_wallet_refund"   // refunded order/meal-plan value
 	LedgerAcctUserReferral LedgerAccountKind = "user_wallet_referral" // referral rewards
 	LedgerAcctUserPromo    LedgerAccountKind = "user_wallet_promo"    // promo credits
 	LedgerAcctUserGoodwill LedgerAccountKind = "user_wallet_goodwill" // admin/goodwill grants
 	LedgerAcctUserCashback LedgerAccountKind = "user_wallet_cashback" // cashback / loyalty rewards
+	// User-side RESERVED funds — held for an in-flight order/payment (Phase 3). Still the
+	// user's money (counts toward total balance) but NOT spendable: a hold moves value here
+	// from the spendable buckets; capture spends it, release restores it to its buckets.
+	LedgerAcctUserHeld LedgerAccountKind = "user_wallet_held"
 
 	// System counterparty accounts (UserID nil).
 	LedgerAcctSystemRefund   LedgerAccountKind = "system_refund"   // funds a refund credit
@@ -49,21 +53,23 @@ const (
 	LedgerAcctSystemOpening  LedgerAccountKind = "system_opening"  // migration opening balances
 )
 
-// UserWalletKinds lists every user-side bucket account kind. Their per-user sum is the
-// customer's single spendable balance.
+// UserWalletKinds lists every user-side account kind (spendable buckets + held). Their
+// per-user sum is the customer's TOTAL balance (available + held).
 func UserWalletKinds() []LedgerAccountKind {
 	return []LedgerAccountKind{
 		LedgerAcctUserWallet, LedgerAcctUserRefund, LedgerAcctUserReferral,
 		LedgerAcctUserPromo, LedgerAcctUserGoodwill, LedgerAcctUserCashback,
+		LedgerAcctUserHeld,
 	}
 }
 
-// IsUserWalletKind reports whether an account kind is a user-side bucket (scoped by UserID,
-// counted toward the customer's balance) rather than a system counterparty.
+// IsUserWalletKind reports whether an account kind is user-side (scoped by UserID, counted
+// toward the customer's balance) rather than a system counterparty. Includes the held account.
 func IsUserWalletKind(k LedgerAccountKind) bool {
 	switch k {
 	case LedgerAcctUserWallet, LedgerAcctUserRefund, LedgerAcctUserReferral,
-		LedgerAcctUserPromo, LedgerAcctUserGoodwill, LedgerAcctUserCashback:
+		LedgerAcctUserPromo, LedgerAcctUserGoodwill, LedgerAcctUserCashback,
+		LedgerAcctUserHeld:
 		return true
 	}
 	return false

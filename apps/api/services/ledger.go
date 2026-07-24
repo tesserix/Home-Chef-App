@@ -148,6 +148,38 @@ func LedgerUserBucketBalances(db *gorm.DB, userID uuid.UUID) (map[models.LedgerA
 	return out, nil
 }
 
+// LedgerUserHeldBalance projects the funds a user has RESERVED (held) for in-flight orders:
+// Σcredits − Σdebits over their user_wallet_held entries. In paise.
+func LedgerUserHeldBalance(db *gorm.DB, userID uuid.UUID) (models.Money, error) {
+	var credit, debit int64
+	q := func(dir models.LedgerDirection) *gorm.DB {
+		return db.Model(&models.LedgerEntry{}).
+			Where("user_id = ? AND account_kind = ? AND direction = ?",
+				userID, models.LedgerAcctUserHeld, dir)
+	}
+	if err := q(models.LedgerCredit).Select("COALESCE(SUM(amount_minor),0)").Scan(&credit).Error; err != nil {
+		return 0, err
+	}
+	if err := q(models.LedgerDebit).Select("COALESCE(SUM(amount_minor),0)").Scan(&debit).Error; err != nil {
+		return 0, err
+	}
+	return models.Money(credit - debit), nil
+}
+
+// LedgerUserAvailableBalance is the SPENDABLE balance: total (LedgerUserBalance) minus what is
+// currently held. This is what a new hold or spend is checked against — never the total.
+func LedgerUserAvailableBalance(db *gorm.DB, userID uuid.UUID) (models.Money, error) {
+	total, err := LedgerUserBalance(db, userID)
+	if err != nil {
+		return 0, err
+	}
+	held, err := LedgerUserHeldBalance(db, userID)
+	if err != nil {
+		return 0, err
+	}
+	return total - held, nil
+}
+
 // LedgerTotals returns the whole ledger's debit and credit sums (paise) — must always be
 // equal (the core financial-integrity invariant). Used by the reconciliation sweep; a
 // mismatch is a SEV-1.
