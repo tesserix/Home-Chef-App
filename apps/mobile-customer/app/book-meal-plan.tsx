@@ -145,6 +145,9 @@ export default function BookMealPlanScreen() {
             a.isCombo === b.isCombo ? bySlotVariant(a, b) : a.isCombo ? -1 : 1,
           );
       } else {
+        // Weekly template fallback. Forward the cell's combo fields (#192 thali/
+        // combo) so a weekly combo renders as one on the card, and — like the
+        // per-date branch — float combos ahead of à-la-carte within a slot.
         cells = weekly
           .filter((it) => it.dayOfWeek === d.getDay())
           .map((it) => ({
@@ -152,10 +155,14 @@ export default function BookMealPlanScreen() {
             variant: it.variant,
             name: it.name,
             price: it.price,
+            isCombo: it.isCombo,
+            comboComponents: it.comboComponents,
             imageUrl: it.imageUrl,
             description: it.description,
           }))
-          .sort(bySlotVariant);
+          .sort((a, b) =>
+            a.isCombo === b.isCombo ? bySlotVariant(a, b) : a.isCombo ? -1 : 1,
+          );
       }
       if (cells.length > 0) {
         out.push({ date: iso, label: dayLabel(d), cells });

@@ -23,6 +23,10 @@ export interface WeeklyMenuItem {
   description?: string;
   price: number;
   imageUrl?: string;
+  /** When true the cell is a bundled thali/combo at one price (#192). */
+  isCombo?: boolean;
+  /** The dishes the thali/combo includes (e.g. ["Rice","Dal","Sabji"]). */
+  comboComponents?: string[];
 }
 
 export interface WeeklyMenu {
