@@ -647,6 +647,7 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 		if err := services.SetOrderHoldAwaitingConfirmation(database.DB, delivery.OrderID); err != nil {
 			log.Printf("payout-hold: park order %s on courier delivery failed: %v", delivery.OrderID, err)
 		}
+		services.StartConfirmReceiptFlow(delivery.OrderID)
 		// Update partner stats
 		database.DB.Model(&partner).Updates(map[string]interface{}{
 			"total_deliveries": partner.TotalDeliveries + 1,

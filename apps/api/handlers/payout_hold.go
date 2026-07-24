@@ -54,6 +54,8 @@ func (h *PayoutHoldHandler) ConfirmOrderReceived(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not confirm receipt"})
 		return
 	}
+	// End any running reminder flow early — the customer confirmed themselves.
+	services.SignalOrderConfirmedFlow(order.ID)
 	c.JSON(http.StatusOK, gin.H{
 		"payoutHoldStatus":    status,
 		"customerConfirmedAt": order.CustomerConfirmedAt,

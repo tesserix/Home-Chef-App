@@ -1474,6 +1474,9 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		if err := services.SetOrderHoldAwaitingConfirmation(database.DB, order.ID); err != nil {
 			log.Printf("payout-hold: park order %s on chef self-delivery failed: %v", order.ID, err)
 		}
+		// Kick off the durable reminder + auto-confirm flow (#auto-confirm). Gated
+		// off by default; no-op until CONFIRM_RECEIPT_FLOW_ENABLED is set.
+		services.StartConfirmReceiptFlow(order.ID)
 	case models.OrderStatusCancelled, models.OrderStatusRejected:
 		// #392: a chef rejecting/cancelling a PAID order must refund the customer in
 		// full (chef's fault). Previously this only signalled the Temporal saga, which

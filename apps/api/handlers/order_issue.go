@@ -211,6 +211,10 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 		return
 	}
 
+	// A dispute was opened — end any running confirm-receipt reminder flow so it
+	// never auto-confirms an order the customer is contesting.
+	services.SignalOrderDisputedFlow(order.ID)
+
 	// Issue rate per chef (#37) — every report counts toward the quality signal.
 	database.DB.Model(&models.ChefProfile{}).Where("id = ?", order.ChefID).
 		UpdateColumn("issue_count", gorm.Expr("issue_count + 1"))
