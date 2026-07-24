@@ -783,51 +783,14 @@ func (h *MealPlanHandler) VerifyMealPlanPayment(c *gin.Context) {
 		return
 	}
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := services.VerifyMealPlanAdvance(tx, &plan, req.RazorpayPaymentID, req.RazorpaySignature); err != nil {
-			return err
-		}
-		// Escrow off = no-op ack; nothing was charged, nothing to confirm/hold.
-		if !services.MealPlanEscrowActive() {
-			return nil
-		}
-		// Payment captured → NOW confirm the plan (payment-after-approval): flip
-		// awaiting_customer → confirmed, accepted days → confirmed, and hold the
-		// chef's per-day payouts against the captured advance. Status-guarded so a
-		// re-verify (or concurrent action) can't double-confirm or double-hold.
-		now := time.Now()
-		res := tx.Model(&models.MealPlan{}).
-			Where("id = ? AND status = ?", plan.ID, models.MealPlanAwaitingCustomer).
-			Updates(map[string]any{"status": models.MealPlanConfirmed, "confirmed_at": now})
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return nil // already confirmed (idempotent re-verify) — payments stamp is harmless
-		}
-		if err := tx.Model(&models.MealPlanDay{}).
-			Where("meal_plan_id = ? AND status = ?", plan.ID, models.MealPlanDayAccepted).
-			Update("status", models.MealPlanDayConfirmed).Error; err != nil {
-			return err
-		}
-		plan.Status = models.MealPlanConfirmed
-		plan.ConfirmedAt = &now
-		for i := range plan.Days {
-			if plan.Days[i].Status == models.MealPlanDayAccepted {
-				plan.Days[i].Status = models.MealPlanDayConfirmed
-			}
-		}
-		// Chef's linked account for the held Route transfers + user id for the event.
-		var chefProfile models.ChefProfile
-		if err := tx.First(&chefProfile, "id = ?", plan.ChefID).Error; err != nil {
-			return err
-		}
-		if err := services.HoldChefPayouts(tx, &plan, chefProfile.RazorpayAccountID); err != nil {
-			return err
-		}
-		return services.EnqueueEvent(tx, services.SubjectMealPlanConfirmed, "meal_plan.confirmed", chefProfile.UserID, map[string]any{
-			"meal_plan_id": plan.ID.String(), "meal_plan_no": plan.MealPlanNumber,
-			"approved": true, "customer_id": customerID.String(), "chef_id": plan.ChefID.String(),
-		})
+		// Validate the captured advance (order + amount + Checkout signature) and, on
+		// the single awaiting_customer → confirmed transition, confirm the plan + hold
+		// the chef payouts. This is the SAME durable seam the payment.captured webhook
+		// uses (services.ConfirmMealPlanAdvance), so a client verify and a webhook
+		// confirm can never diverge, and either one alone is sufficient. Idempotent +
+		// status-guarded; escrow-off is a no-op ack.
+		_, err := services.ConfirmMealPlanAdvance(tx, &plan, req.RazorpayPaymentID, req.RazorpaySignature)
+		return err
 	}); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment verification failed"})
 		return

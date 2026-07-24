@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -1380,6 +1381,37 @@ func (h *PaymentHandler) RazorpayWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+// confirmMealPlanAdvanceFromWebhook is the payment.captured fallback for a meal-plan
+// ADVANCE order — its gateway order id lives on meal_plans, not orders, so the regular
+// order UPDATE above never matches it. It confirms the plan + holds the chef payouts
+// durably server-side, so a lost client verify-payment (e.g. the RN Razorpay SDK
+// returning dismiss on the success auto-redirect) can't strand a captured advance.
+// Returns confirmed=true only on the transition it performed; (false, nil) when there
+// is no pending meal-plan advance for this order (the common case: a regular order
+// that was already completed). Errors are transient so the webhook layer redelivers.
+func (h *PaymentHandler) confirmMealPlanAdvanceFromWebhook(orderID, paymentID string) (bool, error) {
+	if !services.MealPlanEscrowActive() {
+		return false, nil
+	}
+	var plan models.MealPlan
+	err := database.DB.Preload("Days").
+		Where("razorpay_order_id = ? AND status = ?", orderID, models.MealPlanAwaitingCustomer).
+		First(&plan).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil // not a pending meal-plan advance — nothing to do
+	}
+	if err != nil {
+		return false, err
+	}
+	var confirmed bool
+	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+		var e error
+		confirmed, e = services.ConfirmMealPlanAdvance(tx, &plan, paymentID, "")
+		return e
+	})
+	return confirmed, txErr
+}
+
 // handlePaymentCaptured returns a non-nil error only for a TRANSIENT failure (a DB
 // error) so the webhook layer releases the dedup claim and a redelivery re-runs.
 // A parse failure is permanent (nil → keep the claim; a retry won't parse either).
@@ -1413,7 +1445,20 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		log.Printf("payment.captured already processed for order %s (payment %s) — skipping", payment.OrderID, payment.ID)
+		// No regular order matched — the captured order may be a meal-plan ADVANCE,
+		// whose gateway order id lives on meal_plans (not orders). Confirm it durably
+		// here so a dropped client verify-payment call can't strand a captured advance:
+		// money taken, plan left awaiting_customer, chef payout never held. #395·3.
+		confirmed, mpErr := h.confirmMealPlanAdvanceFromWebhook(payment.OrderID, payment.ID)
+		if mpErr != nil {
+			log.Printf("payment.captured: meal-plan advance confirm failed for order %s: %v", payment.OrderID, mpErr)
+			return mpErr // transient → release the dedup claim so a redelivery re-runs
+		}
+		if confirmed {
+			log.Printf("payment.captured: confirmed meal-plan advance for order %s (payment %s) via webhook fallback", payment.OrderID, payment.ID)
+		} else {
+			log.Printf("payment.captured already processed for order %s (payment %s) — skipping", payment.OrderID, payment.ID)
+		}
 	} else {
 		// The order just became paid — try the referral reward (#38). Idempotent
 		// + best-effort: a referral failure must never affect the captured payment.

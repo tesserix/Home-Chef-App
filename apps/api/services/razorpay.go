@@ -549,6 +549,24 @@ func (c *RazorpayClient) FetchPayment(paymentID string) (*PaymentResponse, error
 	return &result, nil
 }
 
+// FetchOrderPayments returns all payments made against a Razorpay order (GET
+// /orders/:id/payments). Used by the meal-plan advance reconcile to discover whether a
+// plan whose gateway order id we hold was actually paid, when both the client verify
+// call and the payment.captured webhook were lost.
+func (c *RazorpayClient) FetchOrderPayments(orderID string) ([]PaymentResponse, error) {
+	resp, err := c.doRequest("GET", fmt.Sprintf("/orders/%s/payments", orderID), nil)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Items []PaymentResponse `json:"items"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse order payments: %w", err)
+	}
+	return result.Items, nil
+}
+
 // --- Webhook Verification ---
 
 // VerifyWebhookSignature validates that a webhook payload came from Razorpay.

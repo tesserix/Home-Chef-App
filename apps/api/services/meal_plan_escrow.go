@@ -447,6 +447,72 @@ func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay
 	return reverseRefundedDayHold(tx, day.ID, reverseOK)
 }
 
+// ConfirmMealPlanAdvance validates a captured meal-plan advance payment and, on the
+// single awaiting_customer → confirmed transition, confirms the plan (accepted days →
+// confirmed), stamps the captured payment id, and holds the chef's per-day payouts.
+//
+// It is idempotent and status-guarded, so it is safe to call from BOTH the client
+// verify-payment path (with the Checkout signature) AND the payment.captured webhook
+// fallback (signature "" — the webhook is Razorpay-authenticated and the fetched
+// payment is re-bound to the plan's order + amount inside VerifyMealPlanAdvance),
+// whichever confirms first. A second call no-ops and returns confirmed=false. No-op
+// (false, nil) when escrow is off. Requires plan.Days loaded. Returns confirmed=true
+// only on the transition it actually performed, so a caller can fire any one-shot side
+// effect exactly once; the confirmed event is enqueued here so both callers emit it.
+//
+// #395·3 durability: without the webhook fallback, a dropped client verify-payment
+// call (e.g. the RN Razorpay SDK returning dismiss on the success auto-redirect) would
+// strand a CAPTURED advance — money taken, plan unconfirmed, chef payout never held.
+func ConfirmMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan, paymentID, signature string) (bool, error) {
+	// Bind + validate the captured payment to this plan's advance order + amount and
+	// stamp EscrowPaymentID (the anti-under-payment gate). No-op when escrow is off.
+	if err := VerifyMealPlanAdvance(tx, plan, paymentID, signature); err != nil {
+		return false, err
+	}
+	if !MealPlanEscrowActive() {
+		return false, nil
+	}
+	now := time.Now()
+	// Status-guarded transition: only the single awaiting_customer → confirmed writer
+	// proceeds; a concurrent webhook/verify or a re-delivery loses here and no-ops.
+	res := tx.Model(&models.MealPlan{}).
+		Where("id = ? AND status = ?", plan.ID, models.MealPlanAwaitingCustomer).
+		Updates(map[string]any{"status": models.MealPlanConfirmed, "confirmed_at": now})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return false, nil // already confirmed — idempotent
+	}
+	if err := tx.Model(&models.MealPlanDay{}).
+		Where("meal_plan_id = ? AND status = ?", plan.ID, models.MealPlanDayAccepted).
+		Update("status", models.MealPlanDayConfirmed).Error; err != nil {
+		return false, err
+	}
+	plan.Status = models.MealPlanConfirmed
+	plan.ConfirmedAt = &now
+	for i := range plan.Days {
+		if plan.Days[i].Status == models.MealPlanDayAccepted {
+			plan.Days[i].Status = models.MealPlanDayConfirmed
+		}
+	}
+	// Hold the chef's per-day payouts against the captured advance.
+	var chef models.ChefProfile
+	if err := tx.First(&chef, "id = ?", plan.ChefID).Error; err != nil {
+		return false, err
+	}
+	if err := HoldChefPayouts(tx, plan, chef.RazorpayAccountID); err != nil {
+		return false, err
+	}
+	if err := EnqueueEvent(tx, SubjectMealPlanConfirmed, "meal_plan.confirmed", chef.UserID, map[string]any{
+		"meal_plan_id": plan.ID.String(), "meal_plan_no": plan.MealPlanNumber,
+		"approved": true, "customer_id": plan.CustomerID.String(), "chef_id": plan.ChefID.String(),
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // RefundDeclinedDays refunds the days the chef declined (cherry-picked out) once
 // the customer approves the trim. No-op when escrow is off.
 func RefundDeclinedDays(tx *gorm.DB, plan *models.MealPlan, reason string) error {

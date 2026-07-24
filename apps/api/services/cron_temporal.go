@@ -60,6 +60,10 @@ func cronJobs() []cronJob {
 		// Tiffin chef cook-reminders: night-before (20:00 IST → tomorrow) and
 		// morning-of (07:00 IST → today) pushes of how many meals to cook.
 		{"meal-plan-reminder", mealPlanReminderInterval, runMealPlanChefReminderScan, StartMealPlanReminderCron},
+		// Tiffin advance-payment reconcile (#395·3): confirm a captured advance whose
+		// client verify AND payment.captured webhook were both lost — money taken, plan
+		// stuck awaiting_customer. Belt-and-suspenders behind those two durable paths.
+		{"meal-plan-advance-reconcile", mealPlanAdvanceReconcileInterval, runMealPlanAdvanceReconcileScan, StartMealPlanAdvanceReconcileCron},
 	}
 }
 
