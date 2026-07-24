@@ -222,7 +222,7 @@ func Load() {
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
 	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
 	orderSaga, _ := strconv.ParseBool(getEnv("ORDER_SAGA_ENABLED", "false"))
-	confirmReceiptFlow, _ := strconv.ParseBool(getEnv("CONFIRM_RECEIPT_FLOW_ENABLED", "false"))
+	confirmReceiptFlow, _ := strconv.ParseBool(getEnv("CONFIRM_RECEIPT_FLOW_ENABLED", "true"))
 	onboardingWorkflow, _ := strconv.ParseBool(getEnv("ONBOARDING_WORKFLOW_ENABLED", "false"))
 	piiEncryption, _ := strconv.ParseBool(getEnv("PII_ENCRYPTION_ENABLED", "false"))
 	emailOTP, _ := strconv.ParseBool(getEnv("EMAIL_OTP_ENABLED", "true"))

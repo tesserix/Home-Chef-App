@@ -42,6 +42,12 @@ type PlatformPolicy struct {
 	// admin console without a redeploy. The gate is `env OR this`, so the env
 	// default-on still works and this only ever turns a feature MORE on.
 	GroupOrdersEnabled bool `json:"groupOrdersEnabled"` // group/office ("corporate") orders
+
+	// ConfirmReceiptFlowEnabled controls the durable reminder + auto-confirm
+	// flow after delivery (#auto-confirm). Unlike GroupOrdersEnabled it defaults
+	// ON and the admin toggle can turn it OFF — a real runtime kill switch — so
+	// the gate reads this value directly (default true) rather than `env OR`.
+	ConfirmReceiptFlowEnabled bool `json:"confirmReceiptFlowEnabled"`
 }
 
 // DefaultPlatformPolicy matches what was hardcoded in handlers/orders.go
@@ -65,6 +71,9 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		// Default off here — the env var (GROUP_ORDERS_ENABLED) provides the
 		// baseline; this policy field only adds a runtime override on top.
 		GroupOrdersEnabled: false,
+		// Default ON — the auto-confirm flow ships enabled; an admin disables it
+		// from the console (or ops via CONFIRM_RECEIPT_FLOW_ENABLED=false).
+		ConfirmReceiptFlowEnabled: true,
 	}
 }
 
@@ -250,6 +259,9 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 		OperatingDays       *[]int   `json:"operatingDays"`
 		ClosedMessage       *string  `json:"closedMessage"`
 		GroupOrdersEnabled  *bool    `json:"groupOrdersEnabled"`
+		// Pointer so an explicit admin `false` turns the default-on flow OFF
+		// (a plain bool couldn't distinguish "unset" from "disabled").
+		ConfirmReceiptFlowEnabled *bool `json:"confirmReceiptFlowEnabled"`
 	}
 	var p partial
 	if err := json.Unmarshal([]byte(setting.Value), &p); err != nil {
@@ -292,6 +304,9 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 	}
 	if p.GroupOrdersEnabled != nil {
 		out.GroupOrdersEnabled = *p.GroupOrdersEnabled
+	}
+	if p.ConfirmReceiptFlowEnabled != nil {
+		out.ConfirmReceiptFlowEnabled = *p.ConfirmReceiptFlowEnabled
 	}
 	return out
 }

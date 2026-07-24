@@ -21,10 +21,21 @@ import (
 
 func confirmFlowID(orderID uuid.UUID) string { return "homechef:confirm:" + orderID.String() }
 
-// confirmFlowActive reports whether the confirm-receipt flow should be driven
-// (Temporal up + flag on).
+// confirmFlowActive reports whether the confirm-receipt flow should be driven.
+// Three gates, all default-on so the flow runs by default:
+//   - Temporal must be up (temporalRT set).
+//   - CONFIRM_RECEIPT_FLOW_ENABLED (env, default true): a deploy-time master
+//     switch — explicit false hard-disables regardless of the admin toggle.
+//   - platform_policy.confirmReceiptFlowEnabled (default true): the runtime
+//     kill switch admins flip from the console (tesserix-home) without a redeploy.
 func confirmFlowActive() bool {
-	return temporalRT != nil && config.AppConfig != nil && config.AppConfig.ConfirmReceiptFlowEnabled
+	if temporalRT == nil {
+		return false
+	}
+	if config.AppConfig != nil && !config.AppConfig.ConfirmReceiptFlowEnabled {
+		return false
+	}
+	return GetPlatformPolicy().ConfirmReceiptFlowEnabled
 }
 
 // StartConfirmReceiptFlow durably starts the reminder+auto-confirm workflow
