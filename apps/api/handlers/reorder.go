@@ -151,6 +151,10 @@ func (h *OrderHandler) ReorderOrder(c *gin.Context) {
 		case !mi.IsAvailable:
 			line.Available = false
 			line.Reason = "Currently unavailable"
+		case !mi.IsApproved:
+			// A dish pulled back into admin review (or never approved) can't be reordered.
+			line.Available = false
+			line.Reason = "Currently unavailable"
 		default:
 			if _, soldOut := services.RemainingToday(mi.ID, mi.DailyCapacity, day); soldOut {
 				line.Available = false

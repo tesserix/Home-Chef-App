@@ -302,64 +302,47 @@ func (h *ApprovalHandler) GetApprovalRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// ApproveRequest approves an approval request and applies side effects
-// PUT /admin/approvals/:id/approve
-func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid approval ID"})
-		return
-	}
+// errApprovalNotHomeKitchen is the home-chefs-only gate failure (reused errApprovalNotFound above),
+// so the single- and bulk-approve endpoints can map a failed approve to the right status / result.
+var errApprovalNotHomeKitchen = errors.New("this kitchen is not an individual home kitchen and cannot be approved; Fe3dr onboards home chefs only")
 
-	var req struct {
-		Notes string `json:"notes"`
-	}
-	c.ShouldBindJSON(&req)
-
-	adminUserID, _ := middleware.GetUserID(c)
-
+// approveOneRequest applies the full approve flow to a single request: status guard, home-kitchen
+// gate, status + history write, type-specific side effects (menu → is_approved, docs → verified,
+// driver verification, onboarding activation), and the approval.approved event. Shared by
+// ApproveRequest and BulkApproveRequests so bulk approval behaves identically to single approval.
+// Returns a sentinel or descriptive error the caller maps to an HTTP status / per-item result.
+func approveOneRequest(id uuid.UUID, adminUserID uuid.UUID, notes string) error {
 	var approval models.ApprovalRequest
 	if err := database.DB.First(&approval, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Approval request not found"})
-		return
+		return errApprovalNotFound
 	}
-
 	if approval.Status != models.ApprovalPending && approval.Status != models.ApprovalInfoRequested {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cannot approve request with status '%s'", approval.Status)})
-		return
+		return fmt.Errorf("cannot approve request with status '%s'", approval.Status)
 	}
-
-	// Home-chefs-only gate (defense in depth). Even though the onboarding form no
-	// longer offers commercial kitchen types, never let a non-home kitchen be
-	// activated. Checked before any mutation so a blocked request stays pending.
+	// Home-chefs-only gate (defense in depth) — never activate a non-home kitchen.
 	if approval.Type == models.ApprovalKitchenOnboarding && approval.ChefID != nil {
 		var k models.ChefProfile
 		if err := database.DB.First(&k, "id = ?", *approval.ChefID).Error; err == nil && !k.IsHomeKitchen() {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{
-				"error": "This kitchen is not an individual home kitchen and cannot be approved. Fe3dr onboards home chefs only.",
-			})
-			return
+			return errApprovalNotHomeKitchen
 		}
 	}
 
 	previousStatus := string(approval.Status)
 	now := time.Now()
 
-	// Update approval request
 	database.DB.Model(&approval).Updates(map[string]interface{}{
 		"status":         models.ApprovalApproved,
 		"reviewed_by_id": adminUserID,
 		"reviewed_at":    &now,
-		"admin_notes":    req.Notes,
+		"admin_notes":    notes,
 	})
 
-	// Create history entry
 	history := models.ApprovalRequestHistory{
 		ApprovalID:  approval.ID,
 		FromStatus:  previousStatus,
 		ToStatus:    string(models.ApprovalApproved),
 		ChangedByID: adminUserID,
-		Notes:       req.Notes,
+		Notes:       notes,
 	}
 	database.DB.Create(&history)
 
@@ -394,7 +377,7 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 		}
 
 	case models.ApprovalMenuItemNew, models.ApprovalMenuItemUpdate, models.ApprovalPricingChange:
-		// Approve the menu item - make it visible to customers
+		// Approve the menu item — makes it visible + orderable for customers.
 		database.DB.Model(&models.MenuItem{}).
 			Where("id = ?", approval.EntityID).
 			Update("is_approved", true)
@@ -426,7 +409,7 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 		"approval_id": approval.ID.String(),
 		"type":        string(approval.Type),
 		"title":       approval.Title,
-		"notes":       req.Notes,
+		"notes":       notes,
 	}
 	if approval.ChefID != nil {
 		eventData["chef_id"] = approval.ChefID.String()
@@ -437,8 +420,88 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 	if err := services.EnqueueEvent(database.DB, services.SubjectApprovalApproved, "approval.approved", adminUserID, eventData); err != nil {
 		log.Printf("failed to enqueue approval.approved event: %v", err)
 	}
+	return nil
+}
 
+// ApproveRequest approves an approval request and applies side effects
+// PUT /admin/approvals/:id/approve
+func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid approval ID"})
+		return
+	}
+	var req struct {
+		Notes string `json:"notes"`
+	}
+	c.ShouldBindJSON(&req)
+	adminUserID, _ := middleware.GetUserID(c)
+
+	if err := approveOneRequest(id, adminUserID, req.Notes); err != nil {
+		switch {
+		case errors.Is(err, errApprovalNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Approval request not found"})
+		case errors.Is(err, errApprovalNotHomeKitchen):
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Approval request approved"})
+}
+
+// bulkApproveFailure is one id that couldn't be approved in a bulk call, with why.
+type bulkApproveFailure struct {
+	ID    string `json:"id"`
+	Error string `json:"error"`
+}
+
+// BulkApproveRequests approves many requests in one call — the admin's "Approve selected" on the
+// approvals queue. Best-effort per item: each is approved independently via the SAME flow as single
+// approve, and the response reports how many succeeded plus any per-id failures, so one bad row
+// (already-approved, wrong kitchen type) never blocks the rest.
+// POST /admin/approvals/bulk-approve   {ids: ["…"], notes?: "…"}
+func (h *ApprovalHandler) BulkApproveRequests(c *gin.Context) {
+	var req struct {
+		IDs   []string `json:"ids" binding:"required"`
+		Notes string   `json:"notes"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No approval ids provided"})
+		return
+	}
+	// Bound the batch so one call can't approve an unbounded set in a single request.
+	if len(req.IDs) > 200 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Too many ids (max 200 per bulk approve)"})
+		return
+	}
+	adminUserID, _ := middleware.GetUserID(c)
+
+	approved := 0
+	failures := make([]bulkApproveFailure, 0)
+	for _, raw := range req.IDs {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			failures = append(failures, bulkApproveFailure{ID: raw, Error: "invalid id"})
+			continue
+		}
+		if err := approveOneRequest(id, adminUserID, req.Notes); err != nil {
+			failures = append(failures, bulkApproveFailure{ID: raw, Error: err.Error()})
+			continue
+		}
+		approved++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"approved": approved,
+		"failed":   len(failures),
+		"failures": failures,
+	})
 }
 
 // RejectRequest rejects an approval request and applies side effects

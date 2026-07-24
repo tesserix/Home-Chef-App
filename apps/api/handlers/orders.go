@@ -342,8 +342,10 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	schedClause, schedArg := services.MenuScheduleClause(services.TodayWeekday())
 	for i, item := range req.Items {
 		var menuItem models.MenuItem
-		if err := database.DB.Where("id = ? AND chef_id = ? AND is_available = ?",
-			item.MenuItemID, req.ChefID, true).
+		// is_approved gate: an unapproved dish is never orderable, even via a direct
+		// API call — matches its invisibility in GetChefMenu / SearchDishes.
+		if err := database.DB.Where("id = ? AND chef_id = ? AND is_available = ? AND is_approved = ?",
+			item.MenuItemID, req.ChefID, true, true).
 			Where(schedClause, schedArg).First(&menuItem).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Menu item %s not found or unavailable", item.MenuItemID)})
 			return

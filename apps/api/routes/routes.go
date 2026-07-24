@@ -1112,6 +1112,7 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/approvals/counts", approvalHandler.GetApprovalCounts)
 			admin.GET("/approvals/:id", approvalHandler.GetApprovalRequest)
 			admin.PUT("/approvals/:id/approve", approvalHandler.ApproveRequest)
+			admin.POST("/approvals/bulk-approve", approvalHandler.BulkApproveRequests)
 			admin.PUT("/approvals/:id/reject", approvalHandler.RejectRequest)
 			admin.PUT("/approvals/:id/request-info", approvalHandler.RequestMoreInfo)
 			admin.GET("/approvals/:id/history", approvalHandler.GetApprovalHistory)

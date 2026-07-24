@@ -127,7 +127,7 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 
 	// Dietary filter — find chefs that have at least one menu item with this dietary tag
 	if dietary != "" {
-		query = query.Where("id IN (SELECT chef_id FROM menu_items WHERE ? = ANY(dietary_tags) AND deleted_at IS NULL)", dietary)
+		query = query.Where("id IN (SELECT chef_id FROM menu_items WHERE ? = ANY(dietary_tags) AND is_approved = true AND deleted_at IS NULL)", dietary)
 	}
 
 	// Price-range filter on the chef's minimum order (#36).
@@ -321,14 +321,12 @@ func (h *ChefHandler) SearchDishes(c *gin.Context) {
 		Scopes(services.ExcludeFSSAILocked).
 		Select("id")
 
-	// Gate on availability only — consistent with the chef-detail menu
-	// (GetChefMenu) and order creation (CreateOrder), which both use is_available
-	// as the single visibility gate. (Previously search also required is_approved,
-	// so an available dish was orderable from a chef's page but never appeared in
-	// search.) If admin moderation of dishes is desired, enforce is_approved in
-	// all three paths instead — a product decision.
+	// Admin moderation is now enforced (product decision): a dish is visible only when
+	// it is both available AND admin-approved (is_approved), consistent with the
+	// chef-detail menu (GetChefMenu) and order creation (CreateOrder). An unapproved
+	// dish never appears in search, on a chef's page, or as an orderable item.
 	base := database.DB.Model(&models.MenuItem{}).
-		Where("is_available = ?", true).
+		Where("is_available = ? AND is_approved = ?", true, true).
 		Where("(name ILIKE ? OR description ILIKE ?)", "%"+q+"%", "%"+q+"%").
 		Where("chef_id IN (?)", visibleChefs)
 
@@ -444,8 +442,11 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 
 	// Only today's scheduled dishes appear — the chef's weekly menu (AvailableDays)
 	// auto-surfaces the right dishes for the day; an empty schedule = every day.
+	// is_approved gate: a dish is invisible to customers until an admin approves its
+	// menu_item_new request (approval flips is_approved → true, auto-surfacing it).
+	// Enforced in all three customer paths — here, SearchDishes, and CreateOrder.
 	schedClause, schedArg := services.MenuScheduleClause(services.TodayWeekday())
-	query := database.DB.Where("chef_id = ? AND is_available = ?", chefID, true).
+	query := database.DB.Where("chef_id = ? AND is_available = ? AND is_approved = ?", chefID, true, true).
 		Where(schedClause, schedArg).
 		Preload("Images").
 		// Add-ons + combo composition (#52) so the customer can pick modifiers
