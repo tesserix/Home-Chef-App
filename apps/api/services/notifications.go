@@ -129,7 +129,7 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
 			Subjects: []string{SubjectApprovalApproved, SubjectApprovalRejected, SubjectApprovalInfoRequested, SubjectApprovalCreated}},
 		{Stream: "MEAL_PLANS", Durable: "notify-meal-plans", Handler: h,
-			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayPrepared, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded, SubjectMealPlanDaySkippedChef}},
+			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayPrepared, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded, SubjectMealPlanDaySkippedChef, SubjectMealPlanDayFailed, SubjectMealPlanCompleted, SubjectMealPlanChefReminder, SubjectMealPlanPayoutReleased}},
 		{Stream: "GROUP_ORDERS", Durable: "notify-group-orders", Handler: h,
 			Subjects: []string{SubjectGroupOrderLocked, SubjectGroupOrderPlaced, SubjectGroupOrderCancelled}},
 	}
@@ -230,6 +230,14 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleMealPlanDayDelivered)
 	case SubjectMealPlanDayRefunded:
 		return decodeThen(data, s.handleMealPlanDayRefunded)
+	case SubjectMealPlanDayFailed:
+		return decodeThen(data, s.handleMealPlanDayFailed)
+	case SubjectMealPlanCompleted:
+		return decodeThen(data, s.handleMealPlanCompleted)
+	case SubjectMealPlanChefReminder:
+		return decodeThen(data, s.handleMealPlanChefReminder)
+	case SubjectMealPlanPayoutReleased:
+		return decodeThen(data, s.handleMealPlanPayoutReleased)
 	default:
 		log.Printf("notification: no handler for subject %q", subject)
 		return nil
@@ -1386,6 +1394,136 @@ func (s *NotificationService) handleMealPlanCancelled(event Event) error {
 		}
 	}
 	return s.notifyMealPlan(event, "meal_plan_cancelled", title, message)
+}
+
+// handleMealPlanDayFailed → customer: a tiffin day couldn't be delivered and is
+// frozen pending admin resolution (#393). In-app + push (the customer paid and is
+// waiting for food). The event targets the customer's user id.
+func (s *NotificationService) handleMealPlanDayFailed(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	dishName, _ := event.Data["dishName"].(string)
+	title := "Tiffin delivery issue"
+	message := "Today's tiffin from your meal plan couldn't be delivered. Our team is sorting it out — you'll be updated soon."
+	if dishName != "" {
+		message = fmt.Sprintf("Today's tiffin (%s) couldn't be delivered. Our team is sorting it out — you'll be updated soon.", dishName)
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "meal_plan_day_failed",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save meal_plan_day_failed notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
+	return nil
+}
+
+// handleMealPlanCompleted → customer: every day of the plan has been served.
+func (s *NotificationService) handleMealPlanCompleted(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_completed",
+		"Your weekly plan is complete",
+		"Every day of your tiffin plan has been served. Book another week whenever you're ready!")
+}
+
+// handleMealPlanChefReminder → chef: the day's tiffin cook count (#tiffin-reminder).
+// A night-before (tomorrow) or morning-of (today) push of how many meals to cook,
+// with the lunch/dinner split. The event targets the chef's user id.
+func (s *NotificationService) handleMealPlanChefReminder(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	total := numFromEventData(event.Data["total"])
+	if total <= 0 {
+		return nil
+	}
+	lunch := numFromEventData(event.Data["lunch"])
+	dinner := numFromEventData(event.Data["dinner"])
+	when := "today"
+	if w, _ := event.Data["window"].(string); w == "tomorrow" {
+		when = "tomorrow"
+	}
+	mealWord := "meals"
+	if total == 1 {
+		mealWord = "meal"
+	}
+	title := fmt.Sprintf("%d tiffin %s to cook %s", total, mealWord, when)
+	parts := make([]string, 0, 2)
+	if lunch > 0 {
+		parts = append(parts, fmt.Sprintf("%d lunch", lunch))
+	}
+	if dinner > 0 {
+		parts = append(parts, fmt.Sprintf("%d dinner", dinner))
+	}
+	message := fmt.Sprintf("You have %d tiffin %s to cook %s.", total, mealWord, when)
+	if len(parts) > 0 {
+		message = fmt.Sprintf("You have %d tiffin %s to cook %s (%s). Tap to see your prep list.", total, mealWord, when, strings.Join(parts, ", "))
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "meal_plan_chef_reminder",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save meal_plan_chef_reminder notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
+	return nil
+}
+
+// handleMealPlanPayoutReleased → chef: a tiffin day's payment was released to their
+// account (auto-release ~2 days after delivery, or an admin release).
+func (s *NotificationService) handleMealPlanPayoutReleased(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	dishName, _ := event.Data["dishName"].(string)
+	title := "Tiffin payment released"
+	message := "A tiffin day's payment has been released to your account."
+	if dishName != "" {
+		message = fmt.Sprintf("Your payment for %s has been released to your account.", dishName)
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "meal_plan_payout_released",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save meal_plan_payout_released notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
+	return nil
+}
+
+// numFromEventData coerces a JSON-decoded numeric event field (float64 over the
+// wire, but tolerant of int/int64) to an int; anything else is 0.
+func numFromEventData(v any) int {
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	case int64:
+		return int(n)
+	}
+	return 0
 }
 
 // ── Notification dispatch (NOTIFICATIONS stream) ─────────────────────────────

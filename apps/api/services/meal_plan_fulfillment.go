@@ -268,9 +268,23 @@ func completeFinishedPlans() {
 		p := &plans[i]
 		if allDaysTerminal(p) {
 			// Guard on the loaded status so a concurrent action (generate → Active) wins.
-			database.DB.Model(&models.MealPlan{}).
+			res := database.DB.Model(&models.MealPlan{}).
 				Where("id = ? AND status = ?", p.ID, p.Status).
 				Update("status", models.MealPlanCompleted)
+			if res.Error != nil {
+				log.Printf("meal-plan fulfillment: complete plan %s: %v", p.ID, res.Error)
+				continue
+			}
+			// Only the goroutine that actually flips the status notifies. Best-effort:
+			// completion is not money movement, so a missed notification must never
+			// roll back the completion — log and move on.
+			if res.RowsAffected > 0 {
+				if err := EnqueueEvent(database.DB, SubjectMealPlanCompleted, "meal_plan.completed", p.CustomerID, map[string]any{
+					"meal_plan_id": p.ID.String(), "meal_plan_no": p.MealPlanNumber,
+				}); err != nil {
+					log.Printf("meal-plan fulfillment: notify completed plan %s: %v", p.ID, err)
+				}
+			}
 		}
 	}
 }

@@ -256,7 +256,38 @@ func ReleaseDayPayout(tx *gorm.DB, day *models.MealPlanDay) error {
 		return fmt.Errorf("release payout %s: %w", day.PayoutTransferID, err)
 	}
 	auditTransferMovement(auditTransferRelease, aggTypeMealPlanDay, day.ID, day.PayoutTransferID, 0, "meal-plan day delivered — chef payout released")
+	// Best-effort: tell the chef their tiffin payout was released. Reached only on
+	// a FRESH release (the idempotent already-released path returned above), so the
+	// chef is notified exactly once per real release. The money already moved — a
+	// failed notification must never surface as a money-seam failure.
+	if err := notifyChefDayPayoutReleased(tx, day); err != nil {
+		log.Printf("meal-plan release: notify chef payout released for day %s: %v", day.ID, err)
+	}
 	return nil
+}
+
+// notifyChefDayPayoutReleased stages the chef's "payout released" notification for
+// one tiffin day, resolving the chef's user id from the plan → chef profile. Uses
+// struct-loads (not a raw Scan into a bare uuid) so GORM handles the uuid columns
+// on both Postgres and the sqlite test harness.
+func notifyChefDayPayoutReleased(tx *gorm.DB, day *models.MealPlanDay) error {
+	var plan models.MealPlan
+	if err := tx.Select("id, chef_id, meal_plan_number").First(&plan, "id = ?", day.MealPlanID).Error; err != nil {
+		return err
+	}
+	var chef models.ChefProfile
+	if err := tx.Select("id, user_id").First(&chef, "id = ?", plan.ChefID).Error; err != nil {
+		return err
+	}
+	if chef.UserID == uuid.Nil {
+		return nil
+	}
+	return EnqueueEvent(tx, SubjectMealPlanPayoutReleased, "meal_plan.payout_released", chef.UserID, map[string]any{
+		"meal_plan_id": day.MealPlanID.String(),
+		"meal_plan_no": plan.MealPlanNumber,
+		"day_id":       day.ID.String(),
+		"dishName":     day.DishName,
+	})
 }
 
 // isAlreadyReleasedErr reports whether a gateway error indicates the transfer was

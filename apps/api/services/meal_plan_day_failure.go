@@ -80,8 +80,20 @@ func MarkMealPlanDayFailed(tx *gorm.DB, orderID uuid.UUID) (bool, error) {
 	if err := SetMealPlanDayHoldDisputed(tx, day.ID); err != nil {
 		return false, err
 	}
-	if err := EnqueueEvent(tx, SubjectMealPlanDayFailed, "meal_plans.day_failed", day.MealPlanID, map[string]any{
-		"meal_plan_id": day.MealPlanID.String(), "day_id": day.ID.String(),
+	// Notify the CUSTOMER their tiffin failed. Resolve their user id from the plan
+	// (the event previously passed day.MealPlanID — a plan id — in the user-id
+	// slot, so it never reached a real recipient). Load through the struct (not a
+	// bare Scan into uuid.UUID) so GORM handles the uuid column on both Postgres and
+	// the sqlite test harness. Best-effort: if the plan can't be loaded, emit with a
+	// zero recipient — the handler no-ops on a nil user, so the failure is still
+	// recorded and the day stays frozen rather than the whole terminalize failing.
+	var customerID uuid.UUID
+	var plan models.MealPlan
+	if err := tx.Select("customer_id").First(&plan, "id = ?", day.MealPlanID).Error; err == nil {
+		customerID = plan.CustomerID
+	}
+	if err := EnqueueEvent(tx, SubjectMealPlanDayFailed, "meal_plans.day_failed", customerID, map[string]any{
+		"meal_plan_id": day.MealPlanID.String(), "day_id": day.ID.String(), "dishName": day.DishName,
 	}); err != nil {
 		return false, err
 	}

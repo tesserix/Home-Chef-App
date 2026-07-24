@@ -53,6 +53,13 @@ func cronJobs() []cronJob {
 		// #741 — release matured, unblocked order payouts. Gated by
 		// payout.sweep_enabled, which ships off.
 		{"payout-release", payoutReleaseInterval, runPayoutReleaseSweep, StartPayoutReleaseCron},
+		// Tiffin per-day auto-release: pay the chef ~2 days after each delivered
+		// meal-plan day (24h customer-confirm window + 24h maturation). Gated by
+		// payout.mealplan_auto_release_enabled (opt-OUT, default on).
+		{"meal-plan-release", mealPlanReleaseInterval, runMealPlanDayReleaseScan, StartMealPlanDayReleaseCron},
+		// Tiffin chef cook-reminders: night-before (20:00 IST → tomorrow) and
+		// morning-of (07:00 IST → today) pushes of how many meals to cook.
+		{"meal-plan-reminder", mealPlanReminderInterval, runMealPlanChefReminderScan, StartMealPlanReminderCron},
 	}
 }
 

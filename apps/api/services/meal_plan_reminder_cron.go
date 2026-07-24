@@ -41,9 +41,8 @@ import (
 
 const mealPlanReminderInterval = 30 * time.Minute
 
-// subjectMealPlanChefReminder is the NATS/outbox subject the reminder event is
-// staged under. Handler wiring lives in notifications.go.
-const subjectMealPlanChefReminder = "meal_plans.chef_cook_reminder"
+// The reminder event is staged under SubjectMealPlanChefReminder (services/nats.go);
+// the handler wiring (in-app copy + push) lives in notifications.go.
 
 // chefReminderRow is one aggregated (chef, slot counts) row from the sweep query.
 type chefReminderRow struct {
@@ -57,7 +56,7 @@ type chefReminderRow struct {
 // userID is the chef's users.id (chef_profiles.user_id) so the handler pushes to
 // the chef.
 var chefCookReminderNotifier = func(db *gorm.DB, chefUserID uuid.UUID, targetDate string, window string, lunch, dinner int) error {
-	return EnqueueEvent(db, subjectMealPlanChefReminder, "meal_plan.chef_cook_reminder", chefUserID, map[string]any{
+	return EnqueueEvent(db, SubjectMealPlanChefReminder, "meal_plan.chef_cook_reminder", chefUserID, map[string]any{
 		"target_date": targetDate,
 		"window":      window,
 		"lunch":       lunch,

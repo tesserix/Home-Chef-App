@@ -92,6 +92,9 @@ const (
 	SubjectMealPlanDayFailed      = "meal_plans.day_failed" // → customer/chef: day delivery failed, resolution pending (#393)
 	SubjectMealPlanDayRefunded    = "meal_plans.day_refunded"
 	SubjectMealPlanDaySkippedChef = "meal_plans.day_skipped_chef" // → chef: customer skipped a day (#422)
+	SubjectMealPlanCompleted      = "meal_plans.completed"        // → customer: every day served, plan done
+	SubjectMealPlanChefReminder   = "meal_plans.chef_cook_reminder" // → chef: tiffin meals to cook today/tomorrow
+	SubjectMealPlanPayoutReleased = "meal_plans.payout_released"  // → chef: a tiffin day's payment was released
 
 	SubjectDriverOnboardingSubmitted = "driver.onboarding.submitted"
 
