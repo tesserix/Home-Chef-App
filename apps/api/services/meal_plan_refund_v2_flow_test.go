@@ -23,9 +23,11 @@ func setupV2RefundDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, status TEXT, price REAL,
-			commission_rate REAL, payout_transfer_id TEXT DEFAULT '', refund_txn_id TEXT,
-			refund_stage TEXT DEFAULT '', chef_refund_choice TEXT DEFAULT '', refund_destination TEXT DEFAULT '',
-			created_at DATETIME, updated_at DATETIME)`,
+			commission_rate REAL, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
+			refund_txn_id TEXT, refund_stage TEXT DEFAULT '', chef_refund_choice TEXT DEFAULT '',
+			refund_destination TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, meal_plan_number TEXT,
+			escrow_payment_id TEXT DEFAULT '', subtotal REAL, tax REAL, total REAL, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT UNIQUE, balance REAL DEFAULT 0,
 			currency TEXT DEFAULT 'INR', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE wallet_txns (id TEXT PRIMARY KEY, wallet_id TEXT, user_id TEXT, type TEXT, source TEXT,
