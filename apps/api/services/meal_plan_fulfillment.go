@@ -319,7 +319,13 @@ func MarkMealPlanDayDelivered(orderID uuid.UUID) {
 		if err := SetMealPlanDayHoldAwaitingConfirmation(tx, day.ID); err != nil {
 			return err
 		}
-		return EnqueueEvent(tx, SubjectMealPlanDayDelivered, "meal_plan_day.delivered", day.MealPlanID, map[string]any{
+		// The event's userID MUST be the CUSTOMER's users.id — handleMealPlanDayDelivered
+		// saves + pushes to event.UserID. Passing day.MealPlanID (a meal_plans.id) sent
+		// the notification to a non-user. Resolve the customer from the plan, mirroring
+		// the day-prepared producer (handlers/meal_plan_prep.go).
+		var customerID uuid.UUID
+		tx.Model(&models.MealPlan{}).Select("customer_id").Where("id = ?", day.MealPlanID).Scan(&customerID)
+		return EnqueueEvent(tx, SubjectMealPlanDayDelivered, "meal_plan_day.delivered", customerID, map[string]any{
 			"meal_plan_id": day.MealPlanID.String(), "day_id": day.ID.String(),
 		})
 	})
