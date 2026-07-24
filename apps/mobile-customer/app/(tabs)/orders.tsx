@@ -18,6 +18,7 @@ import { useDockClearance } from '../../components/navigation/Dock';
 import { ScreenTitle } from '../../components/shared/ScreenTitle';
 import { useOrders } from '../../hooks/useOrderHistory';
 import { OrderCard } from '../../components/orders/OrderCard';
+import { MealPlanList } from '../../components/meal-plan/MealPlanList';
 import type { Order } from '../../types/customer';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
@@ -25,6 +26,15 @@ const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const CTA_RIPPLE = `${customerColors.canvas}33`;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+// Top-level tab mode: order-like tiffin plans live alongside one-off orders, so
+// the Orders tab switches between the two. 'orders' = the existing orders UI.
+type TabMode = 'orders' | 'plans';
+
+const TAB_MODES: { key: TabMode; label: string }[] = [
+  { key: 'orders', label: 'Orders' },
+  { key: 'plans', label: 'Meal plans' },
+];
 
 type StatusFilter = 'all' | 'active' | 'delivered' | 'cancelled';
 
@@ -251,6 +261,7 @@ const emptyStyles = StyleSheet.create({
 
 export default function OrdersScreen() {
   const dockClearance = useDockClearance();
+  const [mode, setMode] = useState<TabMode>('orders');
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
   const [page, setPage] = useState(1);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -301,6 +312,49 @@ export default function OrdersScreen() {
     }
   }
 
+  // ── Top-level mode toggle — Orders | Meal plans ──
+  // Mirrors the status-filter underline pattern below (Pressable → View → Text,
+  // Inter font, 2px bottom underline on the active segment) so the two switching
+  // levels share one visual language. It uses coral as the active accent — the
+  // one brand accent — to mark it as the primary, top-level control and keep it
+  // distinct from the charcoal sub-filter that only applies to orders.
+  const renderModeToggle = () => (
+    <View style={styles.modeToggleRow} accessibilityRole="tablist">
+      {TAB_MODES.map((m) => {
+        const isActive = mode === m.key;
+        return (
+          <Pressable
+            key={m.key}
+            onPress={() => setMode(m.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={`Show ${m.label}`}
+            android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.modeSegment,
+                  isActive && styles.modeSegmentActive,
+                  pressed && Platform.OS === 'ios' && styles.modeSegmentPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.modeSegmentLabel,
+                    isActive ? styles.modeSegmentLabelActive : styles.modeSegmentLabelDefault,
+                  ]}
+                >
+                  {m.label}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
   // ── Filter chip row — Airbnb charcoal-underline style from home screen ──
   // Selected = charcoal text + 2px charcoal bottom underline; unselected =
   // charcoal-soft, no fill, no border. Matches the cuisine category bar.
@@ -347,11 +401,25 @@ export default function OrdersScreen() {
     </ScrollView>
   );
 
+  // ── Meal plans mode — the shared list owns its own query + loading/error/empty
+  // states, so we skip the order status filter bar (it doesn't apply to plans)
+  // and the orders loading/error branches below. ──
+  if (mode === 'plans') {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <ScreenTitle title="Orders" />
+        {renderModeToggle()}
+        <MealPlanList />
+      </SafeAreaView>
+    );
+  }
+
   // ── Loading skeleton (first page only) ──
   if (isLoading && page === 1) {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
         <ScreenTitle title="Orders" />
+        {renderModeToggle()}
         {/* Filter bar skeleton */}
         {renderFilterBar()}
         {/* Skeleton cards */}
@@ -370,6 +438,7 @@ export default function OrdersScreen() {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
         <ScreenTitle title="Orders" />
+        {renderModeToggle()}
         {renderFilterBar()}
         <ErrorState onRetry={handleRefresh} />
       </SafeAreaView>
@@ -379,6 +448,9 @@ export default function OrdersScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScreenTitle title="Orders" />
+
+      {/* ── Top-level Orders | Meal plans toggle ── */}
+      {renderModeToggle()}
 
       {/* ── Airbnb-style filter chip row ── */}
       {renderFilterBar()}
@@ -422,6 +494,42 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: customerColors.canvas,
+  },
+
+  // ── Top-level mode toggle (Orders | Meal plans) ──
+  // Same underline pattern as the status filter chips below, but coral-accented
+  // to mark it as the primary switch. Sits directly under the ScreenTitle.
+  modeToggleRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 2,
+    paddingBottom: 2,
+  },
+  modeSegment: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 44,
+    justifyContent: 'center',
+    marginRight: 8,
+    // No fill, no border — just text + optional coral underline (active)
+  },
+  modeSegmentActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: customerColors.coral.DEFAULT,
+  },
+  modeSegmentPressed: {
+    opacity: 0.6,
+  },
+  modeSegmentLabel: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+  },
+  modeSegmentLabelActive: {
+    color: customerColors.coral.DEFAULT,
+    fontFamily: 'Inter-SemiBold',
+  },
+  modeSegmentLabelDefault: {
+    color: customerColors.charcoal.soft,
   },
 
   // ── Geist-Bold "Orders" header — matches favorites pattern (px-4, pt-3, pb-2)

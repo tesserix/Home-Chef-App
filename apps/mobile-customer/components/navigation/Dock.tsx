@@ -14,7 +14,7 @@
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, FadeIn, useReducedMotion } from 'react-native-reanimated';
-import { Heart, Home, ShoppingBag, User, type LucideIcon } from 'lucide-react-native';
+import { CalendarCheck, Heart, Home, ShoppingBag, User, type LucideIcon } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { CartFab } from './DockCartPill';
 import { DOCK_BOTTOM_GAP, DOCK_HEIGHT, useDockClearance } from './dock-metrics';
@@ -34,6 +34,7 @@ const TAB_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const TAB_ICONS: Record<string, LucideIcon> = {
   index: Home,
   orders: ShoppingBag,
+  plans: CalendarCheck,
   favorites: Heart,
   profile: User,
 };

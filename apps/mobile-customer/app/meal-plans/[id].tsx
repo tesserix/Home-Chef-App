@@ -19,13 +19,12 @@ const CANVAS_RIPPLE = `${customerColors.canvas}33`;
 const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
 import {
   canCancelMealPlan,
-  mealPlanAdvanceBreakdown,
   useCancelMealPlan,
-  useFinalizeMealPlan,
   useMealPlan,
   useSkipMealPlanDay,
   type MealPlanDay,
 } from '../../hooks/useMealPlans';
+import { useMealPlanApproval } from '../../hooks/useMealPlanApproval';
 import {
   useConfirmMealPlanDayReceived,
   useConfirmTodaysTiffin,
@@ -41,12 +40,13 @@ import { MealPlanDayList } from '../../components/meal-plan/MealPlanDayList';
 export default function MealPlanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useMealPlan(id);
-  const finalize = useFinalizeMealPlan();
   const skipDay = useSkipMealPlanDay();
   const cancel = useCancelMealPlan();
   const confirmDay = useConfirmMealPlanDayReceived();
   const confirmTiffin = useConfirmTodaysTiffin();
   const plan = data?.mealPlan;
+  // Approve & pay / reject — the shared flow, identical to the Home card + chef sheet.
+  const approval = useMealPlanApproval(plan, { onDone: () => router.back() });
 
   function handleCancel() {
     if (!id) return;
@@ -96,62 +96,6 @@ export default function MealPlanDetailScreen() {
   const days = plan.days ?? [];
   const acceptedDays = days.filter((d) => !isDeclinedDayStatus(d.status));
   const acceptedTotal = acceptedDays.reduce((s, d) => s + (d.price ?? 0), 0);
-
-  function act(approve: boolean) {
-    if (!plan) return;
-    Alert.alert(
-      approve ? 'Approve & pay?' : 'Reject plan?',
-      approve
-        ? `Confirm the ${acceptedDays.length} day${acceptedDays.length === 1 ? '' : 's'} your chef can cook, then pay the advance (food + GST + delivery, shown at checkout) to lock them in.`
-        : 'This cancels the whole plan. You can book again any time.',
-      [
-        { text: 'Back', style: 'cancel' },
-        {
-          text: approve ? 'Approve' : 'Reject',
-          style: approve ? 'default' : 'destructive',
-          onPress: () =>
-            finalize.mutate(
-              { id: plan.id, approve },
-              {
-                onSuccess: (res) => {
-                  // Approve (escrow on): the server minted a Razorpay advance order
-                  // for the accepted days — launch checkout. Payment now happens here,
-                  // after approval, not at create. verify-payment then confirms + holds.
-                  if (approve && res?.paymentError) {
-                    Alert.alert('Payment unavailable', res.paymentError);
-                    return;
-                  }
-                  if (approve && res?.razorpayOrderId) {
-                    const b = mealPlanAdvanceBreakdown(res.mealPlan);
-                    router.push({
-                      pathname: '/payment/checkout',
-                      params: {
-                        kind: 'mealplan',
-                        mealPlanId: plan.id,
-                        razorpayOrderId: res.razorpayOrderId,
-                        razorpayKeyId: res.razorpayKeyId ?? '',
-                        amount: String(b.amountPaise),
-                        currency: res.mealPlan.currency ?? 'INR',
-                      },
-                    });
-                    return;
-                  }
-                  // Reject, or escrow-off approve (unpaid handshake → confirmed).
-                  Alert.alert(
-                    approve ? 'Plan confirmed' : 'Plan cancelled',
-                    approve
-                      ? 'Your chef has been notified.'
-                      : 'No charge — the plan was cancelled.',
-                    [{ text: 'OK', onPress: () => router.back() }],
-                  );
-                },
-                onError: () => Alert.alert('Something went wrong', 'Please try again.'),
-              },
-            ),
-        },
-      ],
-    );
-  }
 
   function confirmSkip(dayId: string) {
     if (!plan) return;
@@ -344,17 +288,17 @@ export default function MealPlanDetailScreen() {
         <View style={styles.footer}>
           <Pressable
             style={styles.footerColNarrow}
-            onPress={() => act(false)}
-            disabled={finalize.isPending}
+            onPress={approval.reject}
+            disabled={approval.isPending}
             accessibilityRole="button"
             accessibilityLabel="Reject plan"
-            android_ripple={finalize.isPending ? undefined : { color: GHOST_RIPPLE, borderless: false }}
+            android_ripple={approval.isPending ? undefined : { color: GHOST_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
               <View
                 style={[
                   styles.rejectBtn,
-                  pressed && Platform.OS === 'ios' && !finalize.isPending && styles.rejectBtnPressed,
+                  pressed && Platform.OS === 'ios' && !approval.isPending && styles.rejectBtnPressed,
                 ]}
               >
                 <Text style={styles.rejectText}>Reject</Text>
@@ -363,20 +307,20 @@ export default function MealPlanDetailScreen() {
           </Pressable>
           <Pressable
             style={styles.footerColWide}
-            onPress={() => act(true)}
-            disabled={finalize.isPending}
+            onPress={approval.approve}
+            disabled={approval.isPending}
             accessibilityRole="button"
             accessibilityLabel={`Approve ${acceptedDays.length} days`}
-            android_ripple={finalize.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
+            android_ripple={approval.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
               <View
                 style={[
                   styles.approveBtn,
-                  pressed && Platform.OS === 'ios' && !finalize.isPending && styles.approveBtnPressed,
+                  pressed && Platform.OS === 'ios' && !approval.isPending && styles.approveBtnPressed,
                 ]}
               >
-                {finalize.isPending ? (
+                {approval.isPending ? (
                   <ActivityIndicator color={customerColors.canvas} />
                 ) : (
                   <Text style={styles.approveText}>Approve &amp; pay</Text>
