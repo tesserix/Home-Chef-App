@@ -129,7 +129,7 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
 			Subjects: []string{SubjectApprovalApproved, SubjectApprovalRejected, SubjectApprovalInfoRequested, SubjectApprovalCreated}},
 		{Stream: "MEAL_PLANS", Durable: "notify-meal-plans", Handler: h,
-			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded, SubjectMealPlanDaySkippedChef}},
+			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayPrepared, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded, SubjectMealPlanDaySkippedChef}},
 		{Stream: "GROUP_ORDERS", Durable: "notify-group-orders", Handler: h,
 			Subjects: []string{SubjectGroupOrderLocked, SubjectGroupOrderPlaced, SubjectGroupOrderCancelled}},
 	}
@@ -224,6 +224,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleMealPlanConfirmed)
 	case SubjectMealPlanCancelled:
 		return decodeThen(data, s.handleMealPlanCancelled)
+	case SubjectMealPlanDayPrepared:
+		return decodeThen(data, s.handleMealPlanDayPrepared)
 	case SubjectMealPlanDayDelivered:
 		return decodeThen(data, s.handleMealPlanDayDelivered)
 	case SubjectMealPlanDayRefunded:
@@ -311,34 +313,16 @@ func (s *NotificationService) handleDriverOnboardingSubmitted(event Event) error
 	return nil
 }
 
-func (s *NotificationService) handleOrderCreated(event OrderEvent) error {
-	// event.ChefID is a chef_profiles.id — resolve the chef's user before any
-	// user-keyed write. Returning the error (rather than skipping the chef) lets
-	// notify-dispatch retry a transient DB blip; a genuinely missing profile
-	// dead-letters loudly instead of silently dropping the chef's new-order alert.
-	chefUser, err := chefUserID(event.ChefID)
-	if err != nil {
-		return fmt.Errorf("order_created: %w", err)
-	}
-
-	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String(), "total": event.Total})
-	if err := s.saveNotification(&models.Notification{
-		UserID:  chefUser,
-		Type:    "order_created",
-		Title:   "New Order Received",
-		Message: "You have received a new order!",
-		Data:    string(data),
-	}); err != nil {
-		return fmt.Errorf("save order_created notification: %w", err)
-	}
-
-	// Push to chef only. Order lifecycle notifications are push + in-app only; the
-	// delivered GST invoice is the sole order email (owner decision 2026-07-20).
-	PublishNotification(NotificationEvent{
-		UserID: chefUser, Type: "push",
-		Title: "New Order Received", Message: "You have a new order waiting to be prepared!",
-		Data: map[string]any{"order_id": event.OrderID.String()},
-	})
+// handleOrderCreated is intentionally a no-op. orders.created fires at order
+// CREATION — before payment — and used to also alert the chef ("New Order
+// Received"), duplicating the chef.new_order alert ("New Order!" + actionable
+// Accept/Reject push) that fires on payment success for regular orders, or
+// alongside generated/group/subscription orders. That left the chef with two
+// notifications per order, and (worse) one for an order that was never paid.
+// The chef is now alerted exactly once, via chef.new_order → handleChefNewOrder.
+// Kept as a registered handler (rather than removed) so the notify-orders
+// consumer's subscription to SubjectOrderCreated stays intact for future use.
+func (s *NotificationService) handleOrderCreated(_ OrderEvent) error {
 	return nil
 }
 
@@ -1313,23 +1297,61 @@ func (s *NotificationService) handleMealPlanConfirmed(event Event) error {
 		"The customer approved your revised plan. It's confirmed.")
 }
 
-// handleMealPlanDayDelivered → customer: a tiffin day was delivered. In-app only
-// (no push) — per-day delivery is high-frequency and the order pipeline already
-// pushes its own delivery notification.
-func (s *NotificationService) handleMealPlanDayDelivered(event Event) error {
+// handleMealPlanDayPrepared → customer: their chef has started cooking today's
+// tiffin from a confirmed meal-plan day (#50). In-app + push — unlike
+// day-delivered below, no other pipeline notification covers "prepared", so
+// this is the customer's only signal that the dish is on the stove.
+func (s *NotificationService) handleMealPlanDayPrepared(event Event) error {
 	if event.UserID == uuid.Nil {
 		return nil
+	}
+	dishName, _ := event.Data["dishName"].(string)
+	title := "Your tiffin is being prepared"
+	message := "Your chef has started preparing today's tiffin."
+	if dishName != "" {
+		message = fmt.Sprintf("Your chef has started preparing today's tiffin: %s.", dishName)
 	}
 	data, _ := json.Marshal(event.Data)
 	if err := s.saveNotification(&models.Notification{
 		UserID:  event.UserID,
+		Type:    "meal_plan_day_prepared",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save meal_plan_day_prepared notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
+	return nil
+}
+
+// handleMealPlanDayDelivered → customer: a tiffin day was delivered. In-app +
+// push. Previously in-app only on the assumption the order pipeline's own
+// delivery push covers it, but a meal-plan day isn't always paired 1:1 with an
+// order-level delivered event, so the tiffin-specific confirmation pushes too.
+func (s *NotificationService) handleMealPlanDayDelivered(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	title := "Tiffin delivered"
+	message := "Today's tiffin from your meal plan was delivered. Enjoy!"
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
 		Type:    "meal_plan_day_delivered",
-		Title:   "Tiffin delivered",
-		Message: "Today's tiffin from your meal plan was delivered. Enjoy!",
+		Title:   title,
+		Message: message,
 		Data:    string(data),
 	}); err != nil {
 		return fmt.Errorf("save meal_plan_day_delivered notification: %w", err)
 	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
 	return nil
 }
 

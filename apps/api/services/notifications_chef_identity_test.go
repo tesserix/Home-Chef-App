@@ -70,10 +70,16 @@ func TestChefUserID_NilProfile_Errors(t *testing.T) {
 	require.Error(t, err)
 }
 
-// The regression: a new order must notify the chef's USER, not the profile id.
-func TestHandleOrderCreated_NotifiesChefUserNotProfile(t *testing.T) {
+// handleOrderCreated is now a deliberate no-op: orders.created fires at order
+// CREATION (before payment), and used to duplicate the chef's one true
+// new-order alert — chef.new_order → handleChefNewOrder ("New Order!" + the
+// actionable Accept/Reject push), which fires on payment success for regular
+// orders, or alongside generated/group/subscription orders. Dedup means the
+// chef must see NO notification from order_created, for either a resolvable or
+// an unresolvable chef profile.
+func TestHandleOrderCreated_NoOp_ChefNotNotified(t *testing.T) {
 	db := setupChefNotifDB(t)
-	profileID, chefUser := seedChef(t, db)
+	profileID, _ := seedChef(t, db)
 
 	s := GetNotificationService()
 	require.NoError(t, s.handleOrderCreated(OrderEvent{
@@ -83,15 +89,14 @@ func TestHandleOrderCreated_NotifiesChefUserNotProfile(t *testing.T) {
 		Total:      80,
 	}))
 
-	var n models.Notification
-	require.NoError(t, db.Where("type = ?", "order_created").First(&n).Error)
-	require.Equal(t, chefUser, n.UserID,
-		"chef notification must be keyed by users.id; the profile id here means the chef never sees it")
-	require.NotEqual(t, profileID, n.UserID)
+	var count int64
+	require.NoError(t, db.Model(&models.Notification{}).Where("type = ?", "order_created").Count(&count).Error)
+	require.Zero(t, count, "order_created must no longer write a chef notification — chef.new_order owns that alert now")
 }
 
-// A missing chef profile must be a loud error, not a silently dropped alert.
-func TestHandleOrderCreated_UnresolvableChef_Errors(t *testing.T) {
+// Even an unresolvable chef profile must not error now that the handler never
+// touches the chef at all.
+func TestHandleOrderCreated_NoOp_UnresolvableChefDoesNotError(t *testing.T) {
 	setupChefNotifDB(t)
 
 	s := GetNotificationService()
@@ -102,7 +107,7 @@ func TestHandleOrderCreated_UnresolvableChef_Errors(t *testing.T) {
 		Total:      80,
 	})
 
-	require.Error(t, err, "notify-dispatch should retry/dead-letter loudly rather than drop the chef's order alert")
+	require.NoError(t, err)
 }
 
 // Cancellation notifies BOTH parties: the customer by user id (already correct)
