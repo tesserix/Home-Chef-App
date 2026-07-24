@@ -795,6 +795,14 @@ func SetupRouter() *gin.Engine {
 			chefMealPlans.POST("/:id/respond", mealPlanHandler.RespondMealPlan)
 		}
 
+		// Day-level chef actions — own static-prefix group so :dayId doesn't collide with the
+		// /chef/meal-plans/:id routes above. Refund-decision resolves a ≤12h skip/cancel (v2).
+		chefMealPlanDays := v1.Group("/chef/meal-plan-days")
+		chefMealPlanDays.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
+		{
+			chefMealPlanDays.POST("/:dayId/refund-decision", mealPlanHandler.ChefRefundDecision)
+		}
+
 		// Bulk subscription prep view (#50) — own group so its static paths don't
 		// collide with the meal-plans :id routes.
 		chefPrep := v1.Group("/chef/prep")
@@ -957,6 +965,8 @@ func SetupRouter() *gin.Engine {
 			// the platform fee) or rejects (day returns to confirmed) a pending skip.
 			admin.POST("/meal-plan-days/:dayId/approve-skip", mealPlanHandler.AdminApproveMealPlanDaySkip)
 			admin.POST("/meal-plan-days/:dayId/reject-skip", mealPlanHandler.AdminRejectMealPlanDaySkip)
+			// v2 refund workflow: pay a chef-approved (Full/Half) day to wallet or original method.
+			admin.POST("/meal-plan-days/:dayId/pay-refund", mealPlanHandler.AdminPayMealPlanDayRefund)
 
 			// Promotions (featured ads)
 			admin.GET("/promotions", promotionHandler.AdminListPromotions)

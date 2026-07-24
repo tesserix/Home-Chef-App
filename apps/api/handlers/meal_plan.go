@@ -649,6 +649,79 @@ func (h *MealPlanHandler) CancelMealPlan(c *gin.Context) {
 		models.MealPlanPendingChef, models.MealPlanChefAcceptedFull,
 		models.MealPlanChefModified, models.MealPlanAwaitingCustomer, models.MealPlanConfirmed,
 	}
+
+	// v2 refund flow (docs/meal-plan-refund-flow-design.md), gated: cancel resolves EACH unserved
+	// day by the same 12h rule as a skip — >12h auto-refunds full to the wallet, ≤12h routes to the
+	// chef — off the fee/GST-excluded base. Days already awaiting admin (chef decided) are left for
+	// the admin to pay. This replaces the legacy RefundUndeliveredDays(perDayGross) path, which both
+	// over-refunded (GST+delivery) and 500'd on days already mid-skip (skip_req).
+	if services.MealPlanRefundFlowV2Active() {
+		var schedules []models.ChefSchedule
+		database.DB.Where("chef_id = ?", plan.ChefID).Find(&schedules)
+		if err := database.DB.Transaction(func(tx *gorm.DB) error {
+			res := tx.Model(&models.MealPlan{}).Where("id = ? AND status IN ?", plan.ID, fromStatuses).
+				Update("status", models.MealPlanCancelled)
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected == 0 {
+				return errPlanConflict
+			}
+			if err := tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
+				Updates(map[string]any{"cancelled_at": now, "cancel_reason": "cancelled by customer before start"}).Error; err != nil {
+				return err
+			}
+			for i := range plan.Days {
+				d := &plan.Days[i]
+				if v2DayTerminal(d.Status) || d.RefundStage == models.MPRefundPendingAdmin {
+					continue // already served/terminal, or chef decided → admin will pay
+				}
+				// Claim a confirmed day into the skip_req umbrella (guards the fulfilment race) and
+				// freeze its payout.
+				if d.Status == models.MealPlanDayConfirmed {
+					r := tx.Model(&models.MealPlanDay{}).
+						Where("id = ? AND status = ? AND order_id IS NULL", d.ID, models.MealPlanDayConfirmed).
+						Update("status", models.MealPlanDaySkipRequested)
+					if r.Error != nil {
+						return r.Error
+					}
+					if r.RowsAffected == 0 {
+						continue // a concurrent change (e.g. order generated) — leave it
+					}
+					d.Status = models.MealPlanDaySkipRequested
+					if err := services.SetMealPlanDayHoldDisputed(tx, d.ID); err != nil {
+						return err
+					}
+				}
+				early := now.Before(mealPlanDayStartIST(schedules, d).Add(-mealPlanLeadTime))
+				if early {
+					if err := services.AutoApproveMealPlanDayRefund(tx, &plan, d); err != nil {
+						return err
+					}
+				} else if d.RefundStage != models.MPRefundPendingChef {
+					if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", d.ID).
+						Update("refund_stage", models.MPRefundPendingChef).Error; err != nil {
+						return err
+					}
+				}
+			}
+			return services.EnqueueEvent(tx, services.SubjectMealPlanCancelled, "meal_plan.cancelled_by_customer", chefUserID, map[string]any{
+				"meal_plan_id": plan.ID.String(), "meal_plan_no": plan.MealPlanNumber,
+				"customer_id": customerID.String(), "chef_id": plan.ChefID.String(),
+			})
+		}); err != nil {
+			if errors.Is(err, errPlanConflict) {
+				c.JSON(http.StatusConflict, gin.H{"error": "This plan can no longer be cancelled"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel meal plan"})
+			return
+		}
+		plan.ProjectForCustomer()
+		c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
+		return
+	}
+
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		// Status-guarded: lose to a concurrent expiry/respond/skip that already moved it.
 		res := tx.Model(&models.MealPlan{}).
@@ -692,6 +765,17 @@ func (h *MealPlanHandler) CancelMealPlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
+// v2DayTerminal reports whether a meal-plan day is already served or resolved, so a whole-plan
+// cancel needs no refund resolution for it.
+func v2DayTerminal(s models.MealPlanDayStatus) bool {
+	switch s {
+	case models.MealPlanDayDelivered, models.MealPlanDaySkipped, models.MealPlanDayDeclined,
+		models.MealPlanDayCancelled, models.MealPlanDayRefunded, models.MealPlanDayFailed:
+		return true
+	}
+	return false
+}
+
 // SkipMealPlanDay — PUT /meal-plans/:id/days/:dayId/skip. The customer REQUESTS to skip
 // a confirmed day whose order hasn't been generated yet, at least 12h before that day's
 // cooking start (approximated from the chef's schedule). This no longer auto-credits the
@@ -732,7 +816,72 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 	var schedules []models.ChefSchedule
 	database.DB.Where("chef_id = ?", plan.ChefID).Find(&schedules)
 	start := mealPlanDayStartIST(schedules, day)
-	if !time.Now().Before(start.Add(-mealPlanLeadTime)) {
+	early := time.Now().Before(start.Add(-mealPlanLeadTime))
+
+	// v2 refund flow (docs/meal-plan-refund-flow-design.md), gated: a skip >12h before cook-start
+	// auto-approves a FULL refund to the wallet (chef hasn't started prep); a skip ≤12h routes to
+	// the CHEF to decide Full/Half/None (they may have started prep) instead of a hard reject.
+	if services.MealPlanRefundFlowV2Active() {
+		okLock, release := idempotencyGuard(c.Request.Context(), fmt.Sprintf("skipday:%s", day.ID))
+		if !okLock {
+			c.JSON(http.StatusConflict, gin.H{"error": "Already processing"})
+			return
+		}
+		defer release()
+
+		var chef models.ChefProfile
+		database.DB.Select("id", "user_id").First(&chef, "id = ?", plan.ChefID)
+
+		if err := database.DB.Transaction(func(tx *gorm.DB) error {
+			// Claim confirmed + no-order → skip_req (guards the fulfilment-cron order-generation race).
+			res := tx.Model(&models.MealPlanDay{}).
+				Where("id = ? AND status = ? AND order_id IS NULL", day.ID, models.MealPlanDayConfirmed).
+				Update("status", models.MealPlanDaySkipRequested)
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected == 0 {
+				return errPlanConflict
+			}
+			day.Status = models.MealPlanDaySkipRequested
+			// Freeze the chef's payout while the skip resolves.
+			if err := services.SetMealPlanDayHoldDisputed(tx, day.ID); err != nil {
+				return err
+			}
+			if early {
+				// >12h: auto-approve the FULL refund to the wallet — no chef/admin step.
+				return services.AutoApproveMealPlanDayRefund(tx, &plan, day)
+			}
+			// ≤12h: await the chef's decision. Record the stage + notify the chef.
+			if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).
+				Update("refund_stage", models.MPRefundPendingChef).Error; err != nil {
+				return err
+			}
+			if chef.UserID != uuid.Nil {
+				return services.EnqueueEvent(tx, services.SubjectMealPlanDaySkipRequested, "meal_plan_day.skip_requested", chef.UserID, map[string]any{
+					"meal_plan_id": plan.ID.String(), "day_id": day.ID.String(), "date": day.Date.Format("2006-01-02"),
+				})
+			}
+			return nil
+		}); err != nil {
+			if errors.Is(err, errPlanConflict) {
+				c.JSON(http.StatusConflict, gin.H{"error": "This day can no longer be skipped"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to request skip"})
+			return
+		}
+		plan.ProjectForCustomer()
+		if early {
+			c.JSON(http.StatusOK, gin.H{"status": "refunded", "message": "Refunded to your wallet — you won't be served this day.", "mealPlan": plan})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"status": "pending_chef", "message": "Skip requested — your chef will review it.", "mealPlan": plan})
+		}
+		return
+	}
+
+	// Legacy (v2 off): a skip that lands within the lead time is hard-rejected.
+	if !early {
 		c.JSON(http.StatusConflict, gin.H{"error": "Too late to skip this day — the kitchen is about to start cooking it"})
 		return
 	}

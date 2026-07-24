@@ -70,6 +70,13 @@ func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.Mea
 	// customer refund. No-op when the chef has no Route transfer for the day.
 	reverseChefTransferForV2(tx, plan, day, proportion)
 
+	// Drive the day's hold OUT of the payout-release queue so a refunded day can never also be
+	// released to the chef (double-pay). Money-safe for every case; for Half, the chef's kept
+	// slice is settled by the payout-reconcile path — this only guarantees no auto-release.
+	if err := reverseRefundedDayHold(tx, day.ID, true); err != nil {
+		return fmt.Errorf("v2 refund day %s: hold reversal: %w", day.ID, err)
+	}
+
 	reason := fmt.Sprintf("Tiffin %s — refund (%s)", plan.MealPlanNumber, proportion)
 	if dest == models.RefundDestinationSource {
 		// Original method: reverse the escrow charge to the customer's card/UPI (RBI ~5-7 days).
