@@ -22,10 +22,12 @@ export function isLiveMealPlanStatus(status: string): boolean {
   return LIVE_STATUSES.has(status);
 }
 
-// Day statuses that mean "this day won't be served" — drives the struck-through
-// row styling in the list AND the accepted-days / total calc on the approval
-// screen, so the rule stays in one place (#434).
-const DECLINED_DAY_STATUSES = new Set(['declined', 'skipped', 'cancelled', 'refunded']);
+// Day statuses that mean "this day won't be served as planned" — drives the
+// struck-through row styling in the list AND the accepted-days / total calc on the
+// approval screen, so the rule stays in one place (#434). `failed` (#393, delivery
+// terminally failed, awaiting admin resolution) is included so a failed day isn't
+// counted as still-to-be-served in the "N days left" chip.
+const DECLINED_DAY_STATUSES = new Set(['declined', 'skipped', 'cancelled', 'refunded', 'failed']);
 
 export function isDeclinedDayStatus(status: string): boolean {
   return DECLINED_DAY_STATUSES.has(status);
@@ -165,6 +167,10 @@ export function mealPlanDayStatusMeta(status: string): DayStatusMeta {
     case 'skip_req':
       // Customer asked to skip; awaiting admin review (not yet refunded, still in scope).
       return { ...base, label: 'Skip requested', color: customerColors.coral.pressed, bg: customerColors.coral.tint };
+    case 'failed':
+      // Delivery terminally failed (#393) — awaiting admin resolution (refund vs release).
+      // Distinct destructive treatment so the customer sees it needs attention.
+      return { ...base, label: 'Delivery failed', color: customerColors.destructive.DEFAULT, bg: customerColors.destructive.tint };
     case 'declined':
     case 'skipped':
     case 'cancelled':

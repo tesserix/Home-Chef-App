@@ -90,7 +90,7 @@ export default function MealPlanRespondScreen() {
       return;
     }
     const confirmMsg = acceptAll
-      ? `Accept all ${days.length} days? The customer is confirmed right away.`
+      ? `Accept all ${days.length} days? The customer still needs to approve & pay before it's confirmed.`
       : `Cook ${acceptedDays.length} of ${days.length} days? The customer must approve the change.`;
     Alert.alert('Confirm response', confirmMsg, [
       { text: 'Cancel', style: 'cancel' },
@@ -106,9 +106,9 @@ export default function MealPlanRespondScreen() {
             {
               onSuccess: () => {
                 Alert.alert(
-                  acceptAll ? 'Plan confirmed' : 'Sent for approval',
+                  'Sent for approval',
                   acceptAll
-                    ? 'The customer has been notified.'
+                    ? 'The customer will review and pay the advance to confirm.'
                     : 'The customer will review and approve your revised plan.',
                 );
                 router.back();
