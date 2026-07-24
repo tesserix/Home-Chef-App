@@ -25,9 +25,10 @@ const (
 	SubjectOrderVoided = "orders.voided"
 	// SubjectOrderAcceptReminder — an unaccepted order is inside the final two
 	// hours before the kitchen closes (#694).
-	SubjectOrderAcceptReminder = "orders.accept_reminder"
-	SubjectOrderDelivered      = "orders.delivered"
-	SubjectOrderIssueReported  = "orders.issue_reported" // → chef: a customer reported an order issue (#37)
+	SubjectOrderAcceptReminder  = "orders.accept_reminder"
+	SubjectOrderDelivered       = "orders.delivered"
+	SubjectOrderIssueReported   = "orders.issue_reported"   // → chef: a customer reported an order issue (#37)
+	SubjectOrderConfirmReminder = "orders.confirm_reminder" // → customer: reminder to confirm receipt (auto-confirm flow)
 	// Cancellation with vendor arbitration (#475).
 	SubjectCancellationRequested = "orders.cancellation_requested" // → chef: confirm the cancellation
 	SubjectCancellationResolved  = "orders.cancellation_resolved"  // → customer: refund issued

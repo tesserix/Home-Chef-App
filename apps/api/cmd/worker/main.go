@@ -40,6 +40,15 @@ func main() {
 	workflows.OrderRefundFunc = services.CompensateOrderRefund
 	// Onboarding activation (#126).
 	workflows.ActivateChefFunc = services.ActivateChefOnboardingFromActivity
+	// Confirm-receipt reminder + auto-confirm flow (#auto-confirm-delivery).
+	workflows.ConfirmReminderFunc = func(_ context.Context, orderID uuid.UUID, attempt int) error {
+		_, err := services.SendConfirmReceiptReminder(database.DB, orderID, attempt)
+		return err
+	}
+	workflows.AutoConfirmFunc = func(_ context.Context, orderID uuid.UUID) error {
+		_, _, err := services.AutoConfirmOrderReceipt(database.DB, orderID)
+		return err
+	}
 
 	if err := temporal.RunWorkers(
 		temporal.Queue(temporal.TaskQueueNotifications).
@@ -51,9 +60,10 @@ func main() {
 		// Order lifecycle saga (#122) — notify → accept → ready → dispatch →
 		// delivered → settle, with refund compensation.
 		temporal.Queue(temporal.TaskQueueOrders).
-			Workflows(workflows.OrderSagaWorkflow).
+			Workflows(workflows.OrderSagaWorkflow, workflows.ConfirmReceiptWorkflow).
 			Activities(workflows.NotifyChefActivity, workflows.DispatchDeliveryActivity,
-				workflows.OrderSettleActivity, workflows.OrderRefundActivity),
+				workflows.OrderSettleActivity, workflows.OrderRefundActivity,
+				workflows.ReminderActivity, workflows.AutoConfirmActivity),
 		// Durable chef-onboarding activation (#126).
 		temporal.Queue(temporal.TaskQueueOnboarding).
 			Workflows(workflows.OnboardingActivationWorkflow).

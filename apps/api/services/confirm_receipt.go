@@ -112,7 +112,7 @@ func SendConfirmReceiptReminder(db *gorm.DB, orderID uuid.UUID, attempt int) (bo
 	// of the reminder itself.
 	_ = SendPushNotification(order.CustomerID, title, body, data)
 
-	if err := EnqueueEvent(db, "orders.confirm_reminder", "order.confirm_reminder", order.CustomerID, map[string]any{
+	if err := EnqueueEvent(db, SubjectOrderConfirmReminder, "order.confirm_reminder", order.CustomerID, map[string]any{
 		"order_id": order.ID.String(),
 		"attempt":  attempt,
 	}); err != nil {
