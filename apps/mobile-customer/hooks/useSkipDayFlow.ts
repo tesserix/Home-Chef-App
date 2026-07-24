@@ -14,7 +14,7 @@ export function useSkipDayFlow(planId: string | undefined) {
     if (!planId) return;
     Alert.alert(
       'Skip this day?',
-      'We’ll send a refund request for review. Once approved you get that day’s food back (minus the platform fee) to your wallet — GST and delivery aren’t refunded. This can’t be undone.',
+      'More than 12 hours before your meal? You’re refunded to your wallet right away. Closer than that, your chef reviews it (they may have started cooking). The refund is the food only — the platform fee, GST, and delivery aren’t refunded. This can’t be undone.',
       [
         { text: 'Back', style: 'cancel' },
         {
@@ -24,11 +24,16 @@ export function useSkipDayFlow(planId: string | undefined) {
             skipDay.mutate(
               { planId, dayId },
               {
-                onSuccess: () =>
+                // The server tells us the outcome: an auto-refund (>12h) or a pending chef review
+                // (≤12h). Show its message verbatim so the copy always matches what happened.
+                onSuccess: (res) => {
+                  const r = res as { status?: string; message?: string } | undefined;
                   Alert.alert(
-                    'Skip requested',
-                    'Your request is in for review. If approved, the day’s food (minus the platform fee) is refunded to your wallet and your chef won’t cook it.',
-                  ),
+                    r?.status === 'refunded' ? 'Refunded to your wallet' : 'Skip requested',
+                    r?.message ??
+                      'Your request is in. If approved, the day’s food (minus the platform fee) goes to your wallet.',
+                  );
+                },
                 onError: () =>
                   Alert.alert(
                     'Could not request skip',

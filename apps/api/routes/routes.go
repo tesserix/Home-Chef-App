@@ -966,7 +966,9 @@ func SetupRouter() *gin.Engine {
 			// the platform fee) or rejects (day returns to confirmed) a pending skip.
 			admin.POST("/meal-plan-days/:dayId/approve-skip", mealPlanHandler.AdminApproveMealPlanDaySkip)
 			admin.POST("/meal-plan-days/:dayId/reject-skip", mealPlanHandler.AdminRejectMealPlanDaySkip)
-			// v2 refund workflow: pay a chef-approved (Full/Half) day to wallet or original method.
+			// v2 refund workflow: list chef-approved days awaiting payout, and pay one to
+			// wallet (instant) or original method (RBI). The tesserix admin drives this.
+			admin.GET("/meal-plan-days/pending-refunds", mealPlanHandler.GetAdminPendingRefunds)
 			admin.POST("/meal-plan-days/:dayId/pay-refund", mealPlanHandler.AdminPayMealPlanDayRefund)
 
 			// Promotions (featured ads)

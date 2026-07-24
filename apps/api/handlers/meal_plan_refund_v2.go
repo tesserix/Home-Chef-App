@@ -123,6 +123,52 @@ func (h *MealPlanHandler) ChefRefundDecision(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+// adminPendingRefundDay is one day the chef approved (Full/Half), awaiting an admin to pay it.
+type adminPendingRefundDay struct {
+	DayID          string  `json:"dayId"`
+	Date           string  `json:"date"`
+	Slot           string  `json:"slot"`
+	DishName       string  `json:"dishName"`
+	CustomerName   string  `json:"customerName"`
+	ChefName       string  `json:"chefName"`
+	MealPlanNumber string  `json:"mealPlanNumber"`
+	ChefChoice     string  `json:"chefChoice"`   // full | half
+	RefundAmount   float64 `json:"refundAmount"` // fee/GST-excluded amount to pay the customer
+}
+
+// GetAdminPendingRefunds — GET /admin/meal-plan-days/pending-refunds. Days the chef approved
+// (Full/Half) that an admin must pay out to the customer's wallet or original method (the tesserix
+// admin does this via the HMAC gateway). Empty when the v2 flow is off.
+func (h *MealPlanHandler) GetAdminPendingRefunds(c *gin.Context) {
+	if !services.MealPlanRefundFlowV2Active() {
+		c.JSON(http.StatusOK, gin.H{"data": []adminPendingRefundDay{}})
+		return
+	}
+	var days []models.MealPlanDay
+	database.DB.Where("refund_stage = ?", models.MPRefundPendingAdmin).Order("date ASC").Find(&days)
+
+	out := make([]adminPendingRefundDay, 0, len(days))
+	for i := range days {
+		d := &days[i]
+		var plan models.MealPlan
+		if err := database.DB.Select("id", "meal_plan_number", "customer_id", "chef_id").First(&plan, "id = ?", d.MealPlanID).Error; err != nil {
+			continue
+		}
+		var cust models.User
+		database.DB.Select("first_name", "last_name").First(&cust, "id = ?", plan.CustomerID)
+		var chef models.ChefProfile
+		database.DB.Select("business_name").First(&chef, "id = ?", plan.ChefID)
+		out = append(out, adminPendingRefundDay{
+			DayID: d.ID.String(), Date: d.Date.Format("2006-01-02"), Slot: string(d.Slot),
+			DishName: d.DishName, CustomerName: strings.TrimSpace(cust.FirstName + " " + cust.LastName),
+			ChefName: chef.BusinessName, MealPlanNumber: plan.MealPlanNumber,
+			ChefChoice:   string(d.ChefRefundChoice),
+			RefundAmount: services.MealPlanRefundAmount(&plan, d, d.ChefRefundChoice),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"data": out})
+}
+
 // AdminPayMealPlanDayRefund — POST /admin/meal-plan-days/:dayId/pay-refund. Pay a day the chef
 // approved (Full/Half) to {"destination":"wallet"} (instant) or {"destination":"source"} (original
 // method, RBI ~5–7 days). Audited.
