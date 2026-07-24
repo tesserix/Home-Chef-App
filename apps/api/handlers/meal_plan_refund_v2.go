@@ -7,6 +7,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -17,6 +18,58 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 )
+
+// chefRefundDecisionDay is one day awaiting the chef's Full/Half/None/Decline, with the
+// fee/GST-excluded refund amounts so the chef can weigh prep-done vs refund.
+type chefRefundDecisionDay struct {
+	DayID          string  `json:"dayId"`
+	Date           string  `json:"date"`
+	Slot           string  `json:"slot"`
+	DishName       string  `json:"dishName"`
+	CustomerName   string  `json:"customerName"`
+	MealPlanNumber string  `json:"mealPlanNumber"`
+	FoodPrice      float64 `json:"foodPrice"`
+	FullRefund     float64 `json:"fullRefund"`
+	HalfRefund     float64 `json:"halfRefund"`
+}
+
+// GetChefPendingRefundDecisions — GET /chef/meal-plan-days/pending-refund-decisions. Lists the days
+// awaiting THIS chef's decision on a ≤12h skip/cancel. Empty when the v2 flow is off.
+func (h *MealPlanHandler) GetChefPendingRefundDecisions(c *gin.Context) {
+	chef, ok := authedChef(c)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	if !services.MealPlanRefundFlowV2Active() {
+		c.JSON(http.StatusOK, gin.H{"data": []chefRefundDecisionDay{}})
+		return
+	}
+	var days []models.MealPlanDay
+	database.DB.
+		Joins("JOIN meal_plans ON meal_plans.id = meal_plan_days.meal_plan_id").
+		Where("meal_plans.chef_id = ? AND meal_plan_days.refund_stage = ?", chef.ID, models.MPRefundPendingChef).
+		Order("meal_plan_days.date ASC").Find(&days)
+
+	out := make([]chefRefundDecisionDay, 0, len(days))
+	for i := range days {
+		d := &days[i]
+		var plan models.MealPlan
+		if err := database.DB.Select("id", "meal_plan_number", "customer_id").First(&plan, "id = ?", d.MealPlanID).Error; err != nil {
+			continue
+		}
+		var cust models.User
+		database.DB.Select("first_name", "last_name").First(&cust, "id = ?", plan.CustomerID)
+		out = append(out, chefRefundDecisionDay{
+			DayID: d.ID.String(), Date: d.Date.Format("2006-01-02"), Slot: string(d.Slot),
+			DishName: d.DishName, CustomerName: strings.TrimSpace(cust.FirstName + " " + cust.LastName),
+			MealPlanNumber: plan.MealPlanNumber, FoodPrice: d.Price,
+			FullRefund: services.MealPlanRefundAmount(&plan, d, models.RefundProportionFull),
+			HalfRefund: services.MealPlanRefundAmount(&plan, d, models.RefundProportionHalf),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"data": out})
+}
 
 // ChefRefundDecision — POST /chef/meal-plans/days/:dayId/refund-decision. The chef resolves a day
 // awaiting them (a ≤12h skip/cancel): {"choice":"full|half|none"} refunds that proportion of the

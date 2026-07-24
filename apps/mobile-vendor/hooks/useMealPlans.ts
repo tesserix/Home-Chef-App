@@ -21,6 +21,10 @@ export interface WeeklyMenuItem {
   price: number;
   imageUrl?: string;
   menuItemId?: string | null;
+  /** When true the cell is a bundled thali/combo at one price. */
+  isCombo?: boolean;
+  /** The dishes the thali/combo includes (e.g. ["Rice","Dal","Sabji"]). */
+  comboComponents?: string[];
 }
 
 export interface WeeklyMenu {
@@ -244,5 +248,50 @@ export function useRespondMealPlan() {
         })
         .then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['chef', 'meal-plans'] }),
+  });
+}
+
+// ── v2 refund flow (docs/meal-plan-refund-flow-design.md) ──────────────────────
+// A ≤12h skip/cancel routes to the chef to decide how much to refund (they may have
+// started prep). The refund amounts are the fee/GST-excluded food × Full/Half.
+
+export interface RefundDecisionDay {
+  dayId: string;
+  date: string; // YYYY-MM-DD
+  slot: string;
+  dishName: string;
+  customerName: string;
+  mealPlanNumber: string;
+  foodPrice: number;
+  fullRefund: number;
+  halfRefund: number;
+}
+
+// Days awaiting THIS chef's Full/Half/None/Decline.
+export function useChefPendingRefundDecisions() {
+  return useQuery<{ data: RefundDecisionDay[] }>({
+    queryKey: ['chef', 'refund-decisions'],
+    queryFn: () =>
+      api
+        .get<{ data: RefundDecisionDay[] }>('/chef/meal-plan-days/pending-refund-decisions')
+        .then((r) => r.data),
+  });
+}
+
+// The chef's decision: refund full/half/none of the food, or decline (the day is served).
+export function useChefRefundDecision() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { dayId: string; choice?: 'full' | 'half' | 'none'; decline?: boolean }) =>
+      api
+        .post(`/chef/meal-plan-days/${vars.dayId}/refund-decision`, {
+          choice: vars.choice,
+          decline: !!vars.decline,
+        })
+        .then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['chef', 'refund-decisions'] });
+      qc.invalidateQueries({ queryKey: ['chef', 'meal-plans'] });
+    },
   });
 }

@@ -9,10 +9,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { CalendarDays, ChefHat, ChevronLeft, Inbox, UtensilsCrossed } from 'lucide-react-native';
+import { CalendarDays, ChefHat, ChevronLeft, Inbox, RotateCcw, UtensilsCrossed } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
-import { useChefMealPlanRequests } from '../../hooks/useMealPlans';
+import { useChefMealPlanRequests, useChefPendingRefundDecisions } from '../../hooks/useMealPlans';
 import { MealPlanRequestCard } from '../../components/vendor/MealPlanRequestCard';
 
 // Vendor tiffin hub (#195): pending meal-plan requests the chef must respond to
@@ -20,6 +20,8 @@ import { MealPlanRequestCard } from '../../components/vendor/MealPlanRequestCard
 export default function MealPlansScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useChefMealPlanRequests();
   const requests = data?.data ?? [];
+  const { data: refundData } = useChefPendingRefundDecisions();
+  const refundCount = refundData?.data?.length ?? 0;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -133,6 +135,35 @@ export default function MealPlansScreen() {
         )}
       </Pressable>
 
+      {/* Refund requests (v2) — late skips/cancels awaiting the chef's Full/Half/None/Decline */}
+      <Pressable
+        onPress={() => router.push('/meal-plans/refund-decisions' as never)}
+        accessibilityRole="button"
+        accessibilityLabel={`Refund requests${refundCount > 0 ? `, ${refundCount} awaiting your decision` : ''}`}
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      >
+        {({ pressed }) => (
+          <View style={[styles.menuCta, pressed && Platform.OS === 'ios' && styles.pressed]}>
+            <View style={styles.menuIcon}>
+              <RotateCcw size={20} color={theme.colors.ink.soft} strokeWidth={1.75} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuCtaTitle}>Refund requests</Text>
+              <Text style={styles.menuCtaCaption}>
+                Late skips/cancels — you decide how much to refund
+              </Text>
+            </View>
+            {refundCount > 0 ? (
+              <View style={styles.refundBadge}>
+                <Text style={styles.refundBadgeText}>{refundCount > 9 ? '9+' : refundCount}</Text>
+              </View>
+            ) : (
+              <CalendarDays size={18} color={theme.colors.ink.muted} />
+            )}
+          </View>
+        )}
+      </Pressable>
+
       <Text style={styles.sectionLabel}>Pending requests</Text>
 
       {isLoading ? (
@@ -234,6 +265,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     color: theme.colors.ink.DEFAULT,
+  },
+  refundBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: theme.colors.ink.DEFAULT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refundBadgeText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: theme.colors.paper,
   },
   menuCtaCaption: {
     fontFamily: 'Inter',

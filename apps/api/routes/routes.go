@@ -800,6 +800,7 @@ func SetupRouter() *gin.Engine {
 		chefMealPlanDays := v1.Group("/chef/meal-plan-days")
 		chefMealPlanDays.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
 		{
+			chefMealPlanDays.GET("/pending-refund-decisions", mealPlanHandler.GetChefPendingRefundDecisions)
 			chefMealPlanDays.POST("/:dayId/refund-decision", mealPlanHandler.ChefRefundDecision)
 		}
 
