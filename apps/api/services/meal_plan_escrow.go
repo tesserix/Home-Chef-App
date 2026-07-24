@@ -604,6 +604,29 @@ func RefundUndeliveredDays(tx *gorm.DB, plan *models.MealPlan, reason string) er
 	return nil
 }
 
+// TerminalizeCancelledPlanDays drives every still-non-terminal day of a cancelled /
+// rejected / expired plan to a terminal status, so a dead plan never keeps `accepted`
+// or `confirmed` days (which leaves allDaysTerminal false and misrepresents the plan).
+// A day that was refunded (RefundUndeliveredDays stamped a refund txn) becomes
+// `refunded`; any other still-open day becomes `cancelled`. Idempotent — already-
+// terminal days are untouched. Call AFTER RefundUndeliveredDays in reject/cancel/expiry.
+func TerminalizeCancelledPlanDays(tx *gorm.DB, planID uuid.UUID) error {
+	terminal := []models.MealPlanDayStatus{
+		models.MealPlanDayDelivered, models.MealPlanDaySkipped, models.MealPlanDayDeclined,
+		models.MealPlanDayRefunded, models.MealPlanDayCancelled, models.MealPlanDayFailed,
+	}
+	// Days that carry a refund txn → refunded (money was returned).
+	if err := tx.Model(&models.MealPlanDay{}).
+		Where("meal_plan_id = ? AND refund_txn_id IS NOT NULL AND refund_txn_id <> '' AND status NOT IN ?", planID, terminal).
+		Update("status", models.MealPlanDayRefunded).Error; err != nil {
+		return err
+	}
+	// Everything else still open → cancelled.
+	return tx.Model(&models.MealPlanDay{}).
+		Where("meal_plan_id = ? AND status NOT IN ?", planID, terminal).
+		Update("status", models.MealPlanDayCancelled).Error
+}
+
 // isPayableDayStatus reports whether a day is in a state that should hold a chef
 // payout (accepted/confirmed — not declined/skipped/cancelled/refunded).
 func isPayableDayStatus(s models.MealPlanDayStatus) bool {

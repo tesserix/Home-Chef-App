@@ -562,6 +562,11 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 			if err := services.RefundUndeliveredDays(tx, &plan, "customer rejected the revised plan"); err != nil {
 				return err
 			}
+			// The plan is dead — drive its days terminal (refunded / cancelled) so a
+			// cancelled plan never keeps `accepted` days.
+			if err := services.TerminalizeCancelledPlanDays(tx, plan.ID); err != nil {
+				return err
+			}
 		}
 
 		subj := services.SubjectMealPlanConfirmed
@@ -665,6 +670,9 @@ func (h *MealPlanHandler) CancelMealPlan(c *gin.Context) {
 		// Escrow (gated): full refund — nothing was served. No-op when escrow is
 		// off (unpaid handshake) or no advance was collected.
 		if err := services.RefundUndeliveredDays(tx, &plan, "cancelled by customer before start"); err != nil {
+			return err
+		}
+		if err := services.TerminalizeCancelledPlanDays(tx, plan.ID); err != nil {
 			return err
 		}
 		// Notify the chef the request/plan was cancelled.

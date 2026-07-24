@@ -115,7 +115,11 @@ func expireMealPlans(now time.Time, status models.MealPlanStatus, cutoffWhere, r
 			}
 			// Escrow (gated): a lapsed plan fully refunds any captured advance to
 			// the customer's wallet (idempotent per day).
-			return RefundUndeliveredDays(tx, &p, "plan expired — "+reason)
+			if err := RefundUndeliveredDays(tx, &p, "plan expired — "+reason); err != nil {
+				return err
+			}
+			// Drive the days terminal so an expired plan never keeps open days.
+			return TerminalizeCancelledPlanDays(tx, p.ID)
 		})
 		if err != nil {
 			log.Printf("meal-plan-sweep: expire %s failed: %v", p.ID, err)
