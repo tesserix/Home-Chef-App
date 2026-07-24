@@ -19,21 +19,55 @@ func RupeesToMoney(r float64) Money { return Money(math.Round(r * 100)) }
 // Rupees renders the amount as a rupee float (for legacy interop / display only).
 func (m Money) Rupees() float64 { return float64(m) / 100 }
 
-// LedgerAccountKind identifies a normalized account in the double-entry ledger. A user's
-// spendable wallet is `user_wallet` (scoped by UserID); the rest are system counterparty
-// accounts so every transaction balances (Σdebit == Σcredit). Buckets (refund/referral/
-// promo…) are layered on in a later phase as distinct user account kinds.
+// LedgerAccountKind identifies a normalized account in the double-entry ledger. User-side
+// accounts (scoped by UserID) hold a customer's spendable value; the rest are system
+// counterparty accounts so every transaction balances (Σdebit == Σcredit).
+//
+// A user's value is split into BUCKETS (Phase 2, docs/wallet-ledger-plan.md) — refund,
+// referral, promo, goodwill, cashback — each a distinct user account kind with its own
+// provenance and (later) rules. `user_wallet` is the generic/opening bucket: migration
+// opening balances and any unclassified credit. The customer sees ONE balance (the sum of
+// all their buckets, LedgerUserBalance); the per-bucket split is internal (spend priority,
+// expiry, source-preserving refunds). Every user-side kind must satisfy IsUserWalletKind.
 type LedgerAccountKind string
 
 const (
-	LedgerAcctUserWallet     LedgerAccountKind = "user_wallet"      // a customer's spendable balance
-	LedgerAcctSystemRefund   LedgerAccountKind = "system_refund"    // funds a refund credit
-	LedgerAcctSystemReferral LedgerAccountKind = "system_referral"  // funds a referral reward
-	LedgerAcctSystemPromo    LedgerAccountKind = "system_promo"     // funds a promo/cashback credit
-	LedgerAcctSystemSpend    LedgerAccountKind = "system_spend"     // counterparty when a wallet pays for an order
-	LedgerAcctSystemAdjust   LedgerAccountKind = "system_adjust"    // admin adjustment counterparty
-	LedgerAcctSystemOpening  LedgerAccountKind = "system_opening"   // migration opening balances
+	// User-side buckets (all scoped by UserID; sum = the customer's spendable balance).
+	LedgerAcctUserWallet   LedgerAccountKind = "user_wallet"          // generic / opening / unclassified
+	LedgerAcctUserRefund   LedgerAccountKind = "user_wallet_refund"   // refunded order/meal-plan value
+	LedgerAcctUserReferral LedgerAccountKind = "user_wallet_referral" // referral rewards
+	LedgerAcctUserPromo    LedgerAccountKind = "user_wallet_promo"    // promo credits
+	LedgerAcctUserGoodwill LedgerAccountKind = "user_wallet_goodwill" // admin/goodwill grants
+	LedgerAcctUserCashback LedgerAccountKind = "user_wallet_cashback" // cashback / loyalty rewards
+
+	// System counterparty accounts (UserID nil).
+	LedgerAcctSystemRefund   LedgerAccountKind = "system_refund"   // funds a refund credit
+	LedgerAcctSystemReferral LedgerAccountKind = "system_referral" // funds a referral reward
+	LedgerAcctSystemPromo    LedgerAccountKind = "system_promo"    // funds a promo/cashback credit
+	LedgerAcctSystemSpend    LedgerAccountKind = "system_spend"    // counterparty when a wallet pays for an order
+	LedgerAcctSystemAdjust   LedgerAccountKind = "system_adjust"   // admin adjustment counterparty
+	LedgerAcctSystemOpening  LedgerAccountKind = "system_opening"  // migration opening balances
 )
+
+// UserWalletKinds lists every user-side bucket account kind. Their per-user sum is the
+// customer's single spendable balance.
+func UserWalletKinds() []LedgerAccountKind {
+	return []LedgerAccountKind{
+		LedgerAcctUserWallet, LedgerAcctUserRefund, LedgerAcctUserReferral,
+		LedgerAcctUserPromo, LedgerAcctUserGoodwill, LedgerAcctUserCashback,
+	}
+}
+
+// IsUserWalletKind reports whether an account kind is a user-side bucket (scoped by UserID,
+// counted toward the customer's balance) rather than a system counterparty.
+func IsUserWalletKind(k LedgerAccountKind) bool {
+	switch k {
+	case LedgerAcctUserWallet, LedgerAcctUserRefund, LedgerAcctUserReferral,
+		LedgerAcctUserPromo, LedgerAcctUserGoodwill, LedgerAcctUserCashback:
+		return true
+	}
+	return false
+}
 
 // LedgerDirection is the side of an entry.
 type LedgerDirection string
@@ -62,7 +96,7 @@ type LedgerTransaction struct {
 
 // LedgerEntry is one leg (debit or credit) of a transaction. Immutable. AmountMinor is
 // always positive; Direction carries the sign. A user's balance is Σcredits − Σdebits over
-// their `user_wallet` entries.
+// all of their user-side (bucket) entries — every leg with their UserID set.
 type LedgerEntry struct {
 	ID            uuid.UUID         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	TransactionID uuid.UUID         `gorm:"type:uuid;index;not null" json:"transactionId"`

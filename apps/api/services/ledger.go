@@ -20,7 +20,7 @@ import (
 // LedgerLeg is one side of a posting. Amount is always positive (paise); Direction signs it.
 type LedgerLeg struct {
 	AccountKind models.LedgerAccountKind
-	UserID      *uuid.UUID // required for user_wallet, nil for system accounts
+	UserID      *uuid.UUID // required for any user-wallet (bucket) kind, nil for system accounts
 	Direction   models.LedgerDirection
 	Amount      models.Money
 }
@@ -42,8 +42,8 @@ func PostLedgerTransaction(tx *gorm.DB, idempotencyKey, reason, refType, refID s
 		if l.Amount <= 0 {
 			return nil, fmt.Errorf("ledger: leg amount must be positive, got %d", l.Amount)
 		}
-		if l.AccountKind == models.LedgerAcctUserWallet && l.UserID == nil {
-			return nil, errors.New("ledger: user_wallet leg requires a user id")
+		if models.IsUserWalletKind(l.AccountKind) && l.UserID == nil {
+			return nil, errors.New("ledger: user-wallet leg requires a user id")
 		}
 		switch l.Direction {
 		case models.LedgerDebit:
@@ -99,16 +99,17 @@ func PostLedgerTransaction(tx *gorm.DB, idempotencyKey, reason, refType, refID s
 	return txn, nil
 }
 
-// LedgerUserBalance projects a user's spendable wallet balance from the ledger:
-// Σcredits − Σdebits over their user_wallet entries. In paise. This is the authoritative
-// balance once reads flip; during the shadow phase it is reconciled against the legacy
-// float balance.
+// LedgerUserBalance projects a user's single spendable wallet balance from the ledger:
+// Σcredits − Σdebits over ALL of their user-side (bucket) entries. Filtering on user_id
+// alone is exact and bucket-agnostic — only user-side legs ever carry a UserID, so this sums
+// refund + referral + promo + goodwill + cashback + generic together into the one balance the
+// customer sees. In paise. Authoritative once reads flip; reconciled against the legacy float
+// balance during the shadow phase.
 func LedgerUserBalance(db *gorm.DB, userID uuid.UUID) (models.Money, error) {
 	var credit, debit int64
 	q := func(dir models.LedgerDirection) *gorm.DB {
 		return db.Model(&models.LedgerEntry{}).
-			Where("user_id = ? AND account_kind = ? AND direction = ?",
-				userID, models.LedgerAcctUserWallet, dir)
+			Where("user_id = ? AND direction = ?", userID, dir)
 	}
 	if err := q(models.LedgerCredit).Select("COALESCE(SUM(amount_minor),0)").Scan(&credit).Error; err != nil {
 		return 0, err
@@ -117,6 +118,34 @@ func LedgerUserBalance(db *gorm.DB, userID uuid.UUID) (models.Money, error) {
 		return 0, err
 	}
 	return models.Money(credit - debit), nil
+}
+
+// LedgerUserBucketBalances returns the user's per-bucket balances (Σcredits − Σdebits per
+// user-side account kind), in paise. This is the internal breakdown behind the single
+// LedgerUserBalance — used to spend buckets in priority order, to preserve refund provenance,
+// and (later) to drive expiry. Only buckets with a non-zero balance are returned.
+func LedgerUserBucketBalances(db *gorm.DB, userID uuid.UUID) (map[models.LedgerAccountKind]models.Money, error) {
+	type row struct {
+		AccountKind models.LedgerAccountKind
+		Net         int64
+	}
+	var rows []row
+	// SUM(signed) per kind: credits add, debits subtract. One grouped scan.
+	if err := db.Model(&models.LedgerEntry{}).
+		Select("account_kind, COALESCE(SUM(CASE WHEN direction = ? THEN amount_minor ELSE -amount_minor END),0) AS net",
+			models.LedgerCredit).
+		Where("user_id = ?", userID).
+		Group("account_kind").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[models.LedgerAccountKind]models.Money, len(rows))
+	for _, r := range rows {
+		if r.Net != 0 {
+			out[r.AccountKind] = models.Money(r.Net)
+		}
+	}
+	return out, nil
 }
 
 // LedgerTotals returns the whole ledger's debit and credit sums (paise) — must always be

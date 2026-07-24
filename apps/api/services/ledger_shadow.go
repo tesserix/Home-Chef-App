@@ -32,7 +32,7 @@ func LedgerShadowActive() bool {
 }
 
 // ledgerCounterpartyFor maps a legacy wallet source to the ledger system account that
-// balances the user-wallet leg (so every transaction has Σdebit == Σcredit).
+// balances the user-side leg (so every transaction has Σdebit == Σcredit).
 func ledgerCounterpartyFor(s models.WalletTxnSource) models.LedgerAccountKind {
 	switch s {
 	case models.WalletSourceRefund:
@@ -48,27 +48,110 @@ func ledgerCounterpartyFor(s models.WalletTxnSource) models.LedgerAccountKind {
 	}
 }
 
+// ledgerBucketFor maps a wallet CREDIT's source to the user bucket it lands in (Phase 2). The
+// bucket preserves provenance so value can later be spent by priority, expired, or restored to
+// its original tender on refund. Only ever consulted for credits — a debit drains buckets by
+// priority instead (userWalletDebitLegs).
+func ledgerBucketFor(s models.WalletTxnSource) models.LedgerAccountKind {
+	switch s {
+	case models.WalletSourceRefund:
+		return models.LedgerAcctUserRefund
+	case models.WalletSourceReferral:
+		return models.LedgerAcctUserReferral
+	case models.WalletSourcePromo:
+		return models.LedgerAcctUserPromo
+	case models.WalletSourceCashback, models.WalletSourceLoyalty:
+		return models.LedgerAcctUserCashback
+	case models.WalletSourceAdminAdjust:
+		return models.LedgerAcctUserGoodwill
+	default: // OrderPayment is never a credit; anything unknown → generic bucket
+		return models.LedgerAcctUserWallet
+	}
+}
+
+// walletSpendPriority is the order buckets are drained when the wallet is spent: most
+// promotional / expiring value first, refund value (the most cash-like, most likely to become
+// withdrawable) last. A policy-driven priority (platform_settings) replaces this default in a
+// later phase; it is centralized here so that change is one function.
+func walletSpendPriority() []models.LedgerAccountKind {
+	return []models.LedgerAccountKind{
+		models.LedgerAcctUserPromo,
+		models.LedgerAcctUserCashback,
+		models.LedgerAcctUserReferral,
+		models.LedgerAcctUserGoodwill,
+		models.LedgerAcctUserWallet, // generic / opening
+		models.LedgerAcctUserRefund,
+	}
+}
+
+// userWalletDebitLegs splits a debit across the user's buckets in spending priority, taking as
+// much as each bucket holds before moving to the next, so no bucket goes negative and expiring
+// value is spent first. Returns one debit leg per drained bucket; the caller balances them with
+// the system counterparty. Runs in the caller's tx (after the wallet row lock), so the bucket
+// reads are consistent with the balance being debited.
+func userWalletDebitLegs(tx *gorm.DB, userID uuid.UUID, amount models.Money) ([]LedgerLeg, error) {
+	balances, err := LedgerUserBucketBalances(tx, userID)
+	if err != nil {
+		return nil, err
+	}
+	uid := userID
+	remaining := amount
+	var legs []LedgerLeg
+	for _, kind := range walletSpendPriority() {
+		if remaining <= 0 {
+			break
+		}
+		avail := balances[kind]
+		if avail <= 0 {
+			continue
+		}
+		take := avail
+		if take > remaining {
+			take = remaining
+		}
+		legs = append(legs, LedgerLeg{AccountKind: kind, UserID: &uid, Direction: models.LedgerDebit, Amount: take})
+		remaining -= take
+	}
+	// Buckets should always cover the debit — the legacy balance check already guaranteed
+	// sufficient funds and the ledger tracks it to the paise. If they somehow don't (pre-existing
+	// drift), put the shortfall on the generic bucket so the transaction still balances; the
+	// reconcile sweep surfaces the drift. We never strand a leg or post an unbalanced tx.
+	if remaining > 0 {
+		legs = append(legs, LedgerLeg{AccountKind: models.LedgerAcctUserWallet, UserID: &uid, Direction: models.LedgerDebit, Amount: remaining})
+	}
+	return legs, nil
+}
+
 // mirrorWalletTxnToLedger posts a legacy wallet_txn into the double-entry ledger, in the
-// caller's tx. A credit → user_wallet CREDIT + counterparty DEBIT; a debit → the reverse.
-// Reuses the wallet_txn's idempotency key so it posts exactly once even across retries
-// (and, being in the same tx, it commits atomically with the legacy write).
+// caller's tx. A credit lands in its source bucket (refund→refund, promo→promo…), balanced by
+// the system counterparty that funded it; a debit drains buckets in spending priority, balanced
+// by one system-counterparty credit. Reuses the wallet_txn's idempotency key so it posts exactly
+// once even across retries (and, being in the same tx, it commits atomically with the legacy
+// write).
 func mirrorWalletTxnToLedger(tx *gorm.DB, e *models.WalletTxn) error {
 	counter := ledgerCounterpartyFor(e.Source)
 	amt := models.RupeesToMoney(e.Amount)
 	uid := e.UserID
-	userLeg := LedgerLeg{AccountKind: models.LedgerAcctUserWallet, UserID: &uid, Amount: amt}
-	sysLeg := LedgerLeg{AccountKind: counter, Amount: amt}
-	if e.Type == models.WalletCredit {
-		userLeg.Direction, sysLeg.Direction = models.LedgerCredit, models.LedgerDebit
-	} else {
-		userLeg.Direction, sysLeg.Direction = models.LedgerDebit, models.LedgerCredit
-	}
 	refID := ""
 	if e.OrderID != nil {
 		refID = e.OrderID.String()
 	}
-	_, err := PostLedgerTransaction(tx, e.IdempotencyKey, e.Reason, string(e.Source), refID,
-		[]LedgerLeg{userLeg, sysLeg})
+
+	var legs []LedgerLeg
+	if e.Type == models.WalletCredit {
+		legs = []LedgerLeg{
+			{AccountKind: ledgerBucketFor(e.Source), UserID: &uid, Direction: models.LedgerCredit, Amount: amt},
+			{AccountKind: counter, Direction: models.LedgerDebit, Amount: amt},
+		}
+	} else {
+		debitLegs, err := userWalletDebitLegs(tx, uid, amt)
+		if err != nil {
+			return err
+		}
+		legs = append(debitLegs, LedgerLeg{AccountKind: counter, Direction: models.LedgerCredit, Amount: amt})
+	}
+
+	_, err := PostLedgerTransaction(tx, e.IdempotencyKey, e.Reason, string(e.Source), refID, legs)
 	return err
 }
 
