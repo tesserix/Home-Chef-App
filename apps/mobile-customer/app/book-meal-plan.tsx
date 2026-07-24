@@ -19,7 +19,6 @@ const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const CANVAS_RIPPLE = `${customerColors.canvas}33`;
 const GHOST_RIPPLE = `${customerColors.coral.DEFAULT}14`;
 import {
-  mealPlanAdvanceBreakdown,
   useChefDailyMenu,
   useChefWeeklyMenu,
   useCreateMealPlan,
@@ -225,45 +224,13 @@ export default function BookMealPlanScreen() {
         })),
       },
       {
-        onSuccess: (created) => {
-          // Escrow on but the server couldn't attach a payment order — don't
-          // silently proceed as if the advance were collected.
-          if (created.paymentError) {
-            Alert.alert('Payment unavailable', created.paymentError);
-            return;
-          }
-          // Escrow on: collect the FULL advance before the chef is notified.
-          if (created.razorpayOrderId) {
-            // #402: charge the SERVER total (food + GST + per-day delivery), not the
-            // food-only selection sum, and show the exact breakdown before checkout so
-            // the customer never pays more than what's displayed.
-            const b = mealPlanAdvanceBreakdown(created.mealPlan);
-            const goToPay = () =>
-              router.push({
-                pathname: '/payment/checkout',
-                params: {
-                  kind: 'mealplan',
-                  mealPlanId: created.mealPlan.id,
-                  razorpayOrderId: created.razorpayOrderId!,
-                  razorpayKeyId: created.razorpayKeyId ?? '',
-                  amount: String(b.amountPaise), // paise — the actual charge
-                  currency: created.mealPlan.currency ?? 'INR',
-                },
-              });
-            Alert.alert(
-              `Pay ₹${b.total.toFixed(0)} advance`,
-              `Food ₹${b.food.toFixed(2)}\nGST ₹${b.gst.toFixed(2)}\nDelivery ₹${b.delivery.toFixed(2)}\n\nTotal ₹${b.total.toFixed(2)}`,
-              [
-                { text: 'Back', style: 'cancel' },
-                { text: 'Pay now', onPress: goToPay },
-              ],
-            );
-            return;
-          }
-          // Escrow off: unpaid handshake — chef reviews and confirms the days.
+        onSuccess: () => {
+          // Payment now happens AFTER the chef responds and the customer approves
+          // (on the meal-plan detail screen) — NOT here. Sending the request charges
+          // nothing; the chef reviews the days, then you approve and pay to lock it in.
           Alert.alert(
             'Request sent',
-            'Your chef will review the days and confirm. You’ll be notified when they respond.',
+            'Your chef will review the days and confirm what they can cook. When they respond, you approve and pay to lock it in — nothing is charged yet.',
             [{ text: 'OK', onPress: () => router.replace('/meal-plans' as never) }],
           );
         },

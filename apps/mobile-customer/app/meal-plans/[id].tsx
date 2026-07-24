@@ -19,6 +19,7 @@ const CANVAS_RIPPLE = `${customerColors.canvas}33`;
 const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
 import {
   canCancelMealPlan,
+  mealPlanAdvanceBreakdown,
   useCancelMealPlan,
   useFinalizeMealPlan,
   useMealPlan,
@@ -99,9 +100,9 @@ export default function MealPlanDetailScreen() {
   function act(approve: boolean) {
     if (!plan) return;
     Alert.alert(
-      approve ? 'Approve plan?' : 'Reject plan?',
+      approve ? 'Approve & pay?' : 'Reject plan?',
       approve
-        ? `Confirm the ${acceptedDays.length} day${acceptedDays.length === 1 ? '' : 's'} your chef can cook (₹${acceptedTotal.toFixed(0)}).`
+        ? `Confirm the ${acceptedDays.length} day${acceptedDays.length === 1 ? '' : 's'} your chef can cook, then pay the advance (food + GST + delivery, shown at checkout) to lock them in.`
         : 'This cancels the whole plan. You can book again any time.',
       [
         { text: 'Back', style: 'cancel' },
@@ -112,14 +113,38 @@ export default function MealPlanDetailScreen() {
             finalize.mutate(
               { id: plan.id, approve },
               {
-                onSuccess: () =>
+                onSuccess: (res) => {
+                  // Approve (escrow on): the server minted a Razorpay advance order
+                  // for the accepted days — launch checkout. Payment now happens here,
+                  // after approval, not at create. verify-payment then confirms + holds.
+                  if (approve && res?.paymentError) {
+                    Alert.alert('Payment unavailable', res.paymentError);
+                    return;
+                  }
+                  if (approve && res?.razorpayOrderId) {
+                    const b = mealPlanAdvanceBreakdown(res.mealPlan);
+                    router.push({
+                      pathname: '/payment/checkout',
+                      params: {
+                        kind: 'mealplan',
+                        mealPlanId: plan.id,
+                        razorpayOrderId: res.razorpayOrderId,
+                        razorpayKeyId: res.razorpayKeyId ?? '',
+                        amount: String(b.amountPaise),
+                        currency: res.mealPlan.currency ?? 'INR',
+                      },
+                    });
+                    return;
+                  }
+                  // Reject, or escrow-off approve (unpaid handshake → confirmed).
                   Alert.alert(
                     approve ? 'Plan confirmed' : 'Plan cancelled',
                     approve
                       ? 'Your chef has been notified.'
                       : 'No charge — the plan was cancelled.',
                     [{ text: 'OK', onPress: () => router.back() }],
-                  ),
+                  );
+                },
                 onError: () => Alert.alert('Something went wrong', 'Please try again.'),
               },
             ),
@@ -347,7 +372,7 @@ export default function MealPlanDetailScreen() {
                 {finalize.isPending ? (
                   <ActivityIndicator color={customerColors.canvas} />
                 ) : (
-                  <Text style={styles.approveText}>Approve {acceptedDays.length} days</Text>
+                  <Text style={styles.approveText}>Approve &amp; pay</Text>
                 )}
               </View>
             )}

@@ -323,26 +323,12 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		return
 	}
 
-	// Escrow advance (#194) — gated. When enabled, the customer pays the advance
-	// into the platform account here and the held chef payouts are created; until
-	// then the plan proceeds to the chef without charging (handshake mode).
-	resp := gin.H{"mealPlan": plan, "escrowEnabled": config.AppConfig.MealPlanEscrowEnabled}
-	// Escrow (gated): create the Razorpay advance order for the full total and
-	// hand the client what it needs to launch checkout, then POST verify-payment.
-	if services.MealPlanEscrowActive() {
-		orderID, oerr := services.CreateMealPlanAdvanceOrder(&plan)
-		if oerr != nil {
-			resp["paymentError"] = "Could not start the advance payment; please retry."
-		} else if orderID != "" {
-			database.DB.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
-				Update("razorpay_order_id", orderID)
-			resp["razorpayOrderId"] = orderID
-			if rz := services.GetRazorpay(); rz != nil {
-				resp["razorpayKeyId"] = rz.GetKeyID()
-			}
-		}
-	}
-	c.JSON(http.StatusCreated, resp)
+	// Payment now happens AFTER the chef responds and the customer APPROVES the
+	// confirmed days (see ApproveMealPlan) — NOT at create. The request reaches the
+	// chef with nothing charged; the advance order is created + collected only on
+	// approval, for exactly the days the chef committed to. So create returns the
+	// plan only (no razorpay order).
+	c.JSON(http.StatusCreated, gin.H{"mealPlan": plan, "escrowEnabled": config.AppConfig.MealPlanEscrowEnabled})
 }
 
 // GetMyMealPlans — GET /meal-plans. Customer's own plans only (isolation).
@@ -409,6 +395,55 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 	chefUserID := chefProfile.UserID
 
 	now := time.Now()
+
+	// Escrow-on APPROVE does not confirm yet: it snapshots the accepted-days charge
+	// (food + GST + per-accepted-day delivery), mints the Razorpay advance order,
+	// and hands the client checkout. The plan STAYS awaiting_customer until the
+	// payment verifies — VerifyMealPlanPayment then flips it to confirmed and holds
+	// the chef payouts. (Escrow-OFF approve is the unpaid handshake → confirmed
+	// directly, and reject cancels — both handled by the tx below.)
+	if approve && services.MealPlanEscrowActive() {
+		accSub := plan.AcceptedTotal()
+		tax, delivery := services.MealPlanFeeTotals(accSub, plan.AcceptedDayCount())
+		total := services.Round2(accSub + tax + delivery)
+
+		// Snapshot the accepted-days charge, guarded so only one approval mints an
+		// order and only while still awaiting_customer with none minted yet
+		// (idempotent against a double-approve / retry).
+		res := database.DB.Model(&models.MealPlan{}).
+			Where("id = ? AND status = ? AND (razorpay_order_id IS NULL OR razorpay_order_id = '')",
+				plan.ID, models.MealPlanAwaitingCustomer).
+			Updates(map[string]any{"subtotal": accSub, "tax": tax, "total": total})
+		if res.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})
+			return
+		}
+		if res.RowsAffected == 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "This plan is no longer awaiting your approval"})
+			return
+		}
+		plan.Subtotal, plan.Tax, plan.Total = accSub, tax, total
+
+		// Mint the advance order OUTSIDE a tx (external Razorpay call), then stamp it.
+		resp := gin.H{}
+		orderID, oerr := services.CreateMealPlanAdvanceOrder(&plan)
+		if oerr != nil {
+			resp["paymentError"] = "Could not start the advance payment; please retry."
+		} else if orderID != "" {
+			database.DB.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
+				Update("razorpay_order_id", orderID)
+			plan.RazorpayOrderID = orderID
+			resp["razorpayOrderId"] = orderID
+			if rz := services.GetRazorpay(); rz != nil {
+				resp["razorpayKeyId"] = rz.GetKeyID()
+			}
+		}
+		plan.ProjectForCustomer()
+		resp["mealPlan"] = plan
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		newStatus := models.MealPlanConfirmed
 		if !approve {
@@ -694,7 +729,51 @@ func (h *MealPlanHandler) VerifyMealPlanPayment(c *gin.Context) {
 		return
 	}
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		return services.VerifyMealPlanAdvance(tx, &plan, req.RazorpayPaymentID, req.RazorpaySignature)
+		if err := services.VerifyMealPlanAdvance(tx, &plan, req.RazorpayPaymentID, req.RazorpaySignature); err != nil {
+			return err
+		}
+		// Escrow off = no-op ack; nothing was charged, nothing to confirm/hold.
+		if !services.MealPlanEscrowActive() {
+			return nil
+		}
+		// Payment captured → NOW confirm the plan (payment-after-approval): flip
+		// awaiting_customer → confirmed, accepted days → confirmed, and hold the
+		// chef's per-day payouts against the captured advance. Status-guarded so a
+		// re-verify (or concurrent action) can't double-confirm or double-hold.
+		now := time.Now()
+		res := tx.Model(&models.MealPlan{}).
+			Where("id = ? AND status = ?", plan.ID, models.MealPlanAwaitingCustomer).
+			Updates(map[string]any{"status": models.MealPlanConfirmed, "confirmed_at": now})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil // already confirmed (idempotent re-verify) — payments stamp is harmless
+		}
+		if err := tx.Model(&models.MealPlanDay{}).
+			Where("meal_plan_id = ? AND status = ?", plan.ID, models.MealPlanDayAccepted).
+			Update("status", models.MealPlanDayConfirmed).Error; err != nil {
+			return err
+		}
+		plan.Status = models.MealPlanConfirmed
+		plan.ConfirmedAt = &now
+		for i := range plan.Days {
+			if plan.Days[i].Status == models.MealPlanDayAccepted {
+				plan.Days[i].Status = models.MealPlanDayConfirmed
+			}
+		}
+		// Chef's linked account for the held Route transfers + user id for the event.
+		var chefProfile models.ChefProfile
+		if err := tx.First(&chefProfile, "id = ?", plan.ChefID).Error; err != nil {
+			return err
+		}
+		if err := services.HoldChefPayouts(tx, &plan, chefProfile.RazorpayAccountID); err != nil {
+			return err
+		}
+		return services.EnqueueEvent(tx, services.SubjectMealPlanConfirmed, "meal_plan.confirmed", chefProfile.UserID, map[string]any{
+			"meal_plan_id": plan.ID.String(), "meal_plan_no": plan.MealPlanNumber,
+			"approved": true, "customer_id": customerID.String(), "chef_id": plan.ChefID.String(),
+		})
 	}); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment verification failed"})
 		return
@@ -714,12 +793,11 @@ func (h *MealPlanHandler) GetChefMealPlanRequests(c *gin.Context) {
 	}
 	status := c.DefaultQuery("status", string(models.MealPlanPendingChef))
 	var plans []models.MealPlan
+	// Payment now happens AFTER the customer approves the chef's response (not at
+	// create), so a pending request is legitimately unpaid — the chef reviews and
+	// responds first. Do NOT gate on escrow_payment_id here or the chef would never
+	// see a request to act on.
 	q := database.DB.Where("chef_id = ? AND status = ?", chef.ID, status)
-	// When escrow is on, only surface plans whose advance the customer has paid —
-	// the chef shouldn't act on (or be held liable to cook for) an unpaid request.
-	if services.MealPlanEscrowActive() {
-		q = q.Where("escrow_payment_id <> ''")
-	}
 	q.Preload("Days").Preload("Customer").Order("created_at DESC").Find(&plans)
 	for i := range plans {
 		plans[i].ProjectForChef()
@@ -785,22 +863,21 @@ func (h *MealPlanHandler) RespondMealPlan(c *gin.Context) {
 	}
 
 	now := time.Now()
-	subj := services.SubjectMealPlanModified
-	if allAccepted {
-		plan.Status = models.MealPlanConfirmed
-		plan.ConfirmedAt = &now
-		// Accepted-all → confirm the days immediately too.
-		for i := range plan.Days {
-			plan.Days[i].Status = models.MealPlanDayConfirmed
-		}
-		subj = services.SubjectMealPlanAcceptedFull
-	} else {
-		plan.Status = models.MealPlanAwaitingCustomer
-		approveBy := now.Add(custApproveWindow)
-		plan.CustomerApproveBy = &approveBy
+	// Payment-after-approval: whether the chef accepts every day or trims some, the
+	// plan ALWAYS goes to the customer for approval + payment — it is NOT
+	// auto-confirmed, and NO payout is held here. The advance is created + collected
+	// only after the customer approves (ApproveMealPlan → advance order → verify →
+	// HoldChefPayouts). AcceptedFull vs Modified only changes the customer copy.
+	subj := services.SubjectMealPlanAcceptedFull
+	if !allAccepted {
+		subj = services.SubjectMealPlanModified
 	}
+	plan.Status = models.MealPlanAwaitingCustomer
+	approveBy := now.Add(custApproveWindow)
+	plan.CustomerApproveBy = &approveBy
 
-	// Charge basis = the accepted days only (declined days are excluded).
+	// Estimate basis = the accepted days only (declined days are excluded). The
+	// final charge is recomputed with GST + delivery at approval.
 	acceptedTotal := plan.AcceptedTotal()
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		// Status-guarded transition from pending_chef — a concurrent expiry sweep
@@ -821,21 +898,10 @@ func (h *MealPlanHandler) RespondMealPlan(c *gin.Context) {
 				return err
 			}
 		}
-		upd := map[string]any{"subtotal": acceptedTotal, "total": acceptedTotal}
-		if allAccepted {
-			upd["confirmed_at"] = now
-		} else {
-			upd["customer_approve_by"] = plan.CustomerApproveBy
-		}
-		if err := tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).Updates(upd).Error; err != nil {
+		if err := tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).Updates(map[string]any{
+			"subtotal": acceptedTotal, "total": acceptedTotal, "customer_approve_by": plan.CustomerApproveBy,
+		}).Error; err != nil {
 			return err
-		}
-		// Accept-all auto-confirms → hold the chef's per-day payouts now (escrow;
-		// gated). A cherry-pick waits for the customer's approval (finalizeByCustomer).
-		if allAccepted {
-			if err := services.HoldChefPayouts(tx, &plan, chef.RazorpayAccountID); err != nil {
-				return err
-			}
 		}
 		return services.EnqueueEvent(tx, subj, "meal_plan.responded", plan.CustomerID, map[string]any{
 			"meal_plan_id": plan.ID.String(), "all_accepted": allAccepted, "chef_id": chef.ID.String(),

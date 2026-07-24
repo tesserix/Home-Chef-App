@@ -217,3 +217,18 @@ func (p *MealPlan) AcceptedTotal() float64 {
 	}
 	return sum
 }
+
+// AcceptedDayCount counts the days that stay in scope (same filter as
+// AcceptedTotal) — used to size the per-day delivery fee on the accepted set.
+func (p *MealPlan) AcceptedDayCount() int {
+	n := 0
+	for _, d := range p.Days {
+		switch d.Status {
+		case MealPlanDayDeclined, MealPlanDaySkipped, MealPlanDayCancelled, MealPlanDayRefunded:
+			continue
+		default:
+			n++
+		}
+	}
+	return n
+}

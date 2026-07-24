@@ -284,9 +284,12 @@ export function canCancelMealPlan(plan: Pick<MealPlan, 'status' | 'days'>): bool
 export function useFinalizeMealPlan() {
   const qc = useQueryClient();
   return useMutation({
+    // Approve (escrow on) returns the Razorpay advance order for the accepted days
+    // so the app can launch checkout — payment now happens AFTER approval, not at
+    // create. Reject (and escrow-off approve) return just the plan.
     mutationFn: (vars: { id: string; approve: boolean }) =>
       api
-        .put<{ mealPlan: MealPlan }>(
+        .put<CreateMealPlanResponse>(
           `/v1/meal-plans/${vars.id}/${vars.approve ? 'approve' : 'reject'}`,
         )
         .then((r) => r.data),

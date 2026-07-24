@@ -153,8 +153,11 @@ func eventCountFor(t *testing.T, db *gorm.DB, userID uuid.UUID) int {
 
 // ── RespondMealPlan (chef) ──
 
-// Accept-all auto-confirms the plan and every day; charge basis = all days.
-func TestRespondMealPlan_AcceptAll_ConfirmsPlanAndDays(t *testing.T) {
+// Payment-after-approval: accept-all does NOT auto-confirm — it goes to the
+// customer for approval + payment. Days become accepted (not confirmed), the
+// approval window is set, and there is no confirmed_at yet; charge basis = all
+// accepted days.
+func TestRespondMealPlan_AcceptAll_AwaitsCustomerApproval(t *testing.T) {
 	escrowOff(t)
 	db := setupOrchestrationDB(t)
 	chefID, chefUserID := seedOrchChef(t, db)
@@ -165,11 +168,12 @@ func TestRespondMealPlan_AcceptAll_ConfirmsPlanAndDays(t *testing.T) {
 
 	w := respondReq(t, chefUserID, planID, map[string]any{"acceptAll": true})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, string(models.MealPlanConfirmed), planField(t, db, planID, "status"))
-	require.Equal(t, string(models.MealPlanDayConfirmed), dayStatusOf(t, db, d1))
-	require.Equal(t, string(models.MealPlanDayConfirmed), dayStatusOf(t, db, d2))
+	require.Equal(t, string(models.MealPlanAwaitingCustomer), planField(t, db, planID, "status"))
+	require.Equal(t, string(models.MealPlanDayAccepted), dayStatusOf(t, db, d1))
+	require.Equal(t, string(models.MealPlanDayAccepted), dayStatusOf(t, db, d2))
 	require.Equal(t, 250.0, planTotalOf(t, db, planID), "charge basis = all accepted days")
-	require.NotEmpty(t, planField(t, db, planID, "confirmed_at"))
+	require.Empty(t, planField(t, db, planID, "confirmed_at"), "not confirmed until the customer approves + pays")
+	require.NotEmpty(t, planField(t, db, planID, "customer_approve_by"), "approval window is set")
 	require.Equal(t, 1, eventCountFor(t, db, customerID), "customer notified of the response")
 }
 
