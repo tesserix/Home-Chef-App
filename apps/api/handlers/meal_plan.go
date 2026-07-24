@@ -717,9 +717,12 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		// Confirmed → skip_req: RAISE the request (no auto-credit). Guarded so a race
-		// can't re-request or transition past a concurrent change (#422 policy).
+		// can't re-request or transition past a concurrent change (#422 policy). The
+		// `order_id IS NULL` re-check closes the (already time-gate-disjoint) window where
+		// the fulfilment cron locks + generates this day's order between the handler's plan
+		// load and this tx — a generated day must never become skippable.
 		res := tx.Model(&models.MealPlanDay{}).
-			Where("id = ? AND status = ?", day.ID, models.MealPlanDayConfirmed).
+			Where("id = ? AND status = ? AND order_id IS NULL", day.ID, models.MealPlanDayConfirmed).
 			Update("status", models.MealPlanDaySkipRequested)
 		if res.Error != nil {
 			return res.Error
