@@ -169,10 +169,91 @@ func (h *MealPlanHandler) GetAdminPendingRefunds(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": out})
 }
 
-// AdminPayMealPlanDayRefund — POST /admin/meal-plan-days/:dayId/pay-refund. Pay a day the chef
-// approved (Full/Half) to {"destination":"wallet"} (instant) or {"destination":"source"} (original
-// method, RBI ~5–7 days). Audited.
-func (h *MealPlanHandler) AdminPayMealPlanDayRefund(c *gin.Context) {
+// CustomerChooseRefundMedium — POST /meal-plans/:id/days/:dayId/refund-medium. The customer makes
+// the RBI-required medium choice for a refund awaiting them: {"medium":"wallet"} credits their
+// HomeChef wallet instantly; {"medium":"source"} refunds their original card/UPI (5–7 days).
+func (h *MealPlanHandler) CustomerChooseRefundMedium(c *gin.Context) {
+	if !services.MealPlanRefundFlowV2Active() {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not available"})
+		return
+	}
+	customerID, _ := middleware.GetUserID(c)
+	dayID, err := uuid.Parse(c.Param("dayId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid day id"})
+		return
+	}
+	var req struct {
+		Medium models.RefundDestination `json:"medium"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	if err := services.CustomerChooseMealPlanRefundMedium(database.DB, dayID, customerID, req.Medium); err != nil {
+		switch {
+		case errors.Is(err, services.ErrInvalidRefundMedium):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Choose your wallet or your original payment method"})
+		case errors.Is(err, services.ErrRefundStageMismatch):
+			c.JSON(http.StatusConflict, gin.H{"error": "This refund has already been handled"})
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Refund not found"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record your choice"})
+		}
+		return
+	}
+	instant := req.Medium == models.RefundDestinationWallet
+	msg := "We’ll refund your original payment method in 5–7 business days."
+	if instant {
+		msg = "Refunded to your HomeChef wallet — ready to use on your next order."
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "instant": instant, "message": msg})
+}
+
+// customerRefundChoiceDay is one refund awaiting the customer's medium choice.
+type customerRefundChoiceDay struct {
+	DayID          string  `json:"dayId"`
+	MealPlanID     string  `json:"mealPlanId"`
+	MealPlanNumber string  `json:"mealPlanNumber"`
+	Date           string  `json:"date"`
+	Slot           string  `json:"slot"`
+	DishName       string  `json:"dishName"`
+	Amount         float64 `json:"amount"`
+}
+
+// GetCustomerPendingRefundChoices — GET /meal-plans/refund-choices. The customer's refunds that are
+// agreed and awaiting their medium choice (wallet vs original). Empty when the v2 flow is off.
+func (h *MealPlanHandler) GetCustomerPendingRefundChoices(c *gin.Context) {
+	customerID, _ := middleware.GetUserID(c)
+	if !services.MealPlanRefundFlowV2Active() {
+		c.JSON(http.StatusOK, gin.H{"data": []customerRefundChoiceDay{}})
+		return
+	}
+	var days []models.MealPlanDay
+	database.DB.
+		Joins("JOIN meal_plans ON meal_plans.id = meal_plan_days.meal_plan_id").
+		Where("meal_plans.customer_id = ? AND meal_plan_days.refund_stage = ?", customerID, models.MPRefundPendingCustomer).
+		Order("meal_plan_days.date ASC").Find(&days)
+
+	out := make([]customerRefundChoiceDay, 0, len(days))
+	for i := range days {
+		d := &days[i]
+		var plan models.MealPlan
+		if err := database.DB.Select("id", "meal_plan_number").First(&plan, "id = ?", d.MealPlanID).Error; err != nil {
+			continue
+		}
+		out = append(out, customerRefundChoiceDay{
+			DayID: d.ID.String(), MealPlanID: d.MealPlanID.String(), MealPlanNumber: plan.MealPlanNumber,
+			Date: d.Date.Format("2006-01-02"), Slot: string(d.Slot), DishName: d.DishName,
+			Amount: services.MealPlanRefundAmount(&plan, d, d.ChefRefundChoice),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"data": out})
+}
+
+// AdminExecuteMealPlanDayRefund — POST /admin/meal-plan-days/:dayId/execute-refund. Runs the
+// customer-chosen ORIGINAL (gateway) refund. The admin only EXECUTES — the customer already chose
+// the medium (RBI). Audited.
+func (h *MealPlanHandler) AdminExecuteMealPlanDayRefund(c *gin.Context) {
 	if !services.MealPlanRefundFlowV2Active() {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Not available"})
 		return
@@ -182,26 +263,17 @@ func (h *MealPlanHandler) AdminPayMealPlanDayRefund(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid day id"})
 		return
 	}
-	var req struct {
-		Destination models.RefundDestination `json:"destination"`
-	}
-	_ = c.ShouldBindJSON(&req)
-	dest := models.RefundDestinationWallet // default: instant wallet
-	if req.Destination == models.RefundDestinationSource {
-		dest = models.RefundDestinationSource
-	}
-
-	if err := services.AdminPayMealPlanRefund(database.DB, dayID, dest); err != nil {
+	if err := services.AdminExecuteMealPlanRefund(database.DB, dayID); err != nil {
 		switch {
 		case errors.Is(err, services.ErrRefundStageMismatch):
 			c.JSON(http.StatusConflict, gin.H{"error": "This day is not awaiting an admin refund"})
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "Day not found"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to pay refund"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to execute the refund"})
 		}
 		return
 	}
-	services.LogAudit(c, "mealplan.refund.pay", "meal_plan_day", dayID.String(), nil, map[string]any{"destination": dest})
-	c.JSON(http.StatusOK, gin.H{"status": "refunded", "destination": dest})
+	services.LogAudit(c, "mealplan.refund.execute", "meal_plan_day", dayID.String(), nil, map[string]any{"destination": "source"})
+	c.JSON(http.StatusOK, gin.H{"status": "refunded", "destination": "source"})
 }

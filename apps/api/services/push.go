@@ -253,6 +253,9 @@ func (s *PushService) sendToToken(token, title, body string, data map[string]str
 
 // SendPushNotification sends a push notification to a single user by looking up their FCM token
 func SendPushNotification(userID uuid.UUID, title, body string, data map[string]string) error {
+	if database.DB == nil {
+		return nil // DB not initialised (e.g. unit tests) — push is best-effort, never fatal
+	}
 	var user models.User
 	if err := database.DB.Select("id, fcm_token").First(&user, "id = ?", userID).Error; err != nil {
 		return fmt.Errorf("push: user %s not found: %w", userID, err)

@@ -755,6 +755,8 @@ func SetupRouter() *gin.Engine {
 			mealPlans.PUT("/:id/reject", mealPlanHandler.RejectMealPlan)
 			mealPlans.PUT("/:id/cancel", mealPlanHandler.CancelMealPlan)
 			mealPlans.PUT("/:id/days/:dayId/skip", mealPlanHandler.SkipMealPlanDay)
+			// v2 refund workflow: the customer's RBI-required medium choice (wallet | source).
+			mealPlans.POST("/:id/days/:dayId/refund-medium", mealPlanHandler.CustomerChooseRefundMedium)
 			mealPlans.POST("/:id/days/:dayId/confirm-received", payoutHoldHandler.ConfirmMealPlanDayReceived) // #387
 			mealPlans.POST("/:id/verify-payment", mealPlanHandler.VerifyMealPlanPayment)
 		}
@@ -966,10 +968,10 @@ func SetupRouter() *gin.Engine {
 			// the platform fee) or rejects (day returns to confirmed) a pending skip.
 			admin.POST("/meal-plan-days/:dayId/approve-skip", mealPlanHandler.AdminApproveMealPlanDaySkip)
 			admin.POST("/meal-plan-days/:dayId/reject-skip", mealPlanHandler.AdminRejectMealPlanDaySkip)
-			// v2 refund workflow: list chef-approved days awaiting payout, and pay one to
-			// wallet (instant) or original method (RBI). The tesserix admin drives this.
+			// v2 refund workflow: list customer-chose-original days awaiting payout, and EXECUTE
+			// the gateway refund. The customer chose the medium (RBI); the admin only executes.
 			admin.GET("/meal-plan-days/pending-refunds", mealPlanHandler.GetAdminPendingRefunds)
-			admin.POST("/meal-plan-days/:dayId/pay-refund", mealPlanHandler.AdminPayMealPlanDayRefund)
+			admin.POST("/meal-plan-days/:dayId/execute-refund", mealPlanHandler.AdminExecuteMealPlanDayRefund)
 
 			// Promotions (featured ads)
 			admin.GET("/promotions", promotionHandler.AdminListPromotions)
@@ -1178,6 +1180,8 @@ func SetupRouter() *gin.Engine {
 			customer.POST("/me/delete", customerDPDPHandler.DeleteMyAccount)
 
 			// Store-credit wallet (#33)
+			// v2 refund workflow: the customer's refunds awaiting their medium choice.
+			customer.GET("/meal-plan-refund-choices", mealPlanHandler.GetCustomerPendingRefundChoices)
 			customer.GET("/wallet", walletHandler.GetWallet)
 			customer.GET("/wallet/transactions", walletHandler.GetWalletTransactions)
 

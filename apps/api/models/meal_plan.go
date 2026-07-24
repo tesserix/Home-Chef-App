@@ -236,9 +236,10 @@ const (
 type MealPlanRefundStage string
 
 const (
-	MPRefundPendingChef  MealPlanRefundStage = "pending_chef"  // ≤12h, awaiting chef Full/Half/None
-	MPRefundPendingAdmin MealPlanRefundStage = "pending_admin" // chef chose Full/Half, awaiting admin pay
-	MPRefundResolved     MealPlanRefundStage = "resolved"      // terminal (refunded, or no-refund)
+	MPRefundPendingChef     MealPlanRefundStage = "pending_chef"     // ≤12h, awaiting chef Full/Half/None
+	MPRefundPendingCustomer MealPlanRefundStage = "pending_customer" // amount agreed, awaiting the customer's medium choice (RBI)
+	MPRefundPendingAdmin    MealPlanRefundStage = "pending_admin"    // customer chose ORIGINAL, awaiting the admin to execute the gateway refund
+	MPRefundResolved        MealPlanRefundStage = "resolved"         // terminal (refunded, or no-refund)
 )
 
 // RefundDestination is where the admin pays a meal-plan / group-order refund. Wallet is instant

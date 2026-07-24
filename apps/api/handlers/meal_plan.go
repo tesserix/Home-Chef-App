@@ -695,7 +695,7 @@ func (h *MealPlanHandler) CancelMealPlan(c *gin.Context) {
 				}
 				early := now.Before(mealPlanDayStartIST(schedules, d).Add(-mealPlanLeadTime))
 				if early {
-					if err := services.AutoApproveMealPlanDayRefund(tx, &plan, d); err != nil {
+					if err := services.AgreeMealPlanDayRefundFull(tx, &plan, d); err != nil {
 						return err
 					}
 				} else if d.RefundStage != models.MPRefundPendingChef {
@@ -850,7 +850,7 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 			}
 			if early {
 				// >12h: auto-approve the FULL refund to the wallet — no chef/admin step.
-				return services.AutoApproveMealPlanDayRefund(tx, &plan, day)
+				return services.AgreeMealPlanDayRefundFull(tx, &plan, day)
 			}
 			// ≤12h: await the chef's decision. Record the stage + notify the chef.
 			if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).
@@ -873,7 +873,7 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 		}
 		plan.ProjectForCustomer()
 		if early {
-			c.JSON(http.StatusOK, gin.H{"status": "refunded", "message": "Refunded to your wallet — you won't be served this day.", "mealPlan": plan})
+			c.JSON(http.StatusOK, gin.H{"status": "pending_customer", "message": "You won't be served this day. Choose where your refund goes — your wallet (instant) or your original payment method (5–7 days).", "mealPlan": plan})
 		} else {
 			c.JSON(http.StatusOK, gin.H{"status": "pending_chef", "message": "Skip requested — your chef will review it.", "mealPlan": plan})
 		}
