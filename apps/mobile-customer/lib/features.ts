@@ -20,8 +20,14 @@ export const GROUP_ORDERS_ENABLED: boolean = true;
 /** Catering deposit / advance-order flow. */
 export const CATERING_ENABLED: boolean = false;
 
-/** Store-credit wallet — view exists, but spending is off and balances are 0 at launch. */
-export const WALLET_ENABLED: boolean = false;
+/**
+ * Store-credit wallet — the balance view. On for all customers: refunds from
+ * cancelled / undelivered meal-plan days (and any goodwill credit) land in the
+ * wallet, so the customer must be able to SEE what they're owed. Spending that
+ * balance at checkout is a separate gate (WALLET_CHECKOUT_ENABLED / the API's
+ * WALLET_CHECKOUT_ENABLED) that must move in lockstep with the server.
+ */
+export const WALLET_ENABLED: boolean = true;
 
 /** Loyalty / rewards program (v2-deferred). */
 export const REWARDS_ENABLED: boolean = false;
