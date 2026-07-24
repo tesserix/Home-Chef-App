@@ -458,6 +458,27 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 			return
 		}
 		if res.RowsAffected == 0 {
+			// The guarded snapshot didn't apply — RESUME vs CONFLICT. If the plan is
+			// still awaiting_customer with an advance order already minted but NOT yet
+			// paid (escrow_payment_id blank), the customer backed out of Razorpay and is
+			// retrying: hand back the SAME order to resume checkout, rather than 409
+			// (which would strand a minted-but-unpaid advance and block re-payment).
+			// Any other state (paid/confirmed/cancelled) is a genuine conflict.
+			var cur models.MealPlan
+			if err := database.DB.Preload("Days").First(&cur, "id = ?", plan.ID).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})
+				return
+			}
+			if cur.Status == models.MealPlanAwaitingCustomer && cur.RazorpayOrderID != "" && cur.EscrowPaymentID == "" {
+				resp := gin.H{"razorpayOrderId": cur.RazorpayOrderID}
+				if rz := services.GetRazorpay(); rz != nil {
+					resp["razorpayKeyId"] = rz.GetKeyID()
+				}
+				cur.ProjectForCustomer()
+				resp["mealPlan"] = cur
+				c.JSON(http.StatusOK, resp)
+				return
+			}
 			c.JSON(http.StatusConflict, gin.H{"error": "This plan is no longer awaiting your approval"})
 			return
 		}
