@@ -803,16 +803,12 @@ func (h *MealPlanHandler) VerifyMealPlanPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		// Validate the captured advance (order + amount + Checkout signature) and, on
-		// the single awaiting_customer → confirmed transition, confirm the plan + hold
-		// the chef payouts. This is the SAME durable seam the payment.captured webhook
-		// uses (services.ConfirmMealPlanAdvance), so a client verify and a webhook
-		// confirm can never diverge, and either one alone is sufficient. Idempotent +
-		// status-guarded; escrow-off is a no-op ack.
-		_, err := services.ConfirmMealPlanAdvance(tx, &plan, req.RazorpayPaymentID, req.RazorpaySignature)
-		return err
-	}); err != nil {
+	// Validate the captured advance (order + amount + Checkout signature), confirm the
+	// plan in a fast local tx, and hold the chef payouts outside it — the SAME durable
+	// seam the payment.captured webhook + the Temporal workflow use, so a client verify
+	// and a webhook confirm can never diverge. Idempotent + status-guarded; escrow-off
+	// is a no-op ack.
+	if _, err := services.ConfirmMealPlanAdvance(database.DB, &plan, req.RazorpayPaymentID, req.RazorpaySignature); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment verification failed"})
 		return
 	}

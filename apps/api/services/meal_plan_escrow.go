@@ -463,7 +463,39 @@ func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay
 // #395·3 durability: without the webhook fallback, a dropped client verify-payment
 // call (e.g. the RN Razorpay SDK returning dismiss on the success auto-redirect) would
 // strand a CAPTURED advance — money taken, plan unconfirmed, chef payout never held.
-func ConfirmMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan, paymentID, signature string) (bool, error) {
+// It takes the plain *gorm.DB (NOT a caller tx): it runs the confirm in its own fast
+// LOCAL transaction and then holds the chef payouts OUTSIDE it. Splitting the external
+// Route transfers out of the confirm tx (#395·3 GAP 2) means the DB connection is never
+// held across ~N gateway round-trips, and a hold failure can't roll back the confirm or
+// orphan on-hold transfers. A crash between confirm and hold is healed by the
+// meal-plan-hold-reconcile cron. Both steps are idempotent + status-guarded; returns
+// confirmed=true only on the transition it performed. No-op when escrow is off.
+func ConfirmMealPlanAdvance(db *gorm.DB, plan *models.MealPlan, paymentID, signature string) (bool, error) {
+	var confirmed bool
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		var e error
+		confirmed, e = confirmMealPlanAdvanceDBTx(tx, plan, paymentID, signature)
+		return e
+	}); err != nil {
+		return false, err
+	}
+	if !confirmed {
+		return false, nil
+	}
+	// Hold OUTSIDE the confirm tx. Idempotent; on failure the plan is confirmed-but-
+	// unheld and the hold-reconcile cron completes it — money is never held-in-a-tx.
+	if err := HoldMealPlanPayouts(db, plan); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+// confirmMealPlanAdvanceDBTx is the LOCAL-only confirm (no external calls): validate the
+// captured advance, flip awaiting_customer → confirmed + accepted days → confirmed, stamp
+// EscrowPaymentID, and enqueue the confirmed event — all in the caller's tx. Returns
+// confirmed=true only on the single transition it performed. Used by ConfirmMealPlanAdvance
+// and by the Temporal confirm activity.
+func confirmMealPlanAdvanceDBTx(tx *gorm.DB, plan *models.MealPlan, paymentID, signature string) (bool, error) {
 	// Bind + validate the captured payment to this plan's advance order + amount and
 	// stamp EscrowPaymentID (the anti-under-payment gate). No-op when escrow is off.
 	if err := VerifyMealPlanAdvance(tx, plan, paymentID, signature); err != nil {
@@ -496,21 +528,31 @@ func ConfirmMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan, paymentID, signa
 			plan.Days[i].Status = models.MealPlanDayConfirmed
 		}
 	}
-	// Hold the chef's per-day payouts against the captured advance.
 	var chef models.ChefProfile
-	if err := tx.First(&chef, "id = ?", plan.ChefID).Error; err != nil {
+	if err := tx.Select("id", "user_id").First(&chef, "id = ?", plan.ChefID).Error; err != nil {
 		return false, err
 	}
-	if err := HoldChefPayouts(tx, plan, chef.RazorpayAccountID); err != nil {
-		return false, err
-	}
-	if err := EnqueueEvent(tx, SubjectMealPlanConfirmed, "meal_plan.confirmed", chef.UserID, map[string]any{
+	return true, EnqueueEvent(tx, SubjectMealPlanConfirmed, "meal_plan.confirmed", chef.UserID, map[string]any{
 		"meal_plan_id": plan.ID.String(), "meal_plan_no": plan.MealPlanNumber,
 		"approved": true, "customer_id": plan.CustomerID.String(), "chef_id": plan.ChefID.String(),
-	}); err != nil {
-		return false, err
+	})
+}
+
+// HoldMealPlanPayouts holds the chef's per-day Route transfers for a confirmed plan,
+// OUTSIDE any confirm tx. It passes the plain db to HoldChefPayouts so each day's
+// transfer + payout_transfer_id stamp auto-commits independently — a mid-way failure
+// leaves the completed days held (no rollback, no orphaned transfer) and the
+// hold-reconcile cron finishes the rest. Idempotent via the per-day PayoutTransferID
+// guard + the escrow_payment_id gate. Requires plan.Days loaded. No-op when escrow off.
+func HoldMealPlanPayouts(db *gorm.DB, plan *models.MealPlan) error {
+	if !MealPlanEscrowActive() {
+		return nil
 	}
-	return true, nil
+	var chef models.ChefProfile
+	if err := db.Select("id", "razorpay_account_id").First(&chef, "id = ?", plan.ChefID).Error; err != nil {
+		return err
+	}
+	return HoldChefPayouts(db, plan, chef.RazorpayAccountID)
 }
 
 // RefundDeclinedDays refunds the days the chef declined (cherry-picked out) once

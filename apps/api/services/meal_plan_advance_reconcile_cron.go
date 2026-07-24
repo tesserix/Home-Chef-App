@@ -69,12 +69,7 @@ func reconcileMealPlanAdvances(db *gorm.DB, now time.Time) int {
 		if captured == "" {
 			continue // unpaid — leave it; the expiry sweep cancels an abandoned plan
 		}
-		var confirmed bool
-		txErr := db.Transaction(func(tx *gorm.DB) error {
-			var e error
-			confirmed, e = ConfirmMealPlanAdvance(tx, p, captured, "")
-			return e
-		})
+		confirmed, txErr := ConfirmMealPlanAdvance(db, p, captured, "")
 		if txErr != nil {
 			log.Printf("mealplan-advance-reconcile: confirm plan %s failed: %v", p.ID, txErr)
 			continue

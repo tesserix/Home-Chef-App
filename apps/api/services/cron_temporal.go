@@ -64,6 +64,10 @@ func cronJobs() []cronJob {
 		// client verify AND payment.captured webhook were both lost — money taken, plan
 		// stuck awaiting_customer. Belt-and-suspenders behind those two durable paths.
 		{"meal-plan-advance-reconcile", mealPlanAdvanceReconcileInterval, runMealPlanAdvanceReconcileScan, StartMealPlanAdvanceReconcileCron},
+		// Tiffin payout-hold backstop (#395·3 GAP 2): ConfirmMealPlanAdvance holds the
+		// chef payouts OUTSIDE the confirm tx; this completes the hold for any confirmed,
+		// captured plan whose days aren't held yet (crash between confirm and hold).
+		{"meal-plan-hold-reconcile", mealPlanHoldReconcileInterval, runMealPlanHoldReconcileScan, StartMealPlanHoldReconcileCron},
 	}
 }
 

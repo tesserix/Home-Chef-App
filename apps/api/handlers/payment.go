@@ -1403,13 +1403,8 @@ func (h *PaymentHandler) confirmMealPlanAdvanceFromWebhook(orderID, paymentID st
 	if err != nil {
 		return false, err
 	}
-	var confirmed bool
-	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
-		var e error
-		confirmed, e = services.ConfirmMealPlanAdvance(tx, &plan, paymentID, "")
-		return e
-	})
-	return confirmed, txErr
+	// ConfirmMealPlanAdvance manages its own confirm tx + holds payouts outside it.
+	return services.ConfirmMealPlanAdvance(database.DB, &plan, paymentID, "")
 }
 
 // handlePaymentCaptured returns a non-nil error only for a TRANSIENT failure (a DB
