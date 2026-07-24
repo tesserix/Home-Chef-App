@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 	"github.com/homechef/api/temporal"
 	"github.com/homechef/api/temporal/workflows"
@@ -49,6 +50,21 @@ func main() {
 		_, _, err := services.AutoConfirmOrderReceipt(database.DB, orderID)
 		return err
 	}
+	// Durable mixed wallet + external payment flow (wallet-ledger Phase 5) — reserve/
+	// capture/release ledger holds. Inert until WALLET_PAYMENT_FLOW_ENABLED + the ledger
+	// are live; the activities are idempotent so a retry never double-moves money.
+	workflows.PlaceWalletHoldFunc = func(_ context.Context, in workflows.WalletHoldActivityInput) error {
+		_, err := services.PlaceWalletHold(database.DB, in.UserID, models.Money(in.AmountMinor), in.RefType, in.RefID)
+		return err
+	}
+	workflows.CaptureWalletHoldFunc = func(_ context.Context, in workflows.WalletHoldRefInput) error {
+		_, err := services.CaptureWalletHold(database.DB, in.RefType, in.RefID)
+		return err
+	}
+	workflows.ReleaseWalletHoldFunc = func(_ context.Context, in workflows.WalletHoldRefInput) error {
+		_, err := services.ReleaseWalletHold(database.DB, in.RefType, in.RefID)
+		return err
+	}
 
 	if err := temporal.RunWorkers(
 		temporal.Queue(temporal.TaskQueueNotifications).
@@ -68,6 +84,12 @@ func main() {
 		temporal.Queue(temporal.TaskQueueOnboarding).
 			Workflows(workflows.OnboardingActivationWorkflow).
 			Activities(workflows.ActivateChefOnboardingActivity),
+		// Durable mixed wallet + external payment flow (wallet-ledger Phase 5) —
+		// hold → await gateway → capture/release compensation.
+		temporal.Queue(temporal.TaskQueuePayments).
+			Workflows(workflows.WalletPaymentWorkflow).
+			Activities(workflows.PlaceWalletHoldActivity, workflows.CaptureWalletHoldActivity,
+				workflows.ReleaseWalletHoldActivity),
 		// Scheduled jobs (statements, reconciliation, FSSAI, availability, audit).
 		services.RegisterCronWorker(),
 	); err != nil {

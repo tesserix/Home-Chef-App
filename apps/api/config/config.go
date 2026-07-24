@@ -128,6 +128,12 @@ type Config struct {
 	// is deployed (tesserix-k8s) and opening balances are backfilled. See
 	// docs/wallet-ledger-plan.md.
 	LedgerShadowEnabled bool
+	// WalletPaymentFlowEnabled gates the durable mixed wallet + external payment
+	// Temporal workflow (docs/wallet-ledger-plan.md, Phase 5): reserve the wallet
+	// portion as a ledger hold, await the gateway leg, then capture on success or
+	// release on failure/timeout. Default OFF — it settles LEDGER holds, so it is
+	// inert until the ledger is live (also requires LedgerShadowEnabled + Temporal).
+	WalletPaymentFlowEnabled bool
 	// MealSubscriptionAutoActivate gates whether a new tiffin subscription starts
 	// ACTIVE (so the daily-order generator + pause/resume/skip work end-to-end) vs
 	// TRIALING. Default OFF: real recurring CHARGING (Razorpay UPI-Autopay mandate,
@@ -224,6 +230,7 @@ func Load() {
 	walletCheckout, _ := strconv.ParseBool(getEnv("WALLET_CHECKOUT_ENABLED", "false"))
 	mealPlanEscrow, _ := strconv.ParseBool(getEnv("MEAL_PLAN_ESCROW_ENABLED", "false"))
 	ledgerShadow, _ := strconv.ParseBool(getEnv("LEDGER_SHADOW_ENABLED", "false"))
+	walletPaymentFlow, _ := strconv.ParseBool(getEnv("WALLET_PAYMENT_FLOW_ENABLED", "false"))
 	mealSubAutoActivate, _ := strconv.ParseBool(getEnv("MEAL_SUBSCRIPTION_AUTO_ACTIVATE", "false"))
 	groupOrders, _ := strconv.ParseBool(getEnv("GROUP_ORDERS_ENABLED", "false"))
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
@@ -352,6 +359,7 @@ func Load() {
 		WalletCheckoutEnabled:           walletCheckout,
 		MealPlanEscrowEnabled:           mealPlanEscrow,
 		LedgerShadowEnabled:             ledgerShadow,
+		WalletPaymentFlowEnabled:        walletPaymentFlow,
 		MealSubscriptionAutoActivate:    mealSubAutoActivate,
 		GroupOrdersEnabled:              groupOrders,
 		DeliveryDistancePricePerCallUSD: distancePricePerCall,
