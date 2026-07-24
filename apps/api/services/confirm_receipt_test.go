@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
 
@@ -45,4 +46,38 @@ func TestAutoConfirmOrderReceipt_AlreadyConfirmed_NoOp(t *testing.T) {
 	_, acted, err := AutoConfirmOrderReceipt(db, id)
 	require.NoError(t, err)
 	require.False(t, acted, "expected acted=false for an already-confirmed order")
+}
+
+// A reminder is skipped for an order the customer already confirmed (or that
+// otherwise isn't awaiting confirmation): sent=false, no error.
+func TestSendConfirmReceiptReminder_SkipsConfirmed(t *testing.T) {
+	db := setupHoldDB(t)
+	id := uuid.New()
+	now := time.Now()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status, customer_confirmed_at) VALUES (?,?,?,?,?,?)`,
+		id.String(), uuid.NewString(), "delivered", "order_rzp_123", string(models.PayoutHoldReleaseEligible), now,
+	).Error)
+
+	sent, err := SendConfirmReceiptReminder(db, id, 1)
+	require.NoError(t, err)
+	require.False(t, sent, "expected sent=false for a confirmed order")
+}
+
+// An order still awaiting confirmation gets a reminder: sent=true, no error.
+// SendPushNotification reads the package-level database.DB (not the db
+// passed into SendConfirmReceiptReminder), so point it at this harness; the
+// push then fails internally (no users table here) but is best-effort and
+// ignored — the outbox event is staged regardless.
+func TestSendConfirmReceiptReminder_AwaitingSends(t *testing.T) {
+	db := setupHoldDB(t)
+	orig := database.DB
+	database.DB = db
+	t.Cleanup(func() { database.DB = orig })
+
+	id := seedRegularOrder(t, db, models.PayoutHoldAwaitingConfirmation)
+
+	sent, err := SendConfirmReceiptReminder(db, id, 1)
+	require.NoError(t, err)
+	require.True(t, sent, "expected sent=true for an awaiting order")
 }

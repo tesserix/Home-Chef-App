@@ -11,6 +11,7 @@ package services
 // that on its own schedule.
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -75,4 +76,47 @@ func ConfirmReminderIntervalMinutes(db *gorm.DB) int {
 // (default 3).
 func ConfirmReminderMaxCount(db *gorm.DB) int {
 	return confirmReminderSetting(db, "payout.confirm_reminder_max_count", 3)
+}
+
+// SendConfirmReceiptReminder nudges the customer to confirm they received
+// their order. It re-reads the order and skips (sent=false, nil error) once
+// it is no longer awaiting confirmation — already confirmed, disputed, or
+// otherwise moved on. Otherwise it fires a best-effort push (a missing/failed
+// send is not a failure of the reminder itself) and stages a transactional
+// outbox event. Returns (sent, err); sent=true means the reminder was
+// attempted (outbox staged), regardless of whether the push actually reached
+// a device.
+func SendConfirmReceiptReminder(db *gorm.DB, orderID uuid.UUID, attempt int) (bool, error) {
+	var order models.Order
+	if err := db.First(&order, "id = ?", orderID).Error; err != nil {
+		return false, err
+	}
+	if order.CustomerConfirmedAt != nil ||
+		order.PayoutHoldStatus != models.PayoutHoldAwaitingConfirmation {
+		return false, nil
+	}
+
+	chefName := "your chef"
+	var chef models.ChefProfile
+	if err := db.First(&chef, "id = ?", order.ChefID).Error; err == nil && chef.BusinessName != "" {
+		chefName = chef.BusinessName
+	}
+
+	title := "Did your order arrive?"
+	body := fmt.Sprintf("Tap to confirm you received your order from %s.", chefName)
+	data := map[string]string{
+		"order_id": order.ID.String(),
+		"type":     "confirm_receipt",
+	}
+	// Best-effort: a missing/invalid token or send failure is not a failure
+	// of the reminder itself.
+	_ = SendPushNotification(order.CustomerID, title, body, data)
+
+	if err := EnqueueEvent(db, "orders.confirm_reminder", "order.confirm_reminder", order.CustomerID, map[string]any{
+		"order_id": order.ID.String(),
+		"attempt":  attempt,
+	}); err != nil {
+		return true, err
+	}
+	return true, nil
 }
