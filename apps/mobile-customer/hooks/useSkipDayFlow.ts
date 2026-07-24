@@ -1,20 +1,56 @@
 import { Alert } from 'react-native';
 
-import { useSkipMealPlanDay } from './useMealPlans';
+import { useSkipMealPlanDay, useChooseRefundMedium } from './useMealPlans';
 
-// Shared "request to skip a day" flow — the confirm dialog, the skip request, and the
-// success/error copy — so the plan-detail screen and the "My plan" sheet behave identically
-// (one source of truth, no drift). The server enforces the exact guardrail: a day can only be
-// skipped while it is still `confirmed` (no order generated) and at least ~12h before the chef
-// starts cooking it; if it is too late the request is rejected and we explain why.
+// Shared skip + refund-medium flow (v2, docs/meal-plan-refund-flow-design.md), so the plan-detail
+// screen and the "My plan" sheet behave identically. A skip >12h before cooking agrees a full
+// refund immediately, then — per RBI — the CUSTOMER picks the medium (wallet instant vs original
+// 5–7 days); a skip ≤12h goes to the chef to decide the amount first (customer picks the medium
+// later, from the notification). The refund always excludes the platform fee, GST, and delivery.
 export function useSkipDayFlow(planId: string | undefined) {
   const skipDay = useSkipMealPlanDay();
+  const chooseMedium = useChooseRefundMedium();
+
+  // promptMedium: the RBI medium choice for a refund that's agreed and awaiting the customer.
+  // Reusable from a "choose refund" action on any pending_customer day.
+  function promptMedium(dayId: string) {
+    if (!planId) return;
+    Alert.alert(
+      'Where would you like your refund?',
+      'HomeChef Wallet is instant — use it on your next order. Your original payment method takes ~5–7 business days (per RBI).',
+      [
+        {
+          text: 'HomeChef Wallet (instant)',
+          onPress: () =>
+            chooseMedium.mutate(
+              { planId, dayId, medium: 'wallet' },
+              {
+                onSuccess: (r) => Alert.alert('Done', r?.message ?? 'Refunded to your wallet — ready to use.'),
+                onError: () => Alert.alert('Something went wrong', 'Please try again.'),
+              },
+            ),
+        },
+        {
+          text: 'Original method (5–7 days)',
+          onPress: () =>
+            chooseMedium.mutate(
+              { planId, dayId, medium: 'source' },
+              {
+                onSuccess: (r) =>
+                  Alert.alert('On its way', r?.message ?? 'We’ll refund your original payment method in 5–7 business days.'),
+                onError: () => Alert.alert('Something went wrong', 'Please try again.'),
+              },
+            ),
+        },
+      ],
+    );
+  }
 
   function confirmSkip(dayId: string) {
     if (!planId) return;
     Alert.alert(
       'Skip this day?',
-      'More than 12 hours before your meal? You’re refunded to your wallet right away. Closer than that, your chef reviews it (they may have started cooking). The refund is the food only — the platform fee, GST, and delivery aren’t refunded. This can’t be undone.',
+      'More than 12 hours before your meal? You choose your refund right away. Closer than that, your chef reviews it (they may have started cooking). The refund is the food only — the platform fee, GST, and delivery aren’t refunded. This can’t be undone.',
       [
         { text: 'Back', style: 'cancel' },
         {
@@ -24,15 +60,18 @@ export function useSkipDayFlow(planId: string | undefined) {
             skipDay.mutate(
               { planId, dayId },
               {
-                // The server tells us the outcome: an auto-refund (>12h) or a pending chef review
-                // (≤12h). Show its message verbatim so the copy always matches what happened.
                 onSuccess: (res) => {
-                  const r = res as { status?: string; message?: string } | undefined;
-                  Alert.alert(
-                    r?.status === 'refunded' ? 'Refunded to your wallet' : 'Skip requested',
-                    r?.message ??
-                      'Your request is in. If approved, the day’s food (minus the platform fee) goes to your wallet.',
-                  );
+                  const r = res as { status?: string } | undefined;
+                  if (r?.status === 'pending_customer') {
+                    // Agreed (>12h) — the customer now picks the medium.
+                    promptMedium(dayId);
+                  } else {
+                    // Within 12h — the chef decides the amount first.
+                    Alert.alert(
+                      'Skip requested',
+                      'Your chef will review this (they may have started cooking). We’ll notify you when your refund is ready to choose.',
+                    );
+                  }
                 },
                 onError: () =>
                   Alert.alert(
@@ -46,5 +85,5 @@ export function useSkipDayFlow(planId: string | undefined) {
     );
   }
 
-  return { confirmSkip, skipping: skipDay.isPending };
+  return { confirmSkip, promptMedium, skipping: skipDay.isPending || chooseMedium.isPending };
 }

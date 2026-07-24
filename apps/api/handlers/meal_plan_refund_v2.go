@@ -123,7 +123,8 @@ func (h *MealPlanHandler) ChefRefundDecision(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-// adminPendingRefundDay is one day the chef approved (Full/Half), awaiting an admin to pay it.
+// adminPendingRefundDay is one day whose refund the customer routed to their ORIGINAL method,
+// awaiting an admin to execute the gateway reversal (wallet refunds resolve instantly, no admin).
 type adminPendingRefundDay struct {
 	DayID          string  `json:"dayId"`
 	Date           string  `json:"date"`
@@ -136,9 +137,9 @@ type adminPendingRefundDay struct {
 	RefundAmount   float64 `json:"refundAmount"` // fee/GST-excluded amount to pay the customer
 }
 
-// GetAdminPendingRefunds — GET /admin/meal-plan-days/pending-refunds. Days the chef approved
-// (Full/Half) that an admin must pay out to the customer's wallet or original method (the tesserix
-// admin does this via the HMAC gateway). Empty when the v2 flow is off.
+// GetAdminPendingRefunds — GET /admin/meal-plan-days/pending-refunds. Days whose refund the
+// customer routed to their ORIGINAL method (RBI); an admin executes the Razorpay reversal via the
+// HMAC gateway. Wallet refunds never appear here (they resolve instantly). Empty when v2 is off.
 func (h *MealPlanHandler) GetAdminPendingRefunds(c *gin.Context) {
 	if !services.MealPlanRefundFlowV2Active() {
 		c.JSON(http.StatusOK, gin.H{"data": []adminPendingRefundDay{}})

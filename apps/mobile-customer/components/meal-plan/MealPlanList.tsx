@@ -8,10 +8,14 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import { AlertCircle, CalendarDays, ChevronRight } from 'lucide-react-native';
+import { AlertCircle, CalendarDays, ChevronRight, Wallet } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
-import { useMyMealPlans, type MealPlan } from '../../hooks/useMealPlans';
+import {
+  useMyMealPlans,
+  useCustomerRefundChoices,
+  type MealPlan,
+} from '../../hooks/useMealPlans';
 import { formatDateRange, mealPlanStatusMeta } from '../../lib/meal-plan';
 import { useDockClearance } from '../navigation/Dock';
 
@@ -26,6 +30,10 @@ const CTA_RIPPLE = `${customerColors.canvas}33`;
 export function MealPlanList() {
   const { data, isLoading, isError, refetch, isRefetching } = useMyMealPlans();
   const plans = data?.data ?? [];
+  // Refunds the chef has agreed but the customer hasn't yet routed (wallet vs original).
+  // Surfaced as a banner above the list so the RBI medium choice isn't buried in a plan.
+  const { data: refundData } = useCustomerRefundChoices();
+  const pendingRefunds = refundData?.data?.length ?? 0;
   // The floating Dock overlays scene content; pad the list bottom so the last
   // plan clears it. Harmless (~dock height of extra space) on the one consumer
   // shown outside the tabs (the standalone /meal-plans route).
@@ -55,6 +63,9 @@ export function MealPlanList() {
           tintColor={customerColors.coral.DEFAULT}
         />
       }
+      ListHeaderComponent={
+        pendingRefunds > 0 ? <RefundChoiceBanner count={pendingRefunds} /> : null
+      }
       ListEmptyComponent={
         <View style={styles.empty}>
           <View style={styles.emptyIconWrap}>
@@ -67,6 +78,36 @@ export function MealPlanList() {
         </View>
       }
     />
+  );
+}
+
+// A tappable banner nudging the customer to route their agreed refunds (wallet vs original).
+// Coral-tinted so it reads as an action, not an error.
+function RefundChoiceBanner({ count }: { count: number }) {
+  return (
+    <Pressable
+      onPress={() => router.push('/meal-plans/refund-choices' as never)}
+      accessibilityRole="button"
+      accessibilityLabel={`Choose where ${count} refund${count === 1 ? '' : 's'} go`}
+      android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+    >
+      {({ pressed }) => (
+        <View style={[styles.banner, pressed && Platform.OS === 'ios' && styles.pressed]}>
+          <View style={styles.bannerIcon}>
+            <Wallet size={18} color={customerColors.coral.DEFAULT} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bannerTitle}>
+              {count === 1 ? 'A refund is ready' : `${count} refunds are ready`}
+            </Text>
+            <Text style={styles.bannerText}>
+              Choose your HomeChef wallet (instant) or your original payment method.
+            </Text>
+          </View>
+          <ChevronRight size={18} color={customerColors.coral.DEFAULT} />
+        </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -145,6 +186,32 @@ function PlanRow({ plan }: { plan: MealPlan }) {
 
 const styles = StyleSheet.create({
   listContent: { padding: 16, paddingTop: 8, gap: 12 },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: customerColors.coral.tint,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.coral.DEFAULT,
+    padding: 14,
+  },
+  bannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: customerColors.canvas,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerTitle: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
+  bannerText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: customerColors.charcoal.soft,
+    marginTop: 1,
+    lineHeight: 18,
+  },
   card: {
     backgroundColor: customerColors.canvas,
     borderRadius: 12,

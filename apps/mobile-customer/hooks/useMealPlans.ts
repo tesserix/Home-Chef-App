@@ -261,6 +261,53 @@ export function useSkipMealPlanDay() {
   });
 }
 
+// The customer's RBI-required refund medium choice: 'wallet' (instant store credit) or 'source'
+// (reversed to the original card/UPI, ~5–7 business days). v2 refund flow.
+export function useChooseRefundMedium() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { planId: string; dayId: string; medium: 'wallet' | 'source' }) =>
+      api
+        .post<{ instant: boolean; message: string }>(
+          `/v1/meal-plans/${vars.planId}/days/${vars.dayId}/refund-medium`,
+          { medium: vars.medium },
+        )
+        .then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['meal-plans'] });
+      qc.invalidateQueries({ queryKey: ['refund-choices'] });
+      qc.invalidateQueries({ queryKey: ['wallet'] });
+      qc.invalidateQueries({ queryKey: ['wallet-transactions'] });
+    },
+  });
+}
+
+// One refund the chef has agreed (Full/Half) that's now waiting on the customer to pick a medium
+// (wallet vs original). This is the ≤12h path: the chef decided while the customer was away, so
+// the customer picks later from the inbox/notification. Amount already excludes fee, GST, delivery.
+export interface RefundChoiceDay {
+  dayId: string;
+  mealPlanId: string;
+  mealPlanNumber: string;
+  date: string; // YYYY-MM-DD
+  slot: MealSlot;
+  dishName: string;
+  amount: number;
+}
+
+/** The customer's refunds awaiting their medium choice (GET /customer/meal-plan-refund-choices).
+ *  Polled so a chef decision surfaces without a manual refresh; empty when the v2 flow is off. */
+export function useCustomerRefundChoices() {
+  return useQuery<{ data: RefundChoiceDay[] }>({
+    queryKey: ['refund-choices'],
+    queryFn: () =>
+      api
+        .get<{ data: RefundChoiceDay[] }>('/v1/customer/meal-plan-refund-choices')
+        .then((r) => r.data),
+    refetchInterval: 30_000,
+  });
+}
+
 /** Cancel a plan that hasn't started/been served — withdraw a pending request or
  *  cancel a confirmed-but-unstarted plan. Full refund server-side (nothing was
  *  served). Cancelling frees the customer to rebook with the same chef. */
