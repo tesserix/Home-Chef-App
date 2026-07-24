@@ -264,7 +264,7 @@ export default function MealPlanDetailScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <Header />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView style={styles.scrollFill} contentContainerStyle={styles.scroll}>
         <View style={styles.summaryRow}>
           <View>
             <Text style={styles.planNo}>{plan.mealPlanNumber}</Text>
@@ -343,6 +343,7 @@ export default function MealPlanDetailScreen() {
       {needsApproval ? (
         <View style={styles.footer}>
           <Pressable
+            style={styles.footerColNarrow}
             onPress={() => act(false)}
             disabled={finalize.isPending}
             accessibilityRole="button"
@@ -361,6 +362,7 @@ export default function MealPlanDetailScreen() {
             )}
           </Pressable>
           <Pressable
+            style={styles.footerColWide}
             onPress={() => act(true)}
             disabled={finalize.isPending}
             accessibilityRole="button"
@@ -386,6 +388,7 @@ export default function MealPlanDetailScreen() {
       ) : canCancelMealPlan(plan) ? (
         <View style={styles.footer}>
           <Pressable
+            style={styles.footerColNarrow}
             onPress={handleCancel}
             disabled={cancel.isPending}
             accessibilityRole="button"
@@ -447,7 +450,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: customerColors.charcoal.DEFAULT,
   },
-  scroll: { padding: 16, paddingBottom: 24 },
+  // The ScrollView MUST be flex:1 so it's bounded to the space between the header and
+  // the sticky footer. Without it the ScrollView grows to its content and the footer
+  // sibling gets pushed off the bottom edge (the Approve/Reject bar went invisible).
+  scrollFill: { flex: 1 },
+  // Extra bottom padding so the last row clears the absolutely-pinned action bar (~92px).
+  scroll: { padding: 16, paddingBottom: 108 },
+  // Footer button wrappers carry the flex so the Pressables (not just their inner Views)
+  // span the full width — Reject 1 : Approve 2. Without this the Pressables shrink to
+  // their text and cram into the left half.
+  footerColNarrow: { flex: 1 },
+  footerColWide: { flex: 2 },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -532,12 +545,20 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   // Sticky action bar — white, top hairline + shadow[2] (spec §1 floating elements).
+  // Absolutely pinned to the bottom so it renders at its natural height. In the flex
+  // column the footer was being shrunk to ~0px (its 52px buttons collapsed, leaving
+  // only a hairline visible); position:absolute takes it out of flex negotiation.
+  // styles.scroll pads the content so the last row clears this bar.
   footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 16,
+    paddingBottom: 28,
     backgroundColor: customerColors.canvas,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: customerColors.hairline,
