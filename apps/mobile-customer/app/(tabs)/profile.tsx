@@ -1,34 +1,24 @@
-import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { z } from 'zod';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CalendarDays,
   RefreshCw,
   ChevronRight,
   MessageSquare,
   UtensilsCrossed,
-  User,
   ScrollText,
   Wallet,
   Gift,
   Award,
   DatabaseZap,
   KeyRound,
+  Heart,
+  Receipt,
+  Salad,
 } from 'lucide-react-native';
-import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
-import { friendlyErrorMessage } from '../../lib/errors';
+import { useProfile } from '../../hooks/useProfile';
 import {
   TIFFIN_ENABLED,
   CATERING_ENABLED,
@@ -40,55 +30,26 @@ import {
 import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
-import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import { hasPasswordProvider } from '@homechef/mobile-shared/auth';
 import { useDockClearance } from '../../components/navigation/Dock';
-import { ScreenTitle } from '../../components/shared/ScreenTitle';
+import { Alert } from 'react-native';
 
-// Threat model T-02-05-01: Zod validates profile fields before PATCH
-const profileSchema = z.object({
-  firstName: z.string().min(1, 'First name is required').max(50),
-  lastName: z.string().min(1, 'Last name is required').max(50),
-  phone: z
-    .string()
-    .regex(/^\+?[0-9]{7,15}$/, 'Invalid phone number')
-    .optional()
-    .or(z.literal('')),
-});
+// Profile — a HUB, not a form.
+//
+// This screen used to open with a name/phone form and a pair of preference
+// pickers, which pushed every navigational destination below the fold: the
+// things people come here to reach were the hardest things to find. The forms
+// now live at /profile/edit and /profile/preferences, and what remains is
+// identity, three high-traffic tiles, and quiet rows.
 
-type ProfileFormValues = z.infer<typeof profileSchema>;
-
-const CUISINE_OPTIONS = [
-  'North Indian',
-  'South Indian',
-  'Chinese',
-  'Continental',
-  'Italian',
-  'Healthy',
-  'Desserts',
-  'Street Food',
-];
-
-// Android ripple tints — translucent tokens derived from existing colours,
-// never a new literal colour (matches the ChefCard `withAlpha` convention).
 const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
-const CTA_RIPPLE = `${customerColors.canvas}33`;
-const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const DESTRUCTIVE_RIPPLE = `${customerColors.destructive.DEFAULT}14`;
-
-// ─── Section label (iOS grouped style) ───────────────────────────────────────
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <Text className="text-xs font-semibold text-charcoal-soft px-4 pt-5 pb-2">
-      {children}
-    </Text>
+    <Text className="text-xs font-semibold text-charcoal-soft px-4 pt-5 pb-2">{children}</Text>
   );
 }
-
-// ─── Grouped list row ─────────────────────────────────────────────────────────
-// iOS Pressable pattern: visual styles on the inner View; `flex-1` on a plain
-// wrapper if the row must fill the width.
 
 interface NavRowProps {
   icon: React.ReactNode;
@@ -109,16 +70,11 @@ function NavRow({ icon, label, onPress }: NavRowProps) {
         <View
           className={`flex-row items-center px-4 py-3 min-h-[52px] ${pressed ? 'bg-surface-soft' : 'bg-canvas'}`}
         >
-          {/* Left icon circle */}
           <View className="w-9 h-9 rounded-full bg-surface-soft items-center justify-center mr-3">
             {icon}
           </View>
-          {/* Label */}
-          <Text className="flex-1 text-base text-charcoal font-sans">
-            {label}
-          </Text>
-          {/* Chevron */}
-          <ChevronRight size={16} color={customerColors.charcoal.soft} />
+          <Text className="flex-1 text-base text-charcoal font-sans">{label}</Text>
+          <ChevronRight size={18} color={customerColors.charcoal.soft} />
         </View>
       )}
     </Pressable>
@@ -126,122 +82,53 @@ function NavRow({ icon, label, onPress }: NavRowProps) {
 }
 
 function NavRowDivider() {
-  return <View className="h-px bg-hairline ml-[64px]" />;
+  return <View className="h-px bg-hairline ml-16" />;
 }
 
-// ─── Main screen ─────────────────────────────────────────────────────────────
+/** One of the three high-traffic destinations at the top of the hub. */
+function QuickTile({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className="flex-1"
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+    >
+      {({ pressed }) => (
+        <View
+          className="min-h-[88px] items-center justify-center gap-2 rounded-xl"
+          style={{
+            backgroundColor: customerColors.surface.soft,
+            opacity: pressed && Platform.OS === 'ios' ? 0.7 : 1,
+          }}
+        >
+          {icon}
+          <Text className="text-[14px] font-medium" style={{ color: customerColors.charcoal.DEFAULT }}>
+            {label}
+          </Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { data: profile, isLoading } = useProfile();
   const dockClearance = useDockClearance();
-  const { data, isLoading } = useProfile();
-  const updateProfile = useUpdateProfile();
 
-  // Only email/password accounts can change a password. Google/Apple (SSO)
-  // accounts have no password credential, so the "Change password" row is
-  // hidden for them. Read once on mount — providerData is stable for the
-  // session and the user is already authenticated on this screen.
+  // Only email/password accounts can change a password; SSO accounts have no
+  // password credential, so that row is hidden for them.
   const [canChangePassword] = useState(() => hasPasswordProvider());
-
-  // Visible 2px coral focus ring on the inline-edit fields below (R9 / Input
-  // parity) — which field (if any) currently has focus.
-  const [focusedField, setFocusedField] = useState<'firstName' | 'lastName' | 'phone' | null>(null);
-
-  // The API returns the profile FLAT (no { data } envelope), so read it directly.
-  const profile = data;
-
-  const [cuisinePrefs, setCuisinePrefs] = useState<string[]>([]);
-  // Dietary profile (#41) — diet types + allergens to avoid.
-  const [dietPrefs, setDietPrefs] = useState<string[]>([]);
-  const [allergyPrefs, setAllergyPrefs] = useState<string[]>([]);
-
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { errors, isDirty },
-  } = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: { firstName: '', lastName: '', phone: '' },
-  });
-
-  // Populate form when profile loads
-  useEffect(() => {
-    if (profile) {
-      reset({
-        firstName: profile.firstName ?? '',
-        lastName: profile.lastName ?? '',
-        phone: profile.phone ?? '',
-      });
-      setCuisinePrefs(profile.cuisinePreferences ?? []);
-      setDietPrefs(profile.dietaryPreferences ?? []);
-      setAllergyPrefs(profile.foodAllergies ?? []);
-    }
-  }, [profile, reset]);
-
-  // Dirty-tracking for the preference sections so their Save buttons only
-  // appear when something actually changed (mirrors the Personal Info form).
-  const sameSet = (a: string[], b: string[]) =>
-    a.length === b.length && a.every((v) => b.includes(v));
-  const cuisineDirty = profile
-    ? !sameSet(cuisinePrefs, profile.cuisinePreferences ?? [])
-    : false;
-  const dietaryDirty = profile
-    ? !sameSet(dietPrefs, profile.dietaryPreferences ?? []) ||
-      !sameSet(allergyPrefs, profile.foodAllergies ?? [])
-    : false;
-
-  function toggleCuisine(cuisine: string) {
-    setCuisinePrefs((prev) =>
-      prev.includes(cuisine)
-        ? prev.filter((c) => c !== cuisine)
-        : [...prev, cuisine],
-    );
-  }
-
-  const toggleFrom = (set: React.Dispatch<React.SetStateAction<string[]>>) => (value: string) =>
-    set((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
-
-  function saveDietaryProfile() {
-    updateProfile.mutate(
-      { dietaryPreferences: dietPrefs, foodAllergies: allergyPrefs },
-      {
-        onSuccess: () => Alert.alert('Saved', 'Dietary profile updated.'),
-        onError: (error) =>
-          Alert.alert('Error', friendlyErrorMessage(error, 'Could not save dietary profile.')),
-      },
-    );
-  }
-
-  function onSavePersonalInfo(values: ProfileFormValues) {
-    updateProfile.mutate(
-      {
-        firstName: values.firstName,
-        lastName: values.lastName,
-        phone: values.phone ?? undefined,
-      },
-      {
-        onSuccess: () => Alert.alert('Saved', 'Profile updated successfully.'),
-        onError: (error) =>
-          Alert.alert(
-            'Error',
-            friendlyErrorMessage(error, 'Could not update profile. Please try again.'),
-          ),
-      },
-    );
-  }
-
-  function saveCuisinePrefs() {
-    updateProfile.mutate(
-      { cuisinePreferences: cuisinePrefs },
-      {
-        onSuccess: () =>
-          Alert.alert('Saved', 'Cuisine preferences updated.'),
-        onError: (error) =>
-          Alert.alert('Error', friendlyErrorMessage(error, 'Could not save preferences.')),
-      },
-    );
-  }
 
   function handleLogout() {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
@@ -257,7 +144,6 @@ export default function ProfileScreen() {
     ]);
   }
 
-  // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
@@ -268,361 +154,107 @@ export default function ProfileScreen() {
     );
   }
 
-  // Initials for avatar placeholder
+  const fullName = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ');
   const initials =
-    [profile?.firstName?.[0], profile?.lastName?.[0]]
-      .filter(Boolean)
-      .join('')
-      .toUpperCase() || '?';
+    [profile?.firstName?.[0], profile?.lastName?.[0]].filter(Boolean).join('').toUpperCase() || '?';
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
-      <KeyboardAwareScrollView
-        contentContainerStyle={{ paddingBottom: dockClearance }}
-      >
-
-        <ScreenTitle title="Profile" />
-
-        {/* ── Identity block — calm charcoal monogram (accent discipline: the
-            avatar is identity, not a call to action; coral stays reserved for
-            actions/selection). Compact left-aligned row, not a centered hero. ── */}
-        <View className="flex-row items-center gap-4 px-4 pt-2 pb-5 bg-canvas">
-          {/* Inline bg color — `bg-charcoal` isn't in the compiled class set */}
-          <View
-            className="w-16 h-16 rounded-full items-center justify-center"
-            style={{ backgroundColor: customerColors.charcoal.DEFAULT }}
-          >
-            <Text
-              className="text-[22px] font-bold text-canvas font-display"
-              style={{ lineHeight: 28 }}
+      <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: dockClearance }}>
+        {/* ── Identity — the name IS the way into editing, so the form needs no
+            row of its own. The monogram stays charcoal: identity is not a call
+            to action, and coral is reserved for actions and selection. ── */}
+        <Pressable
+          onPress={() => router.push('/profile/edit' as never)}
+          accessibilityRole="button"
+          accessibilityLabel="Edit profile"
+          android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+        >
+          {({ pressed }) => (
+            <View
+              className="flex-row items-center gap-4 px-4 pb-5 pt-4"
+              style={{ opacity: pressed && Platform.OS === 'ios' ? 0.7 : 1 }}
             >
-              {initials}
-            </Text>
-          </View>
-          <View className="flex-1">
-            {(profile?.firstName || profile?.lastName) ? (
-              <Text className="text-lg font-semibold text-charcoal font-display">
-                {[profile?.firstName, profile?.lastName].filter(Boolean).join(' ')}
-              </Text>
-            ) : null}
-            <Text className="text-sm text-charcoal-soft mt-0.5">
-              {profile?.email ?? ''}
-            </Text>
-          </View>
+              <View className="flex-1">
+                <Text
+                  className="text-[30px] font-bold font-display"
+                  style={{ color: customerColors.charcoal.DEFAULT, letterSpacing: -0.5 }}
+                  numberOfLines={1}
+                >
+                  {fullName || 'Your profile'}
+                </Text>
+                <Text className="mt-0.5 text-sm" style={{ color: customerColors.charcoal.soft }}>
+                  {profile?.email ?? ''}
+                </Text>
+              </View>
+              <View
+                className="h-16 w-16 items-center justify-center rounded-full"
+                style={{ backgroundColor: customerColors.charcoal.DEFAULT }}
+              >
+                <Text
+                  className="text-[22px] font-bold font-display"
+                  style={{ color: customerColors.canvas, lineHeight: 28 }}
+                >
+                  {initials}
+                </Text>
+              </View>
+            </View>
+          )}
+        </Pressable>
+
+        {/* ── Three high-traffic destinations ── */}
+        <View className="flex-row gap-3 px-4">
+          <QuickTile
+            icon={<Heart size={22} color={customerColors.charcoal.DEFAULT} />}
+            label="Saved"
+            onPress={() => router.push('/(tabs)/favorites' as never)}
+          />
+          {WALLET_ENABLED ? (
+            <QuickTile
+              icon={<Wallet size={22} color={customerColors.charcoal.DEFAULT} />}
+              label="Wallet"
+              onPress={() => router.push('/wallet')}
+            />
+          ) : null}
+          <QuickTile
+            icon={<Receipt size={22} color={customerColors.charcoal.DEFAULT} />}
+            label="Orders"
+            onPress={() => router.push('/(tabs)/orders' as never)}
+          />
         </View>
 
-        {/* ── Hairline under identity block ── */}
-        <View className="h-px bg-hairline mx-0" />
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            Section — Personal Info
-        ═══════════════════════════════════════════════════════════════════ */}
-        <SectionLabel>Personal Info</SectionLabel>
-
-        <View className="bg-canvas mx-4 rounded-xl overflow-hidden border border-hairline">
-          {/* First Name */}
-          <View className="px-4 pt-3 pb-1">
-            <Text className="text-xs font-semibold text-charcoal-soft mb-1">
-              First Name
-            </Text>
-            <Controller
-              control={control}
-              name="firstName"
-              render={({ field: { onChange, value, onBlur } }) => (
-                <TextInput
-                  className="text-base text-charcoal bg-transparent pb-2"
-                  style={
-                    errors.firstName
-                      ? { borderBottomWidth: 1, borderBottomColor: customerColors.destructive.DEFAULT }
-                      : focusedField === 'firstName'
-                        ? { borderBottomWidth: 2, borderBottomColor: customerColors.coral.DEFAULT }
-                        : { borderBottomWidth: 0 }
-                  }
-                  value={value}
-                  onChangeText={onChange}
-                  onFocus={() => setFocusedField('firstName')}
-                  onBlur={() => {
-                    setFocusedField(null);
-                    onBlur();
-                  }}
-                  placeholder="First name"
-                  placeholderTextColor={customerColors.charcoal.soft}
-                  autoCapitalize="words"
-                  accessibilityLabel="First name"
-                />
-              )}
-            />
-            {errors.firstName ? (
-              <Text className="text-xs text-destructive mb-1">{errors.firstName.message}</Text>
-            ) : null}
-          </View>
-
-          <View className="h-px bg-hairline mx-4" />
-
-          {/* Last Name */}
-          <View className="px-4 pt-3 pb-1">
-            <Text className="text-xs font-semibold text-charcoal-soft mb-1">
-              Last Name
-            </Text>
-            <Controller
-              control={control}
-              name="lastName"
-              render={({ field: { onChange, value, onBlur } }) => (
-                <TextInput
-                  className="text-base text-charcoal bg-transparent pb-2"
-                  style={
-                    errors.lastName
-                      ? { borderBottomWidth: 1, borderBottomColor: customerColors.destructive.DEFAULT }
-                      : focusedField === 'lastName'
-                        ? { borderBottomWidth: 2, borderBottomColor: customerColors.coral.DEFAULT }
-                        : { borderBottomWidth: 0 }
-                  }
-                  value={value}
-                  onChangeText={onChange}
-                  onFocus={() => setFocusedField('lastName')}
-                  onBlur={() => {
-                    setFocusedField(null);
-                    onBlur();
-                  }}
-                  placeholder="Last name"
-                  placeholderTextColor={customerColors.charcoal.soft}
-                  autoCapitalize="words"
-                  accessibilityLabel="Last name"
-                />
-              )}
-            />
-            {errors.lastName ? (
-              <Text className="text-xs text-destructive mb-1">{errors.lastName.message}</Text>
-            ) : null}
-          </View>
-
-          <View className="h-px bg-hairline mx-4" />
-
-          {/* Phone */}
-          <View className="px-4 pt-3 pb-3">
-            <Text className="text-xs font-semibold text-charcoal-soft mb-1">
-              Phone
-            </Text>
-            <Controller
-              control={control}
-              name="phone"
-              render={({ field: { onChange, value, onBlur } }) => (
-                <TextInput
-                  className="text-base text-charcoal bg-transparent pb-2"
-                  style={
-                    errors.phone
-                      ? { borderBottomWidth: 1, borderBottomColor: customerColors.destructive.DEFAULT }
-                      : focusedField === 'phone'
-                        ? { borderBottomWidth: 2, borderBottomColor: customerColors.coral.DEFAULT }
-                        : { borderBottomWidth: 0 }
-                  }
-                  value={value ?? ''}
-                  onChangeText={onChange}
-                  onFocus={() => setFocusedField('phone')}
-                  onBlur={() => {
-                    setFocusedField(null);
-                    onBlur();
-                  }}
-                  placeholder="+91 9876543210"
-                  placeholderTextColor={customerColors.charcoal.soft}
-                  keyboardType="phone-pad"
-                  accessibilityLabel="Phone number"
-                />
-              )}
-            />
-            {errors.phone ? (
-              <Text className="text-xs text-destructive mt-1">{errors.phone.message}</Text>
-            ) : null}
-          </View>
-        </View>
-
-        {/* Save Changes CTA — only shown when form is dirty */}
-        {isDirty ? (
+        {/* ── Referral nudge ── */}
+        {REFERRAL_ENABLED ? (
           <Pressable
-            onPress={() => void handleSubmit(onSavePersonalInfo)()}
-            disabled={updateProfile.isPending}
+            onPress={() => router.push('/referral')}
             accessibilityRole="button"
-            accessibilityLabel="Save changes"
-            android_ripple={{ color: CTA_RIPPLE, borderless: false }}
+            accessibilityLabel="Refer and earn"
+            android_ripple={{ color: ROW_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
               <View
-                className={`mx-4 mt-3 rounded-lg min-h-[52px] items-center justify-center ${
-                  pressed ? 'opacity-90' : ''
-                } bg-coral`}
+                className="mx-4 mt-4 flex-row items-center gap-4 rounded-xl px-4 py-4"
+                style={{
+                  backgroundColor: customerColors.surface.soft,
+                  opacity: pressed && Platform.OS === 'ios' ? 0.7 : 1,
+                }}
               >
-                {updateProfile.isPending ? (
-                  <ActivityIndicator size="small" color={customerColors.canvas} />
-                ) : (
-                  <Text className="text-canvas font-semibold text-base">
-                    Save Changes
+                <View className="flex-1">
+                  <Text
+                    className="text-[17px] font-semibold"
+                    style={{ color: customerColors.charcoal.DEFAULT }}
+                  >
+                    Refer &amp; earn
                   </Text>
-                )}
+                  <Text className="mt-0.5 text-sm" style={{ color: customerColors.charcoal.soft }}>
+                    Share Fe3dr with a friend and you both get credit
+                  </Text>
+                </View>
+                <Gift size={28} color={customerColors.coral.DEFAULT} />
               </View>
             )}
           </Pressable>
         ) : null}
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            Section — Food Preferences
-        ═══════════════════════════════════════════════════════════════════ */}
-        <SectionLabel>Food Preferences</SectionLabel>
-
-        <View className="px-4">
-          <View className="flex-row flex-wrap gap-2 mb-3">
-            {CUISINE_OPTIONS.map((cuisine) => {
-              const isSelected = cuisinePrefs.includes(cuisine);
-              return (
-                /* iOS Pressable pattern: visual styles on inner View */
-                <Pressable
-                  key={cuisine}
-                  onPress={() => toggleCuisine(cuisine)}
-                  accessibilityRole="checkbox"
-                  accessibilityLabel={cuisine}
-                  accessibilityState={{ checked: isSelected }}
-                  android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
-                >
-                  {({ pressed }) => (
-                    <View
-                      className={`px-4 py-2 rounded-full ${
-                        isSelected ? 'bg-coral-tint' : 'bg-surface-soft'
-                      }`}
-                      style={pressed && Platform.OS === 'ios' ? { opacity: 0.7 } : undefined}
-                    >
-                      <Text
-                        className={`text-sm font-medium ${
-                          isSelected ? 'text-coral font-semibold' : 'text-charcoal-soft'
-                        }`}
-                      >
-                        {cuisine}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Save Preferences CTA — only when selections changed (mirrors the
-              Personal Info dirty-gated pattern; no permanent giant coral block) */}
-          {cuisineDirty && (
-          <Pressable
-            onPress={saveCuisinePrefs}
-            disabled={updateProfile.isPending}
-            accessibilityRole="button"
-            accessibilityLabel="Save preferences"
-            android_ripple={{ color: CTA_RIPPLE, borderless: false }}
-          >
-            {({ pressed }) => (
-              <View
-                className={`rounded-lg min-h-[52px] items-center justify-center bg-coral ${pressed ? 'opacity-90' : ''}`}
-              >
-                <Text className="text-canvas font-semibold text-base">
-                  Save Preferences
-                </Text>
-              </View>
-            )}
-          </Pressable>
-          )}
-        </View>
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            Section — Dietary Profile (#41)
-        ═══════════════════════════════════════════════════════════════════ */}
-        <SectionLabel>Dietary Profile</SectionLabel>
-
-        <View className="px-4">
-          <Text className="text-xs text-charcoal-soft mb-2">
-            We'll flag dishes that don't match your diet or contain allergens you avoid.
-          </Text>
-
-          <Text className="text-sm font-semibold text-charcoal mb-2">Diet</Text>
-          <View className="flex-row flex-wrap gap-2 mb-4">
-            {DIET_OPTIONS.map((opt) => {
-              const isSelected = dietPrefs.includes(opt.value);
-              return (
-                <Pressable
-                  key={opt.value}
-                  onPress={() => toggleFrom(setDietPrefs)(opt.value)}
-                  accessibilityRole="checkbox"
-                  accessibilityLabel={opt.label}
-                  accessibilityState={{ checked: isSelected }}
-                  android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
-                >
-                  {({ pressed }) => (
-                    <View
-                      className={`px-4 py-2 rounded-full ${
-                        isSelected ? 'bg-coral-tint' : 'bg-surface-soft'
-                      }`}
-                      style={pressed && Platform.OS === 'ios' ? { opacity: 0.7 } : undefined}
-                    >
-                      <Text
-                        className={`text-sm font-medium ${
-                          isSelected ? 'text-coral font-semibold' : 'text-charcoal-soft'
-                        }`}
-                      >
-                        {opt.label}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Text className="text-sm font-semibold text-charcoal mb-2">Allergies to avoid</Text>
-          <View className="flex-row flex-wrap gap-2 mb-3">
-            {ALLERGEN_OPTIONS.map((opt) => {
-              const isSelected = allergyPrefs.includes(opt.value);
-              return (
-                <Pressable
-                  key={opt.value}
-                  onPress={() => toggleFrom(setAllergyPrefs)(opt.value)}
-                  accessibilityRole="checkbox"
-                  accessibilityLabel={opt.label}
-                  accessibilityState={{ checked: isSelected }}
-                  android_ripple={{ color: DESTRUCTIVE_RIPPLE, borderless: false }}
-                >
-                  {({ pressed }) => (
-                    <View
-                      className={`px-4 py-2 rounded-full ${
-                        isSelected ? 'bg-destructive-tint' : 'bg-surface-soft'
-                      }`}
-                      style={pressed && Platform.OS === 'ios' ? { opacity: 0.7 } : undefined}
-                    >
-                      <Text
-                        className={`text-sm font-medium ${
-                          isSelected ? 'text-destructive font-semibold' : 'text-charcoal-soft'
-                        }`}
-                      >
-                        {opt.label}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Dirty-gated like the other saves — appears only when changed */}
-          {dietaryDirty && (
-          <Pressable
-            onPress={saveDietaryProfile}
-            disabled={updateProfile.isPending}
-            accessibilityRole="button"
-            accessibilityLabel="Save dietary profile"
-            android_ripple={{ color: CTA_RIPPLE, borderless: false }}
-          >
-            {({ pressed }) => (
-              <View
-                className={`rounded-lg min-h-[52px] items-center justify-center bg-coral ${pressed ? 'opacity-90' : ''}`}
-              >
-                <Text className="text-canvas font-semibold text-base">Save Dietary Profile</Text>
-              </View>
-            )}
-          </Pressable>
-          )}
-        </View>
 
         {/* ═══════════════════════════════════════════════════════════════════
             Section — More (iOS grouped nav rows)
@@ -633,20 +265,19 @@ export default function ProfileScreen() {
             lib/features.ts (+ any backend flag) to bring a row back. */}
         {(() => {
           const moreRows = [
-            WALLET_ENABLED && {
-              icon: <Wallet size={18} color={customerColors.charcoal.soft} />,
-              label: 'Wallet',
-              route: '/wallet',
+            // Food preferences and the dietary profile moved off this screen so
+            // it could be a hub; this row is how they stay reachable.
+            {
+              icon: <Salad size={18} color={customerColors.charcoal.soft} />,
+              label: 'Food preferences',
+              route: '/profile/preferences',
             },
+            // Wallet is a tile above and Refer & Earn is the nudge card, so
+            // neither repeats here.
             REWARDS_ENABLED && {
               icon: <Award size={18} color={customerColors.charcoal.soft} />,
               label: 'Rewards',
               route: '/loyalty',
-            },
-            REFERRAL_ENABLED && {
-              icon: <Gift size={18} color={customerColors.charcoal.soft} />,
-              label: 'Refer & Earn',
-              route: '/referral',
             },
             SOCIAL_ENABLED && {
               icon: <MessageSquare size={18} color={customerColors.charcoal.soft} />,
