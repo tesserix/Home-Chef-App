@@ -1,23 +1,23 @@
-name: HomeChef Web - CI Build
+name: HomeChef Vendor Portal - CI Build
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Build validation for apps/web. Runs on PRs that touch the app so it cannot
-# rot again (it accumulated four TS errors while nothing built it).
+# Build validation for apps/vendor-portal. Runs on PRs that touch the app so
+# regressions are caught before merge, mirroring homechef-web-build.yml.
 #
-# Deploy stays manual: `inputs.deploy` gates the image push, and the
-# homechef-web slot currently serves the web-landing image, so an accidental
-# deploy would overwrite the live fe3dr.com landing. Resolve that slot conflict
-# before wiring push-to-main deploys.
+# Deploy stays manual: `inputs.deploy` gates the image push. The
+# homechef-vendor-portal image has its own ksvc slot (no shared-slot conflict
+# like homechef-web/web-landing), but push-to-main deploys are still opt-in
+# until this workflow has run on a few PRs.
 # ──────────────────────────────────────────────────────────────────────────────
 
 on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: "Push the image so Kargo deploys it to the homechef-web slot. WARNING: this OVERWRITES the live web-landing serving fe3dr.com. Leave false to only build-validate apps/web (no push, no deploy)."
+        description: "Push the image so Kargo deploys it to the homechef-vendor-portal slot. Leave false to only build-validate apps/vendor-portal (no push, no deploy)."
         type: boolean
         default: false
-  # Re-enable when the homechef-web slot conflict is resolved:
+  # Re-enable once push-to-main deploys are ready for vendor-portal:
   # push:
   #   branches:
   #     - main
@@ -26,17 +26,17 @@ on:
   #     - 'bugfix/**'
   #     - 'hotfix/**'
   #   paths:
-  #     - 'apps/web/**'
+  #     - 'apps/vendor-portal/**'
   #     - 'packages/**'
   #     - 'pnpm-lock.yaml'
-  #     - '.github/workflows/homechef-web-build.yml'
+  #     - '.github/workflows/homechef-vendor-portal-build.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'apps/web/**'
+      - 'apps/vendor-portal/**'
       - 'packages/**'
       - 'pnpm-lock.yaml'
-      - '.github/workflows/homechef-web-build.yml'
+      - '.github/workflows/homechef-vendor-portal-build.yml'
 
 permissions:
   contents: read
@@ -47,11 +47,11 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   REGISTRY: ghcr.io
-  IMAGE_NAME: tesserix/home-chef-app/homechef-web
+  IMAGE_NAME: tesserix/home-chef-app/homechef-vendor-portal
 
 jobs:
   build:
-    name: Build and Push HomeChef Web
+    name: Build and Push HomeChef Vendor Portal
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
 
     steps:
@@ -83,8 +83,8 @@ jobs:
             type=sha,prefix={{branch}}-
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.title=homechef-web
-            org.opencontainers.image.description=HomeChef Web Application
+            org.opencontainers.image.title=homechef-vendor-portal
+            org.opencontainers.image.description=HomeChef Vendor Portal Application
 
       - name: Compute cache ref
         id: cache
@@ -95,11 +95,10 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: apps/web/Dockerfile
+          file: apps/vendor-portal/Dockerfile
           platforms: linux/amd64
-          # Guard against clobbering the live web-landing on the shared
-          # homechef-web slot: only push (→ Kargo deploys) on an explicit
-          # deploy=true dispatch. The default build-validates apps/web only.
+          # Push (→ Kargo deploys) only on an explicit deploy=true dispatch.
+          # The default build-validates apps/vendor-portal only.
           push: ${{ inputs.deploy == true }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -109,7 +108,7 @@ jobs:
             VITE_GIP_API_KEY=${{ secrets.GIP_WEB_API_KEY }}
             VITE_GIP_PROJECT_ID=tesseracthub-480811
             VITE_GIP_AUTH_DOMAIN=tesseracthub-480811.firebaseapp.com
-            VITE_GIP_TENANT_ID=HomeChef-Customer-rqg8a
+            VITE_GIP_TENANT_ID=HomeChef-Business-8s8ql
             VITE_GOOGLE_CLIENT_ID=849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com
           secrets: |
             npm_token=${{ secrets.NPM_TOKEN }}
@@ -149,7 +148,7 @@ jobs:
         run: |
           echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Application:** HomeChef Web" >> $GITHUB_STEP_SUMMARY
+          echo "**Application:** HomeChef Vendor Portal" >> $GITHUB_STEP_SUMMARY
           echo "**Architecture:** AMD64" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
@@ -204,15 +203,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run linter
-        working-directory: apps/web
+        working-directory: apps/vendor-portal
         run: pnpm lint
 
       - name: Run type check
-        working-directory: apps/web
+        working-directory: apps/vendor-portal
         run: pnpm exec tsc --noEmit
 
       - name: Run tests
-        working-directory: apps/web
+        working-directory: apps/vendor-portal
         run: pnpm test -- --passWithNoTests
         continue-on-error: true
 
@@ -221,5 +220,5 @@ jobs:
         run: |
           echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Application:** HomeChef Web" >> $GITHUB_STEP_SUMMARY
+          echo "**Application:** HomeChef Vendor Portal" >> $GITHUB_STEP_SUMMARY
           echo "**Status:** Tests completed" >> $GITHUB_STEP_SUMMARY
