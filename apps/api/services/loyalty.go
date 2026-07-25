@@ -199,21 +199,18 @@ func ListLoyaltyTxns(db *gorm.DB, userID uuid.UUID, limit, offset int) ([]models
 	return txns, total, nil
 }
 
-// applyLoyaltyTxnInTx is the single mutate path for the points ledger, run
-// inside a caller-provided transaction so it can be composed with a wallet
-// credit (redeem) atomically. It locks the account row (FOR UPDATE on Postgres),
-// writes the immutable ledger entry, and updates the cached balance + lifetime +
-// tier. The idempotency check (plus the unique index) makes a retried event a
-// no-op; the returned bool reports whether a NEW entry was written (false on a
-// dedup hit) so callers can avoid double-notifying.
-func applyLoyaltyTxnInTx(tx *gorm.DB, userID uuid.UUID, points float64, txnType models.LoyaltyTxnType, source models.LoyaltyTxnSource, orderID *uuid.UUID, reason, idempotencyKey string, createdBy *uuid.UUID, cfg LoyaltyConfig) (*models.LoyaltyTransaction, bool, error) {
+// applyLoyaltyLedgerTxn writes the immutable ledger entry and updates the cached
+// balance + lifetime + tier for a credit or debit, under a row lock, idempotent on
+// idempotencyKey. It does NOT touch earn-lot bookkeeping — the caller owns that
+// (createEarnBatch on a credit; consumeBatchesFIFO or a targeted single-lot debit on a
+// debit). Returns the entry and whether a NEW entry was written (false on a dedup hit).
+func applyLoyaltyLedgerTxn(tx *gorm.DB, userID uuid.UUID, points float64, txnType models.LoyaltyTxnType, source models.LoyaltyTxnSource, orderID *uuid.UUID, reason, idempotencyKey string, createdBy *uuid.UUID, cfg LoyaltyConfig) (*models.LoyaltyTransaction, bool, error) {
 	if points <= 0 {
 		return nil, false, fmt.Errorf("loyalty points must be positive, got %v", points)
 	}
 	if idempotencyKey == "" {
 		idempotencyKey = "ltx:" + uuid.NewString()
 	}
-
 	// Idempotency: if this logical event already landed, return it untouched.
 	var existing models.LoyaltyTransaction
 	err := tx.Where("idempotency_key = ?", idempotencyKey).First(&existing).Error
@@ -223,7 +220,6 @@ func applyLoyaltyTxnInTx(tx *gorm.DB, userID uuid.UUID, points float64, txnType 
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, false, err
 	}
-
 	acct, err := GetOrCreateLoyaltyAccount(tx, userID)
 	if err != nil {
 		return nil, false, err
@@ -236,7 +232,6 @@ func applyLoyaltyTxnInTx(tx *gorm.DB, userID uuid.UUID, points float64, txnType 
 	if err := reread.First(acct, "id = ?", acct.ID).Error; err != nil {
 		return nil, false, err
 	}
-
 	newBalance := acct.Balance
 	newLifetime := acct.LifetimePoints
 	if txnType == models.LoyaltyCredit {
@@ -249,7 +244,6 @@ func applyLoyaltyTxnInTx(tx *gorm.DB, userID uuid.UUID, points float64, txnType 
 		newBalance -= points
 	}
 	newTier := ComputeTier(newLifetime, cfg)
-
 	entry := &models.LoyaltyTransaction{
 		ID:               uuid.New(),
 		LoyaltyAccountID: acct.ID,
@@ -273,10 +267,22 @@ func applyLoyaltyTxnInTx(tx *gorm.DB, userID uuid.UUID, points float64, txnType 
 	}).Error; err != nil {
 		return nil, false, err
 	}
+	return entry, true, nil
+}
 
-	// Dated-lot bookkeeping: a credit opens a lot; a debit FIFO-consumes lots.
+// applyLoyaltyTxnInTx is the mutate path for the points ledger WITH dated-lot
+// bookkeeping: a credit opens a lot; a debit FIFO-consumes the soonest-expiring lots.
+// Reversal/expiry that must target a SPECIFIC lot call applyLoyaltyLedgerTxn directly and
+// do their own lot decrement.
+func applyLoyaltyTxnInTx(tx *gorm.DB, userID uuid.UUID, points float64, txnType models.LoyaltyTxnType, source models.LoyaltyTxnSource, orderID *uuid.UUID, reason, idempotencyKey string, createdBy *uuid.UUID, cfg LoyaltyConfig) (*models.LoyaltyTransaction, bool, error) {
+	entry, created, err := applyLoyaltyLedgerTxn(tx, userID, points, txnType, source, orderID, reason, idempotencyKey, createdBy, cfg)
+	if err != nil || !created {
+		return entry, created, err
+	}
+	// Dated-lot bookkeeping. NOTE: the batch key derives from entry.IdempotencyKey (the
+	// POST-fallback value), NOT the raw parameter — so it stays consistent with the ledger row.
 	if txnType == models.LoyaltyCredit {
-		if err := createEarnBatch(tx, userID, points, source, orderID, cfg.ExpiryDays, "batch:"+idempotencyKey); err != nil {
+		if err := createEarnBatch(tx, userID, points, source, orderID, cfg.ExpiryDays, "batch:"+entry.IdempotencyKey); err != nil {
 			return nil, false, err
 		}
 	} else {
@@ -284,7 +290,7 @@ func applyLoyaltyTxnInTx(tx *gorm.DB, userID uuid.UUID, points float64, txnType 
 			return nil, false, err
 		}
 	}
-	return entry, true, nil
+	return entry, created, nil
 }
 
 // EarnLoyalty credits points (delivered order, streak bonus, admin grant).

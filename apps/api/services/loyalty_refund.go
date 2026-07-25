@@ -6,15 +6,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/homechef/api/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-// ReverseOrderLoyalty claws back the points earned on an order when it is refunded — but only
-// the portion still sitting unredeemed in that order's earn lot (if the customer already
-// redeemed them to their wallet, the wallet refund handles that side, so we don't over-debit).
-// Idempotent per order. Runs inside the caller's refund transaction.
+// ReverseOrderLoyalty claws back the points earned on an order when it is refunded — but
+// only the portion still sitting unredeemed in THAT order's earn lot. It debits the account
+// and zeroes the specific lot directly (never routing through the account-wide FIFO
+// consumer), so a reversal can never drain an unrelated, un-refunded order's lot. Idempotent
+// per order. Runs inside the caller's refund transaction.
 func ReverseOrderLoyalty(tx *gorm.DB, orderID uuid.UUID) error {
+	q := tx.Where("order_id = ? AND source = ?", orderID, models.LoyaltySourceOrder)
+	if tx.Dialector.Name() == "postgres" {
+		q = q.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
 	var lot models.LoyaltyEarnBatch
-	err := tx.Where("order_id = ? AND source = ?", orderID, models.LoyaltySourceOrder).First(&lot).Error
+	err := q.First(&lot).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil // nothing earned on this order
 	}
@@ -22,12 +28,22 @@ func ReverseOrderLoyalty(tx *gorm.DB, orderID uuid.UUID) error {
 		return err
 	}
 	if lot.PointsRemaining <= 0 {
-		return nil // already spent or expired
+		return nil // already redeemed or expired — nothing left to claw back
 	}
+	toReverse := lot.PointsRemaining
 	cfg := GetLoyaltyConfig(tx)
 	oid := orderID
-	_, _, err = applyLoyaltyTxnInTx(tx, lot.UserID, lot.PointsRemaining, models.LoyaltyDebit,
+	_, created, err := applyLoyaltyLedgerTxn(tx, lot.UserID, toReverse, models.LoyaltyDebit,
 		models.LoyaltyTxnSource("refund_reversal"), &oid, "Order refunded — earned points reversed",
 		"loyalty:order-refund:"+orderID.String(), nil, cfg)
-	return err
+	if err != nil {
+		return err
+	}
+	if !created {
+		return nil // already reversed (idempotent)
+	}
+	// Zero exactly THIS order's lot (targeted, not FIFO): account balance and this lot both
+	// drop by toReverse, and no other order's lot is touched.
+	return tx.Model(&models.LoyaltyEarnBatch{}).Where("id = ?", lot.ID).
+		Update("points_remaining", 0).Error
 }
