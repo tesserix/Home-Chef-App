@@ -171,6 +171,7 @@ func SetupRouter() *gin.Engine {
 	dietaryHandler := handlers.NewDietaryHandler()
 	currencyHandler := handlers.NewCurrencyHandler()
 	adminHandler := handlers.NewAdminHandler()
+	testModeHandler := handlers.NewTestModeHandler()
 	approvalHandler := handlers.NewApprovalHandler()
 	notificationHandler := handlers.NewNotificationHandler()
 	walletHandler := handlers.NewWalletHandler()
@@ -975,6 +976,15 @@ func SetupRouter() *gin.Engine {
 			// Chef management
 			admin.GET("/chefs", adminHandler.GetChefs)
 			admin.GET("/chefs/fssai-locked", adminHandler.GetFSSAILockedChefs)
+
+			// Test-chef mode: flip a kitchen between live and sandbox, browse
+			// and purge its debugging sessions, and manage who may see sandbox
+			// kitchens at all.
+			admin.PATCH("/chefs/:id/mode", testModeHandler.SetChefMode)
+			admin.GET("/chefs/:id/test-sessions", testModeHandler.GetChefTestSessions)
+			admin.DELETE("/test-sessions/:id", testModeHandler.PurgeTestSession)
+			admin.GET("/test-mode-policy", testModeHandler.GetTestModePolicy)
+			admin.PUT("/test-mode-policy", testModeHandler.UpdateTestModePolicy)
 
 			// Customer wallet — admin view + audited adjustment (#33)
 			admin.GET("/wallet/:userId", adminHandler.GetCustomerWallet)

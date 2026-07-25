@@ -123,6 +123,14 @@ func fetchRazorpayFromSM(ctx context.Context, mode string) (*RazorpayClient, err
 	}, nil
 }
 
+// RazorpaySecretNames is the exported form used by the admin write path, so the
+// slot the admin saves into and the slot the app reads from can never drift
+// apart — a drift of exactly that kind once made admin-entered keys silently
+// invisible to the app.
+func RazorpaySecretNames(mode string) (keyID, keySecret, webhookSecret string) {
+	return razorpaySecretNames(mode)
+}
+
 // razorpaySecretNames returns the three Secret Manager keys backing a mode's
 // credential slot. Separate secrets per slot — rather than one value with a
 // mode suffix — mean rotating or clearing one slot cannot disturb the other,

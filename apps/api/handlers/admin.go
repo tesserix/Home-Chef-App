@@ -582,6 +582,15 @@ func (h *AdminHandler) GetChefs(c *gin.Context) {
 
 	query := db.Model(&models.ChefProfile{}).Preload("User")
 
+	// Admins see every kitchen regardless of mode — they are the people who need
+	// to find a sandbox kitchen — but can filter to one world when they want it.
+	// Deliberately NOT tied to the console's global toggle: the chef list is how
+	// you locate a kitchen in order to flip it, so hiding the other side would
+	// make the flip action unreachable.
+	if mode := c.Query("mode"); mode != "" {
+		query = query.Where("mode = ?", models.NormalizeMode(mode))
+	}
+
 	if search != "" {
 		query = query.Where("business_name ILIKE ? OR cuisines::text ILIKE ?",
 			"%"+search+"%", "%"+search+"%")
@@ -1015,17 +1024,22 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 // Manager at runtime) — there's no hidden env/config path that can show stale
 // or placeholder values here.
 func (h *AdminHandler) GetPaymentGatewayStatus(c *gin.Context) {
-	client := services.GetRazorpay()
+	// Which credential slot the admin is asking about. Absent means live, so the
+	// pre-existing admin UI keeps working through the deploy window.
+	slot := models.NormalizeMode(c.Query("mode"))
+	client := services.GetRazorpayFor(slot)
 
 	webhookURL := "https://api.fe3dr.com/webhooks/razorpay"
 
 	if client == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"configured":       false,
+			"slot":             slot,
 			"mode":             "unknown",
 			"webhookUrl":       webhookURL,
 			"webhookSecretSet": false,
 			"keyPrefix":        "",
+			"slotWarning":      "",
 			"error":            "Razorpay is not configured. Enter your keys to set up the gateway.",
 		})
 		return
@@ -1055,12 +1069,32 @@ func (h *AdminHandler) GetPaymentGatewayStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"configured":       configured,
+		"slot":             slot,
 		"mode":             mode,
 		"webhookUrl":       webhookURL,
 		"webhookSecretSet": client.HasWebhookSecret(),
 		"keyPrefix":        keyPrefix,
+		"slotWarning":      razorpaySlotWarning(slot, keyID),
 		"error":            healthErr,
 	})
+}
+
+// razorpaySlotWarning flags a credential slot holding a key of the wrong kind.
+//
+// Deliberately a WARNING and not a hard error: the live slot legitimately holds
+// a test key until a real live key is issued, and refusing to save that would
+// make the interim state unreachable. The banner stays up until it's fixed.
+func razorpaySlotWarning(slot, keyID string) string {
+	switch {
+	case keyID == "":
+		return ""
+	case !models.IsTestMode(slot) && strings.HasPrefix(keyID, "rzp_test_"):
+		return "The Live slot is holding a TEST key — no real payment will be captured until a live key is entered."
+	case models.IsTestMode(slot) && strings.HasPrefix(keyID, "rzp_live_"):
+		return "The Test slot is holding a LIVE key — sandbox orders would charge real cards. Replace it before using test mode."
+	default:
+		return ""
+	}
 }
 
 // UpdatePaymentGatewayKeys writes the Razorpay credentials to GCP Secret
@@ -1075,6 +1109,8 @@ func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 		KeyID         string `json:"keyId"`
 		KeySecret     string `json:"keySecret"`
 		WebhookSecret string `json:"webhookSecret"`
+		// Mode picks the credential slot: "live" (default) or "test".
+		Mode string `json:"mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -1098,10 +1134,12 @@ func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 	// Persist each provided value to GCP Secret Manager. StorePlatformSecret
 	// creates the secret on first call (idempotent) and appends a new version
 	// on subsequent calls, so the most recent version is always "latest".
+	slot := models.NormalizeMode(req.Mode)
+	idName, secretName, webhookName := services.RazorpaySecretNames(slot)
 	secretMap := map[string]string{
-		services.SecretRazorpayKeyID:         req.KeyID,
-		services.SecretRazorpayKeySecret:     req.KeySecret,
-		services.SecretRazorpayWebhookSecret: req.WebhookSecret,
+		idName:      req.KeyID,
+		secretName:  req.KeySecret,
+		webhookName: req.WebhookSecret,
 	}
 	for secretName, value := range secretMap {
 		if value == "" {
@@ -1113,8 +1151,9 @@ func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 		}
 	}
 
-	// Drop the cached client so the next GetRazorpay() rereads from SM.
-	services.InvalidateRazorpay()
+	// Drop only THIS slot's cached client, so saving test keys can't knock a
+	// healthy live gateway offline.
+	services.InvalidateRazorpayFor(slot)
 	services.LogAudit(c, "payment.keys.update", "payment_gateway", "razorpay", nil, map[string]any{
 		"updatedFields": []string{
 			boolField("keyId", req.KeyID != ""),
@@ -1125,23 +1164,28 @@ func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 
 	// Validate by actually calling Razorpay. If the keys are wrong, surface
 	// the exact error to the UI so the admin can fix it immediately.
-	client := services.GetRazorpay()
+	client := services.GetRazorpayFor(slot)
 	if client == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Saved to Secret Manager, but client failed to initialize"})
 		return
 	}
+	warning := razorpaySlotWarning(slot, client.GetKeyID())
 	if err := client.HealthCheck(); err != nil {
 		c.JSON(http.StatusOK, gin.H{
-			"message":   "Keys saved, but validation failed",
-			"testError": err.Error(),
-			"verified":  false,
+			"message":     "Keys saved, but validation failed",
+			"testError":   err.Error(),
+			"slot":        slot,
+			"slotWarning": warning,
+			"verified":    false,
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Payment gateway keys saved and verified",
-		"verified": true,
+		"message":     "Payment gateway keys saved and verified",
+		"slot":        slot,
+		"slotWarning": warning,
+		"verified":    true,
 	})
 }
 

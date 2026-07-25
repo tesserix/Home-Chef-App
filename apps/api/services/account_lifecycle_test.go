@@ -66,7 +66,7 @@ func setupAccountDB(t *testing.T) *gorm.DB {
 		partner_id TEXT, type TEXT, file_name TEXT, file_path TEXT, bucket TEXT, status TEXT,
 		created_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE driver_referrals (id TEXT PRIMARY KEY, referrer_id TEXT)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE approval_requests (id TEXT PRIMARY KEY, type TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE approval_requests (approved_mode text DEFAULT 'live', id TEXT PRIMARY KEY, type TEXT,
 		status TEXT, priority TEXT, chef_id TEXT, partner_id TEXT, submitted_by_id TEXT,
 		reviewed_by_id TEXT, entity_type TEXT, entity_id TEXT, title TEXT, description TEXT,
 		submitted_data TEXT, admin_notes TEXT, reviewed_at DATETIME, expires_at DATETIME,

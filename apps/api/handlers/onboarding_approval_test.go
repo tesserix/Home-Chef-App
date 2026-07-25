@@ -49,7 +49,7 @@ func setupApprovalDB(t *testing.T) *gorm.DB {
 		id TEXT PRIMARY KEY, chef_id TEXT, type TEXT, status TEXT, expiry_date DATETIME,
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE approval_requests (
+	require.NoError(t, db.Exec(`CREATE TABLE approval_requests (approved_mode text DEFAULT 'live', 
 		id TEXT PRIMARY KEY, type TEXT, status TEXT DEFAULT 'pending',
 		chef_id TEXT, partner_id TEXT, submitted_by_id TEXT, reviewed_by_id TEXT,
 		entity_type TEXT DEFAULT '', entity_id TEXT, title TEXT DEFAULT '',

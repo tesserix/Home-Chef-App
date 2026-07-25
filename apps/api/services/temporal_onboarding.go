@@ -41,5 +41,5 @@ func StartOnboardingActivation(approvalID uuid.UUID) {
 // ActivateChefOnboardingFromActivity is the activity transport — wired onto
 // workflows.ActivateChefFunc by the worker.
 func ActivateChefOnboardingFromActivity(_ context.Context, approvalID uuid.UUID) error {
-	return ActivateChefOnboarding(database.DB, approvalID)
+	return ActivateChefOnboarding(database.DB, approvalID, "")
 }
