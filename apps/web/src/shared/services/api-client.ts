@@ -48,6 +48,29 @@ function dispatchAuthExpired(endpoint: string): void {
   window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT, { detail: { endpoint } }));
 }
 
+/**
+ * Custom event dispatched when the API returns 403 with a body `status` of
+ * `account_deactivated` or `account_deleted` — middleware/bff_auth.go's
+ * account-lifecycle gate, which rejects every path except /me/reactivate for
+ * a paused account. DataPrivacyPage listens for this so a paused user who
+ * reloads (or is deep on some other page) lands somewhere that explains why
+ * and offers reactivation, instead of a silent, opaque 403.
+ */
+export const ACCOUNT_BLOCKED_EVENT = 'auth:account-blocked';
+
+export type AccountBlockedStatus = 'account_deactivated' | 'account_deleted';
+
+function accountBlockedStatus(body: unknown): AccountBlockedStatus | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const status = (body as { status?: unknown }).status;
+  return status === 'account_deactivated' || status === 'account_deleted' ? status : null;
+}
+
+function dispatchAccountBlocked(status: AccountBlockedStatus): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(ACCOUNT_BLOCKED_EVENT, { detail: { status } }));
+}
+
 class ApiClient {
   private baseUrl: string;
   private bffProxyBase: string;
@@ -142,6 +165,13 @@ class ApiClient {
       }));
       if (response.status === 401) {
         dispatchAuthExpired(endpoint);
+      } else if (response.status === 403) {
+        // Read the body's own `status` tag before it gets clobbered below —
+        // `status` on the thrown error is documented (see the comment under
+        // this block) to mean the HTTP status code, so it can't also carry
+        // the account-lifecycle tag.
+        const blocked = accountBlockedStatus(body);
+        if (blocked) dispatchAccountBlocked(blocked);
       }
       // Attach HTTP status so callers can differentiate 401/403/409 etc.
       throw Object.assign(body, { status: response.status });

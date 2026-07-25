@@ -46,5 +46,17 @@ export default defineConfig({
     // The SPA has no tests outside src/; keep the glob tight so vitest does
     // not try to run anything under dist/ or node_modules/.
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    server: {
+      deps: {
+        // @tesserix/web's dist/index.mjs re-exports subpaths without a file
+        // extension (e.g. "./components/accordion"), which is valid for
+        // Vite's browser-style resolution but not for Node's strict ESM
+        // loader that vitest otherwise uses for externalized deps — any
+        // component test that renders shared/components/ui/Button.tsx (which
+        // imports the DS Button from the package root) fails to even import.
+        // Inlining routes it through Vite's own transform instead.
+        inline: ['@tesserix/web'],
+      },
+    },
   },
 });

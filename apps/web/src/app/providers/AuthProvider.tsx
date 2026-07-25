@@ -9,7 +9,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/auth-store';
 import { useFavoritesStore } from '../store/favorites-store';
 import { useCurrencyStore } from '../store/currency-store';
-import { apiClient, AUTH_EXPIRED_EVENT } from '@/shared/services/api-client';
+import { apiClient, ACCOUNT_BLOCKED_EVENT, AUTH_EXPIRED_EVENT } from '@/shared/services/api-client';
 import type { SessionUser, SocialProvider } from '@/shared/types/auth';
 import type { OnboardingStatus, CustomerProfile } from '@/shared/types';
 
@@ -62,6 +62,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener(AUTH_EXPIRED_EVENT, handler);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handler);
   }, [clearAuth, navigate, location.pathname, location.search]);
+
+  // A paused account 403s on every path except /me/reactivate — the session
+  // itself is still valid (pausing is not a sign-out), so unlike auth:expired
+  // above this does NOT clear auth. It only routes a user who is deep on some
+  // other page to where reactivation is offered, rather than leaving every
+  // query on that page failing silently. DataPrivacyPage itself listens for
+  // the same event to render the paused/deleted state — this is only for
+  // the case where the 403 arrives somewhere else.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const status = (e as CustomEvent<{ status?: string }>).detail?.status;
+      if (status !== 'account_deactivated') return;
+      if (!useAuthStore.getState().isAuthenticated) return;
+      if (location.pathname === '/data-privacy') return;
+      navigate('/data-privacy');
+    };
+    window.addEventListener(ACCOUNT_BLOCKED_EVENT, handler);
+    return () => window.removeEventListener(ACCOUNT_BLOCKED_EVENT, handler);
+  }, [navigate, location.pathname]);
 
   // Load favorite chef + dish IDs once authenticated (#237)
   useEffect(() => {
