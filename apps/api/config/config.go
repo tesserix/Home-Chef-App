@@ -185,6 +185,10 @@ type Config struct {
 	// genuineness check (wrong type / invalid number). Default off; the check
 	// always runs and is returned, only hard-rejection is gated.
 	DocAuthenticityEnabled bool
+	// LoyaltyEnabled gates the loyalty points program (#40) — earning on
+	// delivered orders and redeeming to wallet credit. On by default; set
+	// LOYALTY_ENABLED=false to disable enforcement.
+	LoyaltyEnabled bool
 
 	// DeliveryDistancePricePerCallUSD / DeliveryWeatherPricePerCallUSD are the
 	// per-call prices of the metered delivery-intelligence providers (#699), used
@@ -247,6 +251,7 @@ func Load() {
 	piiEncryption, _ := strconv.ParseBool(getEnv("PII_ENCRYPTION_ENABLED", "false"))
 	emailOTP, _ := strconv.ParseBool(getEnv("EMAIL_OTP_ENABLED", "true"))
 	docAuthenticity, _ := strconv.ParseBool(getEnv("DOC_AUTHENTICITY_ENABLED", "false"))
+	loyaltyEnabled, _ := strconv.ParseBool(getEnv("LOYALTY_ENABLED", "true"))
 	distancePricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_DISTANCE_PRICE_PER_CALL_USD", "0.005"), 64)
 	weatherPricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_WEATHER_PRICE_PER_CALL_USD", "0.001"), 64)
 	deliveryMaxRadiusKm, _ := strconv.ParseFloat(getEnv("DELIVERY_DEFAULT_MAX_RADIUS_KM", "10"), 64)
@@ -380,6 +385,7 @@ func Load() {
 		PIIEncryptionEnabled:            piiEncryption,
 		EmailOTPEnabled:                 emailOTP,
 		DocAuthenticityEnabled:          docAuthenticity,
+		LoyaltyEnabled:                  loyaltyEnabled,
 	}
 }
 

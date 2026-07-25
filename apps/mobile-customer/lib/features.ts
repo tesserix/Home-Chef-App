@@ -29,8 +29,8 @@ export const CATERING_ENABLED: boolean = false;
  */
 export const WALLET_ENABLED: boolean = true;
 
-/** Loyalty / rewards program (v2-deferred). */
-export const REWARDS_ENABLED: boolean = false;
+/** Loyalty / rewards program. */
+export const REWARDS_ENABLED: boolean = true;
 
 /** Referral / refer-&-earn program (v2-deferred). */
 export const REFERRAL_ENABLED: boolean = false;

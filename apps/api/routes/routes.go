@@ -1096,6 +1096,7 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/loyalty/config", adminHandler.GetLoyaltyConfig)
 			admin.PUT("/loyalty/config", adminHandler.UpdateLoyaltyConfig)
 			admin.GET("/loyalty/analytics", adminHandler.GetLoyaltyAnalytics)
+			admin.POST("/loyalty/grant", adminHandler.GrantLoyaltyPoints)
 			// In-app messaging mediation (#53) — the relay inbox.
 			admin.GET("/messages/inbox", messagingHandler.AdminInbox)
 			admin.POST("/messages/:id/relay", messagingHandler.AdminRelayMessage)

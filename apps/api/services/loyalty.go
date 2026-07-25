@@ -24,6 +24,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/models"
 )
 
@@ -323,7 +324,7 @@ func EarnLoyalty(db *gorm.DB, userID uuid.UUID, points float64, source models.Lo
 // consumer.
 func AwardOrderLoyalty(db *gorm.DB, userID, orderID uuid.UUID) (float64, error) {
 	cfg := GetLoyaltyConfig(db)
-	if !cfg.Enabled {
+	if !cfg.Enabled || (config.AppConfig != nil && !config.AppConfig.LoyaltyEnabled) {
 		return 0, nil
 	}
 	var order models.Order
@@ -363,6 +364,9 @@ func AwardOrderLoyalty(db *gorm.DB, userID, orderID uuid.UUID) (float64, error) 
 // never diverge, then enqueues a redeemed notification event. Enforces the
 // configured minimum and rejects an overdraw without partial application.
 func RedeemLoyalty(db *gorm.DB, userID uuid.UUID, points float64) (*models.LoyaltyTransaction, *models.WalletTxn, error) {
+	if config.AppConfig != nil && !config.AppConfig.LoyaltyEnabled {
+		return nil, nil, ErrLoyaltyDisabled
+	}
 	cfg := GetLoyaltyConfig(db)
 	if !cfg.Enabled {
 		return nil, nil, ErrLoyaltyDisabled
@@ -413,6 +417,29 @@ func RedeemLoyalty(db *gorm.DB, userID uuid.UUID, points float64) (*models.Loyal
 
 // round2Money rounds to 2 decimal places (paise) for wallet money amounts.
 func round2Money(v float64) float64 { return math.Round(v*100) / 100 }
+
+// AdminAdjustLoyalty grants (points>0) or removes (points<0) loyalty points for a user, stamped
+// with the acting admin. Non-idempotent by design (each call is a distinct manual adjustment).
+func AdminAdjustLoyalty(db *gorm.DB, userID uuid.UUID, points float64, reason string, adminID uuid.UUID) (*models.LoyaltyTransaction, error) {
+	if points == 0 {
+		return nil, fmt.Errorf("adjustment must be non-zero")
+	}
+	cfg := GetLoyaltyConfig(db)
+	txnType := models.LoyaltyCredit
+	amt := points
+	if points < 0 {
+		txnType = models.LoyaltyDebit
+		amt = -points
+	}
+	var out *models.LoyaltyTransaction
+	err := db.Transaction(func(tx *gorm.DB) error {
+		aid := adminID
+		txn, _, err := applyLoyaltyTxnInTx(tx, userID, amt, txnType, models.LoyaltySourceAdminAdjust, nil, reason, "loyalty-admin:"+uuid.NewString(), &aid, cfg)
+		out = txn
+		return err
+	})
+	return out, err
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Streaks — meal-subscription adherence (#2 / #291)

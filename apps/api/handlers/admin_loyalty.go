@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
@@ -89,4 +91,37 @@ func (h *AdminHandler) UpdateLoyaltyConfig(c *gin.Context) {
 // GetLoyaltyAnalytics returns the read-only program overview.
 func (h *AdminHandler) GetLoyaltyAnalytics(c *gin.Context) {
 	c.JSON(http.StatusOK, services.GetLoyaltyAnalytics(database.DB))
+}
+
+type grantLoyaltyRequest struct {
+	UserID string  `json:"userId" binding:"required"`
+	Points float64 `json:"points" binding:"required"`
+	Reason string  `json:"reason"`
+}
+
+// GrantLoyaltyPoints manually credits or debits a customer's points balance
+// (points<0 removes), stamped with the acting admin.
+// POST /admin/loyalty/grant  { userId, points, reason }
+func (h *AdminHandler) GrantLoyaltyPoints(c *gin.Context) {
+	adminID, _ := middleware.GetUserID(c)
+	var req grantLoyaltyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+	uid, err := uuid.Parse(req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid userId"})
+		return
+	}
+	txn, err := services.AdminAdjustLoyalty(database.DB, uid, req.Points, req.Reason, adminID)
+	if err != nil {
+		if errors.Is(err, services.ErrInsufficientLoyaltyPoints) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "User has fewer points than the deduction"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to adjust points"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"pointsBalance": txn.PointsAfter})
 }
