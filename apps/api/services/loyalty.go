@@ -39,22 +39,31 @@ type LoyaltyConfig struct {
 	StreakGraceDays int     `json:"streakGraceDays"` // max gap (days) between delivered days before the run breaks
 	TierSilverAt    float64 `json:"tierSilverAt"`    // lifetime points for silver
 	TierGoldAt      float64 `json:"tierGoldAt"`      // lifetime points for gold
+
+	MaxRedeemPct     float64 `json:"maxRedeemPct"`     // max redemption per order as a fraction of food subtotal (checkout, Phase 3)
+	MonthlyRedeemCap float64 `json:"monthlyRedeemCap"` // max ₹ of wallet credit redeemed per rolling 30 days
+	ExpiryDays       float64 `json:"expiryDays"`       // points expire this many days after they are earned
 }
 
 // defaultLoyaltyConfig — sane defaults so the feature works before an admin sets
-// anything. Defaults give ~1% earn (₹10 → 1 pt) and a 1:1 ₹/10-pt redeem
-// (100 pts → ₹10), i.e. roughly 1% back, with a 7-day streak bonus.
+// anything. Defaults give ~1% earn (₹10 → 1 pt) and a 100pts=₹5 redeem rate
+// (0.05 ₹/point), with a 500-point minimum redemption, a 7-day streak bonus,
+// a 10% max-redeem-per-order cap, a ₹300 monthly redeem cap, and 1-year point
+// expiry.
 func defaultLoyaltyConfig() LoyaltyConfig {
 	return LoyaltyConfig{
-		Enabled:         true,
-		PointsPerRupee:  0.1,
-		RedeemRate:      0.1,
-		MinRedeem:       100,
-		StreakThreshold: 7,
-		StreakBonus:     50,
-		StreakGraceDays: 1, // strictly consecutive calendar days by default
-		TierSilverAt:    1000,
-		TierGoldAt:      5000,
+		Enabled:          true,
+		PointsPerRupee:   0.1,
+		RedeemRate:       0.05,
+		MinRedeem:        500,
+		StreakThreshold:  7,
+		StreakBonus:      50,
+		StreakGraceDays:  1, // strictly consecutive calendar days by default
+		TierSilverAt:     1000,
+		TierGoldAt:       5000,
+		MaxRedeemPct:     0.10,
+		MonthlyRedeemCap: 300,
+		ExpiryDays:       365,
 	}
 }
 
@@ -98,6 +107,18 @@ func GetLoyaltyConfig(db *gorm.DB) LoyaltyConfig {
 		case "loyalty.tier_gold_at":
 			if v, err := strconv.ParseFloat(s.Value, 64); err == nil {
 				cfg.TierGoldAt = v
+			}
+		case "loyalty.max_redeem_pct":
+			if f, err := strconv.ParseFloat(s.Value, 64); err == nil {
+				cfg.MaxRedeemPct = f
+			}
+		case "loyalty.monthly_redeem_cap":
+			if f, err := strconv.ParseFloat(s.Value, 64); err == nil {
+				cfg.MonthlyRedeemCap = f
+			}
+		case "loyalty.expiry_days":
+			if f, err := strconv.ParseFloat(s.Value, 64); err == nil {
+				cfg.ExpiryDays = f
 			}
 		}
 	}

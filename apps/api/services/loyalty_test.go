@@ -73,7 +73,7 @@ func TestGetLoyaltyConfig_DefaultsAndOverrides(t *testing.T) {
 	cfg := GetLoyaltyConfig(db)
 	require.True(t, cfg.Enabled)
 	require.Equal(t, 0.1, cfg.PointsPerRupee)
-	require.Equal(t, 100.0, cfg.MinRedeem)
+	require.Equal(t, 500.0, cfg.MinRedeem)
 	require.Equal(t, 7, cfg.StreakThreshold)
 
 	// Admin overrides via loyalty.* keys.
@@ -156,22 +156,22 @@ func TestRedeemLoyalty_DebitsPointsCreditsWallet(t *testing.T) {
 	db := setupLoyaltyDB(t)
 	uid := uuid.New()
 
-	_, err := EarnLoyalty(db, uid, 500, models.LoyaltySourceOrder, nil, "order", "loyalty:order:r1")
+	_, err := EarnLoyalty(db, uid, 1000, models.LoyaltySourceOrder, nil, "order", "loyalty:order:r1")
 	require.NoError(t, err)
 
-	// Redeem 300 points → at the default 0.1 ₹/point that's ₹30 store credit.
-	lt, wt, err := RedeemLoyalty(db, uid, 300)
+	// Redeem 600 points → at the default 0.05 ₹/point that's ₹30 store credit.
+	lt, wt, err := RedeemLoyalty(db, uid, 600)
 	require.NoError(t, err)
 	require.Equal(t, models.LoyaltyDebit, lt.Type)
-	require.Equal(t, 200.0, lt.PointsAfter)
+	require.Equal(t, 400.0, lt.PointsAfter)
 	require.Equal(t, models.WalletSourceLoyalty, wt.Source)
 	require.Equal(t, 30.0, wt.Amount)
 	require.Equal(t, 30.0, wt.BalanceAfter)
 
 	acct, _ := LoyaltyBalance(db, uid)
-	require.Equal(t, 200.0, acct.Balance)
+	require.Equal(t, 400.0, acct.Balance)
 	// Lifetime is unaffected by redemptions — it only tracks earns.
-	require.Equal(t, 500.0, acct.LifetimePoints)
+	require.Equal(t, 1000.0, acct.LifetimePoints)
 
 	w, _ := WalletBalance(db, uid)
 	require.Equal(t, 30.0, w.Balance)
@@ -191,15 +191,16 @@ func TestRedeemLoyalty_BelowMinimum(t *testing.T) {
 func TestRedeemLoyalty_InsufficientPoints(t *testing.T) {
 	db := setupLoyaltyDB(t)
 	uid := uuid.New()
-	_, err := EarnLoyalty(db, uid, 120, models.LoyaltySourceOrder, nil, "order", "loyalty:order:i1")
+	_, err := EarnLoyalty(db, uid, 520, models.LoyaltySourceOrder, nil, "order", "loyalty:order:i1")
 	require.NoError(t, err)
 
-	_, _, err = RedeemLoyalty(db, uid, 200)
+	// 600 clears the 500-point minimum but exceeds the 520-point balance.
+	_, _, err = RedeemLoyalty(db, uid, 600)
 	require.ErrorIs(t, err, ErrInsufficientLoyaltyPoints)
 
 	// Nothing partially applied — points + wallet untouched.
 	acct, _ := LoyaltyBalance(db, uid)
-	require.Equal(t, 120.0, acct.Balance)
+	require.Equal(t, 520.0, acct.Balance)
 	w, _ := WalletBalance(db, uid)
 	require.Equal(t, 0.0, w.Balance)
 }
@@ -231,12 +232,12 @@ func TestGetLoyaltyAnalytics_Aggregates(t *testing.T) {
 	db := setupLoyaltyDB(t)
 	u1, u2 := uuid.New(), uuid.New()
 
-	_, err := EarnLoyalty(db, u1, 500, models.LoyaltySourceOrder, nil, "o", "loyalty:order:a1")
+	_, err := EarnLoyalty(db, u1, 800, models.LoyaltySourceOrder, nil, "o", "loyalty:order:a1")
 	require.NoError(t, err)
 	_, err = EarnLoyalty(db, u2, 300, models.LoyaltySourceOrder, nil, "o", "loyalty:order:a2")
 	require.NoError(t, err)
-	// u1 redeems 200 → 300 left; wallet credit not relevant here.
-	_, _, err = RedeemLoyalty(db, u1, 200)
+	// u1 redeems 500 → 300 left; wallet credit not relevant here.
+	_, _, err = RedeemLoyalty(db, u1, 500)
 	require.NoError(t, err)
 	// Give u2 a live streak.
 	_, _, err = AdvanceLoyaltyStreak(db, u2, day(1))
@@ -244,9 +245,9 @@ func TestGetLoyaltyAnalytics_Aggregates(t *testing.T) {
 
 	a := GetLoyaltyAnalytics(db)
 	require.Equal(t, int64(2), a.Members)
-	require.Equal(t, 800.0, a.PointsEarned)   // 500 + 300
-	require.Equal(t, 200.0, a.PointsRedeemed) // u1's redeem
-	require.Equal(t, 600.0, a.OutstandingPts) // (500-200) + 300
+	require.Equal(t, 1100.0, a.PointsEarned)  // 800 + 300
+	require.Equal(t, 500.0, a.PointsRedeemed) // u1's redeem
+	require.Equal(t, 600.0, a.OutstandingPts) // (800-500) + 300
 	require.Equal(t, int64(1), a.ActiveStreaks)
 	require.Equal(t, int64(1), a.LongestStreak)
 }

@@ -35,6 +35,10 @@ func (h *AdminHandler) UpdateLoyaltyConfig(c *gin.Context) {
 		StreakGraceDays *int     `json:"streakGraceDays"`
 		TierSilverAt    *float64 `json:"tierSilverAt"`
 		TierGoldAt      *float64 `json:"tierGoldAt"`
+
+		MaxRedeemPct     *float64 `json:"maxRedeemPct"`
+		MonthlyRedeemCap *float64 `json:"monthlyRedeemCap"`
+		ExpiryDays       *float64 `json:"expiryDays"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
@@ -68,6 +72,15 @@ func (h *AdminHandler) UpdateLoyaltyConfig(c *gin.Context) {
 	}
 	if req.TierGoldAt != nil {
 		setPlatformSetting("loyalty.tier_gold_at", num(*req.TierGoldAt), userID)
+	}
+	if req.MaxRedeemPct != nil {
+		setPlatformSetting("loyalty.max_redeem_pct", num(*req.MaxRedeemPct), userID)
+	}
+	if req.MonthlyRedeemCap != nil {
+		setPlatformSetting("loyalty.monthly_redeem_cap", num(*req.MonthlyRedeemCap), userID)
+	}
+	if req.ExpiryDays != nil {
+		setPlatformSetting("loyalty.expiry_days", num(*req.ExpiryDays), userID)
 	}
 
 	c.JSON(http.StatusOK, services.GetLoyaltyConfig(database.DB))

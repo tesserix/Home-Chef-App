@@ -101,23 +101,23 @@ func TestGetLoyalty_ReturnsBalanceAndConfig(t *testing.T) {
 func TestRedeemLoyalty_HappyPath(t *testing.T) {
 	db := setupLoyaltyHandlerDB(t)
 	uid := uuid.New()
-	_, err := services.EarnLoyalty(db, uid, 500, models.LoyaltySourceOrder, nil, "seed", "loyalty:order:seed")
+	_, err := services.EarnLoyalty(db, uid, 1000, models.LoyaltySourceOrder, nil, "seed", "loyalty:order:seed")
 	require.NoError(t, err)
 
 	w := loyaltyReq(t, uid, http.MethodPost, "/loyalty/redeem",
 		func(r *gin.Engine, h *LoyaltyHandler) { r.POST("/loyalty/redeem", h.RedeemLoyalty) },
-		map[string]float64{"points": 300})
+		map[string]float64{"points": 600})
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, 300.0, resp["pointsRedeemed"])
-	assert.Equal(t, 200.0, resp["pointsBalance"])
-	assert.Equal(t, 30.0, resp["walletCredited"]) // 300 × 0.1 ₹/pt
+	assert.Equal(t, 600.0, resp["pointsRedeemed"])
+	assert.Equal(t, 400.0, resp["pointsBalance"])
+	assert.Equal(t, 30.0, resp["walletCredited"]) // 600 × 0.05 ₹/pt
 
 	// Both ledgers moved.
 	acct, _ := services.LoyaltyBalance(db, uid)
-	assert.Equal(t, 200.0, acct.Balance)
+	assert.Equal(t, 400.0, acct.Balance)
 	wallet, _ := services.WalletBalance(db, uid)
 	assert.Equal(t, 30.0, wallet.Balance)
 }
@@ -137,11 +137,12 @@ func TestRedeemLoyalty_BelowMinimum(t *testing.T) {
 func TestRedeemLoyalty_InsufficientPoints(t *testing.T) {
 	db := setupLoyaltyHandlerDB(t)
 	uid := uuid.New()
-	_, err := services.EarnLoyalty(db, uid, 120, models.LoyaltySourceOrder, nil, "seed", "loyalty:order:seed")
+	_, err := services.EarnLoyalty(db, uid, 520, models.LoyaltySourceOrder, nil, "seed", "loyalty:order:seed")
 	require.NoError(t, err)
 
+	// 600 clears the 500-point minimum but exceeds the 520-point balance.
 	w := loyaltyReq(t, uid, http.MethodPost, "/loyalty/redeem",
 		func(r *gin.Engine, h *LoyaltyHandler) { r.POST("/loyalty/redeem", h.RedeemLoyalty) },
-		map[string]float64{"points": 200})
+		map[string]float64{"points": 600})
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
