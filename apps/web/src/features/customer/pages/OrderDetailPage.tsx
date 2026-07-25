@@ -532,7 +532,7 @@ export default function OrderDetailPage() {
                   leftIcon={<XCircle aria-hidden="true" className="h-4 w-4" />}
                   className="border-paprika/30 text-paprika hover:bg-paprika-tint"
                 >
-                  Cancel Order
+                  Request Cancellation
                 </Button>
               )}
             </>
@@ -608,7 +608,7 @@ export default function OrderDetailPage() {
                     )
                   }
                 >
-                  {cancelMutation.isPending ? 'Cancelling…' : 'Cancel Order'}
+                  {cancelMutation.isPending ? 'Requesting…' : 'Request Cancellation'}
                 </Button>
               </div>
             </div>
