@@ -811,7 +811,13 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment does not belong to this order"})
 		return
 	}
-	expectedPaise := services.ToPaise(order.Total) - services.ToPaise(order.WalletApplied)
+	// The gateway only captured (Total − WalletApplied − LoyaltyApplied): both
+	// store credit AND loyalty points are applied at checkout and shrink the
+	// capture identically (see CreateOrderPayment: creditPaise = wallet + points →
+	// plan.CapturePaise). Omitting the loyalty term here rejected every
+	// loyalty-funded order with a false "amount does not match" 400, so the client
+	// never got a synchronous confirmation and hung on "Confirming your payment…".
+	expectedPaise := services.ToPaise(order.Total) - services.ToPaise(order.WalletApplied) - services.ToPaise(order.LoyaltyApplied)
 	if expectedPaise < 0 {
 		expectedPaise = 0
 	}
