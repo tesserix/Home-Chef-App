@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react-swc';
@@ -37,5 +38,13 @@ export default defineConfig({
     // Sourcemaps off in production — they leak unminified source + auth/payment
     // logic to the browser. Keep on for dev so devtools mapping works locally.
     sourcemap: process.env.NODE_ENV !== 'production',
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+    // The SPA has no tests outside src/; keep the glob tight so vitest does
+    // not try to run anything under dist/ or node_modules/.
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
   },
 });
