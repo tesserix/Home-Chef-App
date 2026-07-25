@@ -26,6 +26,7 @@ const c = theme.colors;
 type Item = { label: string; sub: string; href: Href; icon: typeof Users };
 
 const OPERATIONS: Item[] = [
+  { label: 'Security', sub: 'Two-factor & remembered devices', href: '/security', icon: ShieldAlert },
   { label: 'Approvals', sub: 'Kitchen & document review queue', href: '/approvals', icon: BadgeCheck },
   { label: 'Users', sub: 'Customers & accounts', href: '/users', icon: Users },
   { label: 'FSSAI Lockouts', sub: 'Expired licences & overrides', href: '/fssai', icon: ShieldAlert },

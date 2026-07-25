@@ -9,6 +9,7 @@ import {
   BarChart3,
   Gauge,
   Settings,
+  ShieldCheck,
   Menu,
   X,
   LogOut,
@@ -42,6 +43,7 @@ const navigation = [
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Premium', href: '/premium', icon: Sparkles },
   { name: 'Profile', href: '/profile', icon: User },
+  { name: 'Security', href: '/security', icon: ShieldCheck },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
