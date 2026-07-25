@@ -21,6 +21,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
@@ -61,7 +62,15 @@ func setupLoyaltyHandlerDB(t *testing.T) *gorm.DB {
 	}
 	orig := database.DB
 	database.DB = db
-	t.Cleanup(func() { database.DB = orig })
+	// Hermetic w.r.t. the LOYALTY_ENABLED gate: a sibling handler test may leave
+	// config.AppConfig set to a Config whose LoyaltyEnabled is its false zero value;
+	// nil it so the loyalty gate is a no-op and these tests run with the program enabled.
+	prevCfg := config.AppConfig
+	config.AppConfig = nil
+	t.Cleanup(func() {
+		database.DB = orig
+		config.AppConfig = prevCfg
+	})
 	return db
 }
 

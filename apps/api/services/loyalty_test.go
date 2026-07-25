@@ -15,6 +15,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
@@ -62,7 +63,16 @@ func setupLoyaltyDB(t *testing.T) *gorm.DB {
 	}
 	orig := database.DB
 	database.DB = db
-	t.Cleanup(func() { database.DB = orig })
+	// Hermetic w.r.t. the LOYALTY_ENABLED gate: a sibling test in this package may
+	// leave config.AppConfig set to a Config whose LoyaltyEnabled is its false zero
+	// value; nil it here so the loyalty gate is a no-op and these tests run with the
+	// program enabled (governed by cfg.Enabled from platform_settings).
+	prevCfg := config.AppConfig
+	config.AppConfig = nil
+	t.Cleanup(func() {
+		database.DB = orig
+		config.AppConfig = prevCfg
+	})
 	return db
 }
 
