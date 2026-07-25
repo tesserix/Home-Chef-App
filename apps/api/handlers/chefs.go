@@ -93,7 +93,10 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		// so without this a pending, unreviewed kitchen would surface on the
 		// customer homepage.
 		Where("is_verified = ?", true).
-		Scopes(services.ExcludeFSSAILocked) // FSSAI lockout (#91): hide lapsed-licence India chefs
+		Scopes(
+			services.ExcludeFSSAILocked,                 // FSSAI lockout (#91): hide lapsed-licence India chefs
+			services.TestChefVisibility(viewerEmail(c)), // test kitchens: hidden from everyone but the allowlist
+		)
 
 	// Region gate: when the customer's selected delivery address carries a state,
 	// hide kitchens in other states outright — a home cook in Maharashtra is never
@@ -318,7 +321,7 @@ func (h *ChefHandler) SearchDishes(c *gin.Context) {
 	visibleChefs := database.DB.Model(&models.ChefProfile{}).
 		Where("is_active = ?", true).
 		Where("is_verified = ?", true). // admin-approved only — mirrors ListChefs
-		Scopes(services.ExcludeFSSAILocked).
+		Scopes(services.ExcludeFSSAILocked, services.TestChefVisibility(viewerEmail(c))).
 		Select("id")
 
 	// Admin moderation is now enforced (product decision): a dish is visible only when
@@ -384,8 +387,22 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 		return
 	}
 
+	// Test-mode visibility. A born-test kitchen 404s outright; an established
+	// kitchen currently flipped to test renders as closed with its name only, so
+	// its regulars see "closed today" rather than a kitchen that vanished.
+	proceed, reduced := chefVisibleTo(c, &chef)
+	if !proceed {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+
 	var schedules []models.ChefSchedule
 	database.DB.Where("chef_id = ?", chef.ID).Find(&schedules)
+
+	if reduced {
+		c.JSON(http.StatusOK, chef.ToClosedResponse())
+		return
+	}
 
 	resp := chef.ToPublicResponse(schedules)
 	resp.ProBadge = services.IsChefPremium(chef.ID) // Verified-Pro badge (#44)
@@ -431,10 +448,65 @@ func resolveChefID(idOrSlug string) (uuid.UUID, bool) {
 	return chef.ID, true
 }
 
+// viewerEmail returns the calling customer's email, or "" when anonymous.
+//
+// The /chefs group runs bffAuthOptional, which populates this when a session is
+// present without making the routes authenticated — so test-mode visibility can
+// be personalised on endpoints that anonymous visitors still browse.
+func viewerEmail(c *gin.Context) string {
+	if v, ok := c.Get("userEmail"); ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// chefVisibleTo applies the test-mode visibility rule to a single loaded chef.
+//
+// proceed=false means the handler must 404 — deliberately 404 and not 403, so a
+// shared link to a sandbox kitchen discloses nothing about whether it exists.
+// reduced=true means the handler must serve the closed presentation: name and
+// photo only, no menu, no prices, not orderable.
+func chefVisibleTo(c *gin.Context, chef *models.ChefProfile) (proceed bool, reduced bool) {
+	switch services.ChefVisibility(chef, viewerEmail(c)) {
+	case services.VisibilityHidden:
+		return false, false
+	case services.VisibilityClosed:
+		return true, true
+	default:
+		return true, false
+	}
+}
+
+// guardChefRoute is the shared entry check for the single-chef routes. It loads
+// the chef, applies the visibility rule, and writes the 404 itself so each
+// handler is a two-line addition rather than a copy-pasted policy block.
+//
+// Menu, price, review and ordering endpoints pass allowReduced=false: the
+// closed presentation exposes the kitchen's NAME, nothing more. Only GetChef
+// passes true, because it is the endpoint that renders that name.
+func guardChefRoute(c *gin.Context, chefID uuid.UUID, allowReduced bool) (*models.ChefProfile, bool) {
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return nil, false
+	}
+	proceed, reduced := chefVisibleTo(c, &chef)
+	if !proceed || (reduced && !allowReduced) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return nil, false
+	}
+	return &chef, true
+}
+
 func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 	chefID, ok := resolveChefID(c.Param("id"))
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
 		return
 	}
 
@@ -497,6 +569,9 @@ func (h *ChefHandler) GetChefReviews(c *gin.Context) {
 	chefID, ok := resolveChefID(c.Param("id"))
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
 		return
 	}
 
@@ -1737,6 +1812,9 @@ func (h *ChefHandler) GetChefDeliverySlots(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
 		return
 	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
+		return
+	}
 	s := services.GetChefCapacitySettings(chefID)
 	slots := services.BuildSlotAvailability(s, chefID, time.Now())
 	c.JSON(http.StatusOK, gin.H{
@@ -1755,6 +1833,9 @@ func (h *ChefHandler) GetChefFulfillmentTimes(c *gin.Context) {
 	chefID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
 		return
 	}
 	var chef models.ChefProfile

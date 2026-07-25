@@ -545,3 +545,30 @@ func (c *ChefProfile) ToPublicResponse(schedules []ChefSchedule) ChefProfileResp
 	resp.OperatingHours = operatingHours
 	return resp
 }
+
+// ToClosedResponse is the reduced payload for an established kitchen that an
+// admin has currently flipped into test mode for debugging.
+//
+// It carries the kitchen's identity — name, slug, images, cuisines — and
+// nothing else: no menu, no prices, no minimum order, no delivery options, no
+// rating, and AcceptingOrders forced false. Its regulars see a kitchen that is
+// closed today, which is true and reassuring, rather than a kitchen that has
+// disappeared, which reads as "they shut down".
+//
+// Built as a fresh struct rather than by blanking fields on ToResponse, so a
+// field added to the full response later cannot silently start leaking here.
+func (c *ChefProfile) ToClosedResponse() ChefProfileResponse {
+	return ChefProfileResponse{
+		ID:              c.ID,
+		UserID:          c.UserID,
+		BusinessName:    c.BusinessName,
+		Slug:            c.EffectiveSlug(),
+		ProfileImage:    c.ProfileImage,
+		BannerImage:     c.BannerImage,
+		Cuisines:        []string(c.Cuisines),
+		City:            c.City,
+		State:           c.State,
+		AcceptingOrders: false,
+		IsOnline:        false,
+	}
+}

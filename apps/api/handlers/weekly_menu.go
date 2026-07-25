@@ -178,6 +178,9 @@ func (h *ChefHandler) GetPublicWeeklyMenu(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
+		return
+	}
 
 	var menu models.WeeklyMenu
 	if err := database.DB.Where("chef_id = ? AND is_published = ?", chefID, true).First(&menu).Error; err != nil {

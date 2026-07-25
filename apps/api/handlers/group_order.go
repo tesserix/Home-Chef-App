@@ -148,6 +148,10 @@ func (h *GroupOrderHandler) CreateGroupOrder(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "This chef isn't accepting orders right now"})
 		return
 	}
+	if err := assertMayOrderFromChef(c, &chef); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 
 	now := time.Now()
 	g := models.GroupOrder{

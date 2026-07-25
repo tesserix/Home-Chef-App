@@ -269,6 +269,11 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	if err := assertMayOrderFromChef(c, &chef); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
 	// FSSAI hard lockout (#32): an India chef whose food-safety (FSSAI) licence
 	// has lapsed must not take new orders until a renewal is verified — this
 	// protects customers from food prepared under an expired licence and the
@@ -756,7 +761,12 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	offset := (page - 1) * limit
 
-	query := database.DB.Where("customer_id = ?", userID)
+	// Customers see live orders, plus test orders they placed themselves while on
+	// the viewer allowlist. Cloned rows are excluded unconditionally: a clone
+	// replicates a REAL customer's order into the sandbox for debugging, and that
+	// customer never placed it there.
+	query := database.DB.Where("customer_id = ?", userID).
+		Scopes(services.CustomerVisibleModes(viewerEmail(c)))
 	// The order-list tabs send GROUP keys ("active"/"cancelled"), not literal
 	// statuses — there is no order row whose status == "active". Expand the
 	// groups here; an exact status still filters precisely (back-compat).
@@ -825,6 +835,7 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 	// alongside the business name + FSSAI/GSTIN (official document, #receipt).
 	if err := database.DB.Preload("Items").Preload("Chef").Preload("Chef.User").Preload("Delivery").
 		Where("id = ? AND customer_id = ?", orderID, userID).
+		Scopes(services.CustomerVisibleModes(viewerEmail(c))).
 		First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return

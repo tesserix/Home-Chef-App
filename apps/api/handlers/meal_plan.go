@@ -186,6 +186,10 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "This chef isn't accepting orders right now"})
 		return
 	}
+	if err := assertMayOrderFromChef(c, &chef); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 
 	// The chef must have a PUBLISHED weekly menu — draft cells exist in the items
 	// table but are not bookable (the public read gates on is_published too).

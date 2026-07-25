@@ -120,6 +120,9 @@ func (h *MealSubscriptionHandler) GetChefOffer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
 		return
 	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
+		return
+	}
 	cfg := services.GetChefSubscriptionConfig(database.DB, chefID)
 	if cfg == nil || !cfg.Enabled || !services.ChefHasPublishedWeeklyMenu(database.DB, chefID) {
 		c.JSON(http.StatusOK, gin.H{"available": false})
@@ -149,6 +152,15 @@ func (h *MealSubscriptionHandler) PreviewPrice(c *gin.Context) {
 	chefID, err := uuid.Parse(req.ChefID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	if err := assertMayOrderFromChef(c, &chef); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 	cfg := services.GetChefSubscriptionConfig(database.DB, chefID)
