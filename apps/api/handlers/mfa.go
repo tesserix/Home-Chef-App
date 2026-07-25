@@ -117,6 +117,26 @@ func (h *MFAHandler) GetStatus(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// Answer before touching the database when the feature is off.
+	//
+	// The two-factor tables ship separately (tesserix-k8s), so between a client
+	// release and that schema landing this query hits a table that does not
+	// exist. Ordering the flag check second turned "two-factor isn't available
+	// yet" — which every client already renders cleanly — into a 500 and an
+	// error screen. Nothing below is meaningful with the feature off anyway.
+	if !mfaEnabled() {
+		c.JSON(http.StatusOK, gin.H{
+			"featureEnabled":       false,
+			"enabled":              false,
+			"emailEnrolled":        false,
+			"phoneEnrolled":        false,
+			"maskedEmail":          services.MaskEmail(user.Email),
+			"maskedPhone":          "",
+			"backupCodesRemaining": 0,
+			"channels":             []services.MFAChannel{},
+		})
+		return
+	}
 	s, err := services.GetMFASettings(database.DB, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load two-factor settings"})
@@ -459,6 +479,14 @@ func (h *MFAHandler) Verify(c *gin.Context) {
 func (h *MFAHandler) ListDevices(c *gin.Context) {
 	userID, _, ok := currentUser(c)
 	if !ok {
+		return
+	}
+	// Same short-circuit as GetStatus. The shared settings screen calls this
+	// from a hook, which React runs unconditionally — so with the feature off
+	// and the tables not yet deployed, every visit logged a background 500 for
+	// a list that is empty by definition.
+	if !mfaEnabled() {
+		c.JSON(http.StatusOK, gin.H{"devices": []models.TrustedDevice{}})
 		return
 	}
 	devices, err := services.ListTrustedDevices(database.DB, userID)
