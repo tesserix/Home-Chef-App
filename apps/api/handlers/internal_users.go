@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 // InternalUsersHandler owns the BFF-only user upsert path. Called by
@@ -89,6 +92,19 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 
 	now := time.Now()
 	email := strings.ToLower(req.Email)
+
+	// Deleted-account handshake, before anything else.
+	//
+	// A soft-deleted row still owns its (lower(email), auth_pool) slot in
+	// idx_users_email_per_pool — the index is not filtered on deleted_at. The
+	// scoped lookups below cannot see that row, so they used to fall through to
+	// INSERT, hit a duplicate key, and return 502: a deleted user could never
+	// sign up again on the same email. Detect the ghost instead and hand back a
+	// restore token so the app can offer "restore" or "start fresh".
+	if h.handleDeletedAccount(c, email, req) {
+		return
+	}
+
 	var u models.User
 	res := h.DB.Where("gip_uid = ?", req.GIPUid).First(&u)
 	switch {
@@ -188,6 +204,61 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, UpsertUserResponse{UserID: u.ID.String()})
+}
+
+// handleDeletedAccount looks for a soft-deleted account on this email+pool and,
+// if one is still inside its restore window, answers the sign-in with a
+// "restorable" response instead of creating a duplicate. Reports whether it has
+// written the response.
+//
+// Requires req.EmailVerified. Without it an unverified password signup on a
+// known address could probe for — or seize — someone's deleted account, the
+// same hijack the live re-bind path below already guards against.
+//
+// A ghost whose window has already elapsed is purged here and now, which frees
+// the unique email slot so the ordinary signup path can proceed.
+func (h *InternalUsersHandler) handleDeletedAccount(c *gin.Context, email string, req UpsertUserRequest) bool {
+	if email == "" || req.AuthPool == "" || !req.EmailVerified {
+		return false
+	}
+
+	var ghost models.User
+	err := h.DB.Unscoped().
+		Where("email = ? AND auth_pool = ? AND deleted_at IS NOT NULL", email, req.AuthPool).
+		First(&ghost).Error
+	if err != nil {
+		return false // no deleted account here — ordinary flow
+	}
+
+	// Window elapsed: the old account has no further claim on this address, so
+	// release the email slot immediately rather than making the user wait for
+	// the nightly sweeper to free their own address.
+	//
+	// This tombstones the email rather than purging inline. A full purge here
+	// would run the whole role cascade on the sign-in path, and any failure in
+	// it (a locked row, a missing child table) would 502 — re-creating exactly
+	// the lockout this handshake exists to remove. One UPDATE cannot fail that
+	// way, and the sweeper still erases the row properly on its next pass.
+	if ghost.PurgeAfter != nil && time.Now().UTC().After(*ghost.PurgeAfter) {
+		tombstone := fmt.Sprintf("purged-%s@deleted.invalid", ghost.ID)
+		if err := h.DB.Unscoped().Model(&models.User{}).
+			Where("id = ?", ghost.ID).
+			UpdateColumns(map[string]any{"email": tombstone, "email_bidx": ""}).Error; err != nil {
+			log.Printf("internal-users: could not release email for expired ghost user=%s: %v",
+				ghost.ID, err)
+			return false // fall through; a duplicate-key error is still surfaced below
+		}
+		return false // slot released — fall through and create a fresh account
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":       "restorable",
+		"user_id":      ghost.ID.String(),
+		"deletedAt":    ghost.DeletedAt.Time,
+		"purgeAfter":   ghost.PurgeAfter,
+		"restoreToken": services.MintRestoreToken(ghost.ID, req.GIPUid),
+	})
+	return true
 }
 
 // splitName splits "First Last [Middle...]" into FirstName + LastName.

@@ -244,10 +244,27 @@ func BFFAuth(cfg BFFAuthConfig) gin.HandlerFunc {
 		// primary-key SELECT per protected request — same as before.
 		if uid, ok := c.Get("userID"); ok {
 			if parsed, ok := uid.(uuid.UUID); ok && database.DB != nil {
+				// Unscoped: a soft-deleted (pending-deletion) account must be
+				// REJECTED, not merely missed. The scoped lookup used to return
+				// ErrRecordNotFound for it and fall through without aborting, so
+				// a deleted user's existing session kept working — handlers read
+				// the user id from the token, not from this row.
 				var user models.User
-				if err := database.DB.First(&user, "id = ?", parsed).Error; err == nil {
-					if !user.IsActive {
-						c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Account is suspended"})
+				if err := database.DB.Unscoped().First(&user, "id = ?", parsed).Error; err == nil {
+					if user.DeletedAt.Valid {
+						c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+							"error":  "This account has been deleted.",
+							"status": "account_deleted",
+						})
+						return
+					}
+					// A deactivated user must still reach /me/reactivate, or the
+					// pause becomes a one-way door only support can open.
+					if !user.IsActive && !isReactivationPath(c.Request.URL.Path) {
+						c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+							"error":  "Account is suspended",
+							"status": "account_deactivated",
+						})
 						return
 					}
 					c.Set("user", &user)
@@ -257,6 +274,14 @@ func BFFAuth(cfg BFFAuthConfig) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// isReactivationPath reports whether a path is the self-service reactivation
+// endpoint, which a deactivated account is allowed to call. Suffix match so it
+// holds for every role's group (/customer/me/reactivate, /chef/me/reactivate,
+// /driver/me/reactivate) without listing them.
+func isReactivationPath(path string) bool {
+	return strings.HasSuffix(path, "/me/reactivate")
 }
 
 func verify(r *http.Request, body []byte, key []byte, window time.Duration) (*BFFIdentity, error) {

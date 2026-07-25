@@ -75,10 +75,14 @@ func runKitchenScheduleScan(ctx context.Context) {
 	weekday := int(ist.Weekday()) // 0=Sunday .. 6=Saturday (matches ChefSchedule.DayOfWeek)
 	nowMin := ist.Hour()*60 + ist.Minute()
 
-	// Only opted-in, approved kitchens are managed.
+	// Only opted-in, approved, live kitchens are managed.
+	//
+	// is_active is the defence-in-depth half: deactivating or deleting an
+	// account clears auto_schedule_enabled too, but if that ever regressed this
+	// cron would silently reopen a paused or deleted kitchen for customers.
 	var chefs []models.ChefProfile
 	if err := database.DB.
-		Where("auto_schedule_enabled = ? AND is_verified = ?", true, true).
+		Where("auto_schedule_enabled = ? AND is_verified = ? AND is_active = ?", true, true, true).
 		Find(&chefs).Error; err != nil {
 		log.Printf("kitchen-schedule: chef query failed: %v", err)
 		return

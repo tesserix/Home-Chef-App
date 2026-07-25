@@ -312,6 +312,16 @@ func SetupRouter() *gin.Engine {
 		// Mobile-only routes (public — no auth)
 		mobileHandler := handlers.NewMobileHandler()
 		v1.GET("/mobile/min-version", mobileHandler.GetMinVersion)
+
+		// Account restore handshake. Unauthenticated by necessity: the caller
+		// has just re-signed-up on an email whose old account was deleted, so
+		// the original credential no longer exists and there is no session yet.
+		// The short-lived HMAC restoreToken minted by UpsertUser IS the
+		// authorisation — it is bound to both the deleted account id and the
+		// caller's new GIP uid, so it is useless to anyone else.
+		accountLifecycle := handlers.NewAccountLifecycleHandler()
+		v1.POST("/account/restore", accountLifecycle.Restore)
+		v1.POST("/account/start-fresh", accountLifecycle.StartFresh)
 		// Public receipt download by signed token (#receipt parity) — the token is
 		// the authorisation (order+user scoped, minutes-lived), so no session auth.
 		v1.GET("/invoice/:token", orderHandler.DownloadInvoiceByToken)
@@ -581,7 +591,10 @@ func SetupRouter() *gin.Engine {
 			// soft-deletes + queues hard-delete after the retention window.
 			chefDPDPHandler := handlers.NewChefDPDPHandler()
 			chefDashboard.GET("/me/export", chefDPDPHandler.ExportMyData)
-			chefDashboard.POST("/me/delete", chefDPDPHandler.DeleteMyAccount)
+			chefDashboard.POST("/me/delete", accountLifecycle.DeleteAccount)
+			chefDashboard.GET("/me/deletion-eligibility", accountLifecycle.DeletionEligibility)
+			chefDashboard.POST("/me/deactivate", accountLifecycle.Deactivate)
+			chefDashboard.POST("/me/reactivate", accountLifecycle.Reactivate)
 
 			// Stripe Connect onboarding (international chefs)
 			stripeConnectHandler := handlers.NewStripeConnectHandler()
@@ -846,7 +859,10 @@ func SetupRouter() *gin.Engine {
 		{
 			driverDPDPHandler := handlers.NewDriverDPDPHandler()
 			driver.GET("/me/export", driverDPDPHandler.ExportMyData)
-			driver.POST("/me/delete", driverDPDPHandler.DeleteMyAccount)
+			driver.POST("/me/delete", accountLifecycle.DeleteAccount)
+			driver.GET("/me/deletion-eligibility", accountLifecycle.DeletionEligibility)
+			driver.POST("/me/deactivate", accountLifecycle.Deactivate)
+			driver.POST("/me/reactivate", accountLifecycle.Reactivate)
 		}
 
 		// Chef promotion routes (featured ads)
@@ -1178,7 +1194,13 @@ func SetupRouter() *gin.Engine {
 			// soft-deletes with a 30-day retention window.
 			customerDPDPHandler := handlers.NewCustomerDPDPHandler()
 			customer.GET("/me/export", customerDPDPHandler.ExportMyData)
-			customer.POST("/me/delete", customerDPDPHandler.DeleteMyAccount)
+			// /me/delete keeps its path (already shipped in the customer app)
+			// but now runs the lifecycle handler: blocker checks, a 180-day
+			// restore window and GIP credential teardown.
+			customer.POST("/me/delete", accountLifecycle.DeleteAccount)
+			customer.GET("/me/deletion-eligibility", accountLifecycle.DeletionEligibility)
+			customer.POST("/me/deactivate", accountLifecycle.Deactivate)
+			customer.POST("/me/reactivate", accountLifecycle.Reactivate)
 
 			// Store-credit wallet (#33)
 			// v2 refund workflow: the customer's refunds awaiting their medium choice.

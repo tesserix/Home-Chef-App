@@ -1,0 +1,111 @@
+package services
+
+// account_purge_cron.go — erases accounts whose restore window has elapsed.
+//
+// This is the half of the deletion contract the original DPDP work left
+// unbuilt: rows were soft-deleted and a retention window was promised, but
+// nothing ever purged, so "deleted" accounts accumulated indefinitely. Without
+// this cron the 180-day promise is only half true — data is hidden, never
+// erased — which is exactly what a DPDP audit or a store review would fault.
+//
+// Personal data is erased outright. Only PII-stripped financial records are
+// archived (see account_archive.go), because Indian tax law requires the
+// financial trail while DPDP does not permit keeping the identity beside it.
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"github.com/homechef/api/database"
+	"github.com/homechef/api/models"
+)
+
+const (
+	accountPurgeInterval = 24 * time.Hour
+	// accountPurgeBatch caps one scan so a large backlog cannot hold a long
+	// transaction open against the shared instance. The remainder is picked up
+	// on the next run.
+	accountPurgeBatch = 200
+)
+
+// StartAccountPurgeCron launches the purge sweeper. Returns immediately; lives
+// for the life of ctx. Used only when Temporal Schedules are unavailable — see
+// cronJobs() in cron_temporal.go.
+func StartAccountPurgeCron(ctx context.Context) {
+	go func() {
+		runAccountPurgeScan(ctx)
+
+		ticker := time.NewTicker(accountPurgeInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("account-purge: shutting down on ctx cancel")
+				return
+			case <-ticker.C:
+				runAccountPurgeScan(ctx)
+			}
+		}
+	}()
+	log.Printf("account-purge: cron started (interval=24h, window=%dd)",
+		int(RestoreWindow.Hours()/24))
+}
+
+func runAccountPurgeScan(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("account-purge: panic recovered: %v", r)
+		}
+	}()
+
+	if database.DB == nil {
+		return
+	}
+	now := time.Now().UTC()
+
+	var due []models.User
+	if err := database.DB.WithContext(ctx).Unscoped().
+		Where("deleted_at IS NOT NULL AND purge_after IS NOT NULL AND purge_after <= ?", now).
+		Limit(accountPurgeBatch).
+		Find(&due).Error; err != nil {
+		log.Printf("account-purge: could not list due accounts: %v", err)
+		return
+	}
+	if len(due) == 0 {
+		return
+	}
+
+	var purged, failed int
+	for i := range due {
+		user := due[i]
+
+		// Archive before erasing. A failed archive must not stop the erasure:
+		// the user asked to be deleted, and holding their data back because a
+		// bucket write failed would be the worse outcome of the two.
+		if err := ArchiveAccountFinancials(ctx, user); err != nil {
+			log.Printf("account-purge: archive failed for user=%s (continuing): %v", user.ID, err)
+		}
+
+		// Last chance to kill the credential, in case the post-commit attempt
+		// at deletion time failed.
+		if user.GIPUid != "" {
+			if err := DeleteGIPAccount(ctx, user.GIPTenantID, user.GIPUid); err != nil {
+				log.Printf("account-purge: GIP delete failed for user=%s: %v", user.ID, err)
+			}
+		}
+
+		// Isolate per user: one bad row must not strand the rest of the batch.
+		if err := PurgeUser(database.DB.WithContext(ctx), user.ID, user.Role); err != nil {
+			log.Printf("account-purge: purge failed for user=%s: %v", user.ID, err)
+			failed++
+			continue
+		}
+		purged++
+		// User id only — never the email. This is the erasure path.
+		log.Printf("account-purge: erased user=%s role=%s", user.ID, user.Role)
+	}
+
+	log.Printf("account-purge: scan complete (due=%d purged=%d failed=%d)",
+		len(due), purged, failed)
+}

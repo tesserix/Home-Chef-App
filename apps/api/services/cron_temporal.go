@@ -72,6 +72,10 @@ func cronJobs() []cronJob {
 		// double-entry ledger balance == the legacy float balance per wallet. No-op
 		// unless LEDGER_SHADOW_ENABLED. Drift is surfaced, never auto-corrected.
 		{"ledger-reconcile", ledgerReconcileInterval, runLedgerReconcileScan, StartLedgerReconcileCron},
+		// Account erasure: hard-delete accounts whose 180-day restore window has
+		// elapsed, after archiving their PII-stripped financial record. Without
+		// this the retention promise is only half kept — data hidden, never erased.
+		{"account-purge", accountPurgeInterval, runAccountPurgeScan, StartAccountPurgeCron},
 	}
 }
 
