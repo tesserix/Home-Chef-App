@@ -34,7 +34,8 @@ const loyaltyExpiryInterval = 24 * time.Hour
 // Returns how many lots were actually expired.
 func ExpireLoyaltyBatches(db *gorm.DB, now time.Time) (int, error) {
 	var due []models.LoyaltyEarnBatch
-	if err := db.Where("points_remaining > 0 AND expires_at <= ?", now).Find(&due).Error; err != nil {
+	if err := db.Where("points_remaining > 0 AND expires_at <= ?", now).
+		Order("expires_at ASC").Find(&due).Error; err != nil {
 		return 0, err
 	}
 	cfg := GetLoyaltyConfig(db)
@@ -57,8 +58,7 @@ func ExpireLoyaltyBatches(db *gorm.DB, now time.Time) (int, error) {
 				return err
 			}
 			didExpire = created
-			// TEMP: brief's buggy force-zero, to prove the regression test catches it.
-			return tx.Model(&models.LoyaltyEarnBatch{}).Where("id = ?", cur.ID).Update("points_remaining", 0).Error
+			return nil
 		})
 		if err != nil {
 			log.Printf("loyalty-expiry: lot %s failed: %v", b.ID, err)
