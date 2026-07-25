@@ -1,3 +1,4 @@
+import { getDeviceToken, emitMFARequired, parseMFARequired } from './mfa';
 import type { ApiError } from '@/shared/types';
 
 // API calls go through the BFF proxy which handles session auth (cookies → JWT)
@@ -65,6 +66,15 @@ class ApiClient {
       (headers as Record<string, string>)['X-CSRF-Token'] = csrfToken;
     }
 
+    // Two-factor: name the app so device trust stays scoped to the vendor
+    // portal, and present the remembered-device token so a trusted browser
+    // skips the challenge.
+    (headers as Record<string, string>)['X-Client-App'] = 'vendor';
+    const deviceToken = getDeviceToken();
+    if (deviceToken) {
+      (headers as Record<string, string>)['X-Device-Token'] = deviceToken;
+    }
+
     const response = await fetch(url, {
       method,
       headers,
@@ -79,6 +89,17 @@ class ApiClient {
       // Don't hard-redirect here — the route guards (ProtectedRoute) will
       // detect isAuthenticated=false and redirect to /login, avoiding loops.
       throw { success: false, error: { code: 'SESSION_EXPIRED', message: 'Session expired' } };
+    }
+
+    // 403 mfa_required — every protected request 403s until the challenge is
+    // answered, so it has to route to the challenge rather than surfacing as a
+    // generic error on whichever screen happened to fire first.
+    if (response.status === 403) {
+      const body = await response.clone().json().catch(() => null);
+      const challenge = parseMFARequired(body);
+      if (challenge) {
+        emitMFARequired(challenge);
+      }
     }
 
     if (!response.ok) {

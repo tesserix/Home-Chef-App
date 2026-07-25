@@ -7,6 +7,7 @@ import { AuthProvider } from './providers/AuthProvider';
 import { SkipLink } from '@/shared/components/a11y/SkipLink';
 import { ThemeProvider, ThemedToaster } from '@/shared/theme';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
+import { MFAChallengeOverlay } from '@/shared/components/MFAChallengeOverlay';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +29,9 @@ export function App() {
               <AuthProvider>
                 <SkipLink />
                 <AppRoutes />
+                {/* Above the router: a two-factor challenge can be raised by any
+                    request, and until it is answered every other one 403s. */}
+                <MFAChallengeOverlay />
                 <ThemedToaster
                   position="bottom-right"
                   expand={false}
