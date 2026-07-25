@@ -11,26 +11,62 @@ import { Button } from '@/shared/components/ui/Button';
 import { Skeleton } from '@/shared/components/ui/Skeleton';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
 
-interface Payout {
+// ---- API contract types --------------------------------------------------
+// GET /chef/statements/weekly
+// Mirrors the wire shape returned by GetWeeklyStatements's c.JSON exactly
+// (apps/api/handlers/chef_statements.go:88-106): { statements: [...] }.
+// There is no "payout method" on a settlement statement — the field the old
+// local Payout interface expected does not exist on the server, so the
+// interface below is the real statement shape instead of a fabricated one.
+
+type StatementStatus = 'pending' | 'paid'; // models.PayoutStatus — only these two values exist
+
+interface Statement {
   id: string;
-  amount: number;
-  date: string;
-  status: 'completed' | 'pending' | 'failed';
-  method: string;
+  weekStart: string; // YYYY-MM-DD (Monday, IST)
+  weekEnd: string; // YYYY-MM-DD (following Monday, exclusive)
+  currency: string;
+  ordersCount: number;
+  grossRevenue: number;
+  platformCommission: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  tds: number;
+  netPayout: number;
+  status: StatementStatus;
+  paidAt?: string;
+  payoutRef?: string;
 }
 
+interface WeeklyStatementsResponse {
+  statements: Statement[];
+}
 
-function getPayoutStatusVariant(status: string) {
+function getStatusVariant(status: StatementStatus) {
   switch (status) {
-    case 'completed':
+    case 'paid':
       return 'success' as const;
     case 'pending':
       return 'warning' as const;
-    case 'failed':
-      return 'error' as const;
     default:
       return 'default' as const;
   }
+}
+
+function getStatusLabel(status: StatementStatus): string {
+  return status === 'paid' ? 'Paid' : 'Pending';
+}
+
+/** Formats a [weekStart, weekEnd) range as "1 Jun – 7 Jun 2026" (weekEnd is exclusive). */
+function formatWeekRange(weekStart: string, weekEnd: string): string {
+  const start = new Date(`${weekStart}T00:00:00`);
+  const end = new Date(`${weekEnd}T00:00:00`);
+  end.setDate(end.getDate() - 1);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return weekStart;
+  }
+  return `${format(start, 'd MMM')} – ${format(end, 'd MMM yyyy')}`;
 }
 
 function PayoutsLoadingSkeleton() {
@@ -41,16 +77,16 @@ function PayoutsLoadingSkeleton() {
           <thead>
             <tr className="border-b border-mist">
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
-                Date
+                Period
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
-                Amount
+                Orders
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
+                Net Payout
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
                 Status
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
-                Method
               </th>
             </tr>
           </thead>
@@ -58,16 +94,16 @@ function PayoutsLoadingSkeleton() {
             {Array.from({ length: 8 }).map((_, i) => (
               <tr key={i} className="border-b border-mist">
                 <td className="px-4 py-3">
-                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-28" />
+                </td>
+                <td className="px-4 py-3">
+                  <Skeleton className="h-4 w-12" />
                 </td>
                 <td className="px-4 py-3">
                   <Skeleton className="h-4 w-20" />
                 </td>
                 <td className="px-4 py-3">
                   <Skeleton className="h-5 w-16 rounded-full" />
-                </td>
-                <td className="px-4 py-3">
-                  <Skeleton className="h-4 w-28" />
                 </td>
               </tr>
             ))}
@@ -79,9 +115,17 @@ function PayoutsLoadingSkeleton() {
 }
 
 export default function PayoutsPage() {
-  const { data: payouts, isLoading, isError } = useQuery<Payout[]>({
-    queryKey: ['chef', 'earnings', 'payouts'],
-    queryFn: () => apiClient.get<Payout[]>('/chef/earnings/payouts'),
+  const { data: statements, isLoading, isError } = useQuery<Statement[]>({
+    queryKey: ['chef', 'statements', 'weekly'],
+    // GET /chef/statements/weekly answers { statements: [...] } (handlers/
+    // chef_statements.go:106 GetWeeklyStatements's c.JSON) — apiClient only
+    // auto-unwraps a {data, pagination} envelope, so this shape passes
+    // through unchanged. Select .statements explicitly, same class of bug
+    // fixed for /chef/menu and friends in fe60fdf1.
+    queryFn: () =>
+      apiClient
+        .get<WeeklyStatementsResponse>('/chef/statements/weekly')
+        .then((res) => res.statements ?? []),
   });
 
   return (
@@ -102,7 +146,7 @@ export default function PayoutsPage() {
           </Link>
           <h1 className="font-display text-2xl font-semibold text-ink">Payout History</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            View all your past and pending payouts
+            Weekly settlement statements issued by the platform
           </p>
         </motion.div>
 
@@ -110,26 +154,20 @@ export default function PayoutsPage() {
         <motion.div variants={fadeInUp}>
           {isLoading ? (
             <PayoutsLoadingSkeleton />
-          ) : isError || !payouts ? (
+          ) : isError || !statements ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <DollarSign className="mb-4 h-12 w-12 text-ink-muted" />
-              <h3 className="text-lg font-semibold text-ink">
-                Unable to load payouts
-              </h3>
-              <p className="mt-1 text-sm text-ink-muted">
-                Please try again later.
-              </p>
+              <h3 className="text-lg font-semibold text-ink">Unable to load payouts</h3>
+              <p className="mt-1 text-sm text-ink-muted">Please try again later.</p>
             </div>
-          ) : payouts.length === 0 ? (
+          ) : statements.length === 0 ? (
             <Card>
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <CreditCard className="mb-4 h-12 w-12 text-ink-muted" />
-                <h3 className="text-lg font-semibold text-ink">
-                  No payouts yet
-                </h3>
+                <h3 className="text-lg font-semibold text-ink">No payouts yet</h3>
                 <p className="mt-1 max-w-sm text-sm text-ink-muted">
-                  Your payout history will appear here once you receive your
-                  first payout.
+                  Your weekly settlement statements will appear here once the
+                  platform issues your first one.
                 </p>
                 <Link to="/earnings" className="mt-4">
                   <Button variant="outline" size="sm">
@@ -146,41 +184,38 @@ export default function PayoutsPage() {
                   <thead>
                     <tr className="border-b border-mist bg-paper/50">
                       <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
-                        Date
+                        Period
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
-                        Amount
+                        Orders
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
+                        Net Payout
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
-                        Method
-                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-mist">
-                    {payouts.map((payout) => (
+                    {statements.map((statement) => (
                       <tr
-                        key={payout.id}
+                        key={statement.id}
                         className="transition-colors hover:bg-paper/50"
                       >
                         <td className="whitespace-nowrap px-6 py-4 text-sm text-ink-soft">
-                          {format(new Date(payout.date), 'dd MMM yyyy')}
+                          {formatWeekRange(statement.weekStart, statement.weekEnd)}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-ink-soft">
+                          {statement.ordersCount}
                         </td>
                         <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-ink">
-                          {formatCurrency(payout.amount)}
+                          {formatCurrency(statement.netPayout)}
                         </td>
                         <td className="whitespace-nowrap px-6 py-4">
-                          <Badge
-                            variant={getPayoutStatusVariant(payout.status)}
-                            size="sm"
-                          >
-                            {payout.status}
+                          <Badge variant={getStatusVariant(statement.status)} size="sm">
+                            {getStatusLabel(statement.status)}
                           </Badge>
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-ink-muted">
-                          {payout.method}
                         </td>
                       </tr>
                     ))}
