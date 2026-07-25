@@ -18,15 +18,16 @@ export const APP_REGISTER_PATH = '/register';
 /**
  * Whether the customer SPA (apps/web) is actually served on this origin.
  *
- * The landing and the SPA share fe3dr.com by path, but the SPA is not deployed
- * yet — the landing owns every path here, so /login returns the Next.js 404.
- * Sign-in entry points stay hidden until this flips, because a dead nav link is
- * the same defect as the placeholder store badges: it looks like a working
- * feature and isn't.
+ * True since 2026-07-25: fe3dr.com is split by path between this landing and
+ * the ordering SPA (manifests/homechef-istio/virtualservice.yaml). The landing
+ * keeps /, /explore, /chef/<slug>, /cuisine/<slug>, /area/<slug>, /download and
+ * the legal pages; the SPA owns /login, /register, /cart, /checkout, /orders,
+ * /profile and the rest. Verified: /login returns 200 and serves the SPA.
  *
- * TODO(owner): set to true in the SAME release that puts apps/web on fe3dr.com.
+ * Set this back to false if the SPA is ever pulled from this origin — the
+ * sign-in links must never outlive the routes they point at.
  */
-export const WEB_APP_LIVE = false;
+export const WEB_APP_LIVE = true;
 
 /* ── App store listings ─────────────────────────────────────────────────
  *
