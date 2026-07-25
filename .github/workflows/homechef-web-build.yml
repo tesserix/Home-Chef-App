@@ -214,7 +214,6 @@ jobs:
       - name: Run tests
         working-directory: apps/web
         run: pnpm test -- --passWithNoTests
-        continue-on-error: true
 
       - name: Test Summary
         if: always()
