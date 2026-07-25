@@ -70,6 +70,16 @@ type User struct {
 	MarketingConsent   bool       `gorm:"column:marketing_consent;not null;default:false" json:"marketingConsent"`
 	MarketingConsentAt *time.Time `gorm:"column:marketing_consent_at" json:"marketingConsentAt,omitempty"`
 
+	// Account lifecycle (deactivate / delete / restore). DeletedAt below is the
+	// pending-deletion marker; PurgeAfter is when the sweeper may hard-erase.
+	// PurgeAfter is stored rather than derived from DeletedAt so the sweeper can
+	// index it, and so changing the retention window later does not retroactively
+	// reinterpret rows deleted under the old one.
+	DeactivatedAt  *time.Time `gorm:"column:deactivated_at" json:"deactivatedAt,omitempty"`
+	PurgeAfter     *time.Time `gorm:"column:purge_after" json:"purgeAfter,omitempty"`
+	DeletionReason string     `gorm:"column:deletion_reason;type:text" json:"-"`
+	RestoredAt     *time.Time `gorm:"column:restored_at" json:"restoredAt,omitempty"`
+
 	LastLoginAt *time.Time     `gorm:"column:last_login_at" json:"lastLoginAt,omitempty"`
 	CreatedAt   time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt   time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
