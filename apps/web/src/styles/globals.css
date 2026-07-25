@@ -29,21 +29,35 @@
 
 /* Tokens ----------------------------------------------------- */
 :root {
-  /* Core surfaces */
-  --paper: oklch(0.985 0.003 80);              /* warm off-white page bg */
-  --bone: oklch(0.97 0.005 80);                /* elevated card / popover */
-  --mist: oklch(0.92 0.005 80);                /* hairlines, muted bg */
-  --mist-strong: oklch(0.88 0.005 80);         /* divider on bone */
+  /* Customer palette — Paper / Charcoal / Rausch Coral.
+     .impeccable.md "Customer palette addendum" (owner pivot 2026-06-10): the
+     CUSTOMER surfaces use an Airbnb-style palette, not the ink + persimmon
+     system the vendor and driver apps keep. apps/web never received either of
+     the two pivots — it was still on the ORIGINAL herb-GREEN (hue 145), two
+     changes behind, so fe3dr.com rendered green while the landing it sits
+     beside and the customer mobile app both render coral.
 
-  /* Ink scale */
-  --ink: oklch(0.18 0.01 80);                  /* primary text, primary CTA */
-  --ink-soft: oklch(0.40 0.01 80);             /* secondary text */
-  --ink-muted: oklch(0.55 0.005 80);           /* tertiary / placeholders */
+     Token NAMES are unchanged on purpose. apps/mobile-customer set the
+     precedent: ".impeccable.md — mobile tailwind token name kept as `herb` to
+     avoid a 49-file rename". There are ~2,750 token usages across 63 files
+     here; repointing the variables converts every one of them at once and
+     cannot miss a call site. */
 
-  /* Accent (the single brand accent) */
-  --herb: oklch(0.48 0.13 145);                /* deep editorial green */
-  --herb-soft: oklch(0.55 0.10 145);           /* hover */
-  --herb-tint: oklch(0.92 0.04 145);           /* selected backgrounds */
+  /* Core surfaces — white-first, not warm off-white */
+  --paper: #ffffff;                            /* page background */
+  --bone: #ffffff;                             /* elevated card / popover */
+  --mist: #ebebeb;                             /* hairlines, muted bg */
+  --mist-strong: #dddddd;                      /* divider on bone */
+
+  /* Ink scale — Airbnb near-black, never pure #000 */
+  --ink: #222222;                              /* primary text, primary CTA */
+  --ink-soft: #717171;                         /* secondary text */
+  --ink-muted: #8f8f8f;                        /* tertiary / placeholders */
+
+  /* Accent (the single brand accent) — Rausch coral */
+  --herb: #ff385c;                             /* primary CTA, links, focus */
+  --herb-soft: #e00b41;                        /* hover / pressed */
+  --herb-tint: #ffe8ec;                        /* selected backgrounds */
 
   /* Functional-only colors (signal, never decorate) */
   --paprika: oklch(0.58 0.17 30);              /* destructive / error */
@@ -104,18 +118,20 @@
 /* Dark mode ---------------------------------------------------- */
 :root.dark,
 .dark {
-  --paper: oklch(0.16 0.005 80);
-  --bone: oklch(0.20 0.005 80);
-  --mist: oklch(0.26 0.005 80);
-  --mist-strong: oklch(0.32 0.005 80);
+  /* Dark keeps the same coral accent; surfaces stay neutral (no warm tint,
+     matching the white-first light mode above). */
+  --paper: oklch(0.16 0 0);
+  --bone: oklch(0.20 0 0);
+  --mist: oklch(0.26 0 0);
+  --mist-strong: oklch(0.32 0 0);
 
-  --ink: oklch(0.96 0.003 80);
-  --ink-soft: oklch(0.78 0.005 80);
-  --ink-muted: oklch(0.58 0.005 80);
+  --ink: oklch(0.97 0 0);
+  --ink-soft: oklch(0.78 0 0);
+  --ink-muted: oklch(0.60 0 0);
 
-  --herb: oklch(0.62 0.14 145);
-  --herb-soft: oklch(0.70 0.12 145);
-  --herb-tint: oklch(0.28 0.06 145);
+  --herb: #ff5a76;                             /* lifted for contrast on dark */
+  --herb-soft: #ff385c;
+  --herb-tint: oklch(0.30 0.09 15);
 
   --paprika: oklch(0.68 0.17 30);
   --paprika-tint: oklch(0.28 0.07 30);
@@ -136,16 +152,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --paper: oklch(0.16 0.005 80);
-    --bone: oklch(0.20 0.005 80);
-    --mist: oklch(0.26 0.005 80);
-    --mist-strong: oklch(0.32 0.005 80);
-    --ink: oklch(0.96 0.003 80);
-    --ink-soft: oklch(0.78 0.005 80);
-    --ink-muted: oklch(0.58 0.005 80);
-    --herb: oklch(0.62 0.14 145);
-    --herb-soft: oklch(0.70 0.12 145);
-    --herb-tint: oklch(0.28 0.06 145);
+    --paper: oklch(0.16 0 0);
+    --bone: oklch(0.20 0 0);
+    --mist: oklch(0.26 0 0);
+    --mist-strong: oklch(0.32 0 0);
+    --ink: oklch(0.97 0 0);
+    --ink-soft: oklch(0.78 0 0);
+    --ink-muted: oklch(0.60 0 0);
+    --herb: #ff5a76;
+    --herb-soft: #ff385c;
+    --herb-tint: oklch(0.30 0.09 15);
     --paprika: oklch(0.68 0.17 30);
     --paprika-tint: oklch(0.28 0.07 30);
     --amber: oklch(0.78 0.14 75);
@@ -319,7 +335,8 @@
      food photograph in either theme. Use for the single accented word in
      an on-photo headline ("Delivered Fresh"). */
   .text-on-photo-accent {
-    color: oklch(0.78 0.16 145);
+    /* Coral, lifted so it stays legible over a food photograph. */
+    color: #ff7a90;
     text-shadow: 0 1px 2px oklch(0 0 0 / 0.45);
   }
 
@@ -333,9 +350,9 @@
     border: 1px solid oklch(0.99 0 0 / 0.18);
   }
   .chip-on-photo-accent {
-    background: oklch(0.62 0.14 145 / 0.92);
+    background: oklch(0.62 0.14 15 / 0.92);
     color: oklch(0.99 0 0);
-    border: 1px solid oklch(0.78 0.16 145 / 0.55);
+    border: 1px solid oklch(0.78 0.16 15 / 0.55);
   }
 
   /* Hive card — an elevated "cell" that visibly lifts off the section.
@@ -352,7 +369,7 @@
     box-shadow:
       0 1px 2px oklch(0 0 0 / 0.04),
       0 8px 24px -8px oklch(0 0 0 / 0.12),
-      0 0 0 1px oklch(0.48 0.13 145 / 0.03);
+      0 0 0 1px oklch(0.48 0.13 15 / 0.03);
     transition:
       transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
       box-shadow 250ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -364,7 +381,7 @@
     box-shadow:
       0 2px 4px oklch(0 0 0 / 0.05),
       0 16px 40px -12px oklch(0 0 0 / 0.18),
-      0 0 0 1px oklch(0.48 0.13 145 / 0.10);
+      0 0 0 1px oklch(0.48 0.13 15 / 0.10);
   }
   :root.dark .card-hive,
   .dark .card-hive {
@@ -373,16 +390,16 @@
     box-shadow:
       0 1px 2px oklch(0 0 0 / 0.3),
       0 12px 32px -8px oklch(0 0 0 / 0.55),
-      0 0 0 1px oklch(0.62 0.14 145 / 0.06);
+      0 0 0 1px oklch(0.62 0.14 15 / 0.06);
   }
   :root.dark .card-hive:hover,
   .dark .card-hive:hover {
     background: oklch(0.27 0.006 80);
-    border-color: oklch(0.62 0.14 145 / 0.45);
+    border-color: oklch(0.62 0.14 15 / 0.45);
     box-shadow:
       0 2px 4px oklch(0 0 0 / 0.35),
       0 20px 48px -10px oklch(0 0 0 / 0.65),
-      0 0 0 1px oklch(0.62 0.14 145 / 0.18);
+      0 0 0 1px oklch(0.62 0.14 15 / 0.18);
   }
   @media (prefers-color-scheme: dark) {
     :root:not(.light) .card-hive {
@@ -391,15 +408,15 @@
       box-shadow:
         0 1px 2px oklch(0 0 0 / 0.3),
         0 12px 32px -8px oklch(0 0 0 / 0.55),
-        0 0 0 1px oklch(0.62 0.14 145 / 0.06);
+        0 0 0 1px oklch(0.62 0.14 15 / 0.06);
     }
     :root:not(.light) .card-hive:hover {
       background: oklch(0.27 0.006 80);
-      border-color: oklch(0.62 0.14 145 / 0.45);
+      border-color: oklch(0.62 0.14 15 / 0.45);
       box-shadow:
         0 2px 4px oklch(0 0 0 / 0.35),
         0 20px 48px -10px oklch(0 0 0 / 0.65),
-        0 0 0 1px oklch(0.62 0.14 145 / 0.18);
+        0 0 0 1px oklch(0.62 0.14 15 / 0.18);
     }
   }
 
@@ -409,22 +426,22 @@
      Light-first per the design system; dark overrides below. */
   .banner-fallback {
     background:
-      radial-gradient(60% 80% at 30% 30%, oklch(0.78 0.10 145 / 0.45) 0%, transparent 70%),
-      radial-gradient(50% 70% at 80% 80%, oklch(0.55 0.10 145 / 0.30) 0%, transparent 70%),
-      linear-gradient(135deg, oklch(0.92 0.04 145) 0%, oklch(0.85 0.04 145) 100%);
+      radial-gradient(60% 80% at 30% 30%, oklch(0.78 0.10 15 / 0.45) 0%, transparent 70%),
+      radial-gradient(50% 70% at 80% 80%, oklch(0.55 0.10 15 / 0.30) 0%, transparent 70%),
+      linear-gradient(135deg, oklch(0.92 0.04 15) 0%, oklch(0.85 0.04 15) 100%);
   }
   :root.dark .banner-fallback,
   .dark .banner-fallback {
     background:
-      radial-gradient(60% 80% at 30% 30%, oklch(0.62 0.14 145 / 0.28) 0%, transparent 70%),
-      radial-gradient(50% 70% at 80% 80%, oklch(0.48 0.13 145 / 0.20) 0%, transparent 70%),
+      radial-gradient(60% 80% at 30% 30%, oklch(0.62 0.14 15 / 0.28) 0%, transparent 70%),
+      radial-gradient(50% 70% at 80% 80%, oklch(0.48 0.13 15 / 0.20) 0%, transparent 70%),
       linear-gradient(135deg, oklch(0.22 0.018 60) 0%, oklch(0.16 0.012 60) 100%);
   }
   @media (prefers-color-scheme: dark) {
     :root:not(.light) .banner-fallback {
       background:
-        radial-gradient(60% 80% at 30% 30%, oklch(0.62 0.14 145 / 0.28) 0%, transparent 70%),
-        radial-gradient(50% 70% at 80% 80%, oklch(0.48 0.13 145 / 0.20) 0%, transparent 70%),
+        radial-gradient(60% 80% at 30% 30%, oklch(0.62 0.14 15 / 0.28) 0%, transparent 70%),
+        radial-gradient(50% 70% at 80% 80%, oklch(0.48 0.13 15 / 0.20) 0%, transparent 70%),
         linear-gradient(135deg, oklch(0.22 0.018 60) 0%, oklch(0.16 0.012 60) 100%);
     }
   }
@@ -435,21 +452,21 @@
      Tuned per-mode: subtle wash on light, richer ambient glow on dark. */
   .hero-ambience {
     background:
-      radial-gradient(55% 60% at 8% 20%, oklch(0.48 0.13 145 / 0.10) 0%, transparent 65%),
-      radial-gradient(45% 55% at 95% 90%, oklch(0.48 0.13 145 / 0.07) 0%, transparent 70%);
+      radial-gradient(55% 60% at 8% 20%, oklch(0.48 0.13 15 / 0.10) 0%, transparent 65%),
+      radial-gradient(45% 55% at 95% 90%, oklch(0.48 0.13 15 / 0.07) 0%, transparent 70%);
   }
   :root.dark .hero-ambience,
   .dark .hero-ambience {
     background:
-      radial-gradient(55% 60% at 8% 20%, oklch(0.62 0.14 145 / 0.22) 0%, transparent 65%),
-      radial-gradient(45% 55% at 95% 90%, oklch(0.62 0.14 145 / 0.16) 0%, transparent 70%),
+      radial-gradient(55% 60% at 8% 20%, oklch(0.62 0.14 15 / 0.22) 0%, transparent 65%),
+      radial-gradient(45% 55% at 95% 90%, oklch(0.62 0.14 15 / 0.16) 0%, transparent 70%),
       radial-gradient(80% 60% at 50% 100%, oklch(0.22 0.025 60 / 0.5) 0%, transparent 70%);
   }
   @media (prefers-color-scheme: dark) {
     :root:not(.light) .hero-ambience {
       background:
-        radial-gradient(55% 60% at 8% 20%, oklch(0.62 0.14 145 / 0.22) 0%, transparent 65%),
-        radial-gradient(45% 55% at 95% 90%, oklch(0.62 0.14 145 / 0.16) 0%, transparent 70%),
+        radial-gradient(55% 60% at 8% 20%, oklch(0.62 0.14 15 / 0.22) 0%, transparent 65%),
+        radial-gradient(45% 55% at 95% 90%, oklch(0.62 0.14 15 / 0.16) 0%, transparent 70%),
         radial-gradient(80% 60% at 50% 100%, oklch(0.22 0.025 60 / 0.5) 0%, transparent 70%);
     }
   }
