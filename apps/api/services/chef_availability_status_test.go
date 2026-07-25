@@ -223,3 +223,58 @@ func TestLaterCutoffMinutes(t *testing.T) {
 		t.Errorf("disabled cutoff = %d, want -1", got)
 	}
 }
+
+// ── Account-level pause ───────────────────────────────────────────────────────
+//
+// A chef who pauses their whole account must never read as orderable. The
+// listing query already excludes them, but a direct link or a favourite reaches
+// the detail handler, which used to render a normal, orderable-looking kitchen
+// that only failed at checkout with "Chef not found or not available".
+
+func TestDecideAvailability_AccountPaused_IsNotOrderable(t *testing.T) {
+	in := baseOpen(720) // midday, everything else wide open
+	in.accountPaused = true
+
+	got := decideAvailability(in)
+
+	if got.Orderable {
+		t.Fatal("a paused account must never be orderable")
+	}
+	if got.Status != AvailPaused {
+		t.Fatalf("status = %q, want %q", got.Status, AvailPaused)
+	}
+	if got.Label == "" {
+		t.Fatal("paused kitchens need a label for the greyed-out pill")
+	}
+}
+
+// The account pause outranks the clock: no reopening time is quoted, because
+// only the chef can lift it.
+func TestDecideAvailability_AccountPause_OutranksTimedPause(t *testing.T) {
+	in := baseOpen(720)
+	in.accountPaused = true
+	in.pausedUntilMin = 800 // a timed pause that would otherwise quote "Back at ..."
+
+	got := decideAvailability(in)
+
+	if got.Status != AvailPaused {
+		t.Fatalf("status = %q, want %q", got.Status, AvailPaused)
+	}
+	if got.MinutesToChange != 0 {
+		t.Fatalf("MinutesToChange = %d, want 0 — there is no known reopen time",
+			got.MinutesToChange)
+	}
+}
+
+func TestComputeChefAvailability_InactiveChefIsPaused(t *testing.T) {
+	chef := &models.ChefProfile{AcceptingOrders: true, IsActive: false}
+
+	got := ComputeChefAvailability(chef, nil, nil, time.Now())
+
+	if got.Orderable {
+		t.Fatal("an inactive chef profile must not be orderable")
+	}
+	if got.Status != AvailPaused {
+		t.Fatalf("status = %q, want %q", got.Status, AvailPaused)
+	}
+}

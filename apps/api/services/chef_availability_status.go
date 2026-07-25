@@ -43,7 +43,8 @@ type ChefAvailability = models.ChefAvailability
 type availInputs struct {
 	nowMin          int
 	acceptingOrders bool
-	pausedUntilMin  int // -1 when not paused (or the pause already elapsed)
+	pausedUntilMin  int  // -1 when not paused (or the pause already elapsed)
+	accountPaused   bool // the chef paused their whole ACCOUNT (users.is_active=false)
 	scheduleGates   bool // auto-schedule ON and today has an open (non-closed) schedule row
 	schedOpenMin    int  // -1 when absent/invalid
 	schedCloseMin   int  // -1 when absent/invalid
@@ -57,6 +58,15 @@ type availInputs struct {
 // decideAvailability is the pure core: given resolved inputs it returns the status + label. No DB,
 // no time.Now — every value comes in through availInputs so this is fully table-testable.
 func decideAvailability(in availInputs) ChefAvailability {
+	// An account-level pause outranks every clock-based rule: there is no
+	// reopening time to quote because the chef reopens it themselves. Returned
+	// as the existing "paused" status so the apps grey the kitchen out with the
+	// pill they already render, rather than showing a normal-looking kitchen
+	// that only fails at checkout.
+	if in.accountPaused {
+		return ChefAvailability{Status: AvailPaused, Label: "Taking a break"}
+	}
+
 	paused := in.pausedUntilMin >= 0
 	// For auto-schedule kitchens the live schedule window is authoritative (closes the cron lag);
 	// for everyone else the schedule doesn't gate ordering, so withinSchedule is vacuously true.
@@ -195,6 +205,7 @@ func ComputeChefAvailability(chef *models.ChefProfile, todaySched *models.ChefSc
 		nowMin:          istMinutes(now),
 		acceptingOrders: chef.AcceptingOrders,
 		pausedUntilMin:  pausedUntilMinutes(chef.PausedUntil, now),
+		accountPaused:   !chef.IsActive,
 		schedOpenMin:    -1,
 		schedCloseMin:   -1,
 		dailyCloseMin:   laterCutoffMinutes(cap),
