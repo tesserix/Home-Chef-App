@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/homechef/api/config"
+	"github.com/homechef/api/models"
 	"github.com/homechef/api/services/money"
 )
 
@@ -38,6 +39,14 @@ const (
 	SecretRazorpayKeyID         = "prod-homechef-razorpay-key-id"
 	SecretRazorpayKeySecret     = "prod-homechef-razorpay-key-secret"
 	SecretRazorpayWebhookSecret = "prod-homechef-razorpay-webhook-secret"
+
+	// Test-mode credential slot, used by kitchens an admin has marked as test.
+	// Deliberately separate secrets rather than a suffix on the values above, so
+	// rotating or clearing one slot cannot disturb the other — and so the live
+	// names stay exactly as they are, keeping existing production config valid.
+	SecretRazorpayTestKeyID         = "prod-homechef-razorpay-test-key-id"
+	SecretRazorpayTestKeySecret     = "prod-homechef-razorpay-test-key-secret"
+	SecretRazorpayTestWebhookSecret = "prod-homechef-razorpay-test-webhook-secret"
 )
 
 // RazorpayClient handles all Razorpay API interactions.
@@ -53,9 +62,11 @@ type RazorpayClient struct {
 	fetchedAt time.Time
 }
 
+// razorpayClients caches one client per mode ("live", "test"). Keyed rather
+// than two variables so adding a slot is a data change, not a code change.
 var (
-	razorpayClient *RazorpayClient
-	razorpayMu     sync.Mutex
+	razorpayClients = map[string]*RazorpayClient{}
+	razorpayMu      sync.Mutex
 )
 
 // isPlaceholderValue treats blank strings and the literal "placeholder"
@@ -69,28 +80,39 @@ func isPlaceholderValue(v string) bool {
 // required. If SM is unreachable, we fall back to env-provided credentials
 // — but only if they look real (not blank, not "placeholder"). This keeps
 // local dev working without GCP access.
-func fetchRazorpayFromSM(ctx context.Context) (*RazorpayClient, error) {
-	keyID, idErr := GetPlatformSecret(ctx, SecretRazorpayKeyID)
-	keySecret, secErr := GetPlatformSecret(ctx, SecretRazorpayKeySecret)
+func fetchRazorpayFromSM(ctx context.Context, mode string) (*RazorpayClient, error) {
+	mode = models.NormalizeMode(mode)
+	idName, secretName, webhookName := razorpaySecretNames(mode)
+
+	keyID, idErr := GetPlatformSecret(ctx, idName)
+	keySecret, secErr := GetPlatformSecret(ctx, secretName)
 	// Webhook secret is optional — webhooks simply won't verify if it's missing.
-	webhookSecret, _ := GetPlatformSecret(ctx, SecretRazorpayWebhookSecret)
+	webhookSecret, _ := GetPlatformSecret(ctx, webhookName)
 
 	if idErr != nil || secErr != nil || isPlaceholderValue(keyID) || isPlaceholderValue(keySecret) {
 		// Dev fallback: env-provided credentials (never used in prod since prod
 		// relies on Secret Manager).
-		cfg := config.AppConfig
-		if !isPlaceholderValue(cfg.RazorpayKeyID) && !isPlaceholderValue(cfg.RazorpayKeySecret) {
-			return &RazorpayClient{
-				keyID:         cfg.RazorpayKeyID,
-				keySecret:     cfg.RazorpayKeySecret,
-				webhookSecret: cfg.RazorpayWebhookSecret,
-				fetchedAt:     time.Now(),
-			}, nil
+		//
+		// Deliberately LIVE-ONLY. The RAZORPAY_KEY_* env vars predate this
+		// feature and describe a single gateway, so applying them to the test
+		// slot would serve live credentials to a sandbox order — the precise
+		// mix-up this whole feature exists to make impossible. An unconfigured
+		// test slot returns nil instead, which callers already handle.
+		if !models.IsTestMode(mode) {
+			cfg := config.AppConfig
+			if !isPlaceholderValue(cfg.RazorpayKeyID) && !isPlaceholderValue(cfg.RazorpayKeySecret) {
+				return &RazorpayClient{
+					keyID:         cfg.RazorpayKeyID,
+					keySecret:     cfg.RazorpayKeySecret,
+					webhookSecret: cfg.RazorpayWebhookSecret,
+					fetchedAt:     time.Now(),
+				}, nil
+			}
 		}
 		if idErr != nil {
-			return nil, fmt.Errorf("razorpay credentials not configured: %w", idErr)
+			return nil, fmt.Errorf("razorpay[%s] credentials not configured: %w", mode, idErr)
 		}
-		return nil, fmt.Errorf("razorpay credentials missing or still set to placeholder — configure them in Admin → Settings → Payment Gateway")
+		return nil, fmt.Errorf("razorpay[%s] credentials missing or still set to placeholder — configure them in Admin → Settings → Payment Gateway", mode)
 	}
 
 	return &RazorpayClient{
@@ -101,73 +123,116 @@ func fetchRazorpayFromSM(ctx context.Context) (*RazorpayClient, error) {
 	}, nil
 }
 
-// GetRazorpay returns a Razorpay client whose credentials are sourced from GCP
-// Secret Manager at runtime. Results are cached for razorpayCacheTTL; after
-// that, the next call triggers a fresh fetch. Callers that mutate the secret
-// (the admin settings handler) should call InvalidateRazorpay() so the next
-// read picks up new keys immediately.
+// razorpaySecretNames returns the three Secret Manager keys backing a mode's
+// credential slot. Separate secrets per slot — rather than one value with a
+// mode suffix — mean rotating or clearing one slot cannot disturb the other,
+// and the live names are unchanged so everything already configured in
+// production keeps resolving.
+func razorpaySecretNames(mode string) (keyID, keySecret, webhookSecret string) {
+	if models.IsTestMode(mode) {
+		return SecretRazorpayTestKeyID, SecretRazorpayTestKeySecret, SecretRazorpayTestWebhookSecret
+	}
+	return SecretRazorpayKeyID, SecretRazorpayKeySecret, SecretRazorpayWebhookSecret
+}
+
+// GetRazorpayFor returns the cached client for one mode, fetching that mode's
+// credentials from Secret Manager on a cache miss. The two slots are cached and
+// invalidated independently, so a chef in test mode and a chef in live mode can
+// transact concurrently against different gateways.
 //
-// Returns nil when no credentials are configured. Callers must handle nil.
-func GetRazorpay() *RazorpayClient {
+// An unrecognised mode resolves to live (see models.NormalizeMode): a typo in a
+// caller must never fall through to sandbox credentials, which would appear to
+// succeed while capturing no real money.
+//
+// Returns nil when that slot is not configured. Callers must handle nil, as
+// they already did.
+func GetRazorpayFor(mode string) *RazorpayClient {
+	mode = models.NormalizeMode(mode)
+
 	razorpayMu.Lock()
 	defer razorpayMu.Unlock()
 
-	if razorpayClient != nil && time.Since(razorpayClient.fetchedAt) < razorpayCacheTTL {
-		return razorpayClient
+	if c := razorpayClients[mode]; c != nil && time.Since(c.fetchedAt) < razorpayCacheTTL {
+		return c
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	fresh, err := fetchRazorpayFromSM(ctx)
+	fresh, err := fetchRazorpayFromSM(ctx, mode)
 	if err != nil {
 		// If the fetch fails but we have a cached client, keep serving it
 		// (better than going dark during a transient SM outage). Only the
 		// fetchedAt timestamp goes stale.
-		if razorpayClient != nil {
-			log.Printf("razorpay: SM fetch failed, using cached credentials: %v", err)
-			return razorpayClient
+		if c := razorpayClients[mode]; c != nil {
+			log.Printf("razorpay[%s]: SM fetch failed, using cached credentials: %v", mode, err)
+			return c
 		}
-		log.Printf("razorpay: not configured (%v)", err)
+		log.Printf("razorpay[%s]: not configured (%v)", mode, err)
 		return nil
 	}
 
-	razorpayClient = fresh
-	return razorpayClient
+	razorpayClients[mode] = fresh
+	return fresh
 }
 
-// snapshotRazorpayClient returns the current client pointer read under razorpayMu.
-// A RazorpayClient's fields are immutable after construction (GetRazorpay/
-// SetRazorpayClient assign a whole new client, never mutate in place), so callers
+// GetRazorpay is the live credential slot. Retained under its original name so
+// the non-chef-scoped call sites — admin gateway status, reconciliation, wallet
+// top-ups, platform subscriptions — keep compiling and keep meaning exactly
+// what they meant before this feature existed.
+func GetRazorpay() *RazorpayClient { return GetRazorpayFor(models.ChefModeLive) }
+
+// snapshotRazorpayClient returns one slot's client pointer read under razorpayMu.
+// A RazorpayClient's fields are immutable after construction (GetRazorpayFor/
+// SetRazorpayClientFor assign a whole new client, never mutate in place), so callers
 // may read the returned client's fields without further locking. Used by the
 // signature verifiers so a payment/webhook verify can't race a credential refresh
-// (GetRazorpay post-TTL) or invalidation (#395·5).
-func snapshotRazorpayClient() *RazorpayClient {
+// (GetRazorpayFor post-TTL) or invalidation (#395·5).
+func snapshotRazorpayClient(mode string) *RazorpayClient {
 	razorpayMu.Lock()
 	defer razorpayMu.Unlock()
-	return razorpayClient
+	return razorpayClients[models.NormalizeMode(mode)]
 }
 
-// InvalidateRazorpay clears the cached client so the next GetRazorpay() call
-// re-reads credentials from GCP Secret Manager. Call this after updating
-// secrets via the admin API.
+// InvalidateRazorpayFor clears one slot's cached client so the next read
+// re-fetches from Secret Manager. Scoped per mode so saving test keys in the
+// admin UI cannot knock a healthy live gateway offline.
+func InvalidateRazorpayFor(mode string) {
+	mode = models.NormalizeMode(mode)
+	razorpayMu.Lock()
+	defer razorpayMu.Unlock()
+	delete(razorpayClients, mode)
+	log.Printf("razorpay[%s]: credential cache invalidated", mode)
+}
+
+// InvalidateRazorpay clears every slot.
 func InvalidateRazorpay() {
-	razorpayMu.Lock()
-	defer razorpayMu.Unlock()
-	razorpayClient = nil
-	log.Println("razorpay: credential cache invalidated")
+	InvalidateRazorpayFor(models.ChefModeLive)
+	InvalidateRazorpayFor(models.ChefModeTest)
 }
 
-// InitRazorpay triggers an initial fetch to surface configuration problems at
-// startup. Safe to call when secrets aren't set yet — it just logs a warning
-// and returns. The client will be populated the first time a payment call or
-// admin status check runs.
-func InitRazorpay() {
-	if GetRazorpay() != nil {
-		log.Println("razorpay: client initialized from Secret Manager")
-		return
+// SetRazorpayClientFor installs a client into one slot directly. Test seam only.
+func SetRazorpayClientFor(mode string, c *RazorpayClient) {
+	mode = models.NormalizeMode(mode)
+	razorpayMu.Lock()
+	defer razorpayMu.Unlock()
+	if c != nil && c.fetchedAt.IsZero() {
+		c.fetchedAt = time.Now()
 	}
-	log.Println("razorpay: no credentials yet — configure via Admin → Settings → Payment Gateway")
+	razorpayClients[mode] = c
+}
+
+// InitRazorpay probes both slots at startup to surface configuration problems
+// early. Safe to call when secrets aren't set yet — it logs per slot and
+// returns. Each slot is populated on first use regardless.
+func InitRazorpay() {
+	for _, mode := range []string{models.ChefModeLive, models.ChefModeTest} {
+		if GetRazorpayFor(mode) != nil {
+			log.Printf("razorpay[%s]: client initialized from Secret Manager", mode)
+			continue
+		}
+		log.Printf("razorpay[%s]: no credentials yet — configure via Admin → Settings → Payment Gateway", mode)
+	}
 }
 
 // --- Linked Accounts (Razorpay Route) ---
@@ -569,36 +634,74 @@ func (c *RazorpayClient) FetchOrderPayments(orderID string) ([]PaymentResponse, 
 
 // --- Webhook Verification ---
 
-// VerifyWebhookSignature validates that a webhook payload came from Razorpay.
-// The webhook secret is held inside the RazorpayClient, not in global config.
-func VerifyWebhookSignature(payload []byte, signature string) bool {
-	c := snapshotRazorpayClient() // #395·5: read the client under the cache mutex
-	if c == nil || c.webhookSecret == "" {
-		log.Println("Warning: Razorpay webhook secret not configured")
-		return false
+// VerifyWebhookSignatureMode validates a webhook payload against BOTH credential
+// slots and reports which one signed it.
+//
+// Razorpay delivers test-dashboard and live-dashboard webhooks to the same URL,
+// each signed with its own secret, and the payload carries no mode marker — so
+// the only way to tell them apart is to try each secret. Live is tried first.
+//
+// The returned mode is a HINT, not an authority. When both slots hold the same
+// key — the interim production state while a real live key is pending — every
+// event resolves to live. The caller MUST additionally compare this against the
+// target record's own mode and drop a mismatch. That comparison, not this
+// function, is what keeps the two worlds apart.
+//
+// Both attempts use constant-time comparison, and the second is only made when
+// the first fails.
+func VerifyWebhookSignatureMode(payload []byte, signature string) (bool, string) {
+	configured := false
+	for _, mode := range []string{models.ChefModeLive, models.ChefModeTest} {
+		c := snapshotRazorpayClient(mode) // #395·5: read the client under the cache mutex
+		if c == nil || c.webhookSecret == "" {
+			continue
+		}
+		configured = true
+		mac := hmac.New(sha256.New, []byte(c.webhookSecret))
+		mac.Write(payload)
+		expected := hex.EncodeToString(mac.Sum(nil))
+		if hmac.Equal([]byte(expected), []byte(signature)) {
+			return true, mode
+		}
 	}
-
-	mac := hmac.New(sha256.New, []byte(c.webhookSecret))
-	mac.Write(payload)
-	expected := hex.EncodeToString(mac.Sum(nil))
-	return hmac.Equal([]byte(expected), []byte(signature))
+	if !configured {
+		log.Println("Warning: Razorpay webhook secret not configured for any mode")
+	}
+	return false, ""
 }
 
-// VerifyPaymentSignature validates a Razorpay Checkout payment signature:
+// VerifyWebhookSignature reports only whether a webhook is authentic, for
+// callers with no record context to compare a mode against.
+func VerifyWebhookSignature(payload []byte, signature string) bool {
+	ok, _ := VerifyWebhookSignatureMode(payload, signature)
+	return ok
+}
+
+// VerifyPaymentSignatureFor validates a Razorpay Checkout payment signature
+// against ONE mode's key secret:
 // HMAC-SHA256(order_id + "|" + payment_id, keySecret) must equal the signature
 // the client received from Razorpay. This proves Razorpay authorized THIS
 // (order, payment) pair for our merchant, so a captured payment from a
 // different order can't be reused to settle this one. Constant-time compare.
-func VerifyPaymentSignature(razorpayOrderID, razorpayPaymentID, signature string) bool {
-	c := snapshotRazorpayClient() // #395·5: read the client under the cache mutex
+//
+// Always call this with the ORDER's mode, never the chef's current mode — the
+// chef may have been flipped since the payment was taken.
+func VerifyPaymentSignatureFor(mode, razorpayOrderID, razorpayPaymentID, signature string) bool {
+	c := snapshotRazorpayClient(mode) // #395·5: read the client under the cache mutex
 	if c == nil || c.keySecret == "" {
-		log.Println("Warning: Razorpay key secret not configured")
+		log.Printf("Warning: Razorpay key secret not configured for mode %s", models.NormalizeMode(mode))
 		return false
 	}
 	mac := hmac.New(sha256.New, []byte(c.keySecret))
 	mac.Write([]byte(razorpayOrderID + "|" + razorpayPaymentID))
 	expected := hex.EncodeToString(mac.Sum(nil))
 	return hmac.Equal([]byte(expected), []byte(signature))
+}
+
+// VerifyPaymentSignature verifies against the live slot. Retained for the call
+// sites that have no order in hand.
+func VerifyPaymentSignature(razorpayOrderID, razorpayPaymentID, signature string) bool {
+	return VerifyPaymentSignatureFor(models.ChefModeLive, razorpayOrderID, razorpayPaymentID, signature)
 }
 
 // GetKeyID returns the Razorpay publishable key ID (for frontend checkout).

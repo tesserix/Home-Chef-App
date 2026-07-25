@@ -1,6 +1,10 @@
 package services
 
-import "time"
+import (
+	"time"
+
+	"github.com/homechef/api/models"
+)
 
 // razorpay_inject.go — a narrow, exported seam for injecting a Razorpay client so
 // tests in OTHER packages (handlers) can drive the money path (FetchPayment,
@@ -10,13 +14,14 @@ import "time"
 // testable; this makes them reachable from handler-package tests too (reused by
 // #395·4 tip/group verification and #218 sandbox harnessing).
 
-// SetRazorpayClient installs c as the process-wide Razorpay client (nil to clear).
-// Test-only: production populates the client via GetRazorpay/Secret Manager. Guarded
-// by the same mutex as the cache so it can't race a concurrent GetRazorpay.
+// SetRazorpayClient installs c as the LIVE-slot Razorpay client (nil to clear).
+// Test-only: production populates each slot via GetRazorpayFor/Secret Manager.
+//
+// Retained targeting the live slot so every pre-existing handler test — which
+// predates test-chef mode and deals only in live orders — keeps working
+// unchanged. Tests that need the test slot call SetRazorpayClientFor directly.
 func SetRazorpayClient(c *RazorpayClient) {
-	razorpayMu.Lock()
-	defer razorpayMu.Unlock()
-	razorpayClient = c
+	SetRazorpayClientFor(models.ChefModeLive, c)
 }
 
 // NewRazorpayTestClient builds a RazorpayClient whose API host is baseURL (an

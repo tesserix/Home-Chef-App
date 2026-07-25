@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/homechef/api/models"
 )
 
 // hmacHex mirrors VerifyWebhookSignature's expected-signature computation so
@@ -19,17 +21,19 @@ func hmacHex(payload []byte, secret string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// withRazorpayClient swaps the package-level razorpayClient for the duration of
-// a test and restores it afterward, keeping the singleton clean across tests.
+// withRazorpayClient swaps the LIVE-slot client for the duration of a test and
+// restores it afterward, keeping the cache clean across tests. These tests
+// predate test-chef mode and describe live-gateway behaviour, so the live slot
+// is the correct target.
 func withRazorpayClient(t *testing.T, c *RazorpayClient) {
 	t.Helper()
 	razorpayMu.Lock()
-	prev := razorpayClient
-	razorpayClient = c
+	prev := razorpayClients[models.ChefModeLive]
+	razorpayClients[models.ChefModeLive] = c
 	razorpayMu.Unlock()
 	t.Cleanup(func() {
 		razorpayMu.Lock()
-		razorpayClient = prev
+		razorpayClients[models.ChefModeLive] = prev
 		razorpayMu.Unlock()
 	})
 }
