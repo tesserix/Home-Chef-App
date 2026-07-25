@@ -48,6 +48,11 @@ func (h *LoyaltyHandler) GetLoyalty(c *gin.Context) {
 			"streakBonus":     cfg.StreakBonus,
 			"tierSilverAt":    cfg.TierSilverAt,
 			"tierGoldAt":      cfg.TierGoldAt,
+			// Spending limits, served so the app can state them accurately rather
+			// than hardcoding numbers an admin can retune at runtime.
+			"maxRedeemPct":     cfg.MaxRedeemPct,
+			"monthlyRedeemCap": cfg.MonthlyRedeemCap,
+			"expiryDays":       cfg.ExpiryDays,
 		},
 	})
 }

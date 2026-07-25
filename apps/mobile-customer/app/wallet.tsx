@@ -1,10 +1,13 @@
 import React from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AlertCircle, Wallet as WalletIcon, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
+import { AlertCircle, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
+import { router } from 'expo-router';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { BalanceCard } from '../components/wallet/BalanceCard';
 import { useWallet, useWalletTransactions } from '../hooks/useWallet';
+import { useLoyalty } from '../hooks/useLoyalty';
 
 // Android ripple tint — translucent token, never a new literal colour.
 const CANVAS_RIPPLE = `${customerColors.canvas}33`;
@@ -108,7 +111,11 @@ export default function WalletScreen() {
     isError: txnError,
     refetch: refetchTxns,
   } = useWalletTransactions();
+  const { data: loyalty } = useLoyalty();
   const currency = wallet?.currency ?? 'INR';
+  // Points are worth redeemRate rupees each; the rate is admin-tunable at runtime
+  // so it must come from the live config, never a client constant.
+  const pointsValue = (loyalty?.balance ?? 0) * (loyalty?.config?.redeemRate ?? 0);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-canvas">
@@ -120,28 +127,19 @@ export default function WalletScreen() {
       ) : (
         <ScrollView>
           <View className="p-4">
-            {/* Balance card */}
-            <View
-              className="rounded-2xl bg-canvas p-5"
-              style={cardShadow}
-            >
-              <View className="flex-row items-center">
-                <View className="w-12 h-12 rounded-full bg-surface-soft items-center justify-center mr-3">
-                  <WalletIcon size={24} color={customerColors.charcoal.soft} />
-                </View>
-                <View>
-                  <Text className="text-xs font-semibold text-charcoal-soft">
-                    Available balance
-                  </Text>
-                  <Text
-                    className="text-3xl font-bold text-charcoal"
-                    style={{ fontVariant: ['tabular-nums'] }}
-                  >
-                    {formatMoney(wallet?.balance ?? 0, currency)}
-                  </Text>
-                </View>
-              </View>
-            </View>
+            {/* One headline figure, two sources beneath. Wallet credit and points
+                are both spendable on an order, so showing them apart on separate
+                screens left the customer without a single answer to "how much can
+                I spend?". */}
+            <BalanceCard
+              walletBalance={wallet?.balance ?? 0}
+              pointsBalance={loyalty?.balance ?? 0}
+              pointsValue={pointsValue}
+              maxRedeemPct={loyalty?.config?.maxRedeemPct}
+              monthlyCap={loyalty?.config?.monthlyRedeemCap}
+              expiryDays={loyalty?.config?.expiryDays}
+              onPressPoints={() => router.push('/loyalty')}
+            />
 
             <Text className="text-xs font-semibold text-charcoal-soft px-1 pt-6 pb-2">
               Transactions

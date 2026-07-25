@@ -13,6 +13,11 @@ export interface LoyaltyConfig {
   streakBonus: number;
   tierSilverAt: number;
   tierGoldAt: number;
+  /** Spending limits, served by the API so the app states the live values rather
+   *  than hardcoding numbers an admin can retune at runtime. */
+  maxRedeemPct: number;
+  monthlyRedeemCap: number;
+  expiryDays: number;
 }
 
 export interface LoyaltyAccount {
@@ -50,6 +55,9 @@ const EMPTY_CONFIG: LoyaltyConfig = {
   streakBonus: 50,
   tierSilverAt: 1000,
   tierGoldAt: 5000,
+  maxRedeemPct: 0.1,
+  monthlyRedeemCap: 300,
+  expiryDays: 365,
 };
 
 export function useLoyalty() {
