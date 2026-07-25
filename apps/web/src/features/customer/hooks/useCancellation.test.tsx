@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/shared/services/api-client';
 import {
   orderCancellable,
+  useCancellationRequest,
   useRequestCancellation,
 } from '@/features/customer/hooks/useCancellation';
 
@@ -36,6 +37,42 @@ describe('useRequestCancellation', () => {
       '/orders/order-1/cancel',
       expect.anything(),
     );
+  });
+});
+
+describe('useCancellationRequest', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('treats a 404 as "no request filed yet" and resolves to null', async () => {
+    vi.spyOn(apiClient, 'get').mockRejectedValue({
+      success: false,
+      error: { code: 'NOT_FOUND', message: 'not found' },
+      status: 404,
+    });
+
+    const { result } = renderHook(() => useCancellationRequest('order-1'), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBeNull();
+  });
+
+  it('does not swallow a non-404 failure into "no request" — it must propagate', async () => {
+    vi.spyOn(apiClient, 'get').mockRejectedValue({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'server error' },
+      status: 500,
+    });
+
+    const { result } = renderHook(() => useCancellationRequest('order-1'), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
   });
 });
 

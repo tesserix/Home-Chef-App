@@ -26,6 +26,22 @@ export interface CancellationRequest {
  */
 export type RefundDestination = 'wallet' | 'original';
 
+/**
+ * apiClient throws the parsed error body with the HTTP status attached
+ * (see api-client.ts's `Object.assign(body, { status: response.status })`).
+ * A 404 here just means no cancellation request has been filed yet — every
+ * other status (500, a dropped connection, 401/403, etc.) is a real failure
+ * and must propagate, not be swallowed into "no request".
+ */
+function isNotFound(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'status' in err &&
+    (err as { status?: unknown }).status === 404
+  );
+}
+
 /** The cancellation request for an order (null when none). Polls while pending. */
 export function useCancellationRequest(orderId: string | undefined) {
   return useQuery<CancellationRequest | null>({
@@ -34,7 +50,10 @@ export function useCancellationRequest(orderId: string | undefined) {
       apiClient
         .get<{ request: CancellationRequest }>(`/orders/${orderId}/cancel-request`)
         .then((r) => r.request)
-        .catch(() => null), // 404 = no request yet
+        .catch((err) => {
+          if (isNotFound(err)) return null; // 404 = no request filed yet
+          throw err; // real failure — let React Query surface it, don't fake "no request"
+        }),
     enabled: Boolean(orderId),
     retry: false,
     refetchInterval: (query) =>
