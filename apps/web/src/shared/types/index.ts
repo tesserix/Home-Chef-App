@@ -187,11 +187,34 @@ export type OrderStatus =
   | 'cancelled'
   | 'refunded';
 
+/**
+ * Chef identity as it appears on an order.
+ *
+ * The API never serializes the raw ChefProfile onto an order (that leaked
+ * profile fields to the customer); it projects this narrow shape instead —
+ * see `OrderChefResponse` in `apps/api/models/order.go`. Only present when
+ * the handler preloaded the relation, hence `chef?` below.
+ */
+export interface OrderChef {
+  id: string;
+  /** Mirrors businessName; kept for backward-compat with older responses. */
+  name: string;
+  businessName?: string;
+  /** The proprietor behind the kitchen — printed on the official receipt. */
+  ownerName?: string;
+  imageUrl?: string;
+  fssaiLicenseNumber?: string;
+  gstin?: string;
+  /** Supplier state — the receipt uses it to split GST into CGST+SGST vs IGST. */
+  state?: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
   customerId: string;
   chefId: string;
+  chef?: OrderChef;
   deliveryPartnerId?: string;
   status: OrderStatus;
   items: OrderItem[];

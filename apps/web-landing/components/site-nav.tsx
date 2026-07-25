@@ -3,12 +3,26 @@
 import { useEffect, useState } from 'react';
 import { cn } from '@tesserix/web';
 import { Wordmark } from '@/components/wordmark';
+import { APP_LOGIN_PATH } from '@/lib/site';
+
+interface SiteNavProps {
+  /**
+   * Where the primary CTA goes. Defaults to the home page's badge block;
+   * pages that aren't the home page pass a real destination so the CTA is
+   * never a dangling anchor.
+   */
+  ctaHref?: string;
+  ctaLabel?: string;
+}
 
 /**
  * Sticky top navigation. Transparent-on-white at rest; a hairline and
  * faint shadow appear once the page scrolls.
  */
-export function SiteNav() {
+export function SiteNav({
+  ctaHref = '/download/',
+  ctaLabel = 'Get the app',
+}: SiteNavProps = {}) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -57,10 +71,16 @@ export function SiteNav() {
             For chefs
           </a>
           <a
-            href="#get-the-app"
+            href={APP_LOGIN_PATH}
+            className="text-[15px] font-medium text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal"
+          >
+            Log in
+          </a>
+          <a
+            href={ctaHref}
             className="inline-flex h-11 items-center rounded-full bg-coral px-5 text-[15px] font-semibold text-white transition-colors duration-micro ease-state hover:bg-coral-pressed"
           >
-            Get the app
+            {ctaLabel}
           </a>
         </div>
       </nav>

@@ -45,6 +45,7 @@ const TipPage = lazyWithRetry(() => import('@/features/customer/pages/TipPage'))
 const GroupOrderPage = lazyWithRetry(() => import('@/features/customer/pages/GroupOrderPage'));
 const GroupInvitePage = lazyWithRetry(() => import('@/features/customer/pages/GroupInvitePage'));
 const ProfilePage = lazyWithRetry(() => import('@/features/customer/pages/ProfilePage'));
+const DataPrivacyPage = lazyWithRetry(() => import('@/features/customer/pages/DataPrivacyPage'));
 const WalletPage = lazyWithRetry(() => import('@/features/customer/pages/WalletPage'));
 const LoyaltyPage = lazyWithRetry(() => import('@/features/customer/pages/LoyaltyPage'));
 const ReferralPage = lazyWithRetry(() => import('@/features/customer/pages/ReferralPage'));
@@ -217,6 +218,14 @@ export function AppRoutes() {
             element={
               <ProtectedRoute>
                 <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="data-privacy"
+            element={
+              <ProtectedRoute>
+                <DataPrivacyPage />
               </ProtectedRoute>
             }
           />

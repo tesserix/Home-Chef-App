@@ -38,7 +38,14 @@ const menuItemSchema = z.object({
   isFeatured: z.boolean().default(false),
 });
 
-type MenuItemFormData = z.infer<typeof menuItemSchema>;
+/**
+ * The fields with `.default()` (serves, dietaryTags, allergens, isAvailable,
+ * isFeatured) are optional going *in* and guaranteed coming *out*, so the form
+ * and the submit handler need the two different sides of the schema. Collapsing
+ * both to `z.infer` makes the resolver unassignable to useForm.
+ */
+type MenuItemFormInput = z.input<typeof menuItemSchema>;
+type MenuItemFormData = z.output<typeof menuItemSchema>;
 
 const DIETARY_TAGS = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free', 'Keto', 'Low-Carb'];
 const ALLERGENS = ['Nuts', 'Dairy', 'Gluten', 'Soy', 'Eggs', 'Shellfish', 'Fish'];
@@ -381,7 +388,7 @@ function MenuItemForm({
     formState: { errors },
     watch,
     setValue,
-  } = useForm<MenuItemFormData>({
+  } = useForm<MenuItemFormInput, unknown, MenuItemFormData>({
     resolver: zodResolver(menuItemSchema),
     defaultValues: item
       ? {

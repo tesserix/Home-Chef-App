@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -24,6 +24,7 @@ import {
   Copy,
   Download,
   AlertTriangle,
+  Database,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
@@ -117,8 +118,15 @@ export default function ProfilePage() {
                 ))}
               </nav>
 
-              {/* Logout */}
-              <div className="mt-4 pt-4 border-t">
+              {/* Account links */}
+              <div className="mt-4 pt-4 border-t space-y-1">
+                <Link
+                  to="/data-privacy"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-ink-soft hover:bg-mist transition-colors"
+                >
+                  <Database className="h-5 w-5"  aria-hidden="true" />
+                  <span className="font-medium">Your data</span>
+                </Link>
                 <button type="button"
                   onClick={logout}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-paprika hover:bg-paprika-tint transition-colors"
@@ -1719,10 +1727,12 @@ function SecurityTab() {
       <div className="rounded-xl bg-paprika-tint p-6">
         <h2 className="text-lg font-semibold text-paprika">Delete Account</h2>
         <p className="mt-1 text-sm text-paprika">
-          Once you delete your account, there is no going back. Please be certain.
+          To delete your account, we'll ask you to confirm your email and review any account restrictions. This action cannot be undone.
         </p>
-        <Button variant="destructive" className="mt-4">
-          Delete Account
+        <Button variant="destructive" className="mt-4" asChild>
+          <Link to="/data-privacy">
+            Delete Account
+          </Link>
         </Button>
       </div>
     </div>

@@ -6,14 +6,84 @@
 export const SITE_URL = 'https://fe3dr.com';
 export const SITE_NAME = 'Fe3dr';
 
-// TODO(owner): replace with the real App Store listing URL once the
-// customer app is published (current value is a placeholder).
-export const APP_STORE_URL = 'https://apps.apple.com/app/idTODO';
+/**
+ * Paths owned by the customer SPA (apps/web), which is served from this same
+ * origin — see the `web` entry in apps/auth-bff/homechef-products.yaml, whose
+ * hosts are fe3dr.com/www.fe3dr.com and whose BFF is reached same-origin at
+ * /bff. Kept as constants so the landing never hardcodes SPA routes inline.
+ */
+export const APP_LOGIN_PATH = '/login';
+export const APP_REGISTER_PATH = '/register';
 
-// TODO(owner): replace with the real Play Store listing URL once the
-// customer app is published (current value is a placeholder).
-export const PLAY_STORE_URL =
-  'https://play.google.com/store/apps/details?id=com.homechef.customerTODO';
+/* ── App store listings ─────────────────────────────────────────────────
+ *
+ * Neither app is published yet. Every download surface therefore renders a
+ * "coming soon" state instead of a link, because a badge that 404s is worse
+ * than one that tells the truth — and these URLs are also emitted as JSON-LD
+ * `installUrl`, where a dead link gets indexed.
+ *
+ * The package ids below are the real, final ones. Going live is a two-field
+ * edit per platform: set `status: 'live'` and fill in `url`.
+ */
+
+/** Final Play Store application ids — already set on the Expo builds. */
+export const ANDROID_PACKAGES = {
+  customer: 'com.tesserix.homechef.customer',
+  vendor: 'com.tesserix.homechef.vendor',
+} as const;
+
+/** Play listing URL. Only resolves once the listing is public. */
+export function playStoreUrl(packageName: string): string {
+  return `https://play.google.com/store/apps/details?id=${packageName}`;
+}
+
+/** App Store listing URL, built from Apple's numeric app id. */
+export function appStoreUrl(appleAppId: string): string {
+  return `https://apps.apple.com/in/app/id${appleAppId}`;
+}
+
+export type StoreStatus = 'live' | 'coming-soon';
+
+export interface StoreListing {
+  status: StoreStatus;
+  /** Public listing URL — `null` until `status` is `'live'`. */
+  url: string | null;
+}
+
+export interface AppListing {
+  /** Product name as it reads in badge and download copy. */
+  name: string;
+  ios: StoreListing;
+  android: StoreListing;
+}
+
+export const CUSTOMER_APP: AppListing = {
+  name: 'Fe3dr',
+  // TODO(owner): on publish → { status: 'live', url: appStoreUrl('<apple numeric id>') }
+  ios: { status: 'coming-soon', url: null },
+  // TODO(owner): on publish → { status: 'live', url: playStoreUrl(ANDROID_PACKAGES.customer) }
+  android: { status: 'coming-soon', url: null },
+};
+
+export const VENDOR_APP: AppListing = {
+  name: 'Fe3dr for Chefs',
+  // TODO(owner): on publish → { status: 'live', url: appStoreUrl('<apple numeric id>') }
+  ios: { status: 'coming-soon', url: null },
+  // TODO(owner): on publish → { status: 'live', url: playStoreUrl(ANDROID_PACKAGES.vendor) }
+  android: { status: 'coming-soon', url: null },
+};
+
+/** Every live listing URL for an app — empty while it is still unpublished. */
+export function liveStoreUrls(app: AppListing): string[] {
+  return [app.ios, app.android]
+    .filter((listing): listing is StoreListing & { url: string } => listing.url !== null)
+    .map((listing) => listing.url);
+}
+
+/** Whether the app can be downloaded on at least one platform. */
+export function isDownloadable(app: AppListing): boolean {
+  return liveStoreUrls(app).length > 0;
+}
 
 // TODO(owner): confirm the launch city shown across the page.
 export const LAUNCH_CITY = 'Pune';

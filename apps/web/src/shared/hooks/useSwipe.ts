@@ -251,7 +251,10 @@ export function useLongPress(
   onClick?: () => void,
   { delay = 500 }: { delay?: number } = {}
 ) {
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  // Browser timer, not a Node one — `NodeJS.Timeout` only resolved while
+  // @types/node leaked into this app's graph. Infer it from setTimeout so the
+  // type is correct under the DOM lib alone.
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPress = useRef(false);
 
   const start = useCallback(() => {

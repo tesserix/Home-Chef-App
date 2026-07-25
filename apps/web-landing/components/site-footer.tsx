@@ -2,11 +2,13 @@ import { CONTACT_EMAIL, INSTAGRAM_URL, X_URL } from '@/lib/site';
 import { StoreBadges } from '@/components/store-badges';
 import { Wordmark } from '@/components/wordmark';
 
+// Home-relative, not bare anchors: the footer renders on /download/, /privacy/
+// and every SEO page too, where a bare "#how-it-works" scrolls nowhere.
 const EXPLORE_LINKS = [
-  { href: '#how-it-works', label: 'How it works' },
-  { href: '#whats-cooking', label: "What's cooking" },
-  { href: '#for-chefs', label: 'For chefs' },
-  { href: '#get-the-app', label: 'Get the app' },
+  { href: '/#how-it-works', label: 'How it works' },
+  { href: '/#whats-cooking', label: "What's cooking" },
+  { href: '/#for-chefs', label: 'For chefs' },
+  { href: '/download/', label: 'Get the app' },
 ] as const;
 
 const LEGAL_LINKS = [

@@ -4,11 +4,47 @@ products:
   - name: homechef
     domain: fe3dr.com
     apps:
-      # Web portals (web / vendor-portal / delivery-portal) sunset — entries
-      # removed 2026-06-17 (issue #22) once the browser UIs were retired.
+      # Restored 2026-07-25: the web surfaces are coming back (owner reversal of
+      # the 2026-06 app-first sunset). These entries were dropped in #22, which
+      # is why vendors.fe3dr.com answered /bff/auth/exchange with
+      # {"error":"unknown_host"} — GIP sign-in succeeded, then the BFF could not
+      # resolve an app for the host, so nobody could log in.
+      #
       # Mobile auth does NOT use these app entries (it goes through
       # /auth/auto-login gated by mobileTenantAllowlist below); only the
-      # OIDC browser handlers resolve apps by host. admin-portal is retained.
+      # OIDC browser handlers resolve apps by host.
+      #
+      # delivery-portal (delivery.fe3dr.com) was dropped by the same commit and
+      # is deliberately still absent — restore it alongside if that portal is
+      # revived too.
+      - name: web
+        hosts: ["fe3dr.com", "www.fe3dr.com", "localhost:5173"]
+        gipTenantId: HomeChef-Customer-rqg8a
+        oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
+        clientSecretEnv: HOMECHEF_CUSTOMER_CLIENT_SECRET
+        sessionCookie: hc_session
+        callbackPath: /auth/callback
+        callbackHost: fe3dr.com
+        postLoginUrl: /
+        postLogoutUrl: /
+        authContext: customer
+        defaultRole: customer
+        signInMethods: [password, google.com, apple.com, facebook.com, phone]
+        allowedOrigins: ["https://fe3dr.com", "https://www.fe3dr.com", "http://localhost:5173"]
+
+      - name: vendor-portal
+        hosts: ["vendors.fe3dr.com", "localhost:5174"]
+        gipTenantId: HomeChef-Business-8s8ql
+        oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
+        clientSecretEnv: HOMECHEF_BUSINESS_CLIENT_SECRET
+        sessionCookie: hc_vendor_session
+        callbackPath: /auth/callback
+        postLoginUrl: /dashboard
+        authContext: business
+        defaultRole: vendor
+        signInMethods: [password, google.com, apple.com, phone]
+        allowedOrigins: ["https://vendors.fe3dr.com", "http://localhost:5174"]
+
       - name: admin-portal
         hosts: ["admin.fe3dr.com", "localhost:5176"]
         gipTenantId: HomeChef-Internal-gyofe

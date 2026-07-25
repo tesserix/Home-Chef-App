@@ -1,4 +1,4 @@
-import { IMAGES, LAUNCH_CITY } from '@/lib/site';
+import { IMAGES, APP_LOGIN_PATH } from '@/lib/site';
 import { Parallax } from '@/components/parallax';
 import { RouteMotif } from '@/components/route-motif';
 import { StoreBadges } from '@/components/store-badges';
@@ -17,14 +17,9 @@ export function Hero() {
       <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 pb-20 pt-10 sm:px-8 lg:grid-cols-12 lg:gap-6 lg:pb-28 lg:pt-16">
         {/* Copy — left-weighted, editorial */}
         <div className="lg:col-span-6 lg:pr-4">
-          <p className="fade-up inline-flex items-center gap-2.5 rounded-full border border-hairline py-2 pl-3 pr-4 text-[13px] font-semibold text-charcoal">
-            <span className="relative inline-block h-2 w-2 rounded-full bg-coral pulse-dot" />
-            Now launching in {LAUNCH_CITY}
-          </p>
-
           <h1
             id="hero-heading"
-            className="mt-7 font-display text-[clamp(2.75rem,8.5vw,4.5rem)] font-bold leading-[0.98] tracking-[-0.03em] text-charcoal"
+            className="font-display text-[clamp(2.75rem,8.5vw,4.5rem)] font-bold leading-[0.98] tracking-[-0.03em] text-charcoal"
           >
             <span className="line-mask">
               <span className="line-rise" style={{ animationDelay: '80ms' }}>
@@ -58,6 +53,19 @@ export function Hero() {
           <p
             className="fade-up mt-6 text-sm text-charcoal-soft"
             style={{ animationDelay: '540ms' }}
+          >
+            Prefer your browser?{' '}
+            <a
+              href={APP_LOGIN_PATH}
+              className="font-medium text-coral underline-offset-4 hover:underline"
+            >
+              Order on the web
+            </a>
+          </p>
+
+          <p
+            className="fade-up mt-3 text-sm text-charcoal-soft"
+            style={{ animationDelay: '600ms' }}
           >
             FSSAI-verified kitchens&ensp;&middot;&ensp;Secure payments
           </p>
