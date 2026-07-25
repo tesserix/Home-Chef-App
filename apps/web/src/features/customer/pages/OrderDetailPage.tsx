@@ -609,6 +609,28 @@ export default function OrderDetailPage() {
                           // — so surface its own message rather than a
                           // blanket string that would tell a customer to
                           // retry into a 409.
+                          const status =
+                            typeof err === 'object' && err !== null && 'status' in err
+                              ? (err as { status?: unknown }).status
+                              : undefined;
+                          if (status === 502) {
+                            // Cancellation succeeded — only the refund leg
+                            // failed. Treat this as success-with-warning, not
+                            // a flat failure: close the modal and refresh the
+                            // order the same way the success path does, so
+                            // the customer doesn't see a stale order behind
+                            // an armed "Request Cancellation" button that
+                            // would retry straight into a 409.
+                            toast.warning(
+                              friendlyErrorMessage(err, 'Could not request cancellation'),
+                            );
+                            setShowCancelModal(false);
+                            queryClient.invalidateQueries({ queryKey: ['order', id] });
+                            queryClient.invalidateQueries({
+                              queryKey: ['order', id, 'cancel-request'],
+                            });
+                            return;
+                          }
                           toast.error(friendlyErrorMessage(err, 'Could not request cancellation'));
                         },
                       },
