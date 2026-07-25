@@ -226,9 +226,21 @@ export default function RootLayout() {
           setOnboardingComplete(true);
         }
       })
-      .catch(() => {
-        // On a transient failure, fall through to the wizard rather than block
-        // the user — they can still finish (the server upserts idempotently).
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        // A 401 that survived the api client's silent-refresh means the stored
+        // identity is dead (a stale token left in the Keychain, or a session the
+        // BFF no longer honors). Fail CLOSED: sign out so the gate routes to
+        // login — instead of dropping the user into the setup wizard with a
+        // broken session they can't finish (every onboarding write 401s too).
+        const status = (err as { response?: { status?: number } } | null)
+          ?.response?.status;
+        if (status === 401) {
+          void useAuthStore.getState().logout();
+          return;
+        }
+        // Transient (network / 5xx): fall through to the wizard rather than
+        // block the user — they can still finish (the server upserts idempotently).
       })
       .finally(() => {
         if (!cancelled) setOnboardingChecked(true);
