@@ -228,24 +228,6 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, "chef cancel: "+string(reason)); hErr != nil {
 		log.Printf("payout cross-guard failed for cancelled order %s: %v", order.ID, hErr)
 	}
-	// Penalise the chef the platform's service fee for cancelling an in-progress
-	// order — the customer is made fully whole above, but the platform still
-	// incurred a real cost bringing the order this far, so a chef-fault cancel is
-	// not free to the chef. Raised as a debit.penalty on the payout ledger and
-	// collected off the chef's NEXT payout (services/payout_recovery.go's
-	// ApplyRecoveryDeduction reduces the transfer at creation;
-	// handlers/payment.go's dischargeChefRecoveryForOrder resolves it once that
-	// reduced transfer is confirmed). RaiseChefRecoveryPenalty dedupes on this
-	// order, so a concurrent duplicate cancel (the ReserveFullRefund loser still
-	// runs this tail) never double-penalises. Best-effort; never fails the cancel.
-	if order.ServiceFee > 0 {
-		if pErr := services.RaiseChefRecoveryPenalty(database.DB, chef.ID, &order,
-			int64(services.ToPaise(order.ServiceFee)),
-			"chef cancel — platform fee penalty for order "+order.OrderNumber); pErr != nil {
-			log.Printf("chef cancel: recovery penalty raise failed order=%s chef=%s: %v", order.OrderNumber, chef.ID, pErr)
-			services.CaptureBackgroundError(fmt.Errorf("chef-cancel-penalty: order=%s chef=%s: %w", order.OrderNumber, chef.ID, pErr))
-		}
-	}
 	// Release the reserved daily capacity (#48) — these dishes won't be made.
 	// Runs once per cancel (the already-cancelled guard above prevents re-entry).
 	capDay := services.CapacityDay(order.CreatedAt)

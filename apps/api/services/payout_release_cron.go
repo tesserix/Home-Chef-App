@@ -117,23 +117,25 @@ func BuildReleaseInput(db *gorm.DB, order *models.Order, now time.Time) (payouts
 		return payouts.ReleaseInput{}, err
 	}
 
-	// RECOVERY COORDINATION (formerly a LANDMINE — two uncoordinated sites
-	// acting on the same non-discharging recovery debt). A chef's recovery
-	// debt is now COLLECTED-AND-DISCHARGED at transfer creation, not here:
-	// handlers/payment.go's applyChefRecoveryDeduction reduces the chef's
-	// Route transfer by the outstanding balance at checkout, and
-	// dischargeChefRecoveryForOrder writes the resolving
-	// credit.recovery_collected ledger entry (services.DischargeChefRecovery)
-	// once that reduced, HELD transfer is confirmed by gateway capture (or a
-	// direct platform-balance transfer for a fully-wallet-covered order) —
-	// see services/payout_recovery.go's doc comment for the full mechanism.
-	// This release path must defer entirely rather than also block on the
-	// same balance: blocking here on the SAME outstanding figure the
-	// transfer already reduced would double-count the identical debt (once
-	// as a smaller transfer, again as a blocked release) — the exact hazard
-	// the original LANDMINE warned about. RecoveryBalance is therefore always
-	// zero. Do not resurrect a ledger read here without first re-reading both
-	// this comment and applyChefRecoveryDeduction's.
+	// LANDMINE: this is one of TWO uncoordinated places that act on the same
+	// non-discharging recovery debt (services/payout_recovery.go — nothing
+	// anywhere writes a resolving ledger entry, so ApplyRecoveryDeduction
+	// re-derives the SAME full outstanding balance every time it is called).
+	// The other is handlers/payment.go's applyChefRecoveryDeduction, which
+	// already reduced this same chef's gross transfer for a PRIOR order at
+	// checkout. Neither site knows the other exists or discharges anything, so
+	// today the debt can be independently deducted-from-transfer here-and-there
+	// AND block-release here, against the identical outstanding figure. No
+	// penalty/ledger writer may ship until exactly one of these two mechanisms
+	// actually collects-and-discharges the debt and the other defers to it —
+	// do not add a third site, and do not wire a discharging writer to only one
+	// of the two without also fixing the other.
+	gross := payouts.Money{Minor: int64(ToPaise(ChefNetPayoutFor(order))), Currency: payouts.CurrencyINR}
+	_, deducted, err := ApplyRecoveryDeduction(db, order.ChefID, gross, now)
+	if err != nil {
+		return payouts.ReleaseInput{}, err
+	}
+
 	return payouts.ReleaseInput{
 		Now:               now,
 		DeliveredAt:       deliveredAt(order, now),
@@ -149,7 +151,7 @@ func BuildReleaseInput(db *gorm.DB, order *models.Order, now time.Time) (payouts
 		// finding 2).
 		SettlementActivated: order.Chef.RazorpaySettlementStatus == "activated" && order.Chef.PayoutMethod == "bank_transfer",
 		RefundOpen:          order.RefundedAt != nil,
-		RecoveryBalance:     payouts.Zero(payouts.CurrencyINR),
+		RecoveryBalance:     deducted,
 		DeliveredOrderCount: int(delivered),
 		RampOrders:          rampOrders(db),
 		OrderTotal:          payouts.Money{Minor: int64(ToPaise(order.Total)), Currency: payouts.CurrencyINR},

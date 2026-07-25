@@ -488,36 +488,6 @@ func TestBuildReleaseInput_FlagsAnOpenRefund(t *testing.T) {
 	}
 }
 
-// TestBuildReleaseInput_RecoveryBalanceAlwaysZero_DefersToTransferCreation
-// pins the resolved LANDMINE: a chef's recovery debt is now
-// collected-and-discharged at transfer creation (handlers/payment.go's
-// applyChefRecoveryDeduction + dischargeChefRecoveryForOrder), so this
-// release path must NEVER also block on the same balance — even with a
-// large outstanding debit.penalty sitting on the ledger, RecoveryBalance
-// must always read zero and BlockRecoveryBalance must never appear in the
-// decision's reasons.
-func TestBuildReleaseInput_RecoveryBalanceAlwaysZero_DefersToTransferCreation(t *testing.T) {
-	db := newPayoutReleaseTestDB(t)
-	order := seedDeliveredOrder(t, db, nil)
-	require.NoError(t, db.Exec(
-		`INSERT INTO payout_ledger_entries (id, tenant_id, payee_type, payee_id, kind, amount_minor, currency, source_type, source_id, created_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
-		uuid.New().String(), "t1", string(payouts.PayeeChef), order.ChefID.String(), string(payouts.EntryDebitPenalty),
-		20_000, string(payouts.CurrencyINR), "order", uuid.NewString(), time.Now(),
-	).Error)
-
-	in, err := BuildReleaseInput(db, order, time.Now())
-	require.NoError(t, err)
-	require.True(t, in.RecoveryBalance.IsZero(),
-		"RecoveryBalance must always be zero — recovery is collected+discharged at transfer creation, not blocked here")
-
-	decision := payouts.DecideRelease(in)
-	for _, r := range decision.Reasons {
-		require.NotEqual(t, payouts.BlockRecoveryBalance, r,
-			"the release decision must never block on recovery — that is now handled entirely at transfer creation")
-	}
-}
-
 // seedChefWithDeliveredOrders inserts a chef with n PRIOR delivered orders, then
 // returns the (n+1)th delivered order for that chef — the row under evaluation —
 // with Chef preloaded, matching the shape runPayoutReleaseSweep loads.
