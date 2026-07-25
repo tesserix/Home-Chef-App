@@ -34,7 +34,7 @@ func ReverseOrderLoyalty(tx *gorm.DB, orderID uuid.UUID) error {
 	cfg := GetLoyaltyConfig(tx)
 	oid := orderID
 	_, created, err := applyLoyaltyLedgerTxn(tx, lot.UserID, toReverse, models.LoyaltyDebit,
-		models.LoyaltyTxnSource("refund_reversal"), &oid, "Order refunded — earned points reversed",
+		models.LoyaltySourceRefundReversal, &oid, "Order refunded — earned points reversed",
 		"loyalty:order-refund:"+orderID.String(), nil, cfg)
 	if err != nil {
 		return err

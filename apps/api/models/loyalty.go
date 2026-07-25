@@ -22,10 +22,12 @@ const (
 type LoyaltyTxnSource string
 
 const (
-	LoyaltySourceOrder       LoyaltyTxnSource = "order"        // earned on a delivered order
-	LoyaltySourceStreak      LoyaltyTxnSource = "streak_bonus" // meal-sub adherence streak
-	LoyaltySourceRedeem      LoyaltyTxnSource = "redeem"       // converted to wallet credit
-	LoyaltySourceAdminAdjust LoyaltyTxnSource = "admin_adjustment"
+	LoyaltySourceOrder          LoyaltyTxnSource = "order"        // earned on a delivered order
+	LoyaltySourceStreak         LoyaltyTxnSource = "streak_bonus" // meal-sub adherence streak
+	LoyaltySourceRedeem         LoyaltyTxnSource = "redeem"       // converted to wallet credit
+	LoyaltySourceAdminAdjust    LoyaltyTxnSource = "admin_adjustment"
+	LoyaltySourceExpiry         LoyaltyTxnSource = "expiry"          // lot expired past its 1-year window
+	LoyaltySourceRefundReversal LoyaltyTxnSource = "refund_reversal" // earned points clawed back on refund
 )
 
 // Loyalty tiers, derived from lifetime points earned. Tiers are cosmetic by
