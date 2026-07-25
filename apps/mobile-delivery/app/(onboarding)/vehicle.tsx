@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
@@ -15,6 +14,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../lib/api';
 import { useDriverOnboardingStore } from '../../store/onboarding-store';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 const currentYear = new Date().getFullYear();
 
@@ -41,6 +41,7 @@ const vehicleSchema = z.object({
 type VehicleFormData = z.infer<typeof vehicleSchema>;
 
 export default function VehicleScreen() {
+  const { showAlert } = useAlert();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { personalInfo, vehicleDetails, updateVehicleDetails, setStep } =
     useDriverOnboardingStore();
@@ -82,7 +83,7 @@ export default function VehicleScreen() {
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to save vehicle details. Please try again.';
-      Alert.alert('Error', message);
+      showAlert('Error', message);
     } finally {
       setIsSubmitting(false);
     }

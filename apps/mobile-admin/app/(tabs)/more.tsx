@@ -1,4 +1,4 @@
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { type Href, router } from 'expo-router';
 import {
   BadgeCheck,
@@ -15,7 +15,7 @@ import {
   LogOut,
   ChevronRight,
 } from 'lucide-react-native';
-import { Screen } from '@homechef/mobile-shared/ui';
+import { Screen, useAlert } from '@homechef/mobile-shared/ui';
 import { useAuth } from '@homechef/mobile-shared/auth';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../../store/auth-store';
@@ -62,11 +62,12 @@ function Row({ item }: { item: Item }) {
 }
 
 export default function MoreScreen() {
+  const { showAlert } = useAlert();
   const { signOut } = useAuth();
   const user = useAuthStore((s) => s.user);
 
   const onLogout = () => {
-    Alert.alert('Log out', 'Sign out of the admin console?', [
+    showAlert('Log out', 'Sign out of the admin console?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log out',

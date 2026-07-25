@@ -1,18 +1,12 @@
 import { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { AxiosResponse } from 'axios';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../lib/api';
 import { useDriverOnboardingStore } from '../../store/onboarding-store';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 interface SubscriptionPlan {
   id: string;
@@ -40,6 +34,7 @@ function PlanCardSkeleton() {
 }
 
 export default function SubscriptionScreen() {
+  const { showAlert } = useAlert();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(
     useDriverOnboardingStore.getState().subscriptionInfo.selectedPlanId
   );
@@ -61,7 +56,7 @@ export default function SubscriptionScreen() {
 
   const handleSelectPlan = async () => {
     if (!selectedPlanId) {
-      Alert.alert('Select a Plan', 'Please select a subscription plan to continue.');
+      showAlert('Select a Plan', 'Please select a subscription plan to continue.');
       return;
     }
     setIsSubmitting(true);
@@ -77,7 +72,7 @@ export default function SubscriptionScreen() {
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to select plan. Please try again.';
-      Alert.alert('Error', message);
+      showAlert('Error', message);
     } finally {
       setIsSubmitting(false);
     }

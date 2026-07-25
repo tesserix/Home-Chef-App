@@ -5,7 +5,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -20,7 +19,7 @@ import { ChevronLeft, Camera, Check } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReportIssue, type IssueReason } from '../../../hooks/useReportIssue';
 import { friendlyErrorMessage } from '../../../lib/errors';
@@ -52,6 +51,7 @@ interface ReportIssueDraft {
 }
 
 export default function ReportIssueScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useOrder(id ?? '');
   const report = useReportIssue();
@@ -111,7 +111,7 @@ export default function ReportIssueScreen() {
   async function captureFromCamera() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow camera access to take a photo.');
+      showAlert('Permission needed', 'Allow camera access to take a photo.');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -124,7 +124,7 @@ export default function ReportIssueScreen() {
   async function chooseFromLibrary() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo access to attach a photo.');
+      showAlert('Permission needed', 'Allow photo access to attach a photo.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -138,10 +138,10 @@ export default function ReportIssueScreen() {
   // pattern used elsewhere in the app rather than pulling in a sheet library.
   function pickPhoto() {
     if (photoUris.length >= MAX_PHOTOS) {
-      Alert.alert('Photo limit', `You can attach up to ${MAX_PHOTOS} photos.`);
+      showAlert('Photo limit', `You can attach up to ${MAX_PHOTOS} photos.`);
       return;
     }
-    Alert.alert('Add a photo', undefined, [
+    showAlert('Add a photo', undefined, [
       { text: 'Take photo', onPress: () => void captureFromCamera() },
       { text: 'Choose from library', onPress: () => void chooseFromLibrary() },
       { text: 'Cancel', style: 'cancel' },
@@ -162,17 +162,17 @@ export default function ReportIssueScreen() {
         onSuccess: (res) => {
           clearDraft();
           if (res.status === 'auto_refunded' && res.refundAmount > 0) {
-            Alert.alert(
+            showAlert(
               'Refunded to your wallet',
               `${money(res.refundAmount)} has been added to your Fe3dr wallet. Sorry about that!`,
               [{ text: 'View wallet', onPress: () => router.replace('/wallet' as never) }, { text: 'Done', onPress: () => router.back() }],
             );
           } else {
-            Alert.alert('Thanks for reporting', res.message, [{ text: 'OK', onPress: () => router.back() }]);
+            showAlert('Thanks for reporting', res.message, [{ text: 'OK', onPress: () => router.back() }]);
           }
         },
         onError: (err) =>
-          Alert.alert(
+          showAlert(
             'Could not report',
             friendlyErrorMessage(err, 'Please try again in a moment.'),
           ),

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { LoginScreen } from '@homechef/mobile-shared/screens';
@@ -16,6 +16,7 @@ import { getRawFCMToken, registerDeviceToken, authenticateWithBiometrics } from 
 import { useAuthStore } from '../../store/auth-store';
 import { api } from '../../lib/api';
 import type { AuthResponse } from '@homechef/mobile-shared/types';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 const BFF_URL = process.env.EXPO_PUBLIC_BFF_URL ?? '';
 const GIP_TENANT_ID = process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? '';
@@ -49,6 +50,7 @@ async function completeBFFLogin(): Promise<AuthResponse> {
 }
 
 export default function LoginPage() {
+  const { showAlert } = useAlert();
   const { setAuthResponse, biometricsEnabled } = useAuthStore();
   const { completeSignIn } = useAuth();
 
@@ -79,7 +81,7 @@ export default function LoginPage() {
       } catch { /* non-fatal */ }
       router.replace('/(tabs)');
     } catch (err: unknown) {
-      Alert.alert('Sign-in failed', resolveAuthErrorMessage(err));
+      showAlert('Sign-in failed', resolveAuthErrorMessage(err));
     }
   };
 
@@ -95,7 +97,7 @@ export default function LoginPage() {
       } catch { /* non-fatal */ }
       router.replace('/(tabs)');
     } catch (err: unknown) {
-      Alert.alert('Sign-in failed', resolveAuthErrorMessage(err));
+      showAlert('Sign-in failed', resolveAuthErrorMessage(err));
     }
   };
 
@@ -107,7 +109,7 @@ export default function LoginPage() {
       if (!accessToken) throw new Error('No saved session found. Please log in with email.');
       router.replace('/(tabs)');
     } catch (err: unknown) {
-      Alert.alert('Sign-in failed', resolveAuthErrorMessage(err));
+      showAlert('Sign-in failed', resolveAuthErrorMessage(err));
     }
   };
 
@@ -131,7 +133,7 @@ export default function LoginPage() {
           }
           router.replace('/(tabs)');
         } catch (err: unknown) {
-          Alert.alert('Sign-in failed', resolveAuthErrorMessage(err));
+          showAlert('Sign-in failed', resolveAuthErrorMessage(err));
         }
       }}
       onNavigateToRegister={() => router.push('/(auth)/register')}

@@ -8,7 +8,6 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
-  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -66,6 +65,7 @@ import { friendlyErrorMessage } from '../lib/errors';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { AddressLabelSelect } from '../components/address/AddressLabelSelect';
 import type { Address } from '../types/customer';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the ChefCard/MenuItemCard convention.
@@ -120,6 +120,7 @@ function useStaleValue<T>(value: T | undefined): T | undefined {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CheckoutScreen() {
+  const { showAlert } = useAlert();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const cartStore = useCartStore();
@@ -465,7 +466,7 @@ export default function CheckoutScreen() {
         removePromo();
       }
       setError(message);
-      Alert.alert('Could not place order', message);
+      showAlert('Could not place order', message);
     } finally {
       // Re-enable only after the whole create→pay flow settles (dismiss/cancel/
       // error). On success startOrderPayment has already routed to /payment/result.

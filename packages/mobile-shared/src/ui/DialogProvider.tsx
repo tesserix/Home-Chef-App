@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import { Alert } from 'react-native';
 
 import { Dialog, type DialogAction } from './Dialog';
 
@@ -40,6 +49,31 @@ interface AlertContextValue {
 
 const AlertContext = createContext<AlertContextValue | null>(null);
 
+// The escape hatch for callers that have no render tree at all: an axios
+// interceptor, a download helper, anything reached from outside a component.
+// They cannot call a hook, and leaving them on Alert.alert would keep exactly
+// the teal-Material popup this component exists to remove.
+let mountedShowAlert: AlertContextValue['showAlert'] | null = null;
+
+/**
+ * Branded alert for non-React callers. Prefer useAlert() inside components and
+ * hooks — this exists for module-level code that has nowhere to call one.
+ *
+ * Falls back to the platform alert if no provider is mounted yet (an error
+ * during app boot, say). An ugly warning still beats a silent one.
+ */
+export function showAlertOutsideReact(
+  title: string,
+  message?: string,
+  buttons?: AlertButton[],
+): void {
+  if (mountedShowAlert) {
+    mountedShowAlert(title, message, buttons);
+    return;
+  }
+  Alert.alert(title, message, buttons);
+}
+
 export function DialogProvider({
   children,
   accentColor,
@@ -78,6 +112,16 @@ export function DialogProvider({
   }, [current, dismiss]);
 
   const value = useMemo(() => ({ showAlert }), [showAlert]);
+
+  // Publish this provider's showAlert to module-level callers for as long as it
+  // is mounted. Cleared on unmount so a stale setState never fires into a torn
+  // down tree.
+  useEffect(() => {
+    mountedShowAlert = showAlert;
+    return () => {
+      if (mountedShowAlert === showAlert) mountedShowAlert = null;
+    };
+  }, [showAlert]);
 
   return (
     <AlertContext.Provider value={value}>

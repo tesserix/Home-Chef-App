@@ -2,20 +2,12 @@
 // Step 5/6 — Terms checkbox + cancellation policy radio.
 // StyleSheet only — no NativeWind className.
 
-import {
-  Alert,
-  Linking,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Check, RotateCcw } from 'lucide-react-native';
-import { OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import {
@@ -36,6 +28,7 @@ const TERMS_BULLET_KEYS = [
 ];
 
 export default function PoliciesScreen() {
+  const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { policies, updatePolicies, setStep } = useVendorOnboardingStore();
 
@@ -46,11 +39,11 @@ export default function PoliciesScreen() {
 
   function onNext(): void {
     if (!acceptedTerms) {
-      Alert.alert(t('onboarding.termsRequired'), t('onboarding.termsRequiredBody'));
+      showAlert(t('onboarding.termsRequired'), t('onboarding.termsRequiredBody'));
       return;
     }
     if (!cancellationPolicy) {
-      Alert.alert(t('onboarding.policyRequired'), t('onboarding.policyRequiredBody'));
+      showAlert(t('onboarding.policyRequired'), t('onboarding.policyRequiredBody'));
       return;
     }
     updatePolicies({ acceptedTerms, cancellationPolicy });

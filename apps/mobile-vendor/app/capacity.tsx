@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   StyleSheet,
@@ -14,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button, KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { Button, KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import {
   useCapacitySettings,
   useSetItemCapacity,
@@ -35,6 +34,7 @@ function slotWindowOrdered(start: string, end: string): boolean {
 // Capacity & cutoff controls (#48): per-meal order cutoffs + auto-sold-out, and
 // per-dish daily caps with today's remaining/sold counts.
 export default function CapacityScreen() {
+  const { showAlert } = useAlert();
   const { data: settings, isLoading } = useCapacitySettings();
   const updateSettings = useUpdateCapacitySettings();
   const setItemCap = useSetItemCapacity();
@@ -88,12 +88,12 @@ export default function CapacityScreen() {
     }
     for (const [label, v] of timeFields) {
       if (v !== '' && !HHMM.test(v)) {
-        Alert.alert('Invalid time', `${label} must be HH:MM (24h), e.g. 10:00.`);
+        showAlert('Invalid time', `${label} must be HH:MM (24h), e.g. 10:00.`);
         return;
       }
     }
     if (slotsEnabled && (!slotWindowOrdered(lunchStart, lunchEnd) || !slotWindowOrdered(dinnerStart, dinnerEnd))) {
-      Alert.alert('Invalid window', 'A slot start time must be before its end time.');
+      showAlert('Invalid window', 'A slot start time must be before its end time.');
       return;
     }
     // Capacity: blank/0 → unlimited (null).
@@ -116,8 +116,8 @@ export default function CapacityScreen() {
         dinnerSlotCapacity: toCap(dinnerCap),
       },
       {
-        onSuccess: () => Alert.alert('Saved', 'Your capacity settings are updated.'),
-        onError: () => Alert.alert('Could not save', 'Please try again.'),
+        onSuccess: () => showAlert('Saved', 'Your capacity settings are updated.'),
+        onError: () => showAlert('Could not save', 'Please try again.'),
       },
     );
   }
@@ -132,7 +132,7 @@ export default function CapacityScreen() {
     const cap = trimmed === '' ? null : Math.max(0, parseInt(trimmed, 10) || 0);
     setItemCap.mutate(
       { itemId, dailyCapacity: cap },
-      { onError: () => Alert.alert('Could not save', 'Please try again.') },
+      { onError: () => showAlert('Could not save', 'Please try again.') },
     );
     setEditingId(null);
   }

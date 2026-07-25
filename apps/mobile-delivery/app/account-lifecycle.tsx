@@ -10,7 +10,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   Share,
   Text,
@@ -29,8 +28,10 @@ import {
   useExportMyData,
 } from '../hooks/useAccountLifecycle';
 import { useAuthStore } from '../store/auth-store';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 export default function AccountLifecycleScreen() {
+  const { showAlert } = useAlert();
   const user = useAuthStore((s) => s.user);
   const eligibility = useDeletionEligibility();
   const deleteAccount = useDeleteAccount();
@@ -65,12 +66,12 @@ export default function AccountLifecycleScreen() {
         }
       },
       onError: () =>
-        Alert.alert('Export failed', 'Could not prepare your data. Please try again.'),
+        showAlert('Export failed', 'Could not prepare your data. Please try again.'),
     });
   }
 
   function handleDeactivate() {
-    Alert.alert(
+    showAlert(
       'Pause my account',
       'You go offline and stop receiving delivery requests. Nothing is deleted — sign in again any time to start taking deliveries.',
       [
@@ -84,7 +85,7 @@ export default function AccountLifecycleScreen() {
               // driver can come back immediately. Signing out also raced the
               // api client's own 403 redirect to the same screen.
               onSuccess: () => router.replace('/account-paused' as never),
-              onError: () => Alert.alert('Could not pause', 'Please try again.'),
+              onError: () => showAlert('Could not pause', 'Please try again.'),
             }),
         },
       ],
@@ -92,7 +93,7 @@ export default function AccountLifecycleScreen() {
   }
 
   function handleDelete() {
-    Alert.alert(
+    showAlert(
       'Delete account',
       `Your account is removed straight away and your sign-in stops working. If you sign up again with this email within ${retentionDays} days your history comes back — but you will need to be verified again and re-upload your documents. After ${retentionDays} days everything is erased for good.`,
       [
@@ -103,13 +104,13 @@ export default function AccountLifecycleScreen() {
           onPress: () =>
             deleteAccount.mutate(confirmEmail.trim(), {
               onSuccess: () =>
-                Alert.alert(
+                showAlert(
                   'Account deleted',
                   `Sorry to see you go. Sign up again with this email within ${retentionDays} days if you want your history back.`,
                   [{ text: 'OK', onPress: signOutToLogin }],
                 ),
               onError: () =>
-                Alert.alert(
+                showAlert(
                   'Delete failed',
                   'Could not delete your account. Please try again or contact support.',
                 ),

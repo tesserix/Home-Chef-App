@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -13,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
 import { useDriverOnboardingStore } from '../../store/onboarding-store';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 interface SummaryRowProps {
   label: string;
@@ -34,6 +34,7 @@ function maskAccountNumber(account: string): string {
 }
 
 export default function ReviewScreen() {
+  const { showAlert } = useAlert();
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { personalInfo, vehicleDetails, documents, payoutDetails, subscriptionInfo, reset } =
@@ -66,7 +67,7 @@ export default function ReviewScreen() {
       setOtpSent(true);
       setCooldown(60);
     } catch (err) {
-      Alert.alert('Verify email', apiError(err, "Couldn't send the code. Please try again."));
+      showAlert('Verify email', apiError(err, "Couldn't send the code. Please try again."));
     } finally {
       setSending(false);
     }
@@ -79,7 +80,7 @@ export default function ReviewScreen() {
       await api.post('/account/email/otp/verify', { email, code });
       setEmailVerified(true);
     } catch (err) {
-      Alert.alert('Verify email', apiError(err, 'That code is incorrect or expired.'));
+      showAlert('Verify email', apiError(err, 'That code is incorrect or expired.'));
     } finally {
       setVerifying(false);
     }
@@ -94,11 +95,11 @@ export default function ReviewScreen() {
 
   const handleSubmit = async () => {
     if (!termsAccepted) {
-      Alert.alert('Terms Required', 'Please accept the Terms of Service and Privacy Policy.');
+      showAlert('Terms Required', 'Please accept the Terms of Service and Privacy Policy.');
       return;
     }
     if (!emailVerified) {
-      Alert.alert('Verify email', 'Please verify your email before submitting.');
+      showAlert('Verify email', 'Please verify your email before submitting.');
       return;
     }
     setIsSubmitting(true);
@@ -109,7 +110,7 @@ export default function ReviewScreen() {
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to submit application. Please try again.';
-      Alert.alert('Submission Error', message);
+      showAlert('Submission Error', message);
     } finally {
       setIsSubmitting(false);
     }

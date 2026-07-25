@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -12,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
-import { useDialog } from '@homechef/mobile-shared/ui';
+import { useDialog, useAlert } from '@homechef/mobile-shared/ui';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -39,6 +38,7 @@ import { MealPlanDayList } from '../../components/meal-plan/MealPlanDayList';
 // cherry-picked (status awaiting_customer), the customer approves the revised
 // set (declined days drop) or rejects it (whole plan cancels).
 export default function MealPlanDetailScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useMealPlan(id);
   const cancel = useCancelMealPlan();
@@ -121,7 +121,7 @@ export default function MealPlanDetailScreen() {
 
   function confirmReceipt(dayId: string) {
     if (!plan) return;
-    Alert.alert(
+    showAlert(
       'Confirm this meal?',
       "Let us know you received this meal. You can still report an issue if something's wrong.",
       [
@@ -132,9 +132,9 @@ export default function MealPlanDetailScreen() {
             confirmDay.mutate(
               { planId: plan.id, dayId },
               {
-                onSuccess: (res) => Alert.alert('Thanks!', res.message),
+                onSuccess: (res) => showAlert('Thanks!', res.message),
                 onError: (err) =>
-                  Alert.alert(
+                  showAlert(
                     'Something went wrong',
                     friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
                   ),
@@ -146,7 +146,7 @@ export default function MealPlanDetailScreen() {
   }
 
   function confirmToday() {
-    Alert.alert(
+    showAlert(
       "Confirm today's meals?",
       "Let us know you received today's delivered meals. You can still report an issue if something's wrong.",
       [
@@ -156,14 +156,14 @@ export default function MealPlanDetailScreen() {
           onPress: () =>
             confirmTiffin.mutate(undefined, {
               onSuccess: (res) =>
-                Alert.alert(
+                showAlert(
                   'Thanks!',
                   res.confirmed > 0
                     ? `Confirmed ${res.confirmed} meal${res.confirmed === 1 ? '' : 's'}.`
                     : 'Your meals are already confirmed.',
                 ),
               onError: (err) =>
-                Alert.alert(
+                showAlert(
                   'Something went wrong',
                   friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
                 ),

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -32,6 +31,7 @@ import {
   istTodayIso,
 } from '../components/chef/WeeklyMenuDishCard';
 import { MealPlanBookRow } from '../components/chef/MealPlanBookRow';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 const HORIZON_DAYS = 14; // how far ahead a customer can pre-book
 const LEAD_MS = 12 * 60 * 60 * 1000; // server's booking lead time (mealPlanLeadTime)
@@ -96,6 +96,7 @@ const selKey = (date: string, slot: MealSlot) => `${date}-${slot}`;
 // then submits a single advance request → POST /meal-plans. The chef then
 // accepts all or cherry-picks; a trim comes back here for approval.
 export default function BookMealPlanScreen() {
+  const { showAlert } = useAlert();
   const { chefId } = useLocalSearchParams<{ chefId: string }>();
   const { data: menu, isLoading, isError, refetch } = useChefWeeklyMenu(chefId);
 
@@ -239,14 +240,14 @@ export default function BookMealPlanScreen() {
           // Payment now happens AFTER the chef responds and the customer approves
           // (on the meal-plan detail screen) — NOT here. Sending the request charges
           // nothing; the chef reviews the days, then you approve and pay to lock it in.
-          Alert.alert(
+          showAlert(
             'Request sent',
             'Your chef will review the days and confirm what they can cook. When they respond, you approve and pay to lock it in — nothing is charged yet.',
             [{ text: 'OK', onPress: () => router.replace('/meal-plans' as never) }],
           );
         },
         onError: () =>
-          Alert.alert(
+          showAlert(
             'Could not send',
             'Some days may be too soon or unavailable. Please adjust and try again.',
           ),

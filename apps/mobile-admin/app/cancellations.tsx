@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Button, Screen } from '@homechef/mobile-shared/ui';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, Screen, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Badge, Empty, LoadingList, ScreenHeader } from '../components/kit';
 import {
@@ -39,6 +39,7 @@ export default function CancellationsScreen() {
 }
 
 function ArbitrationCard({ req }: { req: AdminCancellationRequest }) {
+  const { showAlert } = useAlert();
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const resolve = useResolveCancellation();
@@ -48,8 +49,8 @@ function ArbitrationCard({ req }: { req: AdminCancellationRequest }) {
     resolve.mutate(
       { id: req.id, reason, note },
       {
-        onSuccess: () => Alert.alert('Resolved', 'Any additional refund has been issued to the customer.'),
-        onError: (e) => Alert.alert('Could not resolve', errorMessage(e)),
+        onSuccess: () => showAlert('Resolved', 'Any additional refund has been issued to the customer.'),
+        onError: (e) => showAlert('Could not resolve', errorMessage(e)),
       },
     );
   }

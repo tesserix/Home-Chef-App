@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import { useAuthStore } from '../../store/auth-store';
 import { stopTracking } from '../../lib/background-location';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 interface NavItem {
   icon: React.ReactNode;
@@ -21,10 +22,11 @@ interface NavItem {
 }
 
 export default function MoreScreen() {
+  const { showAlert } = useAlert();
   const { logout } = useAuthStore();
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
+    showAlert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Logout',

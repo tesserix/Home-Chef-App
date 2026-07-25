@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -11,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Screen, Button } from '@homechef/mobile-shared/ui';
+import { Screen, Button, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import {
   useFSSAILocked,
@@ -40,6 +39,7 @@ const DAY_OPTIONS = [
 ];
 
 export default function FSSAIScreen() {
+  const { showAlert } = useAlert();
   const q = useFSSAILocked();
   const override = useOverrideFSSAILock();
   const clear = useClearFSSAIOverride();
@@ -55,29 +55,29 @@ export default function FSSAIScreen() {
 
   const submitOverride = () => {
     if (!target || reason.trim().length < 10) {
-      Alert.alert('Reason too short', 'Please enter at least 10 characters.');
+      showAlert('Reason too short', 'Please enter at least 10 characters.');
       return;
     }
     override.mutate(
       { chefId: target.chefId, reason: reason.trim(), days: Number(days) },
       {
-        onError: (e) => Alert.alert('Failed', errorMessage(e)),
+        onError: (e) => showAlert('Failed', errorMessage(e)),
         onSuccess: () => {
           closeModal();
-          Alert.alert('Override granted', `Lock lifted for ${days} days.`);
+          showAlert('Override granted', `Lock lifted for ${days} days.`);
         },
       }
     );
   };
 
   const doClear = (ch: FSSAILockedChef) => {
-    Alert.alert('Clear override', `Re-lock ${ch.businessName}?`, [
+    showAlert('Clear override', `Re-lock ${ch.businessName}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Clear',
         style: 'destructive',
         onPress: () =>
-          clear.mutate(ch.chefId, { onError: (e) => Alert.alert('Failed', errorMessage(e)) }),
+          clear.mutate(ch.chefId, { onError: (e) => showAlert('Failed', errorMessage(e)) }),
       },
     ]);
   };

@@ -5,15 +5,17 @@
 // way back. /me/reactivate is the one endpoint the auth middleware lets a
 // deactivated account reach.
 
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { theme } from '@homechef/mobile-shared/theme';
 
 import { useReactivateAccount } from '../hooks/useAccountLifecycle';
 import { useAuthStore } from '../store/auth-store';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 export default function AccountPausedScreen() {
+  const { showAlert } = useAlert();
   const reactivate = useReactivateAccount();
   const { status } = useLocalSearchParams<{ status?: string }>();
 
@@ -24,11 +26,11 @@ export default function AccountPausedScreen() {
   function handleReactivate() {
     reactivate.mutate(undefined, {
       onSuccess: () =>
-        Alert.alert('Welcome back', 'You can go online and start taking deliveries again.', [
+        showAlert('Welcome back', 'You can go online and start taking deliveries again.', [
           { text: 'OK', onPress: () => router.replace('/(tabs)' as never) },
         ]),
       onError: () =>
-        Alert.alert('Could not reactivate', 'Please try again, or contact support.'),
+        showAlert('Could not reactivate', 'Please try again, or contact support.'),
     });
   }
 

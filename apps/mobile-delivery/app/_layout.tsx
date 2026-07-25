@@ -11,6 +11,8 @@ import { AxiosResponse } from 'axios';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { AuthProvider } from '@homechef/mobile-shared/auth';
+import { DialogProvider } from '@homechef/mobile-shared/ui';
+import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
@@ -211,7 +213,9 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <QueryClientProvider client={queryClient}>
           <BottomSheetModalProvider>
-            <AppNavigator />
+            <DialogProvider accentColor={theme.colors.brand[500]}>
+              <AppNavigator />
+            </DialogProvider>
           </BottomSheetModalProvider>
         </QueryClientProvider>
       </GestureHandlerRootView>

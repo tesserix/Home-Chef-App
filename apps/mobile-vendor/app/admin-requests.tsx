@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { AlertTriangle, BellRing, ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { EmptyState, Skeleton } from '@homechef/mobile-shared/ui';
+import { EmptyState, Skeleton, useAlert } from '@homechef/mobile-shared/ui';
 import {
   AdminRequest,
   useAdminRequests,
@@ -37,6 +37,7 @@ function useNowEveryMinute(): number {
 // The bump control. Shown only where it means something: an undecided request
 // the chef is waiting on.
 function RemindControl({ request, now }: { request: AdminRequest; now: number }) {
+  const { showAlert } = useAlert();
   const remind = useRemindAdminRequest();
   const escalated = request.reminderCount >= 3;
 
@@ -51,7 +52,7 @@ function RemindControl({ request, now }: { request: AdminRequest; now: number })
     remind.mutate(request.id, {
       onError: (err) => {
         const status = err?.response?.status;
-        Alert.alert(
+        showAlert(
           status === 429 ? 'Not yet' : "Couldn't send the reminder",
           status === 429
             ? 'This request was reminded recently. The button will unlock again shortly.'

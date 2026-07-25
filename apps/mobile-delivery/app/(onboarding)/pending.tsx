@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { AxiosResponse } from 'axios';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 interface DriverOnboardingStatus {
   step: number;
@@ -19,6 +20,7 @@ interface DriverOnboardingStatus {
 }
 
 export default function PendingScreen() {
+  const { showAlert } = useAlert();
   const { logout } = useAuthStore();
 
   const { data, isLoading } = useQuery<AxiosResponse<DriverOnboardingStatus>>({
@@ -41,7 +43,7 @@ export default function PendingScreen() {
   }, [status]);
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
+    showAlert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Logout',

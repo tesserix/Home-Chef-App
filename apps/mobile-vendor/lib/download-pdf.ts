@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as SecureStore from 'expo-secure-store';
-import { Alert } from 'react-native';
+import { showAlertOutsideReact } from '@homechef/mobile-shared/ui';
 
 /**
  * Download an authenticated PDF from the API and open the platform share
@@ -18,7 +18,7 @@ export async function downloadAndSharePdf(
   try {
     const token = await SecureStore.getItemAsync('access_token');
     if (!token) {
-      Alert.alert('Sign in required', 'Sign in again to download PDFs.');
+      showAlertOutsideReact('Sign in required', 'Sign in again to download PDFs.');
       return;
     }
     const apiBase = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -28,7 +28,7 @@ export async function downloadAndSharePdf(
       headers: { Authorization: `Bearer ${token}` },
     });
     if (dl.status !== 200) {
-      Alert.alert('Could not download', `Server returned ${dl.status}.`);
+      showAlertOutsideReact('Could not download', `Server returned ${dl.status}.`);
       return;
     }
     if (await Sharing.isAvailableAsync()) {
@@ -37,10 +37,10 @@ export async function downloadAndSharePdf(
         dialogTitle: localName,
       });
     } else {
-      Alert.alert('Saved', `Saved to ${dl.uri}`);
+      showAlertOutsideReact('Saved', `Saved to ${dl.uri}`);
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Download failed.';
-    Alert.alert('Could not download', msg);
+    showAlertOutsideReact('Could not download', msg);
   }
 }

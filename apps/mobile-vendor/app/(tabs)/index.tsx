@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActionSheetIOS,
-  Alert,
   Platform,
   Pressable,
   RefreshControl,
@@ -30,7 +29,7 @@ import {
 import { api } from '../../lib/api';
 import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Skeleton } from '@homechef/mobile-shared/ui';
+import { Skeleton, useAlert } from '@homechef/mobile-shared/ui';
 import {
   useVendorDashboard,
   useToggleAcceptingOrders,
@@ -125,6 +124,7 @@ const IN_FLIGHT_STATUSES = new Set<Order['status']>([
 // kitchen status, and any "ready" order. Past-tense numbers (earnings,
 // rating) come last. See agent design notes — pending wins the top.
 export default function DashboardScreen() {
+  const { showAlert } = useAlert();
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const dockClearance = useDockClearance();
@@ -292,7 +292,7 @@ export default function DashboardScreen() {
         },
       );
     } else {
-      Alert.alert('Kitchen status', undefined, [
+      showAlert('Kitchen status', undefined, [
         ...options.map((o) => ({ text: o.label, onPress: o.action })),
         { text: 'Cancel', style: 'cancel' as const },
       ]);

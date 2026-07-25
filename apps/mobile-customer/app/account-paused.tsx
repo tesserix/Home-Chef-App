@@ -9,14 +9,7 @@
 // The api client routes here on 403 + status=account_deactivated. /me/reactivate
 // is the one endpoint the auth middleware lets a deactivated account reach.
 
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PauseCircle } from 'lucide-react-native';
@@ -25,8 +18,10 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { useReactivateAccount } from '../hooks/useDataPrivacy';
 import { friendlyErrorMessage } from '../lib/errors';
 import { useAuthStore } from '../store/auth-store';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 export default function AccountPausedScreen() {
+  const { showAlert } = useAlert();
   const router = useRouter();
   const reactivate = useReactivateAccount();
   const { status } = useLocalSearchParams<{ status?: string }>();
@@ -38,12 +33,12 @@ export default function AccountPausedScreen() {
   function handleReactivate() {
     reactivate.mutate(undefined, {
       onSuccess: () => {
-        Alert.alert('Welcome back', 'Your account is active again.', [
+        showAlert('Welcome back', 'Your account is active again.', [
           { text: 'OK', onPress: () => router.replace('/(tabs)') },
         ]);
       },
       onError: (error) =>
-        Alert.alert(
+        showAlert(
           'Could not reactivate',
           friendlyErrorMessage(error, 'Please try again, or contact support.'),
         ),

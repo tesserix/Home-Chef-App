@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Alert, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import Constants from 'expo-constants';
 import { api } from '../lib/api';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 interface NotificationSettings {
   newDelivery: boolean;
@@ -78,6 +79,7 @@ function ActionRow({
 }
 
 export default function DriverSettingsScreen() {
+  const { showAlert } = useAlert();
   const [newDelivery, setNewDelivery] = useState(true);
   const [earningsPayout, setEarningsPayout] = useState(true);
   const [defaultOnline, setDefaultOnline] = useState(false);
@@ -103,7 +105,7 @@ export default function DriverSettingsScreen() {
   }
 
   function handleViewSubscription() {
-    Alert.alert(
+    showAlert(
       'Subscription',
       'Visit the web portal to manage your subscription.',
       [{ text: 'OK' }],

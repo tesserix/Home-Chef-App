@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { theme } from '../theme/tokens';
+import { resolveDialogLayout, type DialogAction } from './dialog-layout';
 
 // Dialog — the branded centre-screen popup.
 //
@@ -35,14 +36,8 @@ const EXIT_MS = 140;
 // should feel settled the instant it lands, not springy.
 const EASE_OUT = Easing.bezier(0.22, 1, 0.36, 1);
 
-export interface DialogAction {
-  label: string;
-  onPress?: () => void;
-  /** Renders in the destructive colour. For the action that cannot be undone. */
-  destructive?: boolean;
-  /** The quiet, dismissing choice. Rendered before the primary action. */
-  cancel?: boolean;
-}
+export type { DialogAction, DialogLayout } from './dialog-layout';
+export { resolveDialogLayout } from './dialog-layout';
 
 export interface DialogProps {
   visible: boolean;
@@ -101,9 +96,7 @@ export function Dialog({
     action.onPress?.();
   }, []);
 
-  // Cancel-style actions read first, so the eye lands on the way out before the
-  // irreversible one — the same ordering the platform alerts use.
-  const ordered = [...actions].sort((a, b) => Number(!!b.cancel) - Number(!!a.cancel));
+  const { stacked, ordered, primary } = resolveDialogLayout(actions);
 
   return (
     <Modal
@@ -157,24 +150,27 @@ export function Dialog({
 
           <View style={styles.divider} />
 
-          <View style={styles.actions}>
-            {ordered.map((action, i) => (
+          <View style={[styles.actions, stacked && styles.actionsStacked]}>
+            {ordered.map((action) => (
               <Pressable
                 key={action.label}
                 onPress={() => handleAction(action)}
                 accessibilityRole="button"
                 accessibilityLabel={action.label}
                 android_ripple={{ color: `${theme.colors.ink.DEFAULT}14` }}
-                style={styles.actionHit}
+                style={[styles.actionHit, stacked && styles.actionHitStacked]}
               >
                 {({ pressed }) => (
                   <Text
+                    // One line, always: a wrapped action label turns a tidy
+                    // dialog into a ragged one, and the stacked layout above
+                    // already gives every label a full row to work with.
+                    numberOfLines={1}
                     style={[
                       styles.actionLabel,
+                      stacked && styles.actionLabelStacked,
                       action.destructive && styles.actionDestructive,
-                      // The last action is the primary one; earlier ones are quiet.
-                      !action.destructive &&
-                        i === ordered.length - 1 &&
+                      action === primary &&
                         (accentColor ? { color: accentColor } : styles.actionPrimary),
                       action.cancel && styles.actionCancel,
                       pressed && Platform.OS === 'ios' && styles.actionPressed,
@@ -236,16 +232,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: theme.spacing[2],
   },
+  actionsStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    paddingBottom: theme.spacing[1],
+  },
   actionHit: {
     // 48px: a destructive confirmation is the last place to make a target tight.
     minHeight: 48,
     justifyContent: 'center',
     paddingHorizontal: theme.spacing[4],
   },
+  actionHitStacked: {
+    // Full-bleed rows, so the whole width of the card is tappable rather than
+    // just the run of text.
+    paddingHorizontal: theme.spacing[3],
+  },
   actionLabel: {
     fontSize: 15,
     fontWeight: '600',
     color: theme.colors.ink.DEFAULT,
+  },
+  actionLabelStacked: {
+    // Right-aligned to match the row layout's flex-end, so a dialog reads the
+    // same whichever way its actions happened to lay out.
+    textAlign: 'right',
   },
   actionPrimary: { color: theme.colors.ink.DEFAULT },
   actionDestructive: { color: theme.colors.destructive.DEFAULT },

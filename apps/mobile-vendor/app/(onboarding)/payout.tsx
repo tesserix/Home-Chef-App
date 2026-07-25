@@ -12,11 +12,11 @@
 // Secret Manager. Only a masked summary is kept in the onboarding draft.
 
 import { useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { Landmark, ShieldCheck } from 'lucide-react-native';
-import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { Input, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
@@ -33,6 +33,7 @@ import {
 // UPI is not an accepted payout method (#767): Route settles to a bank account
 // only. Bank transfer is the only option.
 export default function PayoutStep() {
+  const { showAlert } = useAlert();
   const { updatePayout, setStep } = useVendorOnboardingStore();
 
   const [values, setValues] = useState<PayoutFormValues>(emptyPayoutForm);
@@ -89,7 +90,7 @@ export default function PayoutStep() {
         router.push('/(onboarding)/review');
       },
       onError: (err) =>
-        Alert.alert(
+        showAlert(
           'Could not save payout details',
           getServerErrorMessage(err, 'Please check your details and try again.'),
         ),

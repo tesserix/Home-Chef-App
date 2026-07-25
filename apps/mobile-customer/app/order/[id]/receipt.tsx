@@ -11,7 +11,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -26,6 +25,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { ChevronLeft, Download, Share2 } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder, fetchInvoiceDownloadUrl } from '../../../hooks/useOrderHistory';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -46,6 +46,7 @@ function formatDateTime(iso: string): string {
 }
 
 export default function OrderReceiptScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { data, isLoading, isError } = useOrder(id ?? '');
@@ -62,7 +63,7 @@ export default function OrderReceiptScreen() {
       const url = await fetchInvoiceDownloadUrl(order.id);
       await WebBrowser.openBrowserAsync(url);
     } catch {
-      Alert.alert(
+      showAlert(
         "Couldn't open the PDF",
         'The receipt could not be opened right now. Please try again in a moment.',
       );

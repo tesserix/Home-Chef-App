@@ -1,7 +1,7 @@
-import { Alert } from 'react-native';
 import { createApiClient } from '@homechef/mobile-shared/api';
 import { useAuthStore } from '../store/auth-store';
 import { appPlatform, appVersion } from './app-version';
+import { showAlertOutsideReact } from '@homechef/mobile-shared/ui';
 
 // Single axios instance for the admin app. Injects the BFF session token as a
 // Bearer header, stamps the app version/platform, and handles 401 (session
@@ -18,7 +18,7 @@ export const api = createApiClient({
     useAuthStore.getState().logout();
   },
   onUpgradeRequired: (payload) => {
-    Alert.alert(
+    showAlertOutsideReact(
       'Update required',
       payload.minVersion
         ? `This version of the admin app is no longer supported. Please update to ${payload.minVersion} or later.`

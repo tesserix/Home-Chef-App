@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Alert, FlatList, RefreshControl, Text, View } from 'react-native';
-import { Screen } from '@homechef/mobile-shared/ui';
+import { FlatList, RefreshControl, Text, View } from 'react-native';
+import { Screen, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import {
   useAdminReviews,
@@ -27,6 +27,7 @@ const VIEW_OPTIONS = [
 ];
 
 export default function ReviewsScreen() {
+  const { showAlert } = useAlert();
   const [view, setView] = useState('visible');
   const q = useAdminReviews({ hidden: view === 'hidden' });
   const hide = useHideReview();
@@ -35,7 +36,7 @@ export default function ReviewsScreen() {
   const reviews = q.data?.data ?? [];
 
   const doUnhide = (r: ReviewRow) => {
-    unhide.mutate(r.id, { onError: (e) => Alert.alert('Failed', errorMessage(e)) });
+    unhide.mutate(r.id, { onError: (e) => showAlert('Failed', errorMessage(e)) });
   };
 
   return (
@@ -113,7 +114,7 @@ export default function ReviewsScreen() {
           hide.mutate(
             { id: hideTarget.id, reason },
             {
-              onError: (e) => Alert.alert('Failed', errorMessage(e)),
+              onError: (e) => showAlert('Failed', errorMessage(e)),
               onSuccess: () => setHideTarget(null),
             }
           )

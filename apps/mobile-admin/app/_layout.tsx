@@ -9,7 +9,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { AuthProvider } from '@homechef/mobile-shared/auth';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
-import { ToastProvider, UndoSnackbarProvider } from '@homechef/mobile-shared/ui';
+import { DialogProvider, ToastProvider, UndoSnackbarProvider } from '@homechef/mobile-shared/ui';
+import { theme } from '@homechef/mobile-shared/theme';
 import { useFonts } from 'expo-font';
 import { Geist_600SemiBold } from '@expo-google-fonts/geist/600SemiBold';
 import { Geist_700Bold } from '@expo-google-fonts/geist/700Bold';
@@ -158,7 +159,9 @@ function RootLayout() {
             <BottomSheetModalProvider>
               <ToastProvider>
                 <UndoSnackbarProvider>
-                  <AppNavigator />
+                  <DialogProvider accentColor={theme.colors.brand[500]}>
+                    <AppNavigator />
+                  </DialogProvider>
                 </UndoSnackbarProvider>
               </ToastProvider>
             </BottomSheetModalProvider>

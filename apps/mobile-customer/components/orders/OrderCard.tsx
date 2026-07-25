@@ -1,4 +1,4 @@
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatMoney } from '../../lib/format';
 import { useRouter } from 'expo-router';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -6,6 +6,7 @@ import type { Order } from '../../types/customer';
 import { useConfirmOrderReceived } from '../../hooks/useConfirmReceived';
 import { canConfirmReceipt } from '../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../lib/errors';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const CARD_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
@@ -110,6 +111,7 @@ function formatDate(dateStr: string): string {
 }
 
 export function OrderCard({ order }: OrderCardProps) {
+  const { showAlert } = useAlert();
   const router = useRouter();
   const confirm = useConfirmOrderReceived();
   const chip = getStatusChip(order);
@@ -124,7 +126,7 @@ export function OrderCard({ order }: OrderCardProps) {
   }
 
   function handleConfirm() {
-    Alert.alert(
+    showAlert(
       'Confirm your order?',
       `Let us know you received your order${
         order.chef?.name ? ` from ${order.chef.name}` : ''
@@ -135,9 +137,9 @@ export function OrderCard({ order }: OrderCardProps) {
           text: 'Confirm received',
           onPress: () =>
             confirm.mutate(order.id, {
-              onSuccess: (res) => Alert.alert('Thanks!', res.message),
+              onSuccess: (res) => showAlert('Thanks!', res.message),
               onError: (err) =>
-                Alert.alert(
+                showAlert(
                   'Something went wrong',
                   friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
                 ),

@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+
 import { router } from 'expo-router';
 
 import {
@@ -7,6 +7,7 @@ import {
   type MealPlan,
 } from './useMealPlans';
 import { isDeclinedDayStatus } from '../lib/meal-plan';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 // useMealPlanApproval — the ONE place the "approve & pay" / "reject the whole plan"
 // flow lives, so the plan-detail screen, the Home card, and the chef-page sheet all
@@ -26,6 +27,7 @@ export function useMealPlanApproval(
   plan: MealPlan | undefined,
   opts?: { onDone?: () => void },
 ): MealPlanApproval {
+  const { showAlert } = useAlert();
   const finalize = useFinalizeMealPlan();
   const acceptedCount = (plan?.days ?? []).filter(
     (d) => !isDeclinedDayStatus(d.status),
@@ -33,7 +35,7 @@ export function useMealPlanApproval(
 
   function run(approve: boolean) {
     if (!plan) return;
-    Alert.alert(
+    showAlert(
       approve ? 'Approve & pay?' : 'Reject plan?',
       approve
         ? `Confirm the ${acceptedCount} day${acceptedCount === 1 ? '' : 's'} your chef can cook, then pay the advance (food + GST + delivery, shown at checkout) to lock them in.`
@@ -52,7 +54,7 @@ export function useMealPlanApproval(
                   // for the accepted days — launch checkout. Payment happens here,
                   // after approval. verify-payment then confirms + holds.
                   if (approve && res?.paymentError) {
-                    Alert.alert('Payment unavailable', res.paymentError);
+                    showAlert('Payment unavailable', res.paymentError);
                     return;
                   }
                   if (approve && res?.razorpayOrderId) {
@@ -71,7 +73,7 @@ export function useMealPlanApproval(
                     return;
                   }
                   // Reject, or escrow-off approve (unpaid handshake → confirmed).
-                  Alert.alert(
+                  showAlert(
                     approve ? 'Plan confirmed' : 'Plan cancelled',
                     approve
                       ? 'Your chef has been notified.'
@@ -79,7 +81,7 @@ export function useMealPlanApproval(
                     [{ text: 'OK', onPress: () => opts?.onDone?.() }],
                   );
                 },
-                onError: () => Alert.alert('Something went wrong', 'Please try again.'),
+                onError: () => showAlert('Something went wrong', 'Please try again.'),
               },
             ),
         },

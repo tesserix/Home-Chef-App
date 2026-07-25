@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { User, Phone, Mail, Check } from 'lucide-react-native';
-import { Input, Button, OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { Input, Button, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
@@ -23,6 +23,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function PersonalInfoScreen() {
+  const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { user } = useAuthStore();
   const { personalInfo, updatePersonalInfo, setStep } = useVendorOnboardingStore();
@@ -81,7 +82,7 @@ export default function PersonalInfoScreen() {
       setOtpSent(true);
       setCooldown(60);
     } catch (err) {
-      Alert.alert(t('onboarding.emailVerifyTitle'), apiError(err, t('onboarding.emailOtpSendFailed')));
+      showAlert(t('onboarding.emailVerifyTitle'), apiError(err, t('onboarding.emailOtpSendFailed')));
     } finally {
       setSending(false);
     }
@@ -95,7 +96,7 @@ export default function PersonalInfoScreen() {
       setEmailVerified(true);
       updatePersonalInfo({ emailVerified: true });
     } catch (err) {
-      Alert.alert(t('onboarding.emailVerifyTitle'), apiError(err, t('onboarding.emailOtpWrong')));
+      showAlert(t('onboarding.emailVerifyTitle'), apiError(err, t('onboarding.emailOtpWrong')));
     } finally {
       setVerifying(false);
     }
@@ -103,7 +104,7 @@ export default function PersonalInfoScreen() {
 
   function onSubmit(data: FormValues): void {
     if (!emailVerified) {
-      Alert.alert(t('onboarding.emailVerifyTitle'), t('onboarding.emailVerifyRequired'));
+      showAlert(t('onboarding.emailVerifyTitle'), t('onboarding.emailVerifyRequired'));
       return;
     }
     updatePersonalInfo({ ...data, emailVerified: true });
@@ -116,7 +117,7 @@ export default function PersonalInfoScreen() {
     const y = firstKey === 'fullName' ? nameFieldY.current : contactFieldY.current;
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
     const firstError = Object.values(errs)[0];
-    if (firstError?.message) Alert.alert(t('onboarding.checkDetails'), t(firstError.message));
+    if (firstError?.message) showAlert(t('onboarding.checkDetails'), t(firstError.message));
   }
 
   return (

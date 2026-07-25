@@ -3,7 +3,6 @@ import { formatMoney } from '../../lib/format';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Platform,
   Pressable,
@@ -46,6 +45,7 @@ import { MenuCategorySheet } from '../../components/chef/MenuCategorySheet';
 import { ChefWeeklyPlanTab } from '../../components/chef/ChefWeeklyPlanTab';
 import { ChefReviewList } from '../../components/chef/ChefReviewList';
 import { TIFFIN_ENABLED } from '../../lib/features';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec (§3.5).
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -89,6 +89,7 @@ function formatCuisines(cuisine?: string): string {
 }
 
 export default function ChefDetailScreen() {
+  const { showAlert } = useAlert();
   const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -136,11 +137,11 @@ export default function ChefDetailScreen() {
               status === 503
                 ? "Group orders aren't available right now. Please try again later."
                 : serverMsg || "We couldn't start the group order. Please try again.";
-            Alert.alert('Could not start', msg);
+            showAlert('Could not start', msg);
           },
         },
       );
-    Alert.alert('Start a group order', 'Who is this for?', [
+    showAlert('Start a group order', 'Who is this for?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Office / corporate', onPress: () => start('office') },
       { text: 'Personal group', onPress: () => start('personal') },

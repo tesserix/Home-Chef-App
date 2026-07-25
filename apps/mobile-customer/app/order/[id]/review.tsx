@@ -1,19 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Star } from 'lucide-react-native';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useCreateReview } from '../../../hooks/useCreateReview';
 
@@ -76,6 +68,7 @@ function StarRow({
 }
 
 export default function OrderReviewScreen() {
+  const { showAlert } = useAlert();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useOrder(id ?? '');
@@ -119,7 +112,7 @@ export default function OrderReviewScreen() {
 
   function handleSubmit() {
     if (overall < 1) {
-      Alert.alert('Add a rating', 'Please give an overall rating before submitting.');
+      showAlert('Add a rating', 'Please give an overall rating before submitting.');
       return;
     }
     createReview.mutate(
@@ -138,10 +131,10 @@ export default function OrderReviewScreen() {
       {
         onSuccess: () => {
           clearDraft();
-          Alert.alert('Thanks!', 'Your review has been submitted.');
+          showAlert('Thanks!', 'Your review has been submitted.');
           router.back();
         },
-        onError: (e) => Alert.alert('Could not submit', e.message || 'Please try again.'),
+        onError: (e) => showAlert('Could not submit', e.message || 'Please try again.'),
       }
     );
   }

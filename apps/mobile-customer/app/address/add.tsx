@@ -10,7 +10,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Keyboard,
   Platform,
@@ -34,6 +33,7 @@ import {
 import { useCreateAddress } from '../../hooks/useAddresses';
 import { AddressLabelSelect } from '../../components/address/AddressLabelSelect';
 import { friendlyErrorMessage } from '../../lib/errors';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 const schema = z.object({
   label: z.string().min(1),
@@ -66,6 +66,7 @@ function fieldBorderStyle(hasError: boolean, isFocused: boolean) {
 type AddressForm = z.infer<typeof schema>;
 
 export default function AddAddressScreen() {
+  const { showAlert } = useAlert();
   const createAddress = useCreateAddress();
   const [focusedField, setFocusedField] = useState<AddressField | null>(null);
 
@@ -128,7 +129,7 @@ export default function AddAddressScreen() {
       });
       router.back();
     } catch (err) {
-      Alert.alert('Could not save address', friendlyErrorMessage(err));
+      showAlert('Could not save address', friendlyErrorMessage(err));
     }
   }
 

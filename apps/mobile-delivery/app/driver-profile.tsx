@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   RefreshControl,
   ScrollView,
   Text,
@@ -16,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, User } from 'lucide-react-native';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../lib/api';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 interface DriverProfile {
   id: string;
@@ -82,6 +82,7 @@ function StatBadge({ label, value }: { label: string; value: string }) {
 }
 
 export default function DriverProfileScreen() {
+  const { showAlert } = useAlert();
   const { data: profile, isLoading, isError, refetch, isRefetching } = useDriverProfile();
   const updateMutation = useUpdateProfile();
   const uploadImageMutation = useUploadProfileImage();
@@ -100,7 +101,7 @@ export default function DriverProfileScreen() {
 
   function handleSave() {
     if (!name.trim() || !phone.trim() || !city.trim()) {
-      Alert.alert('Validation', 'Name, phone, and city are required.');
+      showAlert('Validation', 'Name, phone, and city are required.');
       return;
     }
     updateMutation.mutate(
@@ -108,10 +109,10 @@ export default function DriverProfileScreen() {
       {
         onSuccess: () => {
           setIsEditing(false);
-          Alert.alert('Success', 'Profile updated successfully.');
+          showAlert('Success', 'Profile updated successfully.');
         },
         onError: () => {
-          Alert.alert('Error', 'Failed to update profile. Please try again.');
+          showAlert('Error', 'Failed to update profile. Please try again.');
         },
       },
     );
@@ -127,7 +128,7 @@ export default function DriverProfileScreen() {
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       uploadImageMutation.mutate(asset.uri, {
-        onError: () => Alert.alert('Error', 'Failed to upload photo. Please try again.'),
+        onError: () => showAlert('Error', 'Failed to upload photo. Please try again.'),
       });
     }
   }

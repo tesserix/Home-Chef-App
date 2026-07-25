@@ -6,7 +6,6 @@
 
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   RefreshControl,
@@ -25,6 +24,7 @@ import {
   useChefRefundDecision,
   type RefundDecisionDay,
 } from '../../hooks/useMealPlans';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 function dayLabel(iso: string): string {
   const d = new Date(iso + 'T00:00:00');
@@ -36,6 +36,7 @@ function money(n: number): string {
 }
 
 export default function RefundDecisionsScreen() {
+  const { showAlert } = useAlert();
   const { data, isLoading, isError, refetch, isRefetching } = useChefPendingRefundDecisions();
   const decide = useChefRefundDecision();
   const days = data?.data ?? [];
@@ -53,7 +54,7 @@ export default function RefundDecisionsScreen() {
         : choice === 'half'
           ? `Half the food refunded to the customer; you keep the other half. An admin pays it out.`
           : `Full food refunded to the customer; your payout for this day is reversed. An admin pays it out.`;
-    Alert.alert(title, body, [
+    showAlert(title, body, [
       { text: 'Back', style: 'cancel' },
       {
         text: decline ? 'Keep it' : 'Confirm',
@@ -61,7 +62,7 @@ export default function RefundDecisionsScreen() {
         onPress: () =>
           decide.mutate(
             { dayId: d.dayId, choice, decline },
-            { onError: () => Alert.alert('Something went wrong', 'Please try again.') },
+            { onError: () => showAlert('Something went wrong', 'Please try again.') },
           ),
       },
     ]);

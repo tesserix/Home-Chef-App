@@ -1,13 +1,5 @@
 import { useState } from 'react';
-import {
-  View,
-  Text,
-  Platform,
-  Pressable,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, Platform, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../store/auth-store';
@@ -15,6 +7,7 @@ import { useCustomerOnboardingStore } from '../../store/onboarding-store';
 import { api } from '../../lib/api';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 const CUISINE_OPTIONS = [
   'North Indian',
@@ -33,6 +26,7 @@ const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const CTA_RIPPLE = `${customerColors.canvas}33`;
 
 export default function PreferencesScreen() {
+  const { showAlert } = useAlert();
   const draft = useCustomerOnboardingStore();
   const selected = draft.cuisinePreferences;
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,7 +73,7 @@ export default function PreferencesScreen() {
       await setOnboardingComplete(true);
       router.replace('/(tabs)');
     } catch (error: unknown) {
-      Alert.alert(
+      showAlert(
         'Setup failed',
         friendlyErrorMessage(
           error,

@@ -5,7 +5,6 @@
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -20,6 +19,7 @@ import { Send, ShieldCheck } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { useOrderMessages, useSendMessage, type Message } from '../../../hooks/useMessaging';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 function timeLabel(iso: string): string {
   try {
@@ -30,6 +30,7 @@ function timeLabel(iso: string): string {
 }
 
 export default function MessagesScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const orderId = id ?? '';
   const { data: messages = [], isLoading } = useOrderMessages(orderId);
@@ -48,7 +49,7 @@ export default function MessagesScreen() {
         setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
       },
       onError: () => {
-        Alert.alert(
+        showAlert(
           'Message not sent',
           'Something went wrong sending your message. Please check your connection and try again.',
         );

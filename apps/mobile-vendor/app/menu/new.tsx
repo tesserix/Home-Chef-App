@@ -6,11 +6,11 @@
  *  2. Handles navigation (back + post-create).
  *  3. Provides the ChevronLeft back Pressable (form's backBtn fires router.back).
  */
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { router } from 'expo-router';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import {
   useVendorMenu,
@@ -39,6 +39,7 @@ const BLANK: MenuItemFormValues = {
 };
 
 export default function NewMenuItemScreen() {
+  const { showAlert } = useAlert();
   const { data: menuData } = useVendorMenu();
   const createMutation = useCreateMenuItem();
   const createCategoryMutation = useCreateCategory();
@@ -103,7 +104,7 @@ export default function NewMenuItemScreen() {
       }
       router.back();
     } catch (err: unknown) {
-      Alert.alert(
+      showAlert(
         'Could not add item',
         getServerErrorMessage(err, 'Please check your details and try again.'),
       );

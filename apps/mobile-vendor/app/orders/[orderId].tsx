@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert,
+import {
   ActionSheetIOS,
   Platform,
   Pressable,
@@ -18,7 +18,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { KeyboardAwareScrollView, Skeleton, useToast, useAlert } from '@homechef/mobile-shared/ui';
+import {
+  KeyboardAwareScrollView,
+  Skeleton,
+  useToast,
+  useAlert,
+  showAlertOutsideReact,
+} from '@homechef/mobile-shared/ui';
 import { DietIcon } from '../../components/vendor/DietIcon';
 import {
   useOrderDetail,
@@ -1680,7 +1686,7 @@ async function downloadInvoice(orderId: string): Promise<void> {
   try {
     const token = await SecureStore.getItemAsync('access_token');
     if (!token) {
-      Alert.alert('Sign in required', 'Sign in again to download invoices.');
+      showAlertOutsideReact('Sign in required', 'Sign in again to download invoices.');
       return;
     }
     const apiBase = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -1690,17 +1696,17 @@ async function downloadInvoice(orderId: string): Promise<void> {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (dl.status !== 200) {
-      Alert.alert('Could not download invoice', `Server returned ${dl.status}.`);
+      showAlertOutsideReact('Could not download invoice', `Server returned ${dl.status}.`);
       return;
     }
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(dl.uri, { mimeType: 'application/pdf', dialogTitle: 'Invoice' });
     } else {
-      Alert.alert('Saved', `Invoice saved to ${dl.uri}`);
+      showAlertOutsideReact('Saved', `Invoice saved to ${dl.uri}`);
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Download failed.';
-    Alert.alert('Could not download invoice', msg);
+    showAlertOutsideReact('Could not download invoice', msg);
   }
 }
 
@@ -1711,7 +1717,7 @@ function promptCancelReasonAndroid(submit: (r: CancelReason) => void): void {
   // First two reasons + "Other" / "More…" because Android Alert
   // caps reliably at 3 buttons. "More" chains a second prompt with
   // the remaining options.
-  Alert.alert('Why?', '', [
+  showAlertOutsideReact('Why?', '', [
     {
       text: CANCEL_REASON_LABEL.out_of_ingredient,
       onPress: () => submit('out_of_ingredient'),
@@ -1723,7 +1729,7 @@ function promptCancelReasonAndroid(submit: (r: CancelReason) => void): void {
     {
       text: 'More…',
       onPress: () =>
-        Alert.alert('Why?', '', [
+        showAlertOutsideReact('Why?', '', [
           {
             text: CANCEL_REASON_LABEL.customer_request,
             onPress: () => submit('customer_request'),
@@ -1744,7 +1750,7 @@ function promptCancelReasonAndroid(submit: (r: CancelReason) => void): void {
 function promptDeliveryFailureReasonAndroid(
   submit: (r: DeliveryFailureReason) => void,
 ): void {
-  Alert.alert('What went wrong?', '', [
+  showAlertOutsideReact('What went wrong?', '', [
     {
       text: DELIVERY_FAILURE_REASON_LABEL.customer_unavailable,
       onPress: () => submit('customer_unavailable'),
@@ -1756,7 +1762,7 @@ function promptDeliveryFailureReasonAndroid(
     {
       text: 'More…',
       onPress: () =>
-        Alert.alert('What went wrong?', '', [
+        showAlertOutsideReact('What went wrong?', '', [
           {
             text: DELIVERY_FAILURE_REASON_LABEL.wrong_address,
             onPress: () => submit('wrong_address'),

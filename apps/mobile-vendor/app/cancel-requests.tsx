@@ -1,19 +1,11 @@
 import { useState } from 'react';
-import {
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button, EmptyState, Skeleton } from '@homechef/mobile-shared/ui';
+import { Button, EmptyState, Skeleton, useAlert } from '@homechef/mobile-shared/ui';
 import {
   CANCEL_REASONS,
   useCancellationRequests,
@@ -76,6 +68,7 @@ export default function CancelRequestsScreen() {
 }
 
 function RequestCard({ req }: { req: CancellationRequest }) {
+  const { showAlert } = useAlert();
   const [reason, setReason] = useState<string | null>(null);
   const confirm = useConfirmCancellation();
 
@@ -85,8 +78,8 @@ function RequestCard({ req }: { req: CancellationRequest }) {
       { id: req.id, reason },
       {
         onSuccess: () =>
-          Alert.alert('Cancellation confirmed', 'The refund has been issued to the customer.'),
-        onError: (e) => Alert.alert('Could not confirm', getServerErrorMessage(e, 'Please try again.')),
+          showAlert('Cancellation confirmed', 'The refund has been issued to the customer.'),
+        onError: (e) => showAlert('Could not confirm', getServerErrorMessage(e, 'Please try again.')),
       },
     );
   }

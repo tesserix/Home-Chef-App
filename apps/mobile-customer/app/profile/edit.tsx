@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -36,6 +36,7 @@ function SectionLabel({ children }: { children: string }) {
 }
 
 export default function EditProfileScreen() {
+  const { showAlert } = useAlert();
   const { data: profile, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
 
@@ -70,9 +71,9 @@ export default function EditProfileScreen() {
         phone: values.phone ?? undefined,
       },
       {
-        onSuccess: () => Alert.alert('Saved', 'Profile updated successfully.'),
+        onSuccess: () => showAlert('Saved', 'Profile updated successfully.'),
         onError: (error) =>
-          Alert.alert(
+          showAlert(
             'Error',
             friendlyErrorMessage(error, 'Could not update profile. Please try again.'),
           ),

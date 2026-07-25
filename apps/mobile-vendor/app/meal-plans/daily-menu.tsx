@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -16,7 +15,7 @@ import { router } from 'expo-router';
 import { ChevronLeft, Plus, Trash2 } from 'lucide-react-native';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button, KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { Button, KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { ComboComposer } from '../../components/vendor/ComboComposer';
 import { useVendorMenu } from '../../hooks/useVendorMenu';
 import {
@@ -64,6 +63,7 @@ function blankRow(sortOrder: number): DailyMenuItemInput {
 }
 
 export default function DailyMenuScreen() {
+  const { showAlert } = useAlert();
   // Next 14 bookable days (tomorrow onward, matching the customer horizon).
   const dates = useMemo(() => {
     const out: string[] = [];
@@ -136,19 +136,19 @@ export default function DailyMenuScreen() {
   async function onSave(publish: boolean) {
     const err = validate();
     if (err) {
-      Alert.alert('Check the menu', err);
+      showAlert('Check the menu', err);
       return;
     }
     if (publish && rows.length === 0) {
-      Alert.alert('Add a dish', 'Add at least one dish before publishing.');
+      showAlert('Add a dish', 'Add at least one dish before publishing.');
       return;
     }
     try {
       await save.mutateAsync({ date: selected, isPublished: publish, items: rows });
       setIsPublished(publish);
-      Alert.alert(publish ? 'Published' : 'Saved', `${labelFor(selected).day} menu updated.`);
+      showAlert(publish ? 'Published' : 'Saved', `${labelFor(selected).day} menu updated.`);
     } catch (e) {
-      Alert.alert('Could not save', getServerErrorMessage(e, 'Please try again.'));
+      showAlert('Could not save', getServerErrorMessage(e, 'Please try again.'));
     }
   }
 

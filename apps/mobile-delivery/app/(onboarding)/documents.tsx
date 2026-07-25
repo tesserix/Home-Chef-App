@@ -1,13 +1,5 @@
 import { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Image,
-} from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Image } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
@@ -15,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { useDriverOnboardingStore } from '../../store/onboarding-store';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 type DocumentType = 'driving_license' | 'id_proof' | 'vehicle_rc';
 
@@ -38,6 +31,7 @@ async function uploadDocument(uri: string, type: DocumentType, mimeType?: string
 }
 
 export default function DocumentsScreen() {
+  const { showAlert } = useAlert();
   const { documents, updateDocuments, setStep } = useDriverOnboardingStore();
   const [uploading, setUploading] = useState<DocumentType | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -64,7 +58,7 @@ export default function DocumentsScreen() {
   const handleCamera = async (type: DocumentType) => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Camera permission is required to capture documents.');
+      showAlert('Permission Required', 'Camera permission is required to capture documents.');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -79,7 +73,7 @@ export default function DocumentsScreen() {
         updateSlotUri(type, result.assets[0].uri);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Upload failed. Please try again.';
-        Alert.alert('Upload Error', message);
+        showAlert('Upload Error', message);
       } finally {
         setUploading(null);
       }
@@ -99,7 +93,7 @@ export default function DocumentsScreen() {
         updateSlotUri(type, result.assets[0].uri);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Upload failed. Please try again.';
-        Alert.alert('Upload Error', message);
+        showAlert('Upload Error', message);
       } finally {
         setUploading(null);
       }
@@ -118,7 +112,7 @@ export default function DocumentsScreen() {
         updateSlotUri(type, result.assets[0].uri);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Upload failed. Please try again.';
-        Alert.alert('Upload Error', message);
+        showAlert('Upload Error', message);
       } finally {
         setUploading(null);
       }
@@ -127,7 +121,7 @@ export default function DocumentsScreen() {
 
   const handleNext = () => {
     if (!canProceed) {
-      Alert.alert('Required Documents', 'Please upload Driving License and ID Proof to continue.');
+      showAlert('Required Documents', 'Please upload Driving License and ID Proof to continue.');
       return;
     }
     setStep(4);

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Screen, Button } from '@homechef/mobile-shared/ui';
+import { Screen, Button, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useCustomerWallet, useAdjustWallet } from '../../hooks/useAdminWallet';
 import {
@@ -32,6 +31,7 @@ import { formatINR, formatDateTime, titleCase, errorMessage } from '../../lib/fo
 const c = theme.colors;
 
 export default function WalletsScreen() {
+  const { showAlert } = useAlert();
   const params = useLocalSearchParams<{ userId?: string }>();
   const [userId, setUserId] = useState(params.userId ?? '');
   const [active, setActive] = useState(params.userId ?? '');
@@ -53,20 +53,20 @@ export default function WalletsScreen() {
   const submit = () => {
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0) {
-      Alert.alert('Invalid amount', 'Enter an amount greater than zero.');
+      showAlert('Invalid amount', 'Enter an amount greater than zero.');
       return;
     }
     if (reason.trim().length === 0) {
-      Alert.alert('Reason required', 'Add a reason for the adjustment.');
+      showAlert('Reason required', 'Add a reason for the adjustment.');
       return;
     }
     adjust.mutate(
       { userId: active, amount: amt, reason: reason.trim(), type },
       {
-        onError: (e) => Alert.alert('Failed', errorMessage(e)),
+        onError: (e) => showAlert('Failed', errorMessage(e)),
         onSuccess: () => {
           reset();
-          Alert.alert('Done', 'Wallet adjusted.');
+          showAlert('Done', 'Wallet adjusted.');
         },
       }
     );

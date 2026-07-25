@@ -5,7 +5,6 @@ import {
   Text,
   TextInput,
   Pressable,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,6 +18,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
 import { useCustomerOnboardingStore } from '../../store/onboarding-store';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 const schema = z.object({
   firstName: z.string().min(2, 'First name must be at least 2 characters'),
@@ -50,6 +50,7 @@ function fieldBorderStyle(hasError: boolean, isFocused: boolean) {
 }
 
 export default function UserInfoScreen() {
+  const { showAlert } = useAlert();
   // Prefill from whatever the user already gave at sign-up (email signup
   // captures name + phone into the auth store; social sign-up leaves them
   // blank). Saves re-typing details we already have.
@@ -120,7 +121,7 @@ export default function UserInfoScreen() {
       setOtpSent(true);
       setCooldown(60);
     } catch (err) {
-      Alert.alert('Verify email', apiError(err, "Couldn't send the code. Please try again."));
+      showAlert('Verify email', apiError(err, "Couldn't send the code. Please try again."));
     } finally {
       setSending(false);
     }
@@ -134,7 +135,7 @@ export default function UserInfoScreen() {
       setEmailVerified(true);
       draft.update({ emailVerified: true });
     } catch (err) {
-      Alert.alert('Verify email', apiError(err, 'That code is incorrect or expired.'));
+      showAlert('Verify email', apiError(err, 'That code is incorrect or expired.'));
     } finally {
       setVerifying(false);
     }
@@ -142,7 +143,7 @@ export default function UserInfoScreen() {
 
   const onSubmit = (data: UserInfoForm) => {
     if (!emailVerified) {
-      Alert.alert('Verify email', 'Please verify your email before continuing.');
+      showAlert('Verify email', 'Please verify your email before continuing.');
       return;
     }
     draft.update({

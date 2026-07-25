@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
 // Android ripple tint — translucent token, never a new literal colour.
@@ -11,6 +11,7 @@ import {
   useRequestCancellation,
   type CancellationRequest,
 } from '../../hooks/useCancellation';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 // Customer cancellation on the order detail (#478). If a request exists it shows
 // the vendor's decision + refund (and a dispute action); otherwise, for a still-
@@ -29,6 +30,7 @@ import {
 const money = (paise: number) => `₹${(paise / 100).toFixed(0)}`;
 
 export function CancellationSection({ orderId, status }: { orderId: string; status: string }) {
+  const { showAlert } = useAlert();
   const { data: request, isLoading } = useCancellationRequest(orderId);
   const req = useRequestCancellation();
   const dispute = useDisputeCancellation();
@@ -41,7 +43,7 @@ export function CancellationSection({ orderId, status }: { orderId: string; stat
       <View style={styles.card}>
         <StatusView request={request} orderId={orderId} onDispute={() => dispute.mutate(
           { orderId },
-          { onSuccess: () => Alert.alert('Dispute raised', 'Our team will review it and get back to you.') },
+          { onSuccess: () => showAlert('Dispute raised', 'Our team will review it and get back to you.') },
         )} />
       </View>
     );
@@ -55,12 +57,12 @@ export function CancellationSection({ orderId, status }: { orderId: string; stat
       {
         onSuccess: () => {
           setExpanded(false);
-          Alert.alert(
+          showAlert(
             'Cancellation requested',
             "We've asked the chef to confirm. You'll be notified of the outcome and any refund.",
           );
         },
-        onError: () => Alert.alert('Could not request', 'Please try again.'),
+        onError: () => showAlert('Could not request', 'Please try again.'),
       },
     );
   }

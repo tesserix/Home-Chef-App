@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { AlertCircle, Award, Flame, Sparkles, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
@@ -11,6 +11,7 @@ import {
   useRedeemLoyalty,
   loyaltyErrorMessage,
 } from '../hooks/useLoyalty';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 // Android ripple tint — translucent token, never a new literal colour.
 const CANVAS_RIPPLE = `${customerColors.canvas}33`;
@@ -43,6 +44,7 @@ const cardShadow = {
 } as const;
 
 export default function LoyaltyScreen() {
+  const { showAlert } = useAlert();
   const router = useRouter();
   const { data: loyalty, isLoading, isError, refetch } = useLoyalty();
   const { data: txns = [], isLoading: txnLoading, isError: txnError, refetch: refetchTxns } = useLoyaltyTransactions();
@@ -64,7 +66,7 @@ export default function LoyaltyScreen() {
 
   const onRedeem = () => {
     if (!canRedeem || redeem.isPending) return;
-    Alert.alert(
+    showAlert(
       'Redeem points',
       `Redeem ${formatPoints(redeemable)} points for ${formatMoney(redeemValue)} of wallet credit?`,
       [
@@ -74,7 +76,7 @@ export default function LoyaltyScreen() {
           onPress: () =>
             redeem.mutate(redeemable, {
               onSuccess: (res) =>
-                Alert.alert(
+                showAlert(
                   'Points redeemed',
                   `${formatMoney(res.walletCredited)} has been added to your Fe3dr wallet.`,
                   [
@@ -82,7 +84,7 @@ export default function LoyaltyScreen() {
                     { text: 'Done' },
                   ],
                 ),
-              onError: (err) => Alert.alert('Could not redeem', loyaltyErrorMessage(err)),
+              onError: (err) => showAlert('Could not redeem', loyaltyErrorMessage(err)),
             }),
         },
       ],

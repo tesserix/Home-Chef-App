@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -14,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button } from '@homechef/mobile-shared/ui';
+import { Button, useAlert } from '@homechef/mobile-shared/ui';
 import {
   useChefMealPlanRequests,
   useRespondMealPlan,
@@ -33,6 +32,7 @@ function dayLabel(d: MealPlanDay): string {
 // can cook (the rest are declined). A trim routes the plan back to the customer
 // for approval; accept-all confirms immediately. Mirrors RespondMealPlan (API).
 export default function MealPlanRespondScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useChefMealPlanRequests('pending_chef');
   const respond = useRespondMealPlan();
@@ -83,7 +83,7 @@ export default function MealPlanRespondScreen() {
   function submit() {
     if (!plan) return;
     if (acceptedDays.length === 0) {
-      Alert.alert(
+      showAlert(
         'Pick at least one day',
         'Accept at least one day, or decline the whole request from the requests list.',
       );
@@ -92,7 +92,7 @@ export default function MealPlanRespondScreen() {
     const confirmMsg = acceptAll
       ? `Accept all ${days.length} days? The customer still needs to approve & pay before it's confirmed.`
       : `Cook ${acceptedDays.length} of ${days.length} days? The customer must approve the change.`;
-    Alert.alert('Confirm response', confirmMsg, [
+    showAlert('Confirm response', confirmMsg, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Confirm',
@@ -105,7 +105,7 @@ export default function MealPlanRespondScreen() {
             },
             {
               onSuccess: () => {
-                Alert.alert(
+                showAlert(
                   'Sent for approval',
                   acceptAll
                     ? 'The customer will review and pay the advance to confirm.'
@@ -114,7 +114,7 @@ export default function MealPlanRespondScreen() {
                 router.back();
               },
               onError: () =>
-                Alert.alert('Could not submit', 'Please try again.'),
+                showAlert('Could not submit', 'Please try again.'),
             },
           );
         },

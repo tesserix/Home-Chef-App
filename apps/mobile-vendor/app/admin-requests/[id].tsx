@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ActionSheetIOS,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,7 +17,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { theme } from '@homechef/mobile-shared/theme';
-import { EmptyState, Skeleton, useToast } from '@homechef/mobile-shared/ui';
+import { EmptyState, Skeleton, useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { AdminRequest, useAdminRequests } from '../../hooks/useAdminRequests';
@@ -88,6 +87,7 @@ function formatDate(iso: string): string {
 }
 
 export default function AdminRequestDetailScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const requestId = typeof id === 'string' ? id : '';
   const { request, isLoading, isError, refetch } = useAdminRequest(requestId);
@@ -166,7 +166,7 @@ export default function AdminRequestDetailScreen() {
       );
       return;
     }
-    Alert.alert('Attach a file', '', [
+    showAlert('Attach a file', '', [
       { text: 'Camera', onPress: () => pickFile('camera') },
       { text: 'Gallery', onPress: () => pickFile('gallery') },
       { text: 'PDF', onPress: () => pickFile('pdf') },

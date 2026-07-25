@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
@@ -15,6 +14,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../lib/api';
 import { useDriverOnboardingStore } from '../../store/onboarding-store';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
@@ -49,6 +49,7 @@ const payoutSchema = z
 type PayoutFormData = z.infer<typeof payoutSchema>;
 
 export default function PayoutScreen() {
+  const { showAlert } = useAlert();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { payoutDetails, updatePayoutDetails, setStep } = useDriverOnboardingStore();
 
@@ -88,7 +89,7 @@ export default function PayoutScreen() {
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to save payout details. Please try again.';
-      Alert.alert('Error', message);
+      showAlert('Error', message);
     } finally {
       setIsSubmitting(false);
     }

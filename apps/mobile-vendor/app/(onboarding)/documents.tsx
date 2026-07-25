@@ -5,7 +5,6 @@
 
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -30,7 +29,7 @@ import {
   Video,
   Film,
 } from 'lucide-react-native';
-import { OnboardingScaffold, useToast } from '@homechef/mobile-shared/ui';
+import { OnboardingScaffold, useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
@@ -53,6 +52,7 @@ function uriToFilename(uri: string, fileType: 'image' | 'pdf' | null): string {
 }
 
 export default function DocumentsScreen() {
+  const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { documents, updateDocuments, setStep } = useVendorOnboardingStore();
   const { show: showToast } = useToast();
@@ -314,14 +314,14 @@ export default function DocumentsScreen() {
 
   function onNext(): void {
     if (!documents.idProofUri || !documents.fssaiUri) {
-      Alert.alert(
+      showAlert(
         t('onboarding.documentsRequired'),
         t('onboarding.documentsRequiredBody'),
       );
       return;
     }
     if (!kitchenMediaComplete) {
-      Alert.alert(
+      showAlert(
         t('onboarding.kitchenMediaRequired'),
         t('onboarding.kitchenMediaError'),
       );

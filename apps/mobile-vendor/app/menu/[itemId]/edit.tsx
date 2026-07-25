@@ -7,12 +7,12 @@
  *  3. Resets form state when the item loads (mirrors profile.tsx's useEffect reset).
  */
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { theme } from '@homechef/mobile-shared/theme';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import {
   useVendorMenu,
   useUpdateMenuItem,
@@ -25,6 +25,7 @@ import { MenuItemForm } from '../MenuItemForm';
 import type { MenuItemFormValues } from '../MenuItemForm';
 
 export default function EditMenuItemScreen() {
+  const { showAlert } = useAlert();
   const { itemId } = useLocalSearchParams<{ itemId: string }>();
   const { data: menuData } = useVendorMenu();
   const { show: showToast } = useToast();
@@ -125,7 +126,7 @@ export default function EditMenuItemScreen() {
       showToast({ message: 'Item saved', tone: 'success' });
       router.back();
     } catch (err: unknown) {
-      Alert.alert(
+      showAlert(
         'Could not save',
         getServerErrorMessage(err, 'Please check your details and try again.'),
       );
@@ -137,7 +138,7 @@ export default function EditMenuItemScreen() {
     deleteMutation.mutate(itemId, {
       onSuccess: () => router.back(),
       onError: (err) =>
-        Alert.alert('Delete failed', getServerErrorMessage(err, 'Please try again.')),
+        showAlert('Delete failed', getServerErrorMessage(err, 'Please try again.')),
     });
   }
 
@@ -149,7 +150,7 @@ export default function EditMenuItemScreen() {
       // upload mutation's queryClient. For simplicity we reload via refetch —
       // the upload mutation shares the same MENU_KEY invalidation.
     } catch (err: unknown) {
-      Alert.alert('Could not remove photo', getServerErrorMessage(err, 'Please try again.'));
+      showAlert('Could not remove photo', getServerErrorMessage(err, 'Please try again.'));
     }
   }
 
@@ -158,7 +159,7 @@ export default function EditMenuItemScreen() {
       { itemId: itemId ?? '', uri },
       {
         onError: (err) =>
-          Alert.alert('Upload failed', getServerErrorMessage(err, 'Please try again.')),
+          showAlert('Upload failed', getServerErrorMessage(err, 'Please try again.')),
       },
     );
   }

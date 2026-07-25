@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,7 +11,7 @@ import {
 } from 'react-native';
 import { Plus } from 'lucide-react-native';
 import { FlatList, RefreshControl } from 'react-native';
-import { Screen } from '@homechef/mobile-shared/ui';
+import { Screen, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import {
   useAdminStaff,
@@ -37,6 +36,7 @@ const c = theme.colors;
 const FALLBACK_ROLES = ['support', 'fleet_manager', 'delivery_ops', 'admin'];
 
 export default function StaffScreen() {
+  const { showAlert } = useAlert();
   const q = useAdminStaff();
   const roles = useStaffRoles();
   const invite = useInviteStaff();
@@ -63,16 +63,16 @@ export default function StaffScreen() {
 
   const submitInvite = () => {
     if (!email.trim() || !email.includes('@')) {
-      Alert.alert('Invalid email', 'Enter a valid email address.');
+      showAlert('Invalid email', 'Enter a valid email address.');
       return;
     }
     invite.mutate(
       { email: email.trim(), staffRole: role, title: title.trim() || undefined },
       {
-        onError: (e) => Alert.alert('Failed', errorMessage(e)),
+        onError: (e) => showAlert('Failed', errorMessage(e)),
         onSuccess: () => {
           reset();
-          Alert.alert('Invitation sent', `Invited ${email.trim()}.`);
+          showAlert('Invitation sent', `Invited ${email.trim()}.`);
         },
       }
     );
@@ -81,18 +81,18 @@ export default function StaffScreen() {
   const onRowPress = (m: StaffMember) => {
     const name =
       m.user?.email || `${m.user?.firstName ?? ''} ${m.user?.lastName ?? ''}`.trim() || m.id;
-    Alert.alert(name, titleCase(m.staffRole), [
+    showAlert(name, titleCase(m.staffRole), [
       m.isActive
         ? {
             text: 'Deactivate',
             style: 'destructive',
             onPress: () =>
-              deactivate.mutate(m.id, { onError: (e) => Alert.alert('Failed', errorMessage(e)) }),
+              deactivate.mutate(m.id, { onError: (e) => showAlert('Failed', errorMessage(e)) }),
           }
         : {
             text: 'Reactivate',
             onPress: () =>
-              reactivate.mutate(m.id, { onError: (e) => Alert.alert('Failed', errorMessage(e)) }),
+              reactivate.mutate(m.id, { onError: (e) => showAlert('Failed', errorMessage(e)) }),
           },
       { text: 'Cancel', style: 'cancel' },
     ]);

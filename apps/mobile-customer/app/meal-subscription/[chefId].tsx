@@ -5,7 +5,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +21,7 @@ import {
   usePreviewMealPrice,
   useSubscribeMeal,
 } from '../../hooks/useMealSubscription';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -38,6 +38,7 @@ function money(n: number): string {
 }
 
 export default function MealSubscribeScreen() {
+  const { showAlert } = useAlert();
   const { chefId } = useLocalSearchParams<{ chefId: string }>();
   const { data: offer, isLoading, isError, refetch } = useMealChefOffer(chefId);
   const preview = usePreviewMealPrice();
@@ -84,10 +85,10 @@ export default function MealSubscribeScreen() {
       { chefId: chefId!, slots, days, variant, cadence },
       {
         onSuccess: () =>
-          Alert.alert('Subscription created', 'Your daily tiffin is set up. Manage it under My Subscriptions.', [
+          showAlert('Subscription created', 'Your daily tiffin is set up. Manage it under My Subscriptions.', [
             { text: 'View', onPress: () => router.replace('/subscriptions' as never) },
           ]),
-        onError: (e) => Alert.alert('Could not subscribe', e.message || 'Please try again.'),
+        onError: (e) => showAlert('Could not subscribe', e.message || 'Please try again.'),
       },
     );
   }

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -17,7 +16,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button, KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { Button, KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import {
   useSaveWeeklyMenu,
   useWeeklyMenu,
@@ -64,6 +63,7 @@ const cellKey = (dow: number, slot: MealSlot, variant: MealVariant) =>
 // day × slot × veg/nonveg. Customers pre-book against these cells (#196).
 // Replace-all save mirrors PutWeeklyMenu.
 export default function WeeklyMenuEditorScreen() {
+  const { showAlert } = useAlert();
   const { data, isLoading, isError, refetch } = useWeeklyMenu();
   const save = useSaveWeeklyMenu();
   // Local backup of the in-progress grid — a pre-save safety net so an app
@@ -186,7 +186,7 @@ export default function WeeklyMenuEditorScreen() {
       // (e.g. "Tue is missing its dinner dish") instead of a generic 400.
       const hole = weeklyMenuHole(items);
       if (hole) {
-        Alert.alert('Finish the week first', hole);
+        showAlert('Finish the week first', hole);
         return;
       }
     }
@@ -197,7 +197,7 @@ export default function WeeklyMenuEditorScreen() {
           // Server now holds the grid — the local backup is redundant.
           clearDraft();
           setPublished(nextPublished);
-          Alert.alert(
+          showAlert(
             'Saved',
             nextPublished
               ? 'Your weekly menu is live — customers can pre-book it.'
@@ -207,7 +207,7 @@ export default function WeeklyMenuEditorScreen() {
         // Surface the server's reason (e.g. the validatePublishableGrid 400
         // message naming the missing day) instead of a generic failure.
         onError: (err) =>
-          Alert.alert(
+          showAlert(
             nextPublished ? 'Could not publish' : 'Could not save',
             getServerErrorMessage(
               err,

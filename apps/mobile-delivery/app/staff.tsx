@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   RefreshControl,
@@ -17,6 +16,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { api } from '../lib/api';
+import { useAlert } from '@homechef/mobile-shared/ui';
 
 interface StaffMember {
   id: string;
@@ -92,6 +92,7 @@ function InviteModal({
   visible: boolean;
   onClose: () => void;
 }) {
+  const { showAlert } = useAlert();
   const inviteMutation = useInviteStaff();
   const {
     control,
@@ -106,7 +107,7 @@ function InviteModal({
   function handleInvite(data: InviteForm) {
     inviteMutation.mutate(data, {
       onSuccess: () => {
-        Alert.alert('Success', `Invitation sent to ${data.email}`);
+        showAlert('Success', `Invitation sent to ${data.email}`);
         reset();
         onClose();
       },
@@ -116,7 +117,7 @@ function InviteModal({
           typeof err === 'object' &&
           'response' in err &&
           (err as { response?: { status?: number } }).response?.status === 403;
-        Alert.alert(
+        showAlert(
           'Error',
           is403
             ? 'You do not have permission to invite staff.'

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   StyleSheet,
@@ -13,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { useCreateTip } from '../../../hooks/useTip';
 import { friendlyErrorMessage } from '../../../lib/errors';
 
@@ -27,6 +26,7 @@ const CTA_RIPPLE = `${customerColors.canvas}33`;
 // Post-delivery tip screen (#45): pick an amount for the chef and/or rider;
 // 100% pass-through. Creates the charge then opens the shared Razorpay sheet.
 export default function TipScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const createTip = useCreateTip();
   const [chefAmount, setChefAmount] = useState(50);
@@ -54,7 +54,7 @@ export default function TipScreen() {
           });
         },
         onError: (err) =>
-          Alert.alert('Could not start tip', friendlyErrorMessage(err, 'Please try again.')),
+          showAlert('Could not start tip', friendlyErrorMessage(err, 'Please try again.')),
       },
     );
   }

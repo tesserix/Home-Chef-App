@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Alert, FlatList, RefreshControl, View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
 import { router } from 'expo-router';
-import { Screen } from '@homechef/mobile-shared/ui';
+import { Screen, useAlert } from '@homechef/mobile-shared/ui';
 import {
   useAdminUsers,
   useActivateUser,
@@ -29,6 +29,7 @@ const ROLE_OPTIONS = [
 ];
 
 export default function UsersScreen() {
+  const { showAlert } = useAlert();
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
   const q = useAdminUsers({ search, role });
@@ -38,7 +39,7 @@ export default function UsersScreen() {
 
   const onRowPress = (u: UserWithStats) => {
     const name = `${u.firstName} ${u.lastName}`.trim() || u.email;
-    Alert.alert(name, u.email, [
+    showAlert(name, u.email, [
       {
         text: 'View wallet',
         onPress: () => router.push({ pathname: '/wallets', params: { userId: u.id } }),
@@ -49,14 +50,14 @@ export default function UsersScreen() {
             style: 'destructive',
             onPress: () =>
               suspend.mutate(u.id, {
-                onError: (e) => Alert.alert('Failed', errorMessage(e)),
+                onError: (e) => showAlert('Failed', errorMessage(e)),
               }),
           }
         : {
             text: 'Activate',
             onPress: () =>
               activate.mutate(u.id, {
-                onError: (e) => Alert.alert('Failed', errorMessage(e)),
+                onError: (e) => showAlert('Failed', errorMessage(e)),
               }),
           },
       { text: 'Cancel', style: 'cancel' },

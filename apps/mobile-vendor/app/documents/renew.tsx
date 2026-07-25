@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ActionSheetIOS,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -18,7 +17,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { theme } from '@homechef/mobile-shared/theme';
-import { EmptyState, Skeleton, useToast } from '@homechef/mobile-shared/ui';
+import { EmptyState, Skeleton, useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { describeDocumentType } from '../../hooks/useExpiringDocuments';
@@ -144,6 +143,7 @@ function expiryHint(doc: ChefDocument): { text: string; isUrgent: boolean } | nu
 }
 
 export default function DocumentsRenewScreen() {
+  const { showAlert } = useAlert();
   const { data: docs, isLoading, isError, refetch } = useChefDocuments();
   const replace = useReplaceDocument();
   const { show: showToast } = useToast();
@@ -311,7 +311,7 @@ export default function DocumentsRenewScreen() {
       );
       return;
     }
-    Alert.alert('Replace document', `Pick a new file for ${describeDocumentType(doc.type)}.`, [
+    showAlert('Replace document', `Pick a new file for ${describeDocumentType(doc.type)}.`, [
       { text: 'Camera', onPress: () => pickAndUpload(doc, 'camera') },
       { text: 'Gallery', onPress: () => pickAndUpload(doc, 'gallery') },
       ...(photoOnly

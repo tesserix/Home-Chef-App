@@ -2,21 +2,12 @@
 // Step 3/6 — Operating hours per day, prep time, service radius.
 // StyleSheet only — no NativeWind className.
 
-import {
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Clock, Timer, MapPin } from 'lucide-react-native';
-import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { Input, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 
@@ -47,6 +38,7 @@ const DAY_LABELS: Record<Day, string> = {
 const PREP_TIME_OPTIONS = ['15min', '30min', '45min', '60min', '90min'] as const;
 
 export default function OperationsScreen() {
+  const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { operations, updateOperations, setStep } = useVendorOnboardingStore();
 
@@ -86,14 +78,14 @@ export default function OperationsScreen() {
     // activated by admin, so block it here with a clear reason instead.
     if (!offersPickup && !offersSelfDelivery) {
       scrollRef.current?.scrollTo({ y: Math.max(0, fulfillmentFieldY.current - 16), animated: true });
-      Alert.alert(t('onboarding.validationError'), t('onboarding.fulfillmentError'));
+      showAlert(t('onboarding.validationError'), t('onboarding.fulfillmentError'));
       return;
     }
     // Radius only matters when the chef self-delivers.
     const radius = parseInt(serviceRadius, 10);
     if (offersSelfDelivery && (Number.isNaN(radius) || radius < 1 || radius > 50)) {
       scrollRef.current?.scrollTo({ y: Math.max(0, radiusFieldY.current - 16), animated: true });
-      Alert.alert(t('onboarding.validationError'), t('onboarding.radiusError'));
+      showAlert(t('onboarding.validationError'), t('onboarding.radiusError'));
       return;
     }
     updateOperations({

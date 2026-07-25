@@ -3,21 +3,13 @@
 // StyleSheet only — no NativeWind className.
 // Layout: hairline-divided sections with edit links.
 
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, CheckCircle } from 'lucide-react-native';
-import { OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
@@ -107,6 +99,7 @@ function Section({
 }
 
 export default function ReviewScreen() {
+  const { showAlert } = useAlert();
   const { t } = useTranslation();
   const store = useVendorOnboardingStore();
   const queryClient = useQueryClient();
@@ -188,7 +181,7 @@ export default function ReviewScreen() {
         (error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
       const fallback =
         error instanceof Error ? error.message : t('onboarding.submissionFailed');
-      Alert.alert(t('onboarding.submissionError'), serverError ?? fallback);
+      showAlert(t('onboarding.submissionError'), serverError ?? fallback);
     } finally {
       setSubmitting(false);
     }

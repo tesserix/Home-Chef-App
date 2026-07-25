@@ -9,7 +9,6 @@
 import { useRef, useState as useReactState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -24,7 +23,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
 import { MapPin, UtensilsCrossed, FileText, Navigation } from 'lucide-react-native';
-import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { Input, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
@@ -72,6 +71,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function KitchenDetailsScreen() {
+  const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { kitchenDetails, updateKitchenDetails, setStep } = useVendorOnboardingStore();
 
@@ -298,7 +298,7 @@ export default function KitchenDetailsScreen() {
     const y = firstKey && IDENTITY_FIELDS.has(firstKey) ? identityFieldY.current : addressFieldY.current;
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
     const firstError = Object.values(errs)[0];
-    if (firstError?.message) Alert.alert(t('onboarding.checkDetails'), t(firstError.message));
+    if (firstError?.message) showAlert(t('onboarding.checkDetails'), t(firstError.message));
   }
 
   return (

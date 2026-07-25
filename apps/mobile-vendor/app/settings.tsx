@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -16,7 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import { theme } from '@homechef/mobile-shared/theme';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { useToast, useAlert, showAlertOutsideReact } from '@homechef/mobile-shared/ui';
 import { hasPasswordProvider } from '@homechef/mobile-shared/auth';
 import { api } from '../lib/api';
 import { useVendorPendingOrders } from '../hooks/useVendorOrders';
@@ -187,7 +186,7 @@ async function triggerTestNotification(orderId: string | null): Promise<void> {
   // no-ops and the chef thinks the button is broken.
   const settings = await Notifications.getPermissionsAsync();
   if (settings.status !== 'granted') {
-    Alert.alert(
+    showAlertOutsideReact(
       'Notifications blocked',
       'Enable notifications for Fe3dr Vendor in Settings to test.',
     );
@@ -228,6 +227,7 @@ const SHOW_DEV_TOOLS =
   !(process.env.EXPO_PUBLIC_API_URL ?? '').includes('vendors.fe3dr.com');
 
 export default function SettingsScreen() {
+  const { showAlert } = useAlert();
   const { data, isLoading, isError } = useChefSettings();
   const updateMutation = useUpdateSettings();
   const { data: pendingResp } = useVendorPendingOrders();
@@ -545,7 +545,7 @@ export default function SettingsScreen() {
                   onPress={() => {
                     const firstPending = pendingResp?.orders?.[0]?.id ?? null;
                     triggerTestNotification(firstPending).catch((err: unknown) => {
-                      Alert.alert(
+                      showAlert(
                         'Test notification failed',
                         err instanceof Error ? err.message : 'Unknown error',
                       );

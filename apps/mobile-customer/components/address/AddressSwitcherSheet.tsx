@@ -15,9 +15,9 @@
 // here (confirmed on-device: tapping the address row did nothing).
 
 import { forwardRef, useCallback } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { SheetBase, type SheetHandle } from '@homechef/mobile-shared/ui';
+import { SheetBase, type SheetHandle, showAlertOutsideReact } from '@homechef/mobile-shared/ui';
 import { Check, Plus } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useAddresses, useSetDefaultAddress } from '../../hooks/useAddresses';
@@ -49,7 +49,7 @@ export const AddressSwitcherSheet = forwardRef<SheetHandle>((_props, ref) => {
       await setDefault.mutateAsync(addr);
       handleClose();
     } catch (err) {
-      Alert.alert('Could not switch address', friendlyErrorMessage(err));
+      showAlertOutsideReact('Could not switch address', friendlyErrorMessage(err));
     }
   }
 

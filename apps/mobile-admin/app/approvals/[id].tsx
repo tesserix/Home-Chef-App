@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { AlertTriangle } from 'lucide-react-native';
-import { Screen, Button } from '@homechef/mobile-shared/ui';
+import { Screen, Button, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import {
   useApprovalDetail,
@@ -45,6 +45,7 @@ function Warning({ text }: { text: string }) {
 }
 
 export default function ApprovalDetailScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const q = useApprovalDetail(id);
   const approve = useApproveRequest();
@@ -58,7 +59,7 @@ export default function ApprovalDetailScreen() {
 
   const doApprove = () => {
     if (!a) return;
-    Alert.alert('Approve request', a.title || titleCase(a.type), [
+    showAlert('Approve request', a.title || titleCase(a.type), [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Approve',
@@ -66,8 +67,8 @@ export default function ApprovalDetailScreen() {
           approve.mutate(
             { id: a.id },
             {
-              onError: (e) => Alert.alert('Failed', errorMessage(e)),
-              onSuccess: () => Alert.alert('Approved', 'Request approved.'),
+              onError: (e) => showAlert('Failed', errorMessage(e)),
+              onSuccess: () => showAlert('Approved', 'Request approved.'),
             }
           ),
       },
@@ -174,10 +175,10 @@ export default function ApprovalDetailScreen() {
           reject.mutate(
             { id: a.id, notes },
             {
-              onError: (e) => Alert.alert('Failed', errorMessage(e)),
+              onError: (e) => showAlert('Failed', errorMessage(e)),
               onSuccess: () => {
                 setMode(null);
-                Alert.alert('Rejected', 'Request rejected.');
+                showAlert('Rejected', 'Request rejected.');
               },
             }
           )
@@ -196,10 +197,10 @@ export default function ApprovalDetailScreen() {
           reqInfo.mutate(
             { id: a.id, notes },
             {
-              onError: (e) => Alert.alert('Failed', errorMessage(e)),
+              onError: (e) => showAlert('Failed', errorMessage(e)),
               onSuccess: () => {
                 setMode(null);
-                Alert.alert('Sent', 'Information requested.');
+                showAlert('Sent', 'Information requested.');
               },
             }
           )

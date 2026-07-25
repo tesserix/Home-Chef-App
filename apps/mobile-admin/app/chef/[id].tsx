@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Screen, Button } from '@homechef/mobile-shared/ui';
+import { Screen, Button, useAlert } from '@homechef/mobile-shared/ui';
 import {
   useAdminChefFromCache,
   useVerifyChef,
@@ -21,6 +21,7 @@ import { PromptModal } from '../../components/PromptModal';
 import { formatINR, formatDate, titleCase, errorMessage } from '../../lib/format';
 
 export default function ChefDetailScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const chef = useAdminChefFromCache(id);
   const verify = useVerifyChef();
@@ -43,29 +44,29 @@ export default function ChefDetailScreen() {
   const status = chefStatus(chef);
 
   const doVerify = () => {
-    Alert.alert('Verify kitchen', `Approve ${chef.businessName}?`, [
+    showAlert('Verify kitchen', `Approve ${chef.businessName}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Verify',
         onPress: () =>
           verify.mutate(chef.id, {
-            onError: (e) => Alert.alert('Failed', errorMessage(e)),
-            onSuccess: () => Alert.alert('Done', 'Kitchen verified.'),
+            onError: (e) => showAlert('Failed', errorMessage(e)),
+            onSuccess: () => showAlert('Done', 'Kitchen verified.'),
           }),
       },
     ]);
   };
 
   const doSuspend = () => {
-    Alert.alert('Suspend kitchen', `Suspend ${chef.businessName}? They will stop receiving orders.`, [
+    showAlert('Suspend kitchen', `Suspend ${chef.businessName}? They will stop receiving orders.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Suspend',
         style: 'destructive',
         onPress: () =>
           suspend.mutate(chef.id, {
-            onError: (e) => Alert.alert('Failed', errorMessage(e)),
-            onSuccess: () => Alert.alert('Done', 'Kitchen suspended.'),
+            onError: (e) => showAlert('Failed', errorMessage(e)),
+            onSuccess: () => showAlert('Done', 'Kitchen suspended.'),
           }),
       },
     ]);
@@ -159,10 +160,10 @@ export default function ChefDetailScreen() {
           reject.mutate(
             { chefId: chef.id, reason },
             {
-              onError: (e) => Alert.alert('Failed', errorMessage(e)),
+              onError: (e) => showAlert('Failed', errorMessage(e)),
               onSuccess: () => {
                 setRejectOpen(false);
-                Alert.alert('Done', 'Application rejected.');
+                showAlert('Done', 'Application rejected.');
               },
             }
           )

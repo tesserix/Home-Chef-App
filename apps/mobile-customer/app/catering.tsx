@@ -5,7 +5,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -29,7 +28,7 @@ import type { CateringRequest } from '../hooks/useCatering';
 import { friendlyErrorMessage } from '../lib/errors';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const CARD_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
@@ -351,6 +350,7 @@ function ChipGroup({
 }
 
 function RequestForm({ onSuccess }: { onSuccess: () => void }) {
+  const { showAlert } = useAlert();
   const createRequest = useCreateCateringRequest();
   const { ready, draft, saveDraft, clearDraft } =
     useFormDraft<CateringDraft>('catering-draft');
@@ -458,7 +458,7 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
       },
       {
         onSuccess: () => {
-          Alert.alert(
+          showAlert(
             'Request Submitted!',
             'Chefs will review and send quotes.',
           );
@@ -475,7 +475,7 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
           onSuccess();
         },
         onError: (err) => {
-          Alert.alert(
+          showAlert(
             'Error',
             friendlyErrorMessage(err, 'Could not submit request. Please try again.'),
           );

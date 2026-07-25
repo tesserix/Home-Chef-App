@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { friendlyErrorMessage } from '../../lib/errors';
@@ -36,6 +36,7 @@ function SectionLabel({ children }: { children: string }) {
 }
 
 export default function FoodPreferencesScreen() {
+  const { showAlert } = useAlert();
   const { data: profile, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
 
@@ -73,9 +74,9 @@ export default function FoodPreferencesScreen() {
     updateProfile.mutate(
       { cuisinePreferences: cuisinePrefs },
       {
-        onSuccess: () => Alert.alert('Saved', 'Cuisine preferences updated.'),
+        onSuccess: () => showAlert('Saved', 'Cuisine preferences updated.'),
         onError: (error) =>
-          Alert.alert('Error', friendlyErrorMessage(error, 'Could not save preferences.')),
+          showAlert('Error', friendlyErrorMessage(error, 'Could not save preferences.')),
       },
     );
   }
@@ -84,9 +85,9 @@ export default function FoodPreferencesScreen() {
     updateProfile.mutate(
       { dietaryPreferences: dietPrefs, foodAllergies: allergyPrefs },
       {
-        onSuccess: () => Alert.alert('Saved', 'Dietary profile updated.'),
+        onSuccess: () => showAlert('Saved', 'Dietary profile updated.'),
         onError: (error) =>
-          Alert.alert('Error', friendlyErrorMessage(error, 'Could not save dietary profile.')),
+          showAlert('Error', friendlyErrorMessage(error, 'Could not save dietary profile.')),
       },
     );
   }

@@ -3,7 +3,6 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -19,7 +18,13 @@ import { Redirect, router } from 'expo-router';
 import { CATERING_ENABLED } from '../constants/features';
 import { ChevronLeft, X } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button, EmptyState, KeyboardAwareScrollView, Skeleton } from '@homechef/mobile-shared/ui';
+import {
+  Button,
+  EmptyState,
+  KeyboardAwareScrollView,
+  Skeleton,
+  useAlert,
+} from '@homechef/mobile-shared/ui';
 import {
   useAvailableCateringRequests,
   useCateringBookings,
@@ -178,6 +183,7 @@ function QuoteModal({
   onClose: () => void;
   onSubmitted: () => void;
 }) {
+  const { showAlert } = useAlert();
   const submit = useSubmitCateringQuote();
   const [proposedMenu, setProposedMenu] = useState('');
   const [pricePerPerson, setPricePerPerson] = useState('');
@@ -202,11 +208,11 @@ function QuoteModal({
     const per = parseFloat(pricePerPerson);
     const total = parseFloat(totalPrice);
     if (!proposedMenu.trim()) {
-      Alert.alert('Add a menu', 'Describe what you would serve.');
+      showAlert('Add a menu', 'Describe what you would serve.');
       return;
     }
     if (isNaN(per) || per <= 0 || isNaN(total) || total <= 0) {
-      Alert.alert('Add pricing', 'Enter a price per person and total.');
+      showAlert('Add pricing', 'Enter a price per person and total.');
       return;
     }
     const dep = parseFloat(deposit);
@@ -231,10 +237,10 @@ function QuoteModal({
       },
       {
         onSuccess: () => {
-          Alert.alert('Quote sent', 'The customer will review your quote.');
+          showAlert('Quote sent', 'The customer will review your quote.');
           onSubmitted();
         },
-        onError: () => Alert.alert('Could not send', 'Please try again.'),
+        onError: () => showAlert('Could not send', 'Please try again.'),
       },
     );
   }
@@ -397,6 +403,7 @@ export default function VendorCateringRoute() {
 }
 
 function VendorCateringScreen() {
+  const { showAlert } = useAlert();
   const [tab, setTab] = useState<TabKey>('open');
   const [quoteTarget, setQuoteTarget] = useState<CateringRequest | null>(null);
 
@@ -432,12 +439,12 @@ function VendorCateringScreen() {
   }
 
   function completeBooking(requestId: string) {
-    Alert.alert('Mark this event completed?', 'Do this after the event has been catered.', [
+    showAlert('Mark this event completed?', 'Do this after the event has been catered.', [
       { text: 'Not yet', style: 'cancel' },
       {
         text: 'Complete',
         onPress: () =>
-          complete.mutate(requestId, { onError: () => Alert.alert('Could not update', 'Please try again.') }),
+          complete.mutate(requestId, { onError: () => showAlert('Could not update', 'Please try again.') }),
       },
     ]);
   }
