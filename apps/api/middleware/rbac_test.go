@@ -92,3 +92,56 @@ func TestRequirePool_MissingPoolRejected(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusForbidden, w.Code)
 }
+
+// consoleAdminRouter mimics an admin arriving from the tesserix.app console:
+// the signature has been verified upstream, so the signed email is on the
+// context, but there is NO "userID" — the console signs with its own OIDC
+// subject, which is not a HomeChef users.id and often not a UUID at all, so
+// applyBFFIdentity never sets the legacy key. No staffMember is pre-seeded and
+// no user row exists, so the DB is never consulted on this path.
+func consoleAdminRouter(email string) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/admin/payouts/blocked-chefs",
+		func(c *gin.Context) {
+			if email != "" {
+				c.Set(CtxUserEmail, email)
+			}
+			c.Next()
+		},
+		RequireStaffPermission(models.SPManagePayouts),
+		func(c *gin.Context) { c.Status(http.StatusOK) },
+	)
+	return r
+}
+
+func serveConsole(t *testing.T, email string) int {
+	t.Helper()
+	w := httptest.NewRecorder()
+	consoleAdminRouter(email).ServeHTTP(w, httptest.NewRequest("GET", "/admin/payouts/blocked-chefs", nil))
+	return w.Code
+}
+
+func TestRequireStaffPermission_ConsoleSuperAdminWithoutUserIDAllowed(t *testing.T) {
+	// Regression: this returned 401 for every console admin, which took out all
+	// of Payouts, Payout Setup, Staff and Fleet while the unguarded admin
+	// endpoints kept working. Identity comes from the signature, not from a
+	// resolvable HomeChef user id.
+	require.Equal(t, http.StatusOK, serveConsole(t, "samyak.rout@gmail.com"))
+}
+
+func TestRequireStaffPermission_ConsoleSuperAdminEmailIsCaseInsensitive(t *testing.T) {
+	require.Equal(t, http.StatusOK, serveConsole(t, "  Samyak.Rout@Gmail.com  "))
+}
+
+func TestRequireStaffPermission_ConsoleUnlistedEmailRejected(t *testing.T) {
+	// A signature-verified admin who is not on the super-admin allowlist still
+	// has no staff record, so the gate must deny.
+	require.Equal(t, http.StatusForbidden, serveConsole(t, "someone.else@fe3dr.com"))
+}
+
+func TestRequireStaffPermission_NoIdentityFailsClosed(t *testing.T) {
+	// Neither a user id nor a signed email: deny. Guards against the fallback
+	// turning an empty email into super-admin access.
+	require.Equal(t, http.StatusForbidden, serveConsole(t, ""))
+}

@@ -184,19 +184,32 @@ func RequirePermission(permission Permission) gin.HandlerFunc {
 	}
 }
 
+// staffActorEmail returns the acting admin's email address.
+//
+// Prefers the hydrated users row, then falls back to the signed identity
+// header. The fallback exists for admins who have no HomeChef users row at all
+// — the tesserix.app console authenticates against its own directory — and is
+// safe because X-User-Email is bound into the X-Internal-Auth MAC (#461).
+// Returns "" when neither is present, which every caller must treat as "not a
+// super admin".
+func staffActorEmail(c *gin.Context) string {
+	if user, ok := GetUser(c); ok && user.Email != "" {
+		return user.Email
+	}
+	if v, ok := c.Get(CtxUserEmail); ok {
+		if email, ok := v.(string); ok {
+			return email
+		}
+	}
+	return ""
+}
+
 // RequireStaffPermission checks that the authenticated user has a StaffMember
 // record with the given permission. This enforces granular staff RBAC beyond
 // basic role checks. The StaffMember is loaded from the DB and cached on the
 // gin context as "staffMember" for downstream handlers.
 func RequireStaffPermission(permission models.StaffPermission) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, exists := GetUserID(c)
-		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			c.Abort()
-			return
-		}
-
 		// Check if already loaded (avoid duplicate DB queries in a chain)
 		if cached, ok := c.Get("staffMember"); ok {
 			if staff, ok := cached.(*models.StaffMember); ok && staff != nil {
@@ -210,14 +223,38 @@ func RequireStaffPermission(permission models.StaffPermission) gin.HandlerFunc {
 			}
 		}
 
-		// Load from DB
+		// A HomeChef-native staff member is keyed by users.id, so the DB lookup
+		// is only meaningful when the caller HAS a HomeChef user id.
+		//
+		// The tesserix.app admin console signs requests with its own OIDC
+		// subject as X-User-Id (see lib/api/homechef-admin.ts). That subject is
+		// not a HomeChef users.id and frequently is not even a UUID, and
+		// applyBFFIdentity only sets the legacy "userID" key when the header
+		// parses as one. Demanding a user id up front therefore rejected every
+		// external admin with a 401 before any permission was considered —
+		// which took out all of Payouts, Payout Setup, Staff and Fleet while
+		// the unguarded admin endpoints kept working. Identity is established
+		// by the signature, not by this lookup.
 		var staff models.StaffMember
-		if err := staffDB().Where("user_id = ? AND is_active = ?", userID, true).First(&staff).Error; err != nil {
-			// Auto-provision for default super admins
-			user, userExists := GetUser(c)
-			if userExists && models.IsSuperAdminEmail(user.Email) {
+		userID, hasUserID := GetUserID(c)
+		found := false
+		if hasUserID {
+			if err := staffDB().Where("user_id = ? AND is_active = ?", userID, true).
+				First(&staff).Error; err == nil {
+				found = true
+			}
+		}
+
+		if !found {
+			// Auto-provision for default super admins. The email is read from
+			// the signed identity when no DB user row backs the caller: it is
+			// bound into the X-Internal-Auth MAC (#461), so it cannot be
+			// swapped without the signing key, and /admin has already enforced
+			// bffAuth + RequirePool(internal) + RequireAdmin above. An empty or
+			// unlisted email fails closed here.
+			if models.IsSuperAdminEmail(staffActorEmail(c)) {
 				staff = models.StaffMember{
-					UserID:    userID,
+					UserID:    userID, // uuid.Nil for a console-only admin
 					StaffRole: models.StaffRoleSuperAdmin,
 					IsActive:  true,
 				}
