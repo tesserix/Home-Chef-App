@@ -302,18 +302,17 @@ func orderSettlements(db *gorm.DB, order *models.Order) []services.Settlement {
 // deducted from this chef's next order regardless of whether this read
 // succeeded.
 //
-// LANDMINE (final money-safety review): this checkout-time reduction and the
-// sweep's release-time block (BuildReleaseInput's RecoveryBalance in
-// services/payout_release_cron.go) are two UNCOORDINATED places handling the
-// SAME debt — one reduces the transfer here, the other blocks release there,
-// and neither knows the other exists. Recovery is non-discharging (see
-// services/payout_recovery.go): nothing anywhere writes a resolving ledger
-// entry, so the same full debt is re-derived and can be re-applied by BOTH
-// sites against the SAME outstanding balance. No penalty/ledger writer may
-// ship until exactly one of these two mechanisms actually collects-and-
-// discharges the debt and the other is changed to defer to it — do not add a
-// third site, and do not wire a discharging writer to only one of the two
-// without also fixing the other.
+// RESOLVED LANDMINE (formerly: two uncoordinated sites acting on the same
+// non-discharging debt). This checkout-time reduction is now the SINGLE
+// collect-and-discharge site: dischargeChefRecoveryForOrder (below) writes
+// the resolving credit.recovery_collected entry once the reduced transfer
+// this function computed is confirmed to actually exist (gateway capture, or
+// a successful direct platform-balance transfer for a fully-wallet-covered
+// order). services/payout_release_cron.go's BuildReleaseInput now defers
+// entirely — RecoveryBalance is always zero there — instead of independently
+// blocking release on the identical balance. Do not add a third site that
+// acts on this debt, and do not change what discharges it without re-reading
+// both this comment and BuildReleaseInput's.
 //
 // On the success path, a deduction that actually reduces the transfer
 // (deducted > 0) writes a system audit row — order, chef, gross, and deducted
@@ -339,6 +338,60 @@ func applyChefRecoveryDeduction(db *gorm.DB, order *models.Order, grossPaise int
 		})
 	}
 	return int(net.Minor)
+}
+
+// dischargeChefRecoveryForOrder resolves any recovery penalty collected via
+// this order's chef transfer, now that the caller has confirmed the reduced
+// transfer applyChefRecoveryDeduction computed at checkout genuinely exists —
+// a gateway-confirmed capture (Route auto-creates/executes the held transfer
+// once the linked payment captures) or a successful direct platform-balance
+// transfer for a fully-wallet-covered order. See applyChefRecoveryDeduction's
+// doc comment for why this is now the single collect-and-discharge site.
+//
+// Recomputes the deduction rather than threading it from checkout: the same
+// "Deterministic" invariant orderSettlements' own comment already relies on
+// (nothing mutates THIS chef's ledger between checkout and this
+// capture-confirmation for the SAME order, in the ordinary single-order case)
+// means services.ApplyRecoveryDeduction's pure read reproduces the identical
+// figure applyChefRecoveryDeduction used to shrink the transfer — without
+// re-triggering its audit-log side effect a second time.
+//
+// ACCEPTED v1 LIMITATION: if THIS settling order's held transfer is later
+// reversed by its own refund, the discharge above has already fired though
+// the money was not ultimately paid to the chef — the penalty is then
+// effectively forgiven. Rare (the collecting order must itself be refunded
+// after already discharging the debt) and accepted as the trade-off of
+// discharging at creation rather than at release; a follow-up could move the
+// discharge to the release sweep instead if this proves to matter in
+// practice.
+//
+// Best-effort and idempotent: DischargeChefRecovery dedupes on (kind,
+// "order", this order's id), so calling this from the client-verify path,
+// the payment.captured webhook, and the full-wallet settle path — whichever
+// confirms the money first, and any redelivered webhook after — never
+// double-discharges. Callers must have order.Chef preloaded (RazorpayAccountID,
+// FSSAI fields).
+func dischargeChefRecoveryForOrder(db *gorm.DB, order *models.Order) {
+	if order.ChefID == uuid.Nil || order.Chef.RazorpayAccountID == "" || services.IsChefFSSAIExpired(&order.Chef) {
+		return // no chef transfer was ever created for this order — nothing was collected
+	}
+	gross := payouts.Money{Minor: int64(services.ToPaise(chefNetPayout(order))), Currency: payouts.CurrencyINR}
+	_, deducted, err := services.ApplyRecoveryDeduction(db, order.ChefID, gross, time.Now())
+	if err != nil {
+		log.Printf("recovery-discharge: ledger read failed order=%s chef=%s: %v", order.OrderNumber, order.ChefID, err)
+		services.CaptureBackgroundError(fmt.Errorf(
+			"recovery-discharge: order=%s chef=%s: %w", order.OrderNumber, order.ChefID, err))
+		return
+	}
+	if deducted.Minor <= 0 {
+		return
+	}
+	if err := services.DischargeChefRecovery(db, order.ChefID, order.ID, order.OrderNumber, deducted.Minor); err != nil {
+		log.Printf("recovery-discharge: write failed order=%s chef=%s deducted_paise=%d: %v",
+			order.OrderNumber, order.ChefID, deducted.Minor, err)
+		services.CaptureBackgroundError(fmt.Errorf(
+			"recovery-discharge: order=%s chef=%s: %w", order.OrderNumber, order.ChefID, err))
+	}
 }
 
 // debitOrderWallet debits the customer's store credit for the wallet applied to an
@@ -492,6 +545,10 @@ func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Ord
 
 	// Pay the chef/driver from the platform balance (the whole split is a top-up).
 	settleWalletTopUps(order, plan.DirectTopUps)
+	// This order's chef leg is a direct platform-balance transfer (no gateway
+	// capture confirms it), so discharge right here on the settle path itself —
+	// see dischargeChefRecoveryForOrder's doc comment.
+	dischargeChefRecoveryForOrder(database.DB, order)
 
 	c.JSON(http.StatusOK, gin.H{
 		"provider":      "wallet",
@@ -795,6 +852,11 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 	// IDENTICAL split (the order was reloaded with its persisted commission_rate; the
 	// webhook path shares the same seam — #395·3). Idempotent; a no-op without credit.
 	settleOrderWallet(order)
+	// The gateway capture just confirmed above means Route's held transfer for this
+	// order's (already-reduced) chef leg genuinely exists — collect-and-discharge any
+	// recovery penalty applyChefRecoveryDeduction took off it at checkout. Independent
+	// of wallet credit, so this runs on every order, not just wallet-applied ones.
+	dischargeChefRecoveryForOrder(database.DB, order)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
 }
@@ -1565,10 +1627,28 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) error {
 	// crashed earlier webhook delivery left partial (why it runs on every delivery, not
 	// just the winning RowsAffected>0 one).
 	var walletOrd models.Order
-	if err := database.DB.Preload("Chef").Preload("Delivery.DeliveryPartner").
+	walletLoaded := database.DB.Preload("Chef").Preload("Delivery.DeliveryPartner").
 		Where("razorpay_order_id = ? AND payment_status = ? AND wallet_applied > 0",
-			payment.OrderID, models.PaymentCompleted).First(&walletOrd).Error; err == nil {
+			payment.OrderID, models.PaymentCompleted).First(&walletOrd).Error == nil
+	if walletLoaded {
 		settleOrderWallet(&walletOrd)
+	}
+
+	// Chef recovery penalty (see applyChefRecoveryDeduction / dischargeChefRecoveryForOrder):
+	// discharge on EVERY payment.captured delivery, not just the winning
+	// pending→completed transition — a redelivered webhook must retry it the same
+	// way settleOrderWallet does above. Independent of wallet credit (unlike the
+	// block above), so reuse the already-loaded order when it happened to be a
+	// wallet order; otherwise load fresh — most orders carry no wallet credit.
+	if walletLoaded {
+		dischargeChefRecoveryForOrder(database.DB, &walletOrd)
+	} else {
+		var recoveryOrd models.Order
+		if err := database.DB.Preload("Chef").
+			Where("razorpay_order_id = ? AND payment_status = ?", payment.OrderID, models.PaymentCompleted).
+			First(&recoveryOrd).Error; err == nil {
+			dischargeChefRecoveryForOrder(database.DB, &recoveryOrd)
+		}
 	}
 
 	// A post-delivery tip is a separate Razorpay order (#45); confirm it here too

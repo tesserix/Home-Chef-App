@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/homechef/api/models"
 	"github.com/homechef/api/payouts"
 )
 
@@ -136,4 +137,103 @@ func TestApplyRecoveryDeduction_Conserves(t *testing.T) {
 		t.Fatalf("conservation broken: net %d + deducted %d != gross %d",
 			net.Minor, deducted.Minor, gross.Minor)
 	}
+}
+
+// ── RaiseChefRecoveryPenalty / DischargeChefRecovery — the chef-cancel penalty
+// (first real writer of this ledger) and its resolving discharge ──
+
+// TestRaiseChefRecoveryPenalty_WritesOneDebitAndIsIdempotent pins the
+// chef-cancel penalty writer: exactly one debit.penalty entry per order, and
+// a retried call (the loser of a concurrent duplicate CancelOrder request
+// still runs the penalty tail, or a genuine re-cancel) never writes a second
+// one. After it, ApplyRecoveryDeduction must show the chef owes exactly the
+// raised amount.
+func TestRaiseChefRecoveryPenalty_WritesOneDebitAndIsIdempotent(t *testing.T) {
+	db := newRecoveryTestDB(t)
+	chefID := uuid.New()
+	order := &models.Order{ID: uuid.New(), OrderNumber: "HC-100", ChefID: chefID, ServiceFee: 18.96}
+	amountPaise := int64(1_896) // ₹18.96
+	reason := "chef cancel — platform fee penalty for order HC-100"
+
+	require.NoError(t, RaiseChefRecoveryPenalty(db, chefID, order, amountPaise, reason))
+	require.NoError(t, RaiseChefRecoveryPenalty(db, chefID, order, amountPaise, reason), "a re-cancel/retry must not error")
+
+	var count int64
+	require.NoError(t, db.Model(&payouts.LedgerEntry{}).
+		Where("payee_id = ? AND kind = ?", chefID, payouts.EntryDebitPenalty).Count(&count).Error)
+	require.EqualValues(t, 1, count, "a retried raise must never write a second penalty row")
+
+	_, deducted, err := ApplyRecoveryDeduction(db, chefID, inr(50_000), time.Now())
+	require.NoError(t, err)
+	require.EqualValues(t, amountPaise, deducted.Minor, "the chef must owe exactly the raised penalty, not double it")
+}
+
+// TestRaiseChefRecoveryPenalty_ZeroAmountIsNoOp guards the service layer the
+// same way CancelOrder's `order.ServiceFee > 0` gate does at the caller — a
+// zero (or negative) amount must never write a row.
+func TestRaiseChefRecoveryPenalty_ZeroAmountIsNoOp(t *testing.T) {
+	db := newRecoveryTestDB(t)
+	chefID := uuid.New()
+	order := &models.Order{ID: uuid.New(), OrderNumber: "HC-101", ChefID: chefID}
+
+	require.NoError(t, RaiseChefRecoveryPenalty(db, chefID, order, 0, "no fee"))
+
+	var count int64
+	require.NoError(t, db.Model(&payouts.LedgerEntry{}).Count(&count).Error)
+	require.Zero(t, count)
+}
+
+// TestDischargeChefRecovery_WritesOneCreditAndIsIdempotent proves the
+// resolving half: after a debt is raised, discharging it nets the recovery
+// balance to zero, and a retried discharge call (client-verify + webhook
+// racing, or a redelivered webhook) never double-credits.
+func TestDischargeChefRecovery_WritesOneCreditAndIsIdempotent(t *testing.T) {
+	db := newRecoveryTestDB(t)
+	chefID := uuid.New()
+	seedPenalty(t, db, chefID, 1_896)
+	settlingOrderID := uuid.New()
+
+	require.NoError(t, DischargeChefRecovery(db, chefID, settlingOrderID, "HC-200", 1_896))
+	require.NoError(t, DischargeChefRecovery(db, chefID, settlingOrderID, "HC-200", 1_896))
+
+	var count int64
+	require.NoError(t, db.Model(&payouts.LedgerEntry{}).
+		Where("payee_id = ? AND kind = ?", chefID, payouts.EntryCreditRecoveryCollected).Count(&count).Error)
+	require.EqualValues(t, 1, count, "a retried discharge must never write a second resolving entry")
+
+	var entries []payouts.LedgerEntry
+	require.NoError(t, db.Where("payee_id = ?", chefID).Find(&entries).Error)
+	balance, err := payouts.DeriveBalance(entries, time.Now())
+	require.NoError(t, err)
+	require.True(t, balance.Recovery().IsZero(), "the debt must be fully discharged — Recovery() must read zero")
+}
+
+// TestDischargeChefRecovery_PartialDischargeLeavesRemainder is the
+// partial-collection case: a settling order's gross was smaller than the full
+// debt, so only that slice discharges — the rest stays owed for the chef's
+// next settling order to collect.
+func TestDischargeChefRecovery_PartialDischargeLeavesRemainder(t *testing.T) {
+	db := newRecoveryTestDB(t)
+	chefID := uuid.New()
+	seedPenalty(t, db, chefID, 5_000) // ₹50.00 owed
+
+	require.NoError(t, DischargeChefRecovery(db, chefID, uuid.New(), "HC-300", 3_000)) // only ₹30.00 collected
+
+	var entries []payouts.LedgerEntry
+	require.NoError(t, db.Where("payee_id = ?", chefID).Find(&entries).Error)
+	balance, err := payouts.DeriveBalance(entries, time.Now())
+	require.NoError(t, err)
+	require.EqualValues(t, 2_000, balance.Recovery().Minor, "₹20 must remain owed after only ₹30 of the ₹50 debt was collected")
+}
+
+// TestDischargeChefRecovery_ZeroAmountIsNoOp mirrors the raise-side guard.
+func TestDischargeChefRecovery_ZeroAmountIsNoOp(t *testing.T) {
+	db := newRecoveryTestDB(t)
+	chefID := uuid.New()
+
+	require.NoError(t, DischargeChefRecovery(db, chefID, uuid.New(), "HC-301", 0))
+
+	var count int64
+	require.NoError(t, db.Model(&payouts.LedgerEntry{}).Count(&count).Error)
+	require.Zero(t, count)
 }

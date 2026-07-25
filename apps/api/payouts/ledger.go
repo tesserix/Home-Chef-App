@@ -18,6 +18,14 @@ const (
 	EntryCreditAdjustment     EntryKind = "credit.adjustment"
 	EntryCreditPayoutReversed EntryKind = "credit.payout_reversed"
 	EntryCreditReserveRelease EntryKind = "credit.reserve_release"
+	// EntryCreditRecoveryCollected is the resolving entry that discharges a
+	// recovery debt (debit.penalty et al.) once it has actually been collected
+	// off a chef's Route transfer at creation time — see
+	// services/payout_recovery.go's DischargeChefRecovery. A dedicated kind
+	// (rather than reusing credit.adjustment) so its dedupe key on
+	// (kind, source_type, source_id) can never collide with an unrelated
+	// manual adjustment sharing the same source.
+	EntryCreditRecoveryCollected EntryKind = "credit.recovery_collected"
 
 	// Debits — amounts withheld from the payee.
 	EntryDebitPayout     EntryKind = "debit.payout"

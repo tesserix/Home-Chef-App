@@ -565,6 +565,114 @@ func seedChefPenalty(t *testing.T, db *gorm.DB, chefID uuid.UUID, minor int64) {
 	require.NoError(t, db.Create(&entry).Error)
 }
 
+// chefRecoveryBalance re-derives the chef's current recovery balance straight
+// from the ledger table, the same way ApplyRecoveryDeduction/DeriveBalance
+// would for the chef's next payout.
+func chefRecoveryBalance(t *testing.T, db *gorm.DB, chefID uuid.UUID) payouts.Balance {
+	t.Helper()
+	var entries []payouts.LedgerEntry
+	require.NoError(t, db.Where("payee_id = ?", chefID).Find(&entries).Error)
+	balance, err := payouts.DeriveBalance(entries, time.Now())
+	require.NoError(t, err)
+	return balance
+}
+
+// TestChefRecoveryPenalty_CollectedOnceNotForever is the end-to-end proof
+// that RaiseChefRecoveryPenalty + orderSettlements (checkout-time reduction)
+// + dischargeChefRecoveryForOrder (capture-confirmed discharge) together
+// collect a chef's debt EXACTLY ONCE: the chef's NEXT settling order has its
+// transfer reduced by the owed penalty AND the debt is discharged; a
+// SUBSEQUENT settling order for the same chef sees a clear balance — no
+// deduction at all — and discharging it writes no further resolving entry.
+// This is the regression test for the resolved LANDMINE: before this change,
+// recovery was non-discharging, so the SAME debt would have kept reducing
+// every future order forever.
+func TestChefRecoveryPenalty_CollectedOnceNotForever(t *testing.T) {
+	db := setupPayDB(t)
+	chefID := uuid.New()
+	seedChefPenalty(t, db, chefID, 1_896) // ₹18.96 owed — mirrors a chef-cancel service-fee penalty
+
+	orderA := &models.Order{
+		ID: uuid.New(), OrderNumber: "HC-ONCE-A", ChefID: chefID,
+		Subtotal: 1000, Tax: 50, ChefTip: 20, DeliveryFee: 40, ChefFundedDiscount: 100, CommissionRate: 0.06,
+	}
+	orderA.Chef.RazorpayAccountID = "acc_chef"
+	grossA := services.ToPaise(chefNetPayout(orderA)) // 90630, see TestOrderSettlements_ChefNetTransfer
+
+	settlementsA := orderSettlements(db, orderA)
+	require.Equal(t, grossA-1_896, settlementsA[0].Amount,
+		"the chef's NEXT settling order must have its transfer reduced by the full owed penalty")
+
+	dischargeChefRecoveryForOrder(db, orderA)
+
+	require.True(t, chefRecoveryBalance(t, db, chefID).Recovery().IsZero(),
+		"the ₹18.96 debt must be fully discharged once order A's reduced transfer is confirmed")
+
+	var creditCount int64
+	require.NoError(t, db.Model(&payouts.LedgerEntry{}).
+		Where("payee_id = ? AND kind = ?", chefID, payouts.EntryCreditRecoveryCollected).Count(&creditCount).Error)
+	require.EqualValues(t, 1, creditCount, "exactly one resolving entry, sourced from order A")
+
+	// A SUBSEQUENT order for the SAME chef must see a clear balance: full
+	// gross, no deduction — and discharging it again writes nothing further,
+	// proving the debt was collected ONCE, not re-applied to every future order.
+	orderB := &models.Order{
+		ID: uuid.New(), OrderNumber: "HC-ONCE-B", ChefID: chefID,
+		Subtotal: 1000, Tax: 50, ChefTip: 20, DeliveryFee: 40, ChefFundedDiscount: 100, CommissionRate: 0.06,
+	}
+	orderB.Chef.RazorpayAccountID = "acc_chef"
+	settlementsB := orderSettlements(db, orderB)
+	require.Equal(t, grossA, settlementsB[0].Amount,
+		"order B's transfer must be the FULL gross — the debt was already collected via order A, not re-applied")
+
+	dischargeChefRecoveryForOrder(db, orderB)
+	require.NoError(t, db.Model(&payouts.LedgerEntry{}).
+		Where("payee_id = ? AND kind = ?", chefID, payouts.EntryCreditRecoveryCollected).Count(&creditCount).Error)
+	require.EqualValues(t, 1, creditCount, "order B must not write a second discharge — there was nothing left to collect")
+}
+
+// TestChefRecoveryPenalty_PartialCollectionAcrossOrders is the partial-slice
+// case: a settling order's gross is SMALLER than the full debt, so only that
+// slice is collected and discharged, leaving the remainder for the chef's
+// next settling order — proven across three orders (partial, remainder, then
+// clear).
+func TestChefRecoveryPenalty_PartialCollectionAcrossOrders(t *testing.T) {
+	db := setupPayDB(t)
+	chefID := uuid.New()
+
+	newOrder := func(number string) *models.Order {
+		o := &models.Order{
+			ID: uuid.New(), OrderNumber: number, ChefID: chefID,
+			Subtotal: 300, Tax: 15, ChefTip: 5, CommissionRate: 0.06,
+		}
+		o.Chef.RazorpayAccountID = "acc_chef3"
+		return o
+	}
+
+	orderC := newOrder("HC-PART-C")
+	grossC := int64(services.ToPaise(chefNetPayout(orderC)))
+	owed := grossC + 2_000 // ₹20 more than this order's gross can cover
+	seedChefPenalty(t, db, chefID, owed)
+
+	settlementsC := orderSettlements(db, orderC)
+	require.EqualValues(t, 0, settlementsC[0].Amount, "order C's whole gross is consumed by the larger debt")
+	dischargeChefRecoveryForOrder(db, orderC)
+	require.EqualValues(t, 2_000, chefRecoveryBalance(t, db, chefID).Recovery().Minor,
+		"₹20 remains owed after order C only covered part of the debt")
+
+	orderD := newOrder("HC-PART-D")
+	grossD := int64(services.ToPaise(chefNetPayout(orderD)))
+	settlementsD := orderSettlements(db, orderD)
+	require.EqualValues(t, grossD-2_000, settlementsD[0].Amount, "order D collects exactly the ₹20 remainder")
+	dischargeChefRecoveryForOrder(db, orderD)
+	require.True(t, chefRecoveryBalance(t, db, chefID).Recovery().IsZero(), "the debt is now fully discharged")
+
+	orderE := newOrder("HC-PART-E")
+	grossE := int64(services.ToPaise(chefNetPayout(orderE)))
+	settlementsE := orderSettlements(db, orderE)
+	require.EqualValues(t, grossE, settlementsE[0].Amount, "order E's transfer is untouched — the debt is gone, ONCE not forever")
+}
+
 // TestChefTransferEqualsStatementNetPayout (#390, W3) is the non-tautological
 // guard against field-mapping drift between the two construction sites: the
 // payout side (payment.go → chefNetPayout) and the statement side (statement.go →
