@@ -18,6 +18,7 @@ import {
   Heart,
   Receipt,
   Salad,
+  LifeBuoy,
 } from 'lucide-react-native';
 import { useProfile } from '../../hooks/useProfile';
 import {
@@ -354,6 +355,12 @@ export default function ProfileScreen() {
           icon={<DatabaseZap size={18} color={customerColors.charcoal.soft} />}
           label="Download my data"
           onPress={() => router.push('/data-privacy')}
+        />
+        <NavRowDivider />
+        <NavRow
+          icon={<LifeBuoy size={18} color={customerColors.charcoal.soft} />}
+          label="Help & support"
+          onPress={() => router.push('/support-chat')}
         />
         <NavRowDivider />
         <NavRow
