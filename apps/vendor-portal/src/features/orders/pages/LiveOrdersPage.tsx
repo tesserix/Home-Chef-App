@@ -21,7 +21,7 @@ import { Card } from '@/shared/components/ui/Card';
 import { OrderStatusBadge } from '@/shared/components/ui/Badge';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
 import { OrderMessageThread } from '@/features/orders/components/OrderMessageThread';
-import type { Order, OrderStatus } from '@/shared/types';
+import type { ChefOrdersResponse, Order, OrderStatus } from '@/shared/types';
 
 type LiveTab = 'all' | 'pending' | 'accepted' | 'preparing' | 'ready';
 
@@ -52,7 +52,11 @@ export default function LiveOrdersPage() {
 
   const { data: orders = [], isLoading, isRefetching } = useQuery<Order[]>({
     queryKey: ['chef-orders', 'live'],
-    queryFn: () => apiClient.get<Order[]>('/chef/orders', { status: LIVE_STATUSES }),
+    // /chef/orders answers { orders, total, page, limit } — see ChefOrdersResponse.
+    queryFn: () =>
+      apiClient
+        .get<ChefOrdersResponse>('/chef/orders', { status: LIVE_STATUSES })
+        .then((r) => r.orders ?? []),
     refetchInterval: 30000,
   });
 

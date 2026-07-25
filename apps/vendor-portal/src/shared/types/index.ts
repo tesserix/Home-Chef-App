@@ -34,6 +34,22 @@ export interface PaginatedResponse<T> {
   };
 }
 
+/**
+ * What `GET /chef/orders` actually returns.
+ *
+ * It does NOT return a bare array, and it does not use the `{data, pagination}`
+ * envelope that `apiClient` auto-unwraps — it returns its own shape
+ * (`chefs.go` GetChefOrders). Typing the call as `Order[]` compiles fine and
+ * then blows up at runtime on the first `.filter`/`.map`, which is exactly what
+ * took the chef dashboard down with "i.filter is not a function".
+ */
+export interface ChefOrdersResponse {
+  orders: Order[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 // Chef types
 export type OnboardingStatus = 'not_started' | 'in_progress' | 'submitted' | 'approved' | 'rejected';
 

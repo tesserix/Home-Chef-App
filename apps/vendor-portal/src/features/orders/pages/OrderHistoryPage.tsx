@@ -14,7 +14,7 @@ import { Button } from '@/shared/components/ui/Button';
 import { Card } from '@/shared/components/ui/Card';
 import { OrderStatusBadge } from '@/shared/components/ui/Badge';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
-import type { Order } from '@/shared/types';
+import type { ChefOrdersResponse, Order } from '@/shared/types';
 
 type DateRange = 'today' | '7days' | '30days' | 'all';
 
@@ -57,11 +57,14 @@ export default function OrderHistoryPage() {
 
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['chef-orders', 'history', dateRange],
+    // /chef/orders answers { orders, total, page, limit } — see ChefOrdersResponse.
     queryFn: () =>
-      apiClient.get<Order[]>('/chef/orders', {
-        status: HISTORY_STATUSES,
-        ...(fromDate ? { from: fromDate } : {}),
-      }),
+      apiClient
+        .get<ChefOrdersResponse>('/chef/orders', {
+          status: HISTORY_STATUSES,
+          ...(fromDate ? { from: fromDate } : {}),
+        })
+        .then((r) => r.orders ?? []),
   });
 
   const deliveredCount = orders.filter((o) => o.status === 'delivered').length;

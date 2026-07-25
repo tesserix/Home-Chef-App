@@ -50,6 +50,20 @@ interface Order {
   estimatedDelivery?: string;
 }
 
+/**
+ * What `GET /chef/orders` returns — an envelope, not a bare array, and not the
+ * `{data, pagination}` shape `apiClient` auto-unwraps (see chefs.go
+ * GetChefOrders). Typing the query as `Order[]` compiles and then fails at
+ * runtime on the first `.filter`, which is what broke this dashboard with
+ * "i.filter is not a function".
+ */
+interface ChefOrdersResponse {
+  orders: Order[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -428,8 +442,14 @@ export default function DashboardPage() {
     isLoading: ordersLoading,
   } = useQuery<Order[]>({
     queryKey: ['chef', 'orders', 'active'],
+    // /chef/orders answers { orders, total, page, limit } — not a bare array,
+    // and not the {data, pagination} envelope apiClient unwraps.
     queryFn: () =>
-      apiClient.get('/chef/orders', { status: 'pending,accepted,preparing' }),
+      apiClient
+        .get<ChefOrdersResponse>('/chef/orders', {
+          status: 'pending,accepted,preparing',
+        })
+        .then((r) => r.orders ?? []),
   });
 
   const pendingOrders = orders?.filter((o) => o.status === 'pending') ?? [];
