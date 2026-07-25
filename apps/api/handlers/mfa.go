@@ -38,6 +38,10 @@ type mfaVerifyRequest struct {
 	Code    string `json:"code"`
 	// BackupCode is the recovery path; supplying it makes Channel irrelevant.
 	BackupCode string `json:"backupCode"`
+	// FirebaseIDToken carries the phone leg: a token minted after the client
+	// completed Firebase phone verification, whose claims hold the verified
+	// number. Verified server-side — the client's word is worth nothing here.
+	FirebaseIDToken string `json:"firebaseIdToken"`
 	// RememberDevice persists trust until explicitly revoked. Without it the
 	// caller gets a session-scoped elevation token instead.
 	RememberDevice bool   `json:"rememberDevice"`
@@ -47,6 +51,12 @@ type mfaVerifyRequest struct {
 
 type mfaEnrollEmailVerify struct {
 	Code string `json:"code" binding:"required"`
+}
+
+type mfaEnrollPhone struct {
+	// FirebaseIDToken is minted after the client completes Firebase phone
+	// verification; its claims carry the number Google verified.
+	FirebaseIDToken string `json:"firebaseIdToken" binding:"required"`
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -181,6 +191,48 @@ func (h *MFAHandler) VerifyEmailEnrollment(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"emailEnrolled": true})
+}
+
+// EnrollPhone records a phone number as a second factor, but only after Google
+// says the user proved they hold it.
+//
+// The client runs Firebase phone verification, then posts the resulting ID
+// token. Everything up to that point happened on a device we do not control, so
+// the signature check here is what makes the phone factor a factor at all.
+func (h *MFAHandler) EnrollPhone(c *gin.Context) {
+	userID, user, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	var req mfaEnrollPhone
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Verify your phone first", "field": "firebaseIdToken"})
+		return
+	}
+	verified, err := services.VerifyFirebasePhoneToken(c.Request.Context(), req.FirebaseIDToken, user.GIPUid)
+	if err != nil {
+		c.JSON(phoneVerifyStatus(err), gin.H{"error": err.Error(), "field": "firebaseIdToken"})
+		return
+	}
+	if _, err := upsertSettings(userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save two-factor settings"})
+		return
+	}
+	// Any previous enrollment marker for this channel is cleared: a stale marker
+	// must not vouch for a number the user has just replaced.
+	services.ClearOTPVerified(c.Request.Context(), services.PurposeMFAEnroll, userID.String(), verified.E164)
+
+	if err := database.DB.Model(&models.UserMFASettings{}).Where("user_id = ?", userID).
+		Updates(map[string]any{
+			"phone_enrolled":  true,
+			"phone_e164_enc":  models.EncryptedString(verified.E164),
+			"phone_e164_bidx": services.NormalizeE164(verified.E164),
+			"updated_at":      time.Now(),
+		}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save two-factor settings"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"phoneEnrolled": true, "maskedPhone": services.MaskPhone(verified.E164)})
 }
 
 // ---- enable / disable -------------------------------------------------------
@@ -347,14 +399,27 @@ func (h *MFAHandler) Verify(c *gin.Context) {
 		}
 
 	case services.MFAChannel(req.Channel) == services.MFAChannelPhone:
-		// Item 12 wires the Firebase Admin SDK check. Refusing outright until
-		// then is deliberate: accepting an unverified credential would be a
-		// complete bypass of the second factor.
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"error": "Phone verification is not available yet. Use email or a backup code.",
-			"field": "channel",
-		})
-		return
+		if !s.PhoneEnrolled {
+			c.JSON(http.StatusBadRequest, gin.H{"error": services.ErrMFAChannelNotEnrolled.Error(), "field": "channel"})
+			return
+		}
+		verified, err := services.VerifyFirebasePhoneToken(
+			c.Request.Context(), req.FirebaseIDToken, user.GIPUid,
+		)
+		if err != nil {
+			c.JSON(phoneVerifyStatus(err), gin.H{"error": err.Error(), "field": "firebaseIdToken"})
+			return
+		}
+		// The number Google just verified must be the one enrolled as this
+		// account's factor. Skipping this would let anyone verify any phone they
+		// hold and walk past the challenge with it.
+		if verified.E164 != services.NormalizeE164(string(s.PhoneE164Enc)) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "That is not the phone number registered for this account.",
+				"field": "firebaseIdToken",
+			})
+			return
+		}
 
 	default:
 		subject, _, err := services.ChallengeSubject(s, user.Email, services.MFAChannelEmail)
@@ -450,5 +515,18 @@ func mfaVerifyStatus(err error) int {
 		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError
+	}
+}
+
+func phoneVerifyStatus(err error) int {
+	switch {
+	case errors.Is(err, services.ErrPhoneVerifyUnavailable):
+		return http.StatusServiceUnavailable
+	case errors.Is(err, services.ErrPhoneTokenWrongUser):
+		return http.StatusForbidden
+	default:
+		// Invalid token and phone-less token both read as a bad request; keeping
+		// them indistinguishable from each other gives a prober nothing.
+		return http.StatusBadRequest
 	}
 }

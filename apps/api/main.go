@@ -38,6 +38,13 @@ func main() {
 	// Load configuration
 	config.Load()
 
+	// Hand the Firebase project to services without services importing config
+	// (config already imports services, so a direct import would cycle). Used by
+	// the two-factor phone channel to verify Firebase ID tokens.
+	services.SetFirebaseConfigProvider(func() services.FirebaseConfig {
+		return services.FirebaseConfig{ProjectID: config.AppConfig.FirebaseProjectID}
+	})
+
 	// Structured JSON logging — initialise before anything else logs so
 	// startup lines are machine-parsable in Cloud Logging too.
 	logger.Init(config.AppConfig.Environment)

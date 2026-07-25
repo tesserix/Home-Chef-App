@@ -457,6 +457,7 @@ func SetupRouter() *gin.Engine {
 
 			mfa.POST("/enroll/email/request", mfaHandler.RequestEmailEnrollment)
 			mfa.POST("/enroll/email/verify", mfaHandler.VerifyEmailEnrollment)
+			mfa.POST("/enroll/phone", mfaHandler.EnrollPhone)
 
 			mfa.POST("/enable", mfaHandler.Enable)
 			mfa.POST("/disable", mfaHandler.Disable)

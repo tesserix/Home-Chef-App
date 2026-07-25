@@ -202,6 +202,9 @@ type Config struct {
 	// on, nothing changes for a user until they enrol — the feature is opt-in
 	// per account, so flipping this cannot lock anyone out.
 	MFAEnabled bool
+	// FirebaseProjectID is the GIP/Firebase project whose ID tokens the phone
+	// second factor is verified against. Empty disables the phone channel.
+	FirebaseProjectID string
 	// MFABackupCodeKey is the HMAC key protecting recovery codes at rest.
 	// Required before backup codes can be issued or redeemed; without it those
 	// endpoints error rather than falling back to a weaker scheme.
@@ -414,6 +417,7 @@ func Load() {
 		LoyaltyEnabled:                  loyaltyEnabled,
 		MFAEnabled:                      mfaEnabled,
 		MFABackupCodeKey:                getEnv("MFA_BACKUP_CODE_KEY", ""),
+		FirebaseProjectID:               getEnv("FIREBASE_PROJECT_ID", getEnv("GCS_PROJECT_ID", "")),
 	}
 }
 
