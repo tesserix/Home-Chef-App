@@ -480,3 +480,45 @@ func TestHandler_UnknownHost_FallsBackToDefaultCookie(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, "fallback-user", *capturedUserID)
 }
+
+// Regression for the production 403 that broke order placement: behind
+// Cloudflare the TLS terminates at the edge and the tunnel reaches Istio over
+// plaintext, so X-Forwarded-Proto says http while the browser's Origin says
+// https. Comparing full scheme://host origins rejected every real
+// cookie-authenticated POST. The check is host-only for exactly this reason.
+func TestHandler_CookieAuth_HttpsOriginBehindPlaintextHop_Proxies(t *testing.T) {
+	var called bool
+	mgr, r, _ := newOriginTestFixtures(t, &called)
+	enc, err := mgr.Encode(newTestPayload())
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/orders", nil)
+	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("X-Forwarded-Proto", "http") // what the edge actually sends
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code,
+		"a same-host POST must proxy even when the forwarded scheme differs")
+	assert.True(t, called, "upstream must be called")
+}
+
+// The host check still has to reject a genuine cross-site POST, forwarded
+// scheme notwithstanding — that is the whole point of the guard.
+func TestHandler_CookieAuth_ForeignOriginWithForwardedProto_Rejected(t *testing.T) {
+	var called bool
+	mgr, r, _ := newOriginTestFixtures(t, &called)
+	enc, err := mgr.Encode(newTestPayload())
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/orders", nil)
+	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	req.Header.Set("Origin", "https://attacker.example")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	assert.False(t, called, "upstream must never be reached cross-site")
+}

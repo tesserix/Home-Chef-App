@@ -36,6 +36,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -82,25 +83,16 @@ var safeMethods = map[string]struct{}{
 	http.MethodOptions: {},
 }
 
-// requestOrigin reconstructs the scheme://host this request actually
-// arrived at, as seen from outside the cluster. The service is always
-// behind Istio/Cloudflare, so c.Request.TLS is nil and the scheme has to be
-// read off X-Forwarded-Proto (set by the edge, comma-joined if there were
-// multiple hops — the first value is the one the client used). Absent that
-// header, default to https: every real deployment of this service sits
-// behind TLS-terminating infra, so a missing header means an edge that
-// forgot to set it, not a plaintext deployment. c.Request.Host already
-// carries whatever Host the client sent (or the ingress rewrote it to),
-// which is what a browser's Origin host will match for a same-origin call.
-func requestOrigin(r *http.Request) string {
-	scheme := "https"
-	if xfp := r.Header.Get("X-Forwarded-Proto"); xfp != "" {
-		if i := strings.IndexByte(xfp, ','); i >= 0 {
-			xfp = xfp[:i]
-		}
-		scheme = strings.TrimSpace(xfp)
+// originHost pulls the host out of an Origin header value
+// ("https://fe3dr.com" -> "fe3dr.com"), returning "" if it isn't a usable
+// absolute origin. Origin is always scheme://host[:port] or the literal
+// "null"; it never carries a path.
+func originHost(origin string) string {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return ""
 	}
-	return scheme + "://" + r.Host
+	return u.Host
 }
 
 // checkOrigin enforces that a cookie-authenticated request actually
@@ -108,23 +100,25 @@ func requestOrigin(r *http.Request) string {
 // requests authenticated via the session cookie — Bearer-authenticated
 // requests (mobile) have no meaningful Origin and must not go through this.
 //
-// scheme://host, not host alone, is what's compared: Origin is a full
-// origin, and each SPA (vendors.fe3dr.com, fe3dr.com, ...) is always served
-// over https at a fixed host, so a legitimate call's Origin is always
-// exactly this request's own reconstructed scheme://host — there's no
-// legitimate case where the scheme differs but the host matches. Comparing
-// host alone would still stop the cross-site attack (the attacker can't
-// forge our host into their page's Origin), but it would also silently
-// accept a downgraded-scheme replay if one ever reached this service, which
-// buys nothing and costs a real check. The one thing this deliberately does
-// NOT do is special-case www.fe3dr.com vs fe3dr.com: origin is derived from
-// the request's own Host on every call, never hardcoded, so both domains
-// compare correctly against themselves without any extra normalization —
-// hardcoding a single expected host is exactly the trap to avoid here.
+// The comparison is host-only, deliberately. An earlier version rebuilt
+// scheme://host from X-Forwarded-Proto and compared full origins; that
+// rejected every real cookie-authenticated POST in production
+// (403 origin_rejected on placing an order). Cloudflare terminates TLS and
+// the tunnel reaches Istio over plaintext, so the header arriving here says
+// http while the browser's Origin says https — the two could never match.
+// It went unnoticed at first because same-origin GETs send no Origin header
+// at all and so never reached the comparison.
+//
+// Host alone is what actually carries the CSRF guarantee: an attacker's page
+// cannot put our host in its Origin. The scheme adds nothing here — this
+// service is only ever reachable over HTTPS from outside the cluster.
+//
+// This deliberately does NOT special-case www.fe3dr.com vs fe3dr.com: the
+// expected host is read from the request itself on every call, never
+// hardcoded, so each domain compares correctly against itself.
 func checkOrigin(c *gin.Context) bool {
-	origin := c.GetHeader("Origin")
-	if origin != "" {
-		return origin == requestOrigin(c.Request)
+	if origin := c.GetHeader("Origin"); origin != "" {
+		return originHost(origin) == c.Request.Host
 	}
 	// No Origin at all. Fine for a safe method (e.g. a top-level GET
 	// navigation, which browsers don't attach Origin to); anything else
