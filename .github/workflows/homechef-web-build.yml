@@ -80,7 +80,12 @@ jobs:
           # the kargo-homechef Project's prod Stage.
           tags: |
             type=ref,event=branch
-            type=sha,prefix={{branch}}-
+            type=ref,event=pr
+            # {{branch}} is empty on pull_request, which yields the invalid tag
+            # ":-<sha>" and fails the build outright — so the branch-prefixed
+            # sha tag is push-only. PRs get pr-<number>, which is valid and is
+            # never pushed anyway (see the deploy gate on the build step).
+            type=sha,prefix={{branch}}-,enable=${{ github.event_name != 'pull_request' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.title=homechef-web
