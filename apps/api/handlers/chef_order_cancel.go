@@ -53,9 +53,10 @@ type cancelRequest struct {
 	Reason string `json:"reason" binding:"required"`
 }
 
-// CancelOrder cancels the whole order, issues a full Razorpay refund,
-// and notifies the customer. Idempotent on a re-call: if the order
-// is already cancelled with a refund ID we return 200 + the same
+// CancelOrder cancels the whole order and refunds the customer the FULL total across
+// every rail that funded it — wallet + loyalty credits back to the wallet instantly, the
+// remainder (if any) via a Razorpay refund — then notifies the customer. Idempotent on a
+// re-call: if the order is already cancelled with a refund ID we return 200 + the same
 // payload so retries from the mobile client don't double-refund.
 // POST /chef/orders/:orderId/cancel
 func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
@@ -122,6 +123,16 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		amountPaise = int(roundPaise(reserved))
 	}
 
+	// Mixed-payment split (checkout-credits bugfix): the reservation above records the
+	// FULL refund obligation, but orders can now be part-funded by wallet + loyalty
+	// credits at checkout, so the GATEWAY only ever captured (Total − WalletApplied −
+	// LoyaltyApplied). Refunding the full reserved amount to the gateway fails with
+	// "refund amount greater than amount captured", the cancel defers it, and the retry
+	// cron re-sends the SAME wrong amount forever — the customer is never refunded. Credit
+	// the wallet + loyalty slices back instantly and keep only the CARD slice for the
+	// gateway; cardPaise replaces amountPaise for every gateway concern from here on.
+	cardPaise := splitCancelRefundAcrossRails(&order, amountPaise)
+
 	// #766-followup: persist the CANCELLED state — including a deferred-refund sentinel
 	// when there's money owed — BEFORE the (up to 30s) synchronous gateway call. This is
 	// now the recoverable checkpoint: a crash between here and the gateway call below
@@ -142,8 +153,8 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		"refund_initiated_by": "chef",
 	}
 	sentinel := ""
-	if amountPaise > 0 {
-		sentinel = fmt.Sprintf("%s%d", services.DeferredCancelRefundPrefix, amountPaise)
+	if cardPaise > 0 {
+		sentinel = fmt.Sprintf("%s%d", services.DeferredCancelRefundPrefix, cardPaise)
 		updates["refund_id"] = sentinel
 	}
 	// #609: refund_amount + refunded_at were stamped atomically by the reservation; this
@@ -166,14 +177,14 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	// a deferral — the refund is still owed, just not yet issued.
 	refundID := sentinel
 	deferred := false
-	if amountPaise > 0 {
+	if cardPaise > 0 {
 		rzp := services.GetRazorpay()
 		if rzp == nil {
 			deferred = true
-			log.Printf("chef cancel: razorpay client unavailable for order %s; deferring refund of %d paise to the retry cron", order.ID, amountPaise)
+			log.Printf("chef cancel: razorpay client unavailable for order %s; deferring refund of %d paise to the retry cron", order.ID, cardPaise)
 		} else {
 			refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
-				Amount: amountPaise,
+				Amount: cardPaise,
 				Speed:  "normal",
 				Notes: map[string]string{
 					"order_id":  order.ID.String(),
@@ -190,7 +201,7 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 			})
 			if err != nil {
 				deferred = true
-				log.Printf("chef cancel: gateway refund failed for order %s (%d paise); deferring to the retry cron: %v", order.ID, amountPaise, err)
+				log.Printf("chef cancel: gateway refund failed for order %s (%d paise); deferring to the retry cron: %v", order.ID, cardPaise, err)
 			} else {
 				refundID = refundResp.ID
 				// Guarded replace: swap the sentinel for the real gateway id ONLY if it's
@@ -210,7 +221,7 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		// RetryDeferredCancelRefunds cron tick (up to ~12 minutes) — that cron still
 		// backstops if Temporal is down or this workflow never completes. Both paths
 		// call the gateway with the SAME idempotency key, so they can never double-refund.
-		services.StartDeferredRefundFlow(order.ID, order.RazorpayPaymentID, amountPaise)
+		services.StartDeferredRefundFlow(order.ID, order.RazorpayPaymentID, cardPaise)
 	}
 	// Cross-guard the payout hold (#457) — the customer was fully refunded, so the
 	// chef must not be paid. Best-effort; never fail the cancel on a hold-drive error.
@@ -248,6 +259,69 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	}()
 
 	c.JSON(http.StatusOK, order.ToChefResponse())
+}
+
+// splitCancelRefundAcrossRails credits the wallet + loyalty slices of a chef-cancel
+// refund to the customer's wallet INSTANTLY and returns the remaining CARD slice — the
+// only piece that still needs to go through the payment gateway. It mirrors the
+// funding-rail split in services/orderrefund_gateway.go: a mixed-payment order (checkout
+// credits) only ever CAPTURED (Total − WalletApplied − LoyaltyApplied) at the gateway, so
+// handing the gateway the full reserved amount fails ("refund amount greater than amount
+// captured") and — pre-fix — left the customer permanently unrefunded while the retry
+// cron kept re-sending the same wrong amount. Both credit legs are best-effort: a failure
+// here must never fail the cancel, since the reservation already recorded the FULL amount
+// owed and reconciliation backstops a missed credit (mirroring the gateway adapter).
+func splitCancelRefundAcrossRails(order *models.Order, amountPaise int) (cardPaise int) {
+	if amountPaise <= 0 {
+		return 0
+	}
+	split := services.SplitRefundByFunding(order, amountPaise)
+
+	credit := func(paise int, source models.WalletTxnSource, label string) float64 {
+		if paise <= 0 {
+			return 0
+		}
+		amount := services.FromPaise(paise)
+		if _, err := services.CreditWallet(database.DB, order.CustomerID, amount,
+			source, &order.ID,
+			"chef cancel refund for order "+order.OrderNumber,
+			label+":cancel:"+order.ID.String(), nil); err != nil {
+			log.Printf("chef cancel: %s slice re-credit failed order=%s: %v", label, order.OrderNumber, err)
+			services.CaptureBackgroundError(err)
+			return 0
+		}
+		return amount
+	}
+	walletBack := credit(split.WalletPaise, models.WalletSourceRefund, "refund-wallet")
+	loyaltyBack := credit(split.LoyaltyPaise, models.WalletSourceLoyalty, "refund-loyalty")
+
+	// Record what each rail has now been returned — mirrors orderrefund_gateway.go so a
+	// later partial (e.g. a goodwill top-up) computes its share against the REMAINING
+	// funded amount rather than double-counting the original.
+	if walletBack > 0 || loyaltyBack > 0 {
+		if err := database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
+			Updates(map[string]any{
+				"wallet_refunded":  order.WalletRefunded + walletBack,
+				"loyalty_refunded": order.LoyaltyRefunded + loyaltyBack,
+			}).Error; err != nil {
+			log.Printf("chef cancel: stamp refunded rails failed order=%s: %v", order.OrderNumber, err)
+			services.CaptureBackgroundError(err)
+		}
+	}
+
+	// The gateway can never refund more than it captured. Pro-rata already keeps the
+	// card slice within the captured amount, but the credit caps above (a rail already
+	// partly refunded elsewhere) can push their remainder onto the card; clamp and
+	// return any excess as credit so the customer is still made whole.
+	cardPaise = split.CardPaise
+	capturePaise := services.ToPaise(order.Total) - services.ToPaise(order.WalletApplied) - services.ToPaise(order.LoyaltyApplied)
+	if cardPaise > capturePaise {
+		if over := cardPaise - capturePaise; over > 0 {
+			credit(over, models.WalletSourceRefund, "refund-overflow")
+		}
+		cardPaise = capturePaise
+	}
+	return cardPaise
 }
 
 // TODO(#457-followup): deferred cross-guard edges not wired in this slice —
