@@ -54,10 +54,8 @@ func Handler(d *Deps) gin.HandlerFunc {
 		//    cookie JavaScript can never read), so fall back to the session
 		//    cookie when no Authorization header is present.
 		var token string
-		authHeader := c.GetHeader("Authorization")
-		const prefix = "Bearer "
-		if strings.HasPrefix(authHeader, prefix) {
-			token = strings.TrimPrefix(authHeader, prefix)
+		if bearer, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer "); ok {
+			token = bearer
 		} else if cookie, err := c.Request.Cookie(d.Sessions.CookieName()); err == nil {
 			token = cookie.Value
 		}
