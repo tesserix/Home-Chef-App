@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMoney } from '../../lib/format';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import {
   ActivityIndicator,
   Alert,
@@ -40,6 +41,8 @@ import {
   type ChefDetailTabKey,
 } from '../../components/chef/ChefDetailTabs';
 import { ChefMenuTab } from '../../components/chef/ChefMenuTab';
+import { MenuPill } from '../../components/chef/MenuPill';
+import { MenuCategorySheet } from '../../components/chef/MenuCategorySheet';
 import { ChefWeeklyPlanTab } from '../../components/chef/ChefWeeklyPlanTab';
 import { ChefReviewList } from '../../components/chef/ChefReviewList';
 import { TIFFIN_ENABLED } from '../../lib/features';
@@ -152,8 +155,42 @@ export default function ChefDetailScreen() {
     new Set(menuItems.map((item) => item.category ?? 'Other'))
   );
 
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const activeCategory = selectedCategory ?? categories[0] ?? null;
+  // Category state drives a JUMP, not a filter: every category is rendered, and
+  // activeCategory is simply whichever section is currently in view.
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [menuSheetOpen, setMenuSheetOpen] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  // Measured y-offset of each section within the scroll content. A ref, not
+  // state: layout reports fire during render and writing state there would loop.
+  const sectionOffsets = useRef<Record<string, number>>({});
+  // Categories in render order, read by the scroll handler without making it
+  // depend on (and re-create with) the derived array each render.
+  const categoriesRef = useRef<string[]>([]);
+  categoriesRef.current = categories;
+
+  const scrollToCategory = useCallback((category: string) => {
+    const y = sectionOffsets.current[category];
+    if (y === undefined) return;
+    // Nudge up by the chip row's height so the section heading clears it.
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+    setActiveCategory(category);
+  }, []);
+
+  // Track which section is in view so the chip underline follows the scroll.
+  // The section whose top has most recently passed the fold is the one being
+  // read, so take the LAST offset at or above the current position.
+  const onMenuScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y + 24;
+    let current: string | null = null;
+    // Iterate the CATEGORY order, not the offsets object: its key order is
+    // whatever order layout happened to report, which is not guaranteed to be
+    // top-to-bottom.
+    for (const name of categoriesRef.current) {
+      const top = sectionOffsets.current[name];
+      if (top !== undefined && top <= y) current = name;
+    }
+    if (current) setActiveCategory((prev) => (prev === current ? prev : current));
+  }, []);
 
   // Which in-page tab is showing — Menu is the landing view.
   // Initial tab is deep-linkable via ?tab= (e.g. a "see reviews" link); defaults
@@ -172,10 +209,6 @@ export default function ChefDetailScreen() {
       reviewsRevealedRef.current = true;
     }
   }, [activeTab]);
-
-  const filteredItems = activeCategory
-    ? menuItems.filter((item) => (item.category ?? 'Other') === activeCategory)
-    : menuItems;
 
   // Cart derived values for the sticky CTA bar.
   const cartItems = useCartStore((s) => s.items);
@@ -388,6 +421,7 @@ export default function ChefDetailScreen() {
 
       {/* ── SCROLLABLE CONTENT SHEET ── */}
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
@@ -395,6 +429,11 @@ export default function ChefDetailScreen() {
           { paddingBottom: 88 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
+        // The chip underline follows the scroll: whichever section's top has
+        // passed the fold is the one being read. 16ms would fire on every frame
+        // for a purely cosmetic highlight, so throttle it hard.
+        scrollEventThrottle={120}
+        onScroll={onMenuScroll}
       >
         {/* Spacer: photo area the scroll starts behind */}
         <View style={{ height: HEADER_HEIGHT - 24 }} />
@@ -543,10 +582,13 @@ export default function ChefDetailScreen() {
                 chefId={chef.id}
                 chefName={chef.name}
                 categories={categories}
-                activeCategory={activeCategory}
-                onSelectCategory={setSelectedCategory}
-                filteredItems={filteredItems}
+                activeCategory={activeCategory ?? categories[0] ?? null}
+                onSelectCategory={scrollToCategory}
+                items={menuItems}
                 menuIsEmpty={menuItems.length === 0}
+                onSectionLayout={(cat, y) => {
+                  sectionOffsets.current[cat] = y;
+                }}
                 onStartGroupOrder={() => startGroupOrder(chef.id)}
               />
             ) : null}
@@ -577,6 +619,34 @@ export default function ChefDetailScreen() {
           </Animated.View>
         </View>
       </ScrollView>
+
+      {/* ── MENU JUMP ── */}
+      {/* Only earns its place on a menu with more than one section, and only on
+          the menu tab. It floats rather than scrolling with the content because
+          the need it serves — "I'm deep in a long menu and want to be elsewhere"
+          — arises precisely when an in-flow control would be off screen. Sits
+          above the cart bar when one is showing. */}
+      {activeTab === 'menu' && categories.length > 1 ? (
+        <>
+          <MenuPill
+            onPress={() => setMenuSheetOpen(true)}
+            bottomOffset={(hasCart ? 88 : 12) + insets.bottom}
+          />
+          <MenuCategorySheet
+            visible={menuSheetOpen}
+            categories={categories.map((name) => ({
+              name,
+              count: menuItems.filter((i) => (i.category ?? 'Other') === name).length,
+            }))}
+            activeCategory={activeCategory ?? categories[0] ?? null}
+            onSelect={(cat) => {
+              setMenuSheetOpen(false);
+              scrollToCategory(cat);
+            }}
+            onClose={() => setMenuSheetOpen(false)}
+          />
+        </>
+      ) : null}
 
       {/* ── STICKY BOTTOM CTA BAR ── */}
       {/* Spec §2.4: white, top hairline + shadow[2], coral filled button. */}

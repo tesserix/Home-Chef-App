@@ -1,7 +1,18 @@
 // "Menu" tab pane on the chef detail screen — the à-la-carte landing view.
-// Category chip row (Airbnb underline style) + MenuItemCard list + the small
-// group-order secondary action at the bottom. Presentational: category state
-// and the startGroupOrder flow stay in the screen and come in as props.
+//
+// Every category renders as its own SECTION in one continuous scroll, rather
+// than the chip row filtering the list down to one category at a time. Filtering
+// hid the menu: a customer had to already know a dessert section existed to go
+// looking for it. Sectioning reveals the whole menu, and the floating Menu pill
+// (owned by the screen) jumps between sections.
+//
+// Section offsets are reported upward via onSectionLayout so the screen — which
+// owns the ScrollView — can scroll to one. Measuring real laid-out positions is
+// both simpler and more accurate than a SectionList's scrollToLocation, which
+// needs getItemLayout to be precise and cannot be, since these rows vary in
+// height with photo presence and description length.
+//
+// Presentational: category state and the startGroupOrder flow stay in the screen.
 
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Users } from 'lucide-react-native';
@@ -19,12 +30,16 @@ export interface ChefMenuTabProps {
   chefId: string;
   chefName: string;
   categories: string[];
+  /** The section currently in view — drives the chip underline. */
   activeCategory: string | null;
+  /** Tapping a chip scrolls to that section rather than filtering to it. */
   onSelectCategory: (category: string) => void;
-  /** Items already filtered by the active category. */
-  filteredItems: MenuItem[];
-  /** True when the chef has no menu at all (vs. just an empty category). */
+  /** ALL items, grouped into sections here. */
+  items: MenuItem[];
+  /** True when the chef has no menu at all. */
   menuIsEmpty: boolean;
+  /** Reports each section's y-offset within the scroll content, for jumping. */
+  onSectionLayout: (category: string, y: number) => void;
   onStartGroupOrder: () => void;
 }
 
@@ -34,10 +49,16 @@ export function ChefMenuTab({
   categories,
   activeCategory,
   onSelectCategory,
-  filteredItems,
+  items,
   menuIsEmpty,
+  onSectionLayout,
   onStartGroupOrder,
 }: ChefMenuTabProps) {
+  // Group once per render, preserving the category order the screen derived.
+  const sections = categories
+    .map((name) => ({ name, items: items.filter((i) => (i.category ?? 'Other') === name) }))
+    .filter((sec) => sec.items.length > 0);
+
   return (
     <>
       {/* ── CATEGORY CHIP ROW (Airbnb underline style, spec §2 item 2) ── */}
@@ -54,7 +75,7 @@ export function ChefMenuTab({
                 key={cat}
                 onPress={() => onSelectCategory(cat)}
                 accessibilityRole="button"
-                accessibilityLabel={`Filter by ${cat}`}
+                accessibilityLabel={`Jump to ${cat}`}
                 accessibilityState={{ selected: activeCategory === cat }}
                 android_ripple={{ color: CHIP_RIPPLE }}
               >
@@ -88,26 +109,32 @@ export function ChefMenuTab({
         </>
       ) : null}
 
-      {/* ── MENU ITEMS ── */}
-      {filteredItems.length === 0 ? (
+      {/* ── MENU SECTIONS ── */}
+      {menuIsEmpty ? (
         <View style={styles.emptyMenu}>
           <Text style={styles.emptyMenuText}>
-            {menuIsEmpty
-              ? "This kitchen hasn't published a menu right now — check back soon."
-              : 'No items in this category'}
+            This kitchen hasn&apos;t published a menu right now — check back soon.
           </Text>
         </View>
       ) : (
-        <View style={styles.menuList}>
-          {filteredItems.map((item) => (
-            <MenuItemCard
-              key={item.id}
-              item={item}
-              chefId={chefId}
-              chefName={chefName}
-            />
-          ))}
-        </View>
+        sections.map((section) => (
+          <View
+            key={section.name}
+            // Absolute y within the ScrollView content — what scrollTo needs.
+            onLayout={(e) => onSectionLayout(section.name, e.nativeEvent.layout.y)}
+          >
+            {/* The heading is omitted for a single-category menu, where it would
+                only repeat what the screen already says. */}
+            {sections.length > 1 ? (
+              <Text style={styles.sectionHeading}>{section.name}</Text>
+            ) : null}
+            <View style={styles.menuList}>
+              {section.items.map((item) => (
+                <MenuItemCard key={item.id} item={item} chefId={chefId} chefName={chefName} />
+              ))}
+            </View>
+          </View>
+        ))
       )}
 
       {/* Group / office order (#46) — small secondary action at the bottom of
@@ -135,6 +162,14 @@ export function ChefMenuTab({
 }
 
 const styles = StyleSheet.create({
+  sectionHeading: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: customerColors.charcoal.DEFAULT,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 4,
+  },
   hairline: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: customerColors.hairline,
