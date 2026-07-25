@@ -76,6 +76,7 @@ func cronJobs() []cronJob {
 		// elapsed, after archiving their PII-stripped financial record. Without
 		// this the retention promise is only half kept — data hidden, never erased.
 		{"account-purge", accountPurgeInterval, runAccountPurgeScan, StartAccountPurgeCron},
+		{"loyalty-expiry", loyaltyExpiryInterval, runLoyaltyExpiryScan, StartLoyaltyExpiryCron},
 	}
 }
 

@@ -205,11 +205,15 @@ func ComputeChefAvailability(chef *models.ChefProfile, todaySched *models.ChefSc
 		nowMin:          istMinutes(now),
 		acceptingOrders: chef.AcceptingOrders,
 		pausedUntilMin:  pausedUntilMinutes(chef.PausedUntil, now),
-		accountPaused:   !chef.IsActive,
-		schedOpenMin:    -1,
-		schedCloseMin:   -1,
-		dailyCloseMin:   laterCutoffMinutes(cap),
-		pastDailyClose:  IsPastDailyClose(cap, now),
+		// NOTE: IsActive's Go zero value is false but its DB default is true, so a
+		// ChefProfile that was never loaded from the database reads as paused
+		// here. Every caller passes a DB-loaded row; in-memory fixtures must set
+		// IsActive explicitly.
+		accountPaused:  !chef.IsActive,
+		schedOpenMin:   -1,
+		schedCloseMin:  -1,
+		dailyCloseMin:  laterCutoffMinutes(cap),
+		pastDailyClose: IsPastDailyClose(cap, now),
 	}
 	if chef.AutoScheduleEnabled && todaySched != nil && !todaySched.IsClosed {
 		in.scheduleGates = true

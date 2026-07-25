@@ -172,7 +172,7 @@ func TestHHMMLabel(t *testing.T) {
 // THE BUG, end-to-end: an accepting chef past its cutoff resolves to Closed (not Orderable).
 func TestComputeChefAvailability_PastCutoff_Closed(t *testing.T) {
 	now := time.Date(2026, 7, 25, 15, 0, 0, 0, capacityIST) // 3:00pm IST
-	chef := &models.ChefProfile{AcceptingOrders: true}
+	chef := &models.ChefProfile{AcceptingOrders: true, IsActive: true}
 	cap := &models.ChefCapacitySettings{CutoffEnabled: true, LunchCutoff: "10:00", DinnerCutoff: "14:00"}
 	got := ComputeChefAvailability(chef, nil, cap, now)
 	if got.Orderable || got.Status != AvailClosed {
@@ -183,7 +183,7 @@ func TestComputeChefAvailability_PastCutoff_Closed(t *testing.T) {
 // Closing-soon resolves from a cutoff 15 min out.
 func TestComputeChefAvailability_ClosingSoon(t *testing.T) {
 	now := time.Date(2026, 7, 25, 13, 45, 0, 0, capacityIST) // 1:45pm
-	chef := &models.ChefProfile{AcceptingOrders: true}
+	chef := &models.ChefProfile{AcceptingOrders: true, IsActive: true}
 	cap := &models.ChefCapacitySettings{CutoffEnabled: true, DinnerCutoff: "14:00"} // 2:00pm → 15 min
 	got := ComputeChefAvailability(chef, nil, cap, now)
 	if got.Status != AvailClosingSoon || got.MinutesToChange != 15 || !got.Orderable {
@@ -194,7 +194,7 @@ func TestComputeChefAvailability_ClosingSoon(t *testing.T) {
 // Auto-schedule kitchen past today's close resolves to not-orderable even with accepting=true.
 func TestComputeChefAvailability_AutoSchedulePastClose(t *testing.T) {
 	now := time.Date(2026, 7, 25, 22, 30, 0, 0, capacityIST) // 10:30pm
-	chef := &models.ChefProfile{AcceptingOrders: true, AutoScheduleEnabled: true}
+	chef := &models.ChefProfile{AcceptingOrders: true, IsActive: true, AutoScheduleEnabled: true}
 	sched := &models.ChefSchedule{DayOfWeek: int(now.In(capacityIST).Weekday()), OpenTime: "10:00", CloseTime: "22:00"}
 	got := ComputeChefAvailability(chef, sched, nil, now)
 	if got.Orderable {
@@ -205,7 +205,7 @@ func TestComputeChefAvailability_AutoSchedulePastClose(t *testing.T) {
 // A plain accepting chef with no cutoffs/schedule is simply Open.
 func TestComputeChefAvailability_PlainOpen(t *testing.T) {
 	now := time.Date(2026, 7, 25, 12, 0, 0, 0, capacityIST)
-	got := ComputeChefAvailability(&models.ChefProfile{AcceptingOrders: true}, nil, nil, now)
+	got := ComputeChefAvailability(&models.ChefProfile{AcceptingOrders: true, IsActive: true}, nil, nil, now)
 	if !got.Orderable || got.Status != AvailOpen {
 		t.Fatalf("want open, got %+v", got)
 	}
