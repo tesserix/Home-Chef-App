@@ -121,11 +121,21 @@ class ApiClient {
     const { params, ...fetchOptions } = options;
     const { isAuthenticated, csrfToken, accessToken } = await this.getAuthState();
 
-    // When using API-issued JWT (email/password login), call the API directly
-    // at /api/v1 with a Bearer token. When using BFF session (social login),
-    // route through the BFF proxy so the session cookie is validated.
-    const useDirectApi = isAuthenticated && !!accessToken;
-    const base = useDirectApi ? this.baseUrl : (isAuthenticated ? this.bffProxyBase : this.baseUrl);
+    // Every authenticated call goes through the BFF proxy, which validates the
+    // session cookie and HMAC-signs the upstream request.
+    //
+    // This used to branch on `accessToken`, sending email/password users
+    // straight to /api/v1 with a Bearer token, from an era when the API issued
+    // its own JWTs. It no longer does: auth is GIP -> /bff/auth/exchange -> an
+    // HttpOnly session cookie, `accessToken` is just the Firebase ID token, and
+    // the API accepts only HMAC-signed requests from the BFF (see the apiproxy
+    // package doc: "there is no Bearer auth path on the API"). So the direct
+    // branch could only ever 401 — which it did, on every authenticated request
+    // after an email/password login, surfacing as "Your session has expired".
+    //
+    // Unauthenticated calls still go direct: public endpoints like /currencies
+    // need no session and the BFF would only add a hop.
+    const base = isAuthenticated ? this.bffProxyBase : this.baseUrl;
     const url = this.buildUrl(base, endpoint, params);
 
     // Only advertise JSON content when we're actually sending a body.
@@ -200,8 +210,9 @@ class ApiClient {
    */
   async getBlob(endpoint: string): Promise<{ blob: Blob; filename: string }> {
     const { isAuthenticated, accessToken } = await this.getAuthState();
-    const useDirectApi = isAuthenticated && !!accessToken;
-    const base = useDirectApi ? this.baseUrl : this.bffProxyBase;
+    // Same rule as request(): authenticated traffic goes through the BFF, which
+    // is the only thing the API trusts. See the comment there.
+    const base = isAuthenticated ? this.bffProxyBase : this.baseUrl;
     const url = this.buildUrl(base, endpoint);
 
     const headers: Record<string, string> = {};
