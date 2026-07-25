@@ -25,6 +25,14 @@ interface NestedApiErrorBody {
 /**
  * Resolve a thrown value (from apiClient) into a friendly, customer-safe
  * message.
+ *
+ * Deliberately does NOT fall back to a bare `.message` — that field isn't
+ * server-provided. For an apiClient error it's absent (the server payload
+ * lives under `error` / `error.message`, handled below); for a fetch-level
+ * failure (offline, DNS, CORS) it's a `TypeError` whose `.message` is the
+ * literal browser string `"Failed to fetch"`, which is not something a
+ * customer should ever see. Anything without a real server error payload
+ * falls through to the caller's fallback instead.
  * @param error  The caught value (unknown).
  * @param fallback  Shown when the body carries nothing usable.
  */
@@ -41,11 +49,6 @@ export function friendlyErrorMessage(
     const nested = (error as NestedApiErrorBody).error?.message;
     if (typeof nested === 'string' && nested.trim()) {
       return nested.trim();
-    }
-
-    const raw = (error as { message?: unknown }).message;
-    if (typeof raw === 'string' && raw.trim()) {
-      return raw.trim();
     }
   }
   return fallback;

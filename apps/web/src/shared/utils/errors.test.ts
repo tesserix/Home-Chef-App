@@ -23,8 +23,19 @@ describe('friendlyErrorMessage', () => {
     ).toBe('A cancellation request already exists');
   });
 
-  it('falls back to a plain Error message when there is no API body', () => {
-    expect(friendlyErrorMessage(new Error('network down'))).toBe('network down');
+  it('falls through to the fallback for a fetch-level TypeError, never the raw browser text', () => {
+    // A fetch failure (offline, DNS, CORS) rejects with a TypeError whose
+    // .message is the literal browser string "Failed to fetch" — that must
+    // never reach a customer in place of the intended fallback copy.
+    expect(
+      friendlyErrorMessage(new TypeError('Failed to fetch'), 'Could not request cancellation'),
+    ).toBe('Could not request cancellation');
+  });
+
+  it('falls through to the fallback for any thrown value with no server error payload', () => {
+    expect(friendlyErrorMessage(new Error('network down'))).toBe(
+      'Something went wrong. Please try again.',
+    );
   });
 
   it('falls back to the provided default when nothing usable is present', () => {
