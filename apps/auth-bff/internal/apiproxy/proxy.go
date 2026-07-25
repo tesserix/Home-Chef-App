@@ -2,12 +2,17 @@
 //
 // Mobile apps hold a BFF session token (the AES-GCM-encrypted Payload from
 // session.Manager.Encode) and send it as `Authorization: Bearer <token>`.
-// The API itself only accepts HMAC-signed requests from the BFF — there is
-// no Bearer auth path on the API. This handler bridges the two:
+// Browser SPAs hold the exact same token, but as the value of the HttpOnly
+// session cookie (session.Manager.SetCookie) — JavaScript in the browser
+// can never read it, so it can't be placed in an Authorization header. This
+// handler accepts the token from either source, preferring the header:
 //
 //	mobile  ── Bearer session_token ──▶  BFF /api/v1/*  ── HMAC + X-User-* ──▶  API /api/v1/*
+//	browser ── hc_session cookie     ──▶  BFF /api/v1/*  ── HMAC + X-User-* ──▶  API /api/v1/*
 //
-// On success the upstream response is streamed back unchanged.
+// The API itself only accepts HMAC-signed requests from the BFF — there is
+// no Bearer auth path on the API. On success the upstream response is
+// streamed back unchanged.
 package apiproxy
 
 import (
@@ -44,14 +49,22 @@ func Handler(d *Deps) gin.HandlerFunc {
 	client := &http.Client{Timeout: 30 * time.Second}
 	base := strings.TrimRight(d.APIBaseURL, "/")
 	return func(c *gin.Context) {
-		// 1. Extract Bearer token.
+		// 1. Resolve the session token. Mobile apps send it as a Bearer
+		//    header; browser SPAs can't (their session lives in an HttpOnly
+		//    cookie JavaScript can never read), so fall back to the session
+		//    cookie when no Authorization header is present.
+		var token string
 		authHeader := c.GetHeader("Authorization")
 		const prefix = "Bearer "
-		if !strings.HasPrefix(authHeader, prefix) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing_bearer"})
+		if strings.HasPrefix(authHeader, prefix) {
+			token = strings.TrimPrefix(authHeader, prefix)
+		} else if cookie, err := c.Request.Cookie(d.Sessions.CookieName()); err == nil {
+			token = cookie.Value
+		}
+		if token == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing_session"})
 			return
 		}
-		token := strings.TrimPrefix(authHeader, prefix)
 
 		// 2. Resolve session → identity. Decode also enforces expiry.
 		p, err := d.Sessions.Decode(token)
@@ -87,11 +100,13 @@ func Handler(d *Deps) gin.HandlerFunc {
 			return
 		}
 
-		// 5. Mirror client headers except Authorization (replaced by HMAC)
-		//    and hop-by-hop headers (must not be forwarded).
+		// 5. Mirror client headers except Authorization (replaced by HMAC),
+		//    Cookie (carries the session secret the API has no use for and
+		//    must never see — it only trusts the HMAC signature the BFF
+		//    adds), and hop-by-hop headers (must not be forwarded).
 		for k, vs := range c.Request.Header {
 			lower := strings.ToLower(k)
-			if lower == "authorization" {
+			if lower == "authorization" || lower == "cookie" {
 				continue
 			}
 			if _, hop := hopByHop[lower]; hop {
