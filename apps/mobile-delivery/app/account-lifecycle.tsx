@@ -79,10 +79,11 @@ export default function AccountLifecycleScreen() {
           text: 'Pause',
           onPress: () =>
             deactivate.mutate(undefined, {
-              onSuccess: () =>
-                Alert.alert('Account paused', 'Sign in again whenever you want to come back.', [
-                  { text: 'OK', onPress: signOutToLogin },
-                ]),
+              // Route to the paused screen rather than signing out — the
+              // session stays valid and /me/reactivate is reachable, so the
+              // driver can come back immediately. Signing out also raced the
+              // api client's own 403 redirect to the same screen.
+              onSuccess: () => router.replace('/account-paused' as never),
               onError: () => Alert.alert('Could not pause', 'Please try again.'),
             }),
         },

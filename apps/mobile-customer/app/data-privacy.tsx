@@ -62,17 +62,12 @@ export default function DataPrivacyScreen() {
           text: 'Pause',
           onPress: () =>
             deactivate.mutate(undefined, {
-              onSuccess: () => {
-                Alert.alert('Account paused', 'Sign in again whenever you want to come back.', [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      useAuthStore.getState().logout();
-                      router.replace('/(auth)/login');
-                    },
-                  },
-                ]);
-              },
+              // Route to the paused screen rather than signing out. The session
+              // token stays valid (the account is paused, not deleted) and
+              // /me/reactivate is the one endpoint a paused account may call,
+              // so the user can undo this immediately. Signing out here also
+              // raced the api-client's own 403 redirect to the same screen.
+              onSuccess: () => router.replace('/account-paused'),
               onError: (error) =>
                 Alert.alert(
                   'Could not pause',

@@ -83,12 +83,11 @@ export default function AccountLifecycleScreen() {
           text: 'Pause',
           onPress: () =>
             deactivate.mutate(undefined, {
-              onSuccess: () =>
-                Alert.alert(
-                  'Kitchen paused',
-                  'Sign in again whenever you are ready to reopen.',
-                  [{ text: 'OK', onPress: signOutToLogin }],
-                ),
+              // Route to the paused screen rather than signing out — the
+              // session stays valid and /me/reactivate is reachable, so the
+              // chef can reopen immediately. Signing out also raced the api
+              // client's own 403 redirect to the same screen.
+              onSuccess: () => router.replace('/account-paused' as never),
               onError: () => Alert.alert('Could not pause', 'Please try again.'),
             }),
         },

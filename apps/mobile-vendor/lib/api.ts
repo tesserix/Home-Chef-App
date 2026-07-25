@@ -1,7 +1,20 @@
 import { router } from 'expo-router';
-import { createApiClient } from '@homechef/mobile-shared/api';
+import { createApiClient, type AccountBlockedStatus } from '@homechef/mobile-shared/api';
 import { useAuthStore } from '../store/auth-store';
 import { appPlatform, appVersion } from './app-version';
+
+// Guards against a navigation storm: a paused account 403s on EVERY in-flight
+// query, and each one would otherwise push the screen again.
+let routingToBlockedScreen = false;
+
+function handleAccountBlocked(status: AccountBlockedStatus) {
+  if (routingToBlockedScreen) return;
+  routingToBlockedScreen = true;
+  router.replace(`/account-paused?status=${status}` as never);
+  setTimeout(() => {
+    routingToBlockedScreen = false;
+  }, 3000);
+}
 
 export const api = createApiClient({
   baseURL: process.env.EXPO_PUBLIC_API_URL!,
@@ -12,6 +25,9 @@ export const api = createApiClient({
     // Token refresh failed — store clears itself, layout auth guard will redirect
     useAuthStore.getState().logout();
   },
+  // Paused/deleted accounts 403 on every protected call; route to a screen that
+  // explains why and offers reactivation, rather than leaving a dead app.
+  onAccountBlocked: handleAccountBlocked,
   onUpgradeRequired: (payload) => {
     // Backend returned 426 — pin the upgrade wall regardless of the
     // current route. The screen itself reads minVersion/storeUrl from

@@ -30,7 +30,19 @@ export interface ApiClientOptions {
   platform?: 'ios' | 'android';
   /** Called on 426 Upgrade Required — app should route to the upgrade wall */
   onUpgradeRequired?: (payload: UpgradeRequiredPayload) => void;
+  /**
+   * Called on 403 when the server reports the account is paused or deleted.
+   *
+   * A deactivated account 403s on every protected request, so without this the
+   * user signs in successfully and then hits a dead app with no way back —
+   * pausing would be a one-way door only support could open. The app routes to
+   * a screen offering reactivation.
+   */
+  onAccountBlocked?: (status: AccountBlockedStatus) => void;
 }
+
+/** Server-side reason a signed-in account is being refused. */
+export type AccountBlockedStatus = 'account_deactivated' | 'account_deleted';
 
 export function createApiClient(options: ApiClientOptions): AxiosInstance {
   const {
@@ -40,6 +52,7 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
     appVersion,
     platform,
     onUpgradeRequired,
+    onAccountBlocked,
   } = options;
 
   const instance = axios.create({
@@ -118,6 +131,14 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
           minVersion: data.minVersion,
           storeUrl: data.storeUrl,
         });
+      } else if (error.response?.status === 403) {
+        // Only the account-state 403s route to the paused screen. Ordinary
+        // permission 403s (wrong role, not your order) carry no status field
+        // and must keep surfacing as normal errors.
+        const status = (error.response.data as { status?: string } | undefined)?.status;
+        if (status === 'account_deactivated' || status === 'account_deleted') {
+          onAccountBlocked?.(status);
+        }
       }
       return Promise.reject(error);
     }
