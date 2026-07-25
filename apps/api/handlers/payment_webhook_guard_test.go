@@ -86,7 +86,7 @@ func TestHandlePaymentCaptured_CompletesFailedOnRetry(t *testing.T) {
 		"payment": map[string]any{"entity": map[string]any{"id": "pay_r", "order_id": "rzp_cap_retry", "amount": 50000, "method": "card"}},
 	})
 	require.NoError(t, err)
-	require.NoError(t, (&PaymentHandler{}).handlePaymentCaptured(payload))
+	require.NoError(t, (&PaymentHandler{}).handlePaymentCaptured(payload, models.ChefModeLive))
 
 	require.Equal(t, string(models.PaymentCompleted), paymentStatusOf(t, db, orderID))
 }
@@ -116,7 +116,7 @@ func TestHandlePaymentCaptured_DoesNotReStampRefunded(t *testing.T) {
 		"payment": map[string]any{"entity": map[string]any{"id": "pay_x", "order_id": "rzp_cap_ref", "amount": 50000, "method": "card"}},
 	})
 	require.NoError(t, err)
-	require.NoError(t, (&PaymentHandler{}).handlePaymentCaptured(payload))
+	require.NoError(t, (&PaymentHandler{}).handlePaymentCaptured(payload, models.ChefModeLive))
 
 	require.Equal(t, string(models.PaymentRefunded), paymentStatusOf(t, db, orderID))
 }

@@ -11,7 +11,7 @@ func TestResolveFulfillment(t *testing.T) {
 	chefPickup := models.ChefProfile{OffersPickup: true}
 	chefNoPickup := models.ChefProfile{OffersPickup: false}
 	chefSelfDelivers := models.ChefProfile{OffersSelfDelivery: true}
-	const tpl = true  // a 3PL provider is enabled
+	const tpl = true   // a 3PL provider is enabled
 	const dark = false // 3PL dark (chef-only launch)
 
 	// default → 3PL delivery when the chef does NOT self-deliver but 3PL is live
@@ -54,7 +54,7 @@ func TestResolveFulfillment(t *testing.T) {
 func TestResolveReadyCarrier(t *testing.T) {
 	self := models.ChefProfile{OffersSelfDelivery: true}
 	noSelf := models.ChefProfile{}
-	const tpl = true  // a 3PL provider is enabled
+	const tpl = true   // a 3PL provider is enabled
 	const dark = false // 3PL dark (chef-only launch)
 
 	// no carrier requested → keep current

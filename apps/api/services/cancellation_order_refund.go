@@ -165,7 +165,7 @@ func runCancellationGatewayRefund(order *models.Order, provider string, refundAm
 		if order.RazorpayPaymentID == "" {
 			return "", fmt.Errorf("no razorpay payment on order")
 		}
-		rz := GetRazorpay()
+		rz := GetRazorpayFor(order.Mode)
 		if rz == nil {
 			return "", fmt.Errorf("razorpay gateway not configured")
 		}

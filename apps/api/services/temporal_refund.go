@@ -80,7 +80,7 @@ func StartDeferredRefundFlow(orderID uuid.UUID, paymentID string, amountPaise in
 // uses (RefundFullIdempotencyKey) means a retry — here or via the cron — is
 // deduped by Razorpay, never a double refund.
 func GatewayRefundForWorkflow(_ context.Context, orderID uuid.UUID, paymentID string, amountPaise int) (string, error) {
-	rzp := GetRazorpay()
+	rzp := GetRazorpayFor(PaymentModeForOrder(orderID))
 	if rzp == nil {
 		return "", errors.New("razorpay unavailable")
 	}

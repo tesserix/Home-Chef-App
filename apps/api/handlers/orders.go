@@ -368,13 +368,14 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		subtotal += itemSubtotal
 
 		orderItems[i] = models.OrderItem{
-			MenuItemID: item.MenuItemID,
-			Name:       menuItem.Name,
-			Price:      unitPrice,
-			Quantity:   item.Quantity,
-			Subtotal:   itemSubtotal,
-			Notes:      item.Notes,
-			Modifiers:  string(modJSON),
+			ModePartition: services.PartitionForChef(&chef),
+			MenuItemID:    item.MenuItemID,
+			Name:          menuItem.Name,
+			Price:         unitPrice,
+			Quantity:      item.Quantity,
+			Subtotal:      itemSubtotal,
+			Notes:         item.Notes,
+			Modifiers:     string(modJSON),
 		}
 
 		if menuItem.DailyCapacity != nil && *menuItem.DailyCapacity > 0 {
@@ -568,6 +569,10 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 
 	// Create order
 	order := models.Order{
+		// Snapshot the kitchen's mode onto the order. From here on every gateway
+		// operation for this order reads order.Mode — never the chef's current
+		// mode, which an admin may flip at any time.
+		ModePartition:             services.PartitionForChef(&chef),
 		OrderNumber:               orderNumber,
 		CustomerID:                userID,
 		ChefID:                    chef.ID,

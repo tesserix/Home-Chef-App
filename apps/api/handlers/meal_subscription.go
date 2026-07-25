@@ -223,6 +223,7 @@ func (h *MealSubscriptionHandler) Subscribe(c *gin.Context) {
 		subStatus = models.MealSubStatusActive
 	}
 	sub := models.MealSubscription{
+		ModePartition:      models.ModePartition{Mode: services.PaymentModeForChef(chefID)},
 		CustomerID:         userID,
 		ChefID:             chefID,
 		Slots:              req.Slots,

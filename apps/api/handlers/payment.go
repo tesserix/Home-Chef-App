@@ -128,7 +128,7 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 // payment_provider column is now stamped so VerifyPayment / InitiateRefund
 // know which code path to run later.
 func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Order, userID uuid.UUID, creditReq services.CreditRequest) {
-	rz := services.GetRazorpay()
+	rz := services.GetRazorpayFor(order.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return
@@ -357,7 +357,7 @@ func debitOrderWallet(order *models.Order) error {
 // logged but not fatal — the money is already captured and the reconciliation job
 // retries; failing here would wrongly tell the client the order is unpaid.
 func settleWalletTopUps(order *models.Order, topUps []services.TransferSpec) {
-	rz := services.GetRazorpay()
+	rz := services.GetRazorpayFor(order.Mode)
 	if rz == nil {
 		return
 	}
@@ -727,7 +727,7 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 		return
 	}
 
-	rz := services.GetRazorpay()
+	rz := services.GetRazorpayFor(order.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return
@@ -772,7 +772,7 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 	// from Razorpay. Enforced when present (the customer app always sends it);
 	// tolerated-if-absent since the binding + amount checks above are the hard
 	// gate and don't rely on the client.
-	if signature != "" && !services.VerifyPaymentSignature(rzOrderID, paymentID, signature) {
+	if signature != "" && !services.VerifyPaymentSignatureFor(order.Mode, rzOrderID, paymentID, signature) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
 		return
 	}
@@ -1298,7 +1298,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No Razorpay payment found for this order"})
 			return
 		}
-		rz := services.GetRazorpay()
+		rz := services.GetRazorpayFor(order.Mode)
 		if rz == nil {
 			releaseReservation()
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
@@ -1407,7 +1407,13 @@ func (h *PaymentHandler) RazorpayWebhook(c *gin.Context) {
 
 	// Verify webhook signature
 	signature := c.GetHeader("X-Razorpay-Signature")
-	if !services.VerifyWebhookSignature(body, signature) {
+	// signedMode says WHICH credential slot signed this event. It scopes every
+	// database write below, so a live-signed webhook can never mutate a
+	// test-partition record and vice versa. When both slots hold the same key
+	// (the interim state while a real live key is pending) this resolves to
+	// live, and the row-level mode filter is what keeps the worlds apart.
+	authentic, signedMode := services.VerifyWebhookSignatureMode(body, signature)
+	if !authentic {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
 		return
 	}
@@ -1446,17 +1452,17 @@ func (h *PaymentHandler) RazorpayWebhook(c *gin.Context) {
 	var derr error
 	switch event.Event {
 	case "payment.captured":
-		derr = h.handlePaymentCaptured(event.Payload)
+		derr = h.handlePaymentCaptured(event.Payload, signedMode)
 	case "payment.failed":
-		derr = h.handlePaymentFailed(event.Payload)
+		derr = h.handlePaymentFailed(event.Payload, signedMode)
 	case "refund.processed":
-		derr = h.handleRefundProcessed(event.Payload)
+		derr = h.handleRefundProcessed(event.Payload, signedMode)
 	case "transfer.processed":
 		log.Printf("Transfer processed event received")
 	case "subscription.charged":
-		derr = h.handleSubscriptionCharged(event.Payload)
+		derr = h.handleSubscriptionCharged(event.Payload, signedMode)
 	case "subscription.halted":
-		derr = h.handleSubscriptionHalted(event.Payload)
+		derr = h.handleSubscriptionHalted(event.Payload, signedMode)
 	default:
 		log.Printf("Unhandled Razorpay webhook event: %s", event.Event)
 	}
@@ -1500,7 +1506,7 @@ func (h *PaymentHandler) confirmMealPlanAdvanceFromWebhook(orderID, paymentID st
 // handlePaymentCaptured returns a non-nil error only for a TRANSIENT failure (a DB
 // error) so the webhook layer releases the dedup claim and a redelivery re-runs.
 // A parse failure is permanent (nil → keep the claim; a retry won't parse either).
-func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) error {
+func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage, signedMode string) error {
 	var data struct {
 		Payment struct {
 			Entity services.PaymentResponse `json:"entity"`
@@ -1519,7 +1525,7 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) error {
 	// re-emit downstream effects, and without the `refunded` guard a late/duplicate
 	// capture could re-stamp a refunded order back to completed (#563).
 	res := database.DB.Model(&models.Order{}).
-		Where("razorpay_order_id = ? AND payment_status NOT IN ?", payment.OrderID, completionBlockedStatuses).
+		Where("razorpay_order_id = ? AND mode = ? AND payment_status NOT IN ?", payment.OrderID, models.NormalizeMode(signedMode), completionBlockedStatuses).
 		Updates(map[string]interface{}{
 			"payment_status":      models.PaymentCompleted,
 			"payment_method":      payment.Method,
@@ -1548,7 +1554,7 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) error {
 		// The order just became paid — try the referral reward (#38). Idempotent
 		// + best-effort: a referral failure must never affect the captured payment.
 		var ord models.Order
-		if err := database.DB.Where("razorpay_order_id = ?", payment.OrderID).First(&ord).Error; err == nil {
+		if err := database.DB.Where("razorpay_order_id = ? AND mode = ?", payment.OrderID, models.NormalizeMode(signedMode)).First(&ord).Error; err == nil {
 			services.MaybeGrantReward(database.DB, ord.ID)
 			// Start the durable order saga (#122) — gated, idempotent, no-op when off.
 			services.StartOrderSaga(ord.ID)
@@ -1572,8 +1578,8 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) error {
 	// just the winning RowsAffected>0 one).
 	var walletOrd models.Order
 	if err := database.DB.Preload("Chef").Preload("Delivery.DeliveryPartner").
-		Where("razorpay_order_id = ? AND payment_status = ? AND wallet_applied > 0",
-			payment.OrderID, models.PaymentCompleted).First(&walletOrd).Error; err == nil {
+		Where("razorpay_order_id = ? AND mode = ? AND payment_status = ? AND wallet_applied > 0",
+			payment.OrderID, models.NormalizeMode(signedMode), models.PaymentCompleted).First(&walletOrd).Error; err == nil {
 		settleOrderWallet(&walletOrd)
 	}
 
@@ -1583,7 +1589,7 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) error {
 	return nil
 }
 
-func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) error {
+func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage, signedMode string) error {
 	var data struct {
 		Payment struct {
 			Entity services.PaymentResponse `json:"entity"`
@@ -1600,7 +1606,7 @@ func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) error {
 	// Idempotent: only transition from a non-terminal state. Avoids
 	// overwriting a completed payment if events arrive out-of-order.
 	return database.DB.Model(&models.Order{}).
-		Where("razorpay_order_id = ? AND payment_status NOT IN ?", payment.OrderID, []models.PaymentStatus{
+		Where("razorpay_order_id = ? AND mode = ? AND payment_status NOT IN ?", payment.OrderID, models.NormalizeMode(signedMode), []models.PaymentStatus{
 			models.PaymentCompleted,
 			models.PaymentFailed,
 			models.PaymentRefunded,
@@ -1608,7 +1614,7 @@ func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) error {
 		Update("payment_status", models.PaymentFailed).Error
 }
 
-func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage) error {
+func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage, signedMode string) error {
 	var data struct {
 		Refund struct {
 			Entity services.RefundResponse `json:"entity"`
@@ -1652,7 +1658,7 @@ func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage) error {
 		SELECT o.id AS id, o.total AS total, o.wallet_applied AS wallet_applied, o.refund_id AS refund_id,
 		       COALESCE((SELECT SUM(oi.refund_amount) FROM order_items oi
 		                 WHERE oi.order_id = o.id AND oi.is_cancelled = ?), 0) AS per_line
-		FROM orders o WHERE o.razorpay_payment_id = ? LIMIT 1`, true, refund.PaymentID).Scan(&row)
+		FROM orders o WHERE o.razorpay_payment_id = ? AND o.mode = ? LIMIT 1`, true, refund.PaymentID, models.NormalizeMode(signedMode)).Scan(&row)
 	if q.Error != nil {
 		return q.Error
 	}
@@ -1677,7 +1683,7 @@ func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage) error {
 
 // handleSubscriptionCharged is best-effort (subscription billing, not escrow) —
 // it returns nil so the dedup claim is kept regardless; failures are logged.
-func (h *PaymentHandler) handleSubscriptionCharged(payload json.RawMessage) error {
+func (h *PaymentHandler) handleSubscriptionCharged(payload json.RawMessage, signedMode string) error {
 	log.Printf("Subscription charged webhook received")
 	// Update subscription invoice status
 	var data struct {
@@ -1720,7 +1726,7 @@ func (h *PaymentHandler) handleSubscriptionCharged(payload json.RawMessage) erro
 }
 
 // handleSubscriptionHalted is best-effort (subscription billing) — returns nil.
-func (h *PaymentHandler) handleSubscriptionHalted(payload json.RawMessage) error {
+func (h *PaymentHandler) handleSubscriptionHalted(payload json.RawMessage, signedMode string) error {
 	log.Printf("Subscription halted webhook received")
 	var data struct {
 		Subscription struct {

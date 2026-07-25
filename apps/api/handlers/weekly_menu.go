@@ -103,14 +103,14 @@ func (h *ChefHandler) PutWeeklyMenu(c *gin.Context) {
 			}
 		}
 		cells = append(cells, models.WeeklyMenuItem{
-			ChefID:      chef.ID,
-			DayOfWeek:   in.DayOfWeek,
-			Slot:        models.MealSlot(in.Slot),
-			Variant:     models.MealVariant(in.Variant),
-			Name:        in.Name,
-			Description: in.Description,
-			Price:       in.Price,
-			ImageURL:    in.ImageURL,
+			ChefID:          chef.ID,
+			DayOfWeek:       in.DayOfWeek,
+			Slot:            models.MealSlot(in.Slot),
+			Variant:         models.MealVariant(in.Variant),
+			Name:            in.Name,
+			Description:     in.Description,
+			Price:           in.Price,
+			ImageURL:        in.ImageURL,
 			DietaryTags:     ensureStringArray(in.DietaryTags),
 			Allergens:       ensureStringArray(in.Allergens),
 			MenuItemID:      menuItemID,

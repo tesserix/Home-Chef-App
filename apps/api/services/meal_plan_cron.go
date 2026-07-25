@@ -137,7 +137,7 @@ func rescueCapturedBeforeExpiry(p *models.MealPlan) bool {
 	if !MealPlanEscrowActive() {
 		return false
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(p.Mode)
 	if rz == nil {
 		return false
 	}

@@ -163,7 +163,7 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 					if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
 						return fmt.Errorf("original-method refund needs a razorpay payment")
 					}
-					rzp := GetRazorpay()
+					rzp := GetRazorpayFor(order.Mode)
 					if rzp == nil {
 						return fmt.Errorf("razorpay unavailable")
 					}

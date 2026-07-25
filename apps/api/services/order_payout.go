@@ -57,7 +57,7 @@ func ReleaseOrderPayouts(orderID uuid.UUID) error {
 	if rzOrderID == "" {
 		return nil // not a gateway-charged regular order
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(PaymentModeForOrder(orderID))
 	if rz == nil {
 		return nil
 	}
@@ -92,7 +92,7 @@ func ReverseOrderPayouts(orderID uuid.UUID) error {
 	if rzOrderID == "" {
 		return nil
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(PaymentModeForOrder(orderID))
 	if rz == nil {
 		return nil
 	}

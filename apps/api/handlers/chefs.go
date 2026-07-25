@@ -601,12 +601,12 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		// the wrong state and a single tap flips the real value the wrong way.
 		"autoScheduleEnabled": resp.AutoScheduleEnabled,
 		"kitchenPhotos":       resp.KitchenPhotos,
-		"addressLine1":    chef.AddressLine1,
-		"addressLine2":    chef.AddressLine2,
-		"city":            chef.City,
-		"state":           chef.State,
-		"postalCode":      chef.PostalCode,
-		"operatingHours":  operatingHours,
+		"addressLine1":        chef.AddressLine1,
+		"addressLine2":        chef.AddressLine2,
+		"city":                chef.City,
+		"state":               chef.State,
+		"postalCode":          chef.PostalCode,
+		"operatingHours":      operatingHours,
 		// Fulfillment capabilities + self-delivery pricing. These MUST be
 		// returned so the vendor profile editor reflects the saved state — when
 		// they were omitted the toggles always re-read as OFF after a reload, and
@@ -778,10 +778,10 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"todayRevenue": todayRevenue,
 		// Mobile reads `todayEarnings`; keep `todayRevenue` for any other
 		// consumer.
-		"todayEarnings":   todayRevenue,
-		"pendingOrders":   pendingOrders,
-		"weekOrders":      weekOrders,
-		"weekRevenue":     weekRevenue,
+		"todayEarnings": todayRevenue,
+		"pendingOrders": pendingOrders,
+		"weekOrders":    weekOrders,
+		"weekRevenue":   weekRevenue,
 		// Lifetime totals — the hero shows these (all-time), with today/this-week
 		// as the recent breakdown.
 		"totalEarnings": totalEarnings,
@@ -789,7 +789,7 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"totalReviews":  chef.TotalReviews,
 		// Computed lifetime count, not chef.TotalOrders — that denormalized
 		// counter drifted to 0 for chefs with live orders.
-		"totalOrders": totalOrdersCount,
+		"totalOrders":     totalOrdersCount,
 		"acceptingOrders": chef.AcceptingOrders,
 		"pausedUntil":     chef.PausedUntil,
 		// FSSAI lockout (#92): drives the vendor dashboard's "orders paused —
@@ -2282,7 +2282,7 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		// already has (read under the lock above, so it reflects any
 		// concurrent request that already committed) so re-saving bank
 		// details never mints a second linked account.
-		rz := services.GetRazorpay()
+		rz := services.GetRazorpayFor(chef.Mode)
 		contactName := chef.User.FirstName + " " + chef.User.LastName
 		settlementResult, settlementErr = services.RegisterSettlementAccount(rz, services.SettlementRegistration{
 			ExistingAccountID:          chef.RazorpayAccountID,

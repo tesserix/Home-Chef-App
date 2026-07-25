@@ -151,16 +151,17 @@ func (h *GroupOrderHandler) CreateGroupOrder(c *gin.Context) {
 
 	now := time.Now()
 	g := models.GroupOrder{
-		HostID:      hostID,
-		ChefID:      chefID,
-		Type:        gType,
-		SplitMode:   splitMode,
-		Title:       req.Title,
-		CompanyName: req.CompanyName,
-		JoinToken:   generateJoinToken(),
-		Status:      models.GroupOrderOpen,
-		Currency:    services.CurrencyForCountry(chef.PayoutCountry),
-		ExpiresAt:   now.Add(groupOrderTTL),
+		ModePartition: services.PartitionForChef(&chef),
+		HostID:        hostID,
+		ChefID:        chefID,
+		Type:          gType,
+		SplitMode:     splitMode,
+		Title:         req.Title,
+		CompanyName:   req.CompanyName,
+		JoinToken:     generateJoinToken(),
+		Status:        models.GroupOrderOpen,
+		Currency:      services.CurrencyForCountry(chef.PayoutCountry),
+		ExpiresAt:     now.Add(groupOrderTTL),
 	}
 	host := models.GroupOrderParticipant{
 		UserID:      hostID,
@@ -647,7 +648,7 @@ func (h *GroupOrderHandler) PayGroupShare(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "You have nothing to pay"})
 		return
 	}
-	rz := services.GetRazorpay()
+	rz := services.GetRazorpayFor(g.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return
@@ -693,12 +694,12 @@ func (h *GroupOrderHandler) VerifyGroupShare(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	_, me, ok := loadGroupForParticipant(id, userID)
+	g, me, ok := loadGroupForParticipant(id, userID)
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group order not found"})
 		return
 	}
-	rz := services.GetRazorpay()
+	rz := services.GetRazorpayFor(g.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return

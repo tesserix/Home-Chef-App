@@ -331,6 +331,7 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 
 	respondBy := time.Now().Add(chefRespondWindow)
 	plan := models.MealPlan{
+		ModePartition:  models.ModePartition{Mode: services.PaymentModeForChef(chefID)},
 		MealPlanNumber: mealPlanNumber(),
 		CustomerID:     customerID,
 		ChefID:         chefID,
@@ -471,7 +472,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 			}
 			if cur.Status == models.MealPlanAwaitingCustomer && cur.RazorpayOrderID != "" && cur.EscrowPaymentID == "" {
 				resp := gin.H{"razorpayOrderId": cur.RazorpayOrderID}
-				if rz := services.GetRazorpay(); rz != nil {
+				if rz := services.GetRazorpayFor(cur.Mode); rz != nil {
 					resp["razorpayKeyId"] = rz.GetKeyID()
 				}
 				cur.ProjectForCustomer()
@@ -494,7 +495,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 				Update("razorpay_order_id", orderID)
 			plan.RazorpayOrderID = orderID
 			resp["razorpayOrderId"] = orderID
-			if rz := services.GetRazorpay(); rz != nil {
+			if rz := services.GetRazorpayFor(plan.Mode); rz != nil {
 				resp["razorpayKeyId"] = rz.GetKeyID()
 			}
 		}

@@ -140,6 +140,9 @@ func detectTransferDrift(st aggLedgerState, l transferLedger) []driftFinding {
 // The DIRECT-transfer aggregates (meal-plan-day / group-order) instead key on payout_transfer_id,
 // so they do NOT share that pre-delivery blind spot — see each scan's doc below.
 func RunEscrowLedgerReconcile() int {
+	// Live slot on purpose: this reconciler only ever sees live rows, because
+	// every query it drives is scoped by ExcludeTestOrders. Sandbox money is
+	// reconciled inside the Razorpay test account, not here.
 	rz := GetRazorpay()
 	openCount := scanHeldOrders(rz) + scanHeldMealPlanDays(rz) + scanHeldGroupOrders(rz)
 	if openCount > 0 {

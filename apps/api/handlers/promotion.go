@@ -79,7 +79,7 @@ func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 		}
 	}
 
-	rz := services.GetRazorpay()
+	rz := services.GetRazorpayFor(chef.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return
@@ -90,13 +90,15 @@ func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 
 	// Create promotion record
 	promo := models.ChefPromotion{
-		ChefID:    chef.ID,
-		Status:    models.PromotionPending,
-		Amount:    pricing.MonthlyPrice,
-		Currency:  pricing.Currency,
-		Duration:  30,
-		StartsAt:  now,
-		ExpiresAt: expiresAt,
+		// A test chef's featured-listing purchase is a sandbox charge.
+		ModePartition: services.PartitionForChef(&chef),
+		ChefID:        chef.ID,
+		Status:        models.PromotionPending,
+		Amount:        pricing.MonthlyPrice,
+		Currency:      pricing.Currency,
+		Duration:      30,
+		StartsAt:      now,
+		ExpiresAt:     expiresAt,
 	}
 
 	if err := database.DB.Create(&promo).Error; err != nil {
@@ -172,7 +174,7 @@ func (h *PromotionHandler) ConfirmFeaturedAd(c *gin.Context) {
 	// `if rz != nil` with no order/amount binding let a chef activate a paid
 	// featured listing for free by passing any captured payment id (a ₹1 charge).
 	// Mirrors VerifyPayment (payment.go).
-	rz := services.GetRazorpay()
+	rz := services.GetRazorpayFor(chef.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return

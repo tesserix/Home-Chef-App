@@ -126,6 +126,9 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 	}
 
 	review := models.Review{
+		// A review of a test order belongs to the test partition, so a fake
+		// order can never move a real kitchen's public rating.
+		ModePartition:   order.ModePartition,
 		OrderID:         parsedOrderID,
 		CustomerID:      userID,
 		ChefID:          order.ChefID,
