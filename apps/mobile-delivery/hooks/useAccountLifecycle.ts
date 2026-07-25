@@ -2,12 +2,13 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
 
-// useDataPrivacy — DPDP Act 2023 data-subject actions plus the account
-// lifecycle (deactivate / delete / restore) required by Apple 5.1.1(v) and
-// Google Play's account-deletion policy.
+// useAccountLifecycle — in-app account pause and deletion for drivers.
 //
-// The api client's baseURL already ends in /api, so hooks must supply the /v1
-// prefix — omitting it (as this hook originally did) 404s the request.
+// Required for store submission: Apple 5.1.1(v) demands the user be able to
+// START deletion inside the app. This app previously showed an alert telling
+// drivers to email support, which does not satisfy that rule.
+//
+// Backed by /driver/me/{deactivate,reactivate,delete,deletion-eligibility}.
 
 /** One reason the account cannot be deleted yet. Codes are stable. */
 export interface DeletionBlocker {
@@ -31,34 +32,19 @@ export interface DeletionEligibility {
 export interface DeleteAccountResult {
   status: 'deleted' | 'already_deleted';
   deletedAt: string;
-  /** When the account is erased for good — restore is possible until then. */
   purgeAfter: string;
   notice?: string;
 }
 
-export interface BlockedDeletionError {
-  blockers: DeletionBlocker[];
-}
-
-export function useExportMyData() {
-  return useMutation<unknown, unknown, void>({
-    mutationFn: async () => {
-      const res = await api.get('/v1/customer/me/export');
-      return res.data;
-    },
-  });
-}
-
 /**
- * Previews whether deletion would succeed. Queried when the screen opens so the
- * user sees "finish these first" up front, rather than after typing their email
- * and tapping a button that then fails.
+ * Previews whether deletion would succeed — a driver mid-delivery must finish
+ * or hand off the parcel before the account can go.
  */
 export function useDeletionEligibility() {
   return useQuery<DeletionEligibility>({
-    queryKey: ['deletion-eligibility'],
+    queryKey: ['driver-deletion-eligibility'],
     queryFn: async () => {
-      const res = await api.get('/v1/customer/me/deletion-eligibility');
+      const res = await api.get('/v1/driver/me/deletion-eligibility');
       return res.data as DeletionEligibility;
     },
     staleTime: 30_000,
@@ -68,17 +54,17 @@ export function useDeletionEligibility() {
 export function useDeleteAccount() {
   return useMutation<DeleteAccountResult, unknown, string>({
     mutationFn: async (confirmEmail: string) => {
-      const res = await api.post('/v1/customer/me/delete', { confirmEmail });
+      const res = await api.post('/v1/driver/me/delete', { confirmEmail });
       return res.data as DeleteAccountResult;
     },
   });
 }
 
-/** Reversible pause. Nothing is deleted and there is no countdown. */
+/** Reversible pause — goes offline and leaves dispatch. Nothing is deleted. */
 export function useDeactivateAccount() {
   return useMutation<unknown, unknown, string | undefined>({
     mutationFn: async (reason?: string) => {
-      const res = await api.post('/v1/customer/me/deactivate', { reason: reason ?? '' });
+      const res = await api.post('/v1/driver/me/deactivate', { reason: reason ?? '' });
       return res.data;
     },
   });
@@ -87,7 +73,16 @@ export function useDeactivateAccount() {
 export function useReactivateAccount() {
   return useMutation<unknown, unknown, void>({
     mutationFn: async () => {
-      const res = await api.post('/v1/customer/me/reactivate');
+      const res = await api.post('/v1/driver/me/reactivate');
+      return res.data;
+    },
+  });
+}
+
+export function useExportMyData() {
+  return useMutation<unknown, unknown, void>({
+    mutationFn: async () => {
+      const res = await api.get('/v1/driver/me/export');
       return res.data;
     },
   });

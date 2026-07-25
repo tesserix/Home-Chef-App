@@ -51,6 +51,10 @@ const VARIANTS: { variant: MealVariant; label: string; color: string }[] = [
 interface Cell {
   name: string;
   price: string;
+  // Thali/combo: when on, the cell is a bundled set (`components`, comma-separated
+  // in the input) at the one price, and `name` is the combo's name (e.g. "Veg Thali").
+  isCombo?: boolean;
+  components?: string;
 }
 
 const cellKey = (dow: number, slot: MealSlot, variant: MealVariant) =>
@@ -85,6 +89,8 @@ export default function WeeklyMenuEditorScreen() {
         next[cellKey(it.dayOfWeek, it.slot, it.variant)] = {
           name: it.name ?? '',
           price: it.price ? String(it.price) : '',
+          isCombo: it.isCombo ?? false,
+          components: (it.comboComponents ?? []).join(', '),
         };
       }
       setCells(next);
@@ -160,6 +166,14 @@ export default function WeeklyMenuEditorScreen() {
         variant: variant as MealVariant,
         name: c.name.trim(),
         price: Number.parseFloat(c.price) || 0,
+        isCombo: c.isCombo ?? false,
+        comboComponents:
+          c.isCombo && c.components
+            ? c.components
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [],
       });
     }
     return items;
@@ -333,32 +347,64 @@ export default function WeeklyMenuEditorScreen() {
               const key = cellKey(day.dow, s.slot, v.variant);
               const c = cells[key];
               return (
-                <View key={v.variant} style={styles.cellRow}>
-                  <View style={[styles.variantTag, { borderColor: v.color }]}>
-                    <View style={[styles.variantTagDot, { backgroundColor: v.color }]} />
-                    <Text style={[styles.variantTagText, { color: v.color }]}>
-                      {v.label}
-                    </Text>
+                <View key={v.variant} style={styles.cellWrap}>
+                  <View style={styles.cellRow}>
+                    <View style={[styles.variantTag, { borderColor: v.color }]}>
+                      <View style={[styles.variantTagDot, { backgroundColor: v.color }]} />
+                      <Text style={[styles.variantTagText, { color: v.color }]}>
+                        {v.label}
+                      </Text>
+                    </View>
+                    <TextInput
+                      style={styles.nameInput}
+                      placeholder={c?.isCombo ? 'Thali name (e.g. Veg Thali)' : 'Dish name'}
+                      placeholderTextColor={theme.colors.ink.muted}
+                      value={c?.name ?? ''}
+                      onChangeText={(t) => setCell(day.dow, s.slot, v.variant, { name: t })}
+                    />
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="₹0"
+                      placeholderTextColor={theme.colors.ink.muted}
+                      keyboardType="numeric"
+                      value={c?.price ?? ''}
+                      onChangeText={(t) =>
+                        setCell(day.dow, s.slot, v.variant, {
+                          price: t.replace(/[^0-9.]/g, ''),
+                        })
+                      }
+                    />
                   </View>
-                  <TextInput
-                    style={styles.nameInput}
-                    placeholder="Dish name"
-                    placeholderTextColor={theme.colors.ink.muted}
-                    value={c?.name ?? ''}
-                    onChangeText={(t) => setCell(day.dow, s.slot, v.variant, { name: t })}
-                  />
-                  <TextInput
-                    style={styles.priceInput}
-                    placeholder="₹0"
-                    placeholderTextColor={theme.colors.ink.muted}
-                    keyboardType="numeric"
-                    value={c?.price ?? ''}
-                    onChangeText={(t) =>
-                      setCell(day.dow, s.slot, v.variant, {
-                        price: t.replace(/[^0-9.]/g, ''),
-                      })
-                    }
-                  />
+                  <View style={styles.comboRow}>
+                    <Pressable
+                      onPress={() =>
+                        setCell(day.dow, s.slot, v.variant, { isCombo: !c?.isCombo })
+                      }
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: !!c?.isCombo }}
+                      accessibilityLabel={`Make ${v.label} ${s.label} a thali or combo`}
+                      hitSlop={6}
+                    >
+                      <View style={[styles.comboChip, c?.isCombo && styles.comboChipOn]}>
+                        <Text
+                          style={[styles.comboChipText, c?.isCombo && styles.comboChipTextOn]}
+                        >
+                          {c?.isCombo ? '✓ Thali / combo' : '+ Thali / combo'}
+                        </Text>
+                      </View>
+                    </Pressable>
+                    {c?.isCombo ? (
+                      <TextInput
+                        style={styles.componentsInput}
+                        placeholder="Includes: rice, dal, sabji, roti…"
+                        placeholderTextColor={theme.colors.ink.muted}
+                        value={c?.components ?? ''}
+                        onChangeText={(t) =>
+                          setCell(day.dow, s.slot, v.variant, { components: t })
+                        }
+                      />
+                    ) : null}
+                  </View>
                 </View>
               );
             })}
@@ -511,11 +557,48 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.soft,
     marginBottom: theme.spacing[3],
   },
+  cellWrap: {
+    marginBottom: theme.spacing[3],
+  },
   cellRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[2],
-    marginBottom: theme.spacing[3],
+    marginBottom: theme.spacing[1],
+  },
+  comboRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[2],
+    paddingLeft: 86,
+  },
+  comboChip: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 4,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.bone,
+  },
+  comboChipOn: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderColor: theme.colors.ink.DEFAULT,
+  },
+  comboChipText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 11,
+    color: theme.colors.ink.soft,
+  },
+  comboChipTextOn: { color: theme.colors.paper },
+  componentsInput: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: theme.colors.ink.DEFAULT,
+    paddingVertical: 6,
+    paddingHorizontal: theme.spacing[2],
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.DEFAULT,
   },
   variantTag: {
     flexDirection: 'row',

@@ -310,22 +310,11 @@ export default function SettingsScreen() {
     );
   }
 
-  function handleDeleteAccount() {
-    Alert.alert(
-      'Delete account',
-      'To delete your account, contact our support team. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Contact support',
-          onPress: () =>
-            Alert.alert(
-              'Support',
-              'Email support@fe3dr.com to request account deletion.',
-            ),
-        },
-      ],
-    );
+  // Apple 5.1.1(v) requires deletion to be initiated IN the app. This used to
+  // pop an alert telling chefs to email support, which would fail review — it
+  // now opens the real pause/delete screen.
+  function handleAccountSettings() {
+    router.push('/account-lifecycle' as never);
   }
 
   if (isLoading) {
@@ -535,8 +524,8 @@ export default function SettingsScreen() {
               />
             ) : null}
             <NavRow
-              label="Delete account"
-              onPress={handleDeleteAccount}
+              label="Pause or delete account"
+              onPress={handleAccountSettings}
               destructive
               hasBorderBottom={false}
             />

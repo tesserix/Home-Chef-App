@@ -110,12 +110,14 @@ export default function DriverSettingsScreen() {
     );
   }
 
-  function handleDeleteAccount() {
-    Alert.alert(
-      'Delete Account',
-      'Contact support at support@homechef.in to request account deletion.',
-      [{ text: 'OK' }],
-    );
+  // Apple 5.1.1(v) requires deletion to be initiated IN the app. This used to
+  // pop an alert pointing drivers at support email, which would fail review —
+  // it now opens the real pause/delete screen.
+  function handleAccountSettings() {
+    // Cast: expo-router's generated route union is regenerated on build, so a
+    // newly added screen is not in it yet (same reason the change-password row
+    // above casts).
+    router.push('/account-lifecycle' as never);
   }
 
   const appVersion =
@@ -181,9 +183,9 @@ export default function DriverSettingsScreen() {
           onPress={handleViewSubscription}
         />
         <ActionRow
-          label="Delete Account"
+          label="Pause or Delete Account"
           destructive
-          onPress={handleDeleteAccount}
+          onPress={handleAccountSettings}
         />
         <View className="flex-row items-center px-4 py-3 bg-bone">
           <Text className="flex-1 text-base text-ink-muted">App Version</Text>
