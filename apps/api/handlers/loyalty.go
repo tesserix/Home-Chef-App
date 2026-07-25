@@ -116,6 +116,8 @@ func (h *LoyaltyHandler) RedeemLoyalty(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough points"})
 		case errors.Is(err, services.ErrLoyaltyDisabled):
 			c.JSON(http.StatusForbidden, gin.H{"error": "Loyalty program is currently unavailable"})
+		case errors.Is(err, services.ErrLoyaltyMonthlyCap):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Monthly redemption limit reached — try again next month"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to redeem points"})
 		}

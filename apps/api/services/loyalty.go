@@ -129,6 +129,7 @@ var (
 	ErrLoyaltyDisabled           = errors.New("loyalty program is disabled")
 	ErrInsufficientLoyaltyPoints = errors.New("insufficient loyalty points")
 	ErrLoyaltyBelowMinRedeem     = errors.New("redemption is below the minimum points")
+	ErrLoyaltyMonthlyCap         = errors.New("monthly redemption cap reached")
 )
 
 // PointsForOrder returns the whole points earned on an order of the given total.
@@ -372,6 +373,15 @@ func RedeemLoyalty(db *gorm.DB, userID uuid.UUID, points float64) (*models.Loyal
 	rupees := round2Money(points * cfg.RedeemRate)
 	if rupees <= 0 {
 		return nil, nil, fmt.Errorf("redemption resolves to zero wallet credit")
+	}
+	if cfg.MonthlyRedeemCap > 0 {
+		var redeemedThisMonth float64
+		db.Model(&models.WalletTxn{}).
+			Where("user_id = ? AND source = ? AND created_at >= ?", userID, models.WalletSourceLoyalty, time.Now().AddDate(0, 0, -30)).
+			Select("COALESCE(SUM(amount),0)").Scan(&redeemedThisMonth)
+		if redeemedThisMonth+rupees > cfg.MonthlyRedeemCap+1e-6 {
+			return nil, nil, ErrLoyaltyMonthlyCap
+		}
 	}
 
 	var lt *models.LoyaltyTransaction
