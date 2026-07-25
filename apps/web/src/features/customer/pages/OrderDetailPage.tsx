@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { useRequestCancellation } from '@/features/customer/hooks/useCancellation';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { formatDateTime, formatTime } from '@/shared/utils/format-date';
 import { Button } from '@/shared/components/ui';
@@ -137,18 +138,9 @@ export default function OrderDetailPage() {
     },
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: () =>
-      apiClient.post<Order>(`/orders/${id}/cancel`, { reason: cancelReason }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['order', id] });
-      toast.success('Order cancelled successfully');
-      setShowCancelModal(false);
-    },
-    onError: () => {
-      toast.error('Failed to cancel order');
-    },
-  });
+  // Requests a cancellation through the policy + refund engine. The old
+  // POST /orders/:id/cancel skipped both.
+  const cancelMutation = useRequestCancellation();
 
   // Reorder (#238) — re-add a past order's still-available items to the cart,
   // resolving current add-on option IDs, then send the customer to the chef to
@@ -573,7 +565,8 @@ export default function OrderDetailPage() {
             <div className="w-full max-w-md rounded-xl bg-bone p-6">
               <h3 className="text-lg font-semibold text-ink">Cancel Order</h3>
               <p className="mt-2 text-ink-soft">
-                Are you sure you want to cancel this order? This action cannot be undone.
+                Ask the kitchen to cancel this order? They confirm it, and any refund is
+                worked out from the cancellation policy.
               </p>
 
               <div className="mt-4">
@@ -598,7 +591,22 @@ export default function OrderDetailPage() {
                   variant="destructive"
                   isLoading={cancelMutation.isPending}
                   disabled={cancelMutation.isPending}
-                  onClick={() => cancelMutation.mutate()}
+                  onClick={() =>
+                    cancelMutation.mutate(
+                      { orderId: id!, reason: cancelReason },
+                      {
+                        onSuccess: () => {
+                          toast.success(
+                            'Cancellation requested — the kitchen will confirm shortly',
+                          );
+                          setShowCancelModal(false);
+                        },
+                        onError: () => {
+                          toast.error('Could not request cancellation');
+                        },
+                      },
+                    )
+                  }
                 >
                   {cancelMutation.isPending ? 'Cancelling…' : 'Cancel Order'}
                 </Button>
