@@ -37,4 +37,10 @@ func PublishMFAEvent(subject string, userID uuid.UUID) {
 	}); err != nil {
 		log.Printf("mfa-event: publish %s for user=%s failed: %v", subject, userID, err)
 	}
+	// Tell the user, in the same call. Keeping the audit event and the alert
+	// together means a new call site cannot record a security change while
+	// forgetting to warn the person it happened to.
+	if notifType, ok := notifTypeForSubject[subject]; ok {
+		NotifySecurityEvent(notifType, userID)
+	}
 }

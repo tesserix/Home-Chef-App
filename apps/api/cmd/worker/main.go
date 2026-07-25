@@ -50,6 +50,23 @@ func main() {
 		_, _, err := services.AutoConfirmOrderReceipt(database.DB, orderID)
 		return err
 	}
+	// Admin-initiated two-factor reset, held for 24h so a compromised admin
+	// account cannot silently disarm someone's second factor (#login-otp-2fa).
+	workflows.MFAResetNoticeFunc = func(_ context.Context, userID uuid.UUID, _ int) error {
+		services.NotifySecurityEvent(services.NotifTypeMFAResetPending, userID)
+		return nil
+	}
+	workflows.MFAResetCancelledFunc = func(_ context.Context, userID uuid.UUID) error {
+		services.NotifySecurityEvent(services.NotifTypeMFAResetCancelled, userID)
+		return nil
+	}
+	workflows.MFAResetApplyFunc = func(_ context.Context, userID uuid.UUID) error {
+		if err := services.DisableMFA(database.DB, userID); err != nil {
+			return err
+		}
+		services.NotifySecurityEvent(services.NotifTypeMFAResetApplied, userID)
+		return nil
+	}
 	// Durable deferred chef-cancel gateway-refund retry — fires immediately on a
 	// deferred cancel refund instead of waiting for the cron backstop.
 	workflows.GatewayRefundFunc = services.GatewayRefundForWorkflow
@@ -88,6 +105,15 @@ func main() {
 		temporal.Queue(temporal.TaskQueueOnboarding).
 			Workflows(workflows.OnboardingActivationWorkflow).
 			Activities(workflows.ActivateChefOnboardingActivity),
+		// Admin-initiated two-factor reset, on the notifications queue since
+		// every step of it is a message to the user plus one state change.
+		temporal.Queue(temporal.TaskQueueNotifications).
+			Workflows(workflows.AdminMFAResetWorkflow).
+			Activities(
+				workflows.MFAResetNoticeActivity,
+				workflows.MFAResetApplyActivity,
+				workflows.MFAResetCancelledActivity,
+			),
 		// Durable mixed wallet + external payment flow (wallet-ledger Phase 5) —
 		// hold → await gateway → capture/release compensation. Also carries the
 		// deferred chef-cancel gateway-refund retry (fires immediately on a

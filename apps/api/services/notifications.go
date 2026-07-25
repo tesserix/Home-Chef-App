@@ -1557,7 +1557,10 @@ func numFromEventData(v any) int {
 
 func (s *NotificationService) sendEmailNotification(notif NotificationEvent) error {
 	notifType, _ := notif.Data["type"].(string)
-	if !ShouldSendForType(notif.UserID, notifType, ChannelEmail) {
+	// Security alerts ignore preferences. They would otherwise fall into the
+	// "account" category, which users can switch off — and someone who muted
+	// account email must still be told that their second factor was removed.
+	if !IsSecurityAlert(notifType) && !ShouldSendForType(notif.UserID, notifType, ChannelEmail) {
 		log.Printf("Email dispatch skipped for user %s (category=%s opted-out)", notif.UserID, notificationTypeCategory(notifType))
 		return nil
 	}
@@ -1586,7 +1589,7 @@ func (s *NotificationService) sendEmailNotification(notif NotificationEvent) err
 
 func (s *NotificationService) sendPushNotification(notif NotificationEvent) error {
 	notifType, _ := notif.Data["type"].(string)
-	if !ShouldSendForType(notif.UserID, notifType, ChannelPush) {
+	if !IsSecurityAlert(notifType) && !ShouldSendForType(notif.UserID, notifType, ChannelPush) {
 		log.Printf("Push dispatch skipped for user %s (category=%s opted-out)", notif.UserID, notificationTypeCategory(notifType))
 		return nil
 	}
