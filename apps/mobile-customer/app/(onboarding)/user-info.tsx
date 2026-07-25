@@ -15,6 +15,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { useAuth } from '@homechef/mobile-shared/auth';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
 import { useCustomerOnboardingStore } from '../../store/onboarding-store';
@@ -36,6 +37,11 @@ const CTA_RIPPLE = `${customerColors.canvas}33`;
 const GHOST_RIPPLE = `${customerColors.coral.DEFAULT}22`;
 
 type UserInfoField = 'firstName' | 'lastName' | 'phone';
+
+// Minimal shape check to gate the OTP request when the user types their own
+// email (the identity-provided email is already valid). The server is the real
+// validator; this only stops obviously-broken addresses from firing a request.
+const isValidEmail = (v: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
 // 2px coral focus ring (falls back to the destructive border on error),
 // matching the Input primitive's focus treatment (Task 1).
@@ -71,7 +77,25 @@ export default function UserInfoScreen() {
     },
   });
 
-  const email = user?.email ?? '';
+  // The verified identity from the BFF session (populated by auto-login /
+  // social / silent-refresh). The Zustand store's `user` is only set on the
+  // email-login path, so on a silent or social sign-in `user?.email` is empty —
+  // which used to leave this field blank AND disable "Send verification code",
+  // dead-ending the wizard. Prefer the session identity, fall back to the store.
+  const { user: identity } = useAuth();
+  const identityEmail = (identity?.email ?? user?.email ?? '').trim();
+  // When the identity carries an email we lock the field to it; otherwise the
+  // user must be able to TYPE one so the email-OTP flow can run at all.
+  const emailLocked = identityEmail.length > 0;
+  const [emailInput, setEmailInput] = useState(identityEmail);
+  const [emailFieldFocused, setEmailFieldFocused] = useState(false);
+  // The session identity resolves after first paint; backfill the input once it
+  // arrives, without clobbering anything the user already typed.
+  useEffect(() => {
+    if (identityEmail && !emailInput) setEmailInput(identityEmail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identityEmail]);
+  const email = (emailLocked ? identityEmail : emailInput).trim();
   const [focusedField, setFocusedField] = useState<UserInfoField | null>(null);
 
   // R14 — scroll to + focus the first invalid field on a failed submit.
@@ -114,7 +138,7 @@ export default function UserInfoScreen() {
   };
 
   const sendCode = async (): Promise<void> => {
-    if (sending || cooldown > 0 || !email) return;
+    if (sending || cooldown > 0 || !isValidEmail(email)) return;
     setSending(true);
     try {
       await api.post('/v1/account/email/otp/request', { email });
@@ -297,20 +321,50 @@ export default function UserInfoScreen() {
 
           {/* ── Email verification ── */}
           <Text className="text-sm font-medium text-charcoal mb-1">Email</Text>
-          <View className="h-12 bg-surface-soft rounded-lg px-4 flex-row items-center justify-between mb-1">
-            <Text className="text-base text-charcoal-soft flex-1" numberOfLines={1}>
-              {email}
-            </Text>
-            {emailVerified && (
-              <Text className="text-xs font-semibold text-coral ml-2">Verified ✓</Text>
-            )}
-          </View>
+          {emailLocked ? (
+            <View className="h-12 bg-surface-soft rounded-lg px-4 flex-row items-center justify-between mb-1">
+              <Text className="text-base text-charcoal-soft flex-1" numberOfLines={1}>
+                {email}
+              </Text>
+              {emailVerified && (
+                <Text className="text-xs font-semibold text-coral ml-2">Verified ✓</Text>
+              )}
+            </View>
+          ) : (
+            <View className="mb-1">
+              <TextInput
+                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal"
+                style={fieldBorderStyle(false, emailFieldFocused)}
+                placeholder="you@example.com"
+                placeholderTextColor={customerColors.charcoal.soft}
+                value={emailInput}
+                onChangeText={(v) => {
+                  setEmailInput(v);
+                  // Editing the address invalidates any code already sent or
+                  // verified for the previous one.
+                  if (emailVerified) setEmailVerified(false);
+                  if (otpSent) setOtpSent(false);
+                }}
+                onFocus={() => setEmailFieldFocused(true)}
+                onBlur={() => setEmailFieldFocused(false)}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                returnKeyType="done"
+                accessibilityLabel="Email address"
+              />
+              {emailVerified && (
+                <Text className="text-xs font-semibold text-coral mt-1">Verified ✓</Text>
+              )}
+            </View>
+          )}
 
           {!emailVerified &&
             (!otpSent ? (
               <Pressable
                 onPress={() => void sendCode()}
-                disabled={sending || !email}
+                disabled={sending || !isValidEmail(email)}
                 accessibilityRole="button"
                 accessibilityLabel="Send verification code"
                 android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
