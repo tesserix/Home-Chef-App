@@ -28,6 +28,10 @@ const (
 	LoyaltySourceAdminAdjust    LoyaltyTxnSource = "admin_adjustment"
 	LoyaltySourceExpiry         LoyaltyTxnSource = "expiry"          // lot expired past its 1-year window
 	LoyaltySourceRefundReversal LoyaltyTxnSource = "refund_reversal" // earned points clawed back on refund
+	// LoyaltySourceOrderRedemption is a CHECKOUT redemption — points spent
+	// directly against an order rather than converted to wallet credit. It shares
+	// the monthly redemption cap with LoyaltySourceRedeem.
+	LoyaltySourceOrderRedemption LoyaltyTxnSource = "order_redemption"
 )
 
 // Loyalty tiers, derived from lifetime points earned. Tiers are cosmetic by

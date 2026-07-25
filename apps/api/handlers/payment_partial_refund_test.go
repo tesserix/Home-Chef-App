@@ -18,7 +18,8 @@ import (
 )
 
 // addWalletTables adds the wallet ledger tables so the to-wallet refund branch
-// (CreditWallet) actually executes under setupPayDB.
+// (CreditWallet) actually executes under setupPayDB. The loyalty tables the refund
+// path also needs live in setupPayDB itself — both refund branches touch them.
 func addWalletTables(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.Exec(`CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT UNIQUE, balance REAL DEFAULT 0,

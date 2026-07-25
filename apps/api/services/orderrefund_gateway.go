@@ -78,32 +78,78 @@ func (OrderRefundGateway) RefundPayment(_ context.Context, req orderrefund.Gatew
 
 	gatewayShare := req.Amount
 
-	// Wallet-at-checkout (#141): only (Total − WalletApplied) was captured at the provider,
-	// so it cannot refund more than that. Re-credit the wallet-funded slice as store credit
-	// and cap the provider refund to the captured amount. Parity with InitiateRefund and
-	// RefundOrderForCancellation.
+	// THE FUNDING-RAIL SPLIT. Every rail that funded the order gets back its exact
+	// proportion of whatever is being refunded — wallet and loyalty to store credit,
+	// the remainder to the provider.
 	//
-	// The wallet credit is idempotent on "refund-wallet:<orderID>", so a coordinator retry
-	// for the same order re-credits nothing — which is what makes this safe to sit behind a
-	// gateway call that the saga may re-drive.
-	if order.WalletApplied > 0 && provider != "wallet" {
-		capture := order.Total - order.WalletApplied
-		if gatewayShare > capture {
-			walletPortion := gatewayShare - capture
-			if _, err := CreditWallet(database.DB, order.CustomerID, walletPortion,
-				models.WalletSourceRefund, &order.ID,
-				fmt.Sprintf("Wallet-portion refund for order %s: %s", order.OrderNumber, req.Reason),
-				"refund-wallet:"+order.ID.String(), nil); err != nil {
-				// Best-effort, matching the legacy path: the provider slice is the larger and
-				// more urgent half, and the reconcile cron's refund_mismatch check backstops
-				// the store credit. Failing the whole refund here would strand the captured
-				// money too.
-				log.Printf("orderrefund-gateway: wallet-portion re-credit failed order=%s: %v", order.OrderNumber, err)
+	// Pro-rata rather than gateway-first: the on-demand refundable base is the WHOLE
+	// total and the cancellation policy then applies a percentage, so a partial refund
+	// is routine. Refunding the provider first would hand a credit-funded order pure
+	// cash and return the customer's own credit only once the cash ran out.
+	//
+	// Both credit slices land in the WALLET. The loyalty slice returns as rupees, not
+	// as restored points — an owner decision. Its exposure is bounded because the
+	// monthly redemption cap is NOT released on refund (see MonthlyRedeemedPaise), so
+	// a redeem-then-cancel loop can convert at most MonthlyRedeemCap per customer per
+	// 30 days, no more than they could have spent outright.
+	if provider != "wallet" && (order.WalletApplied > 0 || order.LoyaltyApplied > 0) {
+		split := SplitRefundByFunding(&order, ToPaise(req.Amount))
+
+		// Keyed on the coordinator's per-scope operation id, NOT on the order: two
+		// successive partial refunds are distinct operations and must each credit,
+		// while a re-drive of the SAME operation must not.
+		credit := func(paise int, source models.WalletTxnSource, label string) float64 {
+			if paise <= 0 {
+				return 0
+			}
+			amount := FromPaise(paise)
+			if _, err := CreditWallet(database.DB, order.CustomerID, amount,
+				source, &order.ID,
+				fmt.Sprintf("%s refund for order %s: %s", label, order.OrderNumber, req.Reason),
+				label+":"+req.IdempotencyKey, nil); err != nil {
+				// Best-effort, matching the legacy path: the provider slice is the more
+				// urgent half and the reconcile cron's refund_mismatch check backstops the
+				// store credit. Failing here would strand the captured money too.
+				log.Printf("orderrefund-gateway: %s slice re-credit failed order=%s: %v", label, order.OrderNumber, err)
 				CaptureBackgroundError(err)
+				return 0
+			}
+			return amount
+		}
+		walletBack := credit(split.WalletPaise, models.WalletSourceRefund, "refund-wallet")
+		loyaltyBack := credit(split.LoyaltyPaise, models.WalletSourceLoyalty, "refund-loyalty")
+
+		// Record what each rail has now been returned so a later partial refund
+		// computes its share against the REMAINING funded amount rather than the
+		// original — otherwise two 60% refunds would each take 60% of the original
+		// slice and together return 120% of it.
+		if walletBack > 0 || loyaltyBack > 0 {
+			if err := database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
+				Updates(map[string]any{
+					"wallet_refunded":  order.WalletRefunded + walletBack,
+					"loyalty_refunded": order.LoyaltyRefunded + loyaltyBack,
+				}).Error; err != nil {
+				log.Printf("orderrefund-gateway: stamp refunded rails failed order=%s: %v", order.OrderNumber, err)
+				CaptureBackgroundError(err)
+			}
+		}
+
+		// The provider can never refund more than it captured. Pro-rata already keeps
+		// the card slice within the captured amount, but the credit caps above can push
+		// their remainder onto the card; clamp and return any excess as credit so the
+		// customer is still made whole.
+		gatewayShare = FromPaise(split.CardPaise)
+		if capture := order.Total - order.WalletApplied - order.LoyaltyApplied; gatewayShare > capture {
+			if over := ToPaise(gatewayShare) - ToPaise(capture); over > 0 {
+				credit(over, models.WalletSourceRefund, "refund-overflow")
 			}
 			gatewayShare = capture
 		}
 	}
 
+	if gatewayShare <= 0 {
+		// Fully credit-funded refund — there is no provider leg to run.
+		return "", nil
+	}
 	return runCancellationGatewayRefund(&order, provider, gatewayShare, req.Actor, req.Reason, req.IdempotencyKey)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 )
@@ -32,6 +33,14 @@ type deliveryQuoteRequest struct {
 	// will be charged, so checkout shows an honest total (not just items+delivery).
 	Subtotal float64 `json:"subtotal"`
 	State    string  `json:"state"`
+	// Discount is the applied promo, and the Credit fields are the customer's
+	// wallet/loyalty intent. Together they let this preview return the SAME credit
+	// allocation payment creation will make — the checkout screen shows the credit
+	// card before an order exists, so without this it would have to do the money
+	// arithmetic itself, which is exactly the drift this feature removes.
+	Discount    float64 `json:"discount"`
+	Fulfillment string  `json:"fulfillment"`
+	services.CreditRequest
 }
 
 // QuoteDeliveryFee returns the per-mode delivery fee for a chef + drop address,
@@ -110,6 +119,43 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		"distanceKm":  models.RoundAmount(reach.DistanceKm),
 		"maxRadiusKm": reach.MaxRadiusKm,
 		"rangeKnown":  reach.Known,
+	}
+
+	// Credit preview. The checkout screen renders the wallet/loyalty card BEFORE an
+	// order exists, so it cannot use the order-scoped quote endpoint. Running the
+	// SAME allocator here on the same fee/tax figures this endpoint already computes
+	// keeps the preview and the eventual charge in agreement; payment creation still
+	// recomputes from the real order and remains authoritative.
+	if userID, ok := middleware.GetUserID(c); ok {
+		effectiveDelivery := deliveryFee
+		if req.Fulfillment == string(models.FulfillmentPickup) {
+			effectiveDelivery = pickupFee
+		}
+		taxBase := req.Subtotal + effectiveDelivery + serviceFee - req.Discount
+		if taxBase < 0 {
+			taxBase = 0
+		}
+		// Mirrors CreateOrder exactly. An inclusive rate is already inside taxBase, so
+		// it is backed out for display and NOT added to the total; adding it would
+		// charge the customer the tax twice.
+		var tax, total float64
+		if taxRule.Inclusive {
+			tax = taxBase - (taxBase / (1 + taxRule.Rate/100.0))
+			total = req.Subtotal + effectiveDelivery + serviceFee - req.Discount
+		} else {
+			tax = taxBase * (taxRule.Rate / 100.0)
+			total = req.Subtotal + effectiveDelivery + serviceFee + tax - req.Discount
+		}
+
+		preview := &models.Order{
+			CustomerID: userID, Currency: services.CurrencyForCountry(chef.PayoutCountry),
+			PaymentProvider: chef.PaymentProvider,
+			Subtotal:        req.Subtotal, Discount: req.Discount, DeliveryFee: effectiveDelivery,
+			ServiceFee: serviceFee, Tax: tax, Total: total,
+		}
+		if q, err := services.BuildCreditQuote(database.DB, preview, userID, req.CreditRequest, creditFlags()); err == nil {
+			resp["credit"] = creditQuoteResponse(q)
+		}
 	}
 
 	// Self-delivery estimate (#702). When the chef delivers themselves, the

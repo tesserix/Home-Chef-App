@@ -62,6 +62,54 @@ export interface DeliveryQuote {
   /** GST compliance: 'IN' + intra-state → show CGST+SGST; inter-state → IGST. */
   taxCountry: string;
   taxIntraState: boolean;
+  /** Server-allocated wallet + loyalty credit for this cart. Absent when the
+   *  request was unauthenticated. Every figure the credits card renders comes
+   *  from here — the screen does no money arithmetic of its own, which is what
+   *  keeps what the customer sees and what they are charged in agreement. */
+  credit?: CreditQuote;
+}
+
+/** Why the loyalty row is capped, so the UI can explain the limit rather than
+ *  reimplementing the cap logic to guess at it. */
+export type LoyaltyLimit =
+  | 'balance'
+  | 'per_order_cap'
+  | 'monthly_cap'
+  | 'order_covered'
+  | 'disabled';
+
+export interface CreditQuote {
+  /** Ceiling credit may fund: food + delivery. Fees and tax are never included. */
+  redeemableCap: number;
+  /** Platform fee + tax — always paid in real money. */
+  nonRedeemable: number;
+  walletBalance: number;
+  walletApplied: number;
+  /** Upper bound for the wallet slider — order-sized, not the raw balance. */
+  walletMax: number;
+  pointsBalance: number;
+  pointsApplied: number;
+  /** Rupee value of pointsApplied. */
+  pointsValue: number;
+  /** Upper bound for the points slider. */
+  pointsMax: number;
+  /** Rupee values of the balance and the per-order maximum, computed server-side
+   *  so the app never multiplies points by the redeem rate itself. */
+  pointsBalanceValue: number;
+  pointsMaxValue: number;
+  payable: number;
+  loyaltyLimit: LoyaltyLimit;
+  walletEnabled: boolean;
+  loyaltyEnabled: boolean;
+}
+
+/** The customer's credit intent. Amounts are omitted while a rail is on "auto",
+ *  which asks the server to apply as much as its ceilings allow. */
+export interface CreditIntent {
+  useWallet: boolean;
+  walletAmount?: number;
+  useLoyalty: boolean;
+  loyaltyPoints?: number;
 }
 
 /**
@@ -80,12 +128,23 @@ export function useDeliveryQuote(
     country?: string;
     state?: string;
     subtotal?: number;
+    /** Applied promo, so the credit ceiling is computed on the discounted food. */
+    discount?: number;
+    /** 'pickup' zeroes the delivery fee in the credit ceiling, as the order will. */
+    fulfillment?: string;
+    /** Which credit rails to apply, and optionally how much of each. */
+    credit?: CreditIntent;
   },
 ) {
-  const { latitude, longitude, city, country, state, subtotal } = drop;
+  const { latitude, longitude, city, country, state, subtotal, discount, fulfillment, credit } = drop;
   return useQuery<DeliveryQuote>({
-    // Keyed on the coords + subtotal so the fee/tax re-quote as they change.
-    queryKey: ['delivery-quote', chefId, latitude, longitude, city, state, subtotal],
+    // Keyed on everything that moves the fee, the tax OR the credit allocation —
+    // a stale credit block would put the screen back in the business of guessing.
+    queryKey: [
+      'delivery-quote', chefId, latitude, longitude, city, state, subtotal,
+      discount, fulfillment, credit?.useWallet, credit?.walletAmount,
+      credit?.useLoyalty, credit?.loyaltyPoints,
+    ],
     queryFn: async () =>
       (
         await api.post(`/v1/chefs/${chefId}/delivery-quote`, {
@@ -95,9 +154,15 @@ export function useDeliveryQuote(
           country,
           state,
           subtotal,
+          discount,
+          fulfillment,
+          ...credit,
         })
       ).data as DeliveryQuote,
     enabled: !!chefId,
-    staleTime: 1000 * 60, // a minute — the fee doesn't move within a checkout
+    // No staleTime: the credit block must track the sliders, and a cached quote
+    // would show credit the server is no longer applying.
+    staleTime: 0,
+    placeholderData: (prev) => prev, // hold the last good quote while re-fetching
   });
 }

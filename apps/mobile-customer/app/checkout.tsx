@@ -54,6 +54,8 @@ import { useDeliverySlots, type DeliverySlot } from '../hooks/useDeliverySlots';
 import { useFulfillmentTimes } from '../hooks/useFulfillmentTimes';
 import { useDietaryCheck } from '../hooks/useDietaryConflicts';
 import { useWallet } from '../hooks/useWallet';
+import { CreditsCard } from '../components/checkout/CreditsCard';
+import type { CreditIntent } from '../hooks/useDeliveryQuote';
 import { useAddresses, useCreateAddress } from '../hooks/useAddresses';
 import {
   useAddressAutocomplete,
@@ -86,10 +88,6 @@ const addressSchema = z.object({
 });
 
 type AddressFormValues = z.infer<typeof addressSchema>;
-
-// Wallet-at-checkout (#141) is gated to match the API's WALLET_CHECKOUT_ENABLED;
-// the toggle stays hidden until both the app build and the server enable it.
-const WALLET_CHECKOUT_ENABLED = process.env.EXPO_PUBLIC_WALLET_CHECKOUT_ENABLED === 'true';
 
 // slotDayLabel turns a "YYYY-MM-DD" slot date into a human label relative to the
 // device's today ("Today" / "Tomorrow" / "Mon, 22 Jun") for the slot picker (#51).
@@ -197,7 +195,10 @@ export default function CheckoutScreen() {
     }
   }, [deliveryAvailable, offersPickup, fulfillment]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
-  const [applyWallet, setApplyWallet] = useState(false);
+  // Credit intent (#141 follow-up). Both rails default ON so the customer always
+  // spends the credit they hold; undefined amounts mean "auto" — the server
+  // applies as much as its ceilings allow. Touching either control pins both.
+  const [credit, setCredit] = useState<CreditIntent>({ useWallet: true, useLoyalty: true });
   const [note, setNote] = useState('');
   // Persist the optional note-to-chef so it survives a background/kill (the
   // cart itself is already persisted by cart-store). Cleared once the order is
@@ -452,7 +453,7 @@ export default function CheckoutScreen() {
       // status. Keep the button DISABLED through payment (cleared in finally) so a
       // second tap can't create a duplicate order during the create→pay round-trip
       // before the native sheet appears.
-      await startOrderPayment(orderId, { walletAmount: walletApplied });
+      await startOrderPayment(orderId, credit);
     } catch (err: unknown) {
       // Surface the real reason in a modal — the inline banner sits in the
       // scroll body, far from the sticky button, so a failed tap otherwise
@@ -496,12 +497,19 @@ export default function CheckoutScreen() {
   // `deliveryFee = 0 // free for v1`, which both hid the fee and could show a
   // "Free" total the server then charged a fee on.
   const selectedAddr = addresses.find((a) => a.id === selectedAddressId);
+  // Promo discount (#39) — server-validated preview, clamped to the subtotal.
+  // Declared before the quote because the credit ceiling is computed on the
+  // DISCOUNTED food value, so the server needs it.
+  const discount = appliedPromo ? Math.min(appliedPromo.discount, subtotal) : 0;
   const { data: quoteFresh } = useDeliveryQuote(cartStore.chefId ?? undefined, {
     latitude: selectedAddr?.latitude,
     longitude: selectedAddr?.longitude,
     city: selectedAddr?.city,
     state: selectedAddr?.state,
     subtotal,
+    discount,
+    fulfillment,
+    credit,
   });
   const quote = useStaleValue(quoteFresh);
   // Out-of-range guard (#709): the kitchen's delivery has a hard radius (the chef's
@@ -524,8 +532,6 @@ export default function CheckoutScreen() {
   // What the customer would save by switching to pickup — only real when delivery
   // actually costs something. Drives the incentive nudge; 0 shows nothing.
   const pickupSaving = quote?.pickupSaving ?? 0;
-  // Promo discount (#39) — server-validated preview, clamped to the subtotal.
-  const discount = appliedPromo ? Math.min(appliedPromo.discount, subtotal) : 0;
   // Platform (service) fee + tax — shown so the total is honest, computed the SAME
   // way CreateOrder does (#fee-transparency). serviceFee is a % of subtotal; tax is
   // the rate on (subtotal+delivery+service−discount), backed out when inclusive.
@@ -553,12 +559,15 @@ export default function CheckoutScreen() {
     deliveryOutOfRange ||
     deliveryNeedsLocation;
 
-  // Wallet store-credit applied at checkout (#141). Apply as much as the balance
-  // and total allow; the remaining payable is what the gateway charges.
-  const walletBalance = wallet?.balance ?? 0;
-  const walletAvailable = WALLET_CHECKOUT_ENABLED && walletBalance > 0;
-  const walletApplied = applyWallet ? Math.min(walletBalance, total) : 0;
-  const payable = Math.max(0, total - walletApplied);
+  // Wallet + loyalty credit. EVERY figure comes from the server quote — the screen
+  // does no money arithmetic of its own. It used to compute the payable from a
+  // cached balance and post that amount, so any drift between its view and the
+  // server's showed one number and charged another.
+  const creditQuote = quote?.credit;
+  const walletApplied = creditQuote && credit.useWallet ? creditQuote.walletApplied : 0;
+  const loyaltyApplied = creditQuote && credit.useLoyalty ? creditQuote.pointsValue : 0;
+  const creditApplied = walletApplied + loyaltyApplied;
+  const payable = creditQuote ? creditQuote.payable : total;
   // Extracted to a plain local so it stays narrowed to non-undefined inside the
   // fee-breakdown disclosure's nested Pressable render-prop closures below — TS
   // doesn't retain narrowing of an object PROPERTY like `selfDeliveryBreakdown`
@@ -1086,6 +1095,21 @@ export default function CheckoutScreen() {
           />
         </View>
 
+        {/* ── Pay with your credits ──
+            Above Price Details, not buried under the promo field: as a bare
+            checkbox between the promo input and the total it was missed entirely
+            while placing a live order. */}
+        {creditQuote && (
+          <View className="bg-canvas border-t border-hairline">
+            <CreditsCard
+              quote={creditQuote}
+              useWallet={credit.useWallet}
+              useLoyalty={credit.useLoyalty}
+              onChange={setCredit}
+            />
+          </View>
+        )}
+
         {/* ── Price Details (fees) ── */}
         <View className="bg-canvas border-t border-hairline">
           <Text className="text-base font-semibold text-charcoal px-4 pt-4 pb-2">Price Details</Text>
@@ -1326,48 +1350,9 @@ export default function CheckoutScreen() {
               </View>
             )}
 
-            {/* Wallet store-credit toggle (#141) — only when the feature is live
-                and the customer has a balance. */}
-            {walletAvailable && (
-              <Pressable
-                onPress={() => setApplyWallet((v) => !v)}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: applyWallet }}
-                accessibilityLabel="Apply wallet credit"
-                android_ripple={{ color: CHARCOAL_RIPPLE, borderless: false }}
-              >
-                {({ pressed }) => (
-                  <View
-                    className={`flex-row items-center justify-between ${
-                      pressed && Platform.OS === 'ios' ? 'opacity-70' : ''
-                    }`}
-                    style={{ minHeight: 44 }}
-                  >
-                    <View className="flex-row items-center gap-2">
-                      <View
-                        className={`h-5 w-5 items-center justify-center rounded border ${
-                          applyWallet ? 'border-coral bg-coral' : 'border-hairline bg-canvas'
-                        }`}
-                      >
-                        {applyWallet && <Check size={14} color={customerColors.canvas} />}
-                      </View>
-                      <Text className="text-sm text-charcoal tabular-nums">
-                        Use wallet credit (₹{walletBalance.toFixed(2)})
-                      </Text>
-                    </View>
-                    {applyWallet && (
-                      <Text className="text-sm text-success font-medium" style={{ fontVariant: ['tabular-nums'] }}>
-                        −₹{walletApplied.toFixed(2)}
-                      </Text>
-                    )}
-                  </View>
-                )}
-              </Pressable>
-            )}
-
             <View className="flex-row justify-between pt-1 border-t border-hairline">
               <Text className="text-base font-medium text-charcoal">
-                {walletApplied > 0 ? 'To pay' : 'Total'}
+                {creditApplied > 0 ? 'To pay' : 'Total'}
               </Text>
               <Text
                 className="text-base font-medium text-charcoal"

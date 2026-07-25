@@ -63,6 +63,9 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		stripe_payment_intent_id TEXT DEFAULT '', refund_id TEXT DEFAULT '', refund_amount REAL DEFAULT 0,
 		refund_reason TEXT DEFAULT '', refund_initiated_by TEXT DEFAULT '', refunded_at DATETIME,
 		payout_hold_status TEXT DEFAULT '', wallet_applied REAL DEFAULT 0,
+		loyalty_applied REAL DEFAULT 0, loyalty_points_spent REAL DEFAULT 0,
+		wallet_refunded REAL DEFAULT 0, loyalty_refunded REAL DEFAULT 0,
+		service_fee REAL DEFAULT 0, discount REAL DEFAULT 0, delivery_fee_final REAL,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
 	// PlatformSettings backs services.GetCommissionRate — present so the
@@ -122,6 +125,22 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		user_id TEXT, action TEXT, entity_type TEXT, entity_id TEXT,
 		old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT,
 		correlation_id TEXT, created_at DATETIME)`).Error)
+
+	// Loyalty ledger. Every refund branch — gateway AND to-wallet — calls
+	// ReverseOrderLoyalty inside its persist transaction to claw back the points
+	// earned on the refunded order. Without these tables that transaction rolls
+	// back on "no such table" and the order silently never reaches its terminal
+	// state, so refund tests fail for a reason unrelated to what they assert.
+	require.NoError(t, db.Exec(`CREATE TABLE loyalty_accounts (id TEXT PRIMARY KEY, user_id TEXT UNIQUE,
+		balance REAL DEFAULT 0, lifetime_points REAL DEFAULT 0, tier TEXT DEFAULT 'bronze',
+		current_streak INTEGER DEFAULT 0, longest_streak INTEGER DEFAULT 0, last_streak_day DATETIME,
+		created_at DATETIME, updated_at DATETIME)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE loyalty_transactions (id TEXT PRIMARY KEY, loyalty_account_id TEXT,
+		user_id TEXT, type TEXT, source TEXT, points REAL, points_after REAL, order_id TEXT, reason TEXT,
+		created_by TEXT, idempotency_key TEXT UNIQUE, created_at DATETIME)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE loyalty_earn_batches (id TEXT PRIMARY KEY, user_id TEXT, source TEXT,
+		points REAL, points_remaining REAL, earned_at DATETIME, expires_at DATETIME, order_id TEXT,
+		idempotency_key TEXT UNIQUE, created_at DATETIME)`).Error)
 
 	prev := database.DB
 	database.DB = db

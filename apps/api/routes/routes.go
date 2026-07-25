@@ -906,6 +906,17 @@ func SetupRouter() *gin.Engine {
 			orderPayments.POST("/tip/:tipId/verify", tipHandler.VerifyTip)
 		}
 
+		// Credit quoting is read-only and idempotent, and the checkout sliders call
+		// it as the customer drags. It must NOT sit under the 2 rps limiter above,
+		// which is sized for the money-moving endpoints and would throttle a normal
+		// slider interaction into failure.
+		quoteLimit := middleware.RateLimitByUser(20, 40)
+		orderQuotes := v1.Group("/payments")
+		orderQuotes.Use(bffAuth(bffKey, bffWindow), quoteLimit)
+		{
+			orderQuotes.POST("/order/:orderId/quote", paymentHandler.QuoteOrderCredit)
+		}
+
 		// Admin routes. Gated on BOTH the admin role AND the internal identity
 		// pool (defense-in-depth): the role is a DB column, but the pool is bound
 		// into the BFF signature, so an admin-role user who authenticated through
