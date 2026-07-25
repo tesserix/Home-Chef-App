@@ -23,6 +23,7 @@ import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { DialogProvider } from '@homechef/mobile-shared/ui';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -282,10 +283,13 @@ export default function RootLayout() {
         tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
       >
         <QueryClientProvider client={queryClient}>
-          <View style={{ flex: 1 }}>
-            <OfflineBanner />
-            <Stack screenOptions={{ headerShown: false }} />
-          </View>
+          {/* One branded Dialog for the whole app, replacing Alert.alert. */}
+          <DialogProvider accentColor={customerColors.coral.DEFAULT}>
+            <View style={{ flex: 1 }}>
+              <OfflineBanner />
+              <Stack screenOptions={{ headerShown: false }} />
+            </View>
+          </DialogProvider>
         </QueryClientProvider>
       </AuthProvider>
     </GestureHandlerRootView>

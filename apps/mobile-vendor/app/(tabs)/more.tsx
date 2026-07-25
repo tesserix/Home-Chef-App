@@ -1,4 +1,5 @@
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useAlert } from '@homechef/mobile-shared/ui';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -128,6 +129,7 @@ function deriveInitials(name: string): string {
 }
 
 export default function MoreScreen() {
+  const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { logout, user } = useAuthStore();
   const displayName = deriveDisplayName(
@@ -138,7 +140,7 @@ export default function MoreScreen() {
   const dockClearance = useDockClearance();
 
   function handleLogout() {
-    Alert.alert('Log out?', 'You can sign back in any time.', [
+    showAlert('Log out?', 'You can sign back in any time.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log out',

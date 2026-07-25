@@ -3,9 +3,9 @@
 // web CateringQuotesPage detail panel.
 
 import { useState } from 'react';
+import { useAlert } from '@homechef/mobile-shared/ui';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -190,6 +190,7 @@ function QuoteCard({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function CateringDetailScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useCateringRequest(id);
   const accept = useAcceptCateringQuote(id);
@@ -203,7 +204,7 @@ export default function CateringDetailScreen() {
   const busy = accept.isPending || decline.isPending;
 
   function confirmAccept(quote: CateringQuote) {
-    Alert.alert(
+    showAlert(
       'Accept this quote?',
       `${quote.chef?.businessName ?? 'This chef'} · ${money(quote.totalPrice)}. You'll then pay a ${money(quote.depositAmount)} deposit to confirm.`,
       [
@@ -212,7 +213,7 @@ export default function CateringDetailScreen() {
           text: 'Accept',
           onPress: () =>
             accept.mutate(quote.id, {
-              onError: (err) => Alert.alert('Could not accept', friendlyErrorMessage(err, 'Please try again.')),
+              onError: (err) => showAlert('Could not accept', friendlyErrorMessage(err, 'Please try again.')),
             }),
         },
       ],
@@ -240,21 +241,21 @@ export default function CateringDetailScreen() {
       },
       onError: (err) => {
         setPaying(false);
-        Alert.alert('Deposit unavailable', friendlyErrorMessage(err, 'Deposits aren’t available yet. Please try again later.'));
+        showAlert('Deposit unavailable', friendlyErrorMessage(err, 'Deposits aren’t available yet. Please try again later.'));
       },
     });
   }
 
   function confirmCancel() {
     if (!request) return;
-    Alert.alert('Cancel this request?', 'Chefs will no longer be able to quote.', [
+    showAlert('Cancel this request?', 'Chefs will no longer be able to quote.', [
       { text: 'Keep it', style: 'cancel' },
       {
         text: 'Cancel request',
         style: 'destructive',
         onPress: () =>
           cancel.mutate(request.id, {
-            onError: (err) => Alert.alert('Could not cancel', friendlyErrorMessage(err, 'Please try again.')),
+            onError: (err) => showAlert('Could not cancel', friendlyErrorMessage(err, 'Please try again.')),
           }),
       },
     ]);
@@ -394,7 +395,7 @@ export default function CateringDetailScreen() {
                 onAccept={() => confirmAccept(q)}
                 onDecline={() =>
                   decline.mutate(q.id, {
-                    onError: (err) => Alert.alert('Could not decline', friendlyErrorMessage(err, 'Please try again.')),
+                    onError: (err) => showAlert('Could not decline', friendlyErrorMessage(err, 'Please try again.')),
                   })
                 }
               />

@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -11,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAlert } from '@homechef/mobile-shared/ui';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, Minus, Plus, Share2, Users } from 'lucide-react-native';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
@@ -66,6 +66,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function GroupOrderHubScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useGroupOrder(id);
   const g = data?.groupOrder;
@@ -95,10 +96,10 @@ export default function GroupOrderHubScreen() {
     const addr = addressData?.data?.find((a) => a.isDefault) ?? addressData?.data?.[0];
     const addrId = addr?.id;
     if (!addrId) {
-      Alert.alert('Add a delivery address', 'Set a delivery address in your profile first.');
+      showAlert('Add a delivery address', 'Set a delivery address in your profile first.');
       return;
     }
-    Alert.alert('Lock & collect payment?', 'No more items can be added after this. Everyone pays their share.', [
+    showAlert('Lock & collect payment?', 'No more items can be added after this. Everyone pays their share.', [
       { text: 'Back', style: 'cancel' },
       {
         text: 'Lock',
@@ -124,7 +125,7 @@ export default function GroupOrderHubScreen() {
           },
         });
       },
-      onError: () => Alert.alert('Could not start payment', 'Please try again.'),
+      onError: () => showAlert('Could not start payment', 'Please try again.'),
     });
   }
 
@@ -132,7 +133,7 @@ export default function GroupOrderHubScreen() {
   // approval). Inert while the flags are off (the hold never reaches awaiting).
   function confirmReceived() {
     if (!id || !g) return;
-    Alert.alert(
+    showAlert(
       'Confirm your order?',
       `Let us know your group received the order${
         g.chef?.businessName ? ` from ${g.chef.businessName}` : ''
@@ -143,9 +144,9 @@ export default function GroupOrderHubScreen() {
           text: 'Confirm received',
           onPress: () =>
             confirmGroup.mutate(id, {
-              onSuccess: (res) => Alert.alert('Thanks!', res.message),
+              onSuccess: (res) => showAlert('Thanks!', res.message),
               onError: (err) =>
-                Alert.alert(
+                showAlert(
                   'Something went wrong',
                   friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
                 ),
@@ -448,7 +449,7 @@ export default function GroupOrderHubScreen() {
           {isHost && (open || locked) ? (
             <Pressable
               onPress={() =>
-                Alert.alert('Cancel group order?', 'Everyone who paid is refunded to their wallet.', [
+                showAlert('Cancel group order?', 'Everyone who paid is refunded to their wallet.', [
                   { text: 'Back', style: 'cancel' },
                   { text: 'Cancel order', style: 'destructive', onPress: () => cancelGroup.mutate(undefined) },
                 ])

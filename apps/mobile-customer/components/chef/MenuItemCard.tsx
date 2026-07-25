@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useAlert } from '@homechef/mobile-shared/ui';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { AlertTriangle, Minus, Plus, UtensilsCrossed } from 'lucide-react-native';
@@ -23,6 +24,7 @@ interface MenuItemCardProps {
 }
 
 export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
+  const { showAlert } = useAlert();
   // Read cart state for this item so the quantity control is reactive.
   const cartItems = useCartStore((s) => s.items);
   const updateQty = useCartStore((s) => s.updateQty);
@@ -45,7 +47,7 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
   const addToCart = (cartItem: CartItem) => {
     const result = useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
     if (result === 'cross_chef_conflict') {
-      Alert.alert('Replace Cart?', 'You have items from another chef. Replace cart?', [
+      showAlert('Replace Cart?', 'You have items from another chef. Replace cart?', [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Replace',

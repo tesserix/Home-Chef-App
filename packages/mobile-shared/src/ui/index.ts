@@ -8,6 +8,7 @@ export { ToastProvider, useToast } from './Toast';
 export { Sheet, type SheetHandle } from './Sheet';
 export { Dialog, type DialogProps, type DialogAction } from './Dialog';
 export { useDialog, type ConfirmOptions } from './useDialog';
+export { DialogProvider, useAlert, type AlertButton } from './DialogProvider';
 export { SheetBase, type SheetBaseProps } from './SheetBase';
 export { UndoSnackbarProvider, useUndoSnackbar } from './UndoSnackbar';
 export { OnboardingScaffold } from './OnboardingScaffold';

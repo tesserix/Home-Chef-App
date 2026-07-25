@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -17,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter, useIsFocused } from 'expo-router';
 import { Check, ChevronLeft, ChevronRight, Receipt, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { Sheet, type SheetHandle } from '@homechef/mobile-shared/ui';
+import { Sheet, type SheetHandle, useAlert } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReorder } from '../../../hooks/useReorder';
 import { useConfirmOrderReceived } from '../../../hooks/useConfirmReceived';
@@ -182,6 +181,7 @@ function getInlineStatusLabel(
 }
 
 export default function OrderDetailScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -275,7 +275,7 @@ export default function OrderDetailScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       },
       onError: (err) =>
-        Alert.alert(
+        showAlert(
           'Something went wrong',
           friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
         ),
@@ -338,7 +338,7 @@ export default function OrderDetailScreen() {
       onSuccess: (res) => {
         const available = res.items.filter((i) => i.available);
         if (available.length === 0) {
-          Alert.alert('Unavailable', 'None of these items are available right now.');
+          showAlert('Unavailable', 'None of these items are available right now.');
           return;
         }
 
@@ -367,7 +367,7 @@ export default function OrderDetailScreen() {
               msgs.push(`${dropped} item${dropped > 1 ? 's are' : ' is'} no longer available.`);
             }
             if (needsReview) msgs.push('Some add-ons changed — please review your cart.');
-            Alert.alert('Review your cart', msgs.join(' '), [
+            showAlert('Review your cart', msgs.join(' '), [
               { text: 'OK', onPress: () => router.push(`/chef/${res.chefId}`) },
             ]);
           } else {
@@ -378,7 +378,7 @@ export default function OrderDetailScreen() {
         // Cross-chef conflict: confirm before replacing the current cart.
         const cart = useCartStore.getState();
         if (cart.chefId && cart.chefId !== res.chefId && cart.items.length > 0) {
-          Alert.alert(
+          showAlert(
             'Replace cart?',
             'Your cart has items from another chef. Replace them with this order?',
             [
@@ -397,7 +397,7 @@ export default function OrderDetailScreen() {
           fillAndGo();
         }
       },
-      onError: () => Alert.alert('Error', 'Could not reorder right now. Please try again.'),
+      onError: () => showAlert('Error', 'Could not reorder right now. Please try again.'),
     });
   }
 

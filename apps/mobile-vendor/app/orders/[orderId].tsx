@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
+import { Alert,
   ActionSheetIOS,
-  Alert,
   Platform,
   Pressable,
   StyleSheet,
@@ -19,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { KeyboardAwareScrollView, Skeleton, useToast } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, Skeleton, useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { DietIcon } from '../../components/vendor/DietIcon';
 import {
   useOrderDetail,
@@ -860,6 +859,7 @@ function DetailSkeleton() {
 // ---- Main screen -------------------------------------------------------------
 
 export default function OrderDetailScreen() {
+  const { showAlert } = useAlert();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
   const { data: order, isLoading, isError, refetch } = useOrderDetail(orderId);
   const { triggerAction, isLoading: actionLoading } = useOrderAction();
@@ -1024,7 +1024,7 @@ export default function OrderDetailScreen() {
       );
       return;
     }
-    Alert.alert(
+    showAlert(
       `Can't fulfill "${itemName}"?`,
       'The customer is refunded for this item only.',
       [
@@ -1061,7 +1061,7 @@ export default function OrderDetailScreen() {
     }
     // Android Alert max 3 buttons reliably — split into a 2-step prompt:
     // first confirm intent, then a follow-up to pick a reason.
-    Alert.alert(
+    showAlert(
       'Cancel this order?',
       'The customer will be refunded in full. Pick a reason on the next screen.',
       [
@@ -1117,7 +1117,7 @@ export default function OrderDetailScreen() {
       );
       return;
     }
-    Alert.alert(
+    showAlert(
       "Couldn't deliver this order?",
       "We'll review it and your payout is held until our team decides. Pick a reason next.",
       [

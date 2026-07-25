@@ -28,7 +28,8 @@ import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hoo
 import { api } from '../lib/api';
 import { hydratePersistedLocale } from '../lib/i18n';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { ToastProvider, UndoSnackbarProvider, useToast } from '@homechef/mobile-shared/ui';
+import { ToastProvider, UndoSnackbarProvider, useToast, DialogProvider } from '@homechef/mobile-shared/ui';
+import { theme } from '@homechef/mobile-shared/theme';
 import { useFonts } from 'expo-font';
 import { Geist_600SemiBold } from '@expo-google-fonts/geist/600SemiBold';
 import { Geist_700Bold } from '@expo-google-fonts/geist/700Bold';
@@ -624,7 +625,10 @@ function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <ToastProvider>
               <UndoSnackbarProvider>
-                <AppNavigator />
+                {/* One branded Dialog for the whole app, replacing Alert.alert. */}
+                <DialogProvider accentColor={theme.colors.brand[500]}>
+                  <AppNavigator />
+                </DialogProvider>
               </UndoSnackbarProvider>
             </ToastProvider>
           </QueryClientProvider>

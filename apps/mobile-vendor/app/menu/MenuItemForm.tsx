@@ -9,7 +9,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
-  Alert,
   Animated,
   KeyboardAvoidingView,
   Linking,
@@ -26,7 +25,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { ChevronLeft, Plus } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { validationSummary } from '../../lib/menu-validation';
 import { pricingHint } from '../../lib/pricing-guidance';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
@@ -493,6 +492,7 @@ export function MenuItemForm({
   onBack,
   onDraftChange,
 }: MenuItemFormProps) {
+  const { showAlert } = useAlert();
   const { show: showToast } = useToast();
   // validate() writes errors via setState; handleSave runs in the same tick and
   // would otherwise read the previous render's value.
@@ -719,7 +719,7 @@ export function MenuItemForm({
   }
 
   function handleDelete() {
-    Alert.alert(
+    showAlert(
       'Delete item?',
       'This dish will be permanently removed from your menu.',
       [
@@ -741,7 +741,7 @@ export function MenuItemForm({
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (res.granted) return true;
-    Alert.alert(
+    showAlert(
       kind === 'camera' ? 'Camera access needed' : 'Photo access needed',
       `Allow ${kind === 'camera' ? 'camera' : 'photo library'} access in Settings to ${
         kind === 'camera' ? 'take a photo of your dish' : 'choose a photo'
@@ -756,7 +756,7 @@ export function MenuItemForm({
 
   function acceptImage(asset: ImagePicker.ImagePickerAsset): boolean {
     if (typeof asset.fileSize === 'number' && asset.fileSize > MAX_IMAGE_BYTES) {
-      Alert.alert(
+      showAlert(
         'Photo too large',
         'Please use a photo under 5 MB — try cropping it or taking a new shot.',
       );
@@ -802,7 +802,7 @@ export function MenuItemForm({
   // Let the chef take a live photo or pick from the library, with a clear
   // reminder to keep personal information out of the shot.
   function handleAddMedia() {
-    Alert.alert(
+    showAlert(
       'Add a photo',
       "Show the dish only — please don't include people's faces, IDs, addresses, vehicle number plates, or any personal information.",
       [
@@ -827,7 +827,7 @@ export function MenuItemForm({
       const msg =
         (err as { response?: { data?: { error?: string } } } | null)?.response?.data?.error ??
         'Could not add category. Try again.';
-      Alert.alert('Category error', msg);
+      showAlert('Category error', msg);
     } finally {
       setIsCreatingCategory(false);
     }
@@ -856,7 +856,7 @@ export function MenuItemForm({
                 isDirty &&
                 (name.trim() || description.trim() || price.trim())
               ) {
-                Alert.alert(
+                showAlert(
                   'Discard changes?',
                   "Your new item hasn't been saved.",
                   [

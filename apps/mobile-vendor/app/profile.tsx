@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,7 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, ChevronLeft, ImagePlus, Plus } from 'lucide-react-native';
 import { multipartConfig, getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
 import { useStates } from '../hooks/useLocations';
 import { ImageCropper } from '../components/ImageCropper';
@@ -297,6 +296,7 @@ function EditableField({
 // ---- Screen -------------------------------------------------------------
 
 export default function ProfileScreen() {
+  const { showAlert } = useAlert();
   const { data, isLoading, isError, refetch, isRefetching } = useChefProfile();
   const updateMutation = useUpdateProfile();
   const uploadProfileImageMutation = useUploadProfileImage();
@@ -444,7 +444,7 @@ export default function ProfileScreen() {
 
   function handleSave() {
     if (!businessName.trim()) {
-      Alert.alert(
+      showAlert(
         'Business name required',
         'Enter the name customers will see on the storefront.',
       );
@@ -461,7 +461,7 @@ export default function ProfileScreen() {
         showToast({ message: 'Profile saved', tone: 'success' });
       },
       onError: (err) =>
-        Alert.alert('Save failed', getServerErrorMessage(err, 'Please try again.')),
+        showAlert('Save failed', getServerErrorMessage(err, 'Please try again.')),
     });
   }
 
@@ -473,7 +473,7 @@ export default function ProfileScreen() {
       router.back();
       return;
     }
-    Alert.alert(
+    showAlert(
       'Save changes?',
       'You have unsaved profile edits. Save them before going back?',
       [
@@ -489,7 +489,7 @@ export default function ProfileScreen() {
           text: 'Save',
           onPress: () => {
             if (!businessName.trim()) {
-              Alert.alert(
+              showAlert(
                 'Business name required',
                 'Enter the name customers will see on the storefront.',
               );
@@ -503,7 +503,7 @@ export default function ProfileScreen() {
                 router.back();
               },
               onError: (err) =>
-                Alert.alert('Save failed', getServerErrorMessage(err, 'Please try again.')),
+                showAlert('Save failed', getServerErrorMessage(err, 'Please try again.')),
             });
           },
         },
@@ -521,7 +521,7 @@ export default function ProfileScreen() {
     if (!result.canceled && result.assets[0]) {
       uploadProfileImageMutation.mutate(result.assets[0].uri, {
         onError: (err) =>
-          Alert.alert('Upload failed', getServerErrorMessage(err, 'Failed to upload photo.')),
+          showAlert('Upload failed', getServerErrorMessage(err, 'Failed to upload photo.')),
       });
     }
   }
@@ -542,7 +542,7 @@ export default function ProfileScreen() {
     setCropUri(null);
     uploadBannerImageMutation.mutate(croppedUri, {
       onError: (err) =>
-        Alert.alert('Upload failed', getServerErrorMessage(err, 'Failed to upload cover.')),
+        showAlert('Upload failed', getServerErrorMessage(err, 'Failed to upload cover.')),
       onSuccess: () => showToast({ message: 'Cover photo updated.', tone: 'success' }),
     });
   }
@@ -557,7 +557,7 @@ export default function ProfileScreen() {
     if (!result.canceled && result.assets[0]) {
       uploadKitchenPhotoMutation.mutate(result.assets[0].uri, {
         onError: (err) =>
-          Alert.alert('Upload failed', getServerErrorMessage(err, 'Failed to upload photo.')),
+          showAlert('Upload failed', getServerErrorMessage(err, 'Failed to upload photo.')),
         onSuccess: () => showToast({ message: 'Kitchen photo added.', tone: 'success' }),
       });
     }

@@ -5,7 +5,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   Share,
@@ -18,7 +17,7 @@ import { useRouter } from 'expo-router';
 import { Download, PauseCircle, ShieldAlert } from 'lucide-react-native';
 
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useProfile } from '../hooks/useProfile';
 import {
@@ -35,6 +34,7 @@ const CANVAS_RIPPLE = `${customerColors.canvas}33`;
 const DESTRUCTIVE_RIPPLE = `${customerColors.destructive.DEFAULT}14`;
 
 export default function DataPrivacyScreen() {
+  const { showAlert } = useAlert();
   const router = useRouter();
   const { data: profile } = useProfile();
   const exportData = useExportMyData();
@@ -53,7 +53,7 @@ export default function DataPrivacyScreen() {
     email.length > 0;
 
   function handleDeactivate() {
-    Alert.alert(
+    showAlert(
       'Pause my account',
       'Your profile is hidden and notifications stop. Nothing is deleted — sign in again any time to pick up where you left off.',
       [
@@ -69,7 +69,7 @@ export default function DataPrivacyScreen() {
               // raced the api-client's own 403 redirect to the same screen.
               onSuccess: () => router.replace('/account-paused'),
               onError: (error) =>
-                Alert.alert(
+                showAlert(
                   'Could not pause',
                   friendlyErrorMessage(error, 'Please try again.'),
                 ),
@@ -92,7 +92,7 @@ export default function DataPrivacyScreen() {
         }
       },
       onError: (error) =>
-        Alert.alert(
+        showAlert(
           'Export failed',
           friendlyErrorMessage(error, 'Could not prepare your data. Please try again.'),
         ),
@@ -100,7 +100,7 @@ export default function DataPrivacyScreen() {
   }
 
   function handleDelete() {
-    Alert.alert(
+    showAlert(
       'Delete account',
       `Your account is removed straight away and your sign-in stops working. If you change your mind, signing up again with this email within ${retentionDays} days restores your history — after that everything is erased for good. Continue?`,
       [
@@ -111,7 +111,7 @@ export default function DataPrivacyScreen() {
           onPress: () =>
             deleteAccount.mutate(confirmEmail.trim(), {
               onSuccess: () => {
-                Alert.alert(
+                showAlert(
                   'Account deleted',
                   `Sorry to see you go. Sign up again with this email within ${retentionDays} days if you want your history back.`,
                   [
@@ -126,7 +126,7 @@ export default function DataPrivacyScreen() {
                 );
               },
               onError: (error) =>
-                Alert.alert(
+                showAlert(
                   'Delete failed',
                   friendlyErrorMessage(error, 'Could not delete your account. Please try again.'),
                 ),

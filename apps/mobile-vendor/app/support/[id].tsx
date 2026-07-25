@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { EmptyState, Skeleton, useToast } from '@homechef/mobile-shared/ui';
+import { EmptyState, Skeleton, useToast, useAlert } from '@homechef/mobile-shared/ui';
 import {
   CATEGORY_LABEL,
   useAddMessage,
@@ -77,6 +76,7 @@ function MessageBubble({
 }
 
 export default function TicketDetailScreen() {
+  const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const ticketId = typeof id === 'string' ? id : '';
   const { data: ticket, isLoading, isError, refetch } = useTicket(ticketId);
@@ -102,7 +102,7 @@ export default function TicketDetailScreen() {
   }
 
   function confirmClose(): void {
-    Alert.alert('Close this ticket?', 'You can always open a new one later.', [
+    showAlert('Close this ticket?', 'You can always open a new one later.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Close ticket',

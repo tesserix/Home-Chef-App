@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,7 +14,7 @@ import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import {
   useCreateTicket,
   type TicketCategory,
@@ -54,6 +53,7 @@ interface SupportTicketDraft {
 }
 
 export default function NewTicketScreen() {
+  const { showAlert } = useAlert();
   const { show: showToast } = useToast();
   const create = useCreateTicket();
   const { ready, draft, saveDraft, clearDraft } =
@@ -91,7 +91,7 @@ export default function NewTicketScreen() {
       router.back();
       return;
     }
-    Alert.alert('Discard ticket?', "Your draft hasn't been sent.", [
+    showAlert('Discard ticket?', "Your draft hasn't been sent.", [
       { text: 'Keep editing', style: 'cancel' },
       {
         text: 'Discard',

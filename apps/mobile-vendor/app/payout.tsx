@@ -13,7 +13,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -29,7 +28,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react-native';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
 
 // ---- Data types -----------------------------------------------------------
@@ -147,6 +146,7 @@ function Field({
 // ---- Screen ---------------------------------------------------------------
 
 export default function PayoutScreen() {
+  const { showAlert } = useAlert();
   const { data, isLoading, isError, refetch } = usePayoutDetails();
   const saveMutation = useSavePayout();
   const { show: showToast } = useToast();
@@ -193,7 +193,7 @@ export default function PayoutScreen() {
       popBack();
       return;
     }
-    Alert.alert(
+    showAlert(
       'Save changes?',
       'You have unsaved payout edits. Save them before going back?',
       [
@@ -206,7 +206,7 @@ export default function PayoutScreen() {
 
   function handleSave(): void {
     if (!bankAccountName.trim() || !bankAccountNumber.trim() || !bankIFSC.trim()) {
-      Alert.alert(
+      showAlert(
         'Bank details required',
         'Enter account name, number, and IFSC to save your payout.',
       );
@@ -231,7 +231,7 @@ export default function PayoutScreen() {
         popBack();
       },
       onError: (err) =>
-        Alert.alert('Save failed', getServerErrorMessage(err, 'Please try again.')),
+        showAlert('Save failed', getServerErrorMessage(err, 'Please try again.')),
     });
   }
 

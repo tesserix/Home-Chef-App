@@ -9,9 +9,9 @@
 // platform still owes them or work a customer has already paid for.
 
 import { useState } from 'react';
+import { useAlert } from '@homechef/mobile-shared/ui';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -35,6 +35,7 @@ import {
 import { useAuthStore } from '../store/auth-store';
 
 export default function AccountLifecycleScreen() {
+  const { showAlert } = useAlert();
   const profile = useAuthStore((s) => s.user);
   const eligibility = useDeletionEligibility();
   const deleteAccount = useDeleteAccount();
@@ -69,12 +70,12 @@ export default function AccountLifecycleScreen() {
         }
       },
       onError: () =>
-        Alert.alert('Export failed', 'Could not prepare your data. Please try again.'),
+        showAlert('Export failed', 'Could not prepare your data. Please try again.'),
     });
   }
 
   function handleDeactivate() {
-    Alert.alert(
+    showAlert(
       'Pause my kitchen',
       'Your kitchen is hidden from customers and stops taking orders. Your menu, history and approval stay exactly as they are — sign in again any time to reopen.',
       [
@@ -88,7 +89,7 @@ export default function AccountLifecycleScreen() {
               // chef can reopen immediately. Signing out also raced the api
               // client's own 403 redirect to the same screen.
               onSuccess: () => router.replace('/account-paused' as never),
-              onError: () => Alert.alert('Could not pause', 'Please try again.'),
+              onError: () => showAlert('Could not pause', 'Please try again.'),
             }),
         },
       ],
@@ -96,7 +97,7 @@ export default function AccountLifecycleScreen() {
   }
 
   function handleDelete() {
-    Alert.alert(
+    showAlert(
       'Delete account',
       `Your account is removed straight away and your sign-in stops working. If you sign up again with this email within ${retentionDays} days your menu and history come back — but your kitchen has to be approved again and you will need to re-upload your identity documents. After ${retentionDays} days everything is erased for good.`,
       [
@@ -107,13 +108,13 @@ export default function AccountLifecycleScreen() {
           onPress: () =>
             deleteAccount.mutate(confirmEmail.trim(), {
               onSuccess: () =>
-                Alert.alert(
+                showAlert(
                   'Account deleted',
                   `Sorry to see you go. Sign up again with this email within ${retentionDays} days if you want your kitchen back.`,
                   [{ text: 'OK', onPress: signOutToLogin }],
                 ),
               onError: () =>
-                Alert.alert(
+                showAlert(
                   'Delete failed',
                   'Could not delete your account. Please try again or contact support.',
                 ),

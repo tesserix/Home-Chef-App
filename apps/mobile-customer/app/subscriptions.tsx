@@ -4,7 +4,6 @@
 
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -13,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAlert } from '@homechef/mobile-shared/ui';
 import { router } from 'expo-router';
 import { AlertCircle, ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -150,6 +150,7 @@ export default function SubscriptionsScreen() {
 }
 
 function SubCard({ sub }: { sub: MealSubscription }) {
+  const { showAlert } = useAlert();
   const action = useMealSubAction();
   const { data: fulfil } = useMealFulfillments(sub.id);
   const adherence = fulfil?.adherence;
@@ -161,7 +162,7 @@ function SubCard({ sub }: { sub: MealSubscription }) {
     const confirm = a === 'cancel';
     const go = () => action.mutate({ id: sub.id, action: a });
     if (confirm) {
-      Alert.alert('Cancel subscription?', 'You can resubscribe anytime.', [
+      showAlert('Cancel subscription?', 'You can resubscribe anytime.', [
         { text: 'Keep', style: 'cancel' },
         { text: 'Cancel it', style: 'destructive', onPress: go },
       ]);
@@ -174,7 +175,7 @@ function SubCard({ sub }: { sub: MealSubscription }) {
   // The endpoint and the hook already supported this; nothing ever called it, so
   // every skip was a phone call.
   function skipDay(f: MealFulfillment) {
-    Alert.alert(
+    showAlert(
       'Skip this meal?',
       `${fmtDay(f.date)} · ${f.slot === 'lunch' ? 'Lunch' : 'Dinner'}. You won't be charged for it — the credit applies to your next cycle.`,
       [
@@ -186,7 +187,7 @@ function SubCard({ sub }: { sub: MealSubscription }) {
               { id: sub.id, action: 'skip', date: f.date },
               {
                 onError: (err) =>
-                  Alert.alert(
+                  showAlert(
                     "Couldn't skip this meal",
                     // The server is authoritative on the cutoff; surfacing its
                     // reason beats guessing at the customer ("it MAY be too
