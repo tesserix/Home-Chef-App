@@ -41,17 +41,17 @@ type ChefAvailability = models.ChefAvailability
 // minutes-since-midnight (or -1 when absent/invalid). Keeping the core pure over primitives makes
 // every branch unit-testable with no DB or wall clock.
 type availInputs struct {
-	nowMin          int
-	acceptingOrders bool
-	pausedUntilMin  int  // -1 when not paused (or the pause already elapsed)
-	accountPaused   bool // the chef paused their whole ACCOUNT (users.is_active=false)
-	scheduleGates   bool // auto-schedule ON and today has an open (non-closed) schedule row
-	schedOpenMin    int  // -1 when absent/invalid
-	schedCloseMin   int  // -1 when absent/invalid
-	dailyCloseMin   int  // effective à-la-carte close = later of the set cutoffs; -1 when cutoffs off/none
-	pastDailyClose  bool
-	platformOpen    bool
-	platformOpenMin int // today's platform open; -1 when unconfigured / all-day
+	nowMin           int
+	acceptingOrders  bool
+	pausedUntilMin   int  // -1 when not paused (or the pause already elapsed)
+	accountPaused    bool // the chef paused their whole ACCOUNT (users.is_active=false)
+	scheduleGates    bool // auto-schedule ON and today has an open (non-closed) schedule row
+	schedOpenMin     int  // -1 when absent/invalid
+	schedCloseMin    int  // -1 when absent/invalid
+	dailyCloseMin    int  // effective à-la-carte close = later of the set cutoffs; -1 when cutoffs off/none
+	pastDailyClose   bool
+	platformOpen     bool
+	platformOpenMin  int // today's platform open; -1 when unconfigured / all-day
 	platformCloseMin int // today's platform close; -1 when unconfigured / all-day
 }
 

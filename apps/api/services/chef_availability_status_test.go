@@ -67,7 +67,7 @@ func TestAvail_CutoffBeyondWindow_StaysOpen(t *testing.T) {
 
 // Opening soon: auto-schedule kitchen, before today's open, opens in 15 min.
 func TestAvail_OpeningSoon_Schedule(t *testing.T) {
-	in := baseOpen(9*60 + 45) // 9:45am, not yet open
+	in := baseOpen(9*60 + 45)  // 9:45am, not yet open
 	in.acceptingOrders = false // cron hasn't flipped it on yet
 	in.scheduleGates = true
 	in.schedOpenMin = 10 * 60 // opens 10:00 → 15 min
