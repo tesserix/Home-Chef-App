@@ -30,7 +30,7 @@ import {
 } from '../../lib/features';
 import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, useDialog } from '@homechef/mobile-shared/ui';
 import { hasPasswordProvider } from '@homechef/mobile-shared/auth';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { Alert } from 'react-native';
@@ -134,19 +134,25 @@ export default function ProfileScreen() {
   // Only email/password accounts can change a password; SSO accounts have no
   // password credential, so that row is hidden for them.
   const [canChangePassword] = useState(() => hasPasswordProvider());
+  const dialog = useDialog();
 
   function handleLogout() {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out',
-        style: 'destructive',
-        onPress: () => {
-          useAuthStore.getState().logout();
-          router.replace('/(auth)/login');
+    dialog.confirm({
+      title: 'Log out?',
+      message: "You'll need to sign in again to place an order.",
+      accentColor: customerColors.coral.DEFAULT,
+      actions: [
+        { label: 'Cancel', cancel: true },
+        {
+          label: 'Log out',
+          destructive: true,
+          onPress: () => {
+            useAuthStore.getState().logout();
+            router.replace('/(auth)/login');
+          },
         },
-      },
-    ]);
+      ],
+    });
   }
 
   if (isLoading) {
@@ -405,6 +411,9 @@ export default function ProfileScreen() {
         </Pressable>
 
       </KeyboardAwareScrollView>
+
+      {/* Branded confirmations, replacing the stock platform alert. */}
+      {dialog.element}
     </SafeAreaView>
   );
 }

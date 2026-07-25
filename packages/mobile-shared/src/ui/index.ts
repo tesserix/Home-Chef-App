@@ -6,6 +6,8 @@ export { EmptyState } from './EmptyState';
 export { Skeleton, SkeletonGroup } from './Skeleton';
 export { ToastProvider, useToast } from './Toast';
 export { Sheet, type SheetHandle } from './Sheet';
+export { Dialog, type DialogProps, type DialogAction } from './Dialog';
+export { useDialog, type ConfirmOptions } from './useDialog';
 export { SheetBase, type SheetBaseProps } from './SheetBase';
 export { UndoSnackbarProvider, useUndoSnackbar } from './UndoSnackbar';
 export { OnboardingScaffold } from './OnboardingScaffold';

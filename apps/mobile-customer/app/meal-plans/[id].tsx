@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
+import { useDialog } from '@homechef/mobile-shared/ui';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -47,30 +48,40 @@ export default function MealPlanDetailScreen() {
   const { confirmSkip, skipping } = useSkipDayFlow(plan?.id);
   // Approve & pay / reject — the shared flow, identical to the Home card + chef sheet.
   const approval = useMealPlanApproval(plan, { onDone: () => router.back() });
+  const dialog = useDialog();
 
   function handleCancel() {
     if (!id) return;
-    Alert.alert(
-      'Cancel this plan?',
-      "You haven't been served yet, so you'll be fully refunded. This can't be undone.",
-      [
-        { text: 'Keep plan', style: 'cancel' },
+    dialog.confirm({
+      title: 'Cancel this plan?',
+      message:
+        "You haven't been served yet, so you'll be fully refunded. This can't be undone.",
+      accentColor: customerColors.coral.DEFAULT,
+      actions: [
+        { label: 'Keep plan', cancel: true },
         {
-          text: 'Cancel plan',
-          style: 'destructive',
+          label: 'Cancel plan',
+          destructive: true,
           onPress: () =>
             cancel.mutate(id, {
               onSuccess: () =>
-                Alert.alert(
-                  'Plan cancelled',
-                  'Your plan was cancelled and any advance refunded.',
-                  [{ text: 'OK', onPress: () => router.back() }],
-                ),
-              onError: () => Alert.alert('Something went wrong', 'Please try again.'),
+                dialog.confirm({
+                  title: 'Plan cancelled',
+                  message: 'Your plan was cancelled and any advance refunded.',
+                  accentColor: customerColors.coral.DEFAULT,
+                  actions: [{ label: 'OK', onPress: () => router.back() }],
+                }),
+              onError: () =>
+                dialog.confirm({
+                  title: 'Something went wrong',
+                  message: 'Please try again.',
+                  accentColor: customerColors.coral.DEFAULT,
+                  actions: [{ label: 'OK' }],
+                }),
             }),
         },
       ],
-    );
+    });
   }
 
   if (isLoading) {
@@ -325,6 +336,9 @@ export default function MealPlanDetailScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      {/* Branded confirmations, replacing the stock platform alert. */}
+      {dialog.element}
     </SafeAreaView>
   );
 }
