@@ -48,6 +48,23 @@ type ChefProfile struct {
 	IssueCount      int        `gorm:"default:0" json:"issueCount"`
 	IsVerified      bool       `gorm:"default:false" json:"verified"`
 	VerifiedAt      *time.Time `gorm:"" json:"verifiedAt"`
+
+	// Mode selects which Razorpay credential set, which visibility rules and
+	// which data partition apply to this kitchen. Defaults to live so every
+	// existing chef and every new onboarding is a real kitchen unless an admin
+	// explicitly says otherwise.
+	Mode string `gorm:"type:varchar(4);not null;default:'live';index" json:"mode"`
+
+	// FirstLiveAt is stamped the first time this chef becomes live and is never
+	// cleared. It distinguishes a born-test kitchen (nil — hidden from customers
+	// entirely, since nobody has heard of it) from an established kitchen
+	// temporarily flipped to test for debugging (set — still listed, shown as
+	// closed, so its regulars don't think it shut down).
+	FirstLiveAt *time.Time `gorm:"" json:"firstLiveAt,omitempty"`
+
+	// ActiveTestSessionID points at the open ChefTestSession while Mode is
+	// "test", and is nil while live.
+	ActiveTestSessionID *uuid.UUID `gorm:"type:uuid" json:"activeTestSessionId,omitempty"`
 	IsActive        bool       `gorm:"default:true" json:"isActive"`
 	AcceptingOrders bool       `gorm:"default:true" json:"acceptingOrders"`
 	// AutoScheduleEnabled opts the kitchen into schedule-driven open/close: when
@@ -267,6 +284,16 @@ const KitchenTypeHome = "home_kitchen"
 func (c *ChefProfile) IsHomeKitchen() bool {
 	return c.KitchenType == "" || c.KitchenType == KitchenTypeHome
 }
+
+// IsTestMode reports whether this kitchen currently inhabits the test partition.
+func (c *ChefProfile) IsTestMode() bool { return IsTestMode(c.Mode) }
+
+// IsBornTest reports whether this kitchen has never been live. A born-test
+// kitchen is hidden from customers outright — nobody has heard of it, so it
+// should not exist for them. A kitchen that HAS been live and is currently in
+// test is shown as closed instead, because its regulars would read a sudden
+// disappearance as "they shut down", which is worse than "closed today".
+func (c *ChefProfile) IsBornTest() bool { return c.FirstLiveAt == nil }
 
 // DTOs
 type ChefProfileResponse struct {
