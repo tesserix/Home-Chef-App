@@ -77,8 +77,13 @@ export function OnboardingScaffold({
 }: OnboardingScaffoldProps) {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      {/* iOS uses 'padding' to lift the sticky CTA above the keyboard. On
+          Android, 'height' fights the padding-applying SafeAreaView above —
+          the two re-measure each other on mount and loop ("Maximum update
+          depth exceeded"). Android's window already resizes for the keyboard
+          (adjustResize), so we leave behavior undefined (passthrough). */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.kav}
       >
         {/* Top bar */}
