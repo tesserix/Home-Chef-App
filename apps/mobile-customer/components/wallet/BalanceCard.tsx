@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Modal, Platform, Pressable, Text, View } from 'react-native';
-import { ChevronRight, Info, X } from 'lucide-react-native';
+import { Award, ChevronRight, Info, Wallet, X } from 'lucide-react-native';
 
 import { customerColors } from '@homechef/mobile-shared/theme';
 
@@ -77,53 +77,90 @@ function ExplainerSheet({ item, onClose }: { item: Explainer | null; onClose: ()
   );
 }
 
-/** One itemised source row: ⓘ, amount, label, and an optional chevron. */
+/** One funding source, on its own bounded row.
+ *
+ * The two sources previously ran together with a matching ⓘ apiece, which made
+ * them read as one list of similar things. They are not similar: one is credit,
+ * one is points, and they behave differently at checkout. Each now carries its
+ * own icon and sits in a separated row so the difference is visible before the
+ * label is read. */
 function SourceRow({
+  icon,
   amount,
   label,
+  caption,
   onInfo,
   onPress,
 }: {
+  icon: React.ReactNode;
   amount: string;
   label: string;
+  caption?: string;
   onInfo: () => void;
   onPress?: () => void;
 }) {
   return (
-    <View className="flex-row items-center">
-      <Pressable
-        onPress={onInfo}
-        className="h-11 w-11 items-center justify-center"
-        accessibilityRole="button"
-        accessibilityLabel={`About ${label}`}
-        hitSlop={4}
-      >
-        <Info size={18} color={customerColors.charcoal.soft} />
-      </Pressable>
-      <Pressable
-        onPress={onPress}
-        disabled={!onPress}
-        className="min-h-[44px] flex-1 flex-row items-center justify-between"
-        accessibilityRole={onPress ? 'button' : undefined}
-        accessibilityLabel={onPress ? `${amount} ${label}` : undefined}
-      >
-        {({ pressed }) => (
-          <>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      className="min-h-[72px] flex-row items-center gap-3 px-4 py-3"
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? `${label}, ${amount}` : undefined}
+    >
+      {({ pressed }) => (
+        <>
+          <View
+            className="h-10 w-10 items-center justify-center rounded-full"
+            style={{
+              backgroundColor: customerColors.surface.soft,
+              opacity: pressed && Platform.OS === 'ios' ? 0.6 : 1,
+            }}
+          >
+            {icon}
+          </View>
+
+          <View className="flex-1">
+            <View className="flex-row items-center gap-1.5">
+              <Text
+                className="text-[15px]"
+                style={{ color: customerColors.charcoal.soft }}
+              >
+                {label}
+              </Text>
+              {/* Its own hit target, so tapping "what is this?" never navigates. */}
+              <Pressable
+                onPress={onInfo}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={`About ${label}`}
+              >
+                <Info size={15} color={customerColors.charcoal.soft} />
+              </Pressable>
+            </View>
             <Text
-              className="text-[16px]"
+              className="mt-0.5 text-[17px] font-semibold"
               style={{
                 color: customerColors.charcoal.DEFAULT,
                 fontVariant: ['tabular-nums'],
-                opacity: pressed && Platform.OS === 'ios' ? 0.6 : 1,
               }}
             >
-              {amount} — {label}
+              {amount}
+              {caption ? (
+                <Text
+                  className="text-[15px] font-normal"
+                  style={{ color: customerColors.charcoal.soft }}
+                >
+                  {'  '}
+                  {caption}
+                </Text>
+              ) : null}
             </Text>
-            {onPress ? <ChevronRight size={18} color={customerColors.charcoal.soft} /> : null}
-          </>
-        )}
-      </Pressable>
-    </View>
+          </View>
+
+          {onPress ? <ChevronRight size={18} color={customerColors.charcoal.soft} /> : null}
+        </>
+      )}
+    </Pressable>
   );
 }
 
@@ -143,58 +180,93 @@ export function BalanceCard({
   return (
     <>
       <View
-        className="rounded-2xl px-5 pb-5 pt-4"
-        style={{ backgroundColor: customerColors.surface.soft }}
+        className="overflow-hidden rounded-2xl border"
+        style={{
+          backgroundColor: customerColors.canvas,
+          borderColor: customerColors.hairline,
+        }}
       >
-        <Text className="text-[15px]" style={{ color: customerColors.charcoal.soft }}>
-          Fe3dr balance
-        </Text>
-        <Text
-          className="mt-1 text-[40px] font-bold"
-          style={{
-            color: customerColors.charcoal.DEFAULT,
-            fontVariant: ['tabular-nums'],
-            letterSpacing: -0.5,
-          }}
+        {/* Headline block — tinted so the total reads as a summary of the rows
+            beneath it rather than as another row. */}
+        <View
+          className="flex-row items-center px-5 pb-5 pt-5"
+          style={{ backgroundColor: customerColors.surface.soft }}
         >
-          {money(total)}
-        </Text>
-
-        <View className="mt-3 gap-0.5">
-          <SourceRow
-            amount={money(walletBalance)}
-            label="Wallet credit"
-            onPress={onPressWallet}
-            onInfo={() =>
-              setExplainer({
-                title: 'Wallet credit',
-                body:
-                  'Credit from refunds, referrals and promotions. It never expires and there is no limit on how much you can use in one order. It can be spent on Fe3dr only — it cannot be withdrawn to a bank account.',
-              })
-            }
-          />
-          <SourceRow
-            amount={money(pointsValue)}
-            label={`${points(pointsBalance)} loyalty points`}
-            onPress={onPressPoints}
-            onInfo={() =>
-              setExplainer({
-                title: 'Loyalty points',
-                body: `Points you earn on delivered orders. Unlike wallet credit they expire ${
-                  expiryDays === 365 ? 'a year' : `${expiryDays} days`
-                } after you earn them, and there are limits on spending: up to ${Math.round(
-                  maxRedeemPct * 100,
-                )}% of the food total on any one order, and ${money(
-                  monthlyCap,
-                )} across a rolling 30 days.`,
-              })
-            }
-          />
+          <View className="flex-1">
+            <Text className="text-[15px]" style={{ color: customerColors.charcoal.soft }}>
+              Fe3dr balance
+            </Text>
+            <Text
+              className="mt-1 text-[40px] font-bold"
+              style={{
+                color: customerColors.charcoal.DEFAULT,
+                fontVariant: ['tabular-nums'],
+                letterSpacing: -0.5,
+              }}
+            >
+              {money(total)}
+            </Text>
+          </View>
+          {/* The purse marks what this card is at a glance. Coral tint rather
+              than a coral fill: it is a label, not something to press. */}
+          <View
+            className="h-14 w-14 items-center justify-center rounded-full"
+            style={{ backgroundColor: customerColors.coral.tint }}
+          >
+            <Wallet size={26} color={customerColors.coral.DEFAULT} />
+          </View>
         </View>
+
+        {/* Sources, each bounded by a hairline. */}
+        <View className="h-px" style={{ backgroundColor: customerColors.hairline }} />
+
+        <SourceRow
+          icon={<Wallet size={19} color={customerColors.charcoal.DEFAULT} />}
+          label="Wallet credit"
+          amount={money(walletBalance)}
+          onPress={onPressWallet}
+          onInfo={() =>
+            setExplainer({
+              title: 'Wallet credit',
+              body:
+                'Credit from refunds, referrals and promotions. It never expires and there is no limit on how much you can use in one order. It can be spent on Fe3dr only — it cannot be withdrawn to a bank account.',
+            })
+          }
+        />
+
+        <View
+          className="h-px"
+          style={{ backgroundColor: customerColors.hairline, marginLeft: 68 }}
+        />
+
+        <SourceRow
+          icon={<Award size={19} color={customerColors.coral.DEFAULT} />}
+          label="Loyalty points"
+          amount={money(pointsValue)}
+          caption={`${points(pointsBalance)} pts`}
+          onPress={onPressPoints}
+          onInfo={() =>
+            setExplainer({
+              title: 'Loyalty points',
+              body: `Points you earn on delivered orders. Unlike wallet credit they expire ${
+                expiryDays === 365 ? 'a year' : `${expiryDays} days`
+              } after you earn them, and there are limits on spending: up to ${Math.round(
+                maxRedeemPct * 100,
+              )}% of the food total on any one order, and ${money(
+                monthlyCap,
+              )} across a rolling 30 days.`,
+            })
+          }
+        />
+
+        <View className="h-px" style={{ backgroundColor: customerColors.hairline }} />
 
         {/* The one rule a customer must understand about credit, phrased exactly
             as it is on the checkout credits card. */}
-        <Text className="mt-3 text-[13px]" style={{ color: customerColors.charcoal.soft }}>
+        <Text
+          className="px-4 py-3 text-[13px]"
+          style={{ color: customerColors.charcoal.soft, backgroundColor: customerColors.surface.soft }}
+        >
           Usable on food &amp; delivery. Fees and taxes are paid separately.
         </Text>
       </View>
