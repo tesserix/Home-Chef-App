@@ -138,10 +138,12 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	// re-issue the SAME idempotency-keyed refund on a cron until it lands. Do NOT release
 	// the reservation on a deferral — the refund is still owed, just not yet issued.
 	var refundID string
+	deferred := false
 	if amountPaise > 0 {
 		rzp := services.GetRazorpay()
 		if rzp == nil {
 			refundID = fmt.Sprintf("%s%d", refundPendingRetryPrefix, amountPaise)
+			deferred = true
 			log.Printf("chef cancel: razorpay client unavailable for order %s; deferring refund of %d paise to the retry cron", order.ID, amountPaise)
 		} else {
 			refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
@@ -162,6 +164,7 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 			})
 			if err != nil {
 				refundID = fmt.Sprintf("%s%d", refundPendingRetryPrefix, amountPaise)
+				deferred = true
 				log.Printf("chef cancel: gateway refund failed for order %s (%d paise); deferring to the retry cron: %v", order.ID, amountPaise, err)
 			} else {
 				refundID = refundResp.ID
@@ -187,6 +190,13 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
+	}
+	if deferred {
+		// Fire the durable Temporal retry immediately instead of waiting for the next
+		// RetryDeferredCancelRefunds cron tick (up to ~12 minutes) — that cron still
+		// backstops if Temporal is down or this workflow never completes. Both paths
+		// call the gateway with the SAME idempotency key, so they can never double-refund.
+		services.StartDeferredRefundFlow(order.ID, order.RazorpayPaymentID, amountPaise)
 	}
 	// Cross-guard the payout hold (#457) — the customer was fully refunded, so the
 	// chef must not be paid. Best-effort; never fail the cancel on a hold-drive error.

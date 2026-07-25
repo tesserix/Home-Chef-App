@@ -50,6 +50,10 @@ func main() {
 		_, _, err := services.AutoConfirmOrderReceipt(database.DB, orderID)
 		return err
 	}
+	// Durable deferred chef-cancel gateway-refund retry — fires immediately on a
+	// deferred cancel refund instead of waiting for the cron backstop.
+	workflows.GatewayRefundFunc = services.GatewayRefundForWorkflow
+	workflows.PersistRefundIDFunc = services.PersistDeferredRefundID
 	// Durable mixed wallet + external payment flow (wallet-ledger Phase 5) — reserve/
 	// capture/release ledger holds. Inert until WALLET_PAYMENT_FLOW_ENABLED + the ledger
 	// are live; the activities are idempotent so a retry never double-moves money.
@@ -85,11 +89,14 @@ func main() {
 			Workflows(workflows.OnboardingActivationWorkflow).
 			Activities(workflows.ActivateChefOnboardingActivity),
 		// Durable mixed wallet + external payment flow (wallet-ledger Phase 5) —
-		// hold → await gateway → capture/release compensation.
+		// hold → await gateway → capture/release compensation. Also carries the
+		// deferred chef-cancel gateway-refund retry (fires immediately on a
+		// deferred cancel; RetryDeferredCancelRefunds cron remains the backstop).
 		temporal.Queue(temporal.TaskQueuePayments).
-			Workflows(workflows.WalletPaymentWorkflow).
+			Workflows(workflows.WalletPaymentWorkflow, workflows.DeferredRefundWorkflow).
 			Activities(workflows.PlaceWalletHoldActivity, workflows.CaptureWalletHoldActivity,
-				workflows.ReleaseWalletHoldActivity),
+				workflows.ReleaseWalletHoldActivity, workflows.GatewayRefundActivity,
+				workflows.PersistRefundIDActivity),
 		// Scheduled jobs (statements, reconciliation, FSSAI, availability, audit).
 		services.RegisterCronWorker(),
 	); err != nil {

@@ -170,6 +170,14 @@ type Config struct {
 	// payout-auto-confirm cron remains the fallback either way; this flow only
 	// shortens the wait when Temporal + this flag are both on.
 	ConfirmReceiptFlowEnabled bool
+	// DeferredRefundFlowEnabled gates firing the durable Temporal retry
+	// (workflows.DeferredRefundWorkflow) the instant a chef-cancel gateway
+	// refund is deferred (Razorpay unreachable/erroring), instead of waiting
+	// for the next services.RetryDeferredCancelRefunds cron tick (up to ~12
+	// minutes). On by default; set DEFERRED_REFUND_FLOW_ENABLED=false to
+	// hard-disable. The cron sweep remains the fallback either way, so
+	// disabling this only slows down (never breaks) a deferred refund.
+	DeferredRefundFlowEnabled bool
 	// OnboardingWorkflowEnabled gates running chef-onboarding activation as a
 	// durable Temporal workflow (#126) instead of the inline approval side
 	// effects. Default OFF — the inline activation stays authoritative until ops
@@ -253,6 +261,7 @@ func Load() {
 	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
 	orderSaga, _ := strconv.ParseBool(getEnv("ORDER_SAGA_ENABLED", "false"))
 	confirmReceiptFlow, _ := strconv.ParseBool(getEnv("CONFIRM_RECEIPT_FLOW_ENABLED", "true"))
+	deferredRefundFlow, _ := strconv.ParseBool(getEnv("DEFERRED_REFUND_FLOW_ENABLED", "true"))
 	onboardingWorkflow, _ := strconv.ParseBool(getEnv("ONBOARDING_WORKFLOW_ENABLED", "false"))
 	piiEncryption, _ := strconv.ParseBool(getEnv("PII_ENCRYPTION_ENABLED", "false"))
 	emailOTP, _ := strconv.ParseBool(getEnv("EMAIL_OTP_ENABLED", "true"))
@@ -388,6 +397,7 @@ func Load() {
 		CateringDepositEnabled:          cateringDeposit,
 		OrderSagaEnabled:                orderSaga,
 		ConfirmReceiptFlowEnabled:       confirmReceiptFlow,
+		DeferredRefundFlowEnabled:       deferredRefundFlow,
 		OnboardingWorkflowEnabled:       onboardingWorkflow,
 		PIIEncryptionEnabled:            piiEncryption,
 		EmailOTPEnabled:                 emailOTP,
