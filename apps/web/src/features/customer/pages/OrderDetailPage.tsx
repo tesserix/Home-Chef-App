@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
-import { useRequestCancellation } from '@/features/customer/hooks/useCancellation';
+import { orderCancellable, useRequestCancellation } from '@/features/customer/hooks/useCancellation';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { formatDateTime, formatTime } from '@/shared/utils/format-date';
 import { Button } from '@/shared/components/ui';
@@ -291,7 +291,7 @@ export default function OrderDetailPage() {
   const status = STATUS_CONFIG[order.status];
   const StatusIcon = status.icon;
   const isActive = !['delivered', 'cancelled', 'refunded'].includes(order.status);
-  const canCancel = ['pending', 'accepted'].includes(order.status);
+  const canCancel = orderCancellable(order.status);
   // Report-an-issue eligibility mirrors the API guard: paid order, not cancelled (#37).
   const canReport = order.paymentStatus === 'completed' && order.status !== 'cancelled';
 
