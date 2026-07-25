@@ -57,18 +57,24 @@ export default function PaymentResult() {
   const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
-    if (!orderId) return;
+    // Always arm the grace timer — even with no orderId. Without this, a result
+    // screen reached without a resolvable order id (or holding a status the poll
+    // never turns terminal) spins on "Confirming your payment…" forever.
     const t = setTimeout(() => setTimedOut(true), CONFIRM_TIMEOUT_MS);
     return () => clearTimeout(t);
-  }, [orderId]);
+  }, []);
 
   // Derive the displayed state from the real payment status (+ grace window).
+  // After the grace window, ANYTHING that isn't a confirmed success is a failure
+  // the user can retry — never an endless spinner. A late webhook that flips the
+  // status to 'completed' still wins (success is checked first and the poll keeps
+  // running while pending), so a slow-but-successful payment recovers to success.
   const state: 'checking' | 'success' | 'failure' =
     paymentStatus === 'completed'
       ? 'success'
       : paymentStatus === 'failed' ||
-          (timedOut && (!paymentStatus || paymentStatus === 'pending')) ||
-          (!orderId && Boolean(params.error))
+          (!orderId && Boolean(params.error)) ||
+          (timedOut && paymentStatus !== 'completed')
         ? 'failure'
         : 'checking';
 
