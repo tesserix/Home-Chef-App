@@ -122,4 +122,10 @@ As each device/admin case is run, update its **Status** cell here (✅ / ❌ + n
 - **B1–B5, F5, G2:** admin session on `tesserix.app` (bulk approve runs real approvals).
 
 ## Bugs found & fixes
-_(none yet — updated as runs proceed)_
+
+- **BUG-1 (vendor Settings → "Auto open/close by hours" toggle read stale) — 🔧 FIXED (`0cae05c1`):** root cause was backend — `GetChefProfile` (`/chef/profile`) returned `acceptingOrders` but **omitted `autoScheduleEnabled`**, so the toggle always re-rendered OFF regardless of the saved value; a chef then saw the wrong state and a single tap could flip the real value the wrong way (I had to double-tap to reach OFF while opening Amma). Fix adds `autoScheduleEnabled` to the response map — same class of bug the self-delivery fields already fixed. Deploys with the next API image.
+
+## Test-run notes
+- **Amma ka Kitchen made open** (per request "always use Amma"): disabled its auto-schedule via vendor Settings → `accepting=true, autoSchedule=false, avail=open`. Now orderable for the customer-side tests.
+- **Availability propagation ✅:** Amma flipped **Closed → Open** in the customer app after the change (card + chef-detail header both updated on refresh).
+- **Menu gate on Amma ✅:** Amma's menu shows only approved dishes (Goan Recheado Fish ₹380, Lamb Biryani ₹320).
