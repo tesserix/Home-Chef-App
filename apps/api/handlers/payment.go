@@ -1083,6 +1083,9 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			if err := releaseRefundCapacity(tx); err != nil {
 				return err
 			}
+			if err := services.ReverseOrderLoyalty(tx, order.ID); err != nil {
+				return err
+			}
 			return services.EnqueueEvent(tx, "orders.refunded", "order.refunded", userID, map[string]interface{}{
 				"order_id": order.ID.String(), "order_number": order.OrderNumber,
 				"refund_amount": refundAmount, "reason": req.Reason, "initiated_by": initiatedBy,
