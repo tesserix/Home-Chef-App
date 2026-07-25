@@ -298,3 +298,73 @@ web before launch, not after. Same for chefs on the portal.
 
 **P3 — hardening**
 10. Introduce tests for `apps/web` (currently zero).
+
+---
+
+## 11. Open risks after the P0 merge (2026-07-25)
+
+P0 shipped to `main`. These came out of the whole-branch review and are **not**
+fixed — they need a decision or cluster access, not a code change.
+
+### 11.1 All three browser apps may share one session cookie
+
+The restored registry entries declare `sessionCookie: hc_session` (web) and
+`hc_vendor_session` (vendor-portal), but `App.SessionCookie`
+(`internal/productregistry/registry.go`) **is never read by any Go code**. The
+cookie name is hardcoded in `cmd/server/main.go` as `hc_session`, with
+`Domain: SESSION_COOKIE_DOMAIN` — documented elsewhere as `.fe3dr.com`.
+
+Before P0 only `admin-portal` was a browser cookie client, so this never bit.
+With `web` and `vendor-portal` restored, a chef signing in at
+`vendors.fe3dr.com` may overwrite the customer session at `fe3dr.com` and vice
+versa — and the surviving cookie carries the other app's `pool`/`role`.
+
+**Action:** confirm `SESSION_COOKIE_DOMAIN` on the deployed auth-bff, then
+either honour `App.SessionCookie` in the BFF or delete the field from the YAML
+so it stops implying isolation that does not exist. Symptom if missed:
+"logging into the chef portal signs me out of the customer site" — easy to
+misdiagnose as a GIP bug.
+
+### 11.2 Route ownership between the landing and the SPA is unspecified
+
+Both `apps/web-landing` and `apps/web` are intended to serve `fe3dr.com`, split
+by path, but the split lives only in prose in the P0 plan and is incomplete:
+
+- `/chef/*` collides — the landing owns `/chef/[slug]` (SEO), the SPA owns
+  `/chef/dashboard|menu|orders|earnings|profile|social|catering`.
+- `/privacy`, `/terms`, `/refund` — **both apps ship a full document at each
+  path**, and the SPA links to them with react-router `Link` from consent
+  surfaces (register, checkout). The same URL renders different legal text
+  depending on whether the user arrived by client-side nav or a hard load.
+- Unassigned: `/cookies` (SPA only), `/eula`, `/vendor-terms`,
+  `/account-deletion` (landing only), and the SPA's catch-all
+  `<Route path="*" → Navigate to="/">`, which bounces to a landing-owned path.
+
+**Action:** write the ingress/VirtualService rule in `tesserix-k8s` before
+either app deploys. This is the same decision as the `homechef-web` slot
+conflict in §8.
+
+### 11.3 Deploy dependencies
+
+1. `homechef-products.yaml` is baked into the auth-bff image, so the login fix
+   in `46257856` is **inert until auth-bff is rebuilt and synced**. Verify the
+   image actually reached the `homechef` namespace before calling the outage
+   fixed. Mounting the registry from a ConfigMap is the permanent answer.
+2. The landing's `/login` and `/register` links 404 until `apps/web` is served
+   on that origin — and the nav link now renders on every SEO page, so the
+   blast radius of shipping the landing first is wider than the home page.
+3. `apps/web` has no current image; producing one needs a CI run.
+
+### 11.4 Smaller items
+
+- `account_lifecycle.go` deactivate response `notice` still says "Sign in again
+  any time to reactivate it" — the same falsehood the web toast had, server-side.
+  Web ignores `notice`; any client rendering it would mislead.
+- `account_deleted` is detected in `api-client.ts` but ignored in
+  `AuthProvider`, so a soft-deleted account with a live session hits silent
+  403s everywhere except `/data-privacy`.
+- `localhost:5174` in the registry can never match: `apps/vendor-portal`'s vite
+  config uses port 5173, the same as `apps/web`.
+- The mobile customer hook `apps/mobile-customer/hooks/useCancellation.ts` still
+  has the `.catch(() => null)` that swallows every error — the bug web's copy
+  was narrowed away from.
