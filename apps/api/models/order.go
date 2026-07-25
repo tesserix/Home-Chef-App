@@ -153,7 +153,19 @@ type Order struct {
 	// still settled in full (the wallet-covered slice is topped up from the platform
 	// balance). Recorded at payment-create, debited from the wallet on capture.
 	WalletApplied float64 `gorm:"default:0" json:"walletApplied"`
-	PromoCode     string  `gorm:"" json:"promoCode,omitempty"`
+	// LoyaltyApplied is the rupee value of loyalty points spent on this order at
+	// checkout, and LoyaltyPointsSpent the points debited to fund it. Like
+	// WalletApplied these shrink the gateway capture but never the chef or driver
+	// payout — the platform funds the difference.
+	LoyaltyApplied     float64 `gorm:"default:0" json:"loyaltyApplied"`
+	LoyaltyPointsSpent float64 `gorm:"default:0" json:"loyaltyPointsSpent"`
+	// WalletRefunded / LoyaltyRefunded track how much of each funding source has
+	// ALREADY been returned to the customer. Without them, two successive partial
+	// refunds would each compute their share of the ORIGINAL slice and together
+	// return more than that source ever funded.
+	WalletRefunded  float64 `gorm:"default:0" json:"walletRefunded"`
+	LoyaltyRefunded float64 `gorm:"default:0" json:"loyaltyRefunded"`
+	PromoCode       string  `gorm:"" json:"promoCode,omitempty"`
 	// Currency is the 3-letter ISO code the customer is charged in. Frozen
 	// at order creation from the chef's settlement currency so later edits
 	// on the chef profile don't invalidate an in-flight payment.
