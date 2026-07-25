@@ -338,7 +338,10 @@ func (h *AdminHandler) GetActivities(c *gin.Context) {
 		Timestamp   time.Time `json:"timestamp"`
 	}
 
-	var activities []Activity
+	// Initialised, not declared nil: a nil slice serialises as JSON `null`
+	// rather than `[]`, and every client that does `data ?? []` or `.map()` on
+	// the result breaks on an account with no activity yet.
+	activities := []Activity{}
 
 	// Get recent orders as activities
 	var recentOrders []models.Order
@@ -439,7 +442,9 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 		LastOrderAt *string `json:"lastOrderAt,omitempty"`
 	}
 
-	var response []UserWithStats
+	// Initialised, not nil: a nil slice marshals to `null`, so a page with no
+	// rows would send {"data": null} and break any client that maps over it.
+	response := []UserWithStats{}
 	for _, u := range users {
 		uw := UserWithStats{User: u}
 
@@ -607,7 +612,9 @@ func (h *AdminHandler) GetChefs(c *gin.Context) {
 		OnlineStatus    string  `json:"onlineStatus"`
 	}
 
-	var response []ChefWithStats
+	// Initialised, not nil: a nil slice marshals to `null`, so a page with no
+	// rows would send {"data": null} and break any client that maps over it.
+	response := []ChefWithStats{}
 	for _, ch := range chefs {
 		cws := ChefWithStats{ChefProfile: ch}
 		cws.IsVerifiedAlias = ch.IsVerified
@@ -872,7 +879,9 @@ func (h *AdminHandler) GetAllOrders(c *gin.Context) {
 		ItemCount    int    `json:"itemCount"`
 	}
 
-	var response []OrderResponse
+	// Initialised, not nil: a nil slice marshals to `null`, so a page with no
+	// rows would send {"data": null} and break any client that maps over it.
+	response := []OrderResponse{}
 	for _, o := range orders {
 		name := ""
 		if o.Customer.FirstName != "" {
