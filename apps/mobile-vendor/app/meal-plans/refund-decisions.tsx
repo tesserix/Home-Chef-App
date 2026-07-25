@@ -1,7 +1,7 @@
 // Chef refund decisions (v2 refund flow — docs/meal-plan-refund-flow-design.md). A customer's
 // skip/cancel that lands within 12h of cook-start routes here: the chef may have started prep, so
 // they choose how much of the food to refund — Full / Half / None — or Decline (they'll serve it).
-// The amounts exclude the platform fee, GST, and delivery. After the chef decides Full/Half, an
+// The amounts cover the food + that day's delivery fee, excluding GST + the platform fee. After the chef decides Full/Half, an
 // admin pays it to the customer's wallet or original method.
 
 import {

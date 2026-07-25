@@ -84,7 +84,7 @@ func TestExecuteV2Refund_FullToWallet(t *testing.T) {
 
 	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, models.RefundProportionFull, models.RefundDestinationWallet))
 
-	require.Equal(t, 136.0, v2WalletBalance(t, db, u), "full = 160 − 0.15×160 = 136 (no GST/delivery)")
+	require.Equal(t, 146.0, v2WalletBalance(t, db, u), "full = (160 − 0.15×160) + 10 delivery = 146 (GST excluded, delivery included)")
 	status, stage, choice, dest := v2DayRow(t, db, day.ID)
 	require.Equal(t, string(models.MealPlanDayRefunded), status)
 	require.Equal(t, string(models.MPRefundResolved), stage)
@@ -100,7 +100,7 @@ func TestExecuteV2Refund_HalfToWallet(t *testing.T) {
 	plan, day := seedV2Day(t, db, u)
 
 	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, models.RefundProportionHalf, models.RefundDestinationWallet))
-	require.Equal(t, 68.0, v2WalletBalance(t, db, u), "half = 136/2")
+	require.Equal(t, 73.0, v2WalletBalance(t, db, u), "half = 146/2")
 	status, _, choice, _ := v2DayRow(t, db, day.ID)
 	require.Equal(t, string(models.MealPlanDayRefunded), status)
 	require.Equal(t, "half", choice)
@@ -132,5 +132,5 @@ func TestExecuteV2Refund_Idempotent(t *testing.T) {
 	// Reload the day (refund_txn_id + stage now set) and re-run.
 	day2 := &models.MealPlanDay{ID: day.ID, MealPlanID: plan.ID, Price: 160, CommissionRate: 0.15}
 	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day2, models.RefundProportionFull, models.RefundDestinationWallet))
-	require.Equal(t, 136.0, v2WalletBalance(t, db, u), "credited once, not twice")
+	require.Equal(t, 146.0, v2WalletBalance(t, db, u), "credited once, not twice")
 }

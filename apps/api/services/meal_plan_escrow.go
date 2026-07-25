@@ -80,18 +80,37 @@ func perDayFoodGST(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 	return plan.Tax * (day.Price / plan.Subtotal)
 }
 
-// perDaySkipRefund is the amount refunded to the customer when an ADMIN approves a
-// customer's day-skip (#422 policy change): the day's FOOD price minus the platform
-// commission on that food. The customer forfeits GST + delivery + commission; the chef,
-// who never cooked the meal, gets 0 (the full held transfer is reversed by
-// refundDayAmount). Distinct from perDayGross (the FULL make-whole refund used for
-// declined/undelivered/failed days). A missing/legacy rate falls back to the flat
-// DefaultCommissionRate, matching perDayNetPayout.
-func perDaySkipRefund(_ *models.MealPlan, day *models.MealPlanDay, rate float64) float64 {
+// perDayDeliveryRefund is the delivery fee the customer paid for ONE day, apportioned by that
+// day's share of the plan's food subtotal — the same basis perDayFoodGST uses (for equal-priced
+// days this equals the flat per-day delivery). The plan's total delivery is Total − Subtotal − Tax
+// (snapshotted at booking). Refunded on a cancelled/skipped meal-plan day (policy: the delivery fee
+// IS refundable; GST and the platform commission are not). 0 when the plan isn't loaded with its
+// snapshotted totals (e.g. a caller that Selected only id/number).
+func perDayDeliveryRefund(plan *models.MealPlan, day *models.MealPlanDay) float64 {
+	if plan == nil || plan.Subtotal <= 0 {
+		return 0
+	}
+	totalDelivery := plan.Total - plan.Subtotal - plan.Tax
+	if totalDelivery <= 0 {
+		return 0
+	}
+	return totalDelivery * (day.Price / plan.Subtotal)
+}
+
+// perDaySkipRefund is the amount refunded to the customer when a customer's day-skip / plan-cancel
+// is approved: the day's FOOD price minus the platform commission on that food, PLUS the day's
+// delivery fee. Policy (2026-07): the delivery fee for a cancelled/skipped meal-plan day IS
+// refunded; the customer forfeits only GST + the platform commission. The chef, who never cooked
+// the meal, gets 0 (the full held transfer is reversed by refundDayAmount). Distinct from perDayGross
+// (the FULL make-whole refund, which also returns GST). A missing/legacy rate falls back to the flat
+// DefaultCommissionRate, matching perDayNetPayout. Delivery is only added when the plan carries its
+// snapshotted totals (see perDayDeliveryRefund).
+func perDaySkipRefund(plan *models.MealPlan, day *models.MealPlanDay, rate float64) float64 {
 	if rate <= 0 || rate >= 1 {
 		rate = DefaultCommissionRate
 	}
-	return Round2(day.Price - rate*day.Price)
+	foodNet := day.Price - rate*day.Price
+	return Round2(foodNet + perDayDeliveryRefund(plan, day))
 }
 
 // perDayNetPayout is the chef's NET payout for a single day — the amount the held

@@ -50,7 +50,7 @@ func TestResolveMealPlanDaySkip_Approve_CreditsPartialAndWithholds(t *testing.T)
 	require.Equal(t, models.MealPlanDaySkipped, loadDayStatus(t, db, dayID), "approved → terminal skipped")
 	require.Equal(t, models.PayoutHoldWithheld, loadDayHold(t, db, dayID), "hold reversed out of the pay queue")
 	require.True(t, dayRefundTxnSet(t, db, dayID), "refund txn stamped")
-	require.Equal(t, 188.0, walletBalance(t, db, cust), "food (200) minus 6% commission (12) — GST/delivery forfeited")
+	require.Equal(t, 218.0, walletBalance(t, db, cust), "food (200) − 6% commission (12) + 30 delivery = 218 (GST forfeited, delivery refunded)")
 	require.Equal(t, models.MealPlanCompleted, loadPlanStatus(t, db, planID), "last day terminal → plan completes")
 	require.Equal(t, 1, countOutbox(t, db, SubjectMealPlanDayRefunded))
 }

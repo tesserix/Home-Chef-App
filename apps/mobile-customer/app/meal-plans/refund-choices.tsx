@@ -25,7 +25,7 @@ const slotLabel = (slot: string) => (slot ? slot.charAt(0).toUpperCase() + slot.
 // Refund choices inbox (v2 refund flow, RBI): the chef has agreed a refund (Full/Half) on a
 // skipped/cancelled day and — per RBI — the CUSTOMER decides where it goes. Wallet is instant store
 // credit (reusable); the original method is a real reversal in ~5–7 business days. Each amount here
-// already excludes the platform fee, GST, and delivery. The ≤12h counterpart of the immediate
+// covers the food + that day's delivery fee, excluding GST + the platform fee. The ≤12h counterpart of the immediate
 // prompt in useSkipDayFlow (there the customer is present; here they choose later, from a notification).
 
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -67,7 +67,8 @@ export default function RefundChoicesScreen() {
               <Text style={styles.intro}>
                 Your chef agreed a refund. Pick where it goes — your HomeChef wallet is instant, or
                 we can reverse it to your original payment method (per RBI, that takes 5–7 business
-                days). The platform fee, GST, and delivery aren’t refundable.
+                days). It covers the food and that day’s delivery fee; the GST and platform fee aren’t
+                refundable.
               </Text>
             ) : null
           }

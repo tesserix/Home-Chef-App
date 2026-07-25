@@ -1,8 +1,9 @@
 package services
 
-// meal_plan_refund_v2_test.go — pins the FIRM rule: the v2 refund base excludes the platform
-// fee, GST, and delivery. It is food − commission, scaled by the chef's Full/Half/None decision,
-// and always strictly less than the legacy make-whole gross (which wrongly included GST+delivery).
+// meal_plan_refund_v2_test.go — pins the refund rule: the v2 refund is (food − commission) PLUS the
+// day's delivery fee, scaled by the chef's Full/Half/None decision. Per the 2026-07 policy the
+// delivery fee IS refunded but GST and the platform commission are NOT, so it stays below the legacy
+// make-whole gross (which also returns GST).
 
 import (
 	"testing"
@@ -12,7 +13,7 @@ import (
 	"github.com/homechef/api/models"
 )
 
-func TestMealPlanRefundAmount_ExcludesFeeGSTDelivery(t *testing.T) {
+func TestMealPlanRefundAmount_IncludesDeliveryExcludesGSTAndFee(t *testing.T) {
 	plan := &models.MealPlan{
 		Subtotal: 320, Tax: 32, Total: 372, // 2 days: food 320, GST 32, delivery 20
 		Days: []models.MealPlanDay{
@@ -22,17 +23,18 @@ func TestMealPlanRefundAmount_ExcludesFeeGSTDelivery(t *testing.T) {
 	}
 	day := &plan.Days[0]
 
-	// Full = food − commission = 160 − 0.15×160 = 136 (no GST, no delivery).
-	require.Equal(t, 136.0, MealPlanRefundAmount(plan, day, models.RefundProportionFull))
-	require.Equal(t, 68.0, MealPlanRefundAmount(plan, day, models.RefundProportionHalf))
+	// Full = (food − commission) + the day's delivery = (160 − 24) + 10 = 146. Delivery IS
+	// refunded (the day's food-share of the plan's 20 delivery); GST + commission are NOT.
+	require.Equal(t, 146.0, MealPlanRefundAmount(plan, day, models.RefundProportionFull))
+	require.Equal(t, 73.0, MealPlanRefundAmount(plan, day, models.RefundProportionHalf))
 	require.Equal(t, 0.0, MealPlanRefundAmount(plan, day, models.RefundProportionNone))
 
-	// Proof it excludes GST + delivery: the legacy make-whole gross (food + GST + delivery)
-	// is strictly larger than even a FULL v2 refund.
+	// Still excludes GST: the legacy make-whole gross (food + GST + delivery) stays strictly
+	// larger than a FULL v2 refund, because gross also returns the GST the v2 refund omits.
 	gross := perDayGross(plan, day) // 160 + 16 GST + 10 delivery = 186
 	require.Equal(t, 186.0, gross)
 	require.Greater(t, gross, MealPlanRefundAmount(plan, day, models.RefundProportionFull),
-		"legacy gross includes GST+delivery; the v2 refund must never")
+		"gross includes GST; the v2 refund must not")
 }
 
 // Legacy days with no frozen commission rate fall back to DefaultCommissionRate (not 0),

@@ -284,7 +284,7 @@ export function useChooseRefundMedium() {
 
 // One refund the chef has agreed (Full/Half) that's now waiting on the customer to pick a medium
 // (wallet vs original). This is the ≤12h path: the chef decided while the customer was away, so
-// the customer picks later from the inbox/notification. Amount already excludes fee, GST, delivery.
+// the customer picks later from the inbox/notification. Amount = food + that day's delivery, excl. GST + fee.
 export interface RefundChoiceDay {
   dayId: string;
   mealPlanId: string;

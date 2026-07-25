@@ -6,9 +6,10 @@ package services
 // SkipMealPlanDay). This file executes the admin's decision:
 //
 //   - approve → the day becomes terminally `skipped`; the customer is refunded the day's
-//     FOOD price MINUS the platform commission (perDaySkipRefund) — they forfeit GST +
-//     delivery + commission — and the chef's held transfer is FULLY reversed (0 for a day
-//     never cooked). The plan completes if every day is now terminal.
+//     FOOD price MINUS the platform commission, PLUS the day's delivery fee (perDaySkipRefund) —
+//     they forfeit GST + commission but the delivery fee is refunded — and the chef's held
+//     transfer is FULLY reversed (0 for a day never cooked). The plan completes if every day is
+//     now terminal.
 //   - reject → the day returns to `confirmed`; its frozen hold is restored to none and the
 //     customer is told the skip was declined. No money moves.
 //

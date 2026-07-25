@@ -6,7 +6,7 @@ import { useSkipMealPlanDay, useChooseRefundMedium } from './useMealPlans';
 // screen and the "My plan" sheet behave identically. A skip >12h before cooking agrees a full
 // refund immediately, then — per RBI — the CUSTOMER picks the medium (wallet instant vs original
 // 5–7 days); a skip ≤12h goes to the chef to decide the amount first (customer picks the medium
-// later, from the notification). The refund always excludes the platform fee, GST, and delivery.
+// later, from the notification). The refund covers the food + that day's delivery, excluding GST + the platform fee.
 export function useSkipDayFlow(planId: string | undefined) {
   const skipDay = useSkipMealPlanDay();
   const chooseMedium = useChooseRefundMedium();
@@ -50,7 +50,7 @@ export function useSkipDayFlow(planId: string | undefined) {
     if (!planId) return;
     Alert.alert(
       'Skip this day?',
-      'More than 12 hours before your meal? You choose your refund right away. Closer than that, your chef reviews it (they may have started cooking). The refund is the food only — the platform fee, GST, and delivery aren’t refunded. This can’t be undone.',
+      'More than 12 hours before your meal? You choose your refund right away. Closer than that, your chef reviews it (they may have started cooking). The refund covers the food and that day’s delivery fee — the GST and platform fee aren’t refunded. This can’t be undone.',
       [
         { text: 'Back', style: 'cancel' },
         {
