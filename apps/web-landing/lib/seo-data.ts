@@ -159,6 +159,36 @@ export function getChefIndex(): Promise<SeoIndex> {
   return cached;
 }
 
+/**
+ * Slug emitted when a collection has no entries. Rendered as a 404 by the
+ * page's own not-found guard, and excluded from the sitemap.
+ */
+export const EMPTY_COLLECTION_SLUG = '__empty';
+
+/**
+ * Guarantees a dynamic route yields at least one param.
+ *
+ * `output: 'export'` refuses to build a dynamic route that produces no static
+ * paths, and reports it as:
+ *
+ *   Page "/chef/[slug]" is missing "generateStaticParams()" so it cannot be
+ *   used with "output: export" config.
+ *
+ * The function is not missing — the list is simply empty, which happens
+ * whenever the chef index is empty: a fresh environment, an API returning zero
+ * chefs, or a build-time outage that buildIndex() swallows into
+ * indexChefs([]). That fallback's stated intent ("API down at build → emit
+ * only the static pages") did not hold: an empty index failed the whole export
+ * rather than degrading, taking the marketing site's build down with it.
+ *
+ * One sentinel param keeps the export alive. It renders as a 404 and vanishes
+ * as soon as a single real entry exists, so it costs nothing once the platform
+ * has chefs.
+ */
+export function withExportFallback(params: { slug: string }[]): { slug: string }[] {
+  return params.length > 0 ? params : [{ slug: EMPTY_COLLECTION_SLUG }];
+}
+
 /** Short, unique-ish meta description for a chef. */
 export function chefMetaDescription(c: SeoChef): string {
   const where = c.city ? ` in ${c.city}` : '';

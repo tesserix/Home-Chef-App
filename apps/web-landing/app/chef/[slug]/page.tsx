@@ -5,7 +5,7 @@ import { SiteFooter } from '@/components/site-footer';
 import { JsonLd } from '@/components/seo/json-ld';
 import { AppCta } from '@/components/seo/app-cta';
 import { Breadcrumbs } from '@/components/seo/breadcrumbs';
-import { getChefIndex, chefMetaDescription } from '@/lib/seo-data';
+import { getChefIndex, chefMetaDescription, withExportFallback } from '@/lib/seo-data';
 import { restaurantSchema, breadcrumbSchema, chefUrl } from '@/lib/jsonld';
 import { SITE_NAME } from '@/lib/site';
 
@@ -13,7 +13,7 @@ export const dynamicParams = false;
 
 export async function generateStaticParams() {
   const { chefs } = await getChefIndex();
-  return chefs.map((c) => ({ slug: c.slug }));
+  return withExportFallback(chefs.map((c) => ({ slug: c.slug })));
 }
 
 export async function generateMetadata({

@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { CollectionView } from '@/components/seo/collection-view';
-import { getChefIndex } from '@/lib/seo-data';
+import { getChefIndex, withExportFallback } from '@/lib/seo-data';
 import { SITE_NAME } from '@/lib/site';
 
 export const dynamicParams = false;
 
 export async function generateStaticParams() {
   const { areas } = await getChefIndex();
-  return areas.map((a) => ({ slug: a.slug }));
+  return withExportFallback(areas.map((a) => ({ slug: a.slug })));
 }
 
 function intro(name: string, count: number): string {
