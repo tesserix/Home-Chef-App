@@ -163,6 +163,40 @@ web ordering is re-exposed to customers.
 
 ---
 
+## 5b. Defect: nobody can log in to the web portals
+
+**Severity: total outage of the surface. Found by logging in, 2026-07-25.**
+
+Signing in at `vendors.fe3dr.com` with a valid account fails. Observed order:
+
+| Request | Result |
+|---|---|
+| `POST identitytoolkit.googleapis.com/…/accounts:signInWithPassword` | **200** — GIP accepts the credentials |
+| `GET  /bff/auth/session` | 401 (expected, no session yet) |
+| `POST /bff/auth/exchange` | **400** `{"error":"unknown_host"}` |
+
+Cause: commit `0fd4e5cf` (#22, 2026-06-17) removed the `web`, `vendor-portal`
+and `delivery-portal` entries from `apps/auth-bff/homechef-products.yaml`.
+Only the OIDC browser handlers resolve apps by host, so with no entry for
+`vendors.fe3dr.com` the exchange cannot resolve an app and rejects every
+sign-in. The SPA itself still serves — the host returns 200 and looks healthy
+from outside, which is why this went unnoticed.
+
+`apps/vendor-portal/SUNSET.md` claims removing the registry entry was
+"deferred". It was not — it shipped in #22. That doc is wrong.
+
+**Fixed** in `46257856`: both entries restored verbatim, with host-resolution
+tests. The `HOMECHEF_CUSTOMER_CLIENT_SECRET` / `HOMECHEF_BUSINESS_CLIENT_SECRET`
+env vars they reference are still wired in `charts/apps/homechef-auth-bff` and
+`external-secrets/prod/homechef`, so no infra change is required.
+
+⚠️ **Requires a deploy to take effect.** `homechef-products.yaml` is baked into
+the image (`apps/auth-bff/Dockerfile:19` `COPY … /etc/auth-bff/`), so the fix
+needs an auth-bff rebuild + ArgoCD sync. Consider mounting the registry from a
+ConfigMap instead, so host changes stop requiring an image rebuild.
+
+---
+
 ## 6. Vendor parity — `apps/vendor-portal` vs `apps/mobile-vendor`
 
 28 endpoints missing from the portal:
