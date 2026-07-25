@@ -56,6 +56,7 @@ interface ApiChefProfile {
   availability?: import('../types/customer').ChefAvailability;
   latitude?: number;
   longitude?: number;
+  mode?: 'live' | 'test';
   foodSafetyBadge?: boolean;
   offersPickup?: boolean;
   offersSelfDelivery?: boolean;
@@ -113,6 +114,7 @@ export function mapChef(c: ApiChefProfile): Chef {
     deliveryTime: c.prepTime,
     minimumOrder: c.minimumOrder,
     deliveryFee: c.deliveryFee,
+    mode: c.mode === 'test' ? 'test' : 'live',
     foodSafetyBadge: Boolean(c.foodSafetyBadge),
     offersPickup: c.offersPickup,
     offersSelfDelivery: c.offersSelfDelivery,

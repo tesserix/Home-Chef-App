@@ -162,6 +162,15 @@ export function ChefCard({ chef }: ChefCardProps) {
                   <Text style={styles.chefName} numberOfLines={1}>
                     {chef.name}
                   </Text>
+                  {/* Sandbox kitchen. Only accounts on the test-mode allowlist
+                      ever receive one of these from the API, so this renders for
+                      nobody else — but a tester must be able to tell a fake
+                      kitchen from a real one without opening it. */}
+                  {chef.mode === 'test' && (
+                    <View style={styles.testChip}>
+                      <Text style={styles.testChipText}>TEST</Text>
+                    </View>
+                  )}
                   {chef.reviewCount === 0 ? (
                     // R1 — never render "★ 0.0 (0)". Zero reviews reads as
                     // "New" instead, so a fresh chef isn't shown as a bad one.
@@ -372,6 +381,19 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
     paddingHorizontal: 7,
     paddingVertical: 2,
+  },
+  testChip: {
+    flexShrink: 0,
+    backgroundColor: '#FDE68A',
+    borderRadius: 9999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  testChipText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    letterSpacing: 0.4,
+    color: '#78350F',
   },
   newChipText: {
     fontFamily: 'Inter-SemiBold',

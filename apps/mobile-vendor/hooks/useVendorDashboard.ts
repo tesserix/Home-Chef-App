@@ -21,6 +21,15 @@ export interface DashboardData {
   pausedUntil?: string | null;
   /** True when the chef's FSSAI licence has lapsed and they're locked out (#92). */
   fssaiLocked?: boolean;
+  /**
+   * "test" while an admin has this kitchen in a sandbox session. Every figure
+   * on this screen is then the SANDBOX's own — a chef must never mistake it for
+   * real earnings, which is what the TEST MODE banner exists to prevent.
+   * Optional: a client can outrun the API deploy that added it.
+   */
+  mode?: 'live' | 'test';
+  /** Human-facing number of the open sandbox session (0 when live). */
+  testSessionNo?: number;
   recentOrders: RecentOrder[];
   /**
    * The kitchen queue (#695) — every live order, scoped by STATUS and ordered

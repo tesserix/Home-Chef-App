@@ -557,6 +557,21 @@ export default function DashboardScreen() {
           </View>
         )}
 
+        {/* Sandbox banner. While an admin has this kitchen in a test session,
+            every figure on this screen belongs to the sandbox — a chef must
+            never read those as real earnings. Sits above everything, including
+            the FSSAI lockout, because it changes what all of it MEANS. */}
+        {dashboard?.mode === 'test' && (
+          <View style={styles.testModeBanner}>
+            <Text style={styles.testModeBannerTitle}>TEST MODE</Text>
+            <Text style={styles.testModeBannerBody}>
+              {dashboard.testSessionNo
+                ? `Sandbox session ${dashboard.testSessionNo}. Nothing here is real money.`
+                : 'Nothing here is real money.'}
+            </Text>
+          </View>
+        )}
+
         {/* FSSAI lockout (#92): a lapsed food-safety licence pauses the
             kitchen entirely (orders blocked + payouts frozen server-side).
             Headline banner above the action stack — the chef must grasp
@@ -1266,6 +1281,25 @@ const styles = StyleSheet.create({
   // Zone B' — merged ACTION REQUIRED alert stack
   alertSection: {
     marginBottom: theme.spacing[6],
+  },
+  testModeBanner: {
+    backgroundColor: '#FDE68A',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  testModeBannerTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.6,
+    color: '#78350F',
+  },
+  testModeBannerBody: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#78350F',
+    marginTop: 2,
   },
   alertCards: {
     gap: theme.spacing[2],

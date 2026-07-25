@@ -18,7 +18,14 @@ const HeaderAdminMode = "X-HomeChef-Mode"
 // proxy that strips the header — keeps seeing exactly the real data it saw
 // before this feature existed.
 func adminMode(c *gin.Context) string {
-	return models.NormalizeMode(c.GetHeader(HeaderAdminMode))
+	// Header first, query second. The tesserix-home console reaches this API
+	// through an HMAC-signed proxy that forwards the query string but not
+	// arbitrary headers, so `?mode=test` is the path that actually carries the
+	// toggle in production; the header is kept for direct API callers.
+	if h := c.GetHeader(HeaderAdminMode); h != "" {
+		return models.NormalizeMode(h)
+	}
+	return models.NormalizeMode(c.Query("mode"))
 }
 
 // adminModeScope filters a partitioned table to the console's active mode.

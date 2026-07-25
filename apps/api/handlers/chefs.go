@@ -867,6 +867,11 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"totalOrders":     totalOrdersCount,
 		"acceptingOrders": chef.AcceptingOrders,
 		"pausedUntil":     chef.PausedUntil,
+		// Test-chef mode: drives the vendor app's TEST MODE banner. A chef must
+		// never mistake sandbox figures for real earnings, and the numbers above
+		// are the sandbox's own while the kitchen is in test.
+		"mode":          models.NormalizeMode(chef.Mode),
+		"testSessionNo": chefTestSessionNo(&chef),
 		// FSSAI lockout (#92): drives the vendor dashboard's "orders paused —
 		// renew licence" banner. Same helper as the order/payout enforcement.
 		"fssaiLocked":  services.IsChefFSSAIExpired(&chef),
@@ -2704,4 +2709,19 @@ func chefRepeatRate(chefID uuid.UUID) float64 {
 		return 0
 	}
 	return math.Round(float64(row.Repeat)/float64(row.Total)*1000) / 10
+}
+
+// chefTestSessionNo returns the human-facing number of the kitchen's open test
+// session, or 0 when it is live. Used only for display, so a lookup failure
+// degrades to "no number" rather than failing the dashboard.
+func chefTestSessionNo(chef *models.ChefProfile) int {
+	if chef == nil || !chef.IsTestMode() || chef.ActiveTestSessionID == nil {
+		return 0
+	}
+	var session models.ChefTestSession
+	if err := database.DB.Select("session_no").
+		First(&session, "id = ?", *chef.ActiveTestSessionID).Error; err != nil {
+		return 0
+	}
+	return session.SessionNo
 }
