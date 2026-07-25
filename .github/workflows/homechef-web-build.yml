@@ -47,7 +47,12 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   REGISTRY: ghcr.io
-  IMAGE_NAME: tesserix/home-chef-app/homechef-web
+  # homechef-web-app, NOT homechef-web: the landing
+  # (homechef-web-landing-build.yml) publishes to homechef-web and runs
+  # automatically on every push to main, so it always won that tag and this
+  # SPA could never actually ship. Separate images let both serve fe3dr.com,
+  # split by path in manifests/homechef-istio/virtualservice.yaml.
+  IMAGE_NAME: tesserix/home-chef-app/homechef-web-app
 
 jobs:
   build:
