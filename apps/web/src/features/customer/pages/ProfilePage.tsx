@@ -1727,10 +1727,12 @@ function SecurityTab() {
       <div className="rounded-xl bg-paprika-tint p-6">
         <h2 className="text-lg font-semibold text-paprika">Delete Account</h2>
         <p className="mt-1 text-sm text-paprika">
-          Once you delete your account, there is no going back. Please be certain.
+          To delete your account, we'll ask you to confirm your email and review any account restrictions. This action cannot be undone.
         </p>
-        <Button variant="destructive" className="mt-4">
-          Delete Account
+        <Button variant="destructive" className="mt-4" asChild>
+          <Link to="/data-privacy">
+            Delete Account
+          </Link>
         </Button>
       </div>
     </div>
