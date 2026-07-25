@@ -36,9 +36,17 @@ const NOTIFY_SUBJECT = encodeURIComponent('Tell me when the Fe3dr app is out');
 export default function DownloadPage() {
   const anythingLive = isDownloadable(CUSTOMER_APP) || isDownloadable(VENDOR_APP);
 
+  // The nav CTA below has to point at a section that actually exists in both
+  // states: #notify only renders while nothing is live (below), and #apps —
+  // the store badges — always renders. Without this branch, the moment a
+  // listing flips to `live` the nav CTA keeps pointing at the now-gone
+  // #notify section.
+  const ctaHref = anythingLive ? '#apps' : '#notify';
+  const ctaLabel = anythingLive ? 'Get the app' : 'Get notified';
+
   return (
     <>
-      <SiteNav ctaHref="#notify" ctaLabel="Get notified" />
+      <SiteNav ctaHref={ctaHref} ctaLabel={ctaLabel} />
       <main id="main">
         {/* Header — states the real status up front rather than burying it. */}
         <section className="border-b border-hairline">
@@ -57,7 +65,7 @@ export default function DownloadPage() {
 
         {/* One block per app. The heading says who it's for, because that is
             the only thing a visitor needs in order to choose. */}
-        <section aria-labelledby="apps-heading" className="border-b border-hairline">
+        <section id="apps" aria-labelledby="apps-heading" className="scroll-mt-24 border-b border-hairline">
           <h2 id="apps-heading" className="sr-only">
             The Fe3dr apps
           </h2>

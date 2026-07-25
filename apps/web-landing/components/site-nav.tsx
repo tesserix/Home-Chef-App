@@ -53,19 +53,19 @@ export function SiteNav({
 
         <div className="flex items-center gap-2 sm:gap-7">
           <a
-            href="#how-it-works"
+            href="/#how-it-works"
             className="hidden text-[15px] font-medium text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal sm:block"
           >
             How it works
           </a>
           <a
-            href="#whats-cooking"
+            href="/#whats-cooking"
             className="hidden text-[15px] font-medium text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal md:block"
           >
             What&rsquo;s cooking
           </a>
           <a
-            href="#for-chefs"
+            href="/#for-chefs"
             className="hidden text-[15px] font-medium text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal sm:block"
           >
             For chefs
