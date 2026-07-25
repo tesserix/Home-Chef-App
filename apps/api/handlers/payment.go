@@ -12,13 +12,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/payouts"
 	"github.com/homechef/api/services"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Currency resolution lives in services.CurrencyForCountry; services.ToMinor
@@ -62,16 +62,20 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 		return
 	}
 
-	// Optional wallet store-credit to apply at checkout (#141). Body is optional,
-	// so a malformed/empty body just means "no wallet". Gated by a feature flag;
-	// wallet is INR-only (Razorpay Route), so it never applies to the Stripe path.
-	var body struct {
-		WalletAmount float64 `json:"walletAmount"`
-	}
-	_ = c.ShouldBindJSON(&body)
-	requestedWalletPaise := 0
-	if config.AppConfig.WalletCheckoutEnabled && body.WalletAmount > 0 {
-		requestedWalletPaise = services.ToPaise(body.WalletAmount)
+	// Wallet + loyalty credit to apply at checkout. The client sends INTENT — which
+	// rails, and optionally how much of each — and the server recomputes the whole
+	// allocation from live balances and the real order. Its answer is the only one
+	// that counts.
+	//
+	// This is deliberate: the client used to compute a payable from its own cached
+	// balance and post a rupee amount, so any drift between the two views showed the
+	// customer one figure and charged another. An absent or malformed body simply
+	// means "no credit". An older build posting a bare {"walletAmount": N} is read
+	// as an explicit wallet request.
+	var creditReq services.CreditRequest
+	_ = c.ShouldBindJSON(&creditReq)
+	if !creditReq.UseWallet && creditReq.WalletAmount != nil && *creditReq.WalletAmount > 0 {
+		creditReq.UseWallet = true
 	}
 
 	// Freeze the platform commission rate on the order ONCE at checkout (#390),
@@ -96,7 +100,7 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 	case "stripe":
 		h.createStripePayment(c, &order, userID)
 	default:
-		h.createRazorpayPayment(c, &order, userID, requestedWalletPaise)
+		h.createRazorpayPayment(c, &order, userID, creditReq)
 	}
 }
 
@@ -104,7 +108,7 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 // from the pre-multi-gateway implementation except that the order's
 // payment_provider column is now stamped so VerifyPayment / InitiateRefund
 // know which code path to run later.
-func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Order, userID uuid.UUID, requestedWalletPaise int) {
+func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Order, userID uuid.UUID, creditReq services.CreditRequest) {
 	rz := services.GetRazorpay()
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
@@ -130,23 +134,33 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 
 	settlements := orderSettlements(database.DB, order)
 
-	// Clamp the requested wallet credit against the live balance, then plan the
-	// split: payment-funded transfers (bounded by the capture) + platform-funded
-	// top-ups for whatever the capture can't cover.
-	balancePaise := 0
-	if requestedWalletPaise > 0 {
-		if w, err := services.WalletBalance(database.DB, userID); err == nil && w != nil {
-			balancePaise = services.ToPaise(w.Balance)
-		}
+	// Allocate the credit from LIVE state — the same call the /quote endpoint makes,
+	// so the figure the customer was shown and the figure charged here are produced
+	// by one computation rather than two that can drift.
+	quote, err := services.BuildCreditQuote(database.DB, order, userID, creditReq, creditFlags())
+	if err != nil {
+		log.Printf("credit-quote failed order=%s: %v", order.OrderNumber, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not price this order"})
+		return
 	}
-	plan := services.PlanWalletFunding(totalPaise, balancePaise, requestedWalletPaise, settlements)
-	walletApplied := services.FromPaise(plan.WalletAppliedPaise)
+	walletApplied := services.FromPaise(quote.WalletAppliedPaise)
+	loyaltyApplied := services.FromPaise(quote.PointsAppliedPaise)
 
-	// Full-wallet order: the credit covers the entire total, so there is no gateway
-	// payment. Settle the chef/driver from the platform balance, debit the wallet,
-	// and mark the order paid in one shot.
+	// Loyalty behaves exactly like wallet at the gateway: a platform-funded discount
+	// that shrinks the capture but never the chef's or driver's payout. Route funds
+	// each settlement from the capture as far as it reaches and tops up the rest from
+	// the platform balance.
+	creditPaise := quote.WalletAppliedPaise + quote.PointsAppliedPaise
+	plan := services.PlanWalletFunding(totalPaise, creditPaise, creditPaise, settlements)
+
+	// Fully-credit-covered order: nothing left for the gateway, so settle the
+	// chef/driver from the platform balance and mark the order paid in one shot.
+	//
+	// Unreachable on a normal order now — the capture always retains at least the
+	// service fee and GST — but it still fires on a zero-fee configuration, and it
+	// is the correct handling if one ever exists.
 	if plan.FullWallet {
-		h.settleFullWalletOrder(c, order, plan, walletApplied)
+		h.settleFullWalletOrder(c, order, plan, walletApplied, loyaltyApplied, quote.PointsAppliedPoints)
 		return
 	}
 
@@ -167,11 +181,25 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 		return
 	}
 
-	database.DB.Model(order).Updates(map[string]interface{}{
-		"razorpay_order_id": rzOrder.ID,
-		"payment_provider":  "razorpay",
-		"wallet_applied":    walletApplied,
-	})
+	// Omit(clause.Associations): `order` carries preloaded Customer/Chef/Delivery,
+	// and without this GORM cascades an upsert into those rows on every stamp —
+	// re-saving user records as a side effect of recording a payment, and failing
+	// the ENTIRE update (silently, since the result was never checked) if any
+	// association column mismatches. Stamping payment columns must touch only the
+	// order.
+	if res := database.DB.Model(order).Omit(clause.Associations).Updates(map[string]interface{}{
+		"razorpay_order_id":    rzOrder.ID,
+		"payment_provider":     "razorpay",
+		"wallet_applied":       walletApplied,
+		"loyalty_applied":      loyaltyApplied,
+		"loyalty_points_spent": quote.PointsAppliedPoints,
+	}); res.Error != nil {
+		// The credit is recorded on the order and settled from it after capture, so
+		// losing this write would strand the customer's applied credit.
+		log.Printf("Failed to stamp payment columns order=%s: %v", order.OrderNumber, res.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"provider":        "razorpay",
@@ -179,6 +207,9 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 		"razorpayKeyId":   rz.GetKeyID(),
 		"amount":          plan.CapturePaise,
 		"walletApplied":   walletApplied,
+		"loyaltyApplied":  loyaltyApplied,
+		"pointsApplied":   quote.PointsAppliedPoints,
+		"payable":         services.FromPaise(quote.PayablePaise),
 		"currency":        "INR",
 		"orderNumber":     order.OrderNumber,
 		"prefill": gin.H{
@@ -363,7 +394,16 @@ func settleWalletTopUpsWith(orderID uuid.UUID, orderNumber string, topUps []serv
 // applied credit. REQUIRES order.Chef + order.Delivery.DeliveryPartner preloaded — the
 // top-up split reads their Route accounts (an un-preloaded order would top up "").
 func settleOrderWallet(order *models.Order) {
-	if order.WalletApplied <= 0 {
+	// Loyalty points are burned on the SAME seam as the wallet debit — after the
+	// capture is confirmed, keyed to the order — so an abandoned or failed checkout
+	// never costs the customer their points. Idempotent per order.
+	if order.LoyaltyPointsSpent > 0 {
+		if err := services.RedeemLoyaltyToOrder(database.DB, order.CustomerID, order.ID, order.LoyaltyPointsSpent); err != nil {
+			log.Printf("loyalty-debit failed order=%s: %v", order.OrderNumber, err)
+			services.CaptureBackgroundError(err)
+		}
+	}
+	if order.WalletApplied <= 0 && order.LoyaltyApplied <= 0 {
 		return
 	}
 	if err := debitOrderWallet(order); err != nil {
@@ -378,20 +418,31 @@ func settleOrderWallet(order *models.Order) {
 		services.CaptureBackgroundError(err)
 		return
 	}
-	appliedPaise := services.ToPaise(order.WalletApplied)
+	// The top-up plan must reconstruct the FULL credit applied — wallet plus the
+	// loyalty slice — or the chef/driver would be short-paid by the points portion.
+	appliedPaise := services.ToPaise(order.WalletApplied) + services.ToPaise(order.LoyaltyApplied)
 	plan := services.PlanWalletFunding(services.ToPaise(order.Total), appliedPaise, appliedPaise, orderSettlements(database.DB, order))
 	settleWalletTopUps(order, plan.DirectTopUps)
 }
 
-// settleFullWalletOrder handles an order fully covered by store credit: there is no
+// settleFullWalletOrder handles an order fully covered by credit: there is no
 // gateway payment, so the chef/driver are paid entirely from the platform balance,
-// the wallet is debited, and the order is marked paid (#141).
-func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Order, plan services.FundingPlan, walletApplied float64) {
+// the wallet and points are debited, and the order is marked paid (#141).
+func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Order, plan services.FundingPlan, walletApplied, loyaltyApplied, pointsSpent float64) {
 	order.WalletApplied = walletApplied
+	order.LoyaltyApplied = loyaltyApplied
+	order.LoyaltyPointsSpent = pointsSpent
 	if err := debitOrderWallet(order); err != nil {
 		log.Printf("full-wallet: debit failed order=%s: %v", order.OrderNumber, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not apply wallet credit"})
 		return
+	}
+	if pointsSpent > 0 {
+		if err := services.RedeemLoyaltyToOrder(database.DB, order.CustomerID, order.ID, pointsSpent); err != nil {
+			log.Printf("full-wallet: loyalty debit failed order=%s: %v", order.OrderNumber, err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Could not apply loyalty points"})
+			return
+		}
 	}
 
 	// #555: guarded completion — emit order.paid + chef push ONLY on the single
