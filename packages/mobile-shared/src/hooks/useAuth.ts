@@ -3,6 +3,7 @@
 // Pattern: matches Zustand v5 API (no deprecated createStore pattern)
 
 import { create } from 'zustand';
+import { clearDeviceToken } from '../mfa/device-token';
 import {
   getAccessToken,
   getRefreshToken,
@@ -79,6 +80,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await clearTokens();
+    // Drop the two-factor device token for the same reason: it is credential
+    // material scoped to the user who just left. The server would refuse it for
+    // anyone else, but leaving it in the keychain after sign-out is exactly the
+    // kind of residue that turns into a bug when a device changes hands.
+    await clearDeviceToken();
     // Reset the PERSISTED onboarding flag too — it's a device-local flag, so
     // without this the next user to sign in on this device inherits the
     // previous user's "onboarding complete" state and skips the wizard.

@@ -12,6 +12,8 @@ import {
   focusManager,
 } from '@tanstack/react-query';
 import { AuthProvider } from '@homechef/mobile-shared/auth';
+import { MFAGateProvider } from '@homechef/mobile-shared/mfa';
+import { api as apiClient } from '../lib/api';
 import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
@@ -285,10 +287,20 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           {/* One branded Dialog for the whole app, replacing Alert.alert. */}
           <DialogProvider accentColor={customerColors.coral.DEFAULT}>
-            <View style={{ flex: 1 }}>
-              <OfflineBanner />
-              <Stack screenOptions={{ headerShown: false }} />
-            </View>
+            {/* Two-factor: covers the app while a challenge is pending, since
+                every other request 403s until it is answered. */}
+            <MFAGateProvider
+              api={apiClient}
+              accentColor={customerColors.coral.DEFAULT}
+              onSignOut={() => {
+                void useAuthStore.getState().logout();
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <OfflineBanner />
+                <Stack screenOptions={{ headerShown: false }} />
+              </View>
+            </MFAGateProvider>
           </DialogProvider>
         </QueryClientProvider>
       </AuthProvider>

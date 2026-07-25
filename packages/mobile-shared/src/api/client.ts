@@ -39,10 +39,41 @@ export interface ApiClientOptions {
    * a screen offering reactivation.
    */
   onAccountBlocked?: (status: AccountBlockedStatus) => void;
+  /**
+   * Which app this client belongs to. Sent as X-Client-App so device trust
+   * stays scoped per app — a remembered vendor device must not skip the
+   * two-factor challenge in the admin app.
+   */
+  clientApp?: MFAClientApp;
+  /**
+   * Returns the stored device/elevation token, sent as X-Device-Token. Synchronous
+   * because it runs on every request; the app keeps it in memory after reading
+   * it from SecureStore at start-up.
+   */
+  getDeviceToken?: () => string | null;
+  /**
+   * Called on 403 mfa_required — the app routes to the challenge screen.
+   *
+   * Every protected request 403s until the challenge is passed, so without this
+   * the user signs in and lands in an app where nothing loads and nothing
+   * explains why.
+   */
+  onMFARequired?: (challenge: MFAChallengePrompt) => void;
 }
 
 /** Server-side reason a signed-in account is being refused. */
 export type AccountBlockedStatus = 'account_deactivated' | 'account_deleted';
+
+/** App scopes the API recognises for device trust. */
+export type MFAClientApp = 'customer' | 'vendor' | 'delivery' | 'admin';
+
+/** What the server tells the client when a second factor is owed. */
+export interface MFAChallengePrompt {
+  /** Channels this user can be challenged on. */
+  channels: Array<'email' | 'phone'>;
+  /** Masked hints ("s•••k@gmail.com") — never the full address. */
+  masked: Partial<Record<'email' | 'phone', string>>;
+}
 
 export function createApiClient(options: ApiClientOptions): AxiosInstance {
   const {
@@ -53,6 +84,9 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
     platform,
     onUpgradeRequired,
     onAccountBlocked,
+    clientApp,
+    getDeviceToken,
+    onMFARequired,
   } = options;
 
   const instance = axios.create({
@@ -77,6 +111,15 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
       }
       if (platform) {
         config.headers['X-Platform'] = platform;
+      }
+      // Two-factor: name the app so device trust stays scoped, and present the
+      // remembered-device token so a trusted device skips the challenge.
+      if (clientApp) {
+        config.headers['X-Client-App'] = clientApp;
+      }
+      const deviceToken = getDeviceToken?.();
+      if (deviceToken) {
+        config.headers['X-Device-Token'] = deviceToken;
       }
       return config;
     },
@@ -135,9 +178,18 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
         // Only the account-state 403s route to the paused screen. Ordinary
         // permission 403s (wrong role, not your order) carry no status field
         // and must keep surfacing as normal errors.
-        const status = (error.response.data as { status?: string } | undefined)?.status;
-        if (status === 'account_deactivated' || status === 'account_deleted') {
-          onAccountBlocked?.(status);
+        const data = error.response.data as
+          | { status?: string; error?: string; channels?: Array<'email' | 'phone'>; masked?: Record<string, string> }
+          | undefined;
+        if (data?.status === 'account_deactivated' || data?.status === 'account_deleted') {
+          onAccountBlocked?.(data.status);
+        } else if (data?.error === 'mfa_required') {
+          // Every protected request 403s until the challenge is passed, so this
+          // has to route somewhere rather than surfacing as a generic error.
+          onMFARequired?.({
+            channels: data.channels ?? [],
+            masked: (data.masked ?? {}) as MFAChallengePrompt['masked'],
+          });
         }
       }
       return Promise.reject(error);

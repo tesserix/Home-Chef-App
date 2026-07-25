@@ -1,3 +1,4 @@
+import { getDeviceToken, emitMFARequired } from '@homechef/mobile-shared/mfa';
 import { createApiClient } from '@homechef/mobile-shared/api';
 import { useAuthStore } from '../store/auth-store';
 import { appPlatform, appVersion } from './app-version';
@@ -8,6 +9,11 @@ import { showAlertOutsideReact } from '@homechef/mobile-shared/ui';
 // dead → logout) + 426 (client too old). Admin has no in-app upgrade wall, so
 // 426 surfaces as an alert rather than routing to a dedicated screen.
 export const api = createApiClient({
+  // Two-factor: scope device trust to this app, present the remembered-device
+  // token, and hand a challenge to MFAGateProvider when the API demands one.
+  clientApp: 'admin',
+  getDeviceToken,
+  onMFARequired: emitMFARequired,
   baseURL: process.env.EXPO_PUBLIC_API_URL!,
   getToken: () => useAuthStore.getState().accessToken,
   appVersion,

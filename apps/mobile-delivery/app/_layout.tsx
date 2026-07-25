@@ -11,6 +11,8 @@ import { AxiosResponse } from 'axios';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { AuthProvider } from '@homechef/mobile-shared/auth';
+import { MFAGateProvider } from '@homechef/mobile-shared/mfa';
+import { api as apiClient } from '../lib/api';
 import { DialogProvider } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../store/auth-store';
@@ -214,7 +216,13 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <BottomSheetModalProvider>
             <DialogProvider accentColor={theme.colors.brand[500]}>
-              <AppNavigator />
+              <MFAGateProvider
+                api={apiClient}
+                accentColor={theme.colors.brand[500]}
+                onSignOut={() => { void useAuthStore.getState().logout(); }}
+              >
+                <AppNavigator />
+              </MFAGateProvider>
             </DialogProvider>
           </BottomSheetModalProvider>
         </QueryClientProvider>

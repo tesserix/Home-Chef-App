@@ -8,6 +8,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { AuthProvider } from '@homechef/mobile-shared/auth';
+import { MFAGateProvider } from '@homechef/mobile-shared/mfa';
+import { api as apiClient } from '../lib/api';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 import { DialogProvider, ToastProvider, UndoSnackbarProvider } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -160,7 +162,13 @@ function RootLayout() {
               <ToastProvider>
                 <UndoSnackbarProvider>
                   <DialogProvider accentColor={theme.colors.brand[500]}>
-                    <AppNavigator />
+                    <MFAGateProvider
+                      api={apiClient}
+                      accentColor={theme.colors.brand[500]}
+                      onSignOut={() => { void useAuthStore.getState().logout(); }}
+                    >
+                      <AppNavigator />
+                    </MFAGateProvider>
                   </DialogProvider>
                 </UndoSnackbarProvider>
               </ToastProvider>

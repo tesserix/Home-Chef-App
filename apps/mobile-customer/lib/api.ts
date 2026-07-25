@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { getDeviceToken, emitMFARequired } from '@homechef/mobile-shared/mfa';
 import { createApiClient, type AccountBlockedStatus } from '@homechef/mobile-shared/api';
 import { useAuthStore } from '../store/auth-store';
 
@@ -18,6 +19,11 @@ function handleAccountBlocked(status: AccountBlockedStatus) {
 }
 
 export const api = createApiClient({
+  // Two-factor: scope device trust to this app, present the remembered-device
+  // token, and hand a challenge to MFAGateProvider when the API demands one.
+  clientApp: 'customer',
+  getDeviceToken,
+  onMFARequired: emitMFARequired,
   baseURL: process.env.EXPO_PUBLIC_API_URL!,
   getToken: () => useAuthStore.getState().accessToken,
   onAuthFailure: () => {

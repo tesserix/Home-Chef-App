@@ -22,6 +22,8 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@homechef/mobile-shared/auth';
+import { MFAGateProvider } from '@homechef/mobile-shared/mfa';
+import { api as apiClient } from '../lib/api';
 import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
@@ -627,7 +629,13 @@ function RootLayout() {
               <UndoSnackbarProvider>
                 {/* One branded Dialog for the whole app, replacing Alert.alert. */}
                 <DialogProvider accentColor={theme.colors.brand[500]}>
-                  <AppNavigator />
+                  <MFAGateProvider
+                    api={apiClient}
+                    accentColor={theme.colors.brand[500]}
+                    onSignOut={() => { void useAuthStore.getState().logout(); }}
+                  >
+                    <AppNavigator />
+                  </MFAGateProvider>
                 </DialogProvider>
               </UndoSnackbarProvider>
             </ToastProvider>

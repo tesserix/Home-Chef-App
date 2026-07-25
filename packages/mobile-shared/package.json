@@ -15,7 +15,8 @@
     "./utils": "./src/utils/index.ts",
     "./theme": "./src/theme/index.ts",
     "./screens": "./src/screens/index.ts",
-    "./ui": "./src/ui/index.ts"
+    "./ui": "./src/ui/index.ts",
+    "./mfa": "./src/mfa/index.ts"
   },
   "scripts": {
     "test": "vitest run",
