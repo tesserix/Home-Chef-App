@@ -2,11 +2,11 @@ import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { Inter } from 'next/font/google';
 import {
-  APP_STORE_URL,
   CONTACT_EMAIL,
+  CUSTOMER_APP,
   IMAGES,
   INSTAGRAM_URL,
-  PLAY_STORE_URL,
+  liveStoreUrls,
   SITE_NAME,
   SITE_URL,
   X_URL,
@@ -93,7 +93,12 @@ const structuredData = {
       applicationCategory: 'FoodApplication',
       description: DESCRIPTION,
       author: { '@id': `${SITE_URL}/#organization` },
-      installUrl: [APP_STORE_URL, PLAY_STORE_URL],
+      // Only advertise store listings that actually resolve — an indexed
+      // `installUrl` pointing at an unpublished listing is a crawlable 404.
+      // The key drops out entirely until the first platform goes live.
+      ...(liveStoreUrls(CUSTOMER_APP).length > 0
+        ? { installUrl: liveStoreUrls(CUSTOMER_APP) }
+        : {}),
       offers: {
         '@type': 'Offer',
         price: '0',
