@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
@@ -139,9 +141,17 @@ func DispatchOrderDelivery(orderID uuid.UUID) error {
 // a no-op when there's no delivery, the delivery isn't provider-fulfilled, or
 // it's already terminal — so it's safe to call on every order cancellation.
 // On success the local Delivery row is marked cancelled.
-func CancelOrderDelivery(orderID uuid.UUID, reason string) error {
+//
+// The DB handle is a PARAMETER, not the database.DB global, because both callers
+// invoke this from a detached goroutine that outlives the request. Reading the
+// global asynchronously reads whatever it is when the goroutine is finally
+// scheduled — under test that is nil (the harness restores it on cleanup), and
+// the resulting nil dereference inside gorm panics a goroutine, which no test can
+// recover from. Passing the handle that was live when the request was served
+// removes the race rather than papering over it with a nil check.
+func CancelOrderDelivery(db *gorm.DB, orderID uuid.UUID, reason string) error {
 	var delivery models.Delivery
-	if err := database.DB.Preload("Provider").
+	if err := db.Preload("Provider").
 		Where("order_id = ?", orderID).First(&delivery).Error; err != nil {
 		return nil // no delivery row → nothing to cancel
 	}
@@ -161,7 +171,8 @@ func CancelOrderDelivery(orderID uuid.UUID, reason string) error {
 	}
 
 	now := time.Now()
-	database.DB.Model(&delivery).Updates(map[string]interface{}{
+	// Same handle, same reason — this runs on the detached goroutine too.
+	db.Model(&delivery).Updates(map[string]interface{}{
 		"status":        models.DeliveryCancelled,
 		"cancelled_at":  now,
 		"cancel_reason": reason,
