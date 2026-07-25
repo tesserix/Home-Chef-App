@@ -194,6 +194,7 @@ func SetupRouter() *gin.Engine {
 	mealPlanHandler := handlers.NewMealPlanHandler()
 	cancellationHandler := handlers.NewCancellationHandler()
 	supportHandler := handlers.NewSupportHandler()
+	supportChatHandler := handlers.NewSupportChatHandler()
 	promoHandler := handlers.NewPromoHandler()
 	chatHandler := handlers.NewChatHandler()
 	messagingHandler := handlers.NewMessagingHandler()
@@ -725,6 +726,16 @@ func SetupRouter() *gin.Engine {
 			support.POST("/tickets/:id/messages", supportLimit, supportHandler.AddMessage)
 			support.PUT("/tickets/:id/close", supportHandler.CloseTicket)
 		}
+
+		// Otto support-chat proxy (Phase 5) — customer↔Tesserix support via the
+		// shared otto service. Distinct from the /support/tickets group above:
+		// this is a live-chat surface, forwarded to otto's storefront API. The
+		// explicit route list inside Register IS the path allowlist. A per-user
+		// limiter keeps the write paths (create/reply/ws-ticket) in check; the
+		// poll GETs (resume/messages ~every 5s) sit well under it.
+		supportChat := v1.Group("/support/chat")
+		supportChat.Use(bffAuth(bffKey, bffWindow), middleware.RateLimitByUser(2, 5))
+		supportChatHandler.Register(supportChat)
 
 		// Promo code validation (authenticated)
 		promo := v1.Group("/promo")

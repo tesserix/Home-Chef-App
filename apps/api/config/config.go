@@ -79,6 +79,17 @@ type Config struct {
 	MongoURI    string
 	MongoDBName string
 
+	// Otto support-chat (Phase 5) — the mobile support-chat proxy
+	// (handlers/support_chat.go) forwards to the shared otto storefront surface.
+	// OTTOURL is otto's in-cluster address; OTTOInternalAuth is the shared
+	// X-Internal-Auth secret. BOTH empty ⇒ the proxy returns 503 (feature dark).
+	// OTTOWSPublicBase is the public WebSocket origin the mobile app dials
+	// directly (e.g. "wss://fe3dr.com"); empty ⇒ derived per-request from the
+	// forwarded host.
+	OTTOURL          string
+	OTTOInternalAuth string
+	OTTOWSPublicBase string
+
 	// NATS
 	NATSURL string
 	// NATSCreds is the path to a NATS user credentials (.creds) file. Empty for
@@ -379,6 +390,11 @@ func Load() {
 		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379"),
 		MongoURI:    getEnv("MONGODB_URI", ""),
 		MongoDBName: getEnv("MONGODB_DB", "homechef_chat"),
+
+		// Otto support-chat (Phase 5)
+		OTTOURL:          getEnv("OTTO_URL", ""),
+		OTTOInternalAuth: getEnv("OTTO_INTERNAL_AUTH", ""),
+		OTTOWSPublicBase: getEnv("OTTO_WS_PUBLIC_BASE", ""),
 
 		// NATS
 		NATSURL:             getEnv("NATS_URL", "nats://localhost:4222"),
