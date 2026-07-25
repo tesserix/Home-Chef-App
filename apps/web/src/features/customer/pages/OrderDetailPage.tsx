@@ -24,6 +24,7 @@ import { apiClient } from '@/shared/services/api-client';
 import { orderCancellable, useRequestCancellation } from '@/features/customer/hooks/useCancellation';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { formatDateTime, formatTime } from '@/shared/utils/format-date';
+import { friendlyErrorMessage } from '@/shared/utils/errors';
 import { Button } from '@/shared/components/ui';
 import { useCartStore } from '@/app/store/cart-store';
 import type { Order, OrderStatus, MenuItem, SelectedModifier } from '@/shared/types';
@@ -601,8 +602,14 @@ export default function OrderDetailPage() {
                           );
                           setShowCancelModal(false);
                         },
-                        onError: () => {
-                          toast.error('Could not request cancellation');
+                        onError: (err: unknown) => {
+                          // The server distinguishes real outcomes here —
+                          // e.g. a 502 after the cancellation actually
+                          // succeeded but the refund needs support follow-up
+                          // — so surface its own message rather than a
+                          // blanket string that would tell a customer to
+                          // retry into a 409.
+                          toast.error(friendlyErrorMessage(err, 'Could not request cancellation'));
                         },
                       },
                     )
