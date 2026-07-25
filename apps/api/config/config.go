@@ -198,6 +198,14 @@ type Config struct {
 	// genuineness check (wrong type / invalid number). Default off; the check
 	// always runs and is returned, only hard-rejection is gated.
 	DocAuthenticityEnabled bool
+	// MFAEnabled gates the opt-in login second factor. Default OFF. Even once
+	// on, nothing changes for a user until they enrol — the feature is opt-in
+	// per account, so flipping this cannot lock anyone out.
+	MFAEnabled bool
+	// MFABackupCodeKey is the HMAC key protecting recovery codes at rest.
+	// Required before backup codes can be issued or redeemed; without it those
+	// endpoints error rather than falling back to a weaker scheme.
+	MFABackupCodeKey string
 	// LoyaltyEnabled gates the loyalty points program (#40) — earning on
 	// delivered orders and redeeming to wallet credit. On by default; set
 	// LOYALTY_ENABLED=false to disable enforcement.
@@ -267,6 +275,7 @@ func Load() {
 	emailOTP, _ := strconv.ParseBool(getEnv("EMAIL_OTP_ENABLED", "true"))
 	docAuthenticity, _ := strconv.ParseBool(getEnv("DOC_AUTHENTICITY_ENABLED", "false"))
 	loyaltyEnabled, _ := strconv.ParseBool(getEnv("LOYALTY_ENABLED", "true"))
+	mfaEnabled, _ := strconv.ParseBool(getEnv("MFA_ENABLED", "false"))
 	distancePricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_DISTANCE_PRICE_PER_CALL_USD", "0.005"), 64)
 	weatherPricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_WEATHER_PRICE_PER_CALL_USD", "0.001"), 64)
 	deliveryMaxRadiusKm, _ := strconv.ParseFloat(getEnv("DELIVERY_DEFAULT_MAX_RADIUS_KM", "10"), 64)
@@ -403,6 +412,8 @@ func Load() {
 		EmailOTPEnabled:                 emailOTP,
 		DocAuthenticityEnabled:          docAuthenticity,
 		LoyaltyEnabled:                  loyaltyEnabled,
+		MFAEnabled:                      mfaEnabled,
+		MFABackupCodeKey:                getEnv("MFA_BACKUP_CODE_KEY", ""),
 	}
 }
 
