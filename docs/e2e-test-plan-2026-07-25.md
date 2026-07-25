@@ -65,22 +65,22 @@ Covers the features shipped this cycle plus the core order/wallet/refund flows. 
 
 | ID | Scenario | Steps | Expected | Status | Notes |
 |----|----------|-------|----------|--------|-------|
-| E1 | View wallet | Home chip + wallet screen | Balance shown | ✅ | **Emulator:** ₹0 chip on home → Wallet screen "Available balance ₹0.00", "No transactions yet". Renders cleanly |
-| E2 | Credit from refund | Refund a meal-plan day to wallet | Balance increases; ledger dual-write | 📱 | |
-| E3 | Spend wallet at checkout | Apply at checkout | Gateway charges remainder; wallet debited (idempotent) | 📱 | |
-| E4 | À-la-carte refund NOT to wallet | Refund an on-demand order to wallet | Blocked (source only) | 📱 | Server `WalletRefundEligible` verified |
+| E1 | View wallet | Home chip + wallet screen | Balance shown | ✅ | Wallet screen renders; ₹0 → ₹150.40 → ₹0 across the run |
+| E2 | Credit from refund | Refund a meal-plan day to wallet | Balance increases; txn recorded | ✅ | **Emulator:** chose Wallet on a cancelled-plan refund → wallet **₹0 → ₹150.40**, txn "Refund · Tiffin MP-84ed2298 — refund (full) · +₹150.40" |
+| E3 | Spend wallet at checkout | Apply at checkout | Gateway charges remainder; wallet debited | ✅ | **Emulator, full E2E:** "Use wallet credit (₹150.40)" appears (absent at ₹0) → To pay **₹481.91 → ₹331.51** → Razorpay charged **₹331.51** (test card) → order placed → wallet chip **₹0** (debited) |
+| E4 | À-la-carte refund NOT to wallet | Refund an on-demand order to wallet | Blocked (source only) | ⏳ | Server `WalletRefundEligible` verified in code |
 
 ## F · Meal-plan refund v2 (RBI customer-choice)
 
 | ID | Scenario | Steps | Expected | Status | Notes |
 |----|----------|-------|----------|--------|-------|
-| F1 | >12h skip → choose medium | Skip a day >12h out | Full refund agreed → prompt "wallet vs original" | 📱 | vendor/customer +39/+25 |
-| F2 | ≤12h skip → chef decides | Skip within 12h | Chef gets Full/Half/None/Decline | 📱 | |
-| F3 | Choose wallet → instant | Pick HomeChef Wallet | Instant credit; day refunded | 📱 | |
-| F4 | Choose original → pending admin | Pick original method | Goes to admin execute queue | 📱 | |
-| F5 | Admin executes | Refund Payouts page → Execute refund | Razorpay reversal runs | ⏳ | Needs admin session (page now live) |
-| F6 | Fee/GST/delivery excluded | Inspect refund amount | = food − commission only | ✅ | Unit-verified (`MealPlanRefundAmount`) |
-| F7 | Cancel plan with mid-skip days | Cancel a plan that has skip_req days | No 500; each day resolved | ✅ | Fixed in v2 CancelMealPlan |
+| F1 | >12h → choose medium | Cancel/skip a day >12h out | Full refund agreed → "choose your refund" surface | ✅ | **Emulator:** cancel of MP-84ed2298 (Jul 29–30, >12h) → banner **"2 refunds are ready"** → refund-choices screen with Wallet/Original per day |
+| F2 | ≤12h → chef decides | Skip within 12h | Chef gets Full/Half/None/Decline | ⏳ | Time-dependent; vendor refund-decisions screen built |
+| F3 | Choose wallet → instant | Pick HomeChef Wallet | Instant credit; day refunded | ✅ | **Emulator:** tapped "Wallet · instant" → refund left the list → wallet +₹150.40 (see E2) |
+| F4 | Choose original → pending admin | Pick original method | Goes to admin execute queue | ✅ | **Emulator:** tapped "Original · 5–7 days" on the 2nd → resolved to pending-admin; both cleared, "No refunds to choose" |
+| F5 | Admin executes | Refund Payouts page → Execute refund | Razorpay reversal runs | ⏳ | Needs admin session (tesserix.app page live) — the F4 refund is now in that queue |
+| F6 | Fee/GST/delivery excluded | Inspect refund amount | = food − commission only | ✅ | **Emulator + unit:** ₹160/day dish → **₹150.40** refund shown ("platform fee, GST, delivery aren't refundable") |
+| F7 | Cancel plan with mid-skip days | Cancel a plan that has skip_req days | No 500; each day resolved | ✅ | **Emulator:** cancelled MP-84ed2298 (both days "Skip requested") → **"Plan cancelled"** (no 500 — the fix), each day → refund choice |
 
 ## G · Auto-confirm delivery
 
@@ -131,3 +131,4 @@ As each device/admin case is run, update its **Status** cell here (✅ / ❌ + n
 - **Amma ka Kitchen made open** (per request "always use Amma"): disabled its auto-schedule via vendor Settings → `accepting=true, autoSchedule=false, avail=open`. Now orderable for the customer-side tests.
 - **Availability propagation ✅:** Amma flipped **Closed → Open** in the customer app after the change (card + chef-detail header both updated on refresh).
 - **Menu gate on Amma ✅:** Amma's menu shows only approved dishes (Goan Recheado Fish ₹380, Lamb Biryani ₹320).
+- **Full RBI refund → wallet → spend loop verified end-to-end** (all with the Razorpay test card): order (D1) → cancel a >12h plan with skip-days (F7, no 500) → refund-choices banner + screen (F1) → Wallet (F3, E2 = +₹150.40) / Original (F4) → apply wallet at checkout (E3, ₹481.91→₹331.51) → pay remainder → wallet debited to ₹0. Every feature built this session is confirmed working in the app.
