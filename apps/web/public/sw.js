@@ -1,14 +1,20 @@
 // Service Worker for HomeChef PWA
-const CACHE_NAME = 'homechef-v1';
-const STATIC_CACHE = 'homechef-static-v1';
-const DYNAMIC_CACHE = 'homechef-dynamic-v1';
+const CACHE_NAME = 'homechef-v2';
+const STATIC_CACHE = 'homechef-static-v2';
+const DYNAMIC_CACHE = 'homechef-dynamic-v2';
 
-// Assets to cache on install
+// Assets to cache on install.
+//
+// Every entry must actually exist in public/ — see the install handler for why a
+// missing one used to take the whole service worker down with it. Bump the cache
+// version above whenever this list or the app shell changes, so clients holding
+// an old shell pick up the new one instead of serving it forever.
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/favicon.svg',
+  '/favicon.ico',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
 ];
@@ -19,9 +25,21 @@ const API_ROUTES = ['/api/'];
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => {
-      console.log('[SW] Caching static assets');
-      return cache.addAll(STATIC_ASSETS);
+    caches.open(STATIC_CACHE).then(async (cache) => {
+      // Cached one at a time, NOT via cache.addAll.
+      //
+      // addAll is atomic: a single 404 rejects the whole promise, install fails,
+      // and nothing at all is precached. That is exactly what happened here —
+      // /icons/icon-*.png were listed but never existed, so every install
+      // silently failed and the offline shell never worked. One missing asset
+      // must degrade to one missing asset, not to a dead service worker.
+      const results = await Promise.allSettled(
+        STATIC_ASSETS.map((asset) => cache.add(asset))
+      );
+      const failed = STATIC_ASSETS.filter((_, i) => results[i].status === 'rejected');
+      if (failed.length) {
+        console.warn('[SW] Could not precache:', failed);
+      }
     })
   );
   self.skipWaiting();

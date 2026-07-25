@@ -53,10 +53,17 @@
     <!-- Favicons -->
     <!-- Same steaming-bowl mark the landing serves at /icon.svg, so the tab
          icon does not change as you move between the marketing pages and the
-         app on this shared origin. The 16x16/32x32/apple-touch PNGs that were
-         listed here were never in public/ and 404'd. -->
+         app on this shared origin.
+         Every file referenced here must exist in public/ — an earlier version
+         listed 16x16/32x32/apple-touch PNGs that were never added and 404'd,
+         and safari-pinned-tab.svg was left dangling the same way. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#1a1a18" />
+    <!-- .ico fallback. The SVG covers modern browsers, but a bare origin with no
+         /favicon.ico still gets probed for one, and the crawlers, feed readers
+         and OS shortcut tiles that only understand .ico have nothing to fall
+         back to without it. -->
+    <link rel="alternate icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#FF385C" />
 
     <!-- Preconnect to improve performance -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
