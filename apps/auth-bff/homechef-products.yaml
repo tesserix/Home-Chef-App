@@ -41,7 +41,14 @@ products:
         callbackPath: /auth/callback
         postLoginUrl: /dashboard
         authContext: business
-        defaultRole: vendor
+        # "chef", not "vendor": the Go API's UserRole enum has no vendor member
+        # (customer|chef|delivery|admin|fleet_manager), and every /chef/* route
+        # is gated by RequireChef() == RequireRole(RoleChef, RoleAdmin). A
+        # session minted with role=vendor authenticates fine and then 403s
+        # "Insufficient permissions" on the dashboard. The mobile path already
+        # gets this right — autologin's defaultRoleForPool maps the business
+        # pool to "chef" for exactly this reason.
+        defaultRole: chef
         signInMethods: [password, google.com, apple.com, phone]
         allowedOrigins: ["https://vendors.fe3dr.com", "http://localhost:5174"]
 

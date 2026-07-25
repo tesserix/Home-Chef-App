@@ -35,8 +35,10 @@ func TestRegistry_ResolveWebPortalHosts(t *testing.T) {
 		{"fe3dr.com", "web", "customer", "customer"},
 		{"www.fe3dr.com", "web", "customer", "customer"},
 		{"localhost:5173", "web", "customer", "customer"},
-		{"vendors.fe3dr.com", "vendor-portal", "business", "vendor"},
-		{"localhost:5174", "vendor-portal", "business", "vendor"},
+		// role is "chef", not "vendor" — the API's UserRole enum has no vendor
+		// member and RequireChef() gates every /chef/* route.
+		{"vendors.fe3dr.com", "vendor-portal", "business", "chef"},
+		{"localhost:5174", "vendor-portal", "business", "chef"},
 	} {
 		t.Run(tc.host, func(t *testing.T) {
 			app, err := r.ResolveByHost(tc.host)
@@ -71,4 +73,26 @@ func TestRegistry_MobileTenantAllowlist(t *testing.T) {
 	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Internal-gyofe"))
 	// A tenant not in the allowlist is still rejected.
 	assert.False(t, r.IsMobileTenantAllowed("HomeChef-Unknown-zzzzz"))
+}
+
+// Every app's defaultRole must be a member of the Go API's UserRole enum
+// (models.UserRole: customer|chef|delivery|admin|fleet_manager). A role
+// outside it mints a session that authenticates but then 403s
+// "Insufficient permissions" on every RBAC-gated route — which is exactly
+// what `defaultRole: vendor` did to the chef portal.
+func TestRegistry_DefaultRolesAreValidAPIRoles(t *testing.T) {
+	r, err := Load("../../homechef-products.yaml")
+	require.NoError(t, err)
+
+	valid := map[string]bool{
+		"customer": true, "chef": true, "delivery": true,
+		"admin": true, "fleet_manager": true,
+	}
+
+	for _, host := range []string{"fe3dr.com", "vendors.fe3dr.com", "admin.fe3dr.com"} {
+		app, err := r.ResolveByHost(host)
+		require.NoError(t, err, host)
+		assert.True(t, valid[app.DefaultRole],
+			"%s: defaultRole %q is not a models.UserRole", host, app.DefaultRole)
+	}
 }
