@@ -1,5 +1,11 @@
-import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Crypto from 'expo-crypto';
+// expo-apple-authentication and expo-crypto are loaded LAZILY inside the
+// functions below — never at module top level. This file is re-exported from the
+// auth barrel (./index.ts) that every app imports at startup, and both are
+// iOS-only NATIVE modules. A top-level import made app STARTUP crash on BOTH
+// platforms with "Cannot find native module 'ExpoCrypto'" whenever the native
+// build didn't link them — e.g. a build predating this dependency, or Android,
+// which never offers Sign in with Apple. Deferring the load to an actual Apple
+// sign-in tap keeps startup free of these native modules on every platform.
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 import { signInWithAppleCredential } from './sign-in';
@@ -42,6 +48,12 @@ function toHex(bytes: Uint8Array): string {
  * other sign-in failure.
  */
 export async function signInWithApple(): Promise<FirebaseAuthTypes.UserCredential> {
+  // Native modules — loaded here, not at module top level (see header comment),
+  // so app startup never touches them. This runs only when the user taps
+  // Sign in with Apple, which the UI offers on iOS only.
+  const AppleAuthentication = await import('expo-apple-authentication');
+  const Crypto = await import('expo-crypto');
+
   // A CSPRNG, not Math.random: the whole value of a nonce is that an attacker
   // cannot predict the next one.
   const rawNonce = toHex(await Crypto.getRandomBytesAsync(NONCE_BYTES));
@@ -75,6 +87,10 @@ export async function signInWithApple(): Promise<FirebaseAuthTypes.UserCredentia
 /** True when the device can offer Sign in with Apple (iOS 13+ hardware). */
 export async function isAppleSignInAvailable(): Promise<boolean> {
   try {
+    // Lazy load (see header): on Android or a build without the native module the
+    // import throws, and this correctly reports Apple sign-in as unavailable
+    // instead of crashing.
+    const AppleAuthentication = await import('expo-apple-authentication');
     return await AppleAuthentication.isAvailableAsync();
   } catch {
     return false;
