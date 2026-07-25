@@ -882,6 +882,107 @@ git commit -m "ci: validate web and vendor-portal builds on pull requests"
 
 ---
 
+### Task 5: Sign-in entry point on the landing
+
+`fe3dr.com` currently offers no way to sign in — the only calls to action are the store badges. Owner requirement (2026-07-25): "we can do all using the same what we do on mobile we can do the same using web", so the landing must route people into the customer app, not only to the stores.
+
+**This resolves Open decision 1.** The auth-bff registry entry restored in `46257856` already fixes the topology: the `web` app declares `hosts: ["fe3dr.com", "www.fe3dr.com"]`, `callbackHost: fe3dr.com`, `allowedOrigins: ["https://fe3dr.com", …]`, and `apps/web/src/features/auth/services/auth-service.ts` resolves the BFF as **same-origin `/bff`**. The SPA is therefore designed to be served from `fe3dr.com` itself. The landing keeps the marketing and SEO paths (`/`, `/explore`, `/chef/*`, `/cuisine/*`, `/area/*`, `/download`, legal); the SPA owns the app paths (`/login`, `/register`, `/orders`, `/cart`, `/checkout`, `/profile`, `/wallet`). One origin, no CORS, no cross-domain cookie.
+
+⚠️ **Ship dependency:** the links added here 404 until `apps/web` is actually served on `fe3dr.com` under that path routing. This task must not be deployed ahead of the SPA — shipping it earlier repeats the dead-store-badge defect fixed in `a51110d1`.
+
+**Files:**
+- Modify: `apps/web-landing/lib/site.ts`
+- Modify: `apps/web-landing/components/site-nav.tsx`
+- Modify: `apps/web-landing/components/hero.tsx`
+
+**Interfaces:**
+- Consumes: nothing from earlier tasks.
+- Produces: `APP_LOGIN_PATH`, `APP_REGISTER_PATH` exported from `lib/site.ts`.
+
+- [ ] **Step 1: Add the app paths to the site config**
+
+In `apps/web-landing/lib/site.ts`, after the `SITE_NAME` export, add:
+
+```ts
+/**
+ * Paths owned by the customer SPA (apps/web), which is served from this same
+ * origin — see the `web` entry in apps/auth-bff/homechef-products.yaml, whose
+ * hosts are fe3dr.com/www.fe3dr.com and whose BFF is reached same-origin at
+ * /bff. Kept as constants so the landing never hardcodes SPA routes inline.
+ */
+export const APP_LOGIN_PATH = '/login';
+export const APP_REGISTER_PATH = '/register';
+```
+
+- [ ] **Step 2: Add a sign-in link to the nav**
+
+In `apps/web-landing/components/site-nav.tsx`, import the constant:
+
+```ts
+import { APP_LOGIN_PATH } from '@/lib/site';
+```
+
+and add this link immediately before the existing coral CTA anchor, inside the same flex container:
+
+```tsx
+          <a
+            href={APP_LOGIN_PATH}
+            className="text-[15px] font-medium text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal"
+          >
+            Log in
+          </a>
+```
+
+It is a plain text link, not a second filled button: `.impeccable.md` permits one accent per screen and the "Get the app" CTA already holds it.
+
+- [ ] **Step 3: Offer the web path in the hero**
+
+In `apps/web-landing/components/hero.tsx`, import the constant:
+
+```ts
+import { APP_LOGIN_PATH } from '@/lib/site';
+```
+
+Replace the existing trust line (the paragraph reading `FSSAI-verified kitchens&ensp;&middot;&ensp;Secure payments`) with that line plus a web entry point, so the browser option is offered at the moment someone is choosing how to order:
+
+```tsx
+          <p
+            className="fade-up mt-6 text-sm text-charcoal-soft"
+            style={{ animationDelay: '540ms' }}
+          >
+            Prefer your browser?{' '}
+            <a
+              href={APP_LOGIN_PATH}
+              className="font-medium text-coral underline-offset-4 hover:underline"
+            >
+              Order on the web
+            </a>
+          </p>
+
+          <p
+            className="fade-up mt-3 text-sm text-charcoal-soft"
+            style={{ animationDelay: '600ms' }}
+          >
+            FSSAI-verified kitchens&ensp;&middot;&ensp;Secure payments
+          </p>
+```
+
+- [ ] **Step 4: Verify**
+
+Run: `pnpm --filter @homechef/web-landing typecheck && pnpm --filter @homechef/web-landing lint && pnpm --filter @homechef/web-landing build`
+Expected: all three exit 0.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add apps/web-landing/lib/site.ts \
+        apps/web-landing/components/site-nav.tsx \
+        apps/web-landing/components/hero.tsx
+git commit -m "feat(landing): offer sign-in and web ordering alongside the apps"
+```
+
+---
+
 ## Known gap against the P0 list
 
 `docs/web-mobile-parity.md` §10 P0 item 2 says data-rights must land on "web
