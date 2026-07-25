@@ -21,7 +21,7 @@ import {
 } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { AuthProvider } from '@homechef/mobile-shared/auth';
+import { AuthProvider, ensureFreshInstallReset } from '@homechef/mobile-shared/auth';
 import { MFAGateProvider } from '@homechef/mobile-shared/mfa';
 import { api as apiClient } from '../lib/api';
 import { useAuthStore } from '../store/auth-store';
@@ -149,7 +149,14 @@ function AppNavigator() {
   const pushCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    hydrateFromStorage();
+    // Fresh-install guard MUST finish before hydrateFromStorage reads the
+    // Keychain: a reinstall leaves stale access/session tokens behind that
+    // hydrate would otherwise treat as "signed in", skipping login. On a normal
+    // app restart the guard is a no-op, preserving stay-logged-in (#428/#436).
+    void (async () => {
+      await ensureFreshInstallReset();
+      await hydrateFromStorage();
+    })();
     // Apply the saved language choice (overrides the device default).
     hydratePersistedLocale();
   }, []);

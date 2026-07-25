@@ -7,7 +7,7 @@ import { OfflineBanner } from '@homechef/mobile-shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { AuthProvider } from '@homechef/mobile-shared/auth';
+import { AuthProvider, ensureFreshInstallReset } from '@homechef/mobile-shared/auth';
 import { MFAGateProvider } from '@homechef/mobile-shared/mfa';
 import { api as apiClient } from '../lib/api';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
@@ -42,7 +42,14 @@ function AppNavigator() {
   const { isAuthenticated, isLoading, hydrateFromStorage } = useAuthStore();
 
   useEffect(() => {
-    hydrateFromStorage();
+    // Fresh-install guard MUST finish before hydrateFromStorage reads the
+    // Keychain: a reinstall leaves stale access/session tokens behind that
+    // hydrate would otherwise treat as "signed in", skipping login. On a normal
+    // app restart the guard is a no-op, preserving stay-logged-in (#428/#436).
+    void (async () => {
+      await ensureFreshInstallReset();
+      await hydrateFromStorage();
+    })();
   }, []);
 
   // Wipe the React Query cache whenever the signed-in identity changes so the
