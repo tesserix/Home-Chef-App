@@ -12,6 +12,10 @@ WORKDIR /app
 
 # Monorepo root files required for pnpm workspace resolution.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+# The root package.json declares pnpm.patchedDependencies (@tesserix/native);
+# pnpm reads it on every install and fails if the patch file is missing, even
+# though this app never imports that package. Mirrors apps/web-landing.
+COPY patches ./patches
 COPY .npmrc ./
 COPY apps/web/.npmrc* ./apps/web/
 COPY apps/web/package.json ./apps/web/

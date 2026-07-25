@@ -10,6 +10,10 @@ USER 0:0
 WORKDIR /app
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+# The root package.json declares pnpm.patchedDependencies (@tesserix/native);
+# pnpm reads it on every install and fails if the patch file is missing, even
+# though this app never imports that package. Mirrors apps/web-landing.
+COPY patches ./patches
 COPY apps/vendor-portal/package.json ./apps/vendor-portal/
 COPY apps/vendor-portal/.npmrc ./apps/vendor-portal/
 
