@@ -26,11 +26,11 @@ func setupStuckDayDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
 		customer_id TEXT, chef_id TEXT, status TEXT, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0,
 		total REAL DEFAULT 0, currency TEXT DEFAULT 'INR', escrow_payment_id TEXT DEFAULT '',
 		created_at DATETIME, updated_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
 		status TEXT, payout_transfer_id TEXT DEFAULT '', price REAL DEFAULT 0,
 		payout_hold_status TEXT DEFAULT '', refund_txn_id TEXT, date DATETIME,
 		created_at DATETIME, updated_at DATETIME)`).Error)

@@ -41,13 +41,13 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 		phone TEXT DEFAULT '', role TEXT DEFAULT 'customer', is_active INTEGER DEFAULT 1,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
 		rating REAL DEFAULT 0, total_reviews INTEGER DEFAULT 0, total_orders INTEGER DEFAULT 0,
 		accepting_orders INTEGER DEFAULT 1, paused_until DATETIME,
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
+	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_number TEXT, customer_id TEXT, chef_id TEXT,
 		status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'pending',
 		payment_method TEXT DEFAULT '', fulfillment_type TEXT DEFAULT '',
@@ -55,7 +55,7 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 		currency TEXT DEFAULT 'INR',
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE order_items (
+	require.NoError(t, db.Exec(`CREATE TABLE order_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, 
 		id TEXT PRIMARY KEY, order_id TEXT, menu_item_id TEXT, name TEXT DEFAULT '',
 		quantity INTEGER DEFAULT 1, price REAL DEFAULT 0,
 		created_at DATETIME, updated_at DATETIME
@@ -64,13 +64,13 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 	// meal-plan / subscription / group order when its id appears as order_id here.
 	// deleted_at is included because the subscription/group models are soft-delete
 	// (GORM adds `deleted_at IS NULL` to their subqueries); prod AutoMigrate has it.
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, 
 		id TEXT PRIMARY KEY, order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE meal_subscription_fulfillments (
 		id TEXT PRIMARY KEY, order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '',
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '',
 		id TEXT PRIMARY KEY, order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
 	// The chef list flags rows under an open delivery-failure review (#393), and

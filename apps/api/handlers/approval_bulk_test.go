@@ -57,7 +57,7 @@ func TestBulkApprove_FlipsMenuVisibility(t *testing.T) {
 	db, _, chefID := setupRemindDB(t)
 	// deleted_at is required: models.MenuItem is soft-deleted, so GORM's Update adds
 	// "AND deleted_at IS NULL" — without the column the side-effect update errors silently.
-	require.NoError(t, db.Exec(`CREATE TABLE menu_items (id text PRIMARY KEY, chef_id text, name text,
+	require.NoError(t, db.Exec(`CREATE TABLE menu_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY, chef_id text, name text,
 		is_available integer DEFAULT 1, is_approved integer DEFAULT 0, created_at datetime, updated_at datetime, deleted_at datetime)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE approval_request_histories (id text PRIMARY KEY, approval_id text,
 		from_status text, to_status text, changed_by_id text, notes text, created_at datetime, updated_at datetime)`).Error)

@@ -1,6 +1,10 @@
 package models
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/google/uuid"
+)
 
 // Mode partitions the platform into two worlds that share one database.
 //
@@ -35,3 +39,35 @@ func NormalizeMode(m string) string {
 
 // IsTestMode reports whether a stored mode value means test.
 func IsTestMode(m string) bool { return NormalizeMode(m) == ChefModeTest }
+
+// ModePartition is embedded in every chef-scoped row that participates in the
+// live/test split. GORM flattens anonymous embedded structs into the parent
+// table, so these become ordinary `mode`, `test_session_id` and
+// `cloned_from_id` columns — identical to writing them out per model, but
+// impossible to get subtly wrong in one of seventeen places.
+//
+// Embedding rather than repeating also means a scope written against one
+// partitioned table works unchanged against any other.
+type ModePartition struct {
+	// Mode is the data partition this row belongs to, snapshotted at creation
+	// from the chef's mode and never changed afterwards. Money operations read
+	// THIS field, not the chef's current mode — a chef flipped test→live must
+	// still be able to refund an order that was paid with test credentials.
+	Mode string `gorm:"type:varchar(4);not null;default:'live';index" json:"mode"`
+
+	// TestSessionID ties a test row to the debugging session it belongs to, so
+	// sessions can be listed and purged independently.
+	TestSessionID *uuid.UUID `gorm:"type:uuid;index" json:"testSessionId,omitempty"`
+
+	// ClonedFromID is set on rows produced by the live→test clone. A cloned row
+	// is a historical replica belonging to a real customer who never placed it
+	// in the sandbox, so it must never surface to any customer.
+	ClonedFromID *uuid.UUID `gorm:"type:uuid;index" json:"-"`
+}
+
+// IsTest reports whether this row belongs to the test partition.
+func (m ModePartition) IsTest() bool { return IsTestMode(m.Mode) }
+
+// IsClone reports whether this row was produced by the live→test clone rather
+// than by activity actually performed in the sandbox.
+func (m ModePartition) IsClone() bool { return m.ClonedFromID != nil }

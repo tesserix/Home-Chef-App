@@ -45,9 +45,9 @@ type ChefProfile struct {
 	TotalOrders               int     `gorm:"default:0" json:"totalOrders"`
 	// IssueCount is the number of customer-reported order issues (#37); the issue
 	// rate (issues/orders) feeds the chef's quality signal.
-	IssueCount      int        `gorm:"default:0" json:"issueCount"`
-	IsVerified      bool       `gorm:"default:false" json:"verified"`
-	VerifiedAt      *time.Time `gorm:"" json:"verifiedAt"`
+	IssueCount int        `gorm:"default:0" json:"issueCount"`
+	IsVerified bool       `gorm:"default:false" json:"verified"`
+	VerifiedAt *time.Time `gorm:"" json:"verifiedAt"`
 
 	// Mode selects which Razorpay credential set, which visibility rules and
 	// which data partition apply to this kitchen. Defaults to live so every
@@ -65,8 +65,8 @@ type ChefProfile struct {
 	// ActiveTestSessionID points at the open ChefTestSession while Mode is
 	// "test", and is nil while live.
 	ActiveTestSessionID *uuid.UUID `gorm:"type:uuid" json:"activeTestSessionId,omitempty"`
-	IsActive        bool       `gorm:"default:true" json:"isActive"`
-	AcceptingOrders bool       `gorm:"default:true" json:"acceptingOrders"`
+	IsActive            bool       `gorm:"default:true" json:"isActive"`
+	AcceptingOrders     bool       `gorm:"default:true" json:"acceptingOrders"`
 	// AutoScheduleEnabled opts the kitchen into schedule-driven open/close: when
 	// true, a cron flips AcceptingOrders on/off to match the chef's operating
 	// hours (ChefSchedule) for the current IST day, so the chef doesn't have to
@@ -88,16 +88,16 @@ type ChefProfile struct {
 	KitchenType string `gorm:"type:varchar(20);default:'home_kitchen'" json:"kitchenType"`
 
 	// Address
-	AddressLine1 string  `gorm:"" json:"addressLine1"`
-	AddressLine2 string  `gorm:"" json:"addressLine2"`
+	AddressLine1 string `gorm:"" json:"addressLine1"`
+	AddressLine2 string `gorm:"" json:"addressLine2"`
 	// PII companions (#710 P1) — addresses are not searched, ciphertext only.
 	AddressLine1Enc EncryptedString `gorm:"column:address_line1_enc;type:text" json:"-"`
 	AddressLine2Enc EncryptedString `gorm:"column:address_line2_enc;type:text" json:"-"`
-	City         string  `gorm:"" json:"city"`
-	State        string  `gorm:"" json:"state"`
-	PostalCode   string  `gorm:"" json:"postalCode"`
-	Latitude     float64 `gorm:"" json:"latitude"`
-	Longitude    float64 `gorm:"" json:"longitude"`
+	City            string          `gorm:"" json:"city"`
+	State           string          `gorm:"" json:"state"`
+	PostalCode      string          `gorm:"" json:"postalCode"`
+	Latitude        float64         `gorm:"" json:"latitude"`
+	Longitude       float64         `gorm:"" json:"longitude"`
 
 	// Featured/Promoted
 	IsFeatured    bool       `gorm:"default:false" json:"isFeatured"`
@@ -204,6 +204,9 @@ type ChefProfile struct {
 }
 
 type ChefSchedule struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	ChefID    uuid.UUID `gorm:"type:uuid;not null;index" json:"chefId"`
 	DayOfWeek int       `gorm:"not null" json:"dayOfWeek"` // 0-6, Sunday-Saturday
@@ -345,21 +348,21 @@ type ChefProfileResponse struct {
 	FoodSafetyBadge bool `json:"foodSafetyBadge"`
 	// ProBadge: chef has an active premium subscription — the Verified-Pro badge
 	// (#44). Like FoodSafetyBadge it needs a DB lookup, so the handler populates it.
-	ProBadge        bool                   `json:"proBadge"`
-	IsFeatured      bool                   `json:"isFeatured"`
-	IsOnline        bool                   `json:"isOnline"`
-	AcceptingOrders     bool               `json:"acceptingOrders"`
-	AutoScheduleEnabled bool               `json:"autoScheduleEnabled"`
-	PausedUntil     *time.Time             `json:"pausedUntil,omitempty"`
-	KitchenPhotos   []string               `json:"kitchenPhotos"`
-	KitchenType     string                 `json:"kitchenType"`
-	City            string                 `json:"city"`
-	State           string                 `json:"state"`
-	Country         string                 `json:"country"`  // chef's PayoutCountry (ISO alpha-2)
-	Currency        string                 `json:"currency"` // ISO-4217, derived from country
-	Latitude        float64                `json:"latitude"`
-	Longitude       float64                `json:"longitude"`
-	OperatingHours  map[string]interface{} `json:"operatingHours,omitempty"`
+	ProBadge            bool                   `json:"proBadge"`
+	IsFeatured          bool                   `json:"isFeatured"`
+	IsOnline            bool                   `json:"isOnline"`
+	AcceptingOrders     bool                   `json:"acceptingOrders"`
+	AutoScheduleEnabled bool                   `json:"autoScheduleEnabled"`
+	PausedUntil         *time.Time             `json:"pausedUntil,omitempty"`
+	KitchenPhotos       []string               `json:"kitchenPhotos"`
+	KitchenType         string                 `json:"kitchenType"`
+	City                string                 `json:"city"`
+	State               string                 `json:"state"`
+	Country             string                 `json:"country"`  // chef's PayoutCountry (ISO alpha-2)
+	Currency            string                 `json:"currency"` // ISO-4217, derived from country
+	Latitude            float64                `json:"latitude"`
+	Longitude           float64                `json:"longitude"`
+	OperatingHours      map[string]interface{} `json:"operatingHours,omitempty"`
 	// Availability is the chef's REAL-TIME open/closed status (computed by
 	// services.ComputeChefAvailability), mirroring the exact gates the order path
 	// enforces — accepting flag + live schedule window + daily cutoff + platform

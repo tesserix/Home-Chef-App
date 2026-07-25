@@ -84,7 +84,7 @@ const payoutRaceUsersDDL = `CREATE TABLE IF NOT EXISTS users (
 	last_login_at timestamptz, created_at timestamptz, updated_at timestamptz, deleted_at timestamptz
 )`
 
-const payoutRaceChefProfilesDDL = `CREATE TABLE IF NOT EXISTS chef_profiles (
+const payoutRaceChefProfilesDDL = `CREATE TABLE IF NOT EXISTS chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, 
 	id uuid PRIMARY KEY, user_id uuid, business_name text DEFAULT '',
 	address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '',
 	slug text DEFAULT '', description text DEFAULT '',

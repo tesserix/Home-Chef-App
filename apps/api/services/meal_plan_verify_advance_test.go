@@ -30,7 +30,7 @@ func setupAdvanceDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_number TEXT,
 		razorpay_order_id TEXT, total REAL, escrow_payment_id TEXT, created_at DATETIME, updated_at DATETIME)`).Error)
 	prev := database.DB
 	database.DB = db

@@ -29,15 +29,15 @@ func setupHoldHandlerDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, customer_id TEXT, status TEXT,
+		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, customer_id TEXT, status TEXT,
 			razorpay_order_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			customer_confirmed_at DATETIME, refunded_at DATETIME,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
+		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			customer_confirmed_at DATETIME, delivered_at DATETIME, date DATETIME, refund_txn_id TEXT,
 			created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, status TEXT)`,
+		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, status TEXT)`,
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT, value TEXT, type TEXT, updated_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),

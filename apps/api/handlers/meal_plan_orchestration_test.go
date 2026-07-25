@@ -43,15 +43,15 @@ func setupOrchestrationDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE meal_plans (id text PRIMARY KEY, meal_plan_number text, customer_id text, chef_id text,
+		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY, meal_plan_number text, customer_id text, chef_id text,
 			status text, subtotal real, tax real, total real, currency text, escrow_payment_id text,
 			razorpay_order_id text, chef_respond_by datetime, customer_approve_by datetime, confirmed_at datetime,
 			cancelled_at datetime, cancel_reason text, start_date datetime, end_date datetime,
 			created_at datetime, updated_at datetime)`,
-		`CREATE TABLE meal_plan_days (id text PRIMARY KEY, meal_plan_id text, status text, price real, date datetime,
+		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY, meal_plan_id text, status text, price real, date datetime,
 			payout_transfer_id text, commission_rate real, payout_hold_status text, refund_txn_id text, order_id text,
 			created_at datetime, updated_at datetime)`,
-		`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text, business_name text, profile_image text,
+		`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text, business_name text, profile_image text,
 			razorpay_account_id text, payout_country text, is_active integer DEFAULT 1, deleted_at datetime)`,
 		`CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', id text PRIMARY KEY, first_name text, last_name text, email text, phone text, deleted_at datetime)`,
 		`CREATE TABLE outbox_events (id text PRIMARY KEY, subject text, msg_id text, aggregate_type text,

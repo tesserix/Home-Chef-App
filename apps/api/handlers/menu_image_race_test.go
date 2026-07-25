@@ -41,7 +41,7 @@ func racePG(t *testing.T) *gorm.DB {
 // seedRaceItem creates an isolated item with `existing` images already attached.
 func seedRaceItem(t *testing.T, db *gorm.DB, existing int) uuid.UUID {
 	t.Helper()
-	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS menu_items (
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS menu_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, 
 		id uuid PRIMARY KEY, chef_id uuid, name text, price numeric,
 		image_url text DEFAULT '', created_at timestamptz, updated_at timestamptz,
 		deleted_at timestamptz)`).Error)

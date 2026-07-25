@@ -88,14 +88,14 @@ type DeliveryPartner struct {
 	RejectionReason    string             `gorm:"" json:"rejectionReason,omitempty"`
 
 	// Personal details
-	City             string     `gorm:"" json:"city"`
-	EmergencyContact string     `gorm:"" json:"emergencyContact"`
-	EmergencyPhone   string     `gorm:"" json:"emergencyPhone"`
+	City             string `gorm:"" json:"city"`
+	EmergencyContact string `gorm:"" json:"emergencyContact"`
+	EmergencyPhone   string `gorm:"" json:"emergencyPhone"`
 	// PII companions (#710 P1) — next-of-kin contact for a delivery partner.
 	EmergencyContactEnc EncryptedString `gorm:"column:emergency_contact_enc;type:text" json:"-"`
 	EmergencyPhoneEnc   EncryptedString `gorm:"column:emergency_phone_enc;type:text" json:"-"`
 	EmergencyPhoneBidx  string          `gorm:"column:emergency_phone_bidx;type:text;index" json:"-"`
-	DateOfBirth      *time.Time `gorm:"" json:"dateOfBirth,omitempty"`
+	DateOfBirth         *time.Time      `gorm:"" json:"dateOfBirth,omitempty"`
 
 	// Extended vehicle details
 	VehicleMake         string `gorm:"" json:"vehicleMake"`
@@ -259,14 +259,14 @@ type Delivery struct {
 	// 3PL rider — populated from provider webhooks. For own-fleet deliveries
 	// the rider's live position lives on DeliveryPartner instead; ToResponse
 	// prefers these when set so the customer map shows the real 3PL rider.
-	RiderName      string  `gorm:"" json:"riderName,omitempty"`
-	RiderPhone     string  `gorm:"" json:"riderPhone,omitempty"`
+	RiderName  string `gorm:"" json:"riderName,omitempty"`
+	RiderPhone string `gorm:"" json:"riderPhone,omitempty"`
 	// PII companions (#710 P1) — third-party courier rider identity.
-	RiderNameEnc  EncryptedString `gorm:"column:rider_name_enc;type:text" json:"-"`
-	RiderPhoneEnc EncryptedString `gorm:"column:rider_phone_enc;type:text" json:"-"`
-	RiderLatitude  float64 `gorm:"" json:"riderLatitude,omitempty"`
-	RiderLongitude float64 `gorm:"" json:"riderLongitude,omitempty"`
-	ProviderStatus string  `gorm:"" json:"providerStatus,omitempty"` // raw provider status, pre-mapping
+	RiderNameEnc   EncryptedString `gorm:"column:rider_name_enc;type:text" json:"-"`
+	RiderPhoneEnc  EncryptedString `gorm:"column:rider_phone_enc;type:text" json:"-"`
+	RiderLatitude  float64         `gorm:"" json:"riderLatitude,omitempty"`
+	RiderLongitude float64         `gorm:"" json:"riderLongitude,omitempty"`
+	ProviderStatus string          `gorm:"" json:"providerStatus,omitempty"` // raw provider status, pre-mapping
 
 	// Earnings
 	DeliveryFee float64 `gorm:"default:0" json:"deliveryFee"`

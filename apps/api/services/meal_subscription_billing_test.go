@@ -48,7 +48,7 @@ func setupMealBillingDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	stmts := []string{
-		`CREATE TABLE meal_subscriptions (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, cycle_amount REAL,
+		`CREATE TABLE meal_subscriptions (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, cycle_amount REAL,
 			credit_balance REAL DEFAULT 0, currency TEXT DEFAULT 'INR', status TEXT, cadence TEXT DEFAULT 'weekly',
 			gateway_sub_id TEXT, current_period_start DATETIME, current_period_end DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE meal_subscription_invoices (id TEXT PRIMARY KEY, meal_subscription_id TEXT, invoice_number TEXT,

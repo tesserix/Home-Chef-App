@@ -35,7 +35,7 @@ type PaymentDrift struct {
 	ExpectedPaise int64 `gorm:"default:0" json:"expectedPaise"`
 	GatewayPaise  int64 `gorm:"default:0" json:"gatewayPaise"`
 
-	DetectedAt time.Time  `gorm:"autoCreateTime" json:"detectedAt"`
+	DetectedAt time.Time `gorm:"autoCreateTime" json:"detectedAt"`
 	// ResolvedAt is stamped when a later scan finds the aggregate consistent again — an
 	// OPEN drift is ResolvedAt IS NULL. UpdatedAt tracks the last scan that touched it.
 	ResolvedAt *time.Time `json:"resolvedAt,omitempty"`

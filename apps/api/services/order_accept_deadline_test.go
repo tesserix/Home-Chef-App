@@ -44,7 +44,7 @@ func setupDeadlineDB(t *testing.T) (*gorm.DB, uuid.UUID) {
 			lunch_slot_end text, dinner_slot_start text, dinner_slot_end text,
 			lunch_slot_capacity int, dinner_slot_capacity int, auto_sold_out boolean,
 			created_at datetime, updated_at datetime)`,
-		`CREATE TABLE chef_schedules (id text PRIMARY KEY, chef_id text, day_of_week int,
+		`CREATE TABLE chef_schedules (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY, chef_id text, day_of_week int,
 			open_time text, close_time text, is_closed boolean, created_at datetime, updated_at datetime)`,
 		// ReleaseSlot decrements this when a voided order's slot booking is freed.
 		`CREATE TABLE chef_slot_daily_bookings (id text PRIMARY KEY, chef_id text, slot text,

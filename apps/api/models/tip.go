@@ -22,6 +22,9 @@ const (
 // amounts are attached to the Razorpay order as transfers with OnHold:false, so
 // they settle immediately (delivery has already happened).
 type Tip struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	OrderID    uuid.UUID `gorm:"type:uuid;index;not null" json:"orderId"`
 	CustomerID uuid.UUID `gorm:"type:uuid;index;not null" json:"customerId"`

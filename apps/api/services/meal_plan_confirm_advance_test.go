@@ -32,13 +32,13 @@ func setupConfirmAdvanceDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT, customer_id TEXT, chef_id TEXT,
+		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_number TEXT, customer_id TEXT, chef_id TEXT,
 			status TEXT, razorpay_order_id TEXT, escrow_payment_id TEXT, subtotal REAL, tax REAL, total REAL,
 			currency TEXT, confirmed_at DATETIME, created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, status TEXT,
+		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, status TEXT,
 			payout_transfer_id TEXT DEFAULT '', commission_rate REAL DEFAULT 0, price REAL,
 			created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEXT, razorpay_account_id TEXT DEFAULT '',
+		`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, id TEXT PRIMARY KEY, user_id TEXT, razorpay_account_id TEXT DEFAULT '',
 			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE platform_settings (key TEXT PRIMARY KEY, value TEXT)`,
 		`CREATE TABLE audit_logs (id TEXT PRIMARY KEY, user_id TEXT, action TEXT, entity_type TEXT,

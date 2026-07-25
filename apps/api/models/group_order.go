@@ -63,6 +63,9 @@ const (
 const GroupOrderMaxParticipants = 25
 
 type GroupOrder struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID        uuid.UUID           `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	HostID    uuid.UUID           `gorm:"type:uuid;index;not null" json:"hostId"`
 	ChefID    uuid.UUID           `gorm:"type:uuid;index;not null" json:"chefId"`
@@ -99,18 +102,18 @@ type GroupOrder struct {
 	PayoutSettleAttempts int        `gorm:"default:0" json:"-"`
 
 	// Single drop — frozen at lock (mirrors Order's delivery columns).
-	DeliveryAddressLine1      string  `gorm:"" json:"deliveryAddressLine1,omitempty"`
-	DeliveryAddressLine2      string  `gorm:"" json:"deliveryAddressLine2,omitempty"`
+	DeliveryAddressLine1 string `gorm:"" json:"deliveryAddressLine1,omitempty"`
+	DeliveryAddressLine2 string `gorm:"" json:"deliveryAddressLine2,omitempty"`
 	// PII companions (#710 P1).
-	DeliveryAddressLine1Enc EncryptedString `gorm:"column:delivery_address_line1_enc;type:text" json:"-"`
-	DeliveryAddressLine2Enc EncryptedString `gorm:"column:delivery_address_line2_enc;type:text" json:"-"`
-	DeliveryAddressCity       string  `gorm:"" json:"deliveryAddressCity,omitempty"`
-	DeliveryAddressState      string  `gorm:"" json:"deliveryAddressState,omitempty"`
-	DeliveryAddressPostalCode string  `gorm:"" json:"deliveryAddressPostalCode,omitempty"`
-	DeliveryAddressCountry    string  `gorm:"type:varchar(2);default:'IN'" json:"deliveryAddressCountry,omitempty"`
-	DeliveryLatitude          float64 `gorm:"" json:"deliveryLatitude,omitempty"`
-	DeliveryLongitude         float64 `gorm:"" json:"deliveryLongitude,omitempty"`
-	DeliveryInstructions      string  `gorm:"" json:"deliveryInstructions,omitempty"`
+	DeliveryAddressLine1Enc   EncryptedString `gorm:"column:delivery_address_line1_enc;type:text" json:"-"`
+	DeliveryAddressLine2Enc   EncryptedString `gorm:"column:delivery_address_line2_enc;type:text" json:"-"`
+	DeliveryAddressCity       string          `gorm:"" json:"deliveryAddressCity,omitempty"`
+	DeliveryAddressState      string          `gorm:"" json:"deliveryAddressState,omitempty"`
+	DeliveryAddressPostalCode string          `gorm:"" json:"deliveryAddressPostalCode,omitempty"`
+	DeliveryAddressCountry    string          `gorm:"type:varchar(2);default:'IN'" json:"deliveryAddressCountry,omitempty"`
+	DeliveryLatitude          float64         `gorm:"" json:"deliveryLatitude,omitempty"`
+	DeliveryLongitude         float64         `gorm:"" json:"deliveryLongitude,omitempty"`
+	DeliveryInstructions      string          `gorm:"" json:"deliveryInstructions,omitempty"`
 
 	// Totals — computed once at lock from the full item set.
 	Currency    string  `gorm:"type:varchar(3);default:'INR'" json:"currency"`

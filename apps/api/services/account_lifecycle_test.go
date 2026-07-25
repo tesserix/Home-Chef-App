@@ -45,17 +45,17 @@ func setupAccountDB(t *testing.T) *gorm.DB {
 	// NO deleted_at, exactly as in production. Adding one here would let a
 	// cascade that hard-deletes them appear to pass while destroying data the
 	// restore window promises to keep.
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, id TEXT PRIMARY KEY, user_id TEXT,
 		is_verified BOOLEAN DEFAULT 0, verified_at DATETIME, is_active BOOLEAN DEFAULT 1,
 		accepting_orders BOOLEAN DEFAULT 1, auto_schedule_enabled BOOLEAN DEFAULT 0,
 		created_at DATETIME, updated_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE menu_items (id TEXT PRIMARY KEY, chef_id TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE menu_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, chef_id TEXT,
 		is_available BOOLEAN DEFAULT 1, is_approved BOOLEAN DEFAULT 0,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE chef_documents (id TEXT PRIMARY KEY, chef_id TEXT,
 		type TEXT, file_name TEXT, file_path TEXT, bucket TEXT, status TEXT,
 		created_at DATETIME, updated_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_schedules (id TEXT PRIMARY KEY, chef_id TEXT)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE chef_schedules (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, chef_id TEXT)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE chef_settings (id TEXT PRIMARY KEY, chef_id TEXT)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE addresses (id TEXT PRIMARY KEY, user_id TEXT,
 		created_at DATETIME, updated_at DATETIME)`).Error)
@@ -72,10 +72,10 @@ func setupAccountDB(t *testing.T) *gorm.DB {
 		submitted_data TEXT, admin_notes TEXT, reviewed_at DATETIME, expires_at DATETIME,
 		reminder_count INT DEFAULT 0, last_reminded_at DATETIME, escalated_at DATETIME,
 		created_at DATETIME, updated_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, customer_id TEXT,
 		chef_id TEXT, status TEXT, payout_hold_status TEXT DEFAULT '',
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, customer_id TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, customer_id TEXT,
 		chef_id TEXT, status TEXT, total REAL DEFAULT 0,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT,

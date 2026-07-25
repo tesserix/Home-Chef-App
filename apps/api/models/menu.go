@@ -24,6 +24,9 @@ type MenuCategory struct {
 }
 
 type MenuItem struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID           uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	ChefID       uuid.UUID      `gorm:"type:uuid;not null;index" json:"chefId"`
 	CategoryID   *uuid.UUID     `gorm:"type:uuid;index" json:"categoryId,omitempty"`
@@ -124,13 +127,13 @@ type MenuItemResponse struct {
 	Allergens    []string                `json:"allergens"`
 	SpiceLevel   int                     `json:"spiceLevel"`
 	// IsVeg is omitted from JSON when nil (legacy items where the flag was not set).
-	IsVeg       *bool   `json:"isVeg,omitempty"`
-	IsAvailable bool    `json:"isAvailable"`
+	IsVeg       *bool `json:"isVeg,omitempty"`
+	IsAvailable bool  `json:"isAvailable"`
 	// AvailableDays is the weekly-menu schedule (0=Sun..6=Sat). Empty = every day.
 	AvailableDays []int64 `json:"availableDays"`
 	IsFeatured    bool    `json:"isFeatured"`
-	Rating      float64 `json:"rating"`
-	HSN         string  `json:"hsn,omitempty"`
+	Rating        float64 `json:"rating"`
+	HSN           string  `json:"hsn,omitempty"`
 	// Capacity (#48). DailyCapacity nil = unlimited. RemainingToday + SoldOut are
 	// populated by handlers that have DB access (the daily-sales counter); they're
 	// omitted when the item is uncapped.

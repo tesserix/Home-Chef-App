@@ -21,18 +21,18 @@ const (
 )
 
 type MealSubscriptionFulfillment struct {
-	ID                 uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	MealSubscriptionID uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_meal_fulfill_cell;index" json:"mealSubscriptionId"`
-	CustomerID         uuid.UUID `gorm:"type:uuid;not null;index" json:"customerId"`
-	ChefID             uuid.UUID `gorm:"type:uuid;not null;index" json:"chefId"`
-	Date               time.Time `gorm:"not null;uniqueIndex:idx_meal_fulfill_cell" json:"date"`
-	Slot               MealSlot  `gorm:"type:varchar(10);not null;uniqueIndex:idx_meal_fulfill_cell" json:"slot"`
-	DishName           string    `gorm:"" json:"dishName"`
-	Price              float64   `gorm:"default:0" json:"price"`
-	Status             string    `gorm:"type:varchar(12);not null;default:'scheduled';index" json:"status"`
-	OrderID            *uuid.UUID `gorm:"type:uuid;index" json:"orderId,omitempty"`
-	CreatedAt          time.Time  `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt          time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
+	ID                 uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	MealSubscriptionID uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:idx_meal_fulfill_cell;index" json:"mealSubscriptionId"`
+	CustomerID         uuid.UUID      `gorm:"type:uuid;not null;index" json:"customerId"`
+	ChefID             uuid.UUID      `gorm:"type:uuid;not null;index" json:"chefId"`
+	Date               time.Time      `gorm:"not null;uniqueIndex:idx_meal_fulfill_cell" json:"date"`
+	Slot               MealSlot       `gorm:"type:varchar(10);not null;uniqueIndex:idx_meal_fulfill_cell" json:"slot"`
+	DishName           string         `gorm:"" json:"dishName"`
+	Price              float64        `gorm:"default:0" json:"price"`
+	Status             string         `gorm:"type:varchar(12);not null;default:'scheduled';index" json:"status"`
+	OrderID            *uuid.UUID     `gorm:"type:uuid;index" json:"orderId,omitempty"`
+	CreatedAt          time.Time      `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt          time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt          gorm.DeletedAt `gorm:"index" json:"-"`
 }
 

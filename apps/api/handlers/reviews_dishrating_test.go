@@ -21,7 +21,7 @@ func TestRecomputeMenuItemRating(t *testing.T) {
 	require.NoError(t, err)
 	// MenuItem carries gorm.DeletedAt → the Updates query appends deleted_at IS
 	// NULL, so the column must exist.
-	require.NoError(t, db.Exec(`CREATE TABLE menu_items (
+	require.NoError(t, db.Exec(`CREATE TABLE menu_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, 
 		id text PRIMARY KEY, rating real DEFAULT 0, total_reviews integer DEFAULT 0,
 		updated_at datetime, deleted_at datetime
 	)`).Error)

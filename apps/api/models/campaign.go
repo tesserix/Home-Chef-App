@@ -54,9 +54,9 @@ type Campaign struct {
 	SentAt       *time.Time `json:"sentAt,omitempty"`
 	CreatedBy    *uuid.UUID `gorm:"type:uuid" json:"createdBy,omitempty"`
 	// Cached recipient counts, set at dispatch.
-	Recipients int       `gorm:"not null;default:0" json:"recipients"`
-	CreatedAt  time.Time  `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt  time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
+	Recipients int            `gorm:"not null;default:0" json:"recipients"`
+	CreatedAt  time.Time      `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt  time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
 }
 

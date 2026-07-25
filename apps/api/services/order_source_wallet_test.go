@@ -19,9 +19,9 @@ func TestWalletRefundEligible(t *testing.T) {
 	for _, s := range []string{
 		// deleted_at present so GORM's soft-delete scope (added for models with a DeletedAt)
 		// doesn't error the classification query against a minimal table.
-		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`,
 		`CREATE TABLE meal_subscription_fulfillments (id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`,
-		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE group_orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}

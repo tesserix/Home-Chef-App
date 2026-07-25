@@ -58,14 +58,14 @@ func setupMealOrderDB(t *testing.T) *gorm.DB {
 	// proven meal_plan generateDayOrder pattern; these tests cover the NEW decision /
 	// skip / idempotency / missed-credit / adherence logic.
 	stmts := []string{
-		`CREATE TABLE weekly_menu_items (id TEXT PRIMARY KEY, chef_id TEXT, day_of_week INTEGER, slot TEXT, variant TEXT,
+		`CREATE TABLE weekly_menu_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, chef_id TEXT, day_of_week INTEGER, slot TEXT, variant TEXT,
 			name TEXT, description TEXT, price REAL, image_url TEXT, dietary_tags TEXT, allergens TEXT, menu_item_id TEXT,
 			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_subscription_fulfillments (id TEXT PRIMARY KEY, meal_subscription_id TEXT, customer_id TEXT,
 			chef_id TEXT, date DATETIME, slot TEXT, dish_name TEXT, price REAL, status TEXT DEFAULT 'scheduled',
 			order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE meal_subscription_skips (id TEXT PRIMARY KEY, meal_subscription_id TEXT, date DATETIME, created_at DATETIME)`,
-		`CREATE TABLE meal_subscriptions (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, cycle_amount REAL,
+		`CREATE TABLE meal_subscriptions (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, cycle_amount REAL,
 			credit_balance REAL DEFAULT 0, currency TEXT, status TEXT, updated_at DATETIME, deleted_at DATETIME)`,
 	}
 	for _, s := range stmts {

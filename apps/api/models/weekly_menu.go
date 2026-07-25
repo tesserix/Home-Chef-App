@@ -14,6 +14,9 @@ import (
 
 // WeeklyMenu is the per-chef header (publish state).
 type WeeklyMenu struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID          uuid.UUID        `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	ChefID      uuid.UUID        `gorm:"type:uuid;uniqueIndex;not null" json:"chefId"`
 	IsPublished bool             `gorm:"default:false" json:"isPublished"`
@@ -26,6 +29,9 @@ type WeeklyMenu struct {
 // WeeklyMenuItem is one cell: the dish for a (dayOfWeek 0=Sun..6=Sat, slot, variant).
 // The (chef, day, slot, variant) tuple is unique — one dish per cell.
 type WeeklyMenuItem struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID          uuid.UUID   `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	ChefID      uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:idx_weekly_cell" json:"chefId"`
 	DayOfWeek   int         `gorm:"not null;uniqueIndex:idx_weekly_cell" json:"dayOfWeek"`

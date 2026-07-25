@@ -161,12 +161,12 @@ const (
 
 // StaffInvitation represents a pending invitation for someone to join as staff
 type StaffInvitation struct {
-	ID           uuid.UUID        `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Email        string           `gorm:"not null;index" json:"email"`
+	ID    uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	Email string    `gorm:"not null;index" json:"email"`
 	// PII companions (#710 P1). The existing plain index on `email` becomes
 	// useless once reads move to ciphertext — email_bidx carries it instead.
-	EmailEnc  EncryptedString `gorm:"column:email_enc;type:text" json:"-"`
-	EmailBidx string          `gorm:"column:email_bidx;type:text;index" json:"-"`
+	EmailEnc     EncryptedString  `gorm:"column:email_enc;type:text" json:"-"`
+	EmailBidx    string           `gorm:"column:email_bidx;type:text;index" json:"-"`
 	StaffRole    StaffRole        `gorm:"type:varchar(30);not null" json:"staffRole"`
 	Department   string           `gorm:"type:varchar(50)" json:"department"`
 	Title        string           `gorm:"type:varchar(100)" json:"title"`

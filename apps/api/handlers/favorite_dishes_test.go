@@ -35,7 +35,7 @@ func setupFavDishDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	// menu_items: only the columns the handlers touch (id + soft-delete scope).
 	require.NoError(t, db.Exec(`
-		CREATE TABLE menu_items (
+		CREATE TABLE menu_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, 
 			id         TEXT PRIMARY KEY,
 			chef_id    TEXT,
 			name       TEXT,

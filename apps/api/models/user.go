@@ -49,8 +49,8 @@ type User struct {
 	LastNameEnc  EncryptedString `gorm:"column:last_name_enc;type:text" json:"-"`
 	PhoneEnc     EncryptedString `gorm:"column:phone_enc;type:text" json:"-"`
 	PhoneBidx    string          `gorm:"column:phone_bidx;type:text;index" json:"-"`
-	Avatar    string    `gorm:"" json:"avatar"`
-	Role      UserRole  `gorm:"type:varchar(20);default:'customer'" json:"role"`
+	Avatar       string          `gorm:"" json:"avatar"`
+	Role         UserRole        `gorm:"type:varchar(20);default:'customer'" json:"role"`
 
 	// GIP identity. Populated when apps/auth-bff upserts a user after a
 	// successful Google Identity Platform sign-in. See migration
@@ -112,23 +112,23 @@ func (u *User) BeforeSave(*gorm.DB) error {
 }
 
 type Address struct {
-	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID     uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
-	Label      string    `gorm:"" json:"label"` // Home, Work, etc.
-	Line1      string    `gorm:"not null" json:"line1"`
-	Line2      string    `gorm:"" json:"line2"`
+	ID     uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
+	Label  string    `gorm:"" json:"label"` // Home, Work, etc.
+	Line1  string    `gorm:"not null" json:"line1"`
+	Line2  string    `gorm:"" json:"line2"`
 	// PII companions (#710 P1) — not searched, so ciphertext only.
-	Line1Enc EncryptedString `gorm:"column:line1_enc;type:text" json:"-"`
-	Line2Enc EncryptedString `gorm:"column:line2_enc;type:text" json:"-"`
-	City       string    `gorm:"not null" json:"city"`
-	State      string    `gorm:"not null" json:"state"`
-	PostalCode string    `gorm:"not null" json:"postalCode"`
-	Country    string    `gorm:"default:'US'" json:"country"`
-	Latitude   float64   `gorm:"" json:"latitude"`
-	Longitude  float64   `gorm:"" json:"longitude"`
-	IsDefault  bool      `gorm:"default:false" json:"isDefault"`
-	CreatedAt  time.Time `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt  time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+	Line1Enc   EncryptedString `gorm:"column:line1_enc;type:text" json:"-"`
+	Line2Enc   EncryptedString `gorm:"column:line2_enc;type:text" json:"-"`
+	City       string          `gorm:"not null" json:"city"`
+	State      string          `gorm:"not null" json:"state"`
+	PostalCode string          `gorm:"not null" json:"postalCode"`
+	Country    string          `gorm:"default:'US'" json:"country"`
+	Latitude   float64         `gorm:"" json:"latitude"`
+	Longitude  float64         `gorm:"" json:"longitude"`
+	IsDefault  bool            `gorm:"default:false" json:"isDefault"`
+	CreatedAt  time.Time       `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt  time.Time       `gorm:"autoUpdateTime" json:"updatedAt"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }

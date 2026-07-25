@@ -97,7 +97,7 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT,
+		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT,
 			status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'razorpay', razorpay_payment_id TEXT DEFAULT '',
 			stripe_payment_intent_id TEXT DEFAULT '', total REAL DEFAULT 0, wallet_applied REAL DEFAULT 0, currency TEXT DEFAULT 'INR',
 			loyalty_applied REAL DEFAULT 0, loyalty_points_spent REAL DEFAULT 0,
@@ -122,7 +122,7 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 			idempotency_key TEXT UNIQUE, created_at DATETIME)`,
 		`CREATE TABLE wallet_txns (id TEXT PRIMARY KEY, wallet_id TEXT, user_id TEXT, type TEXT, source TEXT, amount REAL,
 			balance_after REAL, currency TEXT, order_id TEXT, reason TEXT, created_by TEXT, idempotency_key TEXT UNIQUE, created_at DATETIME)`,
-		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0,
+		`CREATE TABLE order_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0,
 			refund_amount REAL DEFAULT 0, subtotal REAL DEFAULT 0, created_at DATETIME)`,
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, status TEXT DEFAULT 'pending', created_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT, aggregate_id TEXT,
@@ -130,8 +130,8 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE audit_logs (id TEXT PRIMARY KEY, user_id TEXT, action TEXT, entity_type TEXT, entity_id TEXT,
 			old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT, correlation_id TEXT, created_at DATETIME)`,
 		// #544: TypedRefundOrderKind Counts these by order_id to detect a typed escrow order.
-		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT, status TEXT, deleted_at DATETIME)`,
-		`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT, status TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, order_id TEXT, status TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE group_orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT, status TEXT, deleted_at DATETIME)`,
 		// #690: the refund ledger. RefundOrderForCancellation now moves money through the
 		// coordinator, which records every attempt here before calling the gateway.
 		`CREATE TABLE refund_transactions (id TEXT PRIMARY KEY, order_id TEXT NOT NULL, provider TEXT NOT NULL,

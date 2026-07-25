@@ -24,13 +24,13 @@ import (
 	"github.com/homechef/api/database"
 )
 
-const menuImgChefDDL = `CREATE TABLE chef_profiles (
+const menuImgChefDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, 
 	id text PRIMARY KEY, user_id text, business_name text,
 	is_active integer DEFAULT 1, created_at datetime, updated_at datetime,
 	deleted_at datetime
 )`
 
-const menuImgItemDDL = `CREATE TABLE menu_items (
+const menuImgItemDDL = `CREATE TABLE menu_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, 
 	id text PRIMARY KEY, chef_id text, name text, price real,
 	image_url text DEFAULT '', is_available integer DEFAULT 1,
 	serves integer DEFAULT 1, sort_order integer DEFAULT 0,
