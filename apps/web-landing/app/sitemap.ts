@@ -13,6 +13,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/privacy/`, lastModified, changeFrequency: 'monthly', priority: 0.3 },
     { url: `${SITE_URL}/terms/`, lastModified, changeFrequency: 'monthly', priority: 0.3 },
     { url: `${SITE_URL}/refund/`, lastModified, changeFrequency: 'monthly', priority: 0.3 },
+    // Submitted in the Play Console Data Safety form as the account-deletion
+    // URL, so it must stay crawlable and reachable without the app installed.
+    { url: `${SITE_URL}/account-deletion/`, lastModified, changeFrequency: 'monthly', priority: 0.3 },
   ];
 
   // SEO chef/cuisine/area pages (#58) — from the same build-time index.

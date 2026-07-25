@@ -13,6 +13,8 @@ const LEGAL_LINKS = [
   { href: '/privacy/', label: 'Privacy Policy' },
   { href: '/terms/', label: 'Terms of Service' },
   { href: '/refund/', label: 'Refund & Cancellation' },
+  // Google Play requires this to be reachable without installing the app.
+  { href: '/account-deletion/', label: 'Delete Your Account' },
 ] as const;
 
 export function SiteFooter() {

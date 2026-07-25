@@ -79,8 +79,9 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '6. How long we keep it',
     paragraphs: [
-      'We keep your personal data only as long as we need it for the purpose we collected it, plus any period the law requires us to hold it. Order and payment records are kept for the period required by Indian tax law; food-safety complaint records are kept for FSSAI traceability; closed-account data is deleted or anonymised within 90 days, except records the law requires us to keep.',
-      'Once the period ends, we delete the data or anonymise it so it can no longer be linked back to you.',
+      'We keep your personal data only as long as we need it for the purpose we collected it, plus any period the law requires us to hold it. Order and payment records are kept for the period required by Indian tax law, and food-safety complaint records are kept for FSSAI traceability.',
+      'When you delete your account, we remove it from the service straight away and your sign-in stops working immediately. We then hold your data for 180 days so that you can change your mind: if you sign up again with the same email address within that window, your history is restored. Chefs and delivery partners who return this way must be approved again and re-upload their identity documents — we do not reinstate a previous approval.',
+      'After 180 days we erase your personal data permanently. What remains is a financial record of your transactions — order totals, invoice references, and tax lines — which Indian tax law requires us to retain. That record carries no name, email address, phone number, or delivery address, so it can no longer be linked back to you.',
     ],
   },
   {
