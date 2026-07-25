@@ -82,6 +82,24 @@ func withRefundGateway(t *testing.T) (gotKey *string, refundCalls *int) {
 	return &key, &calls
 }
 
+// withFailingRefundGateway points GetRazorpay at an httptest server that answers the
+// refund POST with a hard gateway error (HTTP 500) — used to exercise the #766-followup
+// deferral path (CancelOrder must cancel + defer, never hard-block, on a gateway failure).
+func withFailingRefundGateway(t *testing.T) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/refund") {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":{"description":"gateway unavailable"}}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	services.SetRazorpayClient(services.NewRazorpayTestClient(srv.URL, "rzp_test_key", "rzp_test_secret", ""))
+	t.Cleanup(func() { services.SetRazorpayClient(nil) })
+}
+
 func markDeliveredPaid(t *testing.T, orderID uuid.UUID, payID string) {
 	t.Helper()
 	require.NoError(t, database.DB.Exec(

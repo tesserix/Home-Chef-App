@@ -1,0 +1,157 @@
+package handlers
+
+// chef_order_cancel_deferred_test.go — #766-followup. ChefOrderCancelHandler.CancelOrder
+// must never hard-block a chef's cancel on the synchronous Razorpay refund: the order
+// always flips to cancelled + the full-refund obligation is reserved (payment_status /
+// refunded_at / refund_amount), regardless of whether the gateway call can complete right
+// now. When it can't (GetRazorpay()==nil, or CreateRefund errors), the handler defers by
+// stamping a "pending:gateway-retry:<paise>" sentinel into refund_id and still returns 200
+// — services.RetryDeferredCancelRefunds (deferred_cancel_refund_test.go, services package)
+// is what re-issues the gateway call later.
+
+import (
+	"net/http"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
+	"github.com/homechef/api/config"
+	"github.com/homechef/api/database"
+	"github.com/homechef/api/services"
+)
+
+func regChefCancelOrder(r *gin.Engine, h *ChefOrderCancelHandler) {
+	r.POST("/chef/orders/:orderId/cancel", h.CancelOrder)
+}
+
+// pinSingleConn caps the harness's sqlite :memory: pool at one connection. CancelOrder
+// fires a background goroutine (services.CancelOrderDelivery) that queries database.DB
+// concurrently with the handler's own remaining reads; without this pin, database/sql may
+// open a SECOND pooled connection, which for a bare ":memory:" DSN (no shared cache) is a
+// completely separate, empty database — producing a flaky "no such table: orders". Same
+// idiom as services/webhook_dedup_test.go's TestClaimWebhookEvent_Concurrent.
+func pinSingleConn(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+}
+
+// markPreparing flips a freshly-created payOrder row into a cancellable mid-prep state
+// (payOrder always inserts status='pending', which cancellableStatuses rejects).
+func markPreparing(t *testing.T, orderID uuid.UUID) {
+	t.Helper()
+	require.NoError(t, database.DB.Exec(`UPDATE orders SET status = 'preparing' WHERE id = ?`, orderID.String()).Error)
+}
+
+// chefCancelStateOf reads back the columns the deferral contract cares about.
+func chefCancelStateOf(t *testing.T, orderID uuid.UUID) (status, refundID string, refundAmount float64, refundedAtValid bool) {
+	t.Helper()
+	var r struct {
+		Status       string
+		RefundID     string
+		RefundAmount float64
+		RefundedAtN  int64
+	}
+	require.NoError(t, database.DB.Raw(
+		`SELECT status, refund_id, refund_amount, (refunded_at IS NOT NULL) AS refunded_at_n FROM orders WHERE id = ?`,
+		orderID.String()).Scan(&r).Error)
+	return r.Status, r.RefundID, r.RefundAmount, r.RefundedAtN == 1
+}
+
+// TestCancelOrder_GatewayFailure_CancelsAndDefersRefund — a chef cancel against a paid,
+// mid-prep order whose gateway refund call FAILS must still cancel the order (200), reserve
+// the full refund (refunded_at set, refund_amount == total), and leave a deferred-retry
+// sentinel in refund_id instead of hard-blocking with a 502.
+func TestCancelOrder_GatewayFailure_CancelsAndDefersRefund(t *testing.T) {
+	db := setupPayDB(t)
+	for _, col := range []string{"cancelled_at DATETIME", "cancel_reason TEXT DEFAULT ''"} {
+		require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN `+col).Error)
+	}
+	pinSingleConn(t, db)
+	withFailingRefundGateway(t)
+	cust := payUser(t, db, "customer")
+	chefUser := payUser(t, db, "chef")
+	chef := payChef(t, db, chefUser)
+	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	markPreparing(t, orderID)
+
+	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/cancel", regChefCancelOrder,
+		map[string]any{"reason": "customer_request"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	status, refundID, refundAmount, refundedAt := chefCancelStateOf(t, orderID)
+	require.Equal(t, "cancelled", status, "the order must cancel even though the gateway refund failed")
+	require.True(t, strings.HasPrefix(refundID, "pending:gateway-retry:"), "a deferred sentinel must be recorded, got %q", refundID)
+	paise, err := strconv.Atoi(strings.TrimPrefix(refundID, "pending:gateway-retry:"))
+	require.NoError(t, err)
+	require.Equal(t, 50000, paise, "the sentinel must encode the full owed amount in paise (₹500 → 50000)")
+	require.True(t, refundedAt, "refunded_at must be set — the reservation guarantees the refund and blocks the chef payout")
+	require.Equal(t, 500.0, refundAmount, "the full order total is reserved as owed, gateway outcome notwithstanding")
+}
+
+// TestCancelOrder_GatewayNil_CancelsAndDefers — same contract when Razorpay is entirely
+// unconfigured (GetRazorpay() returns nil), the other early-block condition being replaced.
+func TestCancelOrder_GatewayNil_CancelsAndDefers(t *testing.T) {
+	db := setupPayDB(t)
+	for _, col := range []string{"cancelled_at DATETIME", "cancel_reason TEXT DEFAULT ''"} {
+		require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN `+col).Error)
+	}
+	// GetRazorpay() with no cached client falls through to a live Secret Manager fetch,
+	// which needs a non-nil config.AppConfig for its dev-fallback check — set an empty one
+	// so the fetch fails cleanly (no real credentials) and GetRazorpay returns nil, instead
+	// of panicking on a nil config in this test binary.
+	pinSingleConn(t, db)
+	prevCfg := config.AppConfig
+	config.AppConfig = &config.Config{Environment: "test"}
+	t.Cleanup(func() { config.AppConfig = prevCfg })
+	services.SetRazorpayClient(nil)
+	cust := payUser(t, db, "customer")
+	chefUser := payUser(t, db, "chef")
+	chef := payChef(t, db, chefUser)
+	orderID := payOrder(t, db, cust, chef, "completed", 300, "rzp_o", "pay_x")
+	markPreparing(t, orderID)
+
+	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/cancel", regChefCancelOrder,
+		map[string]any{"reason": "out_of_ingredient"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	status, refundID, refundAmount, refundedAt := chefCancelStateOf(t, orderID)
+	require.Equal(t, "cancelled", status)
+	require.True(t, strings.HasPrefix(refundID, "pending:gateway-retry:"), "got %q", refundID)
+	require.True(t, refundedAt)
+	require.Equal(t, 300.0, refundAmount)
+}
+
+// TestCancelOrder_GatewaySuccess_NoSentinel — the happy-path guard: when the gateway
+// refund succeeds, refund_id is the REAL gateway id, never the deferred sentinel, and the
+// gateway is called exactly once.
+func TestCancelOrder_GatewaySuccess_NoSentinel(t *testing.T) {
+	db := setupPayDB(t)
+	for _, col := range []string{"cancelled_at DATETIME", "cancel_reason TEXT DEFAULT ''"} {
+		require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN `+col).Error)
+	}
+	pinSingleConn(t, db)
+	_, refundCalls := withRefundGateway(t)
+	cust := payUser(t, db, "customer")
+	chefUser := payUser(t, db, "chef")
+	chef := payChef(t, db, chefUser)
+	orderID := payOrder(t, db, cust, chef, "completed", 200, "rzp_o", "pay_x")
+	markPreparing(t, orderID)
+
+	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/cancel", regChefCancelOrder,
+		map[string]any{"reason": "equipment_failure"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, 1, *refundCalls)
+
+	status, refundID, refundAmount, refundedAt := chefCancelStateOf(t, orderID)
+	require.Equal(t, "cancelled", status)
+	require.Equal(t, "rfnd_test", refundID, "the real gateway id must be recorded, never a deferred sentinel")
+	require.True(t, refundedAt)
+	require.Equal(t, 200.0, refundAmount)
+}

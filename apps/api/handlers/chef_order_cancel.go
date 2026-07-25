@@ -49,6 +49,14 @@ var cancellableStatuses = map[models.OrderStatus]bool{
 	models.OrderStatusReady:     true,
 }
 
+// refundPendingRetryPrefix marks orders.refund_id with a deferred-gateway-refund
+// sentinel when a chef cancel can't reach Razorpay synchronously. The prefix is
+// followed by the owed amount in paise (e.g. "pending:gateway-retry:50000") so
+// RetryDeferredCancelRefunds (services/deferred_cancel_refund.go) can recover the
+// exact amount to re-refund without a dedicated column. The cron matches on this
+// SAME literal — keep the two in agreement if it ever changes.
+const refundPendingRetryPrefix = "pending:gateway-retry:"
+
 type cancelRequest struct {
 	Reason string `json:"reason" binding:"required"`
 }
@@ -121,35 +129,44 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	if won {
 		amountPaise = int(roundPaise(reserved))
 	}
+	// A chef must be able to cancel a mid-prep order even when the synchronous gateway
+	// refund can't complete right now — the reservation above already committed the full
+	// refund obligation (payment_status/refunded_at/refund_amount), so nothing here can
+	// under-refund the customer. When Razorpay is unreachable or refuses the call, DEFER
+	// it instead of blocking the cancel: stamp a durable sentinel in refund_id encoding the
+	// owed paise, and let RetryDeferredCancelRefunds (services/deferred_cancel_refund.go)
+	// re-issue the SAME idempotency-keyed refund on a cron until it lands. Do NOT release
+	// the reservation on a deferral — the refund is still owed, just not yet issued.
 	var refundID string
 	if amountPaise > 0 {
 		rzp := services.GetRazorpay()
 		if rzp == nil {
-			services.ReleaseFullRefundReservation(database.DB, order.ID, reserved) // let a retry refund once the gateway is back
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "razorpay client unavailable; refund deferred"})
-			return
+			refundID = fmt.Sprintf("%s%d", refundPendingRetryPrefix, amountPaise)
+			log.Printf("chef cancel: razorpay client unavailable for order %s; deferring refund of %d paise to the retry cron", order.ID, amountPaise)
+		} else {
+			refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
+				Amount: amountPaise,
+				Speed:  "normal",
+				Notes: map[string]string{
+					"order_id":  order.ID.String(),
+					"order_no":  order.OrderNumber,
+					"chef_id":   chef.ID.String(),
+					"reason":    string(reason),
+					"initiator": "chef",
+				},
+				// Full-order cancel refund is issued once (order goes terminal-cancelled);
+				// the reservation above serializes concurrent attempts, and the retry cron
+				// re-sends this SAME key on a deferral — so a lost-response success dedups
+				// at the gateway instead of double-refunding. #574.
+				IdempotencyKey: services.RefundFullIdempotencyKey(order.ID),
+			})
+			if err != nil {
+				refundID = fmt.Sprintf("%s%d", refundPendingRetryPrefix, amountPaise)
+				log.Printf("chef cancel: gateway refund failed for order %s (%d paise); deferring to the retry cron: %v", order.ID, amountPaise, err)
+			} else {
+				refundID = refundResp.ID
+			}
 		}
-		refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
-			Amount: amountPaise,
-			Speed:  "normal",
-			Notes: map[string]string{
-				"order_id":  order.ID.String(),
-				"order_no":  order.OrderNumber,
-				"chef_id":   chef.ID.String(),
-				"reason":    string(reason),
-				"initiator": "chef",
-			},
-			// Full-order cancel refund is issued once (order goes terminal-cancelled);
-			// the reservation above serializes concurrent attempts. #574.
-			IdempotencyKey: services.RefundFullIdempotencyKey(order.ID),
-		})
-		if err != nil {
-			services.ReleaseFullRefundReservation(database.DB, order.ID, reserved)
-			services.CaptureSentryError(c, err)
-			c.JSON(http.StatusBadGateway, gin.H{"error": "refund failed at gateway; please retry"})
-			return
-		}
-		refundID = refundResp.ID
 	}
 
 	now := time.Now().UTC()

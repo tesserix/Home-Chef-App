@@ -100,6 +100,11 @@ func runPayoutReconcileScan(_ context.Context) {
 	// payment_status=refunded (ledger already correct, #602). Finalizing it is plain DB state
 	// (the money already moved), so it must run with the escrow flags OFF too.
 	reconcileStuckRefunds()
+	// A chef cancel whose synchronous gateway refund couldn't be issued leaves a durable
+	// "pending:gateway-retry:<paise>" sentinel in refund_id (the order itself already
+	// cancelled + the refund obligation was reserved). Re-issuing it is a pure gateway
+	// retry with no local state to gate, so it also runs with the escrow flags OFF.
+	RetryDeferredCancelRefunds()
 
 	if !payoutMovementEnabled() && !MealPlanEscrowActive() {
 		return // both escrow flags off → the money seam is a no-op, nothing to settle
