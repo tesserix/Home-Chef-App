@@ -25,6 +25,7 @@
     "@react-native-community/netinfo": ">=11.4.1",
     "@tesserix/native": "^1.0.0",
     "axios": "^1.13.0",
+    "expo-crypto": "*",
     "expo-device": ">=7.1.4",
     "expo-notifications": ">=0.30.2",
     "expo-secure-store": ">=15.0.0",

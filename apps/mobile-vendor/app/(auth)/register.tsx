@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { RegisterScreen } from '@homechef/mobile-shared/screens';
 import {
   registerWithEmail,
@@ -10,7 +9,7 @@ import {
   autoLogin,
   getIdToken,
   signInWithGoogleCredential,
-  signInWithAppleCredential,
+  signInWithApple,
 } from '@homechef/mobile-shared/auth';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
 import { useAuthStore } from '../../store/auth-store';
@@ -88,14 +87,7 @@ export default function RegisterPage() {
   };
 
   const handleAppleSignIn = async () => {
-    const cred = await AppleAuthentication.signInAsync({
-      requestedScopes: [
-        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-        AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      ],
-    });
-    if (!cred.identityToken) throw new Error('Apple sign-up failed: no identity token');
-    await signInWithAppleCredential(cred.identityToken, '');
+    await signInWithApple();
     await completeOAuthFlow();
   };
 

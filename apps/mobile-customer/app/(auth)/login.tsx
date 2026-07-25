@@ -2,12 +2,11 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { LoginScreen } from '@homechef/mobile-shared/screens';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import {
   signInWithGoogleCredential,
-  signInWithAppleCredential,
+  signInWithApple,
   signInWithEmail,
   useAuth,
   autoLogin,
@@ -91,17 +90,7 @@ export default function LoginPage() {
   };
 
   const handleAppleSignIn = async () => {
-    const cred = await AppleAuthentication.signInAsync({
-      requestedScopes: [
-        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-        AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      ],
-    });
-    if (!cred.identityToken) throw new Error('Apple sign-in failed: no identity token');
-    // Apple credential exchange in Firebase requires the same rawNonce used in the request;
-    // Expo's signInAsync does not surface a raw nonce — pass empty string and rely on Firebase
-    // to accept the token. For strict nonce verification a custom nonce should be generated.
-    await signInWithAppleCredential(cred.identityToken, '', cred.fullName);
+    await signInWithApple();
     const response = await completeBFFLogin();
     await setAuthResponse(response);
     await completeSignIn();
