@@ -15,6 +15,19 @@ export const SITE_NAME = 'Fe3dr';
 export const APP_LOGIN_PATH = '/login';
 export const APP_REGISTER_PATH = '/register';
 
+/**
+ * Whether the customer SPA (apps/web) is actually served on this origin.
+ *
+ * The landing and the SPA share fe3dr.com by path, but the SPA is not deployed
+ * yet — the landing owns every path here, so /login returns the Next.js 404.
+ * Sign-in entry points stay hidden until this flips, because a dead nav link is
+ * the same defect as the placeholder store badges: it looks like a working
+ * feature and isn't.
+ *
+ * TODO(owner): set to true in the SAME release that puts apps/web on fe3dr.com.
+ */
+export const WEB_APP_LIVE = false;
+
 /* ── App store listings ─────────────────────────────────────────────────
  *
  * Neither app is published yet. Every download surface therefore renders a

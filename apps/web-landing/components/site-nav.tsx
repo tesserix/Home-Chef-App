@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { cn } from '@tesserix/web';
 import { Wordmark } from '@/components/wordmark';
-import { APP_LOGIN_PATH } from '@/lib/site';
+import { APP_LOGIN_PATH, WEB_APP_LIVE } from '@/lib/site';
 
 interface SiteNavProps {
   /**
@@ -70,12 +70,14 @@ export function SiteNav({
           >
             For chefs
           </a>
-          <a
-            href={APP_LOGIN_PATH}
-            className="text-[15px] font-medium text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal"
-          >
-            Log in
-          </a>
+          {WEB_APP_LIVE ? (
+            <a
+              href={APP_LOGIN_PATH}
+              className="text-[15px] font-medium text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal"
+            >
+              Log in
+            </a>
+          ) : null}
           <a
             href={ctaHref}
             className="inline-flex h-11 items-center rounded-full bg-coral px-5 text-[15px] font-semibold text-white transition-colors duration-micro ease-state hover:bg-coral-pressed"

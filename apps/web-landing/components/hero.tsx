@@ -1,4 +1,4 @@
-import { IMAGES, APP_LOGIN_PATH } from '@/lib/site';
+import { IMAGES, APP_LOGIN_PATH, WEB_APP_LIVE } from '@/lib/site';
 import { Parallax } from '@/components/parallax';
 import { RouteMotif } from '@/components/route-motif';
 import { StoreBadges } from '@/components/store-badges';
@@ -50,18 +50,20 @@ export function Hero() {
             <StoreBadges />
           </div>
 
-          <p
-            className="fade-up mt-6 text-sm text-charcoal-soft"
-            style={{ animationDelay: '540ms' }}
-          >
-            Prefer your browser?{' '}
-            <a
-              href={APP_LOGIN_PATH}
-              className="font-medium text-coral underline-offset-4 hover:underline"
+          {WEB_APP_LIVE ? (
+            <p
+              className="fade-up mt-6 text-sm text-charcoal-soft"
+              style={{ animationDelay: '540ms' }}
             >
-              Order on the web
-            </a>
-          </p>
+              Prefer your browser?{' '}
+              <a
+                href={APP_LOGIN_PATH}
+                className="font-medium text-coral underline-offset-4 hover:underline"
+              >
+                Order on the web
+              </a>
+            </p>
+          ) : null}
 
           <p
             className="fade-up mt-3 text-sm text-charcoal-soft"
