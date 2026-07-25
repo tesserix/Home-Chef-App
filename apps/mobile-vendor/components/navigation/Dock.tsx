@@ -12,7 +12,6 @@
 
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { Easing, FadeIn, useReducedMotion } from 'react-native-reanimated';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -25,9 +24,6 @@ import { DOCK_BOTTOM_GAP, DOCK_HEIGHT, useDockClearance } from './dock-metrics';
 
 // Screens keep importing clearance helpers from here too.
 export { DOCK_BOTTOM_GAP, DOCK_HEIGHT, useDockClearance };
-
-// Entrances use the app-standard ease-out-quart — no bounce, no overshoot.
-const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
 // Android ripple tint for the (icon-only) tab slots — translucent ink
 // derived from the ink token, borderless so it reads as an icon-button
@@ -74,7 +70,6 @@ interface DockProps {
 
 export function Dock({ state, descriptors, navigation }: DockProps) {
   const insets = useSafeAreaInsets();
-  const reduceMotion = useReducedMotion();
 
   return (
     <View
@@ -117,19 +112,15 @@ export function Dock({ state, descriptors, navigation }: DockProps) {
                   }
                 >
                   {isActive ? (
-                    <Animated.View
-                      entering={
-                        reduceMotion
-                          ? undefined
-                          : FadeIn.duration(250).easing(ENTRANCE_EASING)
-                      }
-                      style={styles.activePill}
-                    >
+                    // The selected pill applies INSTANTLY — no entrance
+                    // animation. A fade/pop on select read as a "bump" in UX
+                    // feedback; the black highlight now just appears in place.
+                    <View style={styles.activePill}>
                       <Icon size={20} color={colors.paper} />
                       <Text style={styles.activeLabel} numberOfLines={1}>
                         {pillLabel}
                       </Text>
-                    </Animated.View>
+                    </View>
                   ) : (
                     <Icon size={22} color={colors.ink.muted} />
                   )}

@@ -13,7 +13,6 @@
 
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { Easing, FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { CalendarCheck, Heart, Home, ShoppingBag, User, type LucideIcon } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { CartFab } from './DockCartPill';
@@ -22,9 +21,6 @@ import { DOCK_BOTTOM_GAP, DOCK_HEIGHT, useDockClearance } from './dock-metrics';
 // Geometry lives in ./dock-metrics (shared with CartFab, no import cycle).
 // Screens keep importing useDockClearance from here.
 export { DOCK_BOTTOM_GAP, DOCK_HEIGHT, useDockClearance };
-
-// Entrances use the app-standard ease-out-quart — no bounce, no overshoot.
-const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
 // Android ripple tint for the (icon-only) tab slots — translucent ink
 // derived from the charcoal token, borderless so it reads as an icon-button
@@ -61,7 +57,6 @@ interface DockProps {
 
 export function Dock({ state, descriptors, navigation }: DockProps) {
   const insets = useSafeAreaInsets();
-  const reduceMotion = useReducedMotion();
 
   return (
     <View
@@ -103,19 +98,15 @@ export function Dock({ state, descriptors, navigation }: DockProps) {
                   }
                 >
                   {isActive ? (
-                    <Animated.View
-                      entering={
-                        reduceMotion
-                          ? undefined
-                          : FadeIn.duration(250).easing(ENTRANCE_EASING)
-                      }
-                      style={styles.activePill}
-                    >
+                    // The selected pill applies INSTANTLY — no entrance
+                    // animation. A fade/pop on select read as a "bump" in UX
+                    // feedback; the highlight now just appears in place.
+                    <View style={styles.activePill}>
                       <Icon size={20} color={customerColors.coral.DEFAULT} />
                       <Text style={styles.activeLabel} numberOfLines={1}>
                         {label}
                       </Text>
-                    </Animated.View>
+                    </View>
                   ) : (
                     <Icon size={22} color={customerColors.charcoal.soft} />
                   )}
