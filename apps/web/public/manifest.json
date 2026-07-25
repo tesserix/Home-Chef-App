@@ -12,75 +12,10 @@
   "categories": ["food", "lifestyle", "shopping"],
   "icons": [
     {
-      "src": "/icons/icon-72x72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-96x96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-128x128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-144x144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-152x152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-384x384.png",
-      "sizes": "384x384",
-      "type": "image/png",
-      "purpose": "maskable any"
-    },
-    {
-      "src": "/icons/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable any"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshots/home.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Fe3dr Homepage"
-    },
-    {
-      "src": "/screenshots/browse-chefs.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Browse Local Chefs"
-    },
-    {
-      "src": "/screenshots/mobile-home.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Fe3dr Mobile"
+      "src": "/logo-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ],
   "shortcuts": [
@@ -88,22 +23,19 @@
       "name": "Browse Chefs",
       "short_name": "Chefs",
       "description": "Find local home chefs",
-      "url": "/chefs",
-      "icons": [{ "src": "/icons/shortcut-chefs.png", "sizes": "96x96" }]
+      "url": "/chefs"
     },
     {
       "name": "My Orders",
       "short_name": "Orders",
       "description": "View your order history",
-      "url": "/orders",
-      "icons": [{ "src": "/icons/shortcut-orders.png", "sizes": "96x96" }]
+      "url": "/orders"
     },
     {
       "name": "Cart",
       "short_name": "Cart",
       "description": "View your cart",
-      "url": "/cart",
-      "icons": [{ "src": "/icons/shortcut-cart.png", "sizes": "96x96" }]
+      "url": "/cart"
     }
   ],
   "related_applications": [],

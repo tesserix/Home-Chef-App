@@ -613,3 +613,34 @@
 }
 </content>
 </invoke>
+/* ---------------------------------------------------------------------------
+   Otto support launcher overrides
+   ---------------------------------------------------------------------------
+   @tesserix/otto-widget pins its floating launcher at
+   `position: fixed; bottom: 24px; right: 24px; z-index: 2147483000`.
+
+   That z-index is above every overlay on the page, so the launcher physically
+   intercepted pointer events for anything sharing its corner: the sticky
+   "View Cart" bar on a chef's page, and — worse — Razorpay's checkout modal,
+   which made it impossible to pay.
+
+   Two corrections, neither of which touches the package:
+
+   1. Sit BELOW our own overlays. z-40 keeps the launcher above ordinary page
+      content but under the mobile bottom nav (z-50), dialogs, and third-party
+      payment modals, so it can never swallow their clicks again.
+
+   2. Sit ABOVE the bottom bars rather than on top of them. The mobile bottom
+      nav is ~64px plus the safe-area inset, so lift the launcher clear of it
+      on small screens; desktop has no bottom nav and keeps the original 24px.
+--------------------------------------------------------------------------- */
+.otto-widget {
+  z-index: 40;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
+}
+
+@media (min-width: 768px) {
+  .otto-widget {
+    bottom: 1.5rem;
+  }
+}

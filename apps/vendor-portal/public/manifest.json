@@ -1,0 +1,41 @@
+{
+  "name": "Fe3dr Chef Portal",
+  "short_name": "Fe3dr Chef",
+  "description": "Run your home kitchen — orders, menu, capacity, earnings and payouts.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#fafaf7",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en-US",
+  "categories": ["business", "food", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Live Orders",
+      "short_name": "Orders",
+      "description": "Accept and progress today's orders",
+      "url": "/orders"
+    },
+    {
+      "name": "Menu",
+      "short_name": "Menu",
+      "description": "Edit dishes, prices and availability",
+      "url": "/menu"
+    },
+    {
+      "name": "Earnings",
+      "short_name": "Earnings",
+      "description": "Revenue, deductions and payouts",
+      "url": "/earnings"
+    }
+  ]
+}

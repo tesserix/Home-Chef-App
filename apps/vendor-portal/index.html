@@ -36,6 +36,11 @@
     <!-- Favicons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
+    <!-- PWA manifest. The portal already declares the mobile-web-app meta and
+         ships a bottom nav, but without this a chef could not install it to a
+         home screen the way customers can install apps/web. -->
+    <link rel="manifest" href="/manifest.json" />
+
     <!-- Preconnect to improve performance -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
