@@ -235,7 +235,7 @@ func (h *AccountLifecycleHandler) Restore(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":             "restored",
 		"reapprovalRequired": reapproval,
-		"notice": reapprovalNotice(reapproval),
+		"notice":             reapprovalNotice(reapproval),
 	})
 }
 

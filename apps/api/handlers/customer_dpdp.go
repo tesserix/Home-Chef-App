@@ -4,14 +4,15 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/homechef/api/database"
-	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 )
 
 // customer_dpdp.go — DPDP Act 2023 data-subject endpoints for the customer role,
 // mirroring chef_dpdp.go on the shared dpdp_common.go scaffolding:
 //   - GET  /me/export  → machine-readable dump of the customer's personal data
-//   - POST /me/delete  → soft-delete + 30-day retention (confirmEmail required)
+//
+// Deletion is NOT here: it lives in account_lifecycle.go, which adds blocker
+// checks, the 180-day restore window and GIP credential teardown.
 type CustomerDPDPHandler struct{}
 
 func NewCustomerDPDPHandler() *CustomerDPDPHandler { return &CustomerDPDPHandler{} }
@@ -68,23 +69,4 @@ func (h *CustomerDPDPHandler) ExportMyData(c *gin.Context) {
 	dump["cateringRequests"] = catering
 
 	writeExportJSON(c, dump)
-}
-
-// DeleteMyAccount soft-deletes the customer account per the DPDP right to
-// erasure. Existing orders remain server-side through the retention window for
-// legal/financial holds; the account itself is hidden immediately.
-//
-// POST /me/delete   { "confirmEmail": "<user.email>" }
-func (h *CustomerDPDPHandler) DeleteMyAccount(c *gin.Context) {
-	user, proceed := beginSelfDelete(c)
-	if !proceed {
-		return
-	}
-	userID, _ := middleware.GetUserID(c)
-	finalizeSelfDelete(c, user, "customer.account.delete", func() {
-		// Detach saved addresses from the marketplace immediately so a stale
-		// address can't be surfaced during the retention window. Soft-delete via
-		// the model so admin tooling can still reach them for a legal hold.
-		database.DB.Where("user_id = ?", userID).Delete(&models.Address{})
-	})
 }

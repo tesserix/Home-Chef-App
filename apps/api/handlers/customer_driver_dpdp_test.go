@@ -113,7 +113,7 @@ func TestCustomerDelete_WrongConfirmEmail_400(t *testing.T) {
 	uid := seedUser(t, db, "cust3@example.com", "customer")
 
 	w := callSelf(t, uid, http.MethodPost, "/customer/me/delete", func(r *gin.Engine) {
-		r.POST("/customer/me/delete", NewCustomerDPDPHandler().DeleteMyAccount)
+		r.POST("/customer/me/delete", NewAccountLifecycleHandler().DeleteAccount)
 	}, map[string]string{"confirmEmail": "wrong@example.com"})
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
@@ -127,7 +127,7 @@ func TestCustomerDelete_ConfirmEmailCaseInsensitive(t *testing.T) {
 	uid := seedUser(t, db, "MixedCase@Example.com", "customer")
 
 	w := callSelf(t, uid, http.MethodPost, "/customer/me/delete", func(r *gin.Engine) {
-		r.POST("/customer/me/delete", NewCustomerDPDPHandler().DeleteMyAccount)
+		r.POST("/customer/me/delete", NewAccountLifecycleHandler().DeleteAccount)
 	}, map[string]string{"confirmEmail": "  mixedcase@example.com  "})
 
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -139,7 +139,7 @@ func TestCustomerDelete_SoftDeletesWithRetention(t *testing.T) {
 	uid := seedUser(t, db, "cust4@example.com", "customer")
 
 	w := callSelf(t, uid, http.MethodPost, "/customer/me/delete", func(r *gin.Engine) {
-		r.POST("/customer/me/delete", NewCustomerDPDPHandler().DeleteMyAccount)
+		r.POST("/customer/me/delete", NewAccountLifecycleHandler().DeleteAccount)
 	}, map[string]string{"confirmEmail": "cust4@example.com"})
 
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -155,7 +155,7 @@ func TestCustomerDelete_SoftDeletesWithRetention(t *testing.T) {
 
 	// An audit row was written for the erasure.
 	var audits int64
-	db.Table("audit_logs").Where("action = ?", "customer.account.delete").Count(&audits)
+	db.Table("audit_logs").Where("action = ?", "account.delete").Count(&audits)
 	assert.Equal(t, int64(1), audits)
 }
 
@@ -163,7 +163,7 @@ func TestCustomerDelete_Idempotent_AlreadyDeleted(t *testing.T) {
 	db := setupCustomerDPDPDB(t)
 	uid := seedUser(t, db, "cust5@example.com", "customer")
 	reg := func(r *gin.Engine) {
-		r.POST("/customer/me/delete", NewCustomerDPDPHandler().DeleteMyAccount)
+		r.POST("/customer/me/delete", NewAccountLifecycleHandler().DeleteAccount)
 	}
 	body := map[string]string{"confirmEmail": "cust5@example.com"}
 
@@ -193,6 +193,7 @@ func setupDriverDPDPDB(t *testing.T) *gorm.DB {
 		CREATE TABLE deliveries (rider_name_enc text DEFAULT '', rider_phone_enc text DEFAULT '', 
 			id                  TEXT PRIMARY KEY,
 			delivery_partner_id TEXT,
+			status              TEXT DEFAULT '',
 			created_at          DATETIME,
 			updated_at          DATETIME,
 			deleted_at          DATETIME
@@ -239,15 +240,24 @@ func TestDriverDelete_SoftDeletesAndTakesOffline(t *testing.T) {
 	pid := seedPartner(t, db, uid)
 
 	w := callSelf(t, uid, http.MethodPost, "/driver/me/delete", func(r *gin.Engine) {
-		r.POST("/driver/me/delete", NewDriverDPDPHandler().DeleteMyAccount)
+		r.POST("/driver/me/delete", NewAccountLifecycleHandler().DeleteAccount)
 	}, map[string]string{"confirmEmail": "driver2@example.com"})
 
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	// The partner profile is removed so the assigner can never pick this driver.
+	// The partner row SURVIVES the restore window — DeliveryPartner has no
+	// DeletedAt, so removing it would be unrecoverable. It is taken offline and
+	// out of dispatch instead, which is what actually stops the assigner
+	// picking this driver; the purge sweeper deletes the row at the end.
 	var partners int64
 	db.Table("delivery_partners").Where("id = ?", pid.String()).Count(&partners)
-	assert.Equal(t, int64(0), partners)
+	assert.Equal(t, int64(1), partners, "partner row must survive for the restore window")
+
+	var online, active int
+	require.NoError(t, db.Raw(`SELECT is_online, is_active FROM delivery_partners WHERE id = ?`,
+		pid.String()).Row().Scan(&online, &active))
+	assert.Equal(t, 0, online, "driver must go offline")
+	assert.Equal(t, 0, active, "driver must leave dispatch")
 
 	// The user row is soft-deleted (retained), not hard-deleted.
 	var userTotal int64
@@ -255,6 +265,6 @@ func TestDriverDelete_SoftDeletesAndTakesOffline(t *testing.T) {
 	assert.Equal(t, int64(1), userTotal)
 
 	var audits int64
-	db.Table("audit_logs").Where("action = ?", "driver.account.delete").Count(&audits)
+	db.Table("audit_logs").Where("action = ?", "account.delete").Count(&audits)
 	assert.Equal(t, int64(1), audits)
 }

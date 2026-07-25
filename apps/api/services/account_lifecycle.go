@@ -131,6 +131,12 @@ func RequestDeletion(db *gorm.DB, user *models.User, reason string) ([]Blocker, 
 		return nil, nil // already pending deletion — idempotent
 	}
 
+	// Fail CLOSED. The blocker queries swallow their errors, so a database
+	// problem would otherwise read as "nothing outstanding" and delete an
+	// account still holding escrow, store credit or an unreleased payout.
+	if err := CanDetermineBlockers(db, *user); err != nil {
+		return nil, err
+	}
 	if blockers := DeletionBlockers(db, *user); len(blockers) > 0 {
 		return blockers, ErrBlocked
 	}

@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -17,7 +16,9 @@ import (
 // ChefDPDPHandler implements the data-subject access endpoints
 // required by India's Digital Personal Data Protection Act 2023:
 //   - Right to Access  → GET /chef/me/export   (JSON dump of all data)
-//   - Right to Erasure → POST /chef/me/delete  (soft delete + retention queue)
+//
+// Deletion is NOT here: it lives in account_lifecycle.go, which adds blocker
+// checks, the 180-day restore window and GIP credential teardown.
 //
 // Soft-delete semantics: GORM's DeletedAt column flips, the row stays
 // queryable by admin tooling for the retention window (default 30 days
@@ -98,99 +99,6 @@ func (h *ChefDPDPHandler) ExportMyData(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Data(http.StatusOK, "application/json", body)
-}
-
-// DeleteMyAccount soft-deletes the user + chef profile per the DPDP
-// "right to erasure". Hard-delete happens after the retention window
-// (separate sweeper cron, Wave 4). Idempotent — re-calling on a
-// already-deleted user returns 200 + the same payload so a retry
-// from a flaky mobile network is safe.
-//
-// Required confirmation in the request body — chef must type their
-// email exactly to prevent accidental account loss from an
-// uncoordinated tap.
-//
-// POST /chef/me/delete   { "confirmEmail": "<user.email>" }
-func (h *ChefDPDPHandler) DeleteMyAccount(c *gin.Context) {
-	userID, _ := middleware.GetUserID(c)
-
-	// Unscoped so an already-soft-deleted account is still found — otherwise
-	// GORM's default `deleted_at IS NULL` scope hides it and a retried delete
-	// 404s instead of returning the idempotent "already_deleted" below (#106).
-	var user models.User
-	if err := database.DB.Unscoped().First(&user, "id = ?", userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
-
-	var req struct {
-		ConfirmEmail string `json:"confirmEmail" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if req.ConfirmEmail != user.Email {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "confirmEmail must exactly match your account email",
-		})
-		return
-	}
-
-	// Already-deleted? Don't error — DPDP retries should be safe.
-	if user.DeletedAt.Valid {
-		c.JSON(http.StatusOK, gin.H{
-			"status":      "already_deleted",
-			"deletedAt":   user.DeletedAt.Time,
-			"retainUntil": user.DeletedAt.Time.Add(30 * 24 * time.Hour),
-		})
-		return
-	}
-
-	now := time.Now().UTC()
-
-	// Soft delete the user — GORM's DeletedAt mechanism flips the
-	// column, list queries auto-filter out, but admin tooling with
-	// .Unscoped() can still reach the row during the retention
-	// window. Cascade to the chef profile so the kitchen disappears
-	// from the marketplace immediately.
-	if err := database.DB.Delete(&user).Error; err != nil {
-		services.CaptureSentryError(c, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Delete failed; please contact support"})
-		return
-	}
-	var chef models.ChefProfile
-	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err == nil {
-		_ = database.DB.Delete(&chef).Error
-		// Take menu items offline so customers don't see a phantom
-		// kitchen while the retention window runs out.
-		_ = database.DB.Model(&models.MenuItem{}).
-			Where("chef_id = ?", chef.ID).
-			Update("is_available", false).Error
-		// Stop accepting new orders too.
-		_ = database.DB.Model(&models.ChefProfile{}).
-			Unscoped().
-			Where("id = ?", chef.ID).
-			Update("accepting_orders", false).Error
-	}
-
-	// Log the user id only — never the email. This is the erasure path; the
-	// email is PII and the audit row (below) already records the deletion.
-	log.Printf("DPDP delete: user=%s at=%s", user.ID, now.Format(time.RFC3339))
-
-	retainUntil := now.Add(30 * 24 * time.Hour)
-
-	// DPDP-significant: record the erasure request (no PII in the row beyond
-	// the user id, which is already the audit subject) for the compliance trail.
-	services.LogAudit(c, "chef.account.delete", "user", user.ID.String(),
-		nil, gin.H{"deletedAt": now, "retainUntil": retainUntil})
-
-	c.JSON(http.StatusOK, gin.H{
-		"status":      "deleted",
-		"deletedAt":   now,
-		"retainUntil": retainUntil,
-		"notice":      "Your account is now hidden. Data will be permanently erased after the 30-day retention window. Contact support to cancel within this window.",
-	})
 }
 
 // findByChef is a tiny generic-ish wrapper around GORM's Find that

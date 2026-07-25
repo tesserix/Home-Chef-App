@@ -4,14 +4,15 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/homechef/api/database"
-	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 )
 
 // driver_dpdp.go — DPDP Act 2023 data-subject endpoints for the delivery-driver
 // role, on the shared dpdp_common.go scaffolding:
 //   - GET  /driver/me/export → dump of the driver's personal + delivery data
-//   - POST /driver/me/delete → soft-delete + 30-day retention (confirmEmail)
+//
+// Deletion is NOT here: it lives in account_lifecycle.go, which adds blocker
+// checks, the 180-day restore window and GIP credential teardown.
 type DriverDPDPHandler struct{}
 
 func NewDriverDPDPHandler() *DriverDPDPHandler { return &DriverDPDPHandler{} }
@@ -49,25 +50,4 @@ func (h *DriverDPDPHandler) ExportMyData(c *gin.Context) {
 	dump["referrals"] = referrals
 
 	writeExportJSON(c, dump)
-}
-
-// DeleteMyAccount soft-deletes the driver's user account per the DPDP right to
-// erasure (30-day retention on the user row) and removes the delivery-partner
-// profile so the assigner can never pick this driver again — mirroring how the
-// chef flow removes the chef profile. In-flight deliveries remain server-side
-// (referenced by partner id) for the operational/financial record.
-//
-// POST /driver/me/delete   { "confirmEmail": "<user.email>" }
-func (h *DriverDPDPHandler) DeleteMyAccount(c *gin.Context) {
-	user, proceed := beginSelfDelete(c)
-	if !proceed {
-		return
-	}
-	userID, _ := middleware.GetUserID(c)
-	finalizeSelfDelete(c, user, "driver.account.delete", func() {
-		// DeliveryPartner has no soft-delete column, so this removes the row —
-		// which is exactly what stops dispatch (the assigner queries the table
-		// by is_online/is_active and the row is gone).
-		database.DB.Where("user_id = ?", userID).Delete(&models.DeliveryPartner{})
-	})
 }

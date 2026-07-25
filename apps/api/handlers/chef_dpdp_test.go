@@ -51,9 +51,34 @@ func setupDPDPDB(t *testing.T) *gorm.DB {
 			business_name     TEXT NOT NULL DEFAULT '',
 			description       TEXT NOT NULL DEFAULT '',
 			accepting_orders  INTEGER NOT NULL DEFAULT 1,
+			auto_schedule_enabled INTEGER NOT NULL DEFAULT 0,
+			is_active         INTEGER NOT NULL DEFAULT 1,
+			is_verified       INTEGER NOT NULL DEFAULT 0,
+			verified_at       DATETIME,
 			created_at        DATETIME,
 			updated_at        DATETIME
 		)
+	`).Error)
+
+	// Money tables. The delete path now refuses to erase an account while
+	// orders, meal-plan escrow, wallet credit or an unreleased payout are still
+	// outstanding — and it fails CLOSED, so these must exist for it to be able
+	// to establish eligibility at all.
+	require.NoError(t, db.Exec(`
+		CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT,
+			status TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
+			order_number TEXT DEFAULT '', subtotal REAL DEFAULT 0, delivery_fee REAL DEFAULT 0,
+			service_fee REAL DEFAULT 0, tax REAL DEFAULT 0, tax_name TEXT DEFAULT '',
+			total REAL DEFAULT 0, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)
+	`).Error)
+	require.NoError(t, db.Exec(`
+		CREATE TABLE meal_plans (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT,
+			status TEXT DEFAULT '', total REAL DEFAULT 0,
+			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)
+	`).Error)
+	require.NoError(t, db.Exec(`
+		CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT, balance REAL DEFAULT 0,
+			created_at DATETIME, updated_at DATETIME)
 	`).Error)
 
 	require.NoError(t, db.Exec(`
@@ -62,6 +87,7 @@ func setupDPDPDB(t *testing.T) *gorm.DB {
 			chef_id       TEXT NOT NULL,
 			name          TEXT NOT NULL DEFAULT '',
 			is_available  INTEGER NOT NULL DEFAULT 1,
+			is_approved   INTEGER NOT NULL DEFAULT 0,
 			created_at    DATETIME,
 			updated_at    DATETIME,
 			deleted_at    DATETIME
@@ -162,7 +188,9 @@ func doExport(t *testing.T, userID uuid.UUID) *httptest.ResponseRecorder {
 
 func doDelete(t *testing.T, userID uuid.UUID, body any) *httptest.ResponseRecorder {
 	return callDPDP(t, userID, http.MethodPost, "/chef/me/delete",
-		func(r *gin.Engine, h *ChefDPDPHandler) { r.POST("/chef/me/delete", h.DeleteMyAccount) }, body)
+		func(r *gin.Engine, h *ChefDPDPHandler) {
+			r.POST("/chef/me/delete", NewAccountLifecycleHandler().DeleteAccount)
+		}, body)
 }
 
 // ── Export ──────────────────────────────────────────────────────────────────
@@ -271,7 +299,7 @@ func TestDeleteMyAccount_WrongConfirmEmail_400(t *testing.T) {
 
 // ── Delete: soft-delete + retention ───────────────────────────────────────────
 
-func TestDeleteMyAccount_SoftDeletesUserWith30DayRetention(t *testing.T) {
+func TestDeleteMyAccount_SoftDeletesUserWith180DayRestoreWindow(t *testing.T) {
 	db := setupDPDPDB(t)
 	uid := seedUser(t, db, "chef@example.com", "chef")
 
@@ -279,17 +307,18 @@ func TestDeleteMyAccount_SoftDeletesUserWith30DayRetention(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
 
 	var resp struct {
-		Status      string    `json:"status"`
-		DeletedAt   time.Time `json:"deletedAt"`
-		RetainUntil time.Time `json:"retainUntil"`
+		Status     string    `json:"status"`
+		DeletedAt  time.Time `json:"deletedAt"`
+		PurgeAfter time.Time `json:"purgeAfter"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, "deleted", resp.Status)
 
-	// Retention window ≈ 30 days after deletion.
-	gap := resp.RetainUntil.Sub(resp.DeletedAt)
-	assert.InDelta(t, (30 * 24 * time.Hour).Seconds(), gap.Seconds(), 60,
-		"retainUntil should be ~30 days after deletedAt")
+	// Restore window ≈ 180 days after deletion — the account can be brought
+	// back until then, and is erased by the purge sweeper afterwards.
+	gap := resp.PurgeAfter.Sub(resp.DeletedAt)
+	assert.InDelta(t, (180 * 24 * time.Hour).Seconds(), gap.Seconds(), 60,
+		"purgeAfter should be ~180 days after deletedAt")
 
 	// Default-scoped lookup hides the row (soft delete in effect)...
 	var live int64
@@ -311,11 +340,21 @@ func TestDeleteMyAccount_CascadesChefProfileAndMenu(t *testing.T) {
 	w := doDelete(t, uid, map[string]any{"confirmEmail": "chef@example.com"})
 	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
 
-	// Chef profile carries no gorm.DeletedAt → the handler HARD-deletes it so
-	// the kitchen disappears from the marketplace immediately.
+	// The chef profile row SURVIVES. It carries no gorm.DeletedAt, so deleting
+	// it would be a hard delete — unrecoverable, and it would orphan the chef_id
+	// on every past order. The kitchen is taken offline instead, which already
+	// removes it from every customer-facing query, and the purge sweeper deletes
+	// the row at the end of the restore window.
 	var chefRows int64
 	require.NoError(t, db.Raw(`SELECT COUNT(*) FROM chef_profiles WHERE id = ?`, cid.String()).Scan(&chefRows).Error)
-	assert.Equal(t, int64(0), chefRows, "chef profile is hard-deleted on erasure")
+	assert.Equal(t, int64(1), chefRows, "chef profile must survive for the restore window")
+
+	var active, accepting, autoSchedule int
+	require.NoError(t, db.Raw(`SELECT is_active, accepting_orders, auto_schedule_enabled
+		FROM chef_profiles WHERE id = ?`, cid.String()).Row().Scan(&active, &accepting, &autoSchedule))
+	assert.Equal(t, 0, active, "kitchen must be hidden from customers")
+	assert.Equal(t, 0, accepting, "kitchen must stop taking orders")
+	assert.Equal(t, 0, autoSchedule, "auto-schedule must be off or the cron reopens the kitchen")
 
 	// Menu items are taken offline (is_available=false) so no phantom kitchen.
 	var available int
@@ -341,10 +380,10 @@ func TestDeleteMyAccount_WritesPIISafeAuditLog(t *testing.T) {
 	}
 	require.NoError(t, db.Raw(
 		`SELECT action, entity_type, entity_id, old_value, new_value FROM audit_logs WHERE action = ?`,
-		"chef.account.delete",
+		"account.delete",
 	).Scan(&row).Error)
 
-	assert.Equal(t, "chef.account.delete", row.Action)
+	assert.Equal(t, "account.delete", row.Action)
 	assert.Equal(t, "user", row.EntityType)
 	assert.Equal(t, uid.String(), row.EntityID, "audit subject is the user id")
 
@@ -353,7 +392,7 @@ func TestDeleteMyAccount_WritesPIISafeAuditLog(t *testing.T) {
 	blob := row.OldValue + row.NewValue
 	assert.NotContains(t, strings.ToLower(blob), "chef@example.com", "audit must not store the email")
 	assert.NotContains(t, blob, "+910000000000", "audit must not store the phone")
-	assert.Contains(t, row.NewValue, "retainUntil", "audit records the retention deadline")
+	assert.Contains(t, row.NewValue, "purgeAfter", "audit records the purge deadline")
 }
 
 // TestDeleteMyAccount_RetryIsIdempotent verifies that a retried delete is safe
@@ -368,8 +407,8 @@ func TestDeleteMyAccount_RetryIsIdempotent(t *testing.T) {
 	first := doDelete(t, uid, map[string]any{"confirmEmail": "chef@example.com"})
 	require.Equal(t, http.StatusOK, first.Code, "body: %s", first.Body.String())
 	var firstResp struct {
-		Status      string    `json:"status"`
-		RetainUntil time.Time `json:"retainUntil"`
+		Status     string    `json:"status"`
+		PurgeAfter time.Time `json:"purgeAfter"`
 	}
 	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &firstResp))
 	assert.Equal(t, "deleted", firstResp.Status)
@@ -377,13 +416,13 @@ func TestDeleteMyAccount_RetryIsIdempotent(t *testing.T) {
 	second := doDelete(t, uid, map[string]any{"confirmEmail": "chef@example.com"})
 	require.Equal(t, http.StatusOK, second.Code, "retry must be idempotent, not 404")
 	var secondResp struct {
-		Status      string    `json:"status"`
-		RetainUntil time.Time `json:"retainUntil"`
+		Status     string    `json:"status"`
+		PurgeAfter time.Time `json:"purgeAfter"`
 	}
 	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &secondResp))
 	assert.Equal(t, "already_deleted", secondResp.Status, "repeat delete reports already_deleted")
-	assert.WithinDuration(t, firstResp.RetainUntil, secondResp.RetainUntil, time.Second,
-		"retention deadline stays anchored to the original deletion")
+	assert.WithinDuration(t, firstResp.PurgeAfter, secondResp.PurgeAfter, time.Second,
+		"restore window stays anchored to the original deletion, never extended by a retry")
 }
 
 // ── sanitizeUserForExport (pure unit, no DB) ─────────────────────────────────

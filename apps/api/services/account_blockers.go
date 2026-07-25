@@ -15,6 +15,8 @@ package services
 // can never present a delete button that then 409s unexpectedly.
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -228,4 +230,24 @@ func DeletionBlockers(db *gorm.DB, user models.User) []Blocker {
 	}
 
 	return blockers
+}
+
+// CanDetermineBlockers reports whether the blocker queries can actually run.
+//
+// The Count calls above ignore their errors, which means a failed query is
+// indistinguishable from "nothing outstanding" — a guard protecting escrow,
+// wallet credit and unreleased payouts must not fail OPEN like that. Callers
+// check this first and refuse the deletion if eligibility cannot be
+// established, rather than deleting an account with money still attached.
+func CanDetermineBlockers(db *gorm.DB, user models.User) error {
+	var n int64
+	if err := db.Model(&models.Order{}).
+		Where("customer_id = ?", user.ID).Count(&n).Error; err != nil {
+		return fmt.Errorf("account: cannot read orders to check deletion eligibility: %w", err)
+	}
+	if err := db.Model(&models.MealPlan{}).
+		Where("customer_id = ?", user.ID).Count(&n).Error; err != nil {
+		return fmt.Errorf("account: cannot read meal plans to check deletion eligibility: %w", err)
+	}
+	return nil
 }
