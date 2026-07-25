@@ -6,11 +6,13 @@
 // looking for it. Sectioning reveals the whole menu, and the floating Menu pill
 // (owned by the screen) jumps between sections.
 //
-// Section offsets are reported upward via onSectionLayout so the screen — which
-// owns the ScrollView — can scroll to one. Measuring real laid-out positions is
-// both simpler and more accurate than a SectionList's scrollToLocation, which
-// needs getItemLayout to be precise and cannot be, since these rows vary in
-// height with photo presence and description length.
+// Each section registers its view with the screen, which owns the ScrollView and
+// measures it on screen to work out where to scroll. An onLayout `y` is relative
+// to the immediate parent, and summing the nesting chain back to the scroll
+// content is fragile — one forgotten wrapper and every jump lands short. A screen
+// measurement has no such dependency. It also beats a SectionList's
+// scrollToLocation, which needs a getItemLayout these variable-height rows cannot
+// honestly provide.
 //
 // Presentational: category state and the startGroupOrder flow stay in the screen.
 
@@ -38,8 +40,8 @@ export interface ChefMenuTabProps {
   items: MenuItem[];
   /** True when the chef has no menu at all. */
   menuIsEmpty: boolean;
-  /** Reports each section's y-offset within the scroll content, for jumping. */
-  onSectionLayout: (category: string, y: number) => void;
+  /** Registers a section's view so the screen can measure and scroll to it. */
+  registerSection: (category: string, node: View | null) => void;
   onStartGroupOrder: () => void;
 }
 
@@ -51,7 +53,7 @@ export function ChefMenuTab({
   onSelectCategory,
   items,
   menuIsEmpty,
-  onSectionLayout,
+  registerSection,
   onStartGroupOrder,
 }: ChefMenuTabProps) {
   // Group once per render, preserving the category order the screen derived.
@@ -118,11 +120,7 @@ export function ChefMenuTab({
         </View>
       ) : (
         sections.map((section) => (
-          <View
-            key={section.name}
-            // Absolute y within the ScrollView content — what scrollTo needs.
-            onLayout={(e) => onSectionLayout(section.name, e.nativeEvent.layout.y)}
-          >
+          <View key={section.name} ref={(node) => registerSection(section.name, node)}>
             {/* The heading is omitted for a single-category menu, where it would
                 only repeat what the screen already says. */}
             {sections.length > 1 ? (

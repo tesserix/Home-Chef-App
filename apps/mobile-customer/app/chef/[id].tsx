@@ -160,26 +160,58 @@ export default function ChefDetailScreen() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [menuSheetOpen, setMenuSheetOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  // Measured y-offset of each section within the scroll content. A ref, not
-  // state: layout reports fire during render and writing state there would loop.
+  // Section views, plus their resolved offsets within the scroll content.
+  //
+  // The offsets come from an on-screen measure() rather than onLayout: a layout
+  // `y` is relative to the immediate parent, and summing the nesting chain back
+  // to the scroll content is fragile — one unaccounted wrapper and every jump
+  // lands short of its heading. measure() gives a screen position, which added to
+  // the live scroll offset yields the content offset exactly, whatever the
+  // nesting. The ScrollView starts at the top of the screen (the chef header is
+  // absolutely positioned over it), so no origin correction is needed.
+  const sectionNodes = useRef<Record<string, View | null>>({});
   const sectionOffsets = useRef<Record<string, number>>({});
+  const scrollY = useRef(0);
+
+  const measureSections = useCallback(() => {
+    for (const [name, node] of Object.entries(sectionNodes.current)) {
+      node?.measure((_x, _y, _w, _h, _pageX, pageY) => {
+        sectionOffsets.current[name] = scrollY.current + pageY;
+      });
+    }
+  }, []);
   // Categories in render order, read by the scroll handler without making it
   // depend on (and re-create with) the derived array each render.
   const categoriesRef = useRef<string[]>([]);
   categoriesRef.current = categories;
 
   const scrollToCategory = useCallback((category: string) => {
-    const y = sectionOffsets.current[category];
-    if (y === undefined) return;
-    // Nudge up by the chip row's height so the section heading clears it.
-    scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
-    setActiveCategory(category);
+    const node = sectionNodes.current[category];
+    if (!node) return;
+    // Measure at tap time so the offset is right even after images have loaded
+    // and rows have grown since the last measure.
+    node.measure((_x, _y, _w, _h, _pageX, pageY) => {
+      const target = scrollY.current + pageY;
+      sectionOffsets.current[category] = target;
+      // Leave a little clear so the heading isn't flush against the chip bar.
+      scrollRef.current?.scrollTo({ y: Math.max(0, target - 12), animated: true });
+      setActiveCategory(category);
+    });
   }, []);
+
+  // Prime the offsets once the menu has laid out, so the chip underline tracks
+  // the scroll before the customer has jumped anywhere.
+  useEffect(() => {
+    if (categories.length < 2) return;
+    const t = setTimeout(measureSections, 400);
+    return () => clearTimeout(t);
+  }, [categories.length, menuItems.length, measureSections]);
 
   // Track which section is in view so the chip underline follows the scroll.
   // The section whose top has most recently passed the fold is the one being
   // read, so take the LAST offset at or above the current position.
   const onMenuScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollY.current = e.nativeEvent.contentOffset.y;
     const y = e.nativeEvent.contentOffset.y + 24;
     let current: string | null = null;
     // Iterate the CATEGORY order, not the offsets object: its key order is
@@ -586,8 +618,8 @@ export default function ChefDetailScreen() {
                 onSelectCategory={scrollToCategory}
                 items={menuItems}
                 menuIsEmpty={menuItems.length === 0}
-                onSectionLayout={(cat, y) => {
-                  sectionOffsets.current[cat] = y;
+                registerSection={(cat, node) => {
+                  sectionNodes.current[cat] = node;
                 }}
                 onStartGroupOrder={() => startGroupOrder(chef.id)}
               />
@@ -641,7 +673,10 @@ export default function ChefDetailScreen() {
             activeCategory={activeCategory ?? categories[0] ?? null}
             onSelect={(cat) => {
               setMenuSheetOpen(false);
-              scrollToCategory(cat);
+              // Wait for the sheet's dismissal animation to finish. Scrolling
+              // into a closing Modal gets dropped on Android — the offset is
+              // computed correctly and then simply never applied.
+              setTimeout(() => scrollToCategory(cat), 350);
             }}
             onClose={() => setMenuSheetOpen(false)}
           />
