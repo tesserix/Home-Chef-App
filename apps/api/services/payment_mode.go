@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
@@ -99,3 +100,21 @@ func LoyaltyAllowedForOrder(o *models.Order) bool { return !IsTestOrder(o) }
 // released inside the Razorpay TEST account, so the split-payment path is
 // genuinely exercised without anything reaching a real bank.
 func PayoutAllowedForOrder(o *models.Order) bool { return !IsTestOrder(o) }
+
+// OrderIsTestMode reports whether an order id belongs to the test partition,
+// read through the caller's transaction so a guard inside a tx sees the same
+// snapshot as the write it is guarding.
+//
+// Fails safe to FALSE (live) when the row can't be read: a lookup blip must not
+// start rejecting real wallet or loyalty movement on live orders.
+func OrderIsTestMode(db *gorm.DB, orderID uuid.UUID) bool {
+	if db == nil {
+		return false
+	}
+	var mode string
+	if err := db.Model(&models.Order{}).
+		Where("id = ?", orderID).Select("mode").Scan(&mode).Error; err != nil {
+		return false
+	}
+	return models.IsTestMode(mode)
+}

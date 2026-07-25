@@ -298,6 +298,13 @@ func applyLoyaltyTxnInTx(tx *gorm.DB, userID uuid.UUID, points float64, txnType 
 // EarnLoyalty credits points (delivered order, streak bonus, admin grant).
 // Idempotent on idempotencyKey.
 func EarnLoyalty(db *gorm.DB, userID uuid.UUID, points float64, source models.LoyaltyTxnSource, orderID *uuid.UUID, reason, idempotencyKey string) (*models.LoyaltyTransaction, error) {
+	// Points earned on a sandbox order would be redeemable against a REAL
+	// kitchen, so a test order neither earns nor redeems. Returning a nil
+	// transaction with no error keeps this a silent no-op: loyalty is a perk,
+	// and failing the surrounding checkout over it would be worse than skipping.
+	if orderID != nil && OrderIsTestMode(db, *orderID) {
+		return nil, nil
+	}
 	cfg := GetLoyaltyConfig(db)
 	var result *models.LoyaltyTransaction
 	err := db.Transaction(func(tx *gorm.DB) error {

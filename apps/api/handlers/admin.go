@@ -10,6 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
@@ -276,6 +278,10 @@ func (h *AdminHandler) FSSAIExpiryBackfill(c *gin.Context) {
 // GetStats returns dashboard statistics
 func (h *AdminHandler) GetStats(c *gin.Context) {
 	db := database.DB
+	// Every order figure below is scoped to the console's active Live/Test
+	// toggle, so a sandbox order can never move a real revenue number — and an
+	// admin debugging in Test sees the sandbox's own figures rather than zeroes.
+	orders := func() *gorm.DB { return db.Model(&models.Order{}).Scopes(adminModeScope(c)) }
 	var stats models.AdminDashboardStats
 
 	today := time.Now().Truncate(24 * time.Hour)
@@ -290,8 +296,8 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 	db.Model(&models.User{}).Where("created_at >= ?", today).Count(&newUsersToday)
 	db.Model(&models.ChefProfile{}).Count(&totalChefs)
 	db.Model(&models.ChefProfile{}).Where("is_verified = ?", false).Count(&pendingVerifications)
-	db.Model(&models.Order{}).Count(&totalOrders)
-	db.Model(&models.Order{}).Where("created_at >= ?", today).Count(&ordersToday)
+	orders().Count(&totalOrders)
+	orders().Where("created_at >= ?", today).Count(&ordersToday)
 
 	stats.TotalUsers = int(totalUsers)
 	stats.NewUsersToday = int(newUsersToday)
@@ -301,20 +307,20 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 	stats.OrdersToday = int(ordersToday)
 
 	// Revenue (completed orders)
-	db.Model(&models.Order{}).Where("payment_status = ?", "completed").Select("COALESCE(SUM(total), 0)").Scan(&stats.Revenue)
-	db.Model(&models.Order{}).Where("payment_status = ? AND created_at >= ?", "completed", today).Select("COALESCE(SUM(total), 0)").Scan(&stats.RevenueToday)
+	orders().Where("payment_status = ?", "completed").Select("COALESCE(SUM(total), 0)").Scan(&stats.Revenue)
+	orders().Where("payment_status = ? AND created_at >= ?", "completed", today).Select("COALESCE(SUM(total), 0)").Scan(&stats.RevenueToday)
 
 	// Orders change (this week vs last week)
 	var ordersThisWeek, ordersLastWeek int64
-	db.Model(&models.Order{}).Where("created_at >= ?", lastWeek).Count(&ordersThisWeek)
-	db.Model(&models.Order{}).Where("created_at >= ? AND created_at < ?", prevWeek, lastWeek).Count(&ordersLastWeek)
+	orders().Where("created_at >= ?", lastWeek).Count(&ordersThisWeek)
+	orders().Where("created_at >= ? AND created_at < ?", prevWeek, lastWeek).Count(&ordersLastWeek)
 	if ordersLastWeek > 0 {
 		stats.OrdersChange = float64(ordersThisWeek-ordersLastWeek) / float64(ordersLastWeek) * 100
 	}
 
 	// Revenue change (today vs yesterday)
 	var revenueYesterday float64
-	db.Model(&models.Order{}).Where("payment_status = ? AND created_at >= ? AND created_at < ?", "completed", yesterday, today).Select("COALESCE(SUM(total), 0)").Scan(&revenueYesterday)
+	orders().Where("payment_status = ? AND created_at >= ? AND created_at < ?", "completed", yesterday, today).Select("COALESCE(SUM(total), 0)").Scan(&revenueYesterday)
 	if revenueYesterday > 0 {
 		stats.RevenueChange = (stats.RevenueToday - revenueYesterday) / revenueYesterday * 100
 	}
@@ -963,11 +969,16 @@ func (h *AdminHandler) GetAnalytics(c *gin.Context) {
 	today := time.Now().Truncate(24 * time.Hour)
 	thirtyDaysAgo := today.AddDate(0, 0, -30)
 
+	// Same Live/Test scoping as the dashboard: analytics must never blend
+	// sandbox orders into real revenue, and must show the sandbox's own numbers
+	// when the console is in Test.
+	orders := func() *gorm.DB { return db.Model(&models.Order{}).Scopes(adminModeScope(c)) }
+
 	// Overview
-	db.Model(&models.Order{}).Where("payment_status = ?", "completed").Select("COALESCE(SUM(total), 0)").Scan(&analytics.Overview.TotalRevenue)
+	orders().Where("payment_status = ?", "completed").Select("COALESCE(SUM(total), 0)").Scan(&analytics.Overview.TotalRevenue)
 
 	var totalOrders, activeUsers int64
-	db.Model(&models.Order{}).Count(&totalOrders)
+	orders().Count(&totalOrders)
 	analytics.Overview.TotalOrders = int(totalOrders)
 
 	if analytics.Overview.TotalOrders > 0 {
