@@ -255,7 +255,7 @@ export default function ProfileScreen() {
                     Refer &amp; earn
                   </Text>
                   <Text className="mt-0.5 text-sm" style={{ color: customerColors.charcoal.soft }}>
-                    Share Fe3dr with a friend and you both get credit
+                    Share Fe3dr with a friend and you both earn points
                   </Text>
                 </View>
                 <Gift size={28} color={customerColors.coral.DEFAULT} />

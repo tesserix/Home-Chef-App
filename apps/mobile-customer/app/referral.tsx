@@ -150,7 +150,7 @@ export default function ReferralScreen() {
             </View>
             <View style={[styles.statCard, cardShadow]}>
               <Text style={styles.statValue}>{money(data.stats.totalEarned)}</Text>
-              <Text style={styles.statLabel}>Credit earned</Text>
+              <Text style={styles.statLabel}>Rewards earned</Text>
             </View>
           </View>
 
@@ -160,7 +160,7 @@ export default function ReferralScreen() {
             {[
               'Share your code with friends.',
               'They sign up and place their first order.',
-              `You both get credit in your Fe3dr wallet.`,
+              `You both get loyalty points to spend on your next order.`,
             ].map((step, i) => (
               <View key={i} style={styles.stepRow}>
                 <View style={styles.stepNum}>
