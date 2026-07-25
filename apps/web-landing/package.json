@@ -14,7 +14,7 @@
   "dependencies": {
     "@tesserix/web": "^1.7.0",
     "geist": "^1.3.1",
-    "next": "^16.2.11",
+    "next": "16.2.9",
     "react": "^19.2.7",
     "react-dom": "^19.0.0"
   },
