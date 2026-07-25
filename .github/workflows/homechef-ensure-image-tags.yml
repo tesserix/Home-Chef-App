@@ -91,6 +91,10 @@ jobs:
             echo "api=$(changed 'apps/api/')"
             echo "auth_bff=$(changed 'apps/auth-bff/')"
             echo "web=$(changed 'apps/web-landing/')"
+            # homechef-web is the marketing landing; the customer SPA publishes
+            # separately as homechef-web-app. '^apps/web/' needs the trailing
+            # slash so it doesn't also match apps/web-landing/.
+            echo "web_app=$(changed 'apps/web/')"
           } >> "$GITHUB_OUTPUT"
 
       - name: Ensure tags + advance deploy
@@ -100,6 +104,7 @@ jobs:
           API_CHANGED: ${{ steps.changed.outputs.api }}
           AUTHBFF_CHANGED: ${{ steps.changed.outputs.auth_bff }}
           WEB_CHANGED: ${{ steps.changed.outputs.web }}
+          WEB_APP_CHANGED: ${{ steps.changed.outputs.web_app }}
         run: |
           set -euo pipefail
           NEW_TAG="main-${SHORT_SHA}"
@@ -111,6 +116,7 @@ jobs:
             [homechef-api]="${API_CHANGED}"
             [homechef-auth-bff]="${AUTHBFF_CHANGED}"
             [homechef-web]="${WEB_CHANGED}"
+            [homechef-web-app]="${WEB_APP_CHANGED}"
             [homechef-vendor-portal]="false"
             [homechef-delivery-portal]="false"
           )
@@ -120,6 +126,7 @@ jobs:
             [homechef-api]="argocd/prod/apps/homechef/homechef-api.yaml"
             [homechef-auth-bff]="argocd/prod/apps/homechef/homechef-auth-bff.yaml"
             [homechef-web]="argocd/prod/apps/homechef/homechef-web.yaml"
+            [homechef-web-app]="argocd/prod/apps/homechef/homechef-web-app.yaml"
             [homechef-vendor-portal]="argocd/prod/apps/homechef/homechef-vendor-portal.yaml"
             [homechef-delivery-portal]="argocd/prod/apps/homechef/homechef-delivery-portal.yaml"
           )
@@ -161,7 +168,7 @@ jobs:
               | sed -E 's/.*value:[[:space:]]*"?([^"#]+)"?.*/\1/' | tr -d '[:space:]'
           }
 
-          for SVC in homechef-api homechef-auth-bff homechef-web homechef-vendor-portal homechef-delivery-portal; do
+          for SVC in homechef-api homechef-auth-bff homechef-web homechef-web-app homechef-vendor-portal homechef-delivery-portal; do
             echo "::group::${SVC}"
             if tag_exists "${SVC}"; then
               echo "${SVC}:${NEW_TAG} already present ✓"; echo "::endgroup::"; continue

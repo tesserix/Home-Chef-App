@@ -1,35 +1,41 @@
 name: HomeChef Web - CI Build
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Build validation for apps/web. Runs on PRs that touch the app so it cannot
-# rot again (it accumulated four TS errors while nothing built it).
+# Builds and publishes apps/web (the customer SPA) as homechef-web-app.
 #
-# Deploy stays manual: `inputs.deploy` gates the image push, and the
-# homechef-web slot currently serves the web-landing image, so an accidental
-# deploy would overwrite the live fe3dr.com landing. Resolve that slot conflict
-# before wiring push-to-main deploys.
+# PRs build-validate only — the app accumulated four TS errors while nothing
+# built it. Pushes to main publish main-<sha7>, which is what Kargo's prod
+# Stage promotes.
 # ──────────────────────────────────────────────────────────────────────────────
 
 on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: "Push the image so Kargo deploys it to the homechef-web slot. WARNING: this OVERWRITES the live web-landing serving fe3dr.com. Leave false to only build-validate apps/web (no push, no deploy)."
+        description: "Force an image push even when this run wasn't triggered by a push to main (main pushes already publish)."
         type: boolean
         default: false
-  # Re-enable when the homechef-web slot conflict is resolved:
-  # push:
-  #   branches:
-  #     - main
-  #     - 'feat/**'
-  #     - 'feature/**'
-  #     - 'bugfix/**'
-  #     - 'hotfix/**'
-  #   paths:
-  #     - 'apps/web/**'
-  #     - 'packages/**'
-  #     - 'pnpm-lock.yaml'
-  #     - '.github/workflows/homechef-web-build.yml'
+  # Publishes homechef-web-app on every main commit that touches the SPA.
+  #
+  # This was disabled while apps/web and the marketing landing both published
+  # to the SAME image name (homechef-web) — the landing builds automatically,
+  # so it always won that tag and the SPA could never ship. The SPA now has its
+  # own image (homechef-web-app), so the collision is gone and it can publish
+  # like every other service.
+  #
+  # It must publish on main for Kargo: the homechef Warehouse promotes from the
+  # git commit graph and the prod Stage derives image.tag = main-<sha7>, so an
+  # image has to exist at that tag for every promoted commit. ensure-image-tags
+  # carries unchanged services forward, but a CHANGED service has to actually
+  # build — otherwise the deploy branch advances to a tag that cannot be pulled.
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/homechef-web-build.yml'
   pull_request:
     branches: [main]
     paths:
@@ -93,7 +99,7 @@ jobs:
             type=sha,prefix={{branch}}-,enable=${{ github.event_name != 'pull_request' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.title=homechef-web
+            org.opencontainers.image.title=homechef-web-app
             org.opencontainers.image.description=HomeChef Web Application
 
       - name: Compute cache ref
@@ -107,10 +113,9 @@ jobs:
           context: .
           file: apps/web/Dockerfile
           platforms: linux/amd64
-          # Guard against clobbering the live web-landing on the shared
-          # homechef-web slot: only push (→ Kargo deploys) on an explicit
-          # deploy=true dispatch. The default build-validates apps/web only.
-          push: ${{ inputs.deploy == true }}
+          # Publish on a main push (the Kargo path) or an explicit deploy
+          # dispatch. PR runs build-validate only and never push.
+          push: ${{ github.event_name == 'push' || inputs.deploy == true }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -136,7 +141,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         id: trivy
         # Scans the pushed image by digest, so only when we actually pushed.
-        if: inputs.deploy == true
+        if: github.event_name == 'push' || inputs.deploy == true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build_push.outputs.digest }}
@@ -148,7 +153,7 @@ jobs:
           limit-severities-for-sarif: true
 
       - name: Upload Trivy results to GitHub Security tab
-        if: always() && inputs.deploy == true
+        if: always() && (github.event_name == 'push' || inputs.deploy == true)
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
