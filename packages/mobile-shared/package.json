@@ -15,6 +15,7 @@
     "./utils": "./src/utils/index.ts",
     "./theme": "./src/theme/index.ts",
     "./screens": "./src/screens/index.ts",
+    "./support": "./src/support/index.ts",
     "./ui": "./src/ui/index.ts",
     "./mfa": "./src/mfa/index.ts"
   },
