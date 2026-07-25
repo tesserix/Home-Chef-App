@@ -61,11 +61,15 @@ func isMFAExempt(path string) bool {
 	return false
 }
 
-// clientApp resolves the calling app, defaulting to customer when the header is
-// absent so an older client that predates this feature keeps working. The
+// ClientAppFrom resolves the calling app, defaulting to customer when the header
+// is absent so an older client that predates this feature keeps working. The
 // default is the least-privileged app, and it is only ever used to scope device
 // trust — never to grant it.
-func clientApp(c *gin.Context) string {
+//
+// Exported because the verify handler must mint a token under exactly the scope
+// the gate will later check it against; two independent readings of the header
+// would drift.
+func ClientAppFrom(c *gin.Context) string {
 	app := strings.ToLower(strings.TrimSpace(c.GetHeader(HdrClientApp)))
 	if services.ValidMFAApps[app] {
 		return app
@@ -89,7 +93,7 @@ func MFAGate(db *gorm.DB, enabled bool) gin.HandlerFunc {
 			return
 		}
 
-		app := clientApp(c)
+		app := ClientAppFrom(c)
 		req, err := services.EvaluateMFA(
 			c.Request.Context(), db, enabled, userID, app, c.GetHeader(HdrDeviceToken),
 		)

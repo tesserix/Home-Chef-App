@@ -160,6 +160,7 @@ func SetupRouter() *gin.Engine {
 	healthHandler := handlers.NewHealthHandler()
 	uploadHandler := handlers.NewUploadHandler()
 	emailOTPHandler := handlers.NewEmailOTPHandler()
+	mfaHandler := handlers.NewMFAHandler()
 	menuHandler := handlers.NewMenuHandler()
 	locationHandler := handlers.NewLocationHandler()
 	reviewHandler := handlers.NewReviewHandler()
@@ -265,6 +266,14 @@ func SetupRouter() *gin.Engine {
 	// per-subgroup bffAuth below runs too late for the limiter to see a user.
 	// This only identifies — bffAuth still enforces on protected groups.
 	v1.Use(bffIdentify(bffKey, bffWindow))
+	// Two-factor gate. Must sit AFTER bffIdentify: it needs a resolved user, and
+	// registered any earlier it would silently pass every request instead of
+	// challenging — a non-enforcing second factor that still looks installed.
+	//
+	// Safe to mount on all of v1 because it self-exempts the /auth/mfa/* routes a
+	// challenged user needs, no-ops for unauthenticated callers, and no-ops
+	// entirely while MFA_ENABLED is off.
+	v1.Use(middleware.MFAGate(database.DB, config.AppConfig.MFAEnabled))
 	// Redis-backed rate limit on all of v1 — a BACKSTOP against runaway
 	// clients and scrapers, not the primary abuse defence. The real
 	// protection is the targeted limiter on each abuse-prone surface
@@ -433,6 +442,32 @@ func SetupRouter() *gin.Engine {
 		{
 			account.POST("/email/otp/request", emailOTPHandler.RequestOTP)
 			account.POST("/email/otp/verify", emailOTPHandler.VerifyOTP)
+		}
+
+		// Two-factor. Authenticated but deliberately NOT behind MFAGate (it
+		// exempts this prefix) — these are the endpoints a challenged user must
+		// reach in order to stop being challenged.
+		//
+		// Rate limited tighter than the v1 backstop: /challenge sends email and
+		// /verify accepts codes, so both are abuse-prone surfaces.
+		mfa := v1.Group("/auth/mfa")
+		mfa.Use(bffAuth(bffKey, bffWindow), middleware.RateLimitByUser(1, 6))
+		{
+			mfa.GET("/status", mfaHandler.GetStatus)
+
+			mfa.POST("/enroll/email/request", mfaHandler.RequestEmailEnrollment)
+			mfa.POST("/enroll/email/verify", mfaHandler.VerifyEmailEnrollment)
+
+			mfa.POST("/enable", mfaHandler.Enable)
+			mfa.POST("/disable", mfaHandler.Disable)
+			mfa.POST("/backup-codes/regenerate", mfaHandler.RegenerateBackupCodes)
+
+			mfa.POST("/challenge", mfaHandler.Challenge)
+			mfa.POST("/verify", mfaHandler.Verify)
+
+			mfa.GET("/devices", mfaHandler.ListDevices)
+			mfa.DELETE("/devices/:id", mfaHandler.RevokeDevice)
+			mfa.POST("/devices/revoke-all", mfaHandler.RevokeAllDevices)
 		}
 
 		// Chef onboarding (authenticated, but no chef role required — user is
