@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChefHat, Loader2, Eye, EyeOff } from 'lucide-react';
@@ -8,11 +8,33 @@ import { fadeInLeft, fadeInRight } from '@/shared/utils/animations';
 import { GoogleSignInButton } from '@/features/auth/components/GoogleSignInButton';
 
 export default function LoginPage() {
-  const { login, loginWithEmail } = useAuth();
+  const { login, loginWithEmail, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const authError = searchParams.get('error');
   const sessionExpired = authError === 'session_expired' || authError === 'invalid_state';
+  const returnTo = searchParams.get('returnTo');
+
+  // Already signed in? Don't show the form.
+  //
+  // The BFF session lives in an HttpOnly cookie with a 7-day Max-Age, so it
+  // survives new tabs, reloads and typing /login by hand. Without this the
+  // route rendered the form anyway and it looked like the session had been
+  // lost — the user is asked to sign in again while a perfectly good session
+  // is sitting in the jar.
+  //
+  // Waits for isLoading: AuthProvider bootstraps from /bff/auth/session, and
+  // acting before that resolves would flash the form on every visit. Uses
+  // replace so Back doesn't bounce the user straight back here.
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
+    // Only honour a same-origin relative path; an absolute returnTo would be
+    // an open redirect.
+    const target = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+      ? returnTo
+      : '/';
+    navigate(target === '/login' ? '/' : target, { replace: true });
+  }, [isAuthenticated, isLoading, returnTo, navigate]);
 
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [email, setEmail] = useState('');
