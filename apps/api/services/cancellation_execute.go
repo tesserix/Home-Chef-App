@@ -96,22 +96,89 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 				// claim already flipped payment_status→refunded; finalize with a zero increment.
 				cr.RefundRef = "already-refunded"
 			} else if cr.RefundDestination == "original" {
-				if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
-					return fmt.Errorf("original-method refund needs a razorpay payment")
+				// #766-followup: a mixed-payment order (wallet + loyalty credit applied at
+				// checkout) only ever CAPTURES (Total − WalletApplied − LoyaltyApplied) at the
+				// gateway. Sending cr.RefundTotalPaise straight to Razorpay exceeds that
+				// captured amount, gets rejected ("amount greater than amount captured"), 502s
+				// the endpoint, and the sweep re-sends the SAME wrong amount forever — the
+				// customer is never refunded. Split by funding rail instead: wallet + loyalty
+				// slices credit back instantly, only the card slice goes to the gateway.
+				// Mirrors splitCancelRefundAcrossRails, the already-correct chef-cancel path
+				// (handlers/chef_order_cancel.go).
+				split := SplitRefundByFunding(order, cr.RefundTotalPaise)
+
+				creditRail := func(paise int, source models.WalletTxnSource, label string) (float64, error) {
+					if paise <= 0 {
+						return 0, nil
+					}
+					amount := FromPaise(paise)
+					if _, wErr := CreditWallet(tx, order.CustomerID, amount, source, &order.ID,
+						"Cancellation refund for order "+order.OrderNumber, label+":cancel:"+cr.ID.String(), nil); wErr != nil {
+						return 0, wErr
+					}
+					return amount, nil
 				}
-				rzp := GetRazorpay()
-				if rzp == nil {
-					return fmt.Errorf("razorpay unavailable")
+				walletBack, wErr := creditRail(split.WalletPaise, models.WalletSourceRefund, "refund-wallet")
+				if wErr != nil {
+					return wErr
 				}
-				resp, rErr := rzp.CreateRefund(order.RazorpayPaymentID, &RefundRequest{
-					Amount: cr.RefundTotalPaise, Speed: "normal",
-					Notes:          map[string]string{"order_id": order.ID.String(), "scope": "cancellation", "reason": cr.VendorReason},
-					IdempotencyKey: RefundFullIdempotencyKey(order.ID), // one cancellation refund per order; claim + sweep re-drive with the same key. #574
-				})
-				if rErr != nil {
-					return rErr
+				loyaltyBack, lErr := creditRail(split.LoyaltyPaise, models.WalletSourceLoyalty, "refund-loyalty")
+				if lErr != nil {
+					return lErr
 				}
-				cr.RefundRef = resp.ID
+
+				// The gateway can never refund more than it captured. Clamp the card slice to
+				// the captured amount and push any excess (a rail already partly refunded
+				// elsewhere pushed its remainder onto the card) back to the wallet as credit.
+				cardPaise := split.CardPaise
+				capturePaise := ToPaise(order.Total) - ToPaise(order.WalletApplied) - ToPaise(order.LoyaltyApplied)
+				if cardPaise > capturePaise {
+					if over := cardPaise - capturePaise; over > 0 {
+						overBack, oErr := creditRail(over, models.WalletSourceRefund, "refund-overflow")
+						if oErr != nil {
+							return oErr
+						}
+						walletBack += overBack
+					}
+					cardPaise = capturePaise
+				}
+
+				// Record what each rail has now been returned — mirrors
+				// splitCancelRefundAcrossRails so a later partial computes its share against
+				// the REMAINING funded amount rather than double-counting the original.
+				if walletBack > 0 || loyaltyBack > 0 {
+					if uErr := tx.Model(&models.Order{}).Where("id = ?", order.ID).
+						Updates(map[string]any{
+							"wallet_refunded":  gorm.Expr("COALESCE(wallet_refunded,0) + ?", walletBack),
+							"loyalty_refunded": gorm.Expr("COALESCE(loyalty_refunded,0) + ?", loyaltyBack),
+						}).Error; uErr != nil {
+						return uErr
+					}
+				}
+
+				if cardPaise > 0 {
+					// Only a non-zero card slice needs a captured gateway payment — a fully
+					// credit-funded order (wallet + loyalty cover the whole refund) never
+					// touched Razorpay at all, so requiring one here would wrongly block it.
+					if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
+						return fmt.Errorf("original-method refund needs a razorpay payment")
+					}
+					rzp := GetRazorpay()
+					if rzp == nil {
+						return fmt.Errorf("razorpay unavailable")
+					}
+					resp, rErr := rzp.CreateRefund(order.RazorpayPaymentID, &RefundRequest{
+						Amount: cardPaise, Speed: "normal",
+						Notes:          map[string]string{"order_id": order.ID.String(), "scope": "cancellation", "reason": cr.VendorReason},
+						IdempotencyKey: RefundFullIdempotencyKey(order.ID), // one cancellation refund per order; claim + sweep re-drive with the same key. #574
+					})
+					if rErr != nil {
+						return rErr
+					}
+					cr.RefundRef = resp.ID
+				} else {
+					cr.RefundRef = "wallet:cancel:" + cr.ID.String()
+				}
 			} else {
 				if _, wErr := CreditWallet(tx, order.CustomerID, refund, models.WalletSourceRefund,
 					&order.ID, "Cancellation refund", "cancel:"+cr.ID.String(), nil); wErr != nil {
