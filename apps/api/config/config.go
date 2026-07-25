@@ -104,11 +104,16 @@ type Config struct {
 
 	// Feature Flags
 	EnableMockMode bool
-	// WalletCheckoutEnabled gates applying wallet store-credit at checkout (#141).
-	// Default OFF: the chef/driver top-up uses Razorpay direct transfers
-	// (services.CreateTransfer) which must be verified in the Razorpay sandbox
-	// before it touches live settlement. Enable with WALLET_CHECKOUT_ENABLED=true.
-	WalletCheckoutEnabled bool
+	// WalletCheckoutEnabled gates applying wallet store-credit at checkout (#141),
+	// and LoyaltyCheckoutEnabled gates spending loyalty points there.
+	//
+	// Both default ON: a customer should always be able to spend the credit they
+	// hold. The chef/driver direct-transfer top-up these rely on is now verified,
+	// and credit can no longer exceed food + delivery, so the capture always still
+	// covers the platform fee and GST. Each remains an emergency kill switch via
+	// WALLET_CHECKOUT_ENABLED / LOYALTY_CHECKOUT_ENABLED.
+	WalletCheckoutEnabled  bool
+	LoyaltyCheckoutEnabled bool
 	// GroupOrdersEnabled gates the group / office orders feature (#46): shared
 	// cart, split payment, and consolidation. Default OFF — the multi-payer money
 	// flow should be verified in the Razorpay sandbox before going live.
@@ -232,7 +237,8 @@ func Load() {
 	}
 
 	enableMock, _ := strconv.ParseBool(getEnv("ENABLE_MOCK_MODE", "false"))
-	walletCheckout, _ := strconv.ParseBool(getEnv("WALLET_CHECKOUT_ENABLED", "false"))
+	walletCheckout, _ := strconv.ParseBool(getEnv("WALLET_CHECKOUT_ENABLED", "true"))
+	loyaltyCheckout, _ := strconv.ParseBool(getEnv("LOYALTY_CHECKOUT_ENABLED", "true"))
 	mealPlanEscrow, _ := strconv.ParseBool(getEnv("MEAL_PLAN_ESCROW_ENABLED", "false"))
 	ledgerShadow, _ := strconv.ParseBool(getEnv("LEDGER_SHADOW_ENABLED", "false"))
 	walletPaymentFlow, _ := strconv.ParseBool(getEnv("WALLET_PAYMENT_FLOW_ENABLED", "false"))
@@ -363,6 +369,7 @@ func Load() {
 		// Feature Flags
 		EnableMockMode:                  enableMock,
 		WalletCheckoutEnabled:           walletCheckout,
+		LoyaltyCheckoutEnabled:          loyaltyCheckout,
 		MealPlanEscrowEnabled:           mealPlanEscrow,
 		LedgerShadowEnabled:             ledgerShadow,
 		WalletPaymentFlowEnabled:        walletPaymentFlow,
