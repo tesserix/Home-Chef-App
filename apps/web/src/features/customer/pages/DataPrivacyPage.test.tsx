@@ -11,10 +11,18 @@ import DataPrivacyPage from './DataPrivacyPage';
 // "sign in again to resume" — which is factually wrong (the server keeps
 // rejecting every request but /me/reactivate). Both are covered here,
 // alongside the reactivate path that makes the pause actually reversible.
+//
+// Deletion previously only swapped in a static "Account deleted" panel and
+// left the auth store, Firebase session and BFF cookie intact, so
+// ProtectedRoute kept passing and browser-Back landed the "deleted" user
+// right back inside the app — covered in the second describe block below.
+
+const mockLogout = vi.fn();
 
 vi.mock('@/app/providers/AuthProvider', () => ({
   useAuth: () => ({
     user: { email: 'customer@demo.com' },
+    logout: mockLogout,
   }),
 }));
 
@@ -36,6 +44,7 @@ function mockEligibility(
 describe('DataPrivacyPage — pause my account', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockLogout.mockClear();
   });
 
   it('does not pause on a single click — a confirmation dialog appears first', async () => {
@@ -115,5 +124,46 @@ describe('DataPrivacyPage — pause my account', () => {
 
     await waitFor(() => expect(post).toHaveBeenCalledWith('/customer/me/reactivate'));
     await screen.findByText('Your data');
+  });
+});
+
+describe('DataPrivacyPage — delete my account', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockLogout.mockClear();
+  });
+
+  it('terminates the session after a successful deletion', async () => {
+    mockEligibility({ deletable: true });
+    vi.spyOn(apiClient, 'post').mockResolvedValue({
+      status: 'deleted',
+      deletedAt: '2026-07-25T00:00:00Z',
+      purgeAfter: '2027-01-21T00:00:00Z',
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<DataPrivacyPage />);
+
+    const emailInput = await screen.findByLabelText(/type customer@demo.com to confirm/i);
+    await user.type(emailInput, 'customer@demo.com');
+    await user.click(screen.getByRole('button', { name: 'Delete my account' }));
+
+    // logout() clears the auth store, signs out of Firebase and clears the
+    // BFF session cookie — without it, ProtectedRoute keeps passing and
+    // browser-Back lands the "deleted" user right back inside the app.
+    await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not delete while blocked, and never calls logout in that case', async () => {
+    mockEligibility({
+      deletable: false,
+      blockers: [{ code: 'wallet_balance', label: 'Wallet credit left' }],
+    });
+    const post = vi.spyOn(apiClient, 'post');
+    renderWithProviders(<DataPrivacyPage />);
+
+    await screen.findByText('Wallet credit left');
+    expect(screen.getByRole('button', { name: 'Delete my account' })).toBeDisabled();
+    expect(post).not.toHaveBeenCalled();
+    expect(mockLogout).not.toHaveBeenCalled();
   });
 });

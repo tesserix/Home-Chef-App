@@ -34,10 +34,9 @@ import {
  * after the user has typed their email.
  */
 export default function DataPrivacyPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [confirmEmail, setConfirmEmail] = useState('');
   const [confirmPauseOpen, setConfirmPauseOpen] = useState(false);
-  const [purgeAfter, setPurgeAfter] = useState<string | null>(null);
   // Set directly on a successful pause, and also from ACCOUNT_BLOCKED_EVENT —
   // which the eligibility query below will trigger on mount if the account
   // is already paused (e.g. a paused user reloading this page). Either way,
@@ -110,23 +109,22 @@ export default function DataPrivacyPage() {
 
   function handleDelete() {
     deleteAccount.mutate(confirmEmail.trim(), {
-      onSuccess: (result) => setPurgeAfter(result.purgeAfter),
+      onSuccess: (result) => {
+        // The auth store, Firebase session and BFF cookie must all go —
+        // otherwise ProtectedRoute keeps passing and browser-Back lands a
+        // "deleted" user right back inside the app. toast survives the
+        // client-side navigation logout() does (the Toaster is mounted
+        // above the router, not inside this route), so the retention date
+        // still reaches the user on their way out.
+        toast.success(
+          `Account deleted. Sign up again with the same email before ${new Date(
+            result.purgeAfter,
+          ).toLocaleDateString()} and you can restore it.`,
+        );
+        logout();
+      },
       onError: () => toast.error('Could not delete your account — try again'),
     });
-  }
-
-  if (purgeAfter) {
-    return (
-      <div className="mx-auto max-w-2xl px-4 py-8">
-        <h1 className="text-2xl font-semibold text-foreground">Account deleted</h1>
-        <p className="mt-3 text-muted-foreground">
-          Your sign-in no longer works. We keep your data until{' '}
-          {new Date(purgeAfter).toLocaleDateString()} — sign up again with the
-          same email before then and you can restore it. After that it is erased
-          for good.
-        </p>
-      </div>
-    );
   }
 
   if (blockedStatus) {
