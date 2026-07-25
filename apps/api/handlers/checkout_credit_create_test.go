@@ -172,3 +172,26 @@ func TestCreateOrderPayment_NoCreditRequestedChargesFullTotal(t *testing.T) {
 	require.Equal(t, 0.0, body["loyaltyApplied"])
 	require.Equal(t, 100000, *capturedPaise)
 }
+
+// "Pay now" on an unpaid order sends no body — there is no checkout screen to ask
+// again. Reading that silence as "no credit" would quietly drop the credit the
+// customer already applied and charge them the full total.
+func TestCreateOrderPayment_BodylessRetryReusesTheStampedCredit(t *testing.T) {
+	db := setupPayDB(t)
+	addWalletTables(t, db)
+	quoteFlagsOn(t)
+	capturedPaise := withGatewayOrderCapture(t)
+	cust, orderID := seedCreditOrder(t, db, 500, 0)
+
+	// First attempt applies 500.00 of wallet credit and stamps it.
+	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/create",
+		regCreate, map[string]any{"useWallet": true})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, 500.0, createBody(t, w)["walletApplied"])
+
+	// The customer abandons the sheet and taps "Pay now" later — no body at all.
+	w = callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/create", regCreate, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, 500.0, createBody(t, w)["walletApplied"], "credit is preserved on retry")
+	require.Equal(t, 50000, *capturedPaise, "still only the fees + tax at the gateway")
+}

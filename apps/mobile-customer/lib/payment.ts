@@ -12,10 +12,13 @@ import { RAZORPAY_DISPLAY_CONFIG } from './razorpay-config';
 import { useCartStore } from '../store/cart-store';
 
 export interface RazorpayPaymentData {
-  // "wallet" + paid:true when store credit covers the full total — no gateway sheet.
+  // "wallet" + paid:true when credit covers the full total — no gateway sheet.
   provider?: string;
   paid?: boolean;
   walletApplied?: number;
+  loyaltyApplied?: number;
+  /** Server-authoritative amount still due at the gateway. */
+  payable?: number;
   razorpayOrderId: string;
   razorpayKeyId: string;
   amount: number;
@@ -49,15 +52,25 @@ interface RazorpayError {
  * client-side verify never shows a false failure.
  *
  * @param orderId  internal order id
- * @param opts.walletAmount  store credit to apply (#141)
+ * @param credit   which credit rails to apply, and optionally how much of each
+ *
+ * The client sends INTENT, never a computed payable: the server re-runs the whole
+ * allocation from the live balance and the real order, and its answer is what is
+ * charged. Posting an amount is what let the screen show one figure while the
+ * gateway took another.
  */
 export async function startOrderPayment(
   orderId: string,
-  opts: { walletAmount?: number } = {},
+  credit: {
+    useWallet: boolean;
+    walletAmount?: number;
+    useLoyalty: boolean;
+    loyaltyPoints?: number;
+  } = { useWallet: false, useLoyalty: false },
 ): Promise<void> {
   const resp = await api.post<{ data: RazorpayPaymentData }>(
     `/v1/payments/order/${orderId}/create`,
-    opts.walletAmount && opts.walletAmount > 0 ? { walletAmount: opts.walletAmount } : {},
+    credit,
   );
   const data = resp.data.data ?? (resp.data as unknown as RazorpayPaymentData);
 

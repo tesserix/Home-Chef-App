@@ -71,18 +71,20 @@ func creditFlags() services.CreditFlags {
 // constant had to be moved in lockstep with the API env.
 func creditQuoteResponse(q services.CreditQuote) gin.H {
 	return gin.H{
-		"redeemableCap":  services.FromPaise(q.RedeemableCapPaise),
-		"nonRedeemable":  services.FromPaise(q.NonRedeemablePaise),
-		"walletBalance":  services.FromPaise(q.WalletBalancePaise),
-		"walletApplied":  services.FromPaise(q.WalletAppliedPaise),
-		"walletMax":      services.FromPaise(q.WalletMaxPaise),
-		"pointsBalance":  q.PointsBalance,
-		"pointsApplied":  q.PointsAppliedPoints,
-		"pointsValue":    services.FromPaise(q.PointsAppliedPaise),
-		"pointsMax":      q.PointsMaxPoints,
-		"payable":        services.FromPaise(q.PayablePaise),
-		"loyaltyLimit":   q.LoyaltyLimitReason,
-		"walletEnabled":  q.WalletEnabled,
-		"loyaltyEnabled": q.LoyaltyEnabled,
+		"redeemableCap":      services.FromPaise(q.RedeemableCapPaise),
+		"nonRedeemable":      services.FromPaise(q.NonRedeemablePaise),
+		"walletBalance":      services.FromPaise(q.WalletBalancePaise),
+		"walletApplied":      services.FromPaise(q.WalletAppliedPaise),
+		"walletMax":          services.FromPaise(q.WalletMaxPaise),
+		"pointsBalance":      q.PointsBalance,
+		"pointsApplied":      q.PointsAppliedPoints,
+		"pointsValue":        services.FromPaise(q.PointsAppliedPaise),
+		"pointsMax":          q.PointsMaxPoints,
+		"pointsBalanceValue": services.FromPaise(q.PointsBalancePaise),
+		"pointsMaxValue":     services.FromPaise(q.PointsMaxPaise),
+		"payable":            services.FromPaise(q.PayablePaise),
+		"loyaltyLimit":       q.LoyaltyLimitReason,
+		"walletEnabled":      q.WalletEnabled,
+		"loyaltyEnabled":     q.LoyaltyEnabled,
 	}
 }

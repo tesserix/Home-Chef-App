@@ -54,6 +54,11 @@ type CreditQuote struct {
 	PointsAppliedPoints float64
 	PointsAppliedPaise  int
 	PointsMaxPoints     float64
+	// Rupee values of the balance and the per-order maximum. Served so the client
+	// never multiplies points by the redeem rate itself — an admin retune of the
+	// rate would otherwise silently make the app's captions wrong.
+	PointsBalancePaise int
+	PointsMaxPaise     int
 
 	PayablePaise int
 
@@ -166,6 +171,8 @@ func PlanCheckoutCredit(in CreditInputs) CreditQuote {
 		}
 		q.PointsAppliedPoints = pts
 		q.PointsAppliedPaise = pointsToPaise(pts, in.Cfg.RedeemRate)
+		q.PointsBalancePaise = pointsToPaise(in.PointsBalance, in.Cfg.RedeemRate)
+		q.PointsMaxPaise = pointsToPaise(q.PointsMaxPoints, in.Cfg.RedeemRate)
 	}
 
 	q.PayablePaise = in.TotalPaise - q.WalletAppliedPaise - q.PointsAppliedPaise

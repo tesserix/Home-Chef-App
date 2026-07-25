@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,13 +70,31 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 	//
 	// This is deliberate: the client used to compute a payable from its own cached
 	// balance and post a rupee amount, so any drift between the two views showed the
-	// customer one figure and charged another. An absent or malformed body simply
-	// means "no credit". An older build posting a bare {"walletAmount": N} is read
-	// as an explicit wallet request.
+	// customer one figure and charged another. An older build posting a bare
+	// {"walletAmount": N} is read as an explicit wallet request.
+	rawBody, _ := io.ReadAll(c.Request.Body)
 	var creditReq services.CreditRequest
-	_ = c.ShouldBindJSON(&creditReq)
+	if len(rawBody) > 0 {
+		_ = json.Unmarshal(rawBody, &creditReq)
+	}
 	if !creditReq.UseWallet && creditReq.WalletAmount != nil && *creditReq.WalletAmount > 0 {
 		creditReq.UseWallet = true
+	}
+
+	// A body-less call is a RETRY of an order whose credit was already chosen — the
+	// "Pay now" button on an unpaid order, which has no checkout screen to ask
+	// again. Reuse what is stamped on the order rather than reading the silence as
+	// "no credit", which would quietly charge the customer the full total and drop
+	// the credit they had already applied.
+	if len(bytes.TrimSpace(rawBody)) <= 2 { // "" or "{}"
+		if order.WalletApplied > 0 {
+			amt := order.WalletApplied
+			creditReq.UseWallet, creditReq.WalletAmount = true, &amt
+		}
+		if order.LoyaltyPointsSpent > 0 {
+			pts := order.LoyaltyPointsSpent
+			creditReq.UseLoyalty, creditReq.LoyaltyPoints = true, &pts
+		}
 	}
 
 	// Freeze the platform commission rate on the order ONCE at checkout (#390),
