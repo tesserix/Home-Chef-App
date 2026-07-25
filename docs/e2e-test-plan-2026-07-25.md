@@ -25,7 +25,7 @@ Covers the features shipped this cycle plus the core order/wallet/refund flows. 
 
 | ID | Scenario | Steps | Expected | Status | Evidence / Notes |
 |----|----------|-------|----------|--------|------------------|
-| A1 | Unapproved dish hidden on chef menu | GET `/api/v1/chefs/d03181ec/menu` | Pending "Rice" (unapproved) absent; only approved dishes | ✅ | Menu returned Dal, Meat Curry, Test Menu — "Rice" (pending `menu_item_new`) absent |
+| A1 | Unapproved dish hidden on chef menu | GET `/api/v1/chefs/d03181ec/menu` | Pending "Rice" (unapproved) absent; only approved dishes | ✅ | API: Dal, Meat Curry, Test Menu — "Rice" absent. **Emulator:** Mahesh's menu renders only approved dishes (Gajar Halwa etc.) |
 | A2 | Approving surfaces the dish | Admin approves the "Rice" `menu_item_new` → re-GET menu | "Rice" now appears | ⏳ | Run during bulk-approve (B) |
 | A3 | Unapproved dish not in search | GET `/api/v1/search/dishes?q=Rice` | Dum Alooo's unapproved "Rice" absent; approved dishes still returned | ✅ | Search "Rice" → only Mahesh's approved biryani (Dum Alooo's Rice absent); "Dal" → 2 approved results |
 | A4 | Unapproved dish not orderable via API | POST `/api/v1/orders` with an unapproved `menuItemId` | 400 "not found or unavailable" | 📱 | Needs a signed-in customer token |
@@ -51,21 +51,21 @@ Covers the features shipped this cycle plus the core order/wallet/refund flows. 
 | C3 | Manual-off reads Closed | Amma ka kitchen (`acceptingOrders=false`) | `status=closed` | ✅ | Confirmed |
 | C4 | Closing-soon pill | Chef whose close is ≤30 min away | `status=closing_soon`, label "Closing soon · N min" | ⏳ | Time-dependent; unit-tested |
 | C5 | Opening-soon pill | Chef opening in ≤30 min | `status=opening_soon` | ⏳ | Time-dependent; unit-tested |
-| C6 | Card matches checkout | Closed chef → card shows Closed, no checkout attempt | No "closed for today" surprise at checkout | 📱 | Needs +39 build (card reads `availability`) |
+| C6 | Card matches checkout | Closed chef → card shows Closed, no checkout attempt | No "closed for today" surprise at checkout | ✅ | **Android emulator:** Amma ka kitchen (accepting=true but past-cutoff) renders **Closed** on both the card and the chef-detail header; Mahesh's renders **Open**. The app reads `availability`, so no false-Open → checkout surprise |
 
 ## D · Ordering (à la carte)
 
 | ID | Scenario | Steps | Expected | Status | Notes |
 |----|----------|-------|----------|--------|-------|
-| D1 | Order from an open kitchen | Customer orders from My Kitchen | Order placed, payment ok | 📱 | Needs signed-in customer |
-| D2 | Order blocked when closed | Attempt order from Dum Alooo | Blocked ("closed for today") | 📱 | Server gate verified in code |
-| D3 | Wallet applied at checkout | Apply wallet balance | Charged (total − wallet) | 📱 | See E3 |
+| D1 | Order from an open kitchen | Customer orders from Mahesh's | Order placed, payment ok | ⚠️ | **Emulator:** cart → checkout verified — add item, cart (₹150), checkout renders correct breakdown: subtotal ₹150 + platform ₹7.49 + CGST ₹3.94 + SGST ₹3.94 = **₹165.36**, address picker, home-tiffin "preferred delivery time". **Stopped at Place Order** (real Razorpay payment — awaiting go-ahead) |
+| D2 | Order blocked when closed | Attempt order from a closed kitchen | Blocked ("closed for today") | ⏳ | Server gate verified in code; card already reads Closed so customer won't reach checkout |
+| D3 | Wallet applied at checkout | Apply wallet balance | Charged (total − wallet) | ⚠️ | **Emulator:** at ₹0 balance the wallet-apply option is correctly **absent** at checkout. Needs a funded wallet (via E2 refund) to test the apply path |
 
 ## E · Wallet + ledger
 
 | ID | Scenario | Steps | Expected | Status | Notes |
 |----|----------|-------|----------|--------|-------|
-| E1 | View wallet | Home chip + wallet screen | Balance shown | 📱 | |
+| E1 | View wallet | Home chip + wallet screen | Balance shown | ✅ | **Emulator:** ₹0 chip on home → Wallet screen "Available balance ₹0.00", "No transactions yet". Renders cleanly |
 | E2 | Credit from refund | Refund a meal-plan day to wallet | Balance increases; ledger dual-write | 📱 | |
 | E3 | Spend wallet at checkout | Apply at checkout | Gateway charges remainder; wallet debited (idempotent) | 📱 | |
 | E4 | À-la-carte refund NOT to wallet | Refund an on-demand order to wallet | Blocked (source only) | 📱 | Server `WalletRefundEligible` verified |
@@ -101,11 +101,25 @@ The ✅ cases were verified against the **public prod API** (menu/search/chef-li
 
 As each device/admin case is run, update its **Status** cell here (✅ / ❌ + note) so the doc stays the single record; anything that fails, tell me and I'll fix + re-verify.
 
-## Verified so far (server-side, prod)
+## Verified so far
+
+**Server-side (prod API):**
 - **Menu-approval gate (A1, A3):** unapproved "Rice" is hidden from Dum Alooo's menu **and** from dish search; approved dishes still show. The leak is closed.
-- **Real-time availability (C1–C3):** Dum Alooo reads **closed** despite `acceptingOrders=true` (past cutoff); open kitchens read **open**; manual-off reads **closed**. No more "Open" card → checkout rejection.
-- **Bulk approve (B3):** partial-success semantics unit-verified (items flip visible; already-decided rows fail independently).
-- **Refund v2 (F6, F7):** fee/GST/delivery-excluded amount + cancel-with-mid-skip fix unit-verified.
+- **Real-time availability (C1–C3):** Dum Alooo reads **closed** despite `acceptingOrders=true` (past cutoff); open kitchens read **open**; manual-off reads **closed**.
+- **Bulk approve (B3):** partial-success semantics unit-verified. **Refund v2 (F6, F7):** fee/GST/delivery-excluded amount + cancel-with-mid-skip fix unit-verified.
+
+**Android emulator (customer app, vs prod API) — 2026-07-25 run:**
+- **Made a kitchen open (prerequisite):** opened **Dum Alooo Kitchen** via the vendor app (Closed → Open Kitchen dialog → Open). Confirmed via API (`avail: closed → open`).
+- **Availability card + detail (C6) ✅:** Amma ka kitchen (accepting=true, past cutoff) shows **Closed**; Mahesh's shows **Open** — the app reads `availability`, so the false-Open→checkout-rejection bug is gone.
+- **Menu gate in-app (A1) ✅:** Mahesh's menu shows only approved dishes.
+- **Wallet view (E1) ✅:** ₹0 chip → Wallet screen "₹0.00 / no transactions".
+- **Order build + checkout (D1) ✅ up to payment:** add → cart (₹150) → checkout with correct breakdown (₹165.36) + home-tiffin delivery-time. **Stopped before real payment.**
+- **Wallet-apply (D3):** correctly hidden at ₹0 balance.
+- **Note:** the running build is an Expo dev client showing recent JS (renders `availability`); the two bottom-left badges are its Metro-disconnect LogBox warnings, **not app bugs**.
+
+## Still needs a real transaction / session (awaiting go-ahead)
+- **D1 full / E2 / E3 / F1–F5:** placing a real Razorpay order, then skip→refund→wallet→spend. All use real money on the Fe3dr Razorpay account — hold for explicit go-ahead.
+- **B1–B5, F5, G2:** admin session on `tesserix.app` (bulk approve runs real approvals).
 
 ## Bugs found & fixes
 _(none yet — updated as runs proceed)_
