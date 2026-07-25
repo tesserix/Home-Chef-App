@@ -57,7 +57,7 @@ Covers the features shipped this cycle plus the core order/wallet/refund flows. 
 
 | ID | Scenario | Steps | Expected | Status | Notes |
 |----|----------|-------|----------|--------|-------|
-| D1 | Order from an open kitchen | Customer orders from Mahesh's | Order placed, payment ok | ⚠️ | **Emulator:** cart → checkout verified — add item, cart (₹150), checkout renders correct breakdown: subtotal ₹150 + platform ₹7.49 + CGST ₹3.94 + SGST ₹3.94 = **₹165.36**, address picker, home-tiffin "preferred delivery time". **Stopped at Place Order** (real Razorpay payment — awaiting go-ahead) |
+| D1 | Order from an open kitchen | Customer orders from **Amma** | Order placed, payment ok | ✅ | **Emulator, full E2E:** Amma Goan Recheado Fish ₹380 → cart → checkout (total ₹481.91) → agree Terms → Place Order → **Razorpay test card 4718…4366 / 11-30 / OTP 1234 → "Payment confirmed, order placed successfully."** Single-chef-cart "Replace" guard works |
 | D2 | Order blocked when closed | Attempt order from a closed kitchen | Blocked ("closed for today") | ⏳ | Server gate verified in code; card already reads Closed so customer won't reach checkout |
 | D3 | Wallet applied at checkout | Apply wallet balance | Charged (total − wallet) | ⚠️ | **Emulator:** at ₹0 balance the wallet-apply option is correctly **absent** at checkout. Needs a funded wallet (via E2 refund) to test the apply path |
 
@@ -124,6 +124,8 @@ As each device/admin case is run, update its **Status** cell here (✅ / ❌ + n
 ## Bugs found & fixes
 
 - **BUG-1 (vendor Settings → "Auto open/close by hours" toggle read stale) — 🔧 FIXED (`0cae05c1`):** root cause was backend — `GetChefProfile` (`/chef/profile`) returned `acceptingOrders` but **omitted `autoScheduleEnabled`**, so the toggle always re-rendered OFF regardless of the saved value; a chef then saw the wrong state and a single tap could flip the real value the wrong way (I had to double-tap to reach OFF while opening Amma). Fix adds `autoScheduleEnabled` to the response map — same class of bug the self-delivery fields already fixed. Deploys with the next API image.
+
+- **UX-1 (checkout, not a functional bug):** the Place Order button stays disabled until the **"I agree to the Terms of Service and Refund Policy" checkbox** is ticked (a deliberate legal gate — `checkout.tsx:402/482`). "As soon as ready" is pre-selected so the delivery-time requirement is met by default; the *only* remaining gate is the Terms box, which sits below the delivery-time grid. Because the disabled button gives no visible reason, it reads as broken (user flagged it). **Suggested polish:** show a hint near the disabled button ("Agree to the Terms to place your order") or auto-scroll/flash the checkbox. Not blocking — the button enables the moment Terms is ticked.
 
 ## Test-run notes
 - **Amma ka Kitchen made open** (per request "always use Amma"): disabled its auto-schedule via vendor Settings → `accepting=true, autoSchedule=false, avail=open`. Now orderable for the customer-side tests.
