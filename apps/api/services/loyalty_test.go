@@ -55,6 +55,7 @@ func setupLoyaltyDB(t *testing.T) *gorm.DB {
 			id text PRIMARY KEY, user_id text, source text, points real, points_remaining real,
 			earned_at datetime, expires_at datetime, order_id text, idempotency_key text UNIQUE, created_at datetime
 		)`,
+		`CREATE TABLE orders (id text PRIMARY KEY, customer_id text, subtotal real, total real, created_at datetime, deleted_at datetime)`,
 	}
 	for _, s := range stmts {
 		require.NoError(t, db.Exec(s).Error)
@@ -213,14 +214,16 @@ func TestAwardOrderLoyalty_EarnsAndEnqueuesOnce(t *testing.T) {
 	db := setupLoyaltyDB(t)
 	uid := uuid.New()
 	orderID := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, subtotal, total) VALUES (?,?,?,?)`,
+		orderID.String(), uid.String(), 250.0, 250.0).Error)
 
-	pts, err := AwardOrderLoyalty(db, uid, orderID, 250)
+	pts, err := AwardOrderLoyalty(db, uid, orderID)
 	require.NoError(t, err)
 	require.Equal(t, 25.0, pts) // ₹250 × 0.1
 
 	// Redelivered order-delivered event → idempotent no-op (no second earn,
 	// no second notification event).
-	pts, err = AwardOrderLoyalty(db, uid, orderID, 250)
+	pts, err = AwardOrderLoyalty(db, uid, orderID)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, pts)
 
@@ -259,15 +262,21 @@ func TestGetLoyaltyAnalytics_Aggregates(t *testing.T) {
 func TestAwardOrderLoyalty_DisabledOrZero(t *testing.T) {
 	db := setupLoyaltyDB(t)
 	uid := uuid.New()
+	disabledOrderID := uuid.New()
+	zeroOrderID := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, subtotal, total) VALUES (?,?,?,?)`,
+		disabledOrderID.String(), uid.String(), 250.0, 250.0).Error)
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, subtotal, total) VALUES (?,?,?,?)`,
+		zeroOrderID.String(), uid.String(), 0.0, 0.0).Error)
 
 	setLoyaltySetting(t, db, "loyalty.enabled", "false")
-	pts, err := AwardOrderLoyalty(db, uid, uuid.New(), 250)
+	pts, err := AwardOrderLoyalty(db, uid, disabledOrderID)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, pts)
 
-	// Re-enable; a zero-value order earns nothing and creates no account.
+	// Re-enable; a zero-subtotal order earns nothing and creates no account.
 	db.Exec(`UPDATE platform_settings SET value = 'true' WHERE key = 'loyalty.enabled'`)
-	pts, err = AwardOrderLoyalty(db, uid, uuid.New(), 0)
+	pts, err = AwardOrderLoyalty(db, uid, zeroOrderID)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, pts)
 }

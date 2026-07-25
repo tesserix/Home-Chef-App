@@ -508,7 +508,7 @@ func (s *NotificationService) handleOrderDelivered(event OrderEvent) error {
 	// order id, so a redelivered event never double-earns; best-effort so a
 	// transient points failure never blocks or duplicates the delivery
 	// confirmation below.
-	if _, err := AwardOrderLoyalty(database.DB, event.CustomerID, event.OrderID, event.Total); err != nil {
+	if _, err := AwardOrderLoyalty(database.DB, event.CustomerID, event.OrderID); err != nil {
 		log.Printf("loyalty award failed for order %s: %v", event.OrderID, err)
 	}
 	// If this delivered order is a meal-subscription fulfillment, flip its

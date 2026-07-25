@@ -308,16 +308,22 @@ func EarnLoyalty(db *gorm.DB, userID uuid.UUID, points float64, source models.Lo
 
 // AwardOrderLoyalty earns points for a delivered order and enqueues a
 // points-earned notification event — both in the same transaction, and only
-// when the points were newly awarded. A redelivered order-delivered event is a
-// no-op (idempotent on "loyalty:order:<id>"). Returns the points awarded (0 if
-// disabled, already awarded, or a zero-value order). Called from the
-// order-delivered consumer.
-func AwardOrderLoyalty(db *gorm.DB, userID, orderID uuid.UUID, orderTotal float64) (float64, error) {
+// when the points were newly awarded. Points are earned on the order's FOOD
+// SUBTOTAL, not the grand total, so fees/GST/delivery never inflate earn. A
+// redelivered order-delivered event is a no-op (idempotent on
+// "loyalty:order:<id>"). Returns the points awarded (0 if disabled, already
+// awarded, or a zero-subtotal order). Called from the order-delivered
+// consumer.
+func AwardOrderLoyalty(db *gorm.DB, userID, orderID uuid.UUID) (float64, error) {
 	cfg := GetLoyaltyConfig(db)
 	if !cfg.Enabled {
 		return 0, nil
 	}
-	points := PointsForOrder(cfg, orderTotal)
+	var order models.Order
+	if err := db.Select("subtotal").First(&order, "id = ?", orderID).Error; err != nil {
+		return 0, err
+	}
+	points := PointsForOrder(cfg, order.Subtotal) // earn on FOOD subtotal, not total
 	if points <= 0 {
 		return 0, nil
 	}
