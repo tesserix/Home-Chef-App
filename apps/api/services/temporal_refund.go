@@ -5,8 +5,8 @@ package services
 // Mirrors temporal_confirm.go's shape: gated behind temporalRT being set (+ a
 // deploy-time flag), idempotent on an order-keyed workflow ID. Fires
 // IMMEDIATELY when ChefOrderCancelHandler.CancelOrder defers a gateway
-// refund (Razorpay unreachable or erroring — see chef_order_cancel.go's
-// refundPendingRetryPrefix comment), so the customer's refund typically lands
+// refund (Razorpay unreachable or erroring — see DeferredCancelRefundPrefix
+// in deferred_cancel_refund.go), so the customer's refund typically lands
 // within seconds/minutes instead of waiting for the next
 // RetryDeferredCancelRefunds cron tick (up to ~12 minutes, see
 // deferred_cancel_refund.go).
@@ -111,7 +111,7 @@ func GatewayRefundForWorkflow(_ context.Context, orderID uuid.UUID, paymentID st
 // deferred_cancel_refund.go exactly.
 func PersistDeferredRefundID(_ context.Context, orderID uuid.UUID, refundID string) error {
 	res := database.DB.Model(&models.Order{}).
-		Where("id = ? AND refund_id LIKE ?", orderID, deferredCancelRefundPrefix+"%").
+		Where("id = ? AND refund_id LIKE ?", orderID, DeferredCancelRefundPrefix+"%").
 		Update("refund_id", refundID)
 	if res.Error != nil {
 		return res.Error

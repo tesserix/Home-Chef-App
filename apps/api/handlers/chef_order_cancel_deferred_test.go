@@ -155,3 +155,36 @@ func TestCancelOrder_GatewaySuccess_NoSentinel(t *testing.T) {
 	require.True(t, refundedAt)
 	require.Equal(t, 200.0, refundAmount)
 }
+
+// TestCancelOrder_GatewaySuccess_PersistsCancelledThenReplacesSentinel — #766-followup. The
+// crash-safety reorder: CancelOrder must persist status=cancelled + the deferred sentinel
+// BEFORE calling the gateway, then (on success) guard-replace the sentinel with the real
+// refund id. The synchronous call can't observe the intermediate sentinel, but asserting the
+// correct FINAL state — real id, no sentinel, gateway called exactly once — proves the
+// reserve → persist-sentinel → gateway → replace sequence actually ran end to end (a handler
+// that skipped the sentinel persist, or never replaced it, would fail one of these asserts).
+func TestCancelOrder_GatewaySuccess_PersistsCancelledThenReplacesSentinel(t *testing.T) {
+	db := setupPayDB(t)
+	for _, col := range []string{"cancelled_at DATETIME", "cancel_reason TEXT DEFAULT ''"} {
+		require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN `+col).Error)
+	}
+	pinSingleConn(t, db)
+	_, refundCalls := withRefundGateway(t)
+	cust := payUser(t, db, "customer")
+	chefUser := payUser(t, db, "chef")
+	chef := payChef(t, db, chefUser)
+	orderID := payOrder(t, db, cust, chef, "completed", 750, "rzp_o", "pay_x")
+	markPreparing(t, orderID)
+
+	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/cancel", regChefCancelOrder,
+		map[string]any{"reason": "customer_request"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, 1, *refundCalls, "the gateway must be called exactly once")
+
+	status, refundID, refundAmount, refundedAt := chefCancelStateOf(t, orderID)
+	require.Equal(t, "cancelled", status, "the reordered flow still lands the order cancelled")
+	require.Equal(t, "rfnd_test", refundID, "the sentinel persisted before the gateway call must be replaced by the real id")
+	require.False(t, strings.HasPrefix(refundID, "pending:gateway-retry:"), "no sentinel must survive a successful gateway call")
+	require.True(t, refundedAt, "refunded_at was stamped by the reservation, unaffected by the reorder")
+	require.Equal(t, 750.0, refundAmount)
+}

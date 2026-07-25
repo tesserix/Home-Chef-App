@@ -20,6 +20,9 @@ package services
 // The guarded UPDATE (`WHERE refund_id LIKE 'pending:gateway-retry:%'`) is the
 // serialization point: if a concurrent actor already healed the row between our read
 // and write, RowsAffected is 0 and we simply don't count it — no clobber.
+//
+// DeferredCancelRefundPrefix (below) is exported so handlers.ChefOrderCancelHandler.CancelOrder
+// builds the SAME sentinel from this one constant instead of keeping its own duplicate literal.
 
 import (
 	"log"
@@ -35,10 +38,12 @@ import (
 	"github.com/homechef/api/models"
 )
 
-// deferredCancelRefundPrefix MUST match handlers.refundPendingRetryPrefix — the two
-// packages can't share the constant directly (services cannot import handlers), so it
-// is duplicated here deliberately. Keep both in sync if it ever changes.
-const deferredCancelRefundPrefix = "pending:gateway-retry:"
+// DeferredCancelRefundPrefix is the single source of truth for the deferred-gateway-refund
+// sentinel written into orders.refund_id. handlers.ChefOrderCancelHandler.CancelOrder builds
+// the sentinel from this exported constant (handlers can import services) instead of keeping
+// its own duplicate literal — two independently-maintained copies risk drifting, which would
+// silently strand a refund the cron/Temporal retry can never match.
+const DeferredCancelRefundPrefix = "pending:gateway-retry:"
 
 // deferredRefundGrace is how long a deferred sentinel must sit before the retry sweep
 // acts on it — guards against racing the handler's own write (read-then-write inside
@@ -53,7 +58,7 @@ func RetryDeferredCancelRefunds() int {
 	var orders []models.Order
 	if err := database.DB.
 		Where("status = ? AND refund_id LIKE ? AND razorpay_payment_id <> '' AND updated_at < ?",
-			models.OrderStatusCancelled, deferredCancelRefundPrefix+"%", cutoff).
+			models.OrderStatusCancelled, DeferredCancelRefundPrefix+"%", cutoff).
 		Limit(sweepBatchLimit).
 		Find(&orders).Error; err != nil {
 		log.Printf("deferred-cancel-refund: load failed: %v", err)
@@ -88,10 +93,10 @@ func retryOneDeferredCancelRefund(orderID uuid.UUID) bool {
 		}
 		// A concurrent actor (another sweep tick, or an unlikely second CancelOrder retry)
 		// may already have completed this refund — re-check under the lock.
-		if !strings.HasPrefix(o.RefundID, deferredCancelRefundPrefix) {
+		if !strings.HasPrefix(o.RefundID, DeferredCancelRefundPrefix) {
 			return nil
 		}
-		paise, pErr := strconv.Atoi(strings.TrimPrefix(o.RefundID, deferredCancelRefundPrefix))
+		paise, pErr := strconv.Atoi(strings.TrimPrefix(o.RefundID, DeferredCancelRefundPrefix))
 		if pErr != nil || paise <= 0 {
 			log.Printf("deferred-cancel-refund: order %s has an unparseable sentinel %q; skipping", orderID, o.RefundID)
 			return nil
@@ -120,7 +125,7 @@ func retryOneDeferredCancelRefund(orderID uuid.UUID) bool {
 		}
 
 		res := tx.Model(&models.Order{}).
-			Where("id = ? AND refund_id LIKE ?", orderID, deferredCancelRefundPrefix+"%").
+			Where("id = ? AND refund_id LIKE ?", orderID, DeferredCancelRefundPrefix+"%").
 			Update("refund_id", refundResp.ID)
 		if res.Error != nil {
 			return res.Error

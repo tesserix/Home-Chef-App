@@ -49,14 +49,6 @@ var cancellableStatuses = map[models.OrderStatus]bool{
 	models.OrderStatusReady:     true,
 }
 
-// refundPendingRetryPrefix marks orders.refund_id with a deferred-gateway-refund
-// sentinel when a chef cancel can't reach Razorpay synchronously. The prefix is
-// followed by the owed amount in paise (e.g. "pending:gateway-retry:50000") so
-// RetryDeferredCancelRefunds (services/deferred_cancel_refund.go) can recover the
-// exact amount to re-refund without a dedicated column. The cron matches on this
-// SAME literal — keep the two in agreement if it ever changes.
-const refundPendingRetryPrefix = "pending:gateway-retry:"
-
 type cancelRequest struct {
 	Reason string `json:"reason" binding:"required"`
 }
@@ -129,20 +121,54 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	if won {
 		amountPaise = int(roundPaise(reserved))
 	}
+
+	// #766-followup: persist the CANCELLED state — including a deferred-refund sentinel
+	// when there's money owed — BEFORE the (up to 30s) synchronous gateway call. This is
+	// now the recoverable checkpoint: a crash between here and the gateway call below
+	// leaves an order at status=cancelled with refund_id LIKE the sentinel prefix, which
+	// BOTH RetryDeferredCancelRefunds (services/deferred_cancel_refund.go) and
+	// reconcileStuckRefunds can pick up and complete. The old ordering — gateway call
+	// first, this persist last — left a crash-window orphan (refunded_at set,
+	// status=preparing, refund_id='') that NO actor could recover: the cron needs
+	// status=cancelled, and the stuck-refund reconciler needs refunded_at IS NULL. The
+	// residual crash window is now just the two DB writes between ReserveFullRefund's
+	// commit and this persist — no external call in between.
+	now := time.Now().UTC()
+	updates := map[string]interface{}{
+		"status":              models.OrderStatusCancelled,
+		"cancelled_at":        now,
+		"cancel_reason":       string(reason),
+		"refund_reason":       string(reason),
+		"refund_initiated_by": "chef",
+	}
+	sentinel := ""
+	if amountPaise > 0 {
+		sentinel = fmt.Sprintf("%s%d", services.DeferredCancelRefundPrefix, amountPaise)
+		updates["refund_id"] = sentinel
+	}
+	// #609: refund_amount + refunded_at were stamped atomically by the reservation; this
+	// persist only records status/cancellation bookkeeping + the deferred sentinel (never
+	// re-write refund_amount — that was the stale read-modify-write that clobbered a
+	// concurrent partial's increment).
+	if err := database.DB.Model(&order).Updates(updates).Error; err != nil {
+		services.CaptureSentryError(c, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
+		return
+	}
+
 	// A chef must be able to cancel a mid-prep order even when the synchronous gateway
-	// refund can't complete right now — the reservation above already committed the full
-	// refund obligation (payment_status/refunded_at/refund_amount), so nothing here can
-	// under-refund the customer. When Razorpay is unreachable or refuses the call, DEFER
-	// it instead of blocking the cancel: stamp a durable sentinel in refund_id encoding the
-	// owed paise, and let RetryDeferredCancelRefunds (services/deferred_cancel_refund.go)
-	// re-issue the SAME idempotency-keyed refund on a cron until it lands. Do NOT release
-	// the reservation on a deferral — the refund is still owed, just not yet issued.
-	var refundID string
+	// refund can't complete right now — the reservation + the sentinel just persisted
+	// above already commit the full refund obligation, so nothing here can under-refund
+	// the customer. When Razorpay is unreachable or refuses the call, DEFER it instead of
+	// blocking the cancel: the sentinel already encodes the owed paise, and
+	// RetryDeferredCancelRefunds (services/deferred_cancel_refund.go) re-issues the SAME
+	// idempotency-keyed refund on a cron until it lands. Do NOT release the reservation on
+	// a deferral — the refund is still owed, just not yet issued.
+	refundID := sentinel
 	deferred := false
 	if amountPaise > 0 {
 		rzp := services.GetRazorpay()
 		if rzp == nil {
-			refundID = fmt.Sprintf("%s%d", refundPendingRetryPrefix, amountPaise)
 			deferred = true
 			log.Printf("chef cancel: razorpay client unavailable for order %s; deferring refund of %d paise to the retry cron", order.ID, amountPaise)
 		} else {
@@ -163,33 +189,21 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 				IdempotencyKey: services.RefundFullIdempotencyKey(order.ID),
 			})
 			if err != nil {
-				refundID = fmt.Sprintf("%s%d", refundPendingRetryPrefix, amountPaise)
 				deferred = true
 				log.Printf("chef cancel: gateway refund failed for order %s (%d paise); deferring to the retry cron: %v", order.ID, amountPaise, err)
 			} else {
 				refundID = refundResp.ID
+				// Guarded replace: swap the sentinel for the real gateway id ONLY if it's
+				// still there — a concurrent cron/Temporal completion that already replaced
+				// it first is a harmless no-op (mirrors retryOneDeferredCancelRefund's
+				// guarded UPDATE in deferred_cancel_refund.go).
+				if uErr := database.DB.Model(&models.Order{}).
+					Where("id = ? AND refund_id LIKE ?", order.ID, services.DeferredCancelRefundPrefix+"%").
+					Update("refund_id", refundID).Error; uErr != nil {
+					log.Printf("chef cancel: failed to replace deferred sentinel with the real refund id for order %s: %v", order.ID, uErr)
+				}
 			}
 		}
-	}
-
-	now := time.Now().UTC()
-	updates := map[string]interface{}{
-		"status":              models.OrderStatusCancelled,
-		"cancelled_at":        now,
-		"cancel_reason":       string(reason),
-		"refund_reason":       string(reason),
-		"refund_initiated_by": "chef",
-	}
-	// #609: refund_amount + refunded_at were stamped atomically by the reservation; only record
-	// the gateway refund reference here (never re-write refund_amount — that was the stale
-	// read-modify-write that clobbered a concurrent partial's increment).
-	if refundID != "" {
-		updates["refund_id"] = refundID
-	}
-	if err := database.DB.Model(&order).Updates(updates).Error; err != nil {
-		services.CaptureSentryError(c, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
-		return
 	}
 	if deferred {
 		// Fire the durable Temporal retry immediately instead of waiting for the next
@@ -212,8 +226,10 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	// Refresh the in-memory copy so the response reflects the saved state.
 	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
 
+	// order.RefundID post-refresh reflects the FINAL state: the real gateway id when the
+	// guarded replace above landed, or the sentinel when the refund is still deferred.
 	services.LogAudit(c, "chef.order.cancel", "order", order.ID.String(),
-		nil, gin.H{"reason": string(reason), "refundAmount": order.RefundAmount, "refundId": refundID})
+		nil, gin.H{"reason": string(reason), "refundAmount": order.RefundAmount, "refundId": order.RefundID})
 
 	publishOrderCancelled(order)
 
