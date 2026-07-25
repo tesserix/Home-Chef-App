@@ -595,7 +595,12 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		"issueCount":      chef.IssueCount,
 		"verified":        resp.IsVerified,
 		"acceptingOrders": resp.AcceptingOrders,
-		"kitchenPhotos":   resp.KitchenPhotos,
+		// autoScheduleEnabled MUST be returned or the vendor Settings "Auto
+		// open/close by hours" toggle always re-reads OFF after a reload (same
+		// class of bug the self-delivery fields below fixed) — the chef then sees
+		// the wrong state and a single tap flips the real value the wrong way.
+		"autoScheduleEnabled": resp.AutoScheduleEnabled,
+		"kitchenPhotos":       resp.KitchenPhotos,
 		"addressLine1":    chef.AddressLine1,
 		"addressLine2":    chef.AddressLine2,
 		"city":            chef.City,
