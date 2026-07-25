@@ -6,6 +6,15 @@
 export const SITE_URL = 'https://fe3dr.com';
 export const SITE_NAME = 'Fe3dr';
 
+/**
+ * Paths owned by the customer SPA (apps/web), which is served from this same
+ * origin — see the `web` entry in apps/auth-bff/homechef-products.yaml, whose
+ * hosts are fe3dr.com/www.fe3dr.com and whose BFF is reached same-origin at
+ * /bff. Kept as constants so the landing never hardcodes SPA routes inline.
+ */
+export const APP_LOGIN_PATH = '/login';
+export const APP_REGISTER_PATH = '/register';
+
 /* ── App store listings ─────────────────────────────────────────────────
  *
  * Neither app is published yet. Every download surface therefore renders a
