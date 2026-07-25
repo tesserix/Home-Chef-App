@@ -32,6 +32,9 @@ const (
 	// directly against an order rather than converted to wallet credit. It shares
 	// the monthly redemption cap with LoyaltySourceRedeem.
 	LoyaltySourceOrderRedemption LoyaltyTxnSource = "order_redemption"
+	// LoyaltySourceReferral is the acquisition reward paid to both sides of a
+	// referral once the referee places their first paid order (#38).
+	LoyaltySourceReferral LoyaltyTxnSource = "referral"
 )
 
 // Loyalty tiers, derived from lifetime points earned. Tiers are cosmetic by

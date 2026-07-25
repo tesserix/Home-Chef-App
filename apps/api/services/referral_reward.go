@@ -74,7 +74,12 @@ func MaybeGrantReward(db *gorm.DB, orderID uuid.UUID) {
 		}
 	}
 
-	grant := cfg.ReferrerReward + cfg.RefereeReward
+	// The rewards are POINTS; the budget cap is money. Convert at the live redeem
+	// rate so an admin retuning that rate cannot silently blow the budget.
+	loyaltyCfg := GetLoyaltyConfig(db)
+	referrerValue := round2Money(cfg.ReferrerPoints * loyaltyCfg.RedeemRate)
+	refereeValue := round2Money(cfg.RefereePoints * loyaltyCfg.RedeemRate)
+	grant := referrerValue + refereeValue
 
 	// Monthly spend cap — skip (leave pending for manual review) if exceeding.
 	if cfg.MonthlySpendCap > 0 && referralSpendThisMonth(db)+grant > cfg.MonthlySpendCap {
@@ -82,22 +87,24 @@ func MaybeGrantReward(db *gorm.DB, orderID uuid.UUID) {
 		return
 	}
 
-	// Credit both wallets idempotently (per-referral keys → re-runs are no-ops).
-	if cfg.ReferrerReward > 0 {
-		if _, err := CreditWallet(db, ref.ReferrerUserID, cfg.ReferrerReward, models.WalletSourceReferral, &order.ID,
-			"Referral reward — your friend placed their first order", "referral-referrer:"+ref.ID.String(), nil); err != nil {
-			log.Printf("referral reward: credit referrer %s failed: %v", ref.ReferrerUserID, err)
+	// Award both sides in points, idempotently (per-referral keys → re-runs are
+	// no-ops). EarnLoyalty writes a dated earn lot, so these expire and are
+	// consumed FIFO like any other points.
+	if cfg.ReferrerPoints > 0 {
+		if _, err := EarnLoyalty(db, ref.ReferrerUserID, cfg.ReferrerPoints, models.LoyaltySourceReferral, &order.ID,
+			"Referral reward — your friend placed their first order", "referral-referrer:"+ref.ID.String()); err != nil {
+			log.Printf("referral reward: award referrer %s failed: %v", ref.ReferrerUserID, err)
 			return
 		}
 	}
-	if cfg.RefereeReward > 0 {
-		if _, err := CreditWallet(db, ref.RefereeUserID, cfg.RefereeReward, models.WalletSourceReferral, &order.ID,
-			"Welcome credit for joining via a referral", "referral-referee:"+ref.ID.String(), nil); err != nil {
+	if cfg.RefereePoints > 0 {
+		if _, err := EarnLoyalty(db, ref.RefereeUserID, cfg.RefereePoints, models.LoyaltySourceReferral, &order.ID,
+			"Welcome bonus for joining via a referral", "referral-referee:"+ref.ID.String()); err != nil {
 			// Leave the referral PENDING so a retry completes the "get" half. The
-			// referrer credit above is idempotent on its key, so a retry won't
+			// referrer award above is idempotent on its key, so a retry won't
 			// double-pay it. Marking rewarded here would silently drop the
-			// referee's credit forever.
-			log.Printf("referral reward: credit referee %s failed (will retry): %v", ref.RefereeUserID, err)
+			// referee's bonus forever.
+			log.Printf("referral reward: award referee %s failed (will retry): %v", ref.RefereeUserID, err)
 			return
 		}
 	}
@@ -106,8 +113,10 @@ func MaybeGrantReward(db *gorm.DB, orderID uuid.UUID) {
 	db.Model(&models.Referral{}).Where("id = ?", ref.ID).Updates(map[string]any{
 		"status":          models.ReferralStateRewarded,
 		"order_id":        order.ID,
-		"referrer_reward": cfg.ReferrerReward,
-		"referee_reward":  cfg.RefereeReward,
+		// Recorded in RUPEES so the monthly budget cap and the admin reporting
+		// keep working in the unit they are expressed in.
+		"referrer_reward": referrerValue,
+		"referee_reward":  refereeValue,
 		"rewarded_at":     now,
 	})
 
@@ -115,8 +124,10 @@ func MaybeGrantReward(db *gorm.DB, orderID uuid.UUID) {
 	if err := EnqueueEvent(db, SubjectReferralRewarded, "referral.reward.granted", ref.ReferrerUserID, map[string]any{
 		"referral_id":     ref.ID.String(),
 		"referee_id":      ref.RefereeUserID.String(),
-		"referrer_reward": cfg.ReferrerReward,
-		"referee_reward":  cfg.RefereeReward,
+		"referrer_points": cfg.ReferrerPoints,
+		"referee_points":  cfg.RefereePoints,
+		"referrer_reward": referrerValue,
+		"referee_reward":  refereeValue,
 	}); err != nil {
 		log.Printf("referral reward: enqueue notification failed: %v", err)
 	}

@@ -16,29 +16,39 @@ import (
 // ReferralConfig is the admin-tunable program config (#38), stored as
 // PlatformSettings `referral.*` keys so the platform owner changes it at runtime.
 type ReferralConfig struct {
-	Enabled         bool    `json:"enabled"`
-	ReferrerReward  float64 `json:"referrerReward"`
-	RefereeReward   float64 `json:"refereeReward"`
+	Enabled bool `json:"enabled"`
+	// Rewards are LOYALTY POINTS, not rupees. Points expire, are capped per
+	// order and per rolling month at checkout, and only become value when the
+	// customer returns and spends — which is the behaviour a referral is buying.
+	// Wallet credit did none of that: it was a permanent, uncapped liability the
+	// moment it was issued.
+	//
+	// Defaults are 1500 / 1100 points — ₹75 and ₹55 at the standard ₹0.05
+	// redeem rate.
+	ReferrerPoints float64 `json:"referrerPoints"`
+	RefereePoints  float64 `json:"refereePoints"`
+	// MonthlySpendCap stays in RUPEES: it is a budget, and it is compared
+	// against the rupee value of the points granted.
 	MonthlySpendCap float64 `json:"monthlySpendCap"`
 }
 
 // GetReferralConfig reads the program config, falling back to sane defaults so
 // the feature works before an admin sets anything.
 func GetReferralConfig(db *gorm.DB) ReferralConfig {
-	cfg := ReferralConfig{Enabled: true, ReferrerReward: 100, RefereeReward: 100, MonthlySpendCap: 100000}
+	cfg := ReferralConfig{Enabled: true, ReferrerPoints: 1500, RefereePoints: 1100, MonthlySpendCap: 100000}
 	var settings []models.PlatformSettings
 	db.Where("key LIKE ?", "referral.%").Find(&settings)
 	for _, s := range settings {
 		switch s.Key {
 		case "referral.enabled":
 			cfg.Enabled = s.Value == "true" || s.Value == "1"
-		case "referral.referrer_reward":
+		case "referral.referrer_points":
 			if v, err := strconv.ParseFloat(s.Value, 64); err == nil {
-				cfg.ReferrerReward = v
+				cfg.ReferrerPoints = v
 			}
-		case "referral.referee_reward":
+		case "referral.referee_points":
 			if v, err := strconv.ParseFloat(s.Value, 64); err == nil {
-				cfg.RefereeReward = v
+				cfg.RefereePoints = v
 			}
 		case "referral.monthly_spend_cap":
 			if v, err := strconv.ParseFloat(s.Value, 64); err == nil {

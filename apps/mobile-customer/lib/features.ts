@@ -33,7 +33,7 @@ export const WALLET_ENABLED: boolean = true;
 export const REWARDS_ENABLED: boolean = true;
 
 /** Referral / refer-&-earn program (v2-deferred). */
-export const REFERRAL_ENABLED: boolean = false;
+export const REFERRAL_ENABLED: boolean = true;
 
 /** Social feed / community (built & wired to /v1/social, off by flag — v2-deferred). */
 export const SOCIAL_ENABLED: boolean = false;

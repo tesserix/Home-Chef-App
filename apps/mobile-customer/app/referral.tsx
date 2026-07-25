@@ -1,5 +1,5 @@
 // Refer & Earn (#38) — invite friends with a unique code/link; the reward lands
-// in the store-credit wallet on the friend's first paid order. Reward amounts +
+// as LOYALTY POINTS on the friend's first paid order. Reward amounts +
 // stats come from the API (admin-configurable); nothing is hardcoded.
 
 import {
@@ -46,8 +46,8 @@ export default function ReferralScreen() {
     if (!data) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const msg =
-      `Join me on Fe3dr! Use my code ${data.code} and we both get ${money(data.refereeReward)} ` +
-      `in credit on your first order. ${data.link}`;
+      `Join me on Fe3dr! Use my code ${data.code} and we both get rewarded — you get ${money(data.refereeReward)} ` +
+      `in points on your first order. ${data.link}`;
     try {
       await Share.share({ message: msg });
     } catch {
@@ -116,8 +116,8 @@ export default function ReferralScreen() {
               Give {money(data.refereeReward)}, get {money(data.referrerReward)}
             </Text>
             <Text style={styles.heroSub}>
-              Your friend gets {money(data.refereeReward)} off their first order. You get{' '}
-              {money(data.referrerReward)} once they order.
+              Your friend gets {money(data.refereeReward)} in points to spend. You get{' '}
+              {money(data.referrerReward)} in points once they place their first order.
             </Text>
           </View>
 

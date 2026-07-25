@@ -34,6 +34,15 @@ func setupRewardDB(t *testing.T) *gorm.DB {
 			idempotency_key TEXT UNIQUE, created_at DATETIME)`,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT UNIQUE, value TEXT, type TEXT, updated_by TEXT, updated_at DATETIME)`,
 		`CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', id TEXT PRIMARY KEY, fcm_token TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE loyalty_accounts (id TEXT PRIMARY KEY, user_id TEXT UNIQUE, balance REAL DEFAULT 0,
+			lifetime_points REAL DEFAULT 0, tier TEXT DEFAULT 'bronze', current_streak INTEGER DEFAULT 0,
+			longest_streak INTEGER DEFAULT 0, last_streak_day DATETIME, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE loyalty_transactions (id TEXT PRIMARY KEY, loyalty_account_id TEXT, user_id TEXT, type TEXT,
+			source TEXT, points REAL, points_after REAL, order_id TEXT, reason TEXT, created_by TEXT,
+			idempotency_key TEXT UNIQUE, created_at DATETIME)`,
+		`CREATE TABLE loyalty_earn_batches (id TEXT PRIMARY KEY, user_id TEXT, source TEXT, points REAL,
+			points_remaining REAL, earned_at DATETIME, expires_at DATETIME, order_id TEXT,
+			idempotency_key TEXT UNIQUE, created_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT, aggregate_id TEXT,
 			payload TEXT, status TEXT, attempts INT, last_error TEXT, next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
 	}
@@ -63,11 +72,15 @@ func seedPaidOrder(t *testing.T, db *gorm.DB, customer uuid.UUID) uuid.UUID {
 	return id
 }
 
+// balanceOf reads the REWARD rail. Referral rewards moved from the wallet to the
+// points ledger, and these guard tests assert "nothing was paid" — against the
+// wallet they would now pass whether or not the reward fired, since the wallet is
+// never touched either way.
 func balanceOf(t *testing.T, db *gorm.DB, userID uuid.UUID) float64 {
 	t.Helper()
-	var bal float64
-	db.Raw(`SELECT COALESCE(balance, 0) FROM wallets WHERE user_id = ?`, userID.String()).Scan(&bal)
-	return bal
+	acct, err := LoyaltyBalance(db, userID)
+	require.NoError(t, err)
+	return acct.Balance
 }
 
 func setReferralSetting(t *testing.T, db *gorm.DB, key, value string) {
@@ -83,8 +96,8 @@ func TestMaybeGrantReward_HappyPath(t *testing.T) {
 
 	MaybeGrantReward(db, orderID)
 
-	assert.Equal(t, 100.0, balanceOf(t, db, referrer), "referrer credited default reward")
-	assert.Equal(t, 100.0, balanceOf(t, db, referee), "referee credited default reward")
+	assert.Equal(t, 1500.0, balanceOf(t, db, referrer), "referrer awarded the default 1500 pts")
+	assert.Equal(t, 1100.0, balanceOf(t, db, referee), "referee awarded the default 1100 pts")
 
 	var status string
 	db.Raw(`SELECT status FROM referrals WHERE id = ?`, refID.String()).Scan(&status)
@@ -105,8 +118,8 @@ func TestMaybeGrantReward_Idempotent(t *testing.T) {
 	MaybeGrantReward(db, orderID)
 	MaybeGrantReward(db, orderID) // duplicate webhook
 
-	assert.Equal(t, 100.0, balanceOf(t, db, referrer), "no double credit on retry")
-	assert.Equal(t, 100.0, balanceOf(t, db, referee))
+	assert.Equal(t, 1500.0, balanceOf(t, db, referrer), "no double award on retry")
+	assert.Equal(t, 1100.0, balanceOf(t, db, referee))
 }
 
 func TestMaybeGrantReward_NotFirstPaidOrder(t *testing.T) {
@@ -123,7 +136,9 @@ func TestMaybeGrantReward_NotFirstPaidOrder(t *testing.T) {
 
 func TestMaybeGrantReward_SpendCap(t *testing.T) {
 	db := setupRewardDB(t)
-	setReferralSetting(t, db, "referral.monthly_spend_cap", "150") // < 100+100
+	// Below the ₹130 a full grant costs (1500 pts = ₹75 plus 1100 pts = ₹55),
+	// so this referral must be left pending rather than paid.
+	setReferralSetting(t, db, "referral.monthly_spend_cap", "100")
 	referrer, referee := uuid.New(), uuid.New()
 	seedPendingReferral(t, db, referrer, referee, "")
 	orderID := seedPaidOrder(t, db, referee)

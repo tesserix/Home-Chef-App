@@ -34,14 +34,19 @@ func (h *ReferralHandler) GetMyReferral(c *gin.Context) {
 	}
 
 	cfg := services.GetReferralConfig(database.DB)
+	loyalty := services.GetLoyaltyConfig(database.DB)
 	stats := services.GetReferralStats(database.DB, userID)
 
 	c.JSON(http.StatusOK, gin.H{
-		"code":           code,
-		"link":           services.ReferralLink(code),
-		"enabled":        cfg.Enabled,
-		"referrerReward": cfg.ReferrerReward,
-		"refereeReward":  cfg.RefereeReward,
+		"code":    code,
+		"link":    services.ReferralLink(code),
+		"enabled": cfg.Enabled,
+		// Both the points and their rupee value, so the app can lead with whichever
+		// reads better without ever multiplying by the redeem rate itself.
+		"referrerPoints": cfg.ReferrerPoints,
+		"refereePoints":  cfg.RefereePoints,
+		"referrerReward": models.RoundAmount(cfg.ReferrerPoints * loyalty.RedeemRate),
+		"refereeReward":  models.RoundAmount(cfg.RefereePoints * loyalty.RedeemRate),
 		"currency":       "INR",
 		"stats":          stats,
 	})

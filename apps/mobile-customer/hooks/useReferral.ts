@@ -14,8 +14,13 @@ export interface ReferralInfo {
   code: string;
   link: string;
   enabled: boolean;
+  /** Rupee value of each side's reward, computed server-side from the live
+   *  redeem rate — the app never multiplies points by the rate itself. */
   referrerReward: number;
   refereeReward: number;
+  /** The reward as actually granted: loyalty points. */
+  referrerPoints: number;
+  refereePoints: number;
   currency: string;
   stats: ReferralStats;
 }

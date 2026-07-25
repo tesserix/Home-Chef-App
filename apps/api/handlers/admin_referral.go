@@ -27,8 +27,8 @@ func (h *AdminHandler) UpdateReferralConfig(c *gin.Context) {
 
 	var req struct {
 		Enabled         *bool    `json:"enabled"`
-		ReferrerReward  *float64 `json:"referrerReward"`
-		RefereeReward   *float64 `json:"refereeReward"`
+		ReferrerPoints  *float64 `json:"referrerPoints"`
+		RefereePoints   *float64 `json:"refereePoints"`
 		MonthlySpendCap *float64 `json:"monthlySpendCap"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -40,11 +40,12 @@ func (h *AdminHandler) UpdateReferralConfig(c *gin.Context) {
 	if req.Enabled != nil {
 		setPlatformSetting("referral.enabled", strconv.FormatBool(*req.Enabled), userID)
 	}
-	if req.ReferrerReward != nil {
-		setPlatformSetting("referral.referrer_reward", money(*req.ReferrerReward), userID)
+	// Rewards are POINTS now, not rupees — see services.ReferralConfig.
+	if req.ReferrerPoints != nil {
+		setPlatformSetting("referral.referrer_points", money(*req.ReferrerPoints), userID)
 	}
-	if req.RefereeReward != nil {
-		setPlatformSetting("referral.referee_reward", money(*req.RefereeReward), userID)
+	if req.RefereePoints != nil {
+		setPlatformSetting("referral.referee_points", money(*req.RefereePoints), userID)
 	}
 	if req.MonthlySpendCap != nil {
 		setPlatformSetting("referral.monthly_spend_cap", money(*req.MonthlySpendCap), userID)
