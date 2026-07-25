@@ -4,6 +4,7 @@
 
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -14,7 +15,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { AlertCircle, ChevronLeft, Gift, Share2 } from 'lucide-react-native';
+import {
+  AlertCircle,
+  ChevronLeft,
+  Gift,
+  Mail,
+  MessageCircle,
+  MessageSquare,
+  Share2,
+} from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useReferral, useReferralHistory } from '../hooks/useReferral';
@@ -42,14 +51,51 @@ export default function ReferralScreen() {
   const { data, isLoading, isError, refetch } = useReferral();
   const { data: history } = useReferralHistory();
 
-  async function onShare() {
+  function inviteMessage(): string {
+    if (!data) return '';
+    return (
+      `Join me on Fe3dr! Use my code ${data.code} and we both get rewarded — you get ${money(data.refereeReward)} ` +
+      `in points on your first order. ${data.link}`
+    );
+  }
+
+  // Direct-to-app share so the friend picks the channel they actually use:
+  // WhatsApp, Message (SMS), or Email. Each opens the app pre-filled; if that
+  // app isn't installed (or the deep link is refused), fall back to the native
+  // share sheet so the invite is never a dead end.
+  async function shareVia(medium: 'whatsapp' | 'sms' | 'email'): Promise<void> {
     if (!data) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const msg =
-      `Join me on Fe3dr! Use my code ${data.code} and we both get rewarded — you get ${money(data.refereeReward)} ` +
-      `in points on your first order. ${data.link}`;
+    const msg = inviteMessage();
+    const body = encodeURIComponent(msg);
+    const url =
+      medium === 'whatsapp'
+        ? `whatsapp://send?text=${body}`
+        : medium === 'sms'
+          ? // iOS wants `sms:&body=`, Android `sms:?body=` for a recipient-less draft.
+            `sms:${Platform.OS === 'ios' ? '&' : '?'}body=${body}`
+          : `mailto:?subject=${encodeURIComponent('Join me on Fe3dr')}&body=${body}`;
+    try {
+      if (await Linking.canOpenURL(url)) {
+        await Linking.openURL(url);
+        return;
+      }
+    } catch {
+      // Deep link refused — fall through to the native sheet.
+    }
     try {
       await Share.share({ message: msg });
+    } catch {
+      // Share cancelled — ignore.
+    }
+  }
+
+  // "More ways to share" — the OS sheet (copy link, other apps).
+  async function onShare(): Promise<void> {
+    if (!data) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await Share.share({ message: inviteMessage() });
     } catch {
       // Share cancelled — ignore.
     }
@@ -127,16 +173,40 @@ export default function ReferralScreen() {
             <Text style={styles.code} accessibilityLabel={`Your referral code is ${data.code}`}>
               {data.code}
             </Text>
+            {/* Pick the channel the friend actually uses. */}
+            <View style={styles.shareRow}>
+              {[
+                { key: 'whatsapp' as const, label: 'WhatsApp', Icon: MessageCircle },
+                { key: 'sms' as const, label: 'Message', Icon: MessageSquare },
+                { key: 'email' as const, label: 'Email', Icon: Mail },
+              ].map(({ key, label, Icon }) => (
+                <Pressable
+                  key={key}
+                  onPress={() => void shareVia(key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Share invite via ${label}`}
+                  android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
+                  style={{ flex: 1 }}
+                >
+                  {({ pressed }) => (
+                    <View style={[styles.mediumBtn, pressed && Platform.OS === 'ios' && styles.mediumBtnPressed]}>
+                      <Icon size={20} color={customerColors.coral.DEFAULT} strokeWidth={2} />
+                      <Text style={styles.mediumLabel}>{label}</Text>
+                    </View>
+                  )}
+                </Pressable>
+              ))}
+            </View>
             <Pressable
-              onPress={onShare}
+              onPress={() => void onShare()}
               accessibilityRole="button"
-              accessibilityLabel="Share your invite"
-              android_ripple={{ color: CANVAS_RIPPLE, borderless: false }}
+              accessibilityLabel="More ways to share"
+              android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
             >
               {({ pressed }) => (
-                <View style={[styles.shareBtn, pressed && Platform.OS === 'ios' && styles.shareBtnPressed]}>
-                  <Share2 size={18} color={customerColors.canvas} strokeWidth={2} />
-                  <Text style={styles.shareBtnText}>Share invite</Text>
+                <View style={[styles.moreShare, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}>
+                  <Share2 size={15} color={customerColors.charcoal.soft} strokeWidth={2} />
+                  <Text style={styles.moreShareText}>More ways to share</Text>
                 </View>
               )}
             </Pressable>
@@ -256,19 +326,28 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
     color: customerColors.charcoal.DEFAULT,
   },
-  shareBtn: {
+  // Three channel buttons (WhatsApp / Message / Email) — equal-width, tinted
+  // tiles so no single medium dominates; the coral icon carries the accent.
+  shareRow: { flexDirection: 'row', gap: 10, alignSelf: 'stretch' },
+  mediumBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: customerColors.surface.soft,
+    minHeight: 64,
+  },
+  mediumBtnPressed: { backgroundColor: customerColors.coral.tint },
+  mediumLabel: { fontFamily: 'Inter-SemiBold', fontSize: 12, color: customerColors.charcoal.DEFAULT },
+  moreShare: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: customerColors.coral.DEFAULT,
-    borderRadius: 10,
-    paddingHorizontal: 24,
-    minHeight: 48,
     justifyContent: 'center',
-    alignSelf: 'stretch',
+    gap: 6,
+    paddingVertical: 8,
   },
-  shareBtnPressed: { backgroundColor: customerColors.coral.pressed },
-  shareBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.canvas },
+  moreShareText: { fontFamily: 'Inter-Medium', fontSize: 13, color: customerColors.charcoal.soft },
 
   statsRow: { flexDirection: 'row', gap: 12 },
   statCard: { flex: 1, backgroundColor: customerColors.canvas, borderRadius: 12, padding: 16, alignItems: 'center', gap: 2 },
