@@ -182,3 +182,141 @@ func TestHandler_BearerHeaderTakesPrecedenceOverCookie(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "bearer-user", capturedUserID)
 }
+
+// newOriginTestFixtures spins up the manager/signer/router trio shared by
+// the CSRF-origin tests below, plus an upstream that fails the test if it's
+// ever hit — every rejection case in this file must never reach it.
+func newOriginTestFixtures(t *testing.T, upstreamCalled *bool) (*session.Manager, *gin.Engine, string) {
+	t.Helper()
+	k := make([]byte, 32)
+	_, _ = rand.Read(k)
+	mgr, err := session.NewManager(session.Config{EncryptKey: k, MaxAge: time.Hour})
+	require.NoError(t, err)
+	signer := headerproxy.NewSigner(headerproxy.SignerConfig{Key: []byte("test-signing-key-32-bytes-pad!!!")})
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Any("/api/v1/*proxyPath", Handler(&Deps{APIBaseURL: upstream.URL, Sessions: mgr, Signer: signer}))
+	return mgr, r, upstream.URL
+}
+
+func TestHandler_CookieAuth_MatchingOrigin_Proxies(t *testing.T) {
+	var called bool
+	mgr, r, _ := newOriginTestFixtures(t, &called)
+	enc, err := mgr.Encode(newTestPayload())
+	require.NoError(t, err)
+
+	// httptest.NewRequest defaults req.Host to "example.com" when the
+	// target is a bare path; the matching Origin for a same-origin browser
+	// call is therefore https://example.com (no X-Forwarded-Proto set, so
+	// requestOrigin falls back to its https default).
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/chef/onboarding/status", nil)
+	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	req.Header.Set("Origin", "https://example.com")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, called, "upstream must be called for a matching same-origin request")
+}
+
+func TestHandler_CookieAuth_ForeignOrigin_Rejected(t *testing.T) {
+	var called bool
+	mgr, r, _ := newOriginTestFixtures(t, &called)
+	enc, err := mgr.Encode(newTestPayload())
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/chef/onboarding/status", nil)
+	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	req.Header.Set("Origin", "https://evil.example")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"origin_rejected"}`, w.Body.String())
+	assert.False(t, called, "upstream must never be called for a foreign-Origin request")
+}
+
+func TestHandler_CookieAuth_NoOriginGET_Allowed(t *testing.T) {
+	var called bool
+	mgr, r, _ := newOriginTestFixtures(t, &called)
+	enc, err := mgr.Encode(newTestPayload())
+	require.NoError(t, err)
+
+	// No Origin header at all: a top-level cross-site GET navigation looks
+	// exactly like this. GET is safe, so it must be allowed through.
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/chef/onboarding/status", nil)
+	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, called, "upstream must be called for a same-origin-shaped GET with no Origin")
+}
+
+func TestHandler_CookieAuth_NoOriginPOST_Rejected(t *testing.T) {
+	var called bool
+	mgr, r, _ := newOriginTestFixtures(t, &called)
+	enc, err := mgr.Encode(newTestPayload())
+	require.NoError(t, err)
+
+	// No Origin header on an unsafe method: real browsers always attach
+	// Origin to POST/PUT/PATCH/DELETE, including same-origin ones, so this
+	// shape cannot be a legitimate browser call and must be rejected.
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/chef/onboarding/status", nil)
+	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"origin_rejected"}`, w.Body.String())
+	assert.False(t, called, "upstream must never be called for an unsafe request with no Origin")
+}
+
+func TestHandler_BearerAuth_ForeignOrigin_StillProxies(t *testing.T) {
+	var called bool
+	mgr, r, _ := newOriginTestFixtures(t, &called)
+	enc, err := mgr.Encode(newTestPayload())
+	require.NoError(t, err)
+
+	// Mobile apps have no Origin concept and cannot be tricked into
+	// attaching one; the Bearer path must be completely unaffected by the
+	// origin check, foreign Origin header or not.
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/chef/onboarding/status", nil)
+	req.Header.Set("Authorization", "Bearer "+enc)
+	req.Header.Set("Origin", "https://evil.example")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, called, "the Bearer path must never be rejected by the Origin check")
+}
+
+func TestHandler_CookieAuth_MatchingOrigin_HonorsForwardedProto(t *testing.T) {
+	var called bool
+	mgr, r, _ := newOriginTestFixtures(t, &called)
+	enc, err := mgr.Encode(newTestPayload())
+	require.NoError(t, err)
+
+	// The service always sits behind Istio/Cloudflare, so the real scheme
+	// arrives via X-Forwarded-Proto, not TLS on the connection itself. A
+	// hardcoded https-only comparison would reject this legitimate
+	// same-origin http-fronted request; the check must derive scheme from
+	// the header instead.
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/chef/onboarding/status", nil)
+	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	req.Header.Set("X-Forwarded-Proto", "http")
+	req.Header.Set("Origin", "http://example.com")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, called)
+}
