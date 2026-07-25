@@ -36,7 +36,18 @@ permissions:
 
 concurrency:
   group: homechef-ensure-image-tags
-  cancel-in-progress: false
+  # Newest commit wins. This was `false`, which wedged the whole pipeline: with
+  # one slot in the queue, a run stuck polling for an image that never arrives
+  # holds the lock, and GitHub cancels each PENDING run as the next one is
+  # queued behind it. Every commit merged during that window silently never
+  # advanced `deploy`, so Kargo never saw new freight and prod stayed pinned —
+  # with nothing failing anywhere to say so.
+  #
+  # Cancelling in progress is safe here because the run is idempotent and only
+  # ever fast-forwards `deploy` to its own commit: a newer run's commit is a
+  # descendant, so it carries everything the cancelled one would have shipped.
+  # The ancestry guard before the push still rejects genuinely out-of-order runs.
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -51,6 +62,11 @@ jobs:
     name: Ensure all six image tags, advance deploy
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    # Hard ceiling, slightly above POLL_TIMEOUT_SECS so a legitimate 40-minute
+    # wait still completes. Without this the job's only bound was the runner's
+    # 6-hour default, and a wedged run holds the concurrency lock for that whole
+    # time — blocking every deploy behind it.
+    timeout-minutes: 45
     steps:
       - name: Checkout (full history)
         uses: actions/checkout@v7
@@ -133,6 +149,14 @@ jobs:
 
           tag_exists() { crane manifest "${REG}/$1:${NEW_TAG}" >/dev/null 2>&1; }
 
+          # ONE deadline for the whole job, not one per service.
+          #
+          # The per-service `elapsed` counter this replaces reset on every
+          # iteration, so a commit touching four buildable services could wait
+          # 4 x POLL_TIMEOUT_SECS — over two hours — while holding the
+          # concurrency lock and blocking every later deploy.
+          POLL_DEADLINE=$(( $(date +%s) + POLL_TIMEOUT_SECS ))
+
           # Carry-forward source for an UNCHANGED service is resolved PER SERVICE
           # from THIS commit's own history (find_carry_source), NOT the deploy
           # branch tip. Deriving it from `deploy` silently ships a stale image
@@ -174,14 +198,14 @@ jobs:
               echo "${SVC}:${NEW_TAG} already present ✓"; echo "::endgroup::"; continue
             fi
             if [ "${POLL[$SVC]}" = "true" ]; then
-              echo "changed+buildable — waiting up to ${POLL_TIMEOUT_SECS}s for the build to push ${NEW_TAG}…"
-              elapsed=0
+              remaining=$(( POLL_DEADLINE - $(date +%s) ))
+              echo "changed+buildable — waiting up to ${remaining}s (shared budget) for the build to push ${NEW_TAG}…"
               until tag_exists "${SVC}"; do
-                if [ "${elapsed}" -ge "${POLL_TIMEOUT_SECS}" ]; then
+                if [ "$(date +%s)" -ge "${POLL_DEADLINE}" ]; then
                   echo "TIMEOUT waiting for ${SVC}:${NEW_TAG}; NOT advancing deploy (prod stays on last good)." >&2
                   echo "::endgroup::"; exit 1
                 fi
-                sleep "${POLL_INTERVAL_SECS}"; elapsed=$((elapsed + POLL_INTERVAL_SECS))
+                sleep "${POLL_INTERVAL_SECS}"
               done
               echo "${SVC}:${NEW_TAG} appeared ✓"
             else
