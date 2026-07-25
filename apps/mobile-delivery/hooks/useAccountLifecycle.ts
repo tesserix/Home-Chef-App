@@ -9,6 +9,8 @@ import { api } from '../lib/api';
 // drivers to email support, which does not satisfy that rule.
 //
 // Backed by /driver/me/{deactivate,reactivate,delete,deletion-eligibility}.
+// NOTE: this app's EXPO_PUBLIC_API_URL already ends in /api/v1, so paths here
+// must NOT repeat the /v1 (doing so yields /api/v1/v1/... and a silent 404).
 
 /** One reason the account cannot be deleted yet. Codes are stable. */
 export interface DeletionBlocker {
@@ -44,7 +46,7 @@ export function useDeletionEligibility() {
   return useQuery<DeletionEligibility>({
     queryKey: ['driver-deletion-eligibility'],
     queryFn: async () => {
-      const res = await api.get('/v1/driver/me/deletion-eligibility');
+      const res = await api.get('/driver/me/deletion-eligibility');
       return res.data as DeletionEligibility;
     },
     staleTime: 30_000,
@@ -54,7 +56,7 @@ export function useDeletionEligibility() {
 export function useDeleteAccount() {
   return useMutation<DeleteAccountResult, unknown, string>({
     mutationFn: async (confirmEmail: string) => {
-      const res = await api.post('/v1/driver/me/delete', { confirmEmail });
+      const res = await api.post('/driver/me/delete', { confirmEmail });
       return res.data as DeleteAccountResult;
     },
   });
@@ -64,7 +66,7 @@ export function useDeleteAccount() {
 export function useDeactivateAccount() {
   return useMutation<unknown, unknown, string | undefined>({
     mutationFn: async (reason?: string) => {
-      const res = await api.post('/v1/driver/me/deactivate', { reason: reason ?? '' });
+      const res = await api.post('/driver/me/deactivate', { reason: reason ?? '' });
       return res.data;
     },
   });
@@ -73,7 +75,7 @@ export function useDeactivateAccount() {
 export function useReactivateAccount() {
   return useMutation<unknown, unknown, void>({
     mutationFn: async () => {
-      const res = await api.post('/v1/driver/me/reactivate');
+      const res = await api.post('/driver/me/reactivate');
       return res.data;
     },
   });
@@ -82,7 +84,7 @@ export function useReactivateAccount() {
 export function useExportMyData() {
   return useMutation<unknown, unknown, void>({
     mutationFn: async () => {
-      const res = await api.get('/v1/driver/me/export');
+      const res = await api.get('/driver/me/export');
       return res.data;
     },
   });
