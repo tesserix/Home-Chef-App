@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/homechef/api/models"
 )
@@ -38,13 +39,19 @@ func createEarnBatch(tx *gorm.DB, userID uuid.UUID, points float64, source model
 // consumeBatchesFIFO decrements points_remaining from the soonest-expiring non-empty lots
 // until `points` is consumed. Returns ErrInsufficientLoyaltyPoints if the lots can't cover it
 // (the caller's balance check should already prevent this — this is defense in depth).
+// Must run inside the same transaction that holds the loyalty account's row lock (see
+// applyLoyaltyTxnInTx), so two concurrent redemptions for the same user can't both read
+// and then clobber the same batch snapshot.
 func consumeBatchesFIFO(tx *gorm.DB, userID uuid.UUID, points float64) error {
 	if points <= 0 {
 		return nil
 	}
 	var batches []models.LoyaltyEarnBatch
-	if err := tx.Where("user_id = ? AND points_remaining > 0", userID).
-		Order("expires_at ASC").Find(&batches).Error; err != nil {
+	query := tx.Where("user_id = ? AND points_remaining > 0", userID).Order("expires_at ASC")
+	if tx.Dialector.Name() == "postgres" {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	if err := query.Find(&batches).Error; err != nil {
 		return err
 	}
 	remaining := points
