@@ -13,7 +13,12 @@ if (!rootElement) {
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', async () => {
     try {
-      await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      await navigator.serviceWorker.register('/sw.js', {
+        scope: '/',
+        // Bypass the HTTP cache when checking for a new worker. Without it a
+        // cached sw.js pins users to a stale app shell across deploys.
+        updateViaCache: 'none',
+      });
     } catch (error) {
       // SW registration failure is non-fatal; degrade silently to no-offline mode.
       // Surface to error monitoring if you wire one up.

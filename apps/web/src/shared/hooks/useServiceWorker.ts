@@ -33,6 +33,8 @@ export function useServiceWorker(): UseServiceWorkerReturn {
       try {
         const registration = await navigator.serviceWorker.register('/sw.js', {
           scope: '/',
+          // See main.tsx — never let the HTTP cache answer the sw.js check.
+          updateViaCache: 'none',
         });
 
         setState((prev) => ({
