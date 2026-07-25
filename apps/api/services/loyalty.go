@@ -273,6 +273,17 @@ func applyLoyaltyTxnInTx(tx *gorm.DB, userID uuid.UUID, points float64, txnType 
 	}).Error; err != nil {
 		return nil, false, err
 	}
+
+	// Dated-lot bookkeeping: a credit opens a lot; a debit FIFO-consumes lots.
+	if txnType == models.LoyaltyCredit {
+		if err := createEarnBatch(tx, userID, points, source, orderID, cfg.ExpiryDays, "batch:"+idempotencyKey); err != nil {
+			return nil, false, err
+		}
+	} else {
+		if err := consumeBatchesFIFO(tx, userID, points); err != nil {
+			return nil, false, err
+		}
+	}
 	return entry, true, nil
 }
 

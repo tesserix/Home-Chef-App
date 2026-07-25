@@ -12,11 +12,7 @@ import (
 )
 
 func setupBatchDB(t *testing.T) *gorm.DB {
-	db := setupLoyaltyDB(t)
-	require.NoError(t, db.Exec(`CREATE TABLE loyalty_earn_batches (
-		id text PRIMARY KEY, user_id text, source text, points real, points_remaining real,
-		earned_at datetime, expires_at datetime, order_id text, idempotency_key text UNIQUE, created_at datetime)`).Error)
-	return db
+	return setupLoyaltyDB(t)
 }
 
 func batchRemaining(t *testing.T, db *gorm.DB, u uuid.UUID) float64 {

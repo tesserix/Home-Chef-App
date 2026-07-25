@@ -51,6 +51,10 @@ func setupLoyaltyDB(t *testing.T) *gorm.DB {
 		)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT, aggregate_id TEXT,
 			payload TEXT, status TEXT, attempts INT, last_error TEXT, next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
+		`CREATE TABLE loyalty_earn_batches (
+			id text PRIMARY KEY, user_id text, source text, points real, points_remaining real,
+			earned_at datetime, expires_at datetime, order_id text, idempotency_key text UNIQUE, created_at datetime
+		)`,
 	}
 	for _, s := range stmts {
 		require.NoError(t, db.Exec(s).Error)
