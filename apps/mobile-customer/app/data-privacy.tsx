@@ -140,7 +140,7 @@ export default function DataPrivacyScreen() {
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
       {/* Pushed screen — headerShown is false app-wide, so draw the back
           affordance ourselves (this screen shipped without one). */}
-      <ScreenHeader title="Your Data" />
+      <ScreenHeader title="Account & data" />
       <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <View className="px-4 pt-3 pb-2">
           <Text className="text-sm text-charcoal-soft">

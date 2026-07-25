@@ -14,6 +14,7 @@ import {
   Award,
   DatabaseZap,
   KeyRound,
+  UserMinus,
   Heart,
   Receipt,
   Salad,
@@ -45,20 +46,15 @@ import { Alert } from 'react-native';
 const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const DESTRUCTIVE_RIPPLE = `${customerColors.destructive.DEFAULT}14`;
 
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <Text className="text-xs font-semibold text-charcoal-soft px-4 pt-5 pb-2">{children}</Text>
-  );
-}
-
 interface NavRowProps {
   icon: React.ReactNode;
   label: string;
   onPress: () => void;
-  isLast?: boolean;
+  /** Account-ending actions read in the destructive colour, as in the chef app. */
+  destructive?: boolean;
 }
 
-function NavRow({ icon, label, onPress }: NavRowProps) {
+function NavRow({ icon, label, onPress, destructive }: NavRowProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -73,7 +69,16 @@ function NavRow({ icon, label, onPress }: NavRowProps) {
           <View className="w-9 h-9 rounded-full bg-surface-soft items-center justify-center mr-3">
             {icon}
           </View>
-          <Text className="flex-1 text-base text-charcoal font-sans">{label}</Text>
+          <Text
+            className="flex-1 text-base font-sans"
+            style={{
+              color: destructive
+                ? customerColors.destructive.DEFAULT
+                : customerColors.charcoal.DEFAULT,
+            }}
+          >
+            {label}
+          </Text>
           <ChevronRight size={18} color={customerColors.charcoal.soft} />
         </View>
       )}
@@ -198,6 +203,9 @@ export default function ProfileScreen() {
                   {initials}
                 </Text>
               </View>
+              {/* Without this the row reads as a static header and nobody
+                  discovers that their personal details live behind it. */}
+              <ChevronRight size={20} color={customerColors.charcoal.soft} />
             </View>
           )}
         </Pressable>
@@ -310,34 +318,18 @@ export default function ProfileScreen() {
           if (moreRows.length === 0) return null;
 
           return (
-            <>
-              <SectionLabel>More</SectionLabel>
-              {/* Shadow on outer View, overflow+radius on clip View — iOS shadow gotcha */}
-              <View
-                className="mx-4"
-                style={{
-                  shadowColor: customerColors.charcoal.DEFAULT,
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.06,
-                  shadowRadius: 4,
-                  elevation: 2,
-                }}
-              >
-                <View className="rounded-xl overflow-hidden">
-                  {moreRows.map((r, i) => (
-                    <View key={r.label}>
-                      {i > 0 ? <NavRowDivider /> : null}
-                      <NavRow
-                        icon={r.icon}
-                        label={r.label}
-                        onPress={() => router.push(r.route as never)}
-                        isLast={i === moreRows.length - 1}
-                      />
-                    </View>
-                  ))}
+            <View className="mt-6">
+              {moreRows.map((r, i) => (
+                <View key={r.label}>
+                  {i > 0 ? <NavRowDivider /> : null}
+                  <NavRow
+                    icon={r.icon}
+                    label={r.label}
+                    onPress={() => router.push(r.route as never)}
+                  />
                 </View>
-              </View>
-            </>
+              ))}
+            </View>
           );
         })()}
 
@@ -347,62 +339,50 @@ export default function ProfileScreen() {
             the four reference documents consolidate behind one "Legal" row
             (app/legal.tsx index).
         ═══════════════════════════════════════════════════════════════════ */}
-        <SectionLabel>Privacy & Legal</SectionLabel>
+        {/* A hairline, not a heading: the break in rhythm is enough to separate
+            account admin from the destinations above, and three stacked section
+            headers were most of what made this screen feel busy. */}
+        <View className="mt-6 h-2" style={{ backgroundColor: customerColors.surface.soft }} />
 
-        {/* Shadow on outer View, overflow+radius on clip View — iOS shadow gotcha */}
-        <View
-          className="mx-4"
-          style={{
-            shadowColor: customerColors.charcoal.DEFAULT,
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.06,
-            shadowRadius: 4,
-            elevation: 2,
-          }}
-        >
-          <View className="rounded-xl overflow-hidden">
-            <NavRow
-              icon={<DatabaseZap size={18} color={customerColors.charcoal.soft} />}
-              label="Your Data"
-              onPress={() => router.push('/data-privacy')}
-            />
-            <NavRowDivider />
-            <NavRow
-              icon={<ScrollText size={18} color={customerColors.charcoal.soft} />}
-              label="Legal"
-              onPress={() => router.push('/legal')}
-              isLast
-            />
-          </View>
-        </View>
+        <NavRow
+          icon={<DatabaseZap size={18} color={customerColors.charcoal.soft} />}
+          label="Download my data"
+          onPress={() => router.push('/data-privacy')}
+        />
+        <NavRowDivider />
+        <NavRow
+          icon={<ScrollText size={18} color={customerColors.charcoal.soft} />}
+          label="Legal"
+          onPress={() => router.push('/legal')}
+        />
 
         {/* ── Account — password change, gated to email/password accounts.
             Google/Apple (SSO) accounts have no password credential, so this
             section is hidden for them (hasPasswordProvider). ── */}
         {canChangePassword ? (
           <>
-            <SectionLabel>Account</SectionLabel>
-            <View
-              className="mx-4"
-              style={{
-                shadowColor: customerColors.charcoal.DEFAULT,
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.06,
-                shadowRadius: 4,
-                elevation: 2,
-              }}
-            >
-              <View className="rounded-xl overflow-hidden">
-                <NavRow
-                  icon={<KeyRound size={18} color={customerColors.charcoal.soft} />}
-                  label="Change password"
-                  onPress={() => router.push('/(auth)/forgot-password' as never)}
-                  isLast
-                />
-              </View>
-            </View>
+            <NavRowDivider />
+            <NavRow
+              icon={<KeyRound size={18} color={customerColors.charcoal.soft} />}
+              label="Change password"
+              onPress={() => router.push('/(auth)/forgot-password' as never)}
+            />
           </>
         ) : null}
+
+        {/* Apple 5.1.1(v) requires account deletion to be initiated IN the app,
+            and a customer has to be able to FIND it. Pausing and deleting have
+            always been on the data-privacy screen, but that screen was reachable
+            only behind a row called "Your data" — accurate for the export half,
+            and invisible to anyone looking to leave. This is the chef app's
+            wording (settings.tsx), pointed at the screen we already have. */}
+        <NavRowDivider />
+        <NavRow
+          icon={<UserMinus size={18} color={customerColors.destructive.DEFAULT} />}
+          label="Pause or delete account"
+          onPress={() => router.push('/data-privacy')}
+          destructive
+        />
 
         {/* ── Logout — destructive action ── */}
         <Pressable
