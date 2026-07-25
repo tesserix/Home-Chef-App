@@ -66,9 +66,9 @@ func TestExpireLoyaltyBatches_MultipleLotsBalanceConsistent(t *testing.T) {
 	// Backdate the two lots we want due, leaving the third (c3, 100 pts) in
 	// the future. createEarnBatch keys batches as "batch:<idempotencyKey>".
 	require.NoError(t, db.Exec(`UPDATE loyalty_earn_batches SET expires_at = ? WHERE idempotency_key = ?`,
-		time.Now().Add(-2*time.Hour), "batch:c1").Error)
+		time.Now().Add(-1*time.Hour), "batch:c1").Error)
 	require.NoError(t, db.Exec(`UPDATE loyalty_earn_batches SET expires_at = ? WHERE idempotency_key = ?`,
-		time.Now().Add(-1*time.Hour), "batch:c2").Error)
+		time.Now().Add(-2*time.Hour), "batch:c2").Error)
 
 	require.Equal(t, 180.0, batchRemaining(t, db, u))
 
