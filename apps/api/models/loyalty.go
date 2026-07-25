@@ -26,6 +26,10 @@ const (
 	LoyaltySourceStreak      LoyaltyTxnSource = "streak_bonus" // meal-sub adherence streak
 	LoyaltySourceRedeem      LoyaltyTxnSource = "redeem"       // converted to wallet credit
 	LoyaltySourceAdminAdjust LoyaltyTxnSource = "admin_adjustment"
+	// LoyaltySourceOrderRedemption is a CHECKOUT redemption — points spent
+	// directly against an order rather than converted to wallet credit. It shares
+	// the monthly redemption cap with LoyaltySourceRedeem.
+	LoyaltySourceOrderRedemption LoyaltyTxnSource = "order_redemption"
 )
 
 // Loyalty tiers, derived from lifetime points earned. Tiers are cosmetic by

@@ -374,12 +374,18 @@ func RedeemLoyalty(db *gorm.DB, userID uuid.UUID, points float64) (*models.Loyal
 	if rupees <= 0 {
 		return nil, nil, fmt.Errorf("redemption resolves to zero wallet credit")
 	}
+	// The monthly cap is shared with checkout redemptions, so it is measured on the
+	// POINTS ledger (MonthlyRedeemedPaise) rather than on wallet credits. A
+	// wallet-based count would miss checkout redemptions entirely — letting a
+	// customer draw the full cap through each route — and would double-count a
+	// redeem-then-refund cycle, since a refunded loyalty slice returns as wallet
+	// credit under the same source.
 	if cfg.MonthlyRedeemCap > 0 {
-		var redeemedThisMonth float64
-		db.Model(&models.WalletTxn{}).
-			Where("user_id = ? AND source = ? AND created_at >= ?", userID, models.WalletSourceLoyalty, time.Now().AddDate(0, 0, -30)).
-			Select("COALESCE(SUM(amount),0)").Scan(&redeemedThisMonth)
-		if redeemedThisMonth+rupees > cfg.MonthlyRedeemCap+1e-6 {
+		redeemedPaise, err := MonthlyRedeemedPaise(db, userID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if redeemedPaise+ToPaise(rupees) > ToPaise(cfg.MonthlyRedeemCap) {
 			return nil, nil, ErrLoyaltyMonthlyCap
 		}
 	}
