@@ -32,7 +32,7 @@ type APIClient interface {
 // browser session cookie.
 type SessionWriter interface {
 	Encode(*session.Payload) (string, error)
-	SetCookie(w http.ResponseWriter, value string)
+	SetCookie(w http.ResponseWriter, name, value string)
 	MaxAge() time.Duration
 }
 
@@ -221,7 +221,11 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "session_encode_failed"})
 		return
 	}
-	h.Sessions.SetCookie(c.Writer, enc)
+	// app is already resolved from the request Host (see Callback/Exchange
+	// above), so this writes the cookie under that app's own name directly —
+	// no separate Host→name resolution needed here, unlike session.Handler
+	// and apiproxy, which see the raw request instead of a pre-resolved app.
+	h.Sessions.SetCookie(c.Writer, app.SessionCookie, enc)
 	if c.Request.Method == http.MethodGet {
 		// Callback path → browser-friendly redirect.
 		target := app.PostLoginURL

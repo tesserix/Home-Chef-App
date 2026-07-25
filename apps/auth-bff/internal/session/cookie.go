@@ -58,6 +58,27 @@ func NewManager(cfg Config) (*Manager, error) {
 func (m *Manager) MaxAge() time.Duration { return m.cfg.MaxAge }
 func (m *Manager) CookieName() string    { return m.cfg.CookieName }
 
+// CookieNameResolver maps a request Host to the session cookie name that
+// owns that host, so callers can isolate cookies per app without this
+// package (or apiproxy) importing the product registry. Returning "" means
+// "no match" — ResolveCookieName then falls back to the Manager's default.
+type CookieNameResolver func(host string) string
+
+// ResolveCookieName returns resolver(host) when resolver is non-nil and
+// yields a non-empty name; otherwise it returns the Manager's configured
+// default cookie name (cfg.CookieName). This centralizes the "unmatched
+// host / no resolver" fallback for every caller that reads or writes the
+// session cookie for a given request, so an unknown Host degrades to the
+// historical single shared cookie instead of erroring.
+func (m *Manager) ResolveCookieName(resolver CookieNameResolver, host string) string {
+	if resolver != nil {
+		if name := resolver(host); name != "" {
+			return name
+		}
+	}
+	return m.cfg.CookieName
+}
+
 func (m *Manager) Encode(p *Payload) (string, error) {
 	plaintext, err := json.Marshal(p)
 	if err != nil {
@@ -94,9 +115,16 @@ func (m *Manager) Decode(raw string) (*Payload, error) {
 	return &p, nil
 }
 
-func (m *Manager) SetCookie(w http.ResponseWriter, value string) {
+// SetCookie writes the session cookie under name. An empty name falls back
+// to the Manager's configured default cookie name — callers that haven't
+// resolved a per-app name (or that want the historical single cookie) can
+// pass "" rather than duplicating the fallback themselves.
+func (m *Manager) SetCookie(w http.ResponseWriter, name, value string) {
+	if name == "" {
+		name = m.cfg.CookieName
+	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     m.cfg.CookieName,
+		Name:     name,
 		Value:    value,
 		Path:     "/",
 		Domain:   m.cfg.CookieDomain,
@@ -107,9 +135,14 @@ func (m *Manager) SetCookie(w http.ResponseWriter, value string) {
 	})
 }
 
-func (m *Manager) Clear(w http.ResponseWriter) {
+// Clear expires the session cookie under name, following the same
+// empty-name fallback as SetCookie.
+func (m *Manager) Clear(w http.ResponseWriter, name string) {
+	if name == "" {
+		name = m.cfg.CookieName
+	}
 	http.SetCookie(w, &http.Cookie{
-		Name: m.cfg.CookieName, Value: "", Path: "/", Domain: m.cfg.CookieDomain,
+		Name: name, Value: "", Path: "/", Domain: m.cfg.CookieDomain,
 		MaxAge: -1, HttpOnly: true, Secure: m.cfg.Secure, SameSite: http.SameSiteLaxMode,
 	})
 }

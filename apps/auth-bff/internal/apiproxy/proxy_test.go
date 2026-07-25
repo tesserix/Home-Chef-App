@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/homechef/auth-bff/internal/headerproxy"
+	"github.com/homechef/auth-bff/internal/productregistry"
 	"github.com/homechef/auth-bff/internal/session"
 )
 
@@ -319,4 +320,163 @@ func TestHandler_CookieAuth_MatchingOrigin_HonorsForwardedProto(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.True(t, called)
+}
+
+// --- per-app session cookie isolation (SessionCookie / homechef-products.yaml) ---
+//
+// These tests wire Deps.CookieForHost to the real product registry, exactly
+// as cmd/server/main.go does (reg.SessionCookieForHost), and prove the
+// cross-app collision this seam closes: each portal's Host must resolve its
+// own cookie name, and a cookie minted for a different app must NOT be
+// accepted just because it arrived on the right domain.
+
+// newHostCookieFixtures spins up a router wired with the real product
+// registry's SessionCookieForHost as Deps.CookieForHost, plus an upstream
+// that records the identity headers it received (or fails the test if it's
+// hit when it shouldn't be).
+func newHostCookieFixtures(t *testing.T) (mgr *session.Manager, r *gin.Engine, capturedUserID *string) {
+	t.Helper()
+	k := make([]byte, 32)
+	_, _ = rand.Read(k)
+	mgr, err := session.NewManager(session.Config{EncryptKey: k, MaxAge: time.Hour})
+	require.NoError(t, err)
+	signer := headerproxy.NewSigner(headerproxy.SignerConfig{Key: []byte("test-signing-key-32-bytes-pad!!!")})
+
+	reg, err := productregistry.Load("../../homechef-products.yaml")
+	require.NoError(t, err)
+
+	capturedUserID = new(string)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*capturedUserID = r.Header.Get(headerproxy.HdrUserID)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	gin.SetMode(gin.TestMode)
+	r = gin.New()
+	r.Any("/api/v1/*proxyPath", Handler(&Deps{
+		APIBaseURL:    upstream.URL,
+		Sessions:      mgr,
+		Signer:        signer,
+		CookieForHost: reg.SessionCookieForHost,
+	}))
+	return mgr, r, capturedUserID
+}
+
+// hostRequest builds a GET (safe-method, no Origin required) request whose
+// Host is exactly host and whose only cookie is {name: value}.
+func hostRequest(host, cookieName, cookieValue string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "http://"+host+"/api/v1/chef/onboarding/status", nil)
+	req.Host = host
+	req.AddCookie(&http.Cookie{Name: cookieName, Value: cookieValue})
+	return req
+}
+
+func TestHandler_VendorHost_ReadsVendorCookie_NotDefault(t *testing.T) {
+	mgr, r, capturedUserID := newHostCookieFixtures(t)
+	p := newTestPayload()
+	p.UID = "vendor-user"
+	enc, err := mgr.Encode(p)
+	require.NoError(t, err)
+
+	req := hostRequest("vendors.fe3dr.com", "hc_vendor_session", enc)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "vendor-user", *capturedUserID)
+}
+
+func TestHandler_WebHost_UsesDefaultSessionCookie(t *testing.T) {
+	mgr, r, capturedUserID := newHostCookieFixtures(t)
+	p := newTestPayload()
+	p.UID = "web-user"
+	enc, err := mgr.Encode(p)
+	require.NoError(t, err)
+
+	req := hostRequest("fe3dr.com", "hc_session", enc)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "web-user", *capturedUserID)
+}
+
+func TestHandler_AdminHost_UsesAdminCookie(t *testing.T) {
+	mgr, r, capturedUserID := newHostCookieFixtures(t)
+	p := newTestPayload()
+	p.UID = "admin-user"
+	enc, err := mgr.Encode(p)
+	require.NoError(t, err)
+
+	req := hostRequest("admin.fe3dr.com", "hc_admin_session", enc)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "admin-user", *capturedUserID)
+}
+
+// This is the actual bug: before per-app cookie names were honored, every
+// portal shared hc_session on the same .fe3dr.com cookie domain, so a
+// customer session cookie was silently accepted (and cross-mixed) on the
+// vendor portal. With the fix, a request to vendors.fe3dr.com that only
+// carries hc_session (no hc_vendor_session) must be treated as having no
+// session at all — hc_session is simply not the cookie name this handler
+// looks for on that Host.
+func TestHandler_VendorHost_HcSessionCookie_NotAcceptedAsVendorSession(t *testing.T) {
+	mgr, r, _ := newHostCookieFixtures(t)
+	p := newTestPayload()
+	p.UID = "customer-user"
+	enc, err := mgr.Encode(p)
+	require.NoError(t, err)
+
+	req := hostRequest("vendors.fe3dr.com", "hc_session", enc)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.JSONEq(t, `{"error":"missing_session"}`, w.Body.String())
+}
+
+// The Bearer path must be entirely unaffected by CookieForHost: mobile
+// clients send Authorization: Bearer <token> with no cookie, and the Host
+// they connect through has no registered app. The Bearer branch in the
+// handler never even calls CookieForHost — this proves the resolved cookie
+// name plays no role in whether the request is accepted.
+func TestHandler_BearerPath_UnaffectedByHostCookieResolver(t *testing.T) {
+	mgr, r, capturedUserID := newHostCookieFixtures(t)
+	p := newTestPayload()
+	p.UID = "mobile-user"
+	enc, err := mgr.Encode(p)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/chef/onboarding/status", nil)
+	req.Host = "api.internal.mobile.invalid" // not registered to any app
+	req.Header.Set("Authorization", "Bearer "+enc)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "mobile-user", *capturedUserID)
+}
+
+// A Host the registry doesn't recognize must not error — it degrades to the
+// Manager's default cookie name (session.Config.CookieName, "hc_session" in
+// production) exactly like before this change, so nothing regresses for a
+// host that isn't (yet) in homechef-products.yaml.
+func TestHandler_UnknownHost_FallsBackToDefaultCookie(t *testing.T) {
+	mgr, r, capturedUserID := newHostCookieFixtures(t)
+	p := newTestPayload()
+	p.UID = "fallback-user"
+	enc, err := mgr.Encode(p)
+	require.NoError(t, err)
+
+	req := hostRequest("unregistered.fe3dr.com", mgr.CookieName(), enc)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "fallback-user", *capturedUserID)
 }

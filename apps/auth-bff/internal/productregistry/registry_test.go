@@ -64,6 +64,37 @@ func TestRegistry_UnknownHost_Errors(t *testing.T) {
 	assert.ErrorIs(t, err, ErrUnknownHost)
 }
 
+// SessionCookieForHost is the seam session.Handler and apiproxy.Deps use to
+// isolate each portal's session cookie on the shared .fe3dr.com cookie
+// domain (see homechef-products.yaml's sessionCookie field). This is a
+// direct regression test for the cross-app cookie collision: web, vendor,
+// and admin must each resolve to their own distinct cookie name.
+func TestRegistry_SessionCookieForHost(t *testing.T) {
+	r, err := Load("../../homechef-products.yaml")
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		host       string
+		wantCookie string
+	}{
+		{"fe3dr.com", "hc_session"},
+		{"www.fe3dr.com", "hc_session"},
+		{"vendors.fe3dr.com", "hc_vendor_session"},
+		{"admin.fe3dr.com", "hc_admin_session"},
+	} {
+		t.Run(tc.host, func(t *testing.T) {
+			assert.Equal(t, tc.wantCookie, r.SessionCookieForHost(tc.host))
+		})
+	}
+}
+
+// An unmatched host returns "" (not an error, not a made-up name) so callers
+// can apply their own default rather than the registry hardcoding one.
+func TestRegistry_SessionCookieForHost_UnknownHost_ReturnsEmpty(t *testing.T) {
+	r, _ := Load("../../homechef-products.yaml")
+	assert.Equal(t, "", r.SessionCookieForHost("attacker.example.com"))
+}
+
 func TestRegistry_MobileTenantAllowlist(t *testing.T) {
 	r, _ := Load("../../homechef-products.yaml")
 	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Customer-rqg8a"))

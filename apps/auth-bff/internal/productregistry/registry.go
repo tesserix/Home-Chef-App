@@ -71,6 +71,22 @@ func (r *Registry) ResolveByHost(host string) (*App, error) {
 	return nil, fmt.Errorf("%w: %s", ErrUnknownHost, host)
 }
 
+// SessionCookieForHost resolves the per-app session cookie name for host.
+// It returns "" when host doesn't match any registered app, or when the
+// matched app has no sessionCookie configured — callers (session.Manager's
+// ResolveCookieName) treat "" as "no match" and fall back to their own
+// default cookie name rather than erroring. Shaped as a plain
+// func(string) string (matches session.CookieNameResolver) so it can be
+// passed directly into session.Handler / apiproxy.Deps without either of
+// those packages importing productregistry.
+func (r *Registry) SessionCookieForHost(host string) string {
+	app, err := r.ResolveByHost(host)
+	if err != nil {
+		return ""
+	}
+	return app.SessionCookie
+}
+
 func (r *Registry) IsMobileTenantAllowed(tenantID string) bool {
 	for _, t := range r.MobileTenantAllowlist {
 		if t == tenantID {

@@ -85,8 +85,13 @@ func main() {
 	}
 
 	mgr, err := session.NewManager(session.Config{
-		EncryptKey:   cfg.SessionEncryptKey,
-		MaxAge:       cfg.SessionMaxAge,
+		EncryptKey: cfg.SessionEncryptKey,
+		MaxAge:     cfg.SessionMaxAge,
+		// Default/fallback cookie name for any Host the registry can't
+		// resolve to an app (see productregistry.Registry.SessionCookieForHost
+		// and session.Manager.ResolveCookieName). Each registered app gets
+		// its own cookie name from homechef-products.yaml's sessionCookie
+		// field instead — see reg.SessionCookieForHost wiring below.
 		CookieName:   "hc_session",
 		CookieDomain: cfg.SessionCookieDomain,
 		Secure:       cfg.Env != "dev",
@@ -141,16 +146,17 @@ func main() {
 	})
 	rateLimited.POST("/auto-login", autoH.PostHandler())
 
-	(&session.Handler{Mgr: mgr}).Register(r)
+	(&session.Handler{Mgr: mgr, CookieForHost: reg.SessionCookieForHost}).Register(r)
 
 	// Mobile clients hold a BFF session token but the upstream API only
 	// accepts HMAC-signed requests. Catch-all /api/v1/* proxies validated
 	// Bearer-token requests upstream, attaching the X-Internal-Auth + identity
 	// headers via the existing headerproxy.Signer.
 	apiProxyH := apiproxy.Handler(&apiproxy.Deps{
-		APIBaseURL: cfg.APIBaseURL,
-		Sessions:   mgr,
-		Signer:     signer,
+		APIBaseURL:    cfg.APIBaseURL,
+		Sessions:      mgr,
+		Signer:        signer,
+		CookieForHost: reg.SessionCookieForHost,
 	})
 	r.Any("/api/v1/*proxyPath", apiProxyH)
 

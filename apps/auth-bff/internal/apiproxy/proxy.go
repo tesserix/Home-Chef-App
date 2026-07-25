@@ -8,7 +8,13 @@
 // handler accepts the token from either source, preferring the header:
 //
 //	mobile  ── Bearer session_token ──▶  BFF /api/v1/*  ── HMAC + X-User-* ──▶  API /api/v1/*
-//	browser ── hc_session cookie     ──▶  BFF /api/v1/*  ── HMAC + X-User-* ──▶  API /api/v1/*
+//	browser ── per-app session cookie ─▶  BFF /api/v1/*  ── HMAC + X-User-* ──▶  API /api/v1/*
+//
+// The cookie name is resolved per request Host via Deps.CookieForHost (each
+// portal owns its own cookie — see productregistry.Registry.SessionCookieForHost
+// and homechef-products.yaml's sessionCookie field) so that, e.g., a
+// vendors.fe3dr.com session and a fe3dr.com session never collide on the
+// shared .fe3dr.com cookie domain. The Bearer path never consults it.
 //
 // The API itself only accepts HMAC-signed requests from the BFF — there is
 // no Bearer auth path on the API. On success the upstream response is
@@ -42,6 +48,15 @@ type Deps struct {
 	APIBaseURL string
 	Sessions   *session.Manager
 	Signer     *headerproxy.Signer
+
+	// CookieForHost resolves the request Host to the app-specific session
+	// cookie name (e.g. productregistry.Registry.SessionCookieForHost). It
+	// is only consulted on the cookie fallback path below — the Bearer path
+	// never touches it, so mobile requests (Authorization header, no Host-
+	// based app) are completely unaffected whether this is nil or not.
+	// Optional: nil, or an unmatched host, falls back to Sessions' default
+	// cookie name.
+	CookieForHost session.CookieNameResolver
 }
 
 // hopByHop headers must not be forwarded by an intermediary (RFC 7230 §6.1).
@@ -130,7 +145,7 @@ func Handler(d *Deps) gin.HandlerFunc {
 		var viaCookie bool
 		if bearer, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer "); ok {
 			token = bearer
-		} else if cookie, err := c.Request.Cookie(d.Sessions.CookieName()); err == nil {
+		} else if cookie, err := c.Request.Cookie(d.Sessions.ResolveCookieName(d.CookieForHost, c.Request.Host)); err == nil {
 			token = cookie.Value
 			viaCookie = true
 		}

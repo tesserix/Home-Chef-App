@@ -12,6 +12,19 @@ import (
 
 type Handler struct {
 	Mgr *Manager
+
+	// CookieForHost resolves the request Host to the app-specific session
+	// cookie name (e.g. productregistry.Registry.SessionCookieForHost). It is
+	// optional: nil, or a host with no match, falls back to Mgr's default
+	// cookie name — see Manager.ResolveCookieName. Deliberately typed as a
+	// plain func rather than *productregistry.Registry so this package never
+	// has to import the registry.
+	CookieForHost CookieNameResolver
+}
+
+// cookieName resolves the session cookie name for the given request Host.
+func (h *Handler) cookieName(host string) string {
+	return h.Mgr.ResolveCookieName(h.CookieForHost, host)
 }
 
 func (h *Handler) Register(r gin.IRouter) {
@@ -37,7 +50,7 @@ func (h *Handler) session(c *gin.Context) {
 }
 
 func (h *Handler) logout(c *gin.Context) {
-	h.Mgr.Clear(c.Writer)
+	h.Mgr.Clear(c.Writer, h.cookieName(c.Request.Host))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -53,7 +66,7 @@ func (h *Handler) refresh(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "encode_failed"})
 		return
 	}
-	h.Mgr.SetCookie(c.Writer, enc)
+	h.Mgr.SetCookie(c.Writer, h.cookieName(c.Request.Host), enc)
 	c.JSON(http.StatusOK, gin.H{"expires_at": p.ExpiresAt})
 }
 
@@ -73,9 +86,13 @@ func (h *Handler) csrf(c *gin.Context) {
 }
 
 // read pulls the session payload from either the session cookie or
-// an Authorization: Bearer header (mobile).
+// an Authorization: Bearer header (mobile). The cookie lookup uses the
+// per-Host cookie name (see cookieName); the Bearer fallback is unaffected
+// by that resolution — mobile requests carry no cookie, so this simply
+// falls through to the Authorization header regardless of what the Host
+// resolves to.
 func (h *Handler) read(c *gin.Context) (*Payload, error) {
-	if ck, err := c.Request.Cookie(h.Mgr.CookieName()); err == nil {
+	if ck, err := c.Request.Cookie(h.cookieName(c.Request.Host)); err == nil {
 		return h.Mgr.Decode(ck.Value)
 	}
 	if a := c.GetHeader("Authorization"); strings.HasPrefix(a, "Bearer ") {

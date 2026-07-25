@@ -45,8 +45,11 @@ type fakeSessions struct {
 }
 
 func (f *fakeSessions) Encode(*session.Payload) (string, error) { return f.encoded, nil }
-func (f *fakeSessions) SetCookie(w http.ResponseWriter, v string) {
-	http.SetCookie(w, &http.Cookie{Name: "hc_session", Value: v, Path: "/"})
+func (f *fakeSessions) SetCookie(w http.ResponseWriter, name, v string) {
+	if name == "" {
+		name = "hc_session"
+	}
+	http.SetCookie(w, &http.Cookie{Name: name, Value: v, Path: "/"})
 }
 func (f *fakeSessions) MaxAge() time.Duration { return time.Hour }
 
@@ -130,8 +133,11 @@ func TestExchange_Happy(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	body, _ := io.ReadAll(w.Result().Body)
 	assert.Contains(t, string(body), `"user_id":"u1"`)
-	// Session cookie should be set.
-	assert.Contains(t, w.Header().Get("Set-Cookie"), "hc_session=sess-blob")
+	// Session cookie should be set under the admin app's own cookie name
+	// (homechef-products.yaml: admin-portal → hc_admin_session), not the
+	// shared hc_session name — that's exactly the isolation this handler
+	// exists to preserve (see productregistry.App.SessionCookie).
+	assert.Contains(t, w.Header().Get("Set-Cookie"), "hc_admin_session=sess-blob")
 }
 
 func TestExchange_AdminEmailNotInAllowlist_403(t *testing.T) {
