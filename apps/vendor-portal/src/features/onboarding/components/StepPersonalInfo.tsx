@@ -93,9 +93,16 @@ export function StepPersonalInfo({ errors }: Props) {
     }
   }
 
-  // Fetch countries on mount
+  // Fetch countries on mount.
+  // GET /locations/countries answers { data: Country[] } (location.go's ok()
+  // helper) — that's `data` WITHOUT a sibling `pagination` key, so apiClient's
+  // auto-unwrap (which only fires for {data, pagination}) leaves it wrapped.
+  // Same shape for /states and /cities below.
   useEffect(() => {
-    apiClient.get<Country[]>('/locations/countries').then(setCountries).catch(() => {});
+    apiClient
+      .get<{ data: Country[] }>('/locations/countries')
+      .then((r) => setCountries(r.data ?? []))
+      .catch(() => {});
   }, []);
 
   // Fetch states when country changes
@@ -106,8 +113,8 @@ export function StepPersonalInfo({ errors }: Props) {
     }
     setLoadingStates(true);
     apiClient
-      .get<StateItem[]>(`/locations/countries/${data.kitchenAddress.country}/states`)
-      .then(setStates)
+      .get<{ data: StateItem[] }>(`/locations/countries/${data.kitchenAddress.country}/states`)
+      .then((r) => setStates(r.data ?? []))
       .catch(() => setStates([]))
       .finally(() => setLoadingStates(false));
   }, [data.kitchenAddress.country]);
@@ -122,8 +129,8 @@ export function StepPersonalInfo({ errors }: Props) {
     if (!stateObj) return;
     setLoadingCities(true);
     apiClient
-      .get<City[]>(`/locations/states/${stateObj.code}/cities`, { country: data.kitchenAddress.country })
-      .then(setCities)
+      .get<{ data: City[] }>(`/locations/states/${stateObj.code}/cities`, { country: data.kitchenAddress.country })
+      .then((r) => setCities(r.data ?? []))
       .catch(() => setCities([]))
       .finally(() => setLoadingCities(false));
   }, [data.kitchenAddress.state, states, data.kitchenAddress.country]);

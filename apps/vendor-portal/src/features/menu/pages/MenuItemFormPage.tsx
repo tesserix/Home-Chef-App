@@ -41,6 +41,7 @@ import type {
   MenuItemImage,
   ModifierGroupInput,
   ComboItemInput,
+  ChefMenuResponse,
 } from '@/shared/types';
 import { useDraftForm } from '@/shared/hooks/useDraftForm';
 import { ModifierComboEditor } from '../components/ModifierComboEditor';
@@ -272,7 +273,9 @@ export default function MenuItemFormPage() {
   // The chef's other dishes, for the combo picker (#52). Excludes this item.
   const { data: allMenuItems = [] } = useQuery<MenuItem[]>({
     queryKey: ['chef-menu'],
-    queryFn: () => apiClient.get<MenuItem[]>('/chef/menu'),
+    // GET /chef/menu answers { items, categories } (menu.go GetChefMenuItems) — not
+    // a bare MenuItem[]. Select .items so the component keeps its array type.
+    queryFn: () => apiClient.get<ChefMenuResponse>('/chef/menu').then((r) => r.items ?? []),
   });
   const comboPickerItems = allMenuItems
     .filter((m) => m.id !== id)

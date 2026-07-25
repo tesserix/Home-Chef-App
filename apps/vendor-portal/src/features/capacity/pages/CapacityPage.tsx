@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Gauge, Clock } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { Button } from '@/shared/components/ui/Button';
-import type { MenuItem } from '@/shared/types';
+import type { MenuItem, ChefMenuResponse } from '@/shared/types';
 
 // Chef capacity & cutoff controls (#48) — web parity with the vendor mobile app.
 // Per-meal order cutoffs + auto-sold-out, and per-dish daily caps with today's
@@ -41,9 +41,11 @@ export default function CapacityPage() {
     queryKey: ['chef-capacity-settings'],
     queryFn: () => apiClient.get<CapacitySettings>('/chef/capacity-settings'),
   });
-  const { data: items } = useQuery({
+  const { data: items } = useQuery<MenuItem[]>({
     queryKey: ['chef-menu'],
-    queryFn: () => apiClient.get<MenuItem[]>('/chef/menu'),
+    // GET /chef/menu answers { items, categories } (menu.go GetChefMenuItems) — not
+    // a bare MenuItem[]. Select .items so the component keeps its array type.
+    queryFn: () => apiClient.get<ChefMenuResponse>('/chef/menu').then((r) => r.items ?? []),
   });
 
   const [cutoffEnabled, setCutoffEnabled] = useState(false);

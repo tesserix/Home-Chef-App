@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/Select';
 import { SkeletonFoodCard } from '@/shared/components/ui/Skeleton';
-import type { MenuItem, MenuCategory } from '@/shared/types';
+import type { MenuItem, MenuCategory, ChefMenuResponse } from '@/shared/types';
 
 export default function MenuPage() {
   const queryClient = useQueryClient();
@@ -43,7 +43,9 @@ export default function MenuPage() {
     isError: isItemsError,
   } = useQuery<MenuItem[]>({
     queryKey: ['chef-menu'],
-    queryFn: () => apiClient.get<MenuItem[]>('/chef/menu'),
+    // GET /chef/menu answers { items, categories } (menu.go GetChefMenuItems) — not
+    // a bare MenuItem[]. Select .items so the component keeps its array type.
+    queryFn: () => apiClient.get<ChefMenuResponse>('/chef/menu').then((r) => r.items ?? []),
   });
 
   // Fetch categories

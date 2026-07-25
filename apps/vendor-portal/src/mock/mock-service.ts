@@ -91,7 +91,8 @@ class MockService {
     }
 
     if (endpoint === '/chef/menu' && method === 'GET') {
-      return mockMenuItems as unknown as T;
+      // Matches menu.go GetChefMenuItems: { items, categories }, not a bare array.
+      return { items: mockMenuItems, categories: mockCategories } as unknown as T;
     }
 
     if (endpoint.match(/\/chef\/menu\/items\/(.+)/) && method === 'GET') {
@@ -116,11 +117,11 @@ class MockService {
     // ── Orders ──────────────────────────────────────────────
     if (endpoint === '/chef/orders' && method === 'GET') {
       const status = options?.params?.status as string | undefined;
-      if (status) {
-        const statuses = status.split(',');
-        return mockOrders.filter((o) => statuses.includes(o.status)) as unknown as T;
-      }
-      return mockOrders as unknown as T;
+      const filtered = status
+        ? mockOrders.filter((o) => status.split(',').includes(o.status))
+        : mockOrders;
+      // Matches chefs.go GetChefOrders: { orders, total, page, limit }, not a bare array.
+      return { orders: filtered, total: filtered.length, page: 1, limit: filtered.length } as unknown as T;
     }
 
     if (endpoint.match(/\/chef\/orders\/(.+)\/status/) && method === 'PUT') {

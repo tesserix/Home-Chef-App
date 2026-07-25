@@ -223,6 +223,20 @@ export interface MenuItem {
   comboItems?: ComboItemRef[];
 }
 
+/**
+ * What `GET /chef/menu` actually returns.
+ *
+ * It is an envelope, not a bare `MenuItem[]`, and not the `{data, pagination}`
+ * shape `apiClient` auto-unwraps (see `menu.go` GetChefMenuItems). Typing the
+ * call as `MenuItem[]` compiles fine and then blows up at runtime on the first
+ * `.filter`/`.map`, which is what took the vendor menu pages down with
+ * "i.filter is not a function".
+ */
+export interface ChefMenuResponse {
+  items: MenuItem[];
+  categories: MenuCategory[];
+}
+
 /** Per-item add-on modifier group, read shape from the API (#52). */
 export interface ModifierOption {
   id: string;

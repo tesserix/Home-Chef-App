@@ -40,16 +40,6 @@ interface ApprovalRequest {
   createdAt: string;
 }
 
-interface NotificationsResponse {
-  data: Notification[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
-
 const statusLabels: Record<string, string> = {
   pending: 'Pending Review',
   approved: 'Approved',
@@ -106,15 +96,22 @@ export default function NotificationsPage() {
 
   // Fetch approval requests directly for this chef's kitchen
   // This works regardless of which user account the notifications were sent to
+  //
+  // GET /chef/admin-requests answers { data, pagination } (approval.go
+  // GetChefApprovalRequests) — apiClient's auto-unwrap already strips the
+  // envelope, so the resolved value is a bare ApprovalRequest[]. Typing the
+  // call as `{ data: ApprovalRequest[] }` was a double-unwrap: it compiled,
+  // but `approvalData` was actually the array itself.
   const { data: approvalData, isLoading: approvalsLoading } = useQuery({
     queryKey: ['chef-admin-requests'],
-    queryFn: () => apiClient.get<{ data: ApprovalRequest[] }>('/chef/admin-requests'),
+    queryFn: () => apiClient.get<ApprovalRequest[]>('/chef/admin-requests'),
   });
 
-  // Also fetch notifications (for non-approval notifications)
+  // GET /notifications answers { data, pagination } (notifications.go
+  // GetNotifications) too — same auto-unwrap, same fix.
   const { data, isLoading: notifsLoading } = useQuery({
     queryKey: ['notifications'],
-    queryFn: () => apiClient.get<NotificationsResponse>('/notifications', { limit: 50 }),
+    queryFn: () => apiClient.get<Notification[]>('/notifications', { limit: 50 }),
   });
 
   const isLoading = approvalsLoading && notifsLoading;
@@ -135,17 +132,11 @@ export default function NotificationsPage() {
     },
   });
 
-  // Parse approval requests (primary data source for admin requests)
-  const rawApproval = approvalData as unknown;
-  const approvals: ApprovalRequest[] = Array.isArray(rawApproval)
-    ? rawApproval
-    : (rawApproval as { data: ApprovalRequest[] })?.data ?? [];
+  // Approval requests (primary data source for admin requests)
+  const approvals: ApprovalRequest[] = approvalData ?? [];
 
-  // Parse notifications (secondary - for other notifications)
-  const rawData = data as unknown;
-  const notifications: Notification[] = Array.isArray(rawData)
-    ? rawData
-    : (rawData as NotificationsResponse)?.data ?? [];
+  // Notifications (secondary - for other notifications)
+  const notifications: Notification[] = data ?? [];
   const hasUnread = notifications.some((n) => !n.isRead);
   const hasContent = approvals.length > 0 || notifications.length > 0;
 
