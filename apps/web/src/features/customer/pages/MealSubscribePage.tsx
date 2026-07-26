@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { apiClient } from '@/shared/services/api-client';
 import { Button } from '@/shared/components/ui';
+import type { WeeklyMenu, WeeklyMenuItem } from '@/shared/types';
 import {
   useMealChefOffer,
   usePreviewMealPrice,
@@ -32,6 +35,15 @@ export default function MealSubscribePage() {
   const [variant, setVariant] = useState<'veg' | 'nonveg'>('veg');
   const [cadence, setCadence] = useState('weekly');
   const [price, setPrice] = useState<number | null>(null);
+
+  // The chef's published weekly menu, so the configurator can show the actual
+  // dishes for the selected days rather than asking for a blind commitment.
+  const { data: weeklyMenu } = useQuery({
+    queryKey: ['chef', chefId, 'weekly-menu'],
+    queryFn: () => apiClient.get<WeeklyMenu>(`/chefs/${chefId}/weekly-menu`),
+    enabled: !!chefId,
+  });
+  const weeklyCells: WeeklyMenuItem[] = weeklyMenu?.isPublished ? (weeklyMenu.items ?? []) : [];
 
   useEffect(() => {
     if (offer?.available) {
@@ -101,6 +113,62 @@ export default function MealSubscribePage() {
             <button type="button" className={chip(variant === 'veg')} onClick={() => setVariant('veg')}>Veg</button>
             <button type="button" className={chip(variant === 'nonveg')} onClick={() => setVariant('nonveg')}>Non-veg</button>
           </div>
+        </div>
+
+        {/* What you'll actually receive.
+            The configurator previously asked for days, slots and a preference
+            without ever showing the food — you committed to a recurring plan
+            without seeing a single dish. This reflects the chef's published
+            weekly menu back against the exact selection above, so the choice is
+            made against real meals. */}
+        <div>
+          <p className="mb-2 text-sm font-medium text-ink-soft">What you&apos;ll get</p>
+          {weeklyCells.length === 0 ? (
+            <p className="rounded-lg border border-mist bg-paper p-3 text-sm text-ink-soft">
+              This chef hasn&apos;t published a weekly menu yet, so the daily dishes
+              aren&apos;t listed. Your subscription still runs — the chef cooks that
+              day&apos;s meal.
+            </p>
+          ) : days.length === 0 || slots.length === 0 ? (
+            <p className="rounded-lg border border-mist bg-paper p-3 text-sm text-ink-soft">
+              Pick at least one day and one meal to see the dishes.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {DAYS.filter((d) => days.includes(d.v)).map((d) => {
+                const forDay = weeklyCells.filter(
+                  (c) => c.dayOfWeek === d.v && slots.includes(c.slot) && c.variant === variant,
+                );
+                return (
+                  <li key={d.v} className="rounded-lg border border-mist bg-paper p-3">
+                    <p className="text-sm font-semibold text-ink">{d.l}</p>
+                    {forDay.length === 0 ? (
+                      <p className="mt-1 text-sm text-ink-soft">
+                        No {variant === 'veg' ? 'veg' : 'non-veg'} dish listed for this day.
+                      </p>
+                    ) : (
+                      <ul className="mt-1 space-y-1">
+                        {forDay.map((c, i) => (
+                          <li key={c.id ?? `${d.v}-${c.slot}-${i}`} className="flex items-baseline justify-between gap-3">
+                            <span className="text-sm text-ink">
+                              <span className="text-ink-soft">
+                                {c.slot === 'lunch' ? 'Lunch' : 'Dinner'}
+                              </span>
+                              {' · '}
+                              {c.name}
+                            </span>
+                            {c.price > 0 ? (
+                              <span className="shrink-0 text-sm tabular-nums text-ink-soft">{fp(c.price)}</span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
 
         <div>

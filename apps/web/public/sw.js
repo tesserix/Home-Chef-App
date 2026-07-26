@@ -1,7 +1,14 @@
 // Service Worker for HomeChef PWA
-const CACHE_NAME = 'homechef-v2';
-const STATIC_CACHE = 'homechef-static-v2';
-const DYNAMIC_CACHE = 'homechef-dynamic-v2';
+//
+// v3 — bumped to evict poisoned dynamic caches from v1/v2. Those versions let
+// /bff/auth/session and /bff/auth/csrf fall through to stale-while-revalidate,
+// so a logged-out user kept being served an authenticated session from cache
+// and the CSRF double-submit token was served stale. The activate handler
+// deletes any cache whose name isn't current, so bumping is what actually
+// clears it from clients already in the wild.
+const CACHE_NAME = 'homechef-v3';
+const STATIC_CACHE = 'homechef-static-v3';
+const DYNAMIC_CACHE = 'homechef-dynamic-v3';
 
 // Assets to cache on install.
 //
@@ -21,6 +28,16 @@ const STATIC_ASSETS = [
 
 // API routes that should use network-first strategy
 const API_ROUTES = ['/api/'];
+
+// Never cached, never served from cache, under any strategy.
+//
+// Everything behind /bff/ is authenticated, per-user state proxied to the BFF —
+// session, CSRF token and the whole API surface. Serving any of it from cache is
+// wrong in both directions: a signed-out user sees a live session, and a stale
+// double-submit CSRF token silently fails writes. These are also the requests
+// where "offline support" is meaningless: without the network there is no
+// session to speak of.
+const NEVER_CACHE_PREFIXES = ['/bff/', '/auth/'];
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
@@ -72,6 +89,14 @@ self.addEventListener('fetch', (event) => {
 
   // Skip chrome-extension and other non-http(s) requests
   if (!url.protocol.startsWith('http')) return;
+
+  // Auth / BFF traffic — hand straight to the network and never touch the cache.
+  // This must come before every other branch: these are GETs with an `accept` of
+  // */*, so they previously matched none of the checks below and fell through to
+  // the stale-while-revalidate default.
+  if (NEVER_CACHE_PREFIXES.some((p) => url.pathname.startsWith(p))) {
+    return;
+  }
 
   // API requests - Network first, fall back to cache
   if (API_ROUTES.some((route) => url.pathname.startsWith(route))) {
