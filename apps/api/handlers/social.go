@@ -58,9 +58,37 @@ func (h *SocialHandler) GetFeed(c *gin.Context) {
 	var posts []models.Post
 	var total int64
 
+	// Current user, if any — the feed is anonymous-friendly.
+	var userIDPtr *uuid.UUID
+	var viewerID uuid.UUID
+	if uid, ok := middleware.GetUserID(c); ok {
+		userIDPtr = &uid
+		viewerID = uid
+	}
+
 	query := database.DB.Where("status = ?", models.PostStatusPublished)
 	if hashtag != "" {
 		query = query.Where("? = ANY(hashtags)", strings.ToLower(hashtag))
+	}
+
+	// App Review 1.2, the filtering half: content taken down by a moderator, or
+	// auto-hidden after crossing the report threshold, must not keep appearing
+	// in the feed. Without this the report button files a record and changes
+	// nothing a user can see, which is precisely what 1.2 rejects.
+	query = query.Where("is_moderated = ?", false)
+
+	// ...and the blocking half: a user who blocked a chef must stop seeing that
+	// chef's posts. Blocks are recorded against user ids, posts against chef
+	// profile ids, hence the subquery.
+	blocked, err := services.BlockedUserIDs(database.DB, viewerID)
+	if err != nil {
+		services.CaptureSentryError(c, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch feed"})
+		return
+	}
+	if len(blocked) > 0 {
+		query = query.Where(
+			"chef_id NOT IN (SELECT id FROM chef_profiles WHERE user_id IN ?)", blocked)
 	}
 
 	query.Model(&models.Post{}).Count(&total)
@@ -75,12 +103,6 @@ func (h *SocialHandler) GetFeed(c *gin.Context) {
 		Find(&posts).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch feed"})
 		return
-	}
-
-	// Get current user ID if authenticated (for isLiked)
-	var userIDPtr *uuid.UUID
-	if uid, ok := middleware.GetUserID(c); ok {
-		userIDPtr = &uid
 	}
 
 	responses := make([]models.PostResponse, len(posts))

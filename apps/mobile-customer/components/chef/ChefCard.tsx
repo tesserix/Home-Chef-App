@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { Clock, Heart, UtensilsCrossed } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
+import { useRequireAccount } from '../../hooks/useRequireAccount';
 import type { Chef } from '../../types/customer';
 
 // Android ripple tints — translucent colours derived from existing tokens
@@ -34,6 +35,7 @@ export function ChefCard({ chef }: ChefCardProps) {
     false;
 
   const toggleFavorite = useToggleFavorite();
+  const requireAccount = useRequireAccount();
 
   // Heart scale-pop: 1 → 1.2 → 1 in 150ms, gated by useReducedMotion.
   const heartScale = useSharedValue(1);
@@ -42,6 +44,9 @@ export function ChefCard({ chef }: ChefCardProps) {
   }));
 
   function handleToggleFavorite() {
+    // Favourites live server-side against a user id, so this is one of the
+    // actions that genuinely needs an account (App Review 5.1.1(iv)).
+    if (!requireAccount('save a chef')) return;
     if (!reduceMotion) {
       heartScale.value = withSequence(
         withTiming(1.25, { duration: 75 }),
@@ -191,9 +196,21 @@ export function ChefCard({ chef }: ChefCardProps) {
                   )}
                 </View>
 
-                {/* Cuisine line */}
+                {/* Cuisine + the numbers a customer actually chooses on, in one
+                    line. Splitting these across four stacked rows was fine in a
+                    two-up grid; at full width it reads as clutter. */}
                 <Text style={styles.cuisine} numberOfLines={1}>
-                  {chef.cuisine}
+                  {[
+                    chef.cuisine,
+                    chef.deliveryTime,
+                    chef.deliveryFee != null
+                      ? chef.deliveryFee === 0
+                        ? 'Free delivery'
+                        : `₹${chef.deliveryFee} delivery`
+                      : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </Text>
 
                 {/* Hygiene / food-safety badge (#35): verified, non-expired FSSAI.
@@ -251,7 +268,6 @@ export function ChefCard({ chef }: ChefCardProps) {
                   <Text style={styles.meta} numberOfLines={1}>
                     {[
                       statusWord,
-                      chef.deliveryTime,
                       chef.minimumOrder != null
                         ? `Min ₹${chef.minimumOrder}`
                         : undefined,
@@ -284,21 +300,14 @@ const styles = StyleSheet.create({
   // Shadow on the outer wrapper; overflow on the inner clip — iOS pattern.
   outerShadow: {
     flex: 1,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
   },
   innerClip: {
     flex: 1,
-    borderRadius: 12, // rounded-xl
-    overflow: 'hidden',
-    backgroundColor: customerColors.surface.DEFAULT,
+    backgroundColor: 'transparent',
   },
   card: {
     flex: 1,
-    backgroundColor: customerColors.surface.DEFAULT,
+    backgroundColor: 'transparent',
   },
   // iOS-only pressed treatment (Android gets android_ripple instead — see
   // the Pressable above). Per §3.5 motion contract: pressed scale 0.97.
@@ -310,8 +319,10 @@ const styles = StyleSheet.create({
   // --- Photo --- 4:3 aspect ratio
   photoContainer: {
     width: '100%',
-    aspectRatio: 4 / 3,
+    aspectRatio: 16 / 9,
     position: 'relative',
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   photo: {
     width: '100%',
@@ -354,10 +365,10 @@ const styles = StyleSheet.create({
 
   // --- Info block ---
   info: {
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 10,
-    gap: 3,
+    paddingHorizontal: 0,
+    paddingTop: 10,
+    paddingBottom: 4,
+    gap: 4,
   },
 
   nameRatingRow: {
@@ -369,9 +380,9 @@ const styles = StyleSheet.create({
   chefName: {
     flex: 1,
     fontFamily: 'Inter-SemiBold',
-    fontSize: 14,
+    fontSize: 16,
     color: customerColors.charcoal.DEFAULT,
-    letterSpacing: -0.1,
+    letterSpacing: -0.2,
   },
   // R1 zero-review state — surface-soft bg + charcoal-soft text, never a
   // gold/coral badge (that's reserved for the accent).

@@ -97,6 +97,11 @@ type ChefPostInfo struct {
 	BusinessName string    `json:"businessName"`
 	ProfileImage string    `json:"profileImage"`
 	IsVerified   bool      `json:"verified"`
+	// UserID is the chef's USER id, not the profile id above. Blocks are
+	// recorded against users, so the app needs this to offer "block this chef"
+	// on a post (App Review 1.2). Omitted when the Chef relation was not
+	// preloaded rather than emitting a zero uuid the client would try to block.
+	UserID *uuid.UUID `json:"userId,omitempty"`
 }
 
 type MenuItemBasic struct {
@@ -149,6 +154,10 @@ func (p *Post) ToResponse(userID *uuid.UUID) PostResponse {
 			BusinessName: p.Chef.BusinessName,
 			ProfileImage: p.Chef.ProfileImage,
 			IsVerified:   p.Chef.IsVerified,
+		}
+		if p.Chef.UserID != uuid.Nil {
+			userID := p.Chef.UserID
+			response.Chef.UserID = &userID
 		}
 	}
 

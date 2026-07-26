@@ -95,6 +95,10 @@ func runAccountPurgeScan(ctx context.Context) {
 			}
 		}
 
+		// Same for the Apple grant — this is the last moment the refresh token
+		// still exists, since PurgeUser erases the row that holds it.
+		RevokeAppleGrantForUser(ctx, &user)
+
 		// Isolate per user: one bad row must not strand the rest of the batch.
 		if err := PurgeUser(database.DB.WithContext(ctx), user.ID, user.Role); err != nil {
 			log.Printf("account-purge: purge failed for user=%s: %v", user.ID, err)

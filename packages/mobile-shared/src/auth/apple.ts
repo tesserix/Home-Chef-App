@@ -34,6 +34,16 @@ import { signInWithAppleCredential } from './sign-in';
 /** Bytes of entropy in the raw nonce. 32 is what Apple's own sample uses. */
 const NONCE_BYTES = 32;
 
+// The authorization code from the most recent Apple sign-in, held until the BFF
+// session exists and linkPendingAppleGrant() can post it.
+//
+// It lives in a module slot rather than in signInWithApple's return type because
+// the four call sites all discard the return value, and the code is only useful
+// AFTER the session handshake they perform next. Single-slot by design: it is
+// consumed once and cleared, and a second sign-in legitimately supersedes the
+// first. See linkPendingAppleGrant below for why this matters at all.
+let pendingAppleAuthCode: string | null = null;
+
 function toHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -75,6 +85,11 @@ export async function signInWithApple(): Promise<FirebaseAuthTypes.UserCredentia
     throw new Error('Apple sign-in failed: no identity token');
   }
 
+  // Stash the one-shot authorization code for linkPendingAppleGrant(). This is
+  // the ONLY moment it is ever available, and without it the backend can never
+  // revoke this grant on account deletion (App Review 5.1.1(v)).
+  pendingAppleAuthCode = credential.authorizationCode ?? null;
+
   // Firebase hashes the raw nonce and compares it against that claim.
   //
   // fullName is only ever populated on the FIRST authorization for a given
@@ -82,6 +97,41 @@ export async function signInWithApple(): Promise<FirebaseAuthTypes.UserCredentia
   // name is captured here and persisted onto the Firebase profile rather than
   // being re-read on subsequent logins.
   return signInWithAppleCredential(credential.identityToken, rawNonce, credential.fullName);
+}
+
+/**
+ * Hand the pending Apple authorization code to the API so it can be exchanged
+ * for a refresh token and, later, revoked.
+ *
+ * Call this AFTER the BFF session is established — the endpoint is
+ * authenticated, and the code is bound to the user who just signed in.
+ *
+ * Why it exists: App Review guideline 5.1.1(v) requires an app that offers Sign
+ * in with Apple to revoke the user's Apple token when they delete their account.
+ * Deleting our own identity record is not enough — Apple keeps its own copy of
+ * the grant, and a reviewer who deletes the test account and checks Settings →
+ * Apple ID → Sign in with Apple will still see the app listed. Revocation needs
+ * a refresh token, and the single-use authorization code captured during
+ * sign-in is the only way to obtain one.
+ *
+ * Never throws and never blocks login: a user with a working session must not be
+ * turned away because Apple's token endpoint hiccuped. The code is cleared
+ * either way — it is single-use, so a retry with the same value would fail.
+ *
+ * @param api - the app's axios instance, already carrying the session token
+ */
+export async function linkPendingAppleGrant(api: {
+  post: (url: string, body: unknown) => Promise<unknown>;
+}): Promise<void> {
+  const code = pendingAppleAuthCode;
+  pendingAppleAuthCode = null;
+  if (!code) return;
+
+  try {
+    await api.post('/v1/auth/apple/link', { authorizationCode: code });
+  } catch {
+    // Non-fatal by contract — see above.
+  }
 }
 
 /** True when the device can offer Sign in with Apple (iOS 13+ hardware). */

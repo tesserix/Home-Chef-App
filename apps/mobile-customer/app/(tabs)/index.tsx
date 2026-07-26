@@ -31,7 +31,20 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Bell, Map, Search, SlidersHorizontal, Wallet } from 'lucide-react-native';
+import {
+  Bell,
+  CookingPot,
+  Drumstick,
+  Map,
+  Pizza,
+  Salad,
+  Sandwich,
+  Search,
+  SlidersHorizontal,
+  Soup,
+  UtensilsCrossed,
+  Wallet,
+} from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { AddressSwitcher } from '../../components/address/AddressSwitcher';
 import { AddressSwitcherSheet } from '../../components/address/AddressSwitcherSheet';
@@ -74,15 +87,18 @@ function walletChipLabel(n: number): string {
     : `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// The category rail. Icons rather than photography: illustrated category art is
+// a design deliverable we do not have, and a row of stock food photos reads as
+// filler. A tinted circle with one glyph is honest, scannable, and on-brand.
 const CUISINES = [
-  'All',
-  'North Indian',
-  'South Indian',
-  'Chinese',
-  'Continental',
-  'Italian',
-  'Healthy',
-];
+  { label: 'All', Icon: UtensilsCrossed },
+  { label: 'North Indian', Icon: CookingPot },
+  { label: 'South Indian', Icon: Soup },
+  { label: 'Chinese', Icon: Drumstick },
+  { label: 'Continental', Icon: Sandwich },
+  { label: 'Italian', Icon: Pizza },
+  { label: 'Healthy', Icon: Salad },
+] as const;
 
 // Counts how many secondary filters are active (non-default) so the badge
 // on the Filters pill reflects the applied state.
@@ -323,7 +339,7 @@ export default function HomeScreen() {
         style={styles.chipRow}
         accessibilityRole="tablist"
       >
-        {CUISINES.map((cuisine) => {
+        {CUISINES.map(({ label: cuisine, Icon: CuisineIcon }) => {
           const isSelected = selectedCuisine === cuisine;
           return (
             // iOS Pressable inner-View pattern: visual styles stay on the
@@ -346,11 +362,28 @@ export default function HomeScreen() {
                 <View
                   style={[
                     styles.chip,
-                    isSelected && styles.chipSelected,
                     pressed && Platform.OS === 'ios' && styles.chipPressedIOS,
                   ]}
                 >
+                  <View
+                    style={[
+                      styles.cuisineTile,
+                      isSelected && styles.cuisineTileSelected,
+                    ]}
+                  >
+                    <CuisineIcon
+                      size={24}
+                      strokeWidth={1.75}
+                      color={
+                        isSelected
+                          ? customerColors.coral.pressed
+                          : customerColors.charcoal.soft
+                      }
+                      accessibilityElementsHidden
+                    />
+                  </View>
                   <Text
+                    numberOfLines={1}
                     style={[
                       styles.chipLabel,
                       isSelected ? styles.chipLabelSelected : styles.chipLabelDefault,
@@ -514,8 +547,6 @@ export default function HomeScreen() {
         <FlatList
           data={isLoading ? [] : chefs}
           keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={[
             styles.listContent,
             { paddingBottom: dockClearance },
@@ -749,9 +780,9 @@ const styles = StyleSheet.create({
   chipRowContent: {
     flexDirection: 'row',
     flexWrap: 'nowrap',
-    gap: 0,
-    paddingHorizontal: 16,
-    paddingBottom: 4,
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
   // This is the Pressable's OWN style (not the inner `chip` View below) —
   // the Pressable is the actual flex item living inside chipRowContent's
@@ -766,12 +797,25 @@ const styles = StyleSheet.create({
   },
   chip: {
     flexShrink: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    alignItems: 'center',
+    width: 76,
+    paddingVertical: 8,
+    gap: 6,
   },
-  chipSelected: {
-    borderBottomWidth: 2,
-    borderBottomColor: customerColors.charcoal.DEFAULT,
+  // The circular category tile. Selected takes the brand tint rather than a
+  // fill — one accent per screen, and the coral fill is spoken for by the CTA.
+  cuisineTile: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: customerColors.surface.soft,
+  },
+  cuisineTileSelected: {
+    backgroundColor: customerColors.coral.tint ?? customerColors.surface.soft,
+    borderWidth: 1.5,
+    borderColor: customerColors.coral.pressed,
   },
   // iOS-only pressed treatment — opacity only (no scale) so the underline
   // stays put under the moving text on a horizontal-scroll tab.
@@ -781,7 +825,8 @@ const styles = StyleSheet.create({
   chipLabel: {
     flexShrink: 0,
     fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 12,
+    textAlign: 'center',
     letterSpacing: 0,
   },
   chipLabelSelected: {
@@ -907,15 +952,14 @@ const styles = StyleSheet.create({
   },
 
   // ── List layout ───────────────────────────────────────────────────────────
-  columnWrapper: {
-    gap: 12,
-    paddingHorizontal: 16,
-  },
   // Bottom padding is applied dynamically (useDockClearance) so the last
-  // row scrolls clear of the floating dock.
+  // card scrolls clear of the floating dock.
   listContent: {
-    gap: 12,
+    // Full-width cards need room to breathe between them — at 12 the flat
+    // (shadowless) cards ran together into one column of images.
+    gap: 24,
     paddingTop: 4,
+    paddingHorizontal: 16,
   },
 
   // ── Empty state ───────────────────────────────────────────────────────────
@@ -939,15 +983,12 @@ const styles = StyleSheet.create({
 
   // ── Skeleton grid ─────────────────────────────────────────────────────────
   skeletonGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    gap: 24,
     paddingHorizontal: 16,
     paddingTop: 4,
   },
   skeletonCol: {
-    flex: 1,
-    minWidth: '45%',
+    width: '100%',
   },
   skeletonCard: {
     flex: 1,
@@ -957,7 +998,8 @@ const styles = StyleSheet.create({
   },
   skeletonPhoto: {
     width: '100%',
-    aspectRatio: 4 / 3,
+    aspectRatio: 16 / 9,
+    borderRadius: 8,
     backgroundColor: customerColors.hairline,
   },
   skeletonBody: {

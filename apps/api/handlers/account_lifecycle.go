@@ -176,6 +176,13 @@ func (h *AccountLifecycleHandler) DeleteAccount(c *gin.Context) {
 		}
 	}
 
+	// Revoke the Sign in with Apple grant too. Deleting the Identity Platform
+	// user does not touch Apple's own record — without this the app stays listed
+	// under Settings → Apple ID → Sign in with Apple after deletion, which is
+	// exactly what App Review guideline 5.1.1(v) prohibits. Same best-effort
+	// contract as above; the purge sweeper retries.
+	services.RevokeAppleGrantForUser(c.Request.Context(), &user)
+
 	// User id only — never the email. This is the erasure path.
 	services.LogAudit(c, "account.delete", "user", user.ID.String(), nil, gin.H{
 		"deletedAt":  user.DeletedAt.Time,

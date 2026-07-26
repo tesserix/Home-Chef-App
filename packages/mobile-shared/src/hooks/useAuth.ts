@@ -13,6 +13,8 @@ import {
   setBiometricsEnabled,
   isOnboardingComplete,
   setOnboardingCompleteInStore,
+  isGuestMode,
+  setGuestModeInStore,
 } from '../utils/storage';
 import { User, AuthResponse } from '../types/user';
 
@@ -24,6 +26,17 @@ interface AuthState {
   isLoading: boolean;
   biometricsEnabled: boolean;
   onboardingComplete: boolean;
+  /**
+   * The user chose to browse without an account.
+   *
+   * App Review guideline 5.1.1(iv): an app may only require an account for
+   * features that genuinely need one. Browsing chefs and menus does not, so the
+   * customer app lets people in and asks for an account at the point of ordering.
+   *
+   * Distinct from isAuthenticated on purpose — a guest has no token, so every
+   * write path must check this rather than assume "in the app" means "signed in".
+   */
+  isGuest: boolean;
 
   // Actions
   /** Load tokens from expo-secure-store into memory on app start */
@@ -36,6 +49,8 @@ interface AuthState {
   setBiometricsEnabled: (enabled: boolean) => Promise<void>;
   /** Mark onboarding as complete (persisted to SecureStore) */
   setOnboardingComplete: (complete: boolean) => Promise<void>;
+  /** Enter or leave browse-without-an-account mode (persisted). */
+  setGuest: (guest: boolean) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -45,19 +60,24 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
   biometricsEnabled: false,
   onboardingComplete: false,
+  isGuest: false,
 
   hydrateFromStorage: async () => {
     try {
-      const [token, biometrics, onboarding] = await Promise.all([
+      const [token, biometrics, onboarding, guest] = await Promise.all([
         getAccessToken(),
         isBiometricsEnabled(),
         isOnboardingComplete(),
+        isGuestMode(),
       ]);
       set({
         accessToken: token,
         isAuthenticated: !!token,
         biometricsEnabled: biometrics,
         onboardingComplete: onboarding,
+        // A real session always wins: a guest who signs in is no longer a guest,
+        // and a stale flag must not shadow their account.
+        isGuest: !token && guest,
         isLoading: false,
       });
     } catch {
@@ -70,10 +90,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       accessToken: response.accessToken,
       refreshToken: response.refreshToken,
     });
+    // Signing in ends guest mode — otherwise the flag survives in the keychain
+    // and a later sign-out silently drops the user back into a browse session
+    // instead of the login screen.
+    await setGuestModeInStore(false);
     set({
       user: response.user,
       accessToken: response.accessToken,
       isAuthenticated: true,
+      isGuest: false,
       isLoading: false,
     });
   },
@@ -89,10 +114,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     // without this the next user to sign in on this device inherits the
     // previous user's "onboarding complete" state and skips the wizard.
     await setOnboardingCompleteInStore(false);
+    await setGuestModeInStore(false);
     set({
       user: null,
       accessToken: null,
       isAuthenticated: false,
+      isGuest: false,
       onboardingComplete: false,
       isLoading: false,
     });
@@ -106,5 +133,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   setOnboardingComplete: async (complete: boolean) => {
     await setOnboardingCompleteInStore(complete);
     set({ onboardingComplete: complete });
+  },
+
+  setGuest: async (guest: boolean) => {
+    await setGuestModeInStore(guest);
+    set({ isGuest: guest });
   },
 }));

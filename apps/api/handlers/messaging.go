@@ -81,6 +81,41 @@ func orderParticipants(c *gin.Context, orderID, requesterID uuid.UUID, asRole st
 	return order.CustomerID.String(), chef.UserID.String(), true
 }
 
+// blockGate stops a message when either party has blocked the other.
+//
+// App Review 1.2 asks for the ability to block abusive users, and order chat is
+// the one surface here where an abusive party can reach a specific person
+// directly — filtering a feed does nothing about it.
+//
+// Checked in both directions and answered with a 403 rather than a silent
+// success: pretending to deliver would leave the sender believing they had
+// communicated something about a live order.
+//
+// Writes the response itself and returns false when the send must not proceed.
+func blockGate(c *gin.Context, customerID, chefUserID string) bool {
+	custUUID, err1 := uuid.Parse(customerID)
+	chefUUID, err2 := uuid.Parse(chefUserID)
+	if err1 != nil || err2 != nil {
+		return true // ids came from a resolved order; nothing to gate on
+	}
+
+	blocked, err := services.IsBlockedEitherWay(database.DB, custUUID, chefUUID)
+	if err != nil {
+		// Fail open. A database hiccup must not sever communication about a live
+		// order — the wrong failure here strands a delivery.
+		services.CaptureSentryError(c, err)
+		return true
+	}
+	if blocked {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Messaging is unavailable because one of you has blocked the other. " +
+				"Contact support if you need help with this order.",
+		})
+		return false
+	}
+	return true
+}
+
 func messagesJSON(c *gin.Context, msgs []services.MediatedMessage) {
 	c.JSON(http.StatusOK, gin.H{"data": msgs})
 }
@@ -106,6 +141,9 @@ func (h *MessagingHandler) CustomerSendMessage(c *gin.Context) {
 	}
 	custID, chefID, ok := orderParticipants(c, orderID, userID, services.MsgRoleCustomer)
 	if !ok {
+		return
+	}
+	if !blockGate(c, custID, chefID) {
 		return
 	}
 	m, err := svc.CustomerSend(c.Request.Context(), orderID.String(), custID, chefID, req.Content)
@@ -165,6 +203,9 @@ func (h *MessagingHandler) ChefSendMessage(c *gin.Context) {
 	}
 	custID, chefID, ok := orderParticipants(c, orderID, userID, services.MsgRoleChef)
 	if !ok {
+		return
+	}
+	if !blockGate(c, custID, chefID) {
 		return
 	}
 	m, err := svc.ChefSend(c.Request.Context(), orderID.String(), custID, chefID, req.Content)

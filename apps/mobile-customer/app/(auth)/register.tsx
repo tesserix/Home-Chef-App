@@ -8,6 +8,7 @@ import {
   registerWithEmail,
   signInWithGoogleCredential,
   signInWithApple,
+  linkPendingAppleGrant,
   useAuth,
   autoLogin,
   getIdToken,
@@ -87,6 +88,9 @@ export default function RegisterPage() {
     const body = await autoLogin(BFF_URL, idToken, GIP_TENANT_ID);
     await setAuthResponse(bffToAuthResponse(body, '', '', ''));
     await completeSignIn();
+    // No-ops unless the credential above came from Apple. Records the grant so
+    // account deletion can revoke it (App Review 5.1.1(v)).
+    await linkPendingAppleGrant(api);
     try {
       const fcmToken = await getRawFCMToken();
       if (fcmToken) await registerDeviceToken(api, fcmToken);

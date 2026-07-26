@@ -60,7 +60,7 @@ export default function RootLayout() {
     'Inter-SemiBold': Inter_600SemiBold,
   });
 
-  const { isAuthenticated, isLoading, onboardingComplete, hydrateFromStorage } =
+  const { isAuthenticated, isLoading, onboardingComplete, isGuest, hydrateFromStorage } =
     useAuthStore();
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
   // Whether we've reconciled onboarding state with the SERVER for this session.
@@ -258,7 +258,11 @@ export default function RootLayout() {
     if (!fontsLoaded) return;
     if (isLoading) return;
     if (!isAuthenticated) {
-      router.replace('/(auth)/login');
+      // App Review 5.1.1(iv): an account may only be required for features that
+      // genuinely need one. Browsing chefs and menus does not, so a guest goes
+      // straight to the tabs; the account gate moves to the point of ordering
+      // (see requireAccount in hooks/useRequireAccount.ts).
+      router.replace(isGuest ? '/(tabs)' : '/(auth)/login');
     } else if (!onboardingComplete) {
       // Wait for the server reconciliation before deciding, so we never flash the
       // setup wizard at a returning user whose profile is already complete.
@@ -267,7 +271,7 @@ export default function RootLayout() {
     } else {
       router.replace('/(tabs)');
     }
-  }, [fontsLoaded, isAuthenticated, isLoading, onboardingComplete, onboardingChecked]);
+  }, [fontsLoaded, isAuthenticated, isLoading, isGuest, onboardingComplete, onboardingChecked]);
 
   // Fonts must resolve BEFORE the tree mounts. The previous approach rendered
   // the whole app under an opaque overlay while fonts loaded — every Text was

@@ -69,6 +69,10 @@ type ReviewResponse struct {
 	ChefResponse    string     `json:"chefResponse,omitempty"`
 	ChefRespondedAt *time.Time `json:"chefRespondedAt,omitempty"`
 	HelpfulCount    int        `json:"helpfulCount"`
+	// CustomerID is the reviewer's user id. Exposed so the app can offer
+	// "block this reviewer" alongside reporting a review (App Review 1.2);
+	// blocks are recorded against user ids.
+	CustomerID      uuid.UUID  `json:"customerId"`
 	CustomerName    string     `json:"customerName"`
 	CustomerAvatar  string     `json:"customerAvatar,omitempty"`
 	CreatedAt       time.Time  `json:"createdAt"`
@@ -106,6 +110,7 @@ func (r *Review) ToResponse() ReviewResponse {
 		ChefResponse:    r.ChefResponse,
 		ChefRespondedAt: r.ChefRespondedAt,
 		HelpfulCount:    r.HelpfulCount,
+		CustomerID:      r.CustomerID,
 		CustomerName:    customerName,
 		CustomerAvatar:  customerAvatar,
 		CreatedAt:       r.CreatedAt,

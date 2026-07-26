@@ -7,6 +7,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import {
   signInWithGoogleCredential,
   signInWithApple,
+  linkPendingAppleGrant,
   signInWithEmail,
   useAuth,
   autoLogin,
@@ -94,6 +95,9 @@ export default function LoginPage() {
     const response = await completeBFFLogin();
     await setAuthResponse(response);
     await completeSignIn();
+    // Hand Apple's one-shot authorization code to the API now that a session
+    // exists, so account deletion can revoke the grant (App Review 5.1.1(v)).
+    await linkPendingAppleGrant(api);
     try {
       const fcmToken = await getRawFCMToken();
       if (fcmToken) await registerDeviceToken(api, fcmToken);
@@ -138,6 +142,12 @@ export default function LoginPage() {
       onGoogleSignIn={handleGoogleSignIn}
       onAppleSignIn={Platform.OS === 'ios' ? handleAppleSignIn : undefined}
       onBiometricLogin={biometricsEnabled ? handleBiometricLogin : undefined}
+      // App Review 5.1.1(iv): browsing chefs and menus needs no account, so the
+      // wall moves to the point of ordering (hooks/useRequireAccount.ts).
+      onContinueAsGuest={async () => {
+        await useAuthStore.getState().setGuest(true);
+        router.replace('/(tabs)');
+      }}
     />
   );
 }

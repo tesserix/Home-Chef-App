@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { AlertCircle, ShoppingBag } from 'lucide-react-native';
+import { AlertCircle, ShoppingBag, Receipt } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { ScreenTitle } from '../../components/shared/ScreenTitle';
@@ -20,6 +20,8 @@ import { useOrders } from '../../hooks/useOrderHistory';
 import { OrderCard } from '../../components/orders/OrderCard';
 import { MealPlanList } from '../../components/meal-plan/MealPlanList';
 import type { Order } from '../../types/customer';
+import { GuestGate } from '../../components/GuestGate';
+import { useIsGuest } from '../../hooks/useRequireAccount';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -260,6 +262,19 @@ const emptyStyles = StyleSheet.create({
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function OrdersScreen() {
+  // App Review 5.1.1(iv): this tab is account-based, so a guest gets an
+  // explanation and a way in rather than an error or an empty list.
+  const isGuest = useIsGuest();
+  if (isGuest) {
+    return (
+      <GuestGate
+        icon={Receipt}
+        title="Your orders live here"
+        body="Sign in to track deliveries, reorder favourites, and see every receipt."
+      />
+    );
+  }
+
   const dockClearance = useDockClearance();
   const [mode, setMode] = useState<TabMode>('orders');
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');

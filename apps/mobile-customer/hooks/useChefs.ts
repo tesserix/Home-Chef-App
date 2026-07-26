@@ -226,6 +226,8 @@ export interface ChefReview {
   comment: string;
   chefResponse?: string;
   chefRespondedAt?: string;
+  /** Reviewer's user id — what /v1/blocks takes. */
+  customerId?: string;
   customerName: string;
   customerAvatar?: string;
   createdAt: string;

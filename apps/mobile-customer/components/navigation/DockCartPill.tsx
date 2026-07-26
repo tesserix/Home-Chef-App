@@ -17,6 +17,7 @@ import { ShoppingBag } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useCartStore } from '../../store/cart-store';
 import { DOCK_HEIGHT } from './dock-metrics';
+import { useRequireAccount } from '../../hooks/useRequireAccount';
 
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
@@ -30,6 +31,7 @@ const FAB_GAP = 10;
 export const CART_FAB_CLEARANCE = 44 + FAB_GAP + 6;
 
 export function CartFab() {
+  const requireAccount = useRequireAccount();
   const items = useCartStore((s) => s.items);
   const total = useCartStore((s) => s.total());
   const hasHydrated = useCartStore((s) => s.hasHydrated);
@@ -65,7 +67,13 @@ export function CartFab() {
           shares a view with overflow:hidden, so the two never mix. */}
       <View style={styles.shadowWrap}>
         <Pressable
-          onPress={() => router.push('/checkout')}
+          onPress={() => {
+            // A guest can build a cart — that needs no account — but paying
+            // does. This is where App Review 5.1.1(iv)'s "directly relevant"
+            // line actually falls.
+            if (!requireAccount('place an order')) return;
+            router.push('/checkout');
+          }}
           accessibilityRole="button"
           accessibilityLabel={`View cart — ${itemCount} ${
             itemCount === 1 ? 'item' : 'items'

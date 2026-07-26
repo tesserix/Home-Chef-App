@@ -15,6 +15,7 @@ import { ChevronLeft, Minus, Plus, Trash2, UtensilsCrossed } from 'lucide-react-
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useCartStore } from '../store/cart-store';
 import type { CartItem } from '../types/customer';
+import { useRequireAccount } from '../hooks/useRequireAccount';
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the ChefCard/MenuItemCard convention.
@@ -163,6 +164,7 @@ function CartItemRow({ item }: { item: CartItem }) {
 }
 
 export default function CartScreen() {
+  const requireAccount = useRequireAccount();
   const items = useCartStore((s) => s.items);
   const total = useCartStore((s) => s.total());
   const chefName = useCartStore((s) => s.chefName);
@@ -235,7 +237,13 @@ export default function CartScreen() {
               </Text>
             </View>
             <Pressable
-              onPress={() => router.push('/checkout')}
+              onPress={() => {
+            // A guest can build a cart — that needs no account — but paying
+            // does. This is where App Review 5.1.1(iv)'s "directly relevant"
+            // line actually falls.
+            if (!requireAccount('place an order')) return;
+            router.push('/checkout');
+          }}
               accessibilityLabel="Proceed to checkout"
               accessibilityRole="button"
               android_ripple={{ color: CTA_RIPPLE, borderless: false }}

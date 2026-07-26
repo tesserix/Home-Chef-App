@@ -60,6 +60,12 @@ type User struct {
 	GIPProvider string   `gorm:"column:gip_provider" json:"gipProvider,omitempty"`
 	AuthPool    AuthPool `gorm:"column:auth_pool;type:varchar(16)" json:"authPool,omitempty"`
 
+	// Sign in with Apple refresh token, held solely so account deletion can call
+	// Apple's /auth/revoke — required by App Review guideline 5.1.1(v).
+	// Encrypted at rest and json:"-": it is a credential, never a response field
+	// and never part of the DPDP export.
+	AppleRefreshTokenEnc EncryptedString `gorm:"column:apple_refresh_token_enc;type:text" json:"-"`
+
 	IsActive      bool   `gorm:"default:true" json:"isActive"`
 	PhoneVerified bool   `gorm:"default:false" json:"phoneVerified"`
 	FCMToken      string `gorm:"column:fcm_token" json:"-"`

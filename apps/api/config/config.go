@@ -59,6 +59,23 @@ type Config struct {
 	GIPBusinessTenantID string
 	GIPDeliveryTenantID string
 
+	// Sign in with Apple — the service-account half of the integration.
+	//
+	// Apple's App Review guideline 5.1.1(v) requires an app that offers Sign in
+	// with Apple to call the token-revocation REST endpoint when the user
+	// deletes their account. Deleting the Identity Platform user is not enough:
+	// Apple keeps its own record of the app-to-Apple-ID grant, which stays live
+	// under Settings → Apple ID → Sign in with Apple until it is revoked.
+	//
+	// AppleSignInPrivateKey is the contents of the .p8 key downloaded from the
+	// Apple Developer portal (PKCS#8 ECDSA P-256), supplied base64-encoded so
+	// it survives a single-line env var / Secret Manager value.
+	// Leave any of these empty to disable revocation cleanly.
+	AppleTeamID           string
+	AppleKeyID            string
+	AppleServicesClientID string
+	AppleSignInPrivateKey []byte
+
 	// PublicAPIBaseURL is this API's externally reachable origin. Used to build
 	// links we put in emails, so recipients see a hostname they recognise
 	// instead of a raw provider URL.
@@ -330,6 +347,22 @@ func Load() {
 		log.Fatal("BFF_INTERNAL_HMAC_KEY must decode to at least 16 bytes")
 	}
 
+	// Sign in with Apple signing key. Optional: an unset or malformed key
+	// disables revocation rather than taking the API down, because every other
+	// auth path (Google, email) is unaffected by it. A malformed value is worth
+	// a loud log line though — it means store-compliance revocation is silently
+	// off, which is exactly the kind of thing that is only discovered during
+	// App Review.
+	var applePrivateKey []byte
+	if raw := os.Getenv("APPLE_SIGNIN_PRIVATE_KEY_B64"); raw != "" {
+		decoded, decErr := base64.StdEncoding.DecodeString(raw)
+		if decErr != nil {
+			log.Printf("config: APPLE_SIGNIN_PRIVATE_KEY_B64 is not valid base64 (%v) — Sign in with Apple token revocation is DISABLED", decErr)
+		} else {
+			applePrivateKey = decoded
+		}
+	}
+
 	// Clock-skew window for the X-Auth-Ts header. Default 60s — same as
 	// what auth-bff stamps with. Operators can widen it for laggy
 	// cross-region environments.
@@ -383,6 +416,12 @@ func Load() {
 		GIPBusinessTenantID: getEnv("GIP_BUSINESS_TENANT_ID", "HomeChef-Business-8s8ql"),
 		GIPDeliveryTenantID: getEnv("GIP_DELIVERY_TENANT_ID", "HomeChef-Customer-rqg8a"),
 		PublicAPIBaseURL:    getEnv("PUBLIC_API_BASE_URL", "https://api.fe3dr.com"),
+
+		// Sign in with Apple (5.1.1(v) token revocation on account deletion).
+		AppleTeamID:           getEnv("APPLE_TEAM_ID", ""),
+		AppleKeyID:            getEnv("APPLE_KEY_ID", ""),
+		AppleServicesClientID: getEnv("APPLE_SERVICES_CLIENT_ID", ""),
+		AppleSignInPrivateKey: applePrivateKey,
 
 		// Razorpay
 		RazorpayKeyID:         getEnv("RAZORPAY_KEY_ID", ""),

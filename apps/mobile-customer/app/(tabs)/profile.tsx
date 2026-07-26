@@ -19,6 +19,7 @@ import {
   Receipt,
   Salad,
   LifeBuoy,
+  ShieldOff,
 } from 'lucide-react-native';
 import { useProfile } from '../../hooks/useProfile';
 import {
@@ -35,6 +36,8 @@ import { KeyboardAwareScrollView, useDialog } from '@homechef/mobile-shared/ui';
 import { hasPasswordProvider } from '@homechef/mobile-shared/auth';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { Alert } from 'react-native';
+import { GuestGate } from '../../components/GuestGate';
+import { useIsGuest } from '../../hooks/useRequireAccount';
 
 // Profile — a HUB, not a form.
 //
@@ -128,6 +131,19 @@ function QuickTile({
 }
 
 export default function ProfileScreen() {
+  // App Review 5.1.1(iv): everything on this screen is tied to an identity,
+  // so a guest gets a way in rather than a profile full of blanks.
+  const isGuest = useIsGuest();
+  if (isGuest) {
+    return (
+      <GuestGate
+        icon={UserMinus}
+        title="Your account"
+        body="Sign in to manage addresses, payments, your wallet and your data."
+      />
+    );
+  }
+
   const router = useRouter();
   const { data: profile, isLoading } = useProfile();
   const dockClearance = useDockClearance();
@@ -355,6 +371,15 @@ export default function ProfileScreen() {
           icon={<DatabaseZap size={18} color={customerColors.charcoal.soft} />}
           label="Download my data"
           onPress={() => router.push('/data-privacy')}
+        />
+        <NavRowDivider />
+        {/* App Review 1.2 asks for blocking to be reversible. The block itself
+            is offered inline on the content (the ⋯ menu on a post or review),
+            which is where people reach for it; this row is where they undo it. */}
+        <NavRow
+          icon={<ShieldOff size={18} color={customerColors.charcoal.soft} />}
+          label="Blocked accounts"
+          onPress={() => router.push('/blocked-accounts')}
         />
         <NavRowDivider />
         <NavRow

@@ -43,6 +43,7 @@ func setupDB(t *testing.T) *gorm.DB {
 			gip_uid               TEXT,
 			gip_tenant_id         TEXT,
 			gip_provider          TEXT,
+			apple_refresh_token_enc TEXT,
 			auth_pool             TEXT,
 			is_active             INTEGER NOT NULL DEFAULT 1,
 			phone_verified        INTEGER NOT NULL DEFAULT 0,

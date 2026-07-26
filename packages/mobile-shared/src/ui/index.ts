@@ -18,3 +18,4 @@ export { SheetBase, type SheetBaseProps } from './SheetBase';
 export { UndoSnackbarProvider, useUndoSnackbar } from './UndoSnackbar';
 export { OnboardingScaffold } from './OnboardingScaffold';
 export { DietIcon } from './DietIcon';
+export { ReportSheet, REPORT_REASONS, type ReportReason, type ReportTargetType } from './ReportSheet';

@@ -6,7 +6,6 @@ import {
   MapPin,
   ChefHat,
   Clock,
-  ArrowRight,
   Utensils,
   Heart,
   Truck,
@@ -21,7 +20,7 @@ import { apiClient } from '@/shared/services/api-client';
 import { useFavoritesStore } from '@/app/store/favorites-store';
 import { useAuth } from '@/app/providers/AuthProvider';
 import type { Chef, PaginatedResponse } from '@/shared/types';
-import { Button, Card, Input, Badge, Avatar, RatingBadge } from '@/shared/components/ui';
+import { Button, Card, Input, Badge } from '@/shared/components/ui';
 import { WinbackBanner } from '@/features/customer/components/WinbackBanner';
 
 // Animation variants
@@ -196,7 +195,7 @@ export default function HomePage() {
       </section>
 
       {/* How It Works */}
-      <section className="py-20 bg-bone">
+      <section className="py-10 bg-paper">
         <div className="container-app">
           <motion.div
             initial="hidden"
@@ -256,63 +255,65 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Cuisines */}
-      <section className="py-20 bg-paper">
+      {/* Cuisines — a category rail, not a hero grid.
+          Round tiles that scroll sideways: the same destinations in a fraction
+          of the vertical budget, and they read as navigation instead of
+          competing with the hero above them. */}
+      <section className="border-b border-mist py-6">
         <div className="container-app">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: '-100px' }}
-            variants={staggerContainer}
+          <div
+            className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            role="list"
+            aria-label="Browse by cuisine"
           >
-            <motion.div variants={fadeInUp} className="flex items-center justify-between">
-              <div>
-                <Badge variant="brand" className="mb-3">Cuisines</Badge>
-                <h2 className="font-display text-display-md text-ink">Explore Flavors</h2>
-                <p className="mt-2 text-ink-soft">Discover authentic dishes from around the world</p>
-              </div>
-              <Button asChild variant="ghost" className="hidden sm:flex">
-                <Link to="/chefs">
-                  View All <ArrowRight className="ml-2 h-4 w-4"  aria-hidden="true" />
-                </Link>
-              </Button>
-            </motion.div>
+            {cuisines.map((cuisine) => (
+              <Link
+                key={cuisine.name}
+                to={`/chefs?cuisine=${cuisine.name}`}
+                role="listitem"
+                className="group flex w-[84px] shrink-0 snap-start flex-col items-center gap-2 rounded-lg py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+              >
+                <img
+                  src={cuisine.image}
+                  alt=""
+                  width={112}
+                  height={112}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-14 w-14 rounded-full object-cover ring-1 ring-mist transition-transform duration-200 group-hover:scale-105"
+                />
+                <span className="text-center text-xs font-medium leading-tight text-ink-soft group-hover:text-ink">
+                  {cuisine.name}
+                </span>
+              </Link>
+            ))}
+          </div>
 
-            <motion.div
-              variants={staggerContainer}
-              className="mt-10 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6"
-            >
-              {cuisines.map((cuisine) => (
-                <motion.div key={cuisine.name} variants={scaleIn}>
-                  <Link
-                    to={`/chefs?cuisine=${cuisine.name}`}
-                    className="group relative block overflow-hidden rounded-2xl shadow-1 hover:shadow-2 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
-                  >
-                    <div className="aspect-[4/3]">
-                      <img
-                        src={cuisine.image}
-                        alt={cuisine.name}
-                        width={300}
-                        height={200}
-                        loading="lazy"
-                        decoding="async"
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                      />
-                    </div>
-                    <div aria-hidden="true" className="absolute inset-0 scrim-bottom" />
-                    <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <h3 className="text-on-photo font-display text-lg font-semibold tracking-tight">{cuisine.name}</h3>
-                    </div>
-                  </Link>
-                </motion.div>
-              ))}
-            </motion.div>
-          </motion.div>
+          {/* Filter chips. Uber Eats puts these directly under the category
+              rail; each is a pre-filtered entry into the chef list rather than
+              local state, so this stays a landing page and not a half-built
+              search UI. */}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {[
+              { label: 'Open now', to: '/chefs?isOpen=true' },
+              { label: 'Highest rated', to: '/chefs?sort=rating' },
+              { label: 'Fastest delivery', to: '/chefs?sort=prepTime' },
+              { label: 'Food safety verified', to: '/chefs?foodSafety=true' },
+            ].map((chip) => (
+              <Link
+                key={chip.label}
+                to={chip.to}
+                className="inline-flex min-h-[36px] items-center rounded-full border border-mist px-3.5 text-sm font-medium text-ink transition-colors hover:bg-bone focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+              >
+                {chip.label}
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* Featured Chefs */}
-      <section className="py-20 bg-bone">
+      <section className="py-10 bg-paper">
         <div className="container-app">
           <motion.div
             initial="hidden"
@@ -320,25 +321,21 @@ export default function HomePage() {
             viewport={{ once: true, margin: '-100px' }}
             variants={staggerContainer}
           >
-            <motion.div variants={fadeInUp} className="flex items-center justify-between">
-              <div>
-                <Badge variant="premium" className="mb-3">
-                  <Star aria-hidden="true" className="h-3 w-3 mr-1 fill-amber text-amber" />
-                  Top Rated
-                </Badge>
-                <h2 className="font-display text-display-md text-ink">Featured Chefs</h2>
-                <p className="mt-2 text-ink-soft">Our community's favorite home chefs</p>
-              </div>
-              <Button asChild variant="ghost" className="hidden sm:flex">
-                <Link to="/chefs">
-                  View All Chefs <ArrowRight className="ml-2 h-4 w-4"  aria-hidden="true" />
-                </Link>
-              </Button>
+            <motion.div variants={fadeInUp} className="flex items-baseline justify-between gap-4">
+              <h2 className="font-display text-2xl font-bold tracking-tight text-ink">
+                Top rated near you
+              </h2>
+              <Link
+                to="/chefs"
+                className="shrink-0 text-sm font-medium text-ink underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+              >
+                See all
+              </Link>
             </motion.div>
 
             <motion.div
               variants={staggerContainer}
-              className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+              className="mt-6 grid gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3"
             >
               {(featuredChefs?.data ?? []).map((chef) => (
                 <motion.div key={chef.id} variants={scaleIn}>
@@ -469,7 +466,7 @@ export default function HomePage() {
       </section>
 
       {/* Become a Chef CTA */}
-      <section className="py-20 bg-bone">
+      <section className="py-10 bg-paper">
         <div className="container-app">
           <motion.div
             initial="hidden"
@@ -557,12 +554,14 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
   return (
     <Link
       to={`/chefs/${chef.id}`}
-      className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+      className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
     >
-      <article className="card-hive group h-full overflow-hidden">
+      <article className="group h-full">
         {/* Banner — uses .banner-fallback as the underlay so a missing image
-            still reads as a brand-tinted cell, never flat black. */}
-        <div className="banner-fallback relative h-40 overflow-hidden">
+            still reads as a brand-tinted cell, never flat black.
+            16:9 and rounded in its own right: the card has no chrome of its
+            own, so the image is the card. */}
+        <div className="banner-fallback relative aspect-[16/9] overflow-hidden rounded-lg">
           {bannerSrc ? (
             <img
               src={bannerSrc}
@@ -607,48 +606,43 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
             />
           </button>
 
-          <div className="absolute -bottom-8 left-4">
-            <Avatar
-              src={chef.profileImage}
-              alt={chef.businessName}
-              size="xl"
-              className="border-4 border-[var(--bone)] shadow-2"
-            />
-          </div>
         </div>
 
-        {/* Content */}
-        <div className="p-5 pt-10">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <h3 className="font-display text-lg font-semibold text-ink truncate group-hover:text-herb transition-colors">
-                {chef.businessName}
-              </h3>
-              <p className="mt-1 text-sm text-ink-muted truncate">
-                {chef.cuisines.slice(0, 2).join(' • ')}
-              </p>
-            </div>
-            <RatingBadge value={chef.rating} />
-          </div>
-
-          <p className="mt-3 line-clamp-2 text-sm text-ink-soft">{chef.description}</p>
-
-          <div className="mt-4 flex items-center gap-4 text-sm text-ink-muted">
-            <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4"  aria-hidden="true" />
-              {chef.prepTime}
-            </div>
-            <div>{chef.priceRange}</div>
-            {chef.acceptingOrders ? (
-              <Badge variant="success" size="sm" dot>
-                Open
-              </Badge>
-            ) : (
-              <Badge variant="default" size="sm">
-                Closed
-              </Badge>
+        {/* Content — sits on the page, not in a card. */}
+        <div className="pt-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="truncate font-display text-base font-semibold text-ink">
+              {chef.businessName}
+            </h3>
+            {chef.acceptingOrders ? null : (
+              <span className="shrink-0 text-xs font-medium text-ink-muted">Closed</span>
             )}
           </div>
+
+          {/* One metadata line, in Uber Eats' order: rating first, because it
+              is what people scan for. The description paragraph is gone — at
+              three cards across it was the only thing making the row ragged. */}
+          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm text-ink-muted">
+            <span className="inline-flex items-center gap-1 font-medium text-ink">
+              <Star aria-hidden="true" className="h-3.5 w-3.5 fill-ink text-ink" />
+              <span className="tabular-nums">{chef.rating.toFixed(1)}</span>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="inline-flex items-center gap-1">
+              <Clock aria-hidden="true" className="h-3.5 w-3.5" />
+              {chef.prepTime}
+            </span>
+            {chef.priceRange ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{chef.priceRange}</span>
+              </>
+            ) : null}
+          </p>
+
+          <p className="mt-0.5 truncate text-sm text-ink-muted">
+            {chef.cuisines.slice(0, 2).join(' · ')}
+          </p>
         </div>
       </article>
     </Link>
