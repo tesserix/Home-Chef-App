@@ -35,12 +35,17 @@ export const REWARDS_ENABLED: boolean = true;
 /** Referral / refer-&-earn program (v2-deferred). */
 export const REFERRAL_ENABLED: boolean = true;
 
-/** Social feed / community (built & wired to /v1/social, off by flag — v2-deferred). */
-export const SOCIAL_ENABLED: boolean = false;
+/**
+ * Social feed / community — ChefBook. Wired to /api/v1/social; verified
+ * returning 200 against prod before switching on. Keep in lockstep with
+ * apps/web/src/shared/config/features.ts.
+ */
+export const SOCIAL_ENABLED: boolean = true;
 
 /**
- * In-app messaging / "Message support about this order" (#53). Backed by
- * MongoDB, which is NOT provisioned in prod yet, so the endpoints 503. Hidden
- * until MONGODB_URI is set on the backend — flip to true then.
+ * In-app messaging / "Message support about this order" (#53). Still off, but
+ * the old note here ("MongoDB is NOT provisioned") is out of date: the
+ * homechef-mongodb replica set is healthy and the API has MONGODB_URI set.
+ * Re-verify what actually blocks messaging before flipping this.
  */
 export const MESSAGING_ENABLED: boolean = false;

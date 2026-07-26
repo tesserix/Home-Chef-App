@@ -36,8 +36,17 @@ export const REWARDS_ENABLED: boolean = true;
 /** Referral / refer-&-earn program. */
 export const REFERRAL_ENABLED: boolean = true;
 
-/** Social feed / community — built and wired, off by flag (v2-deferred). */
-export const SOCIAL_ENABLED: boolean = false;
+/**
+ * Social feed / community — ChefBook. Verified live before switching on:
+ * GET /api/v1/social/feed returns 200 and the posts/post_likes/post_comments
+ * tables exist in prod.
+ */
+export const SOCIAL_ENABLED: boolean = true;
 
-/** In-app messaging. Backed by MongoDB, not provisioned in prod yet. */
+/**
+ * In-app messaging. Still off, but NOT for the reason previously recorded
+ * here: MongoDB *is* provisioned — homechef-mongodb is a healthy 3-node
+ * replica set and the API has MONGODB_URI configured. Whatever remains before
+ * messaging can ship needs re-checking rather than assuming the old note.
+ */
 export const MESSAGING_ENABLED: boolean = false;
