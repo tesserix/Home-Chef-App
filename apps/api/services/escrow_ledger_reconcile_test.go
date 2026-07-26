@@ -26,7 +26,7 @@ func setupLedgerDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '',
+	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '',
 		status TEXT, payout_hold_status TEXT DEFAULT '', razorpay_order_id TEXT DEFAULT '',
 		refunded_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
 	// Hand-DDL payment_drifts (AutoMigrate emits the Postgres gen_random_uuid() default, which
@@ -37,10 +37,10 @@ func setupLedgerDB(t *testing.T) *gorm.DB {
 	// meal_plan_days / group_orders carry DIRECT chef payout transfers (PayoutTransferID),
 	// reconciled via FetchTransfer(id) — the #398 day/group slice. Only the columns the scans
 	// Select are present (neither model has a soft-delete column).
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, status TEXT DEFAULT '',
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, status TEXT DEFAULT '',
 		payout_hold_status TEXT DEFAULT '', payout_transfer_id TEXT DEFAULT '', refund_txn_id TEXT,
 		updated_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, status TEXT DEFAULT '',
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, status TEXT DEFAULT '',
 		payout_hold_status TEXT DEFAULT '', payout_transfer_id TEXT DEFAULT '', updated_at DATETIME)`).Error)
 	prev := database.DB
 	database.DB = db

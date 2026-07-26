@@ -28,7 +28,7 @@ import (
 	"github.com/homechef/api/models"
 )
 
-const payoutOrdersDDL = `CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '',
+const payoutOrdersDDL = `CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '',
 	customer_id TEXT, chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 	subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 	chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
@@ -36,16 +36,16 @@ const payoutOrdersDDL = `CREATE TABLE orders (delivery_address_line1_enc text DE
 	payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 	refunded_at DATETIME, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`
 
-const payoutDaysDDL = `CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
+const payoutDaysDDL = `CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
 	status TEXT, payout_transfer_id TEXT DEFAULT '', price REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 	payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, delivered_at DATETIME,
 	payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 	date DATETIME, created_at DATETIME, updated_at DATETIME)`
 
-const payoutPlansDDL = `CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
+const payoutPlansDDL = `CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
 	customer_id TEXT, chef_id TEXT, status TEXT, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0)`
 
-const payoutGroupOrdersDDL = `CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT,
+const payoutGroupOrdersDDL = `CREATE TABLE group_orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT,
 	order_id TEXT, status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 	customer_confirmed_at DATETIME, delivered_at DATETIME, payout_settled_at DATETIME,
 	payout_settle_attempts INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
@@ -64,7 +64,7 @@ const payoutAuditDDL = `CREATE TABLE audit_logs (id TEXT DEFAULT '00000000-0000-
 // (#747). Only the columns those two handlers and the shared seedChef helper
 // (chef_dpdp_test.go) touch — not the full models.ChefProfile column set,
 // since nothing here does a full-struct gorm Save().
-const payoutChefProfilesDDL = `CREATE TABLE chef_profiles (
+const payoutChefProfilesDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, 
 	id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
 	description TEXT DEFAULT '', accepting_orders INTEGER DEFAULT 1,
 	razorpay_settlement_status TEXT DEFAULT '', razorpay_settlement_requirements TEXT DEFAULT '',

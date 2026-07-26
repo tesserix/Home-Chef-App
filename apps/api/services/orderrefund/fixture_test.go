@@ -76,7 +76,7 @@ func newFixture(t *testing.T, opts ...fixtureOpt) *fixture {
 	// models.Order carries gorm.DeletedAt, so GORM appends
 	// "orders.deleted_at IS NULL" to every query — same as the existing refund
 	// suites' DDL.
-	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
+	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 		total REAL, refund_amount REAL DEFAULT 0, wallet_applied REAL DEFAULT 0,
 		payment_status TEXT, payment_provider TEXT, razorpay_payment_id TEXT,
@@ -89,7 +89,7 @@ func newFixture(t *testing.T, opts ...fixtureOpt) *fixture {
 	// The coordinator reserves through refundreserve (#690), which reads the columns
 	// above and sums per-line refunds off order_items (#527). Both are part of the
 	// shared reservation contract now, so the fixture has to model them.
-	require.NoError(t, db.Exec(`CREATE TABLE order_items (
+	require.NoError(t, db.Exec(`CREATE TABLE order_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, 
 		id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0,
 		refund_amount REAL DEFAULT 0, subtotal REAL DEFAULT 0, created_at DATETIME
 	)`).Error)

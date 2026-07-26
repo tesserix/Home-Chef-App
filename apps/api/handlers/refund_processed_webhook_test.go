@@ -10,6 +10,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/homechef/api/models"
 	"testing"
 
 	"github.com/google/uuid"
@@ -42,7 +43,7 @@ func TestHandleRefundProcessed_Partial_DoesNotStampRefundedAt(t *testing.T) {
 	// total 500 → captured 50000 paise (no wallet). A ₹100 per-line/goodwill refund = 10000 paise.
 	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
 
-	err := NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_partial", 10000))
+	err := NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_partial", 10000), models.ChefModeLive)
 	require.NoError(t, err)
 
 	refundID, hasRefundedAt := refundedAtSet(t, db, orderID.String())
@@ -58,7 +59,7 @@ func TestHandleRefundProcessed_Full_StampsRefundedAt(t *testing.T) {
 	chef := payChef(t, db, chefUser)
 	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x") // captured 50000 paise
 
-	err := NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_full", 50000))
+	err := NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_full", 50000), models.ChefModeLive)
 	require.NoError(t, err)
 
 	refundID, hasRefundedAt := refundedAtSet(t, db, orderID.String())
@@ -78,12 +79,12 @@ func TestHandleRefundProcessed_Full_RespectsWalletApplied(t *testing.T) {
 	// captured = (500 − 100) = 400 → 40000 paise.
 
 	// A 10000-paise refund is still partial.
-	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_p", 10000)))
+	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_p", 10000), models.ChefModeLive))
 	_, hasRA := refundedAtSet(t, db, orderID.String())
 	require.False(t, hasRA, "partial vs the captured (wallet-reduced) amount → no stamp")
 
 	// A 40000-paise refund covers the full captured amount → stamp.
-	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_f", 40000)))
+	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_f", 40000), models.ChefModeLive))
 	_, hasRA2 := refundedAtSet(t, db, orderID.String())
 	require.True(t, hasRA2, "full refund of the captured (Total−WalletApplied) amount → stamp")
 }
@@ -108,7 +109,7 @@ func TestHandleRefundProcessed_PerLineCancel_NotStampedAsFull(t *testing.T) {
 
 	// That line's refund.processed (₹600 = 60000 paise) must NOT be seen as a full refund:
 	// captured = ToPaise(400 + 600 − 0) = 100000, and 60000 < 100000.
-	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_line", 60000)))
+	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_line", 60000), models.ChefModeLive))
 	_, hasRA := refundedAtSet(t, db, orderID.String())
 	require.False(t, hasRA, "#635: a per-line cancel must not stamp refunded_at as if the whole order were refunded")
 
@@ -116,7 +117,7 @@ func TestHandleRefundProcessed_PerLineCancel_NotStampedAsFull(t *testing.T) {
 	require.NoError(t, db.Exec(`UPDATE orders SET total = 0 WHERE id = ?`, orderID.String()).Error)
 	require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, subtotal, is_cancelled, refund_amount) VALUES (?,?,400,1,400)`,
 		uuid.NewString(), orderID.String()).Error)
-	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_line2", 40000)))
+	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_line2", 40000), models.ChefModeLive))
 	_, hasRA2 := refundedAtSet(t, db, orderID.String())
 	require.False(t, hasRA2, "#635: cancelling the last line (Total→0) must not look like a full refund")
 }
@@ -129,8 +130,8 @@ func TestHandleRefundProcessed_Idempotent(t *testing.T) {
 	chef := payChef(t, db, chefUser)
 	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
 
-	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_full", 50000)))
-	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_full", 50000)))
+	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_full", 50000), models.ChefModeLive))
+	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_x", "rfnd_full", 50000), models.ChefModeLive))
 	refundID, hasRA := refundedAtSet(t, db, orderID.String())
 	require.Equal(t, "rfnd_full", refundID)
 	require.True(t, hasRA)
@@ -139,7 +140,7 @@ func TestHandleRefundProcessed_Idempotent(t *testing.T) {
 // No matching order for the payment id → clean no-op (e.g. a subscription/tip refund).
 func TestHandleRefundProcessed_NoOrder_NoOp(t *testing.T) {
 	db := setupPayDB(t)
-	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_absent", "rfnd_x", 10000)))
+	require.NoError(t, NewPaymentHandler().handleRefundProcessed(refundProcessedPayload("pay_absent", "rfnd_x", 10000), models.ChefModeLive))
 	var n int64
 	require.NoError(t, db.Raw(`SELECT COUNT(*) FROM orders WHERE refund_id = 'rfnd_x'`).Scan(&n).Error)
 	require.Equal(t, int64(0), n)

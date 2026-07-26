@@ -38,7 +38,7 @@ func setupApprovalDB(t *testing.T) *gorm.DB {
 		id TEXT PRIMARY KEY, email TEXT, role TEXT DEFAULT 'customer', is_active INTEGER DEFAULT 1,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
 		is_verified INTEGER DEFAULT 0, verified_at DATETIME, is_active INTEGER DEFAULT 0,
 		payout_country TEXT DEFAULT 'IN', fssai_override_until DATETIME,
@@ -49,7 +49,7 @@ func setupApprovalDB(t *testing.T) *gorm.DB {
 		id TEXT PRIMARY KEY, chef_id TEXT, type TEXT, status TEXT, expiry_date DATETIME,
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE approval_requests (
+	require.NoError(t, db.Exec(`CREATE TABLE approval_requests (approved_mode text DEFAULT 'live', 
 		id TEXT PRIMARY KEY, type TEXT, status TEXT DEFAULT 'pending',
 		chef_id TEXT, partner_id TEXT, submitted_by_id TEXT, reviewed_by_id TEXT,
 		entity_type TEXT DEFAULT '', entity_id TEXT, title TEXT DEFAULT '',

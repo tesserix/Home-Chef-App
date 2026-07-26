@@ -36,11 +36,11 @@ func setupCampaignDB(t *testing.T) *gorm.DB {
 			id text PRIMARY KEY, user_id text, city text, state text,
 			latitude real, longitude real, is_default integer, created_at datetime
 		)`,
-		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
+		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 			id text PRIMARY KEY, customer_id text, chef_id text, status text,
 			created_at datetime, updated_at datetime, deleted_at datetime
 		)`,
-		`CREATE TABLE meal_subscriptions (
+		`CREATE TABLE meal_subscriptions (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, 
 			id text PRIMARY KEY, customer_id text, chef_id text, status text,
 			created_at datetime, updated_at datetime, deleted_at datetime
 		)`,

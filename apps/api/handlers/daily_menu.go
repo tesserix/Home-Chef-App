@@ -239,6 +239,9 @@ func (h *ChefHandler) GetPublicDailyMenu(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
+		return
+	}
 	from, to, ok2 := parseDailyRange(c)
 	if !ok2 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "from/to must be YYYY-MM-DD"})

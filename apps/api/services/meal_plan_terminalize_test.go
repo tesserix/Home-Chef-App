@@ -21,7 +21,7 @@ func setupTerminalizeDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, status TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, status TEXT,
 		refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`).Error)
 	return db
 }

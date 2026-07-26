@@ -186,6 +186,10 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "This chef isn't accepting orders right now"})
 		return
 	}
+	if err := assertMayOrderFromChef(c, &chef); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 
 	// The chef must have a PUBLISHED weekly menu — draft cells exist in the items
 	// table but are not bookable (the public read gates on is_published too).
@@ -331,6 +335,7 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 
 	respondBy := time.Now().Add(chefRespondWindow)
 	plan := models.MealPlan{
+		ModePartition:  models.ModePartition{Mode: services.PaymentModeForChef(chefID)},
 		MealPlanNumber: mealPlanNumber(),
 		CustomerID:     customerID,
 		ChefID:         chefID,
@@ -471,7 +476,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 			}
 			if cur.Status == models.MealPlanAwaitingCustomer && cur.RazorpayOrderID != "" && cur.EscrowPaymentID == "" {
 				resp := gin.H{"razorpayOrderId": cur.RazorpayOrderID}
-				if rz := services.GetRazorpay(); rz != nil {
+				if rz := services.GetRazorpayFor(cur.Mode); rz != nil {
 					resp["razorpayKeyId"] = rz.GetKeyID()
 				}
 				cur.ProjectForCustomer()
@@ -494,7 +499,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 				Update("razorpay_order_id", orderID)
 			plan.RazorpayOrderID = orderID
 			resp["razorpayOrderId"] = orderID
-			if rz := services.GetRazorpay(); rz != nil {
+			if rz := services.GetRazorpayFor(plan.Mode); rz != nil {
 				resp["razorpayKeyId"] = rz.GetKeyID()
 			}
 		}

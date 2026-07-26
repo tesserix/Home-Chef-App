@@ -45,13 +45,13 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		phone TEXT DEFAULT '', role TEXT DEFAULT 'customer', is_active INTEGER DEFAULT 1,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
 		payment_provider TEXT DEFAULT 'razorpay', razorpay_account_id TEXT DEFAULT '',
 		stripe_account_id TEXT DEFAULT '', stripe_charges_enabled INTEGER DEFAULT 0,
 		payout_country TEXT DEFAULT 'IN', created_at DATETIME, updated_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
+	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_number TEXT, customer_id TEXT, chef_id TEXT, delivery_id TEXT,
 		status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'pending',
 		payment_method TEXT DEFAULT '', payment_provider TEXT DEFAULT 'razorpay',
@@ -89,15 +89,15 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	// exist or every refund would 500; empty in most tests → the guard passes through.
 	// order_items — RemainingRefundable (#560, InitiateRefund) sums cancelled lines; without
 	// the table its raw query errors and silently falls back to the old formula.
-	require.NoError(t, db.Exec(`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE order_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, order_id TEXT,
 		menu_item_id TEXT, quantity INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0, created_at DATETIME)`).Error)
 	// order_issues — claimOrderItemForCancel (#622) checks whether a resolved customer issue
 	// already refunded the target line; the table must exist or the per-line cancel errors.
 	require.NoError(t, db.Exec(`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, chef_id TEXT,
 		customer_id TEXT, reason TEXT, affected_item_ids TEXT, requested_amount REAL DEFAULT 0,
 		refund_amount REAL DEFAULT 0, status TEXT DEFAULT 'pending', created_at DATETIME, updated_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, order_id TEXT)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT)`).Error)
 	// #395: the completion helper stages chef.new_order + order.paid via the outbox.
 	require.NoError(t, db.Exec(`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT,
 		aggregate_type TEXT, aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,

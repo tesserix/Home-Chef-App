@@ -43,8 +43,8 @@ type ChefSubscriptionConfig struct {
 	ID            uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	ChefID        uuid.UUID      `gorm:"type:uuid;uniqueIndex;not null" json:"chefId"`
 	Enabled       bool           `gorm:"default:false" json:"enabled"`
-	Slots         pq.StringArray `gorm:"type:text[]" json:"slots"`     // offered: ["lunch","dinner"]
-	Cadences      pq.StringArray `gorm:"type:text[]" json:"cadences"`  // ["weekly","monthly"]
+	Slots         pq.StringArray `gorm:"type:text[]" json:"slots"`    // offered: ["lunch","dinner"]
+	Cadences      pq.StringArray `gorm:"type:text[]" json:"cadences"` // ["weekly","monthly"]
 	PerMealPrice  float64        `gorm:"default:0" json:"perMealPrice"`
 	DeliveryFee   float64        `gorm:"default:0" json:"deliveryFee"` // flat, per cycle
 	DailyCapacity int            `gorm:"default:0" json:"dailyCapacity"`
@@ -60,6 +60,9 @@ type ChefSubscriptionConfig struct {
 // MealTrial is a one-time paid sampler of a chef before subscribing. Unique per
 // (customer, chef) so a customer can't trial the same chef twice.
 type MealTrial struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	CustomerID      uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_meal_trial_cust_chef" json:"customerId"`
 	ChefID          uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_meal_trial_cust_chef" json:"chefId"`
@@ -81,6 +84,9 @@ func (t *MealTrial) BeforeCreate(*gorm.DB) error {
 }
 
 type MealSubscription struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	CustomerID uuid.UUID `gorm:"type:uuid;not null;index" json:"customerId"`
 	ChefID     uuid.UUID `gorm:"type:uuid;not null;index" json:"chefId"`

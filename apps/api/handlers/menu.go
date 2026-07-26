@@ -59,7 +59,10 @@ func (h *MenuHandler) GetChefMenuItems(c *gin.Context) {
 	}
 
 	var items []models.MenuItem
-	database.DB.Where("chef_id = ?", chef.ID).
+	// Same clean-slate rule as the order queue: in a sandbox session the chef
+	// edits the CLONED menu, and their real menu is untouched and comes back
+	// whole when they return to live.
+	database.DB.Where("chef_id = ?", chef.ID).Scopes(services.ChefOwnModeScope(chef.ID)).
 		Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order ASC") }).
 		Preload("ModifierGroups", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
 		Preload("ModifierGroups.Options", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).

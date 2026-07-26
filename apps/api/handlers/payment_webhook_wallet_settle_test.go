@@ -9,6 +9,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"github.com/homechef/api/models"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,7 +85,7 @@ func TestHandlePaymentCaptured_SettlesWalletForWebhookOnlyCompletion(t *testing.
 
 	orderID, cust := seedWalletOrder(t, db, "order_wh1", 500, 100)
 
-	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(capturedPayload("order_wh1", "pay_wh1", 40000)))
+	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(capturedPayload("order_wh1", "pay_wh1", 40000), models.ChefModeLive))
 
 	var status string
 	require.NoError(t, db.Raw(`SELECT payment_status FROM orders WHERE id = ?`, orderID.String()).Scan(&status).Error)
@@ -106,9 +107,9 @@ func TestHandlePaymentCaptured_WalletSettlementIdempotent(t *testing.T) {
 	orderID, cust := seedWalletOrder(t, db, "order_wh2", 500, 100)
 	payload := capturedPayload("order_wh2", "pay_wh2", 40000)
 
-	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(payload))
+	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(payload, models.ChefModeLive))
 	first := *transfers
-	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(payload)) // retry / duplicate delivery
+	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(payload, models.ChefModeLive)) // retry / duplicate delivery
 
 	require.Equal(t, int64(1), walletDebitCount(t, db, orderID), "debited exactly once across two settlements")
 	require.Equal(t, 0.0, walletBalance(t, db, cust), "no double debit (balance not negative)")
@@ -128,7 +129,7 @@ func TestHandlePaymentCaptured_DebitFailure_DoesNotFundTopUp(t *testing.T) {
 	orderID, cust := seedWalletOrder(t, db, "order_wh3", 500, 100)
 	require.NoError(t, db.Exec(`UPDATE wallets SET balance = 40 WHERE user_id = ?`, cust.String()).Error)
 
-	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(capturedPayload("order_wh3", "pay_wh3", 40000)))
+	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(capturedPayload("order_wh3", "pay_wh3", 40000), models.ChefModeLive))
 
 	var status string
 	require.NoError(t, db.Raw(`SELECT payment_status FROM orders WHERE id = ?`, orderID.String()).Scan(&status).Error)

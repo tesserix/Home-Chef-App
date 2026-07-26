@@ -29,6 +29,9 @@ const (
 )
 
 type CateringRequest struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID         uuid.UUID             `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	CustomerID uuid.UUID             `gorm:"type:uuid;not null;index" json:"customerId"`
 	Status     CateringRequestStatus `gorm:"type:varchar(20);default:'open'" json:"status"`

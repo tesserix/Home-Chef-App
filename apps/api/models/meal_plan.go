@@ -61,8 +61,8 @@ const (
 	// customer no longer self-credits a skip (#422 policy change).
 	MealPlanDaySkipRequested MealPlanDayStatus = "skip_req"
 	MealPlanDaySkipped       MealPlanDayStatus = "skipped" // admin approved a skip → partial refund
-	MealPlanDayCancelled MealPlanDayStatus = "cancelled"
-	MealPlanDayRefunded  MealPlanDayStatus = "refunded"
+	MealPlanDayCancelled     MealPlanDayStatus = "cancelled"
+	MealPlanDayRefunded      MealPlanDayStatus = "refunded"
 	// MealPlanDayFailed marks a day whose delivery terminally failed (#393). It is
 	// deliberately NON-terminal (excluded from allDaysTerminal): the day's payout hold
 	// is frozen to disputed and the plan stays open until an admin resolves the day's
@@ -72,6 +72,9 @@ const (
 
 // MealPlan is one customer's advance booking from one chef.
 type MealPlan struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID             uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	MealPlanNumber string         `gorm:"uniqueIndex;not null" json:"mealPlanNumber"`
 	CustomerID     uuid.UUID      `gorm:"type:uuid;index;not null" json:"customerId"`
@@ -165,6 +168,9 @@ func (m *MealPlan) ProjectForAdmin() {
 
 // MealPlanDay is one slot on one date within a plan.
 type MealPlanDay struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID         uuid.UUID         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	MealPlanID uuid.UUID         `gorm:"type:uuid;index;not null" json:"mealPlanId"`
 	Date       time.Time         `gorm:"index;not null" json:"date"`

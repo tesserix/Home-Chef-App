@@ -48,6 +48,10 @@ export interface Chef {
   deliveryTime?: string;
   minimumOrder?: number;
   deliveryFee?: number;
+  /** "test" marks a sandbox kitchen. Only accounts on the test-mode allowlist
+   *  ever receive one from the API, so the TEST badge renders for nobody else —
+   *  but a tester needs to tell it apart from a real kitchen at a glance. */
+  mode?: 'live' | 'test';
   // foodSafetyBadge (#35): chef holds a verified, non-expired FSSAI licence;
   // set from the chef-list API response via mapChef.
   foodSafetyBadge?: boolean;

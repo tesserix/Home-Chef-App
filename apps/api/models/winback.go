@@ -37,14 +37,14 @@ const (
 )
 
 type WinbackOffer struct {
-	ID              uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID          uuid.UUID      `gorm:"type:uuid;not null;index" json:"userId"`
-	AudienceType    string         `gorm:"type:varchar(16);not null" json:"audienceType"`
-	Trigger         string         `gorm:"type:varchar(32);not null" json:"trigger"`
-	PromoCodeID     uuid.UUID      `gorm:"type:uuid;not null;index" json:"promoCodeId"`
-	Code            string         `gorm:"type:varchar(32);not null" json:"code"`
-	DiscountPercent float64        `gorm:"default:0" json:"discountPercent"`
-	Status          string         `gorm:"type:varchar(16);not null;default:'offered';index" json:"status"`
+	ID              uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID          uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
+	AudienceType    string    `gorm:"type:varchar(16);not null" json:"audienceType"`
+	Trigger         string    `gorm:"type:varchar(32);not null" json:"trigger"`
+	PromoCodeID     uuid.UUID `gorm:"type:uuid;not null;index" json:"promoCodeId"`
+	Code            string    `gorm:"type:varchar(32);not null" json:"code"`
+	DiscountPercent float64   `gorm:"default:0" json:"discountPercent"`
+	Status          string    `gorm:"type:varchar(16);not null;default:'offered';index" json:"status"`
 	// SubscriptionID links the offer to the cancelled/suspended subscription that
 	// triggered it (nil for a lapse-triggered customer offer).
 	SubscriptionID *uuid.UUID     `gorm:"type:uuid" json:"subscriptionId,omitempty"`

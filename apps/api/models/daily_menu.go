@@ -15,6 +15,9 @@ import (
 
 // DailyMenu is the per-(chef, date) header holding publish state.
 type DailyMenu struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID          uuid.UUID       `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	ChefID      uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex:idx_daily_menu_chef_date" json:"chefId"`
 	Date        time.Time       `gorm:"type:date;not null;uniqueIndex:idx_daily_menu_chef_date" json:"date"`
@@ -29,6 +32,9 @@ type DailyMenu struct {
 // allowed — there is deliberately NO unique-cell constraint (the key difference
 // from WeeklyMenuItem), so a chef can list several dishes for the same slot.
 type DailyMenuItem struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID          uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	DailyMenuID uuid.UUID      `gorm:"type:uuid;not null;index" json:"dailyMenuId"`
 	ChefID      uuid.UUID      `gorm:"type:uuid;not null;index:idx_daily_item_chef_date" json:"chefId"`

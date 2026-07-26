@@ -7,7 +7,7 @@ import (
 
 func TestParseIndianAddressTail(t *testing.T) {
 	cases := []struct {
-		addr             string
+		addr              string
 		city, reg, postal string
 	}{
 		{"Asima Residency, Kalarahanga, Bhubaneswar, Odisha 751024", "Bhubaneswar", "Odisha", "751024"},

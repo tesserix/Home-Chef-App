@@ -739,7 +739,7 @@ func (h *CateringHandler) CreateDeposit(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No deposit is due for this booking"})
 		return
 	}
-	rz := services.GetRazorpay()
+	rz := services.GetRazorpayFor(request.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return
@@ -800,7 +800,7 @@ func (h *CateringHandler) VerifyDeposit(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "Deposit already confirmed", "data": request.ToResponse()})
 		return
 	}
-	rz := services.GetRazorpay()
+	rz := services.GetRazorpayFor(request.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return

@@ -311,7 +311,7 @@ var errApprovalNotHomeKitchen = errors.New("this kitchen is not an individual ho
 // driver verification, onboarding activation), and the approval.approved event. Shared by
 // ApproveRequest and BulkApproveRequests so bulk approval behaves identically to single approval.
 // Returns a sentinel or descriptive error the caller maps to an HTTP status / per-item result.
-func approveOneRequest(id uuid.UUID, adminUserID uuid.UUID, notes string) error {
+func approveOneRequest(id uuid.UUID, adminUserID uuid.UUID, notes, mode string) error {
 	var approval models.ApprovalRequest
 	if err := database.DB.First(&approval, "id = ?", id).Error; err != nil {
 		return errApprovalNotFound
@@ -330,11 +330,15 @@ func approveOneRequest(id uuid.UUID, adminUserID uuid.UUID, notes string) error 
 	previousStatus := string(approval.Status)
 	now := time.Now()
 
+	// Persist the admin's live/test choice on the approval BEFORE any activation
+	// path runs, so the durable Temporal activity can read it back on retry.
+	mode = models.NormalizeMode(mode)
 	database.DB.Model(&approval).Updates(map[string]interface{}{
 		"status":         models.ApprovalApproved,
 		"reviewed_by_id": adminUserID,
 		"reviewed_at":    &now,
 		"admin_notes":    notes,
+		"approved_mode":  mode,
 	})
 
 	history := models.ApprovalRequestHistory{
@@ -355,7 +359,7 @@ func approveOneRequest(id uuid.UUID, adminUserID uuid.UUID, notes string) error 
 		// — otherwise inline. Same idempotent op either way (#126).
 		if services.OnboardingWorkflowActive() {
 			services.StartOnboardingActivation(approval.ID)
-		} else if err := services.ActivateChefOnboarding(database.DB, approval.ID); err != nil {
+		} else if err := services.ActivateChefOnboarding(database.DB, approval.ID, mode); err != nil {
 			log.Printf("onboarding: inline activation failed for approval %s: %v", approval.ID, err)
 		}
 
@@ -433,11 +437,14 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 	}
 	var req struct {
 		Notes string `json:"notes"`
+		// Mode is "live" (default) or "test". Absent means live, so an older
+		// admin build keeps minting real kitchens exactly as before.
+		Mode string `json:"mode"`
 	}
 	c.ShouldBindJSON(&req)
 	adminUserID, _ := middleware.GetUserID(c)
 
-	if err := approveOneRequest(id, adminUserID, req.Notes); err != nil {
+	if err := approveOneRequest(id, adminUserID, req.Notes, req.Mode); err != nil {
 		switch {
 		case errors.Is(err, errApprovalNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "Approval request not found"})
@@ -490,7 +497,10 @@ func (h *ApprovalHandler) BulkApproveRequests(c *gin.Context) {
 			failures = append(failures, bulkApproveFailure{ID: raw, Error: "invalid id"})
 			continue
 		}
-		if err := approveOneRequest(id, adminUserID, req.Notes); err != nil {
+		// Bulk approve always mints LIVE kitchens. A sandbox kitchen is a
+		// deliberate, one-at-a-time decision — minting a batch of them by
+		// accident would be both surprising and hard to unpick.
+		if err := approveOneRequest(id, adminUserID, req.Notes, models.ChefModeLive); err != nil {
 			failures = append(failures, bulkApproveFailure{ID: raw, Error: err.Error()})
 			continue
 		}

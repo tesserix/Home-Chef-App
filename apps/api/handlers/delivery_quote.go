@@ -61,6 +61,12 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
+	// A quote is a price for an order this viewer could place. If they can't see
+	// the kitchen, they can't be quoted by it.
+	if proceed, reduced := chefVisibleTo(c, &chef); !proceed || reduced {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
 
 	country := req.Country
 	if country == "" {

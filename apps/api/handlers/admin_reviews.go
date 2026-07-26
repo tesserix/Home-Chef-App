@@ -72,7 +72,7 @@ func (h *AdminHandler) AdminHideReview(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hide review"})
 		return
 	}
-	updateChefRating(review.ChefID)
+	updateChefRating(review.ChefID, review.Mode)
 	services.LogAudit(c, "review.hide", "review", id.String(), nil, map[string]any{
 		"reason": req.Reason, "chefId": review.ChefID.String(),
 	})
@@ -98,7 +98,7 @@ func (h *AdminHandler) AdminUnhideReview(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to restore review"})
 		return
 	}
-	updateChefRating(review.ChefID)
+	updateChefRating(review.ChefID, review.Mode)
 	services.LogAudit(c, "review.unhide", "review", id.String(), nil, map[string]any{
 		"chefId": review.ChefID.String(),
 	})

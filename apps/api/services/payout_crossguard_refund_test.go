@@ -37,7 +37,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
+		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 			chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 			chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
@@ -45,15 +45,15 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 			refund_amount REAL DEFAULT 0, refund_reason TEXT, refund_initiated_by TEXT,
 			refunded_at DATETIME, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
+		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', price REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, delivered_at DATETIME,
 			payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 			refund_txn_id TEXT, date DATETIME, created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
+		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
 			customer_id TEXT, chef_id TEXT, status TEXT, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0,
 			total REAL DEFAULT 0, created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,
+		`CREATE TABLE group_orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			customer_confirmed_at DATETIME, delivered_at DATETIME, payout_settled_at DATETIME,
 			payout_settle_attempts INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
@@ -68,7 +68,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			requested_amount REAL DEFAULT 0, refund_amount REAL DEFAULT 0, status TEXT DEFAULT 'pending',
 			resolved_by TEXT, resolved_at DATETIME, refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`,
 		// order_items — RefundIssueToWallet's PerLineRefundedTotalTx sums per-line refunds.
-		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0)`,
+		`CREATE TABLE order_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0)`,
 		`CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT UNIQUE, balance REAL DEFAULT 0,
 			currency TEXT DEFAULT 'INR', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE wallet_txns (id TEXT PRIMARY KEY, wallet_id TEXT, user_id TEXT, type TEXT, source TEXT,
@@ -82,7 +82,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			entity_id TEXT, old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT, correlation_id TEXT, created_at DATETIME)`,
 		// chef_profiles — the partial-refund claw-back (#549) resolves the chef's
 		// Route account by joining orders.chef_id → chef_profiles.id.
-		`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, razorpay_account_id TEXT DEFAULT '',
+		`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, razorpay_account_id TEXT DEFAULT '',
 			payout_country TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)

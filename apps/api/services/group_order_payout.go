@@ -61,7 +61,7 @@ func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) 
 	if amt <= 0 {
 		return nil
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(g.Mode)
 	if rz == nil {
 		return fmt.Errorf("razorpay not configured")
 	}
@@ -97,7 +97,7 @@ func ReleaseGroupChefPayout(g *models.GroupOrder) error {
 	if g.PayoutTransferID == "" {
 		return nil
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(g.Mode)
 	if rz == nil {
 		return nil // gateway unconfigured — no-op like ReleaseOrderPayouts
 	}
@@ -123,7 +123,7 @@ func ReverseGroupChefPayout(g *models.GroupOrder) error {
 	if g.PayoutTransferID == "" {
 		return nil
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(g.Mode)
 	if rz == nil {
 		return nil
 	}

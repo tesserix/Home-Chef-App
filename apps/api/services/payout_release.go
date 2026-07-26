@@ -864,8 +864,8 @@ func reverseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 		if err := db.First(&day, "id = ?", id).Error; err != nil {
 			return fmt.Errorf("payout-release: load day %s: %w", id, err)
 		}
-		if MealPlanEscrowActive() && day.PayoutTransferID != "" && GetRazorpay() != nil {
-			if _, err := GetRazorpay().ReverseTransfer(day.PayoutTransferID, 0); err != nil {
+		if MealPlanEscrowActive() && day.PayoutTransferID != "" && GetRazorpayFor(day.Mode) != nil {
+			if _, err := GetRazorpayFor(day.Mode).ReverseTransfer(day.PayoutTransferID, 0); err != nil {
 				if !isAlreadyReversedErr(err) {
 					return fmt.Errorf("payout-release: reverse day transfer %s: %w", day.PayoutTransferID, err)
 				}

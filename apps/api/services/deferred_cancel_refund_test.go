@@ -31,7 +31,7 @@ func setupDeferredCancelRefundDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '',
+	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '',
 		id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT,
 		status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'razorpay', total REAL DEFAULT 0,
 		razorpay_payment_id TEXT DEFAULT '', refund_amount REAL DEFAULT 0, refund_id TEXT DEFAULT '', refund_reason TEXT,

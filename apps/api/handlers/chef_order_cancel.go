@@ -178,7 +178,7 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	refundID := sentinel
 	deferred := false
 	if cardPaise > 0 {
-		rzp := services.GetRazorpay()
+		rzp := services.GetRazorpayFor(order.Mode)
 		if rzp == nil {
 			deferred = true
 			log.Printf("chef cancel: razorpay client unavailable for order %s; deferring refund of %d paise to the retry cron", order.ID, cardPaise)
@@ -409,7 +409,7 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 		return
 	}
 
-	rzp := services.GetRazorpay()
+	rzp := services.GetRazorpayFor(order.Mode)
 	if rzp == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "razorpay client unavailable; refund deferred"})
 		return
@@ -586,7 +586,7 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		return
 	}
 
-	rzp := services.GetRazorpay()
+	rzp := services.GetRazorpayFor(order.Mode)
 	if rzp == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "razorpay client unavailable; refund deferred"})
 		return

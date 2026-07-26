@@ -59,7 +59,7 @@ func ReverseOrderChefTransferPartial(db *gorm.DB, orderID uuid.UUID, refundedPai
 	if row.RazorpayOrderID == "" || row.RazorpayAccountID == "" {
 		return nil
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(PaymentModeForOrder(orderID))
 	if rz == nil {
 		return nil
 	}

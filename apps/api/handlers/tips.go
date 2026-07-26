@@ -83,13 +83,15 @@ func (h *TipHandler) CreateOrderTip(c *gin.Context) {
 		return
 	}
 
-	rz := services.GetRazorpay()
+	// A tip rides the same gateway as the order it thanks — a test-mode order's
+	// tip must not become a real charge.
+	rz := services.GetRazorpayFor(order.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return
 	}
 
-	tip := models.Tip{OrderID: order.ID, CustomerID: customerID, Currency: "INR", Status: models.TipPending}
+	tip := models.Tip{ModePartition: models.ModePartition{Mode: order.Mode, TestSessionID: order.TestSessionID}, OrderID: order.ID, CustomerID: customerID, Currency: "INR", Status: models.TipPending}
 	var transfers []services.TransferSpec
 
 	if req.ChefAmount > 0 {
@@ -189,7 +191,7 @@ func (h *TipHandler) VerifyTip(c *gin.Context) {
 		return
 	}
 
-	rz := services.GetRazorpay()
+	rz := services.GetRazorpayFor(tip.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return

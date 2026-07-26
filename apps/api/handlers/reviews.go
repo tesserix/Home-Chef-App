@@ -126,6 +126,9 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 	}
 
 	review := models.Review{
+		// A review of a test order belongs to the test partition, so a fake
+		// order can never move a real kitchen's public rating.
+		ModePartition:   order.ModePartition,
 		OrderID:         parsedOrderID,
 		CustomerID:      userID,
 		ChefID:          order.ChefID,
@@ -147,7 +150,7 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 	}
 
 	// Update chef's rating stats
-	go updateChefRating(order.ChefID)
+	go updateChefRating(order.ChefID, order.Mode)
 
 	// Notify the chef of the new review (#422). Best-effort: the review is
 	// already committed, so a staging failure must never fail the request.
@@ -207,24 +210,18 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 	c.JSON(http.StatusCreated, review.ToResponse())
 }
 
-// updateChefRating recalculates a chef's average rating and total reviews.
-func updateChefRating(chefID uuid.UUID) {
-	var stats struct {
-		AvgRating    float64
-		TotalReviews int64
+// updateChefRating recalculates a chef's average rating and total reviews for
+// the given mode.
+//
+// Recomputed per mode (services.RecalcChefRating) rather than over all reviews:
+// the live figures still land on chef_profiles, which every customer-facing
+// query already reads, while sandbox reviews accumulate only in chef_mode_stats.
+// A fake order therefore cannot move a real kitchen's public rating.
+// Hidden, unapproved and deleted reviews are excluded exactly as before.
+func updateChefRating(chefID uuid.UUID, mode string) {
+	if err := services.RecalcChefRating(database.DB, chefID, mode); err != nil {
+		log.Printf("reviews: recompute %s rating for chef %s: %v", models.NormalizeMode(mode), chefID, err)
 	}
-	// Exclude hidden reviews (#35 moderation) alongside unapproved/deleted — a
-	// hidden review must not count toward the public rating.
-	database.DB.Model(&models.Review{}).
-		Where("chef_id = ? AND is_approved = ? AND is_hidden = ? AND deleted_at IS NULL", chefID, true, false).
-		Select("COALESCE(AVG(overall_rating), 0) as avg_rating, COUNT(*) as total_reviews").
-		Scan(&stats)
-
-	database.DB.Model(&models.ChefProfile{}).Where("id = ?", chefID).
-		Updates(map[string]interface{}{
-			"rating":        stats.AvgRating,
-			"total_reviews": stats.TotalReviews,
-		})
 }
 
 // recomputeMenuItemRating averages a dish's per-dish ratings (#145) into the

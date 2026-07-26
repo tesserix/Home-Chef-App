@@ -38,7 +38,10 @@ func runMealPlanHoldReconcileScan(_ context.Context) {
 // reconcileUnheldMealPlans holds the chef payouts for live + captured plans whose payable
 // days aren't yet held. Returns how many plans it (re)held.
 func reconcileUnheldMealPlans(db *gorm.DB, _ time.Time) int {
-	if !MealPlanEscrowActive() || GetRazorpay() == nil {
+	// Per-plan holds resolve their own gateway (HoldChefPayouts reads plan.Mode),
+	// so this gate only asks whether ANY gateway is configured at all.
+	if !MealPlanEscrowActive() ||
+		(GetRazorpayFor(models.ChefModeLive) == nil && GetRazorpayFor(models.ChefModeTest) == nil) {
 		return 0
 	}
 	liveStatuses := []models.MealPlanStatus{models.MealPlanConfirmed, models.MealPlanActive}

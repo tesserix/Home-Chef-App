@@ -156,6 +156,9 @@ func Migrate() error {
 		&models.ChefSchedule{},
 		&models.ChefDocument{},
 		&models.ChefNotificationPreferences{},
+		// Test-chef mode: sandbox sessions and per-mode aggregates.
+		&models.ChefTestSession{},
+		&models.ChefModeStats{},
 
 		// Menu
 		&models.MenuCategory{},

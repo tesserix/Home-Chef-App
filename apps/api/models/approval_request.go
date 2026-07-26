@@ -45,8 +45,14 @@ type ApprovalRequest struct {
 	Description   string                `gorm:"type:text" json:"description"`
 	SubmittedData string                `gorm:"type:jsonb" json:"submittedData"`
 	AdminNotes    string                `gorm:"type:text" json:"adminNotes,omitempty"`
-	ReviewedAt    *time.Time            `json:"reviewedAt,omitempty"`
-	ExpiresAt     *time.Time            `json:"expiresAt,omitempty"`
+	// ApprovedMode records whether an admin approved this kitchen as live or as
+	// a test (sandbox) kitchen. Persisted on the approval rather than passed
+	// through the activation call so the choice survives a crash: the durable
+	// Temporal activation reads it back here on retry, and the workflow's input
+	// struct — and therefore its determinism — is untouched.
+	ApprovedMode string     `gorm:"type:varchar(4);default:'live'" json:"approvedMode,omitempty"`
+	ReviewedAt   *time.Time `json:"reviewedAt,omitempty"`
+	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
 
 	// ── Reminders / escalation (#697) ────────────────────────────────────────
 	// A chef whose request sits unattended has no lever other than contacting

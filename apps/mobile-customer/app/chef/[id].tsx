@@ -566,6 +566,15 @@ export default function ChefDetailScreen() {
               {formatCuisines(chef.cuisine)}
             </Text>
 
+            {/* Sandbox kitchen. Reaching this screen at all means the viewer
+                is on the test-mode allowlist, so this is a reminder rather than
+                a warning: nothing bought here costs real money. */}
+            {chef.mode === 'test' ? (
+              <Text style={styles.testModeNote}>
+                TEST kitchen — payments use Razorpay test mode, no real money is charged.
+              </Text>
+            ) : null}
+
             {/* Hygiene / food-safety badge (#35): verified, non-expired FSSAI.
                 Restrained text — trust signal at the point of ordering. */}
             {chef.foodSafetyBadge ? (
@@ -939,6 +948,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: customerColors.success.DEFAULT,
     marginTop: 6,
+  },
+  testModeNote: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: '#78350F',
+    backgroundColor: '#FDE68A',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 6,
+    alignSelf: 'flex-start',
   },
   pickupOnlyNote: {
     fontFamily: 'Inter',

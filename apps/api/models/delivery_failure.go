@@ -12,7 +12,7 @@ type DeliveryFailureReason string
 const (
 	// Customer-fault: confirmed/correct address, but the customer could not receive it.
 	FailureCustomerUnavailable DeliveryFailureReason = "customer_unavailable" // not home / unreachable
-	FailureCustomerRefused     DeliveryFailureReason = "customer_refused"      // refused the delivery
+	FailureCustomerRefused     DeliveryFailureReason = "customer_refused"     // refused the delivery
 	// Platform/driver-fault: the courier could not attempt/complete the delivery.
 	FailureDriverNoShow DeliveryFailureReason = "driver_no_show"
 	// Chef-fault: food unfit on handover / spoiled in transit.

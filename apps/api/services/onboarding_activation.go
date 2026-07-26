@@ -20,7 +20,7 @@ import (
 // ActivateChefOnboarding verifies + activates the chef behind a kitchen-onboarding
 // approval and promotes their user to the chef role. No-op for any other approval
 // type. Idempotent.
-func ActivateChefOnboarding(db *gorm.DB, approvalID uuid.UUID) error {
+func ActivateChefOnboarding(db *gorm.DB, approvalID uuid.UUID, mode string) error {
 	var approval models.ApprovalRequest
 	if err := db.First(&approval, "id = ?", approvalID).Error; err != nil {
 		return fmt.Errorf("onboarding: load approval %s: %w", approvalID, err)
@@ -30,11 +30,32 @@ func ActivateChefOnboarding(db *gorm.DB, approvalID uuid.UUID) error {
 	}
 
 	now := time.Now()
-	if err := db.Model(&models.ChefProfile{}).Where("id = ?", *approval.ChefID).Updates(map[string]any{
+	// An empty mode means "whatever the admin chose at approval time", read back
+	// from the approval row. That is the path the durable Temporal activity
+	// takes, so a retry after a crash still activates into the right world.
+	if mode == "" {
+		mode = approval.ApprovedMode
+	}
+	mode = models.NormalizeMode(mode)
+	updates := map[string]any{
 		"is_verified": true,
 		"verified_at": &now,
 		"is_active":   true,
-	}).Error; err != nil {
+		"mode":        mode,
+	}
+	// FirstLiveAt is what distinguishes a born-test kitchen (hidden from
+	// customers outright) from an established one that has merely been flipped
+	// to test (shown as closed). Stamped only when the kitchen actually goes
+	// live, and only once — so a chef approved as Test stays hidden until an
+	// admin promotes them, and re-running this activity never moves the mark.
+	if !models.IsTestMode(mode) {
+		var existing models.ChefProfile
+		if err := db.Select("first_live_at").First(&existing, "id = ?", *approval.ChefID).Error; err == nil &&
+			existing.FirstLiveAt == nil {
+			updates["first_live_at"] = &now
+		}
+	}
+	if err := db.Model(&models.ChefProfile{}).Where("id = ?", *approval.ChefID).Updates(updates).Error; err != nil {
 		return fmt.Errorf("onboarding: verify chef %s: %w", *approval.ChefID, err)
 	}
 

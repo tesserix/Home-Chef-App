@@ -26,9 +26,9 @@ type MealSubscriptionInvoice struct {
 	InvoiceNumber      string    `gorm:"uniqueIndex;not null" json:"invoiceNumber"`
 	Status             string    `gorm:"type:varchar(16);not null;default:'pending'" json:"status"`
 
-	CycleAmount   float64 `gorm:"not null" json:"cycleAmount"`   // gross for the cycle (before credits)
+	CycleAmount   float64 `gorm:"not null" json:"cycleAmount"`    // gross for the cycle (before credits)
 	CreditApplied float64 `gorm:"default:0" json:"creditApplied"` // skip/missed credit consumed
-	Amount        float64 `gorm:"not null" json:"amount"`        // net = cycle − credit
+	Amount        float64 `gorm:"not null" json:"amount"`         // net = cycle − credit
 	TaxAmount     float64 `gorm:"default:0" json:"taxAmount"`
 	TotalAmount   float64 `gorm:"not null" json:"totalAmount"`
 	Currency      string  `gorm:"type:varchar(3);default:'INR'" json:"currency"`

@@ -30,6 +30,10 @@ func GetOrCreateWallet(db *gorm.DB, userID uuid.UUID) (*models.Wallet, error) {
 	return &w, nil
 }
 
+// ErrTestOrderNoWallet is returned when a test-partition order tries to use the
+// wallet as a payment source or a refund destination.
+var ErrTestOrderNoWallet = errors.New("wallet is not available for test-mode orders")
+
 // CreditWallet adds store credit (refund-to-wallet, referral, promo, cashback,
 // admin top-up). Amount must be positive. Idempotent on idempotencyKey: a repeat
 // call with the same key returns the original entry without double-crediting.
@@ -53,6 +57,14 @@ func DebitWallet(db *gorm.DB, userID uuid.UUID, amount float64, source models.Wa
 func applyWalletTxn(db *gorm.DB, userID uuid.UUID, amount float64, txnType models.WalletTxnType, source models.WalletTxnSource, orderID *uuid.UUID, reason, idempotencyKey string, createdBy *uuid.UUID) (*models.WalletTxn, error) {
 	if amount <= 0 {
 		return nil, fmt.Errorf("wallet amount must be positive, got %v", amount)
+	}
+	// Test-mode money must never touch the real wallet. A refund of a sandbox
+	// order crediting store credit would mint spendable balance out of nothing —
+	// and that balance is usable against LIVE kitchens, so the leak escapes the
+	// sandbox entirely. Guarded here, at the single mutate path, rather than at
+	// each of the many callers.
+	if orderID != nil && OrderIsTestMode(db, *orderID) {
+		return nil, ErrTestOrderNoWallet
 	}
 	// Every entry carries a non-empty unique key. Callers pass a semantic key
 	// (e.g. "refund:<orderID>") for dedup; absent one we mint a UUID so the

@@ -60,7 +60,7 @@ func setupSkipDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := setupOrchestrationDB(t)
 	require.NoError(t, db.Exec(`ALTER TABLE meal_plan_days ADD COLUMN slot text DEFAULT ''`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_schedules (id text PRIMARY KEY, chef_id text,
+	require.NoError(t, db.Exec(`CREATE TABLE chef_schedules (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY, chef_id text,
 		day_of_week int, open_time text, close_time text, is_closed integer DEFAULT 0,
 		created_at datetime, updated_at datetime)`).Error)
 	return db

@@ -23,10 +23,10 @@ type DeliveryDistanceCache struct {
 	// so two concurrent first-orders for the same trip collapse to one row.
 	CacheKey string `gorm:"type:varchar(80);uniqueIndex;not null" json:"cacheKey"`
 
-	ChefLat  float64 `gorm:"not null" json:"chefLat"`
-	ChefLng  float64 `gorm:"not null" json:"chefLng"`
-	DropLat  float64 `gorm:"not null" json:"dropLat"`
-	DropLng  float64 `gorm:"not null" json:"dropLng"`
+	ChefLat float64 `gorm:"not null" json:"chefLat"`
+	ChefLng float64 `gorm:"not null" json:"chefLng"`
+	DropLat float64 `gorm:"not null" json:"dropLat"`
+	DropLng float64 `gorm:"not null" json:"dropLng"`
 
 	DistanceKm float64 `gorm:"not null" json:"distanceKm"`
 	// Provider records which router produced it ("google" | "osrm" | "fallback"),

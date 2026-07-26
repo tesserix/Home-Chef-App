@@ -146,7 +146,7 @@ func reverseChefTransferForV2(tx *gorm.DB, plan *models.MealPlan, day *models.Me
 	if day.PayoutTransferID == "" {
 		return
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(plan.Mode)
 	if rz == nil {
 		return
 	}
@@ -170,7 +170,7 @@ func reverseChefTransferForV2(tx *gorm.DB, plan *models.MealPlan, day *models.Me
 // customer's original method (Razorpay). Returns the gateway refund id. idemKey dedups a
 // timeout-after-success retry so a day is never refunded twice at the gateway.
 func gatewayRefundToSource(plan *models.MealPlan, amount float64, reason, idemKey string) (string, error) {
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(plan.Mode)
 	if rz == nil {
 		return "", fmt.Errorf("razorpay not configured")
 	}

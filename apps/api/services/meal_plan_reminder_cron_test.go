@@ -53,7 +53,7 @@ func setupReminderDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := setupHoldDB(t)
 	require.NoError(t, db.Exec(`ALTER TABLE meal_plan_days ADD COLUMN slot TEXT DEFAULT ''`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEXT)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, id TEXT PRIMARY KEY, user_id TEXT)`).Error)
 	return db
 }
 

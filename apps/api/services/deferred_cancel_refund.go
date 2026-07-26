@@ -102,7 +102,7 @@ func retryOneDeferredCancelRefund(orderID uuid.UUID) bool {
 			return nil
 		}
 
-		rzp := GetRazorpay()
+		rzp := GetRazorpayFor(o.Mode)
 		if rzp == nil {
 			return nil // gateway still unavailable — leave the sentinel, retry next sweep
 		}

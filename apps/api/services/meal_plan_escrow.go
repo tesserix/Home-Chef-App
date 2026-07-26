@@ -144,7 +144,7 @@ func CreateMealPlanAdvanceOrder(plan *models.MealPlan) (string, error) {
 	if !MealPlanEscrowActive() {
 		return "", nil
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(plan.Mode)
 	if rz == nil {
 		return "", fmt.Errorf("razorpay not configured")
 	}
@@ -171,7 +171,7 @@ func VerifyMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan, paymentID, signat
 	if !MealPlanEscrowActive() {
 		return nil
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(plan.Mode)
 	if rz == nil {
 		return fmt.Errorf("razorpay not configured")
 	}
@@ -208,7 +208,7 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 	if !MealPlanEscrowActive() {
 		return nil
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(plan.Mode)
 	if rz == nil {
 		return fmt.Errorf("razorpay not configured")
 	}
@@ -277,7 +277,7 @@ func ReleaseDayPayout(tx *gorm.DB, day *models.MealPlanDay) error {
 	if !MealPlanEscrowActive() || day.PayoutTransferID == "" {
 		return nil
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(day.Mode)
 	if rz == nil {
 		return fmt.Errorf("razorpay not configured")
 	}
@@ -405,7 +405,7 @@ func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay
 		day.RefundTxnID = locked.RefundTxnID // reconcile the caller's struct to the DB truth
 		return nil                            // already refunded by a prior/concurrent writer
 	}
-	rz := GetRazorpay()
+	rz := GetRazorpayFor(day.Mode)
 	if rz == nil {
 		return fmt.Errorf("razorpay not configured")
 	}

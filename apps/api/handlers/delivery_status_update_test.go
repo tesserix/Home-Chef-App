@@ -63,7 +63,7 @@ func setupDeliveryStatusDB(t *testing.T) *gorm.DB {
 		assigned_at DATETIME, picked_up_at DATETIME, delivered_at DATETIME,
 		cancelled_at DATETIME, cancel_reason TEXT DEFAULT ''
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
+	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_number TEXT, customer_id TEXT, chef_id TEXT, delivery_id TEXT,
 		status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'pending',
 		subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, total REAL DEFAULT 0,
@@ -73,8 +73,8 @@ func setupDeliveryStatusDB(t *testing.T) *gorm.DB {
 	)`).Error)
 	// meal_plan_days / group_orders: only touched on the DELIVERED path (not driven), but present
 	// so any stray classification probe is a clean empty read rather than a missing-table error.
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`).Error)
 
 	prev := database.DB
 	database.DB = db

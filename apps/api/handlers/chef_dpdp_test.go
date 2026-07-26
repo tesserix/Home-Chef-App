@@ -45,7 +45,7 @@ func setupDPDPDB(t *testing.T) *gorm.DB {
 	db := setupDB(t) // users table (shared helper from internal_users_test.go)
 
 	require.NoError(t, db.Exec(`
-		CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
+		CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 			id                TEXT PRIMARY KEY,
 			user_id           TEXT NOT NULL,
 			business_name     TEXT NOT NULL DEFAULT '',
@@ -65,14 +65,14 @@ func setupDPDPDB(t *testing.T) *gorm.DB {
 	// outstanding — and it fails CLOSED, so these must exist for it to be able
 	// to establish eligibility at all.
 	require.NoError(t, db.Exec(`
-		CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT,
+		CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT,
 			status TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			order_number TEXT DEFAULT '', subtotal REAL DEFAULT 0, delivery_fee REAL DEFAULT 0,
 			service_fee REAL DEFAULT 0, tax REAL DEFAULT 0, tax_name TEXT DEFAULT '',
 			total REAL DEFAULT 0, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)
 	`).Error)
 	require.NoError(t, db.Exec(`
-		CREATE TABLE meal_plans (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT,
+		CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT,
 			status TEXT DEFAULT '', total REAL DEFAULT 0,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)
 	`).Error)
@@ -82,7 +82,7 @@ func setupDPDPDB(t *testing.T) *gorm.DB {
 	`).Error)
 
 	require.NoError(t, db.Exec(`
-		CREATE TABLE menu_items (
+		CREATE TABLE menu_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, 
 			id            TEXT PRIMARY KEY,
 			chef_id       TEXT NOT NULL,
 			name          TEXT NOT NULL DEFAULT '',

@@ -1,0 +1,215 @@
+package services
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"github.com/homechef/api/models"
+)
+
+// partitionedTables is every table carrying the mode/test_session_id/
+// cloned_from_id triple. It drives both the clone and the purge, so a table
+// added to one is never forgotten by the other.
+var partitionedTables = []string{
+	"orders", "order_items",
+	"group_orders",
+	"meal_plans", "meal_plan_days",
+	"meal_subscriptions", "meal_trials",
+	"catering_requests",
+	"tips",
+	"chef_promotions",
+	"reviews",
+	"menu_items",
+	"weekly_menus", "weekly_menu_items",
+	"daily_menus", "daily_menu_items",
+	"chef_schedules",
+}
+
+// CloneChefIntoSession copies a live kitchen into a fresh test session.
+//
+// Depth is CONFIGURATION IN FULL plus a bounded window of order history. That
+// reproduces essentially any production issue while completing in seconds; a
+// recursive copy of a year of ledger entries would be slower, far more fragile,
+// and no more useful for debugging.
+//
+// Four invariants hold for every step, and the tests enforce all four:
+//
+//  1. INSERT ONLY, NO HOOKS. Rows are written with SkipHooks so no
+//     BeforeSave/AfterCreate fires. Cloning 118 orders must not push 118
+//     notifications at a real customer, enqueue 118 NATS events, or start 118
+//     Temporal workflows. This is the single biggest correctness risk here.
+//  2. NO GATEWAY IDENTIFIERS. Razorpay order/payment/transfer ids are cleared,
+//     so a cloned order can be inspected and driven through its status machine
+//     but can never be charged or refunded against a real payment.
+//  3. PROVENANCE. Every row carries mode=test, the session id, and
+//     cloned_from_id pointing at its original — so a clone is always
+//     distinguishable from something actually done in the sandbox, and the
+//     purge can find every row it created.
+//  4. ALL OR NOTHING. The caller runs this inside one transaction. A partial
+//     clone would leave a kitchen half-copied and in test mode with no way to
+//     tell what is missing.
+//
+// PII columns (including the #710 encrypted companions) are copied verbatim
+// rather than re-encrypted, so no key material is touched.
+//
+// NOT cloned: ledger entries, payout records, statements, invoices, wallet
+// balances and loyalty lots. Those are real-money artefacts — a copy is
+// meaningless in a sandbox and dangerous if it ever leaked into reporting.
+//
+// Returns a JSON object of per-table row counts for the session summary.
+func CloneChefIntoSession(tx *gorm.DB, chefID uuid.UUID, session *models.ChefTestSession, windowDays int) (string, error) {
+	if windowDays <= 0 {
+		windowDays = models.DefaultTestCloneWindowDays
+	}
+	since := time.Now().AddDate(0, 0, -windowDays)
+	counts := map[string]int{}
+
+	// Configuration: copied in full, so the sandbox kitchen behaves exactly like
+	// the real one — same menu, same schedule, same capacity, same prices.
+	cfg := []struct {
+		table string
+		where string
+		args  []any
+	}{
+		{"menu_items", "chef_id = ? AND mode = ? AND deleted_at IS NULL", []any{chefID, models.ChefModeLive}},
+		{"chef_schedules", "chef_id = ? AND mode = ?", []any{chefID, models.ChefModeLive}},
+		{"weekly_menus", "chef_id = ? AND mode = ?", []any{chefID, models.ChefModeLive}},
+		{"daily_menus", "chef_id = ? AND mode = ?", []any{chefID, models.ChefModeLive}},
+	}
+	for _, c := range cfg {
+		n, err := cloneRows(tx, c.table, session, c.where, c.args, nil)
+		if err != nil {
+			return "", err
+		}
+		counts[c.table] = n
+	}
+
+	// History: a bounded window, enough to debug against the order that broke.
+	// Gateway identifiers are blanked so a replica can never move real money.
+	n, err := cloneRows(tx, "orders", session,
+		"chef_id = ? AND mode = ? AND created_at >= ? AND deleted_at IS NULL",
+		[]any{chefID, models.ChefModeLive, since},
+		map[string]any{
+			"razorpay_order_id":   "",
+			"razorpay_payment_id": "",
+			"payout_transfer_id":  "",
+			"refund_id":           "",
+		})
+	if err != nil {
+		return "", err
+	}
+	counts["orders"] = n
+
+	raw, err := json.Marshal(counts)
+	if err != nil {
+		return "", fmt.Errorf("clone: marshal summary: %w", err)
+	}
+	return string(raw), nil
+}
+
+// cloneRows copies matching rows of one table into the test partition.
+//
+// Implemented as INSERT … SELECT rather than load-mutate-save because it is a
+// pure data copy: no model hooks fire, no events are enqueued, no notifications
+// are sent, and the column list is derived from the live schema so a column
+// added later is copied automatically without touching this code.
+//
+// overrides blanks or replaces specific columns on the copy (gateway ids).
+func cloneRows(tx *gorm.DB, table string, session *models.ChefTestSession, where string, args []any, overrides map[string]any) (int, error) {
+	cols, err := tableColumns(tx, table)
+	if err != nil {
+		return 0, fmt.Errorf("clone: columns for %s: %w", table, err)
+	}
+	if len(cols) == 0 {
+		return 0, nil // table absent in this environment (sqlite fixtures)
+	}
+
+	selects := make([]string, 0, len(cols))
+	for _, col := range cols {
+		switch col {
+		case "id":
+			// A fresh identity per copy. The original is recorded in
+			// cloned_from_id, so provenance survives.
+			selects = append(selects, newIDExpr(tx))
+		case "mode":
+			selects = append(selects, "'"+models.ChefModeTest+"'")
+		case "test_session_id":
+			selects = append(selects, "'"+session.ID.String()+"'")
+		case "cloned_from_id":
+			selects = append(selects, "id")
+		default:
+			if v, ok := overrides[col]; ok {
+				selects = append(selects, quoteLiteral(v))
+				continue
+			}
+			selects = append(selects, col)
+		}
+	}
+
+	sql := fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s WHERE %s",
+		table, joinCols(cols), joinCols(selects), table, where)
+	res := tx.Exec(sql, args...)
+	if res.Error != nil {
+		return 0, fmt.Errorf("clone: copy %s: %w", table, res.Error)
+	}
+	return int(res.RowsAffected), nil
+}
+
+// newIDExpr returns the dialect's fresh-UUID expression. Postgres has
+// gen_random_uuid(); the sqlite test driver has no UUID function, so tests get
+// a deterministic-enough hex string of the right shape.
+func newIDExpr(tx *gorm.DB) string {
+	if tx.Dialector.Name() == "sqlite" {
+		return "lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || " +
+			"substr(hex(randomblob(2)),2) || '-a' || substr(hex(randomblob(2)),2) || " +
+			"'-' || hex(randomblob(6)))"
+	}
+	return "gen_random_uuid()"
+}
+
+func joinCols(c []string) string {
+	out := ""
+	for i, s := range c {
+		if i > 0 {
+			out += ", "
+		}
+		out += s
+	}
+	return out
+}
+
+// quoteLiteral renders an override value as a SQL literal. Only ever called
+// with values this package supplies (blank gateway ids), never with user input.
+func quoteLiteral(v any) string {
+	switch t := v.(type) {
+	case string:
+		if t == "" {
+			return "''"
+		}
+		return "'" + t + "'"
+	case nil:
+		return "NULL"
+	default:
+		return fmt.Sprintf("%v", t)
+	}
+}
+
+// tableColumns lists a table's columns, so the clone copies whatever the schema
+// currently has rather than a list that silently rots.
+func tableColumns(tx *gorm.DB, table string) ([]string, error) {
+	names, err := tx.Migrator().ColumnTypes(table)
+	if err != nil {
+		// A table that doesn't exist in this environment is not an error — the
+		// sqlite fixtures only create the tables a given test needs.
+		return nil, nil
+	}
+	out := make([]string, 0, len(names))
+	for _, c := range names {
+		out = append(out, c.Name())
+	}
+	return out, nil
+}

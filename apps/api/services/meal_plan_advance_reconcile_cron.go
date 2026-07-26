@@ -44,8 +44,10 @@ func reconcileMealPlanAdvances(db *gorm.DB, now time.Time) int {
 	if !MealPlanEscrowActive() {
 		return 0
 	}
-	rz := GetRazorpay()
-	if rz == nil {
+	// No top-level client: each plan is reconciled against the gateway that took
+	// its advance, so a live plan and a test plan in the same sweep talk to
+	// different Razorpay accounts. Bail only when neither slot is configured.
+	if GetRazorpayFor(models.ChefModeLive) == nil && GetRazorpayFor(models.ChefModeTest) == nil {
 		return 0
 	}
 	var plans []models.MealPlan
@@ -60,6 +62,11 @@ func reconcileMealPlanAdvances(db *gorm.DB, now time.Time) int {
 	confirmedN := 0
 	for i := range plans {
 		p := &plans[i]
+		rz := GetRazorpayFor(p.Mode)
+		if rz == nil {
+			log.Printf("mealplan-advance-reconcile: no %s gateway configured for plan %s; skipping", models.NormalizeMode(p.Mode), p.ID)
+			continue
+		}
 		pays, err := rz.FetchOrderPayments(p.RazorpayOrderID)
 		if err != nil {
 			log.Printf("mealplan-advance-reconcile: fetch payments for order %s failed: %v", p.RazorpayOrderID, err)

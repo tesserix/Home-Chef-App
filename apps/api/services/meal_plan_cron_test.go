@@ -34,14 +34,14 @@ func setupMealPlanCronDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_number TEXT,
 		customer_id TEXT, chef_id TEXT, status TEXT, subtotal REAL, tax REAL, total REAL,
 		chef_respond_by DATETIME, customer_approve_by DATETIME, cancelled_at DATETIME,
 		cancel_reason TEXT, created_at DATETIME, updated_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
 		status TEXT, payout_transfer_id TEXT, price REAL, payout_hold_status TEXT, refund_txn_id TEXT,
 		date DATETIME, created_at DATETIME, updated_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, user_id TEXT)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, user_id TEXT)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT,
 		aggregate_type TEXT, aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,
 		next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`).Error)

@@ -106,6 +106,9 @@ const (
 )
 
 type Order struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID              uuid.UUID       `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	OrderNumber     string          `gorm:"uniqueIndex;not null" json:"orderNumber"`
 	CustomerID      uuid.UUID       `gorm:"type:uuid;not null;index" json:"customerId"`
@@ -172,14 +175,14 @@ type Order struct {
 	Currency string `gorm:"type:varchar(3);default:'INR'" json:"currency"`
 
 	// Delivery Address
-	DeliveryAddressLine1      string `gorm:"" json:"deliveryAddressLine1"`
-	DeliveryAddressLine2      string `gorm:"" json:"deliveryAddressLine2"`
+	DeliveryAddressLine1 string `gorm:"" json:"deliveryAddressLine1"`
+	DeliveryAddressLine2 string `gorm:"" json:"deliveryAddressLine2"`
 	// PII companions (#710 P1) — the address snapshot frozen at order time.
-	DeliveryAddressLine1Enc EncryptedString `gorm:"column:delivery_address_line1_enc;type:text" json:"-"`
-	DeliveryAddressLine2Enc EncryptedString `gorm:"column:delivery_address_line2_enc;type:text" json:"-"`
-	DeliveryAddressCity       string `gorm:"" json:"deliveryAddressCity"`
-	DeliveryAddressState      string `gorm:"" json:"deliveryAddressState"`
-	DeliveryAddressPostalCode string `gorm:"" json:"deliveryAddressPostalCode"`
+	DeliveryAddressLine1Enc   EncryptedString `gorm:"column:delivery_address_line1_enc;type:text" json:"-"`
+	DeliveryAddressLine2Enc   EncryptedString `gorm:"column:delivery_address_line2_enc;type:text" json:"-"`
+	DeliveryAddressCity       string          `gorm:"" json:"deliveryAddressCity"`
+	DeliveryAddressState      string          `gorm:"" json:"deliveryAddressState"`
+	DeliveryAddressPostalCode string          `gorm:"" json:"deliveryAddressPostalCode"`
 	// ISO-3166 alpha-2 country used to pick the tax rule and for invoicing.
 	DeliveryAddressCountry string  `gorm:"type:varchar(2);default:'IN'" json:"deliveryAddressCountry"`
 	DeliveryLatitude       float64 `gorm:"" json:"deliveryLatitude"`
@@ -288,6 +291,9 @@ type Order struct {
 type Customer = User
 
 type OrderItem struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	OrderID    uuid.UUID `gorm:"type:uuid;not null;index" json:"orderId"`
 	MenuItemID uuid.UUID `gorm:"type:uuid;not null" json:"menuItemId"`

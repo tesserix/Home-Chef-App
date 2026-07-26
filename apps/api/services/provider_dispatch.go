@@ -29,6 +29,16 @@ func DispatchOrderDelivery(orderID uuid.UUID) error {
 		return fmt.Errorf("dispatch: load order: %w", err)
 	}
 
+	// A sandbox order must never reach an external courier: a real rider would
+	// be sent to a real address to collect food nobody is cooking. Pickup and
+	// chef self-delivery still work, and our own platform drivers can still be
+	// assigned through the driver app, so the delivery flow stays fully
+	// testable end to end — only the 3PL handoff is blocked.
+	if !ShouldDispatchToProvider(&order) {
+		log.Printf("dispatch: order %s is a test-mode order — skipping 3PL dispatch", orderID)
+		return nil
+	}
+
 	// Idempotency: skip if a delivery already exists for this order.
 	if order.DeliveryID != nil {
 		return nil

@@ -34,7 +34,7 @@ func setupDashboardDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) {
 	t.Helper()
 	db, userID, chefID := setupChefOrderDB(t)
 	require.NoError(t, db.Exec(
-		`CREATE TABLE meal_plan_days (id text PRIMARY KEY, order_id text, status text, deleted_at datetime)`,
+		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY, order_id text, status text, deleted_at datetime)`,
 	).Error)
 	// The active query subquery-excludes orders under an open delivery-failure
 	// review (#393). Without this table that subquery errors and the whole

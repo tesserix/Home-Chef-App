@@ -127,6 +127,8 @@ func reconcileOne(o *models.Order) ([]Drift, bool) {
 }
 
 func reconcileRazorpay(o *models.Order) []Drift {
+	// Live slot on purpose: reconciliation covers real money only, and its
+	// queries exclude the test partition.
 	client := GetRazorpay()
 	if client == nil {
 		return nil // not configured — skip silently (logged once at startup)

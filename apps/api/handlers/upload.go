@@ -683,22 +683,22 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 	}
 
 	chef := models.ChefProfile{
-		UserID:         userID,
-		BusinessName:   req.BusinessName,
-		Description:    req.Description,
-		Cuisines:       pq.StringArray(req.Cuisines),
-		Specialties:    pq.StringArray(req.Specialties),
-		PrepTime:       req.PrepTime,
-		MinimumOrder:   req.MinimumOrder,
-		DeliveryRadius: req.ServiceRadius,
-		ServiceRadius:  req.ServiceRadius,
+		UserID:             userID,
+		BusinessName:       req.BusinessName,
+		Description:        req.Description,
+		Cuisines:           pq.StringArray(req.Cuisines),
+		Specialties:        pq.StringArray(req.Specialties),
+		PrepTime:           req.PrepTime,
+		MinimumOrder:       req.MinimumOrder,
+		DeliveryRadius:     req.ServiceRadius,
+		ServiceRadius:      req.ServiceRadius,
 		OffersPickup:       req.OffersPickup,
 		OffersSelfDelivery: req.OffersSelfDelivery,
-		AddressLine1:   req.KitchenAddress.Line1,
-		AddressLine2:   req.KitchenAddress.Line2,
-		City:           req.KitchenAddress.City,
-		State:          req.KitchenAddress.State,
-		PostalCode:     req.KitchenAddress.PostalCode,
+		AddressLine1:       req.KitchenAddress.Line1,
+		AddressLine2:       req.KitchenAddress.Line2,
+		City:               req.KitchenAddress.City,
+		State:              req.KitchenAddress.State,
+		PostalCode:         req.KitchenAddress.PostalCode,
 		// Persist the regulatory IDs as structured columns. Previously only
 		// captured in the approval submittedData JSON blob (audit-only),
 		// which left admin queries + Wave 3 invoicing without a queryable
@@ -1122,30 +1122,30 @@ func (h *UploadHandler) GetExpiringDocuments(c *gin.Context) {
 // Request types
 
 type OnboardingRequest struct {
-	FullName       string                  `json:"fullName" binding:"required"`
-	Phone          string                  `json:"phone" binding:"required"`
-	Email          string                  `json:"email"`
-	KitchenAddress KitchenAddressReq       `json:"kitchenAddress" binding:"required"`
-	BusinessName   string                  `json:"businessName" binding:"required"`
-	Description    string                  `json:"description" binding:"required"`
-	KitchenType    string                  `json:"kitchenType"`
-	Cuisines       []string                `json:"cuisines" binding:"required"`
-	Specialties    []string                `json:"specialties"`
-	YearsOfExp     string                  `json:"yearsOfExperience"`
-	MealsPerDay    string                  `json:"mealsPerDay"`
-	PrepTime       string                  `json:"prepTime"`
-	ServiceRadius  float64                 `json:"serviceRadius"`
-	MinimumOrder   float64                 `json:"minimumOrder"`
-	DeliveryFee    float64                 `json:"deliveryFee"`
+	FullName       string            `json:"fullName" binding:"required"`
+	Phone          string            `json:"phone" binding:"required"`
+	Email          string            `json:"email"`
+	KitchenAddress KitchenAddressReq `json:"kitchenAddress" binding:"required"`
+	BusinessName   string            `json:"businessName" binding:"required"`
+	Description    string            `json:"description" binding:"required"`
+	KitchenType    string            `json:"kitchenType"`
+	Cuisines       []string          `json:"cuisines" binding:"required"`
+	Specialties    []string          `json:"specialties"`
+	YearsOfExp     string            `json:"yearsOfExperience"`
+	MealsPerDay    string            `json:"mealsPerDay"`
+	PrepTime       string            `json:"prepTime"`
+	ServiceRadius  float64           `json:"serviceRadius"`
+	MinimumOrder   float64           `json:"minimumOrder"`
+	DeliveryFee    float64           `json:"deliveryFee"`
 	// Fulfillment — how customers get their food. At least one must be true or the
 	// kitchen can't be activated (the admin verify gate rejects it). The onboarding
 	// wizard requires the chef to pick at least one, so a completed application
 	// always satisfies the gate.
-	OffersPickup       bool                `json:"offersPickup"`
-	OffersSelfDelivery bool                `json:"offersSelfDelivery"`
-	OperatingHours map[string]*DayHoursReq `json:"operatingHours"`
-	PanNumber      string                  `json:"panNumber"`
-	FSSAINumber    string                  `json:"fssaiLicenseNumber"`
+	OffersPickup       bool                    `json:"offersPickup"`
+	OffersSelfDelivery bool                    `json:"offersSelfDelivery"`
+	OperatingHours     map[string]*DayHoursReq `json:"operatingHours"`
+	PanNumber          string                  `json:"panNumber"`
+	FSSAINumber        string                  `json:"fssaiLicenseNumber"`
 	// GSTIN is optional — chefs below the GST threshold don't need one.
 	// When provided, persisted to chef_profiles.gstin and printed on
 	// customer invoices alongside the FSSAI number.

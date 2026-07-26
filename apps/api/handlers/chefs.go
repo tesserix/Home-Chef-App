@@ -93,7 +93,10 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		// so without this a pending, unreviewed kitchen would surface on the
 		// customer homepage.
 		Where("is_verified = ?", true).
-		Scopes(services.ExcludeFSSAILocked) // FSSAI lockout (#91): hide lapsed-licence India chefs
+		Scopes(
+			services.ExcludeFSSAILocked,                 // FSSAI lockout (#91): hide lapsed-licence India chefs
+			services.TestChefVisibility(viewerEmail(c)), // test kitchens: hidden from everyone but the allowlist
+		)
 
 	// Region gate: when the customer's selected delivery address carries a state,
 	// hide kitchens in other states outright — a home cook in Maharashtra is never
@@ -318,7 +321,7 @@ func (h *ChefHandler) SearchDishes(c *gin.Context) {
 	visibleChefs := database.DB.Model(&models.ChefProfile{}).
 		Where("is_active = ?", true).
 		Where("is_verified = ?", true). // admin-approved only — mirrors ListChefs
-		Scopes(services.ExcludeFSSAILocked).
+		Scopes(services.ExcludeFSSAILocked, services.TestChefVisibility(viewerEmail(c))).
 		Select("id")
 
 	// Admin moderation is now enforced (product decision): a dish is visible only when
@@ -384,8 +387,22 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 		return
 	}
 
+	// Test-mode visibility. A born-test kitchen 404s outright; an established
+	// kitchen currently flipped to test renders as closed with its name only, so
+	// its regulars see "closed today" rather than a kitchen that vanished.
+	proceed, reduced := chefVisibleTo(c, &chef)
+	if !proceed {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+
 	var schedules []models.ChefSchedule
 	database.DB.Where("chef_id = ?", chef.ID).Find(&schedules)
+
+	if reduced {
+		c.JSON(http.StatusOK, chef.ToClosedResponse())
+		return
+	}
 
 	resp := chef.ToPublicResponse(schedules)
 	resp.ProBadge = services.IsChefPremium(chef.ID) // Verified-Pro badge (#44)
@@ -431,10 +448,65 @@ func resolveChefID(idOrSlug string) (uuid.UUID, bool) {
 	return chef.ID, true
 }
 
+// viewerEmail returns the calling customer's email, or "" when anonymous.
+//
+// The /chefs group runs bffAuthOptional, which populates this when a session is
+// present without making the routes authenticated — so test-mode visibility can
+// be personalised on endpoints that anonymous visitors still browse.
+func viewerEmail(c *gin.Context) string {
+	if v, ok := c.Get("userEmail"); ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// chefVisibleTo applies the test-mode visibility rule to a single loaded chef.
+//
+// proceed=false means the handler must 404 — deliberately 404 and not 403, so a
+// shared link to a sandbox kitchen discloses nothing about whether it exists.
+// reduced=true means the handler must serve the closed presentation: name and
+// photo only, no menu, no prices, not orderable.
+func chefVisibleTo(c *gin.Context, chef *models.ChefProfile) (proceed bool, reduced bool) {
+	switch services.ChefVisibility(chef, viewerEmail(c)) {
+	case services.VisibilityHidden:
+		return false, false
+	case services.VisibilityClosed:
+		return true, true
+	default:
+		return true, false
+	}
+}
+
+// guardChefRoute is the shared entry check for the single-chef routes. It loads
+// the chef, applies the visibility rule, and writes the 404 itself so each
+// handler is a two-line addition rather than a copy-pasted policy block.
+//
+// Menu, price, review and ordering endpoints pass allowReduced=false: the
+// closed presentation exposes the kitchen's NAME, nothing more. Only GetChef
+// passes true, because it is the endpoint that renders that name.
+func guardChefRoute(c *gin.Context, chefID uuid.UUID, allowReduced bool) (*models.ChefProfile, bool) {
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return nil, false
+	}
+	proceed, reduced := chefVisibleTo(c, &chef)
+	if !proceed || (reduced && !allowReduced) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return nil, false
+	}
+	return &chef, true
+}
+
 func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 	chefID, ok := resolveChefID(c.Param("id"))
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
 		return
 	}
 
@@ -497,6 +569,9 @@ func (h *ChefHandler) GetChefReviews(c *gin.Context) {
 	chefID, ok := resolveChefID(c.Param("id"))
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
 		return
 	}
 
@@ -601,12 +676,12 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		// the wrong state and a single tap flips the real value the wrong way.
 		"autoScheduleEnabled": resp.AutoScheduleEnabled,
 		"kitchenPhotos":       resp.KitchenPhotos,
-		"addressLine1":    chef.AddressLine1,
-		"addressLine2":    chef.AddressLine2,
-		"city":            chef.City,
-		"state":           chef.State,
-		"postalCode":      chef.PostalCode,
-		"operatingHours":  operatingHours,
+		"addressLine1":        chef.AddressLine1,
+		"addressLine2":        chef.AddressLine2,
+		"city":                chef.City,
+		"state":               chef.State,
+		"postalCode":          chef.PostalCode,
+		"operatingHours":      operatingHours,
 		// Fulfillment capabilities + self-delivery pricing. These MUST be
 		// returned so the vendor profile editor reflects the saved state — when
 		// they were omitted the toggles always re-read as OFF after a reload, and
@@ -653,7 +728,12 @@ func chefVisibleOrders(chefID uuid.UUID) *gorm.DB {
 		chefID,
 		[]models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded},
 		mealPlanDayOrders,
-	)
+		// Scoped to the world the kitchen is currently in, so a sandbox session
+		// is a clean slate: while in test the chef sees only sandbox orders, and
+		// the moment they return to live their real queue reappears untouched.
+		// Applied here rather than at each of the eight callers so no vendor
+		// surface can be forgotten.
+	).Scopes(services.ChefOwnModeScope(chefID))
 }
 
 // GetChefDashboard returns the chef's dashboard data
@@ -778,10 +858,10 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"todayRevenue": todayRevenue,
 		// Mobile reads `todayEarnings`; keep `todayRevenue` for any other
 		// consumer.
-		"todayEarnings":   todayRevenue,
-		"pendingOrders":   pendingOrders,
-		"weekOrders":      weekOrders,
-		"weekRevenue":     weekRevenue,
+		"todayEarnings": todayRevenue,
+		"pendingOrders": pendingOrders,
+		"weekOrders":    weekOrders,
+		"weekRevenue":   weekRevenue,
 		// Lifetime totals — the hero shows these (all-time), with today/this-week
 		// as the recent breakdown.
 		"totalEarnings": totalEarnings,
@@ -789,9 +869,14 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"totalReviews":  chef.TotalReviews,
 		// Computed lifetime count, not chef.TotalOrders — that denormalized
 		// counter drifted to 0 for chefs with live orders.
-		"totalOrders": totalOrdersCount,
+		"totalOrders":     totalOrdersCount,
 		"acceptingOrders": chef.AcceptingOrders,
 		"pausedUntil":     chef.PausedUntil,
+		// Test-chef mode: drives the vendor app's TEST MODE banner. A chef must
+		// never mistake sandbox figures for real earnings, and the numbers above
+		// are the sandbox's own while the kitchen is in test.
+		"mode":          models.NormalizeMode(chef.Mode),
+		"testSessionNo": chefTestSessionNo(&chef),
 		// FSSAI lockout (#92): drives the vendor dashboard's "orders paused —
 		// renew licence" banner. Same helper as the order/payout enforcement.
 		"fssaiLocked":  services.IsChefFSSAIExpired(&chef),
@@ -1737,6 +1822,9 @@ func (h *ChefHandler) GetChefDeliverySlots(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
 		return
 	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
+		return
+	}
 	s := services.GetChefCapacitySettings(chefID)
 	slots := services.BuildSlotAvailability(s, chefID, time.Now())
 	c.JSON(http.StatusOK, gin.H{
@@ -1755,6 +1843,9 @@ func (h *ChefHandler) GetChefFulfillmentTimes(c *gin.Context) {
 	chefID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	if _, ok := guardChefRoute(c, chefID, false); !ok {
 		return
 	}
 	var chef models.ChefProfile
@@ -2282,7 +2373,7 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		// already has (read under the lock above, so it reflects any
 		// concurrent request that already committed) so re-saving bank
 		// details never mints a second linked account.
-		rz := services.GetRazorpay()
+		rz := services.GetRazorpayFor(chef.Mode)
 		contactName := chef.User.FirstName + " " + chef.User.LastName
 		settlementResult, settlementErr = services.RegisterSettlementAccount(rz, services.SettlementRegistration{
 			ExistingAccountID:          chef.RazorpayAccountID,
@@ -2623,4 +2714,19 @@ func chefRepeatRate(chefID uuid.UUID) float64 {
 		return 0
 	}
 	return math.Round(float64(row.Repeat)/float64(row.Total)*1000) / 10
+}
+
+// chefTestSessionNo returns the human-facing number of the kitchen's open test
+// session, or 0 when it is live. Used only for display, so a lookup failure
+// degrades to "no number" rather than failing the dashboard.
+func chefTestSessionNo(chef *models.ChefProfile) int {
+	if chef == nil || !chef.IsTestMode() || chef.ActiveTestSessionID == nil {
+		return 0
+	}
+	var session models.ChefTestSession
+	if err := database.DB.Select("session_no").
+		First(&session, "id = ?", *chef.ActiveTestSessionID).Error; err != nil {
+		return 0
+	}
+	return session.SessionNo
 }

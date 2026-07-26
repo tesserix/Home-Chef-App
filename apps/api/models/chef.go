@@ -45,11 +45,28 @@ type ChefProfile struct {
 	TotalOrders               int     `gorm:"default:0" json:"totalOrders"`
 	// IssueCount is the number of customer-reported order issues (#37); the issue
 	// rate (issues/orders) feeds the chef's quality signal.
-	IssueCount      int        `gorm:"default:0" json:"issueCount"`
-	IsVerified      bool       `gorm:"default:false" json:"verified"`
-	VerifiedAt      *time.Time `gorm:"" json:"verifiedAt"`
-	IsActive        bool       `gorm:"default:true" json:"isActive"`
-	AcceptingOrders bool       `gorm:"default:true" json:"acceptingOrders"`
+	IssueCount int        `gorm:"default:0" json:"issueCount"`
+	IsVerified bool       `gorm:"default:false" json:"verified"`
+	VerifiedAt *time.Time `gorm:"" json:"verifiedAt"`
+
+	// Mode selects which Razorpay credential set, which visibility rules and
+	// which data partition apply to this kitchen. Defaults to live so every
+	// existing chef and every new onboarding is a real kitchen unless an admin
+	// explicitly says otherwise.
+	Mode string `gorm:"type:varchar(4);not null;default:'live';index" json:"mode"`
+
+	// FirstLiveAt is stamped the first time this chef becomes live and is never
+	// cleared. It distinguishes a born-test kitchen (nil — hidden from customers
+	// entirely, since nobody has heard of it) from an established kitchen
+	// temporarily flipped to test for debugging (set — still listed, shown as
+	// closed, so its regulars don't think it shut down).
+	FirstLiveAt *time.Time `gorm:"" json:"firstLiveAt,omitempty"`
+
+	// ActiveTestSessionID points at the open ChefTestSession while Mode is
+	// "test", and is nil while live.
+	ActiveTestSessionID *uuid.UUID `gorm:"type:uuid" json:"activeTestSessionId,omitempty"`
+	IsActive            bool       `gorm:"default:true" json:"isActive"`
+	AcceptingOrders     bool       `gorm:"default:true" json:"acceptingOrders"`
 	// AutoScheduleEnabled opts the kitchen into schedule-driven open/close: when
 	// true, a cron flips AcceptingOrders on/off to match the chef's operating
 	// hours (ChefSchedule) for the current IST day, so the chef doesn't have to
@@ -71,16 +88,16 @@ type ChefProfile struct {
 	KitchenType string `gorm:"type:varchar(20);default:'home_kitchen'" json:"kitchenType"`
 
 	// Address
-	AddressLine1 string  `gorm:"" json:"addressLine1"`
-	AddressLine2 string  `gorm:"" json:"addressLine2"`
+	AddressLine1 string `gorm:"" json:"addressLine1"`
+	AddressLine2 string `gorm:"" json:"addressLine2"`
 	// PII companions (#710 P1) — addresses are not searched, ciphertext only.
 	AddressLine1Enc EncryptedString `gorm:"column:address_line1_enc;type:text" json:"-"`
 	AddressLine2Enc EncryptedString `gorm:"column:address_line2_enc;type:text" json:"-"`
-	City         string  `gorm:"" json:"city"`
-	State        string  `gorm:"" json:"state"`
-	PostalCode   string  `gorm:"" json:"postalCode"`
-	Latitude     float64 `gorm:"" json:"latitude"`
-	Longitude    float64 `gorm:"" json:"longitude"`
+	City            string          `gorm:"" json:"city"`
+	State           string          `gorm:"" json:"state"`
+	PostalCode      string          `gorm:"" json:"postalCode"`
+	Latitude        float64         `gorm:"" json:"latitude"`
+	Longitude       float64         `gorm:"" json:"longitude"`
 
 	// Featured/Promoted
 	IsFeatured    bool       `gorm:"default:false" json:"isFeatured"`
@@ -187,6 +204,9 @@ type ChefProfile struct {
 }
 
 type ChefSchedule struct {
+	// Live/test data partition. See models.ModePartition.
+	ModePartition
+
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	ChefID    uuid.UUID `gorm:"type:uuid;not null;index" json:"chefId"`
 	DayOfWeek int       `gorm:"not null" json:"dayOfWeek"` // 0-6, Sunday-Saturday
@@ -268,6 +288,16 @@ func (c *ChefProfile) IsHomeKitchen() bool {
 	return c.KitchenType == "" || c.KitchenType == KitchenTypeHome
 }
 
+// IsTestMode reports whether this kitchen currently inhabits the test partition.
+func (c *ChefProfile) IsTestMode() bool { return IsTestMode(c.Mode) }
+
+// IsBornTest reports whether this kitchen has never been live. A born-test
+// kitchen is hidden from customers outright — nobody has heard of it, so it
+// should not exist for them. A kitchen that HAS been live and is currently in
+// test is shown as closed instead, because its regulars would read a sudden
+// disappearance as "they shut down", which is worse than "closed today".
+func (c *ChefProfile) IsBornTest() bool { return c.FirstLiveAt == nil }
+
 // DTOs
 type ChefProfileResponse struct {
 	ID            uuid.UUID `json:"id"`
@@ -318,21 +348,21 @@ type ChefProfileResponse struct {
 	FoodSafetyBadge bool `json:"foodSafetyBadge"`
 	// ProBadge: chef has an active premium subscription — the Verified-Pro badge
 	// (#44). Like FoodSafetyBadge it needs a DB lookup, so the handler populates it.
-	ProBadge        bool                   `json:"proBadge"`
-	IsFeatured      bool                   `json:"isFeatured"`
-	IsOnline        bool                   `json:"isOnline"`
-	AcceptingOrders     bool               `json:"acceptingOrders"`
-	AutoScheduleEnabled bool               `json:"autoScheduleEnabled"`
-	PausedUntil     *time.Time             `json:"pausedUntil,omitempty"`
-	KitchenPhotos   []string               `json:"kitchenPhotos"`
-	KitchenType     string                 `json:"kitchenType"`
-	City            string                 `json:"city"`
-	State           string                 `json:"state"`
-	Country         string                 `json:"country"`  // chef's PayoutCountry (ISO alpha-2)
-	Currency        string                 `json:"currency"` // ISO-4217, derived from country
-	Latitude        float64                `json:"latitude"`
-	Longitude       float64                `json:"longitude"`
-	OperatingHours  map[string]interface{} `json:"operatingHours,omitempty"`
+	ProBadge            bool                   `json:"proBadge"`
+	IsFeatured          bool                   `json:"isFeatured"`
+	IsOnline            bool                   `json:"isOnline"`
+	AcceptingOrders     bool                   `json:"acceptingOrders"`
+	AutoScheduleEnabled bool                   `json:"autoScheduleEnabled"`
+	PausedUntil         *time.Time             `json:"pausedUntil,omitempty"`
+	KitchenPhotos       []string               `json:"kitchenPhotos"`
+	KitchenType         string                 `json:"kitchenType"`
+	City                string                 `json:"city"`
+	State               string                 `json:"state"`
+	Country             string                 `json:"country"`  // chef's PayoutCountry (ISO alpha-2)
+	Currency            string                 `json:"currency"` // ISO-4217, derived from country
+	Latitude            float64                `json:"latitude"`
+	Longitude           float64                `json:"longitude"`
+	OperatingHours      map[string]interface{} `json:"operatingHours,omitempty"`
 	// Availability is the chef's REAL-TIME open/closed status (computed by
 	// services.ComputeChefAvailability), mirroring the exact gates the order path
 	// enforces — accepting flag + live schedule window + daily cutoff + platform
@@ -514,4 +544,31 @@ func (c *ChefProfile) ToPublicResponse(schedules []ChefSchedule) ChefProfileResp
 	}
 	resp.OperatingHours = operatingHours
 	return resp
+}
+
+// ToClosedResponse is the reduced payload for an established kitchen that an
+// admin has currently flipped into test mode for debugging.
+//
+// It carries the kitchen's identity — name, slug, images, cuisines — and
+// nothing else: no menu, no prices, no minimum order, no delivery options, no
+// rating, and AcceptingOrders forced false. Its regulars see a kitchen that is
+// closed today, which is true and reassuring, rather than a kitchen that has
+// disappeared, which reads as "they shut down".
+//
+// Built as a fresh struct rather than by blanking fields on ToResponse, so a
+// field added to the full response later cannot silently start leaking here.
+func (c *ChefProfile) ToClosedResponse() ChefProfileResponse {
+	return ChefProfileResponse{
+		ID:              c.ID,
+		UserID:          c.UserID,
+		BusinessName:    c.BusinessName,
+		Slug:            c.EffectiveSlug(),
+		ProfileImage:    c.ProfileImage,
+		BannerImage:     c.BannerImage,
+		Cuisines:        []string(c.Cuisines),
+		City:            c.City,
+		State:           c.State,
+		AcceptingOrders: false,
+		IsOnline:        false,
+	}
 }
