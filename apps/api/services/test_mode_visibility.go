@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/homechef/api/models"
@@ -96,5 +97,27 @@ func CustomerVisibleModes(viewerEmail string) func(*gorm.DB) *gorm.DB {
 			return db
 		}
 		return db.Where("mode = ?", models.ChefModeLive)
+	}
+}
+
+// ChefOwnModeScope filters a chef-scoped table to the world the kitchen is
+// CURRENTLY in, expressed as a correlated subquery so it costs no extra round
+// trip and can never race a flip that happens mid-request.
+//
+// This is what makes the sandbox feel like a clean slate to the chef. While a
+// kitchen is in test mode its dashboard, order queue, earnings and menu must
+// show the sandbox's own rows and nothing else; the moment it returns to live,
+// its real data reappears exactly as it was. Without this the chef would see
+// live and sandbox work interleaved — which is both confusing and dangerous,
+// since a chef could act on a real order believing it was a test one.
+//
+// Note it reads the CHEF's current mode, unlike the money paths which read each
+// record's own snapshotted mode. That difference is deliberate: this is a view
+// concern, not a settlement concern.
+func ChefOwnModeScope(chefID uuid.UUID) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where(
+			"mode = COALESCE((SELECT mode FROM chef_profiles WHERE id = ?), ?)",
+			chefID, models.ChefModeLive)
 	}
 }

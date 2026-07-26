@@ -728,7 +728,12 @@ func chefVisibleOrders(chefID uuid.UUID) *gorm.DB {
 		chefID,
 		[]models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded},
 		mealPlanDayOrders,
-	)
+		// Scoped to the world the kitchen is currently in, so a sandbox session
+		// is a clean slate: while in test the chef sees only sandbox orders, and
+		// the moment they return to live their real queue reappears untouched.
+		// Applied here rather than at each of the eight callers so no vendor
+		// surface can be forgotten.
+	).Scopes(services.ChefOwnModeScope(chefID))
 }
 
 // GetChefDashboard returns the chef's dashboard data
