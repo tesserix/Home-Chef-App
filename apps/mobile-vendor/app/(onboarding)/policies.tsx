@@ -74,6 +74,7 @@ export default function PoliciesScreen() {
       stepName={t('onboarding.stepPolicies')}
       title={t('onboarding.policiesTitle')}
       subtitle={t('onboarding.policiesSubtitle')}
+      encouragement={t('onboarding.encPolicies')}
       primaryLabel={t('onboarding.continue')}
       onPrimary={onNext}
       primaryDisabled={!canContinue}

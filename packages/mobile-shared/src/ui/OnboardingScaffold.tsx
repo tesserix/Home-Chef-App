@@ -1,5 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -35,6 +38,10 @@ interface OnboardingScaffoldProps {
   /** Optional back action. When provided, renders a top-left chevron text
    *  link "Back". */
   onBack?: () => void;
+  /** One short line of encouragement for this step — what the chef gets out of
+   *  finishing it, not what the form wants. Signup wizards read as paperwork
+   *  without it; this is the line that says "why bother". */
+  encouragement?: string;
 }
 
 /**
@@ -68,7 +75,41 @@ export function OnboardingScaffold({
   primaryLoading = false,
   primaryDisabled = false,
   onBack,
+  encouragement,
 }: OnboardingScaffoldProps) {
+  // Completion is measured on *finished* steps, so step 1 reads 0% rather than
+  // claiming credit for work not yet done. The final step lands on 100%.
+  const percent = Math.round(((step - 1) / Math.max(total - 1, 1)) * 100);
+
+  const fill = useRef(new Animated.Value(percent)).current;
+  const reduceMotion = useRef(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((on) => { reduceMotion.current = on; })
+      .catch(() => { /* default: animate */ });
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion.current) {
+      fill.setValue(percent);
+      return;
+    }
+    Animated.timing(fill, {
+      toValue: percent,
+      duration: 400,
+      // Brand easing — decelerate, no overshoot. Width can't use the native
+      // driver, which is why this animates a percentage rather than transform.
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [percent, fill]);
+
+  const fillWidth = fill.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
@@ -84,33 +125,33 @@ export function OnboardingScaffold({
           ) : (
             <View />
           )}
-          <Text style={styles.stepLabel} accessibilityLabel={`Step ${step} of ${total}`}>
+          <Text
+            style={styles.stepLabel}
+            accessibilityLabel={`Step ${step} of ${total}, ${percent} percent complete`}
+          >
             Step {step} of {total}
+            <Text style={styles.stepDivider}>{'  ·  '}</Text>
+            <Text style={styles.percentLabel}>{percent}%</Text>
           </Text>
         </View>
 
-        {/* Progress bar — one segment per step: done = ink, current = persimmon
-            ("you are here"), upcoming = mist. The single accent segment makes the
-            position obvious at a glance. */}
+        {/* Progress: a single continuous track with an animated persimmon fill,
+            plus per-step ticks. A segmented-only bar showed position but never
+            how much was *left* — the percentage and the growing fill are what
+            make progress feel like progress. */}
         <View
           style={styles.progressRow}
           accessibilityRole="progressbar"
-          accessibilityValue={{ min: 0, max: total, now: step }}
+          accessibilityValue={{ min: 0, max: 100, now: percent }}
         >
-          {Array.from({ length: total }).map((_, i) => {
-            const isDone = i < step - 1;
-            const isCurrent = i === step - 1;
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  isDone && styles.dotDone,
-                  isCurrent && styles.dotCurrent,
-                ]}
-              />
-            );
-          })}
+          <View style={styles.track}>
+            <Animated.View style={[styles.trackFill, { width: fillWidth }]} />
+            <View style={styles.tickRow} pointerEvents="none">
+              {Array.from({ length: total - 1 }).map((_, i) => (
+                <View key={i} style={styles.tick} />
+              ))}
+            </View>
+          </View>
         </View>
 
         <ScrollView
@@ -121,7 +162,16 @@ export function OnboardingScaffold({
         >
           {stepName ? <Text style={styles.eyebrow}>{stepName}</Text> : null}
           <Text style={styles.title}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          {subtitle ? (
+            <Text style={[styles.subtitle, encouragement && styles.subtitleTight]}>
+              {subtitle}
+            </Text>
+          ) : null}
+          {encouragement ? (
+            <View style={styles.encouragement}>
+              <Text style={styles.encouragementText}>{encouragement}</Text>
+            </View>
+          ) : null}
           <View style={styles.form}>{children}</View>
         </ScrollView>
 
@@ -163,23 +213,59 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   stepDivider: { color: theme.colors.mist.strong },
+  percentLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.label.size,
+    color: theme.colors.herb.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
 
   progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[6],
     paddingBottom: theme.spacing[4],
   },
-  dot: {
-    flex: 1,
+  track: {
     height: 4,
     borderRadius: 2,
     backgroundColor: theme.colors.mist.DEFAULT,
+    overflow: 'hidden',
+    justifyContent: 'center',
   },
-  dotDone: { backgroundColor: theme.colors.ink.DEFAULT },
-  // Current step in persimmon — the single "you are here" accent.
-  dotCurrent: { backgroundColor: theme.colors.herb.DEFAULT },
+  trackFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 2,
+    backgroundColor: theme.colors.herb.DEFAULT,
+  },
+  // Hairline ticks mark each step boundary so the bar still communicates
+  // "N discrete steps", not just a vague ratio.
+  tickRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    height: '100%',
+  },
+  tick: {
+    width: 1,
+    height: '100%',
+    backgroundColor: theme.colors.paper,
+    opacity: 0.9,
+  },
+
+  encouragement: {
+    borderLeftWidth: 2,
+    borderLeftColor: theme.colors.herb.DEFAULT,
+    paddingLeft: theme.spacing[3],
+    marginBottom: theme.spacing[5],
+  },
+  encouragementText: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    lineHeight: theme.typography.size.bodySm.size * 1.45,
+    color: theme.colors.ink.soft,
+  },
 
   scroll: { flex: 1 },
   scrollContent: {
@@ -212,6 +298,9 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.muted,
     marginBottom: theme.spacing[5],
   },
+  // The encouragement block carries the gap when it is present, so the subtitle
+  // tightens up rather than leaving a double space.
+  subtitleTight: { marginBottom: theme.spacing[3] },
   form: { gap: theme.spacing[1] },
 
   ctaWrap: {

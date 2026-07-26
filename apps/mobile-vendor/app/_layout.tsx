@@ -238,16 +238,18 @@ function AppNavigator() {
 
       // Android channels MUST be created before first notification arrives.
       if (Platform.OS === 'android') {
+        // `sound` names a bundled sound *file*; the literal string 'default'
+        // makes expo-notifications hunt for an asset called "default" and warn
+        // "Custom sound 'default' not found in native app" on every launch.
+        // Omitting it is what actually selects the system default sound.
         await Notifications.setNotificationChannelAsync('new-orders', {
           name: 'New Orders',
           importance: Notifications.AndroidImportance.MAX,
-          sound: 'default',
           vibrationPattern: [0, 250, 250, 250],
         });
         await Notifications.setNotificationChannelAsync('order-updates', {
           name: 'Order Updates',
           importance: Notifications.AndroidImportance.HIGH,
-          sound: 'default',
         });
       }
 

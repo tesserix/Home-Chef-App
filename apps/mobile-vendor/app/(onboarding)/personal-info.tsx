@@ -116,6 +116,7 @@ export default function PersonalInfoScreen() {
       stepName={t('onboarding.stepPersonal')}
       title={t('onboarding.personalTitle')}
       subtitle={t('onboarding.personalSubtitle')}
+      encouragement={t('onboarding.encPersonal')}
       primaryLabel={t('onboarding.continue')}
       onPrimary={handleSubmit(onSubmit, onInvalid)}
     >

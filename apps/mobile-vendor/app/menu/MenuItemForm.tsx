@@ -973,7 +973,14 @@ export function MenuItemForm({
                 />
                 <Pressable
                   onPress={handleCreateCategory}
-                  disabled={isCreatingCategory || newCatName.trim().length < 2}
+                  // Also disabled when the host screen wired no callback —
+                  // otherwise the control looks live and silently does nothing,
+                  // which is exactly how the edit screen shipped broken.
+                  disabled={
+                    isCreatingCategory ||
+                    newCatName.trim().length < 2 ||
+                    !onCreateCategory
+                  }
                   accessibilityRole="button"
                   accessibilityLabel="Add category"
                 >
@@ -981,7 +988,9 @@ export function MenuItemForm({
                     <View
                       style={[
                         styles.newCatAdd,
-                        (isCreatingCategory || newCatName.trim().length < 2) && styles.newCatAddDisabled,
+                        (isCreatingCategory ||
+                          newCatName.trim().length < 2 ||
+                          !onCreateCategory) && styles.newCatAddDisabled,
                         pressed && { opacity: 0.8 },
                       ]}
                     >

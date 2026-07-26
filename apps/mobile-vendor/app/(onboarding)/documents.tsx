@@ -326,6 +326,37 @@ export default function DocumentsScreen() {
       );
       return;
     }
+    // The licence number and expiry were previously optional, so a chef could
+    // submit with the document attached but no number and no expiry date. That
+    // leaves admins verifying against nothing and leaves the FSSAI expiry cron
+    // (services/fssai_reminder.go) with no date to fire on — the licence then
+    // lapses silently. OCR pre-fills these when it can; this makes sure they are
+    // present either way.
+    if (documents.fssaiLicenseNumber.length !== 14) {
+      Alert.alert(
+        t('onboarding.fssaiNumberRequired'),
+        t('onboarding.fssaiNumberRequiredBody'),
+      );
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(documents.fssaiExpiryDate)) {
+      Alert.alert(
+        t('onboarding.fssaiExpiryRequired'),
+        t('onboarding.fssaiExpiryRequiredBody'),
+      );
+      return;
+    }
+    // A licence that has already lapsed can't be the basis for going live.
+    const expiry = new Date(`${documents.fssaiExpiryDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (!Number.isNaN(expiry.getTime()) && expiry < today) {
+      Alert.alert(
+        t('onboarding.fssaiExpiredTitle'),
+        t('onboarding.fssaiExpiredBody'),
+      );
+      return;
+    }
     setStep(5);
     router.push('/(onboarding)/policies');
   }
@@ -493,6 +524,7 @@ export default function DocumentsScreen() {
       stepName={t('onboarding.stepDocuments')}
       title={t('onboarding.documentsTitle')}
       subtitle={t('onboarding.documentsSubtitle')}
+      encouragement={t('onboarding.encDocuments')}
       primaryLabel={t('onboarding.continue')}
       onPrimary={onNext}
       primaryDisabled={!bothUploaded}

@@ -196,7 +196,8 @@ async function triggerTestNotification(orderId: string | null): Promise<void> {
         // testing the cold-cache deep-link path.
         orderId: orderId ?? 'test-no-cache',
       },
-      sound: 'default',
+      // Omitted deliberately — see _layout.tsx: 'default' is treated as a
+      // bundled filename, not "the default sound", and warns on every fire.
       categoryIdentifier: Platform.OS === 'ios' ? 'new_order' : undefined,
     },
     trigger: {

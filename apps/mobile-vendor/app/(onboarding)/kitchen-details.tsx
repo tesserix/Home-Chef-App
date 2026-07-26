@@ -298,6 +298,7 @@ export default function KitchenDetailsScreen() {
       stepName={t('onboarding.stepKitchen')}
       title={t('onboarding.kitchenTitle')}
       subtitle={t('onboarding.kitchenSubtitle')}
+      encouragement={t('onboarding.encKitchen')}
       primaryLabel={t('onboarding.continue')}
       onPrimary={handleSubmit(onSubmit, onInvalid)}
     >

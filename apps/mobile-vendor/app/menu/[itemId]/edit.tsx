@@ -18,6 +18,7 @@ import {
   useUpdateMenuItem,
   useDeleteMenuItem,
   useUploadMenuPhoto,
+  useCreateCategory,
   extraDietTags,
 } from '../../../hooks/useVendorMenu';
 import { api } from '../../../lib/api';
@@ -35,6 +36,7 @@ export default function EditMenuItemScreen() {
   const updateMutation = useUpdateMenuItem();
   const deleteMutation = useDeleteMenuItem();
   const uploadMutation = useUploadMenuPhoto();
+  const createCategoryMutation = useCreateCategory();
 
   // Derive initial values from the item whenever it first arrives (or updates).
   // We keep a version counter so MenuItemForm can re-mount with fresh
@@ -153,6 +155,13 @@ export default function EditMenuItemScreen() {
     }
   }
 
+  // Without this the form's "Add category" control renders enabled but is a
+  // silent no-op in edit mode — handleCreateCategory() bails out when the
+  // callback is absent, so nothing is sent and no chip appears.
+  async function handleCreateCategory(name: string) {
+    return createCategoryMutation.mutateAsync(name);
+  }
+
   function handleAddPhoto(uri: string) {
     uploadMutation.mutate(
       { itemId: itemId ?? '', uri },
@@ -179,6 +188,7 @@ export default function EditMenuItemScreen() {
       isSaving={isSaving}
       onDelete={handleDelete}
       isDeleting={deleteMutation.isPending}
+      onCreateCategory={handleCreateCategory}
       onRemoveExistingPhoto={handleRemoveExistingPhoto}
       onAddPhoto={handleAddPhoto}
       isUploadingPhoto={uploadMutation.isPending}
