@@ -1,7 +1,10 @@
 import { router } from 'expo-router';
+
 import { ForgotPasswordScreen } from '@homechef/mobile-shared/screens';
-import { sendPasswordResetEmail } from '@homechef/mobile-shared/auth';
+import { requestPasswordReset } from '@homechef/mobile-shared/auth';
 import { customerColors } from '@homechef/mobile-shared/theme';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 export default function ForgotPasswordPage() {
   return (
@@ -13,9 +16,13 @@ export default function ForgotPasswordPage() {
       // text size. Fills (CTA, focus rings) stay coral via `accent` above.
       linkColor={customerColors.coral.pressed}
       onForgotPassword={async ({ email }) => {
-        // Firebase (GIP-backed) sends the reset email. The screen shows a
-        // generic "check your inbox" success internally (anti-enumeration).
-        await sendPasswordResetEmail(email);
+        // Routed through our own API rather than Firebase: Firebase delivers
+        // from an unauthenticated firebaseapp.com address that Gmail files as
+        // spam, branded with the GCP project name. Ours sends from the
+        // verified platform sender, with a single-use link that expires in 15
+        // minutes. The "customer" tenant is required — accounts are tenant-scoped,
+        // so the wrong one silently finds nothing.
+        await requestPasswordReset(API_URL, email, 'customer');
       }}
       onNavigateToLogin={() => router.back()}
     />

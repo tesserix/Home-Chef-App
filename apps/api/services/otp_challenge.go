@@ -36,7 +36,9 @@ const (
 )
 
 const (
-	otpTTL            = 10 * time.Minute
+	// Matches emailOTPTTL — see the note there. Any OTP on this platform is
+	// valid for at most five minutes.
+	otpTTL            = 5 * time.Minute
 	otpVerifiedTTL    = 2 * time.Hour
 	otpResendCooldown = 60 * time.Second
 	otpSendWindow     = time.Hour

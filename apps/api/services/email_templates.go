@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"strings"
+	"time"
 )
 
 // esc HTML-escapes user-controlled free text before it is interpolated into an
@@ -155,20 +156,32 @@ func StaffInvitationHTML(inviterName, role, acceptURL string) (subject, html str
 	return
 }
 
-// PasswordResetHTML returns the password reset email
-func PasswordResetHTML(resetURL string) (subject, html string) {
-	subject = "Reset your password — Fe3dr"
+// PasswordResetHTML renders the branded password-reset email.
+//
+// Sent by US, not by Firebase. Firebase's own message comes from
+// noreply@<project>.firebaseapp.com (which Gmail treats as spam), is branded
+// with the GCP project name rather than the product, and pastes a raw
+// firebaseapp.com URL into the body — three things that together make a
+// legitimate security email look exactly like a phishing attempt.
+//
+// ttl is passed in rather than hardcoded so the stated expiry can never drift
+// away from the one actually enforced in services/password_reset.go.
+func PasswordResetHTML(resetURL string, ttl time.Duration) (subject, html string) {
+	subject = "Reset your Fe3dr password"
+	mins := int(ttl.Minutes())
 	body := fmt.Sprintf(`
           <h2>Reset your password</h2>
-          <p>We received a request to reset the password for your Fe3dr account.</p>
-          <a href="%s" class="btn">Reset Password</a>
+          <p>We received a request to reset the password for your Fe3dr account. Choose a new one using the button below.</p>
+          <a href="%s" class="btn">Choose a new password</a>
           <div class="info-box">
-            <p>This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email — your account is secure.</p>
+            <p><strong>This link expires in %d minutes</strong> and can only be used once.</p>
+            <p>If you didn't ask for this, you can safely ignore this email — your password stays as it is, and nobody can change it without this link.</p>
           </div>
           <hr class="divider">
-          <p class="muted">Button not working? Copy and paste this URL:<br>
+          <p class="muted">We will never ask you for your password, an OTP, or your payment details by email or phone.</p>
+          <p class="muted">Button not working? Copy and paste this address into your browser:<br>
           <span style="word-break:break-all;color:#111827;">%s</span></p>
-`, resetURL, resetURL)
+`, esc(resetURL), mins, esc(resetURL))
 	html = emailBase(subject, "Reset your Fe3dr password", body)
 	return
 }
@@ -471,4 +484,35 @@ func DeliveryAssignedHTML(orderNumber, pickupAddress string) (subject, html stri
 `, orderNumber, pickupAddress)
 	html = emailBase(subject, fmt.Sprintf("New delivery — pickup at %s", pickupAddress), body)
 	return
+}
+
+// PasswordResetExpiredHTML is the page shown when a reset link is expired,
+// unknown, or already used.
+//
+// Deliberately ONE page for all three cases. Distinguishing "expired" from
+// "never existed" would tell someone probing tokens which of their guesses had
+// once been real.
+func PasswordResetExpiredHTML() string {
+	return `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Reset link no longer valid — Fe3dr</title>
+<style>
+  body{margin:0;background:#faf9f7;color:#1c1917;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+       display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
+  .card{background:#fff;border:1px solid #e7e5e4;border-radius:16px;padding:32px;max-width:440px;
+        box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  h1{margin:0 0 12px;font-size:20px;font-weight:600}
+  p{margin:0 0 12px;color:#57534e}
+  .muted{font-size:13px;color:#78716c;margin-top:20px}
+</style></head><body>
+  <div class="card">
+    <h1>This reset link is no longer valid</h1>
+    <p>Password reset links expire after 15 minutes and can only be used once.</p>
+    <p>Open the Fe3dr app and choose <strong>Forgot password</strong> again to get a fresh one.</p>
+    <p class="muted">Your account is unchanged, and your current password still works.</p>
+  </div>
+</body></html>`
 }

@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/homechef/api/config"
 )
@@ -123,10 +124,15 @@ func (s *EmailService) SendOrderStatusUpdate(to, orderNumber, status string) err
 	return s.send(to, subject, html)
 }
 
-// SendPasswordResetEmail sends a branded password reset link
-func (s *EmailService) SendPasswordResetEmail(to, resetToken string) error {
-	resetLink := fmt.Sprintf("https://fe3dr.com/reset-password?token=%s", resetToken)
-	subject, html := PasswordResetHTML(resetLink)
+// SendPasswordResetLink emails a branded reset link.
+//
+// Replaces an older SendPasswordResetEmail that fabricated
+// https://fe3dr.com/reset-password?token=… — a route on the retired customer
+// SPA that no longer exists, and which nothing ever called. The caller now
+// supplies the real link (see services/password_reset.go) and the validity
+// window so the copy cannot drift from the actual TTL.
+func (s *EmailService) SendPasswordResetLink(to, resetURL string, ttl time.Duration) error {
+	subject, html := PasswordResetHTML(resetURL, ttl)
 	return s.send(to, subject, html)
 }
 
