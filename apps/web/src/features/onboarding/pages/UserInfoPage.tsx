@@ -21,9 +21,27 @@ import { StepPreferences } from '../components/StepPreferences';
 import { StepAddress } from '../components/StepAddress';
 
 const STEPS = [
-  { title: 'Basic Info', description: 'Your details', icon: User },
-  { title: 'Preferences', description: 'Food & dietary', icon: UtensilsCrossed },
-  { title: 'Address', description: 'Delivery location', icon: MapPin },
+  {
+    title: 'Basic Info',
+    description: 'Your details',
+    icon: User,
+    // One line per step saying what the customer GETS, not what we want from
+    // them. A wizard that only counts fields feels like paperwork; saying why
+    // the step exists is what makes finishing it worth the effort.
+    encouragement: 'Just the basics — this takes about a minute.',
+  },
+  {
+    title: 'Preferences',
+    description: 'Food & dietary',
+    icon: UtensilsCrossed,
+    encouragement: 'Tell us how you eat and we’ll put the right chefs first.',
+  },
+  {
+    title: 'Address',
+    description: 'Delivery location',
+    icon: MapPin,
+    encouragement: 'Last one — then you can start ordering.',
+  },
 ];
 
 const TOTAL_STEPS = 3;
@@ -43,6 +61,7 @@ export default function UserInfoPage() {
   const { currentStep, data, nextStep, prevStep, reset } = useOnboardingStore();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
 
   // Email-verification gate (#12). The API requires an OTP-verified email before
   // it will accept the completed profile; this UI had no step for it.
@@ -79,10 +98,13 @@ export default function UserInfoPage() {
 
   const submitOnboarding = async () => {
     await apiClient.post('/customer/onboarding/complete', data);
-    toast.success('Your preferences have been saved!');
     reset();
     useAuthStore.getState().setOnboardingCompleted(true);
-    navigate('/', { replace: true });
+    // Land on a completion moment rather than snapping straight to the home
+    // page. Finishing a multi-step form should feel like finishing something;
+    // a toast that disappears mid-navigation doesn't read as an ending.
+    setCelebrating(true);
+    window.setTimeout(() => navigate('/', { replace: true }), 1600);
   };
 
   const handleComplete = async () => {
@@ -156,6 +178,34 @@ export default function UserInfoPage() {
 
   const isLastStep = currentStep === TOTAL_STEPS - 1;
 
+  // Counts the step you're on, so arriving reads as 33% rather than 0%. The
+  // vendor scaffold counts only *finished* steps and therefore opens at 0% —
+  // defensible there across seven steps, but over three it makes a fresh start
+  // look like no start, which is the opposite of encouraging.
+  const percent = Math.round(((currentStep + 1) / TOTAL_STEPS) * 100);
+
+  if (celebrating) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          className="text-center"
+          role="status"
+        >
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <CheckCircle2 aria-hidden="true" className="h-8 w-8" />
+          </div>
+          <p className="mt-4 text-xl font-semibold text-foreground">You&rsquo;re all set</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Profile complete — taking you to the good stuff.
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -195,11 +245,30 @@ export default function UserInfoPage() {
               </div>
             ))}
           </div>
-          <div className="h-2 rounded-full bg-secondary">
+          <div
+            className="h-2 rounded-full bg-secondary"
+            role="progressbar"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Profile ${percent} percent complete`}
+          >
             <div
               className="h-full rounded-full bg-primary transition-all duration-300"
-              style={{ width: `${((currentStep + 1) / TOTAL_STEPS) * 100}%` }}
+              style={{ width: `${percent}%` }}
             />
+          </div>
+
+          {/* The number and the line under it are the motivating part: the bar
+              alone shows position, but "60% complete" plus what the next step
+              buys you is what gets someone to finish. */}
+          <div className="mt-2 flex items-baseline justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              {STEPS[currentStep]?.encouragement}
+            </p>
+            <span className="shrink-0 text-sm font-semibold tabular-nums text-primary">
+              {percent}%
+            </span>
           </div>
         </div>
 
