@@ -1,0 +1,50 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "copyright": "2026 Tesserix Pty Ltd",
+    "categories": ["BUSINESS", "FOOD_AND_DRINK"],
+    "info": {
+      "en-US": {
+        "title": "Fe3dr Vendor: Sell Food",
+        "subtitle": "Run your home kitchen",
+        "description": "The companion app for home chefs selling on Fe3dr.\n\nTake orders, publish your menu, and get paid — from the kitchen, on your phone. Fe3dr Vendor is for FSSAI-licensed home chefs who already sell on Fe3dr; you will need an approved chef account to sign in.\n\nORDERS\n• New orders arrive with a push notification\n• Accept or decline, and set your own prep time\n• Mark ready, hand to a rider, or deliver yourself\n• Confirm delivery with an OTP from the customer\n\nYOUR MENU\n• Add dishes with photos, prices, dietary tags and allergens\n• Set a fixed weekly menu for tiffin customers, with veg and non-veg options for each day\n• Publish a different menu for each date when you want to cook something else\n• Build thalis and combos from dishes you already have\n• Choose which days each dish is available\n\nCAPACITY AND HOURS\n• Cap how many portions you will cook per slot, so you never oversell\n• Set your kitchen hours and pause when you need a day off\n• Choose delivery, pickup, or both\n\nEARNINGS\n• See what you have earned, per order and per week\n• Track payouts through to your bank account\n• Commission and deductions shown in full, with nothing hidden\n\nGETTING SET UP\n• Guided onboarding for your kitchen details and documents\n• Upload your FSSAI licence and identity documents from your phone\n• Track your approval status as you go\n\nAvailable in English and Hindi. Fe3dr operates in India.\n\nQuestions? support@fe3dr.com",
+        "keywords": "chef,tiffin,seller,orders,menu,earnings,payout,cook,business,dabba,fssai,catering,meal,sales",
+        "releaseNotes": "The first release of Fe3dr Vendor.\n\n• Accept orders and track them through to delivery\n• Build your menu — à la carte, weekly tiffin, or per-date\n• Set portion caps and kitchen hours\n• Follow your earnings and payouts\n• English and Hindi",
+        "promoText": "Take orders, publish your menu, and follow your earnings — the Fe3dr companion app for home chefs.",
+        "privacyPolicyUrl": "https://fe3dr.com/privacy",
+        "supportUrl": "https://fe3dr.com/support",
+        "marketingUrl": "https://fe3dr.com"
+      }
+    },
+    "advisory": {
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gambling": false,
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "unrestrictedWebAccess": false,
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "seventeenPlus": false
+    },
+    "release": {
+      "automaticRelease": false,
+      "phasedRelease": false
+    },
+    "review": {
+      "firstName": "TODO",
+      "lastName": "TODO",
+      "email": "support@fe3dr.com",
+      "phone": "TODO",
+      "demoUsername": "TODO-vendor-review@fe3dr.com",
+      "demoPassword": "TODO",
+      "notes": "Fe3dr Vendor is the companion app for home chefs selling on Fe3dr, a marketplace for home-cooked food in India.\n\nThis app REQUIRES AN APPROVED CHEF ACCOUNT — there is no public sign-up that reaches the main app, because a chef must pass FSSAI licence and identity checks before they can sell. The demo account below is pre-approved with a published menu and at least one order, so every screen is reachable.\n\nIt manages an existing real-world business relationship between the chef and the platform. It is not a standalone product and has no consumer-facing purchase flow, so In-App Purchase does not apply (guideline 3.1.1). Chefs are paid out to their bank account; they never pay through the app.\n\nLOCATION is requested once, during onboarding, only to autofill the kitchen address. It is optional — the address can be typed instead — and the app never uses location in the background.\n\nCAMERA AND PHOTOS are used for dish photos and for uploading the FSSAI licence and identity documents.\n\nACCOUNT DELETION: More > Settings > Pause or delete account. Confirm by typing the account email. Also available at https://fe3dr.com/account-deletion.\n\nThe app is offered in India only. The interface is available in English and Hindi."
+    }
+  }
+}
