@@ -214,6 +214,12 @@ func main() {
 		if err := services.EnsureMessagingIndexes(context.Background()); err != nil {
 			log.Printf("Warning: messaging index setup failed: %v", err)
 		}
+		// ChefBook article indexes (idempotent). Also best-effort: a missing
+		// index makes the feed slow, not broken, and shouldn't stop the API
+		// from starting.
+		if err := services.EnsureChefBookIndexes(context.Background()); err != nil {
+			log.Printf("Warning: ChefBook index setup failed: %v", err)
+		}
 	}
 
 	// Connect to NATS

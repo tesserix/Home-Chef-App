@@ -192,6 +192,7 @@ func SetupRouter() *gin.Engine {
 	promotionHandler := handlers.NewPromotionHandler()
 	providerHandler := handlers.NewDeliveryProviderHandler()
 	socialHandler := handlers.NewSocialHandler()
+	chefBookHandler := handlers.NewChefBookHandler()
 	cateringHandler := handlers.NewCateringHandler()
 	mealPlanHandler := handlers.NewMealPlanHandler()
 	cancellationHandler := handlers.NewCancellationHandler()
@@ -804,6 +805,39 @@ func SetupRouter() *gin.Engine {
 			moderation.GET("/blocks", moderationHandler.ListBlocks)
 			moderation.POST("/blocks", middleware.RateLimitByUser(1, 20), moderationHandler.BlockUser)
 			moderation.DELETE("/blocks/:userId", moderationHandler.UnblockUser)
+		}
+
+		// ChefBook — chef-authored culinary articles, stored in MongoDB.
+		//
+		// Reading is anonymous-friendly for the same reason the feed is: an
+		// article is meant to be shareable to someone who has never opened the
+		// app. Reacting and commenting check for a userID inside the handler.
+		chefbook := v1.Group("/chefbook")
+		chefbook.Use(bffAuthOptional(bffKey, bffWindow))
+		{
+			chefbook.GET("/articles", chefBookHandler.GetFeed)
+			chefbook.GET("/articles/:slug", chefBookHandler.GetArticle)
+		}
+
+		// Reactions and comments — a session is required, so these sit behind
+		// bffAuth rather than the optional variant. Rate limited because an
+		// unthrottled comment endpoint is a spam vector.
+		chefbookWrite := v1.Group("/chefbook/articles")
+		chefbookWrite.Use(bffAuth(bffKey, bffWindow))
+		{
+			chefbookWrite.POST("/:id/react", middleware.RateLimitByUser(1, 60), chefBookHandler.React)
+			chefbookWrite.POST("/:id/comments", middleware.RateLimitByUser(1, 20), chefBookHandler.AddComment)
+			chefbookWrite.DELETE("/:id/comments/:commentId", chefBookHandler.DeleteComment)
+		}
+
+		// ChefBook authoring (chef only).
+		chefBookAuthor := v1.Group("/chef/chefbook/articles")
+		chefBookAuthor.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
+		{
+			chefBookAuthor.GET("", chefBookHandler.ListMine)
+			chefBookAuthor.POST("", chefBookHandler.CreateArticle)
+			chefBookAuthor.PUT("/:id", chefBookHandler.UpdateArticle)
+			chefBookAuthor.DELETE("/:id", chefBookHandler.DeleteArticle)
 		}
 
 		// Chef social posts (chef only)

@@ -1,6 +1,9 @@
 package services
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The gate's whole job is the difference between "clearly about food",
 // "clearly not", and "can't tell" — so those three outcomes are what's tested,
@@ -85,5 +88,33 @@ func TestCheckCulinaryTopic(t *testing.T) {
 				t.Fatalf("Weak = %v, want %v (matches=%d)", got.Weak, tc.wantWeak, got.Matches)
 			}
 		})
+	}
+}
+
+// Slugify builds the shareable URL, so its edge cases are worth pinning: an
+// emoji-only title still has to produce a usable link.
+func TestSlugify(t *testing.T) {
+	cases := []struct{ in, suffix, want string }{
+		{"Dalma, three ways", "abc123", "dalma-three-ways-abc123"},
+		{"  Spaced   Out  ", "x", "spaced-out-x"},
+		{"Ghee & Garlic!!", "y", "ghee-garlic-y"},
+		// No alphanumerics survive, so fall back rather than emit a bare suffix.
+		{"🍛🍛🍛", "z", "article-z"},
+		{"No suffix", "", "no-suffix"},
+	}
+	for _, tc := range cases {
+		if got := Slugify(tc.in, tc.suffix); got != tc.want {
+			t.Errorf("Slugify(%q, %q) = %q, want %q", tc.in, tc.suffix, got, tc.want)
+		}
+	}
+
+	// Long titles are truncated without leaving a trailing hyphen.
+	long := "the quick brown fox jumps over the lazy dog while cooking a very large pot of dalma for everyone"
+	got := Slugify(long, "s")
+	if len(got) > 70 {
+		t.Errorf("slug too long: %q", got)
+	}
+	if strings.Contains(got, "--") {
+		t.Errorf("slug has a doubled hyphen: %q", got)
 	}
 }
