@@ -27,8 +27,8 @@ func maskEmail(e string) string {
 }
 
 // EmailService handles sending transactional emails. The provider chain is
-// built in InitEmailService: Resend primary, SendGrid fallback — Resend is
-// the only provider our sending domain is DKIM/SPF-authenticated for.
+// built in InitEmailService. Resend is the only provider — it is the only one
+// our sending domain is DKIM/SPF-authenticated for.
 type EmailService struct {
 	mailer Mailer
 }
@@ -55,45 +55,29 @@ func GetEmailService() *EmailService {
 
 // InitEmailService initialises the email service from config.
 //
-// SendGrid is the primary provider; Resend is ALWAYS the fallback when both
-// keys are set, so a SendGrid outage degrades to a provider switch instead
-// of dropped mail. With only one key, that provider runs alone. With no
-// keys, emails are skipped (and logged) — same behaviour as before the
-// fallback existed.
+// Resend is the ONLY provider. Our sending domain is authenticated for it and
+// nothing else: tesserix.app publishes the resend/s1/s2 DKIM selectors, and its
+// SPF covers postal, SES and Cloudflare — there is no sendgrid.net include and
+// no SendGrid DKIM selector.
+//
+// Mail sent through any other provider from noreply@tesserix.app therefore
+// fails SPF, fails DKIM, and so fails DMARC alignment — which lands it in spam.
+// A fallback that silently degrades deliverability is worse than no fallback,
+// because the failure is invisible: the send "succeeds" and the mail is never
+// read. If a second provider is ever wanted, authenticate the domain for it
+// FIRST (SPF include + DKIM selector in DNS), then wire it here.
+//
+// With no key, emails are skipped and logged.
 func InitEmailService() {
 	svc := GetEmailService()
 	cfg := config.AppConfig
 
 	switch {
-	case cfg.SendGridAPIKey != "" && cfg.ResendAPIKey != "":
-		// Resend FIRST, deliberately.
-		//
-		// Our sending domain is authenticated for Resend and nothing else:
-		// tesserix.app publishes the resend/s1/s2 DKIM selectors, and its SPF
-		// covers postal, SES and Cloudflare — there is no sendgrid.net include
-		// and no SendGrid DKIM selector. Sending through SendGrid from
-		// noreply@tesserix.app therefore fails SPF, fails DKIM, and so fails
-		// DMARC alignment, which is a direct route to the spam folder.
-		//
-		// SendGrid stays as the fallback so an outage still has somewhere to go
-		// — an unaligned email that arrives in spam beats no email at all — but
-		// it must not be the default path. If SendGrid is ever promoted back,
-		// add sendgrid.net to SPF and its DKIM selector to DNS first.
-		svc.mailer = NewFallbackMailer(
-			NewResendMailer(cfg.ResendAPIKey, cfg.FromEmail, cfg.FromName),
-			NewSendGridMailer(cfg.SendGridAPIKey, cfg.FromEmail, cfg.FromName),
-		)
-		log.Println("Email service initialised (Resend primary, SendGrid fallback)")
-	case cfg.SendGridAPIKey != "":
-		log.Println("Warning: RESEND_API_KEY not configured — SendGrid only, no fallback provider")
-		svc.mailer = NewSendGridMailer(cfg.SendGridAPIKey, cfg.FromEmail, cfg.FromName)
-		log.Println("Email service initialised (SendGrid)")
 	case cfg.ResendAPIKey != "":
-		log.Println("Warning: SENDGRID_API_KEY not configured — using Resend as the only provider")
 		svc.mailer = NewResendMailer(cfg.ResendAPIKey, cfg.FromEmail, cfg.FromName)
-		log.Println("Email service initialised (Resend)")
+		log.Printf("Email service initialised (Resend, from %s)", cfg.FromEmail)
 	default:
-		log.Println("Warning: SendGrid API key not configured — emails will be skipped")
+		log.Println("Warning: RESEND_API_KEY not configured — emails will be skipped")
 	}
 }
 

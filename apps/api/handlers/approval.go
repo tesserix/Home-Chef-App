@@ -695,7 +695,7 @@ func (h *ApprovalHandler) RequestMoreInfo(c *gin.Context) {
 }
 
 // sendApprovalInfoRequestedEmail looks up the chef's user email and
-// fires the SendGrid template. Wrapped in its own function so the
+// fires the email template. Wrapped in its own function so the
 // info_requested handler stays focused on its core workflow.
 func sendApprovalInfoRequestedEmail(chefID uuid.UUID, title, notes string) {
 	var chef models.ChefProfile

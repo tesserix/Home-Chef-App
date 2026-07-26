@@ -73,11 +73,10 @@ type Config struct {
 	ShadowfaxAPIToken      string
 	ShadowfaxWebhookSecret string
 
-	// Email — SendGrid primary, Resend fallback
-	SendGridAPIKey string
-	ResendAPIKey   string
-	FromEmail      string
-	FromName       string
+	// Email — Resend only (the sole provider tesserix.app is SPF/DKIM-aligned for)
+	ResendAPIKey string
+	FromEmail    string
+	FromName     string
 
 	// Twilio
 	TwilioAccountSID  string
@@ -393,11 +392,10 @@ func Load() {
 		ShadowfaxAPIToken:      getEnv("SHADOWFAX_API_TOKEN", ""),
 		ShadowfaxWebhookSecret: getEnv("SHADOWFAX_WEBHOOK_SECRET", ""),
 
-		// Email — SendGrid primary, Resend fallback
-		SendGridAPIKey: getEnv("SENDGRID_API_KEY", ""),
-		ResendAPIKey:   getEnv("RESEND_API_KEY", ""),
-		FromEmail:      getEnv("FROM_EMAIL", "noreply@homechef.com"),
-		FromName:       getEnv("FROM_NAME", "HomeChef"),
+		// Email — Resend only
+		ResendAPIKey: getEnv("RESEND_API_KEY", ""),
+		FromEmail:    getEnv("FROM_EMAIL", "noreply@homechef.com"),
+		FromName:     getEnv("FROM_NAME", "HomeChef"),
 
 		// Twilio
 		TwilioAccountSID:  getEnv("TWILIO_ACCOUNT_SID", ""),
