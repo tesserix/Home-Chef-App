@@ -6,13 +6,15 @@
 // Renders plain Views (not a FlatList) so it can live inside a parent
 // ScrollView without nested-VirtualizedList warnings; review lists are small.
 
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useRef } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Image } from 'expo-image';
-import { Star } from 'lucide-react-native';
+import { MoreHorizontal, Star } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { EmptyState } from '@homechef/mobile-shared/ui';
+import { EmptyState, ReportSheet, type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useChefReviews, type ChefReview } from '../../hooks/useChefs';
+import { useReportContent, useBlockUser } from '../../hooks/useModeration';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec (§3.5).
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -73,6 +75,12 @@ interface ReviewRowProps {
 }
 
 function ReviewRow({ review }: ReviewRowProps) {
+  // App Review 1.2 — reviews are user-generated content, so each row carries a
+  // reachable report action and, where the reviewer's id is known, a block.
+  const reportSheetRef = useRef<SheetHandle>(null);
+  const reportContent = useReportContent();
+  const blockUser = useBlockUser();
+
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -83,6 +91,15 @@ function ReviewRow({ review }: ReviewRowProps) {
           </Text>
           <Text style={styles.date}>{formatRelativeDate(review.createdAt)}</Text>
         </View>
+        <Pressable
+          onPress={() => reportSheetRef.current?.present()}
+          accessibilityRole="button"
+          accessibilityLabel="Report or block this reviewer"
+          hitSlop={8}
+          style={styles.reportButton}
+        >
+          <MoreHorizontal size={18} color={customerColors.charcoal.soft} />
+        </Pressable>
       </View>
       <View style={styles.starRow}>
         <Text style={styles.star}>★</Text>
@@ -99,6 +116,27 @@ function ReviewRow({ review }: ReviewRowProps) {
           <Text style={styles.replyText}>{review.chefResponse}</Text>
         </View>
       ) : null}
+
+      <ReportSheet
+        ref={reportSheetRef}
+        subject="this review"
+        onSubmit={async (reason, details) => {
+          await reportContent.mutateAsync({
+            targetType: 'review',
+            targetId: review.id,
+            reason,
+            details,
+          });
+        }}
+        onBlock={
+          review.customerId
+            ? async () => {
+                await blockUser.mutateAsync({ userId: review.customerId as string });
+              }
+            : undefined
+        }
+        blockLabel={`Block ${review.customerName || 'this reviewer'}`}
+      />
     </View>
   );
 }
@@ -221,6 +259,12 @@ const styles = StyleSheet.create({
   },
   headerTextCol: {
     flex: 1,
+  },
+  reportButton: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   customerName: {
     fontFamily: 'Inter-SemiBold',

@@ -10,6 +10,7 @@ import {
   getIdToken,
   signInWithGoogleCredential,
   signInWithApple,
+  linkPendingAppleGrant,
 } from '@homechef/mobile-shared/auth';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
 import { useAuthStore } from '../../store/auth-store';
@@ -65,6 +66,9 @@ export default function RegisterPage() {
     // strings; the user can fill them in from the profile screen later.
     await setAuthResponse(bffToAuthResponse(body, '', '', ''));
     await completeSignIn();
+    // No-ops unless the credential above came from Apple. Records the grant so
+    // account deletion can revoke it (App Review 5.1.1(v)).
+    await linkPendingAppleGrant(api);
     try {
       const fcmToken = await getRawFCMToken();
       if (fcmToken) await registerDeviceToken(api, fcmToken);

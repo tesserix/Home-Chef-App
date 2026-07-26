@@ -582,10 +582,28 @@ func (h *ChefHandler) GetChefReviews(c *gin.Context) {
 	var reviews []models.Review
 	var total int64
 
-	database.DB.Model(&models.Review{}).Where("chef_id = ? AND is_approved = ?", chefID, true).Count(&total)
+	// is_hidden is the moderation gate — set by an admin takedown
+	// (admin_reviews.go) and by the report auto-hide threshold
+	// (services/moderation.go). It was previously written but never read here,
+	// so hiding a review changed nothing a customer could see. App Review 1.2
+	// requires reported content to actually disappear.
+	base := database.DB.Where("chef_id = ? AND is_approved = ? AND is_hidden = ?", chefID, true, false)
 
-	if err := database.DB.Preload("Customer").
-		Where("chef_id = ? AND is_approved = ?", chefID, true).
+	// A customer who blocked another customer stops seeing their reviews.
+	viewerID, _ := middleware.GetUserID(c)
+	blocked, err := services.BlockedUserIDs(database.DB, viewerID)
+	if err != nil {
+		services.CaptureSentryError(c, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch reviews"})
+		return
+	}
+	if len(blocked) > 0 {
+		base = base.Where("customer_id NOT IN ?", blocked)
+	}
+
+	base.Session(&gorm.Session{}).Model(&models.Review{}).Count(&total)
+
+	if err := base.Session(&gorm.Session{}).Preload("Customer").
 		Order("created_at DESC").
 		Offset(offset).Limit(limit).
 		Find(&reviews).Error; err != nil {

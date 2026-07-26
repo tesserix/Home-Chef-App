@@ -201,6 +201,8 @@ func SetupRouter() *gin.Engine {
 	chatHandler := handlers.NewChatHandler()
 	messagingHandler := handlers.NewMessagingHandler()
 	securityHandler := handlers.NewSecurityHandler()
+	appleSignInHandler := handlers.NewAppleSignInHandler()
+	moderationHandler := handlers.NewModerationHandler()
 	platformHandler := handlers.NewPlatformHandler()
 	exportsHandler := handlers.NewExportsHandler()
 
@@ -397,6 +399,16 @@ func SetupRouter() *gin.Engine {
 		auth.Use(authLimit)
 		{
 			auth.GET("/password-policy", securityHandler.GetPasswordPolicy)
+		}
+
+		// Sign in with Apple grant linking. Authenticated: the code is exchanged
+		// and stored against the caller's own row. Required so account deletion
+		// can revoke the Apple grant (App Review 5.1.1(v)) — see
+		// services/apple_signin.go.
+		appleAuth := v1.Group("/auth/apple")
+		appleAuth.Use(bffAuth(bffKey, bffWindow), middleware.RateLimitByUser(1, 5))
+		{
+			appleAuth.POST("/link", appleSignInHandler.LinkGrant)
 		}
 
 		// Staff invitation routes (public - token validates)
@@ -779,6 +791,21 @@ func SetupRouter() *gin.Engine {
 			social.POST("/posts/:id/comments", socialHandler.AddComment)
 		}
 
+		// Content reports and user blocks (App Review 1.2).
+		//
+		// Rate limited per user: reporting is a trust primitive, and an
+		// unthrottled report endpoint is a way to bury a competitor. Blocking is
+		// throttled more loosely because it only ever affects the caller's own
+		// view.
+		moderation := v1.Group("")
+		moderation.Use(bffAuth(bffKey, bffWindow))
+		{
+			moderation.POST("/reports", middleware.RateLimitByUser(1, 10), moderationHandler.CreateReport)
+			moderation.GET("/blocks", moderationHandler.ListBlocks)
+			moderation.POST("/blocks", middleware.RateLimitByUser(1, 20), moderationHandler.BlockUser)
+			moderation.DELETE("/blocks/:userId", moderationHandler.UnblockUser)
+		}
+
 		// Chef social posts (chef only)
 		chefSocial := v1.Group("/chef/posts")
 		chefSocial.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
@@ -1038,6 +1065,11 @@ func SetupRouter() *gin.Engine {
 
 			// Review moderation (#35) — list, hide, unhide (audited; recomputes rating)
 			admin.GET("/reviews", adminHandler.AdminListReviews)
+			// User-report triage queue (App Review 1.2). Apple asks for reports
+			// to be acted on, not merely collected — this is where that happens.
+			admin.GET("/reports", moderationHandler.AdminListReports)
+			admin.POST("/reports/:id/resolve", moderationHandler.AdminResolveReport)
+
 			admin.PUT("/reviews/:id/hide", adminHandler.AdminHideReview)
 			admin.PUT("/reviews/:id/unhide", adminHandler.AdminUnhideReview)
 			admin.POST("/chefs/:id/fssai-override", adminHandler.OverrideFSSAILock)

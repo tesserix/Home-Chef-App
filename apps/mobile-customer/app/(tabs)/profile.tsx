@@ -19,6 +19,7 @@ import {
   Receipt,
   Salad,
   LifeBuoy,
+  ShieldOff,
 } from 'lucide-react-native';
 import { useProfile } from '../../hooks/useProfile';
 import {
@@ -355,6 +356,15 @@ export default function ProfileScreen() {
           icon={<DatabaseZap size={18} color={customerColors.charcoal.soft} />}
           label="Download my data"
           onPress={() => router.push('/data-privacy')}
+        />
+        <NavRowDivider />
+        {/* App Review 1.2 asks for blocking to be reversible. The block itself
+            is offered inline on the content (the ⋯ menu on a post or review),
+            which is where people reach for it; this row is where they undo it. */}
+        <NavRow
+          icon={<ShieldOff size={18} color={customerColors.charcoal.soft} />}
+          label="Blocked accounts"
+          onPress={() => router.push('/blocked-accounts')}
         />
         <NavRowDivider />
         <NavRow

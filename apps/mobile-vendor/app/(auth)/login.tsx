@@ -6,6 +6,7 @@ import { LoginScreen } from '@homechef/mobile-shared/screens';
 import {
   signInWithGoogleCredential,
   signInWithApple,
+  linkPendingAppleGrant,
   signInWithEmail,
   useAuth,
   autoLogin,
@@ -91,6 +92,9 @@ export default function LoginPage() {
       const response = await completeBFFLogin();
       await setAuthResponse(response);
       await completeSignIn();
+      // Hand Apple's one-shot authorization code to the API now that a session
+      // exists, so account deletion can revoke the grant (App Review 5.1.1(v)).
+      await linkPendingAppleGrant(api);
       try {
         const fcmToken = await getRawFCMToken();
         if (fcmToken) await registerDeviceToken(api, fcmToken);

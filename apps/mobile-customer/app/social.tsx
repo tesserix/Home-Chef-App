@@ -2,7 +2,7 @@
 // GET  /v1/social/feed          → paginated PostResponse list
 // POST /v1/social/posts/:id/like → toggle like
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { AlertCircle, Camera, Heart } from 'lucide-react-native';
+import { AlertCircle, Camera, Heart, MoreHorizontal } from 'lucide-react-native';
+import { ReportSheet, type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useSocialFeed, useLikePost } from '../hooks/useSocial';
 import type { SocialPost } from '../hooks/useSocial';
+import { useReportContent, useBlockUser } from '../hooks/useModeration';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 
@@ -34,6 +36,12 @@ const CANVAS_RIPPLE = `${customerColors.canvas}33`;
 
 function PostCard({ post }: { post: SocialPost }) {
   const likePost = useLikePost();
+  // App Review 1.2: every piece of user-generated content needs a reachable
+  // report action, and blocking the author needs to be offered in the same
+  // place — a report flow buried in Settings is one nobody finds.
+  const reportSheetRef = useRef<SheetHandle>(null);
+  const reportContent = useReportContent();
+  const blockUser = useBlockUser();
   const [optimisticLiked, setOptimisticLiked] = useState(post.isLiked);
   const [optimisticCount, setOptimisticCount] = useState(post.likesCount);
 
@@ -72,6 +80,15 @@ function PostCard({ post }: { post: SocialPost }) {
             })}
           </Text>
         </View>
+        <Pressable
+          onPress={() => reportSheetRef.current?.present()}
+          accessibilityRole="button"
+          accessibilityLabel={`Report or block ${post.chefName}`}
+          hitSlop={8}
+          className="min-h-[44px] min-w-[44px] items-center justify-center"
+        >
+          <MoreHorizontal size={20} color={customerColors.charcoal.soft} />
+        </Pressable>
       </View>
 
       {/* Post image — full width, 4:3 ratio. R2: blurhash placeholder + fade. */}
@@ -134,6 +151,30 @@ function PostCard({ post }: { post: SocialPost }) {
 
       {/* Hairline separator between posts */}
       <View className="h-px bg-hairline" />
+
+      <ReportSheet
+        ref={reportSheetRef}
+        subject="this post"
+        onSubmit={async (reason, details) => {
+          await reportContent.mutateAsync({
+            targetType: 'social_post',
+            targetId: post.id,
+            reason,
+            details,
+          });
+        }}
+        // Blocking needs the chef's USER id. Older API builds omit it, in which
+        // case reporting is still offered and the block button is not — better
+        // than a button that 400s.
+        onBlock={
+          post.chefUserId
+            ? async () => {
+                await blockUser.mutateAsync({ userId: post.chefUserId as string });
+              }
+            : undefined
+        }
+        blockLabel={`Block ${post.chefName}`}
+      />
     </View>
   );
 }
