@@ -433,14 +433,17 @@ func Load() {
 
 		// Email — Resend only.
 		//
-		// The FROM_EMAIL domain must be VERIFIED as a sending domain in Resend
-		// (DKIM CNAMEs + an SPF include). fe3dr.com currently publishes only
-		// Cloudflare's inbound routing — "v=spf1 include:_spf.mx.cloudflare.net
-		// ~all" — which does not authorise Resend to send as @fe3dr.com. Verify
-		// the domain in Resend BEFORE pointing prod at this default, or mail
-		// starts failing SPF and landing in spam.
+		// SENDS FROM tesserix.app, DISPLAYS AS Fe3dr — deliberately. The sending
+		// domain must be VERIFIED in Resend (DKIM CNAMEs + an SPF include), and
+		// tesserix.app is. fe3dr.com publishes only Cloudflare's inbound routing
+		// — "v=spf1 include:_spf.mx.cloudflare.net ~all" — which does NOT
+		// authorise Resend to send as @fe3dr.com, so pointing this at fe3dr.com
+		// would fail SPF and land mail in spam.
+		//
+		// Recipients see the FromName, not the envelope domain, so the brand
+		// reads correctly without needing a second verified domain.
 		ResendAPIKey: getEnv("RESEND_API_KEY", ""),
-		FromEmail:    getEnv("FROM_EMAIL", "noreply@fe3dr.com"),
+		FromEmail:    getEnv("FROM_EMAIL", "noreply@tesserix.app"),
 		FromName:     getEnv("FROM_NAME", "Fe3dr"),
 
 		// Twilio
