@@ -1,11 +1,18 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { User, LogOut, X } from 'lucide-react';
+import { User, LogOut, X, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLockBodyScroll } from '@/shared/hooks/useMobile';
 import { Button } from '@/shared/components/ui';
-import { ACCOUNT_NAV, ACCOUNT_SECONDARY_NAV, RAIL_NAV, type NavItem } from './nav-items';
+import {
+  ACCOUNT_NAV,
+  ACCOUNT_SECONDARY_NAV,
+  LEGAL_NAV,
+  PARTNER_NAV,
+  RAIL_NAV,
+  type NavItem,
+} from './nav-items';
 
 // The account drawer behind the hamburger — the web counterpart of mobile's
 // Profile tab, reachable from every page instead of being a destination you
@@ -24,16 +31,35 @@ interface AccountDrawerProps {
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
+const ROW =
+  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-ink-soft transition-colors hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40';
+
 function DrawerLink({ item, onClose }: { item: NavItem; onClose: () => void }) {
   const Icon = item.icon;
-  return (
-    <Link
-      to={item.href}
-      onClick={onClose}
-      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-ink-soft transition-colors hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40"
-    >
+  const body = (
+    <>
       <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
       <span className="truncate">{item.name}</span>
+      {item.external && (
+        <ExternalLink aria-hidden="true" className="ml-auto h-3.5 w-3.5 shrink-0 text-ink-muted" />
+      )}
+    </>
+  );
+
+  // Another origin (the vendor portal) can't go through the router, and it
+  // opens in its own tab so the customer doesn't lose their place here.
+  if (item.external) {
+    return (
+      <a href={item.href} target="_blank" rel="noopener noreferrer" onClick={onClose} className={ROW}>
+        {body}
+        <span className="sr-only">(opens in a new tab)</span>
+      </a>
+    );
+  }
+
+  return (
+    <Link to={item.href} onClick={onClose} className={ROW}>
+      {body}
     </Link>
   );
 }
@@ -167,20 +193,23 @@ export function AccountDrawer({ open, onClose, returnFocusRef }: AccountDrawerPr
               // buttons drop their classes in this app, so anything built on
               // asChild renders as bare text. These keep link semantics
               // (middle-click, open in new tab) and are guaranteed to style.
+              // Sign up leads, log in follows — a signed-out visitor is more
+              // often new than returning, and it matches the pattern the
+              // category's apps have trained people on.
               <div className="flex flex-col gap-2 px-4 pb-2">
-                <Link
-                  to="/login"
-                  onClick={onClose}
-                  className="flex w-full items-center justify-center rounded-lg bg-herb px-4 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-herb-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40"
-                >
-                  Log in
-                </Link>
                 <Link
                   to="/register"
                   onClick={onClose}
-                  className="flex w-full items-center justify-center rounded-lg border border-mist px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40"
+                  className="flex w-full items-center justify-center rounded-lg bg-herb px-4 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-herb-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40"
                 >
                   Sign up
+                </Link>
+                <Link
+                  to="/login"
+                  onClick={onClose}
+                  className="flex w-full items-center justify-center rounded-lg bg-mist px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-mist/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40"
+                >
+                  Log in
                 </Link>
               </div>
             )}
@@ -197,9 +226,25 @@ export function AccountDrawer({ open, onClose, returnFocusRef }: AccountDrawerPr
               </nav>
             </div>
 
+            {/* The other ways in. Signed-in customers don't need pitching at,
+                so this only shows when signed out. */}
+            {!isAuthenticated && (
+              <>
+                <hr className="mx-3 my-2 border-mist" />
+                <nav aria-label="Partner with us" className="flex flex-col gap-1 px-3 pb-2">
+                  {PARTNER_NAV.map((item) => (
+                    <DrawerLink key={item.href} item={item} onClose={onClose} />
+                  ))}
+                </nav>
+              </>
+            )}
+
             <hr className="mx-3 my-2 border-mist" />
-            <nav aria-label="Settings" className="flex flex-col gap-1 px-3 pb-2">
-              {ACCOUNT_SECONDARY_NAV.map((item) => (
+            <nav
+              aria-label={isAuthenticated ? 'Settings' : 'Legal'}
+              className="flex flex-col gap-1 px-3 pb-2"
+            >
+              {(isAuthenticated ? ACCOUNT_SECONDARY_NAV : LEGAL_NAV).map((item) => (
                 <DrawerLink key={item.href} item={item} onClose={onClose} />
               ))}
             </nav>

@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   FileText,
+  Store,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -38,6 +39,8 @@ export interface NavItem {
   name: string;
   href: string;
   icon: LucideIcon;
+  /** Renders as a real <a> to another origin rather than a router Link. */
+  external?: boolean;
 }
 
 /** The fixed rail — browse and discovery only. */
@@ -58,11 +61,30 @@ export const ACCOUNT_NAV: NavItem[] = [
   { name: 'Invite friends', href: '/referral', icon: Gift },
 ];
 
-/** Drawer footer group — settings, privacy and legal sit apart from the list. */
-export const ACCOUNT_SECONDARY_NAV: NavItem[] = [
-  { name: 'Settings', href: '/settings', icon: Settings },
+/** Legal, shown to everyone — signed in or out. */
+export const LEGAL_NAV: NavItem[] = [
   { name: 'Privacy & data', href: '/data-privacy', icon: ShieldCheck },
   { name: 'Terms', href: '/terms', icon: FileText },
+];
+
+/**
+ * Drawer footer group for a signed-in visitor. Settings sits here rather than
+ * in LEGAL_NAV because it configures *your* account — it means nothing to
+ * someone who hasn't signed in, so the signed-out drawer shows LEGAL_NAV only.
+ */
+export const ACCOUNT_SECONDARY_NAV: NavItem[] = [
+  { name: 'Settings', href: '/settings', icon: Settings },
+  ...LEGAL_NAV,
+];
+
+/**
+ * The other ways in — our counterpart to Uber Eats' "Add your restaurant" /
+ * "Sign up to deliver" block. Only genuinely reachable destinations belong
+ * here: the vendor portal is live, whereas delivery.fe3dr.com currently 404s,
+ * so driver signup is deliberately absent rather than linked into a dead end.
+ */
+export const PARTNER_NAV: NavItem[] = [
+  { name: 'Add your kitchen', href: 'https://vendors.fe3dr.com', icon: Store, external: true },
 ];
 
 /**
