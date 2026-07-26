@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -94,8 +96,16 @@ type MealSubscription struct {
 	// Selection — the customer picks slots, days and veg/nonveg; price is computed.
 	Slots   pq.StringArray `gorm:"type:text[]" json:"slots"`        // ["lunch","dinner"]
 	Days    pq.Int64Array  `gorm:"type:integer[]" json:"days"`      // day-of-week 0=Sun..6=Sat
-	Variant MealVariant    `gorm:"type:varchar(10)" json:"variant"` // veg/nonveg, applied to every day
+	Variant MealVariant    `gorm:"type:varchar(10)" json:"variant"` // veg/nonveg — the plan default
 	Cadence string         `gorm:"type:varchar(10)" json:"cadence"` // weekly|monthly
+
+	// DayVariants is the per-day veg/nonveg override, JSON keyed by day-of-week
+	// as a string: {"1":"veg","6":"nonveg"}. A household that wants veg midweek
+	// and non-veg at the weekend could not previously express that, because
+	// Variant applied to every day. Any day absent here falls back to Variant,
+	// so existing subscriptions (and every billing path) behave unchanged when
+	// this is empty.
+	DayVariants string `gorm:"type:jsonb" json:"dayVariants,omitempty"`
 
 	// Pricing — frozen at subscribe so later chef price edits don't change an active plan.
 	PerMealPrice float64 `gorm:"default:0" json:"perMealPrice"`
@@ -130,6 +140,32 @@ func (s *MealSubscription) BeforeCreate(*gorm.DB) error {
 		s.ID = uuid.New()
 	}
 	return nil
+}
+
+// VariantForDay resolves the veg/nonveg choice for a given day-of-week
+// (0=Sun..6=Sat), falling back to the plan-wide Variant.
+//
+// Every consumer should go through this rather than reading DayVariants
+// directly: order generation, pricing and the customer's own view must all
+// agree on which meal a given day gets, and the fallback rule is what keeps
+// subscriptions created before per-day choice existed behaving exactly as
+// before. Malformed JSON degrades to the plan default rather than erroring —
+// a stored subscription should never fail to produce a meal.
+func (s *MealSubscription) VariantForDay(day int) MealVariant {
+	if s.DayVariants != "" {
+		var m map[string]string
+		if err := json.Unmarshal([]byte(s.DayVariants), &m); err == nil {
+			if v, ok := m[strconv.Itoa(day)]; ok {
+				if mv := MealVariant(v); mv == MealVariantVeg || mv == MealVariantNonVeg {
+					return mv
+				}
+			}
+		}
+	}
+	if s.Variant == MealVariantVeg || s.Variant == MealVariantNonVeg {
+		return s.Variant
+	}
+	return MealVariantVeg
 }
 
 // MealSubscriptionSkip records a single skipped delivery date (before cutoff) so

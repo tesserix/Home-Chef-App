@@ -33,6 +33,9 @@ export default function MealSubscribePage() {
   const [slots, setSlots] = useState<string[]>([]);
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [variant, setVariant] = useState<'veg' | 'nonveg'>('veg');
+  // Per-day overrides. Absent day => the plan default above applies, which is
+  // exactly how the API resolves it (MealSubscription.VariantForDay).
+  const [dayVariants, setDayVariants] = useState<Record<number, 'veg' | 'nonveg'>>({});
   const [cadence, setCadence] = useState('weekly');
   const [price, setPrice] = useState<number | null>(null);
 
@@ -54,18 +57,26 @@ export default function MealSubscribePage() {
     }
   }, [offer]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const variantFor = (day: number): 'veg' | 'nonveg' => dayVariants[day] ?? variant;
+  // Only send genuine overrides — a day matching the plan default is noise.
+  const dayVariantsPayload = Object.fromEntries(
+    days
+      .filter((d) => dayVariants[d] && dayVariants[d] !== variant)
+      .map((d) => [String(d), dayVariants[d] as string]),
+  );
+
   const valid = slots.length > 0 && days.length > 0 && !!cadence && !!chefId;
 
   useEffect(() => {
     if (!valid) { setPrice(null); return; }
     preview.mutate(
-      { chefId: chefId!, slots, days, variant, cadence },
+      { chefId: chefId!, slots, days, variant, dayVariants: dayVariantsPayload, cadence },
       {
         onSuccess: (r) => setPrice((r as unknown as { cycleAmount: number }).cycleAmount),
         onError: () => setPrice(null),
       },
     );
-  }, [slots, days, variant, cadence]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [slots, days, variant, dayVariants, cadence]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (list: number[] | string[], v: never, set: (x: never[]) => void) =>
     set((list.includes(v) ? (list as never[]).filter((x) => x !== v) : [...(list as never[]), v]) as never[]);
@@ -108,7 +119,7 @@ export default function MealSubscribePage() {
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-medium text-ink-soft">Preference</p>
+          <p className="mb-2 text-sm font-medium text-ink-soft">Preference (applies to every day unless you change a day below)</p>
           <div className="flex gap-2">
             <button type="button" className={chip(variant === 'veg')} onClick={() => setVariant('veg')}>Veg</button>
             <button type="button" className={chip(variant === 'nonveg')} onClick={() => setVariant('nonveg')}>Non-veg</button>
@@ -136,15 +147,37 @@ export default function MealSubscribePage() {
           ) : (
             <ul className="space-y-2">
               {DAYS.filter((d) => days.includes(d.v)).map((d) => {
+                const dayVariant = variantFor(d.v);
                 const forDay = weeklyCells.filter(
-                  (c) => c.dayOfWeek === d.v && slots.includes(c.slot) && c.variant === variant,
+                  (c) => c.dayOfWeek === d.v && slots.includes(c.slot) && c.variant === dayVariant,
                 );
                 return (
                   <li key={d.v} className="rounded-lg border border-mist bg-paper p-3">
-                    <p className="text-sm font-semibold text-ink">{d.l}</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-ink">{d.l}</p>
+                      <div className="flex shrink-0 gap-1" role="group" aria-label={`${d.l} preference`}>
+                        {(['veg', 'nonveg'] as const).map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            aria-pressed={dayVariant === v}
+                            onClick={() =>
+                              setDayVariants((prev) => ({ ...prev, [d.v]: v }))
+                            }
+                            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                              dayVariant === v
+                                ? 'border-herb bg-herb-tint text-herb'
+                                : 'border-mist bg-paper text-ink-soft hover:border-ink-soft'
+                            }`}
+                          >
+                            {v === 'veg' ? 'Veg' : 'Non-veg'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     {forDay.length === 0 ? (
                       <p className="mt-1 text-sm text-ink-soft">
-                        No {variant === 'veg' ? 'veg' : 'non-veg'} dish listed for this day.
+                        No {dayVariant === 'veg' ? 'veg' : 'non-veg'} dish listed for this day.
                       </p>
                     ) : (
                       <ul className="mt-1 space-y-1">
@@ -194,7 +227,7 @@ export default function MealSubscribePage() {
           disabled={!valid || subscribe.isPending}
           onClick={() =>
             subscribe.mutate(
-              { chefId: chefId!, slots, days, variant, cadence },
+              { chefId: chefId!, slots, days, variant, dayVariants: dayVariantsPayload, cadence },
               {
                 onSuccess: () => { toast.success('Subscription created'); navigate('/subscriptions'); },
                 onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Could not subscribe'),
