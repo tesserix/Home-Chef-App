@@ -431,10 +431,20 @@ func Load() {
 		ShadowfaxAPIToken:      getEnv("SHADOWFAX_API_TOKEN", ""),
 		ShadowfaxWebhookSecret: getEnv("SHADOWFAX_WEBHOOK_SECRET", ""),
 
-		// Email — Resend only
+		// Email — Resend only.
+		//
+		// SENDS FROM tesserix.app, DISPLAYS AS Fe3dr — deliberately. The sending
+		// domain must be VERIFIED in Resend (DKIM CNAMEs + an SPF include), and
+		// tesserix.app is. fe3dr.com publishes only Cloudflare's inbound routing
+		// — "v=spf1 include:_spf.mx.cloudflare.net ~all" — which does NOT
+		// authorise Resend to send as @fe3dr.com, so pointing this at fe3dr.com
+		// would fail SPF and land mail in spam.
+		//
+		// Recipients see the FromName, not the envelope domain, so the brand
+		// reads correctly without needing a second verified domain.
 		ResendAPIKey: getEnv("RESEND_API_KEY", ""),
-		FromEmail:    getEnv("FROM_EMAIL", "noreply@homechef.com"),
-		FromName:     getEnv("FROM_NAME", "HomeChef"),
+		FromEmail:    getEnv("FROM_EMAIL", "noreply@tesserix.app"),
+		FromName:     getEnv("FROM_NAME", "Fe3dr"),
 
 		// Twilio
 		TwilioAccountSID:  getEnv("TWILIO_ACCOUNT_SID", ""),

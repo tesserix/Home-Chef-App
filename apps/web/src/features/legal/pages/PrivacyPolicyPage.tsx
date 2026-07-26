@@ -668,10 +668,10 @@ export default function PrivacyPolicyPage() {
                 </dt>
                 <dd>
                   <a
-                    href="mailto:grievance@homechef.in"
+                    href="mailto:dpo@fe3dr.com"
                     className="text-herb underline underline-offset-2 hover:text-herb-dark"
                   >
-                    grievance@homechef.in
+                    dpo@fe3dr.com
                   </a>
                 </dd>
 

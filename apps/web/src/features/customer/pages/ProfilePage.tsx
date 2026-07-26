@@ -1293,12 +1293,12 @@ function TwoFactorSection() {
   };
 
   const downloadCodes = () => {
-    const text = `HomeChef 2FA Backup Codes\n${'='.repeat(30)}\n\n${backupCodes.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\nKeep these codes safe. Each code can only be used once.`;
+    const text = `Fe3dr 2FA Backup Codes\n${'='.repeat(30)}\n\n${backupCodes.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\nKeep these codes safe. Each code can only be used once.`;
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'homechef-backup-codes.txt';
+    a.download = 'fe3dr-backup-codes.txt';
     a.click();
     URL.revokeObjectURL(url);
   };

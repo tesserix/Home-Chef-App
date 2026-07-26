@@ -267,7 +267,7 @@ export function MainLayout() {
                     {/* TODO: replace [Grievance Officer Name] and phone with the real appointed person before public launch (DPDP §13 requirement) */}
                     <address className="not-italic">
                       [Grievance Officer Name]<br />
-                      <a href="mailto:grievance@homechef.in" className="text-herb hover:underline">grievance@homechef.in</a><br />
+                      <a href="mailto:dpo@fe3dr.com" className="text-herb hover:underline">dpo@fe3dr.com</a><br />
                       Response within 15 days (DPDP Act §13)
                     </address>
                   </div>
