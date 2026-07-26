@@ -78,6 +78,7 @@ const payoutRaceUsersDDL = `CREATE TABLE IF NOT EXISTS users (
 	phone_enc text DEFAULT '', phone_bidx text DEFAULT '',
 	avatar text NOT NULL DEFAULT '', role varchar(20) NOT NULL DEFAULT 'customer',
 	gip_uid text, gip_tenant_id text, gip_provider text, auth_pool varchar(16),
+	apple_refresh_token_enc text,
 	is_active boolean NOT NULL DEFAULT true, phone_verified boolean NOT NULL DEFAULT false,
 	fcm_token text NOT NULL DEFAULT '',
 	marketing_consent boolean NOT NULL DEFAULT false, marketing_consent_at timestamptz,
