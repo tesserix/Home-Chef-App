@@ -637,16 +637,27 @@ func (h *AdminHandler) GetChefs(c *gin.Context) {
 		cws.OwnerEmail = ch.User.Email
 		cws.OwnerPhone = ch.User.Phone
 
+		// Every per-kitchen figure is scoped to the world that kitchen is
+		// currently in. Unscoped, a sandboxed kitchen shows its live and test rows
+		// SUMMED — 1 real dish plus 1 cloned dish reading as "2 items", and, once
+		// sandbox orders exist, real revenue blended with fake. That is precisely
+		// the mixing this feature exists to prevent, and it is most misleading on
+		// the very screen an admin uses to decide whether to flip a kitchen.
+		modeScoped := services.ChefOwnModeScope(ch.ID)
+
 		var orderCount int64
 		var revenue float64
-		db.Model(&models.Order{}).Where("chef_id = ?", ch.ID).Count(&orderCount)
+		db.Model(&models.Order{}).Where("chef_id = ?", ch.ID).Scopes(modeScoped).Count(&orderCount)
 		db.Model(&models.Order{}).Where("chef_id = ? AND payment_status = ?", ch.ID, "completed").
-			Select("COALESCE(SUM(total), 0)").Scan(&revenue)
+			Scopes(modeScoped).Select("COALESCE(SUM(total), 0)").Scan(&revenue)
 		cws.TotalOrders = int(orderCount)
 		cws.TotalRevenue = revenue
 
 		var menuCount, docCount int64
-		db.Model(&models.MenuItem{}).Where("chef_id = ?", ch.ID).Count(&menuCount)
+		db.Model(&models.MenuItem{}).Where("chef_id = ?", ch.ID).Scopes(modeScoped).Count(&menuCount)
+		// Documents are compliance artefacts of the REAL kitchen (FSSAI, ID proof)
+		// and are deliberately not partitioned — the same licence applies in both
+		// worlds — so this count stays unscoped.
 		db.Model(&models.ChefDocument{}).Where("chef_id = ?", ch.ID).Count(&docCount)
 		cws.MenuItemCount = int(menuCount)
 		cws.DocumentCount = int(docCount)

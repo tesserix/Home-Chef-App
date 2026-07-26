@@ -565,10 +565,16 @@ export default function DashboardScreen() {
           <View style={styles.testModeBanner}>
             <Text style={styles.testModeBannerTitle}>TEST MODE</Text>
             <Text style={styles.testModeBannerBody}>
-              {dashboard.testSessionNo
-                ? `Sandbox session ${dashboard.testSessionNo}. Nothing here is real money.`
-                : 'Nothing here is real money.'}
+              The Fe3dr team is running tests on your kitchen to investigate an
+              issue. Orders and earnings shown here are not real, and customers
+              cannot order from you right now. Your real orders and menu are
+              safe and return as soon as testing finishes.
             </Text>
+            {dashboard.testSessionNo ? (
+              <Text style={styles.testModeBannerMeta}>
+                Reference: test session {dashboard.testSessionNo}
+              </Text>
+            ) : null}
           </View>
         )}
 
@@ -1298,8 +1304,15 @@ const styles = StyleSheet.create({
   testModeBannerBody: {
     fontFamily: 'Inter-Regular',
     fontSize: 13,
+    lineHeight: 18,
     color: '#78350F',
     marginTop: 2,
+  },
+  testModeBannerMeta: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    color: '#92400E',
+    marginTop: 6,
   },
   alertCards: {
     gap: theme.spacing[2],
