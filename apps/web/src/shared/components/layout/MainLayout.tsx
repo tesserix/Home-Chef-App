@@ -453,6 +453,13 @@ export function MainLayout() {
                   Registered in New South Wales, Australia<br />
                   Operations: Mumbai, India · Sydney, Australia
                 </address>
+                {/* Zivana is the entity that actually collects payment, so it
+                    is named here rather than only inside the terms — the name a
+                    customer sees on their bank statement should be findable. */}
+                <p className="mt-2">
+                  Payments are collected and settled by <strong>Zivana Innovations LLP</strong>,
+                  part of Tesserix Pty Ltd.
+                </p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-ink-soft mb-1">Grievance Officer</h3>

@@ -116,6 +116,23 @@ export const LEGAL_OPERATOR = 'Tesserix Pty Ltd';
 // the mark8ly precedent of putting the ACN/ABN in user-facing copy.
 export const LEGAL_OPERATOR_FULL =
   'Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia';
+
+// India operating entity. Zivana collects customer payments and settles chef
+// payouts, so users need to see its name where they part with money and where
+// they sign in — a payment or a bank statement showing an entity nobody has
+// heard of is the kind of surprise that turns into a chargeback.
+//
+// Verified against the Australian Business Register on 26 July 2026:
+// https://abr.business.gov.au/ABN/View?abn=59694070865 — TESSERIX PTY LTD,
+// ACN 694 070 865, active from 03 Jan 2026, NSW.
+//
+// TODO(legal): add Zivana's LLPIN and registered office. An Indian LLP is
+// identified by its LLPIN, not by an Australian ABN, so the disclosure is
+// incomplete for an Indian user or regulator until that is filled in.
+export const LEGAL_INDIA_OPERATOR = 'Zivana Innovations LLP';
+/** One-line attribution for footers and sign-in screens. */
+export const POWERED_BY_LINE =
+  'Powered by Zivana Innovations LLP, part of Tesserix Pty Ltd (ACN 694 070 865 · ABN 59 694 070 865)';
 // India grievance-officer contact (DPDP §13). Distinct from the general
 // LEGAL_SUPPORT_EMAIL; mark8ly exposes a dedicated dpo@ alongside general support.
 // TODO(ops): provision dpo@fe3dr.com mailbox + name a resident Grievance Officer (DPDP §13)

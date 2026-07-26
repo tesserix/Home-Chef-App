@@ -347,6 +347,15 @@ export function LoginScreen({
         </View>
       ) : null}
 
+      {/* Operator attribution. Sits on the sign-in screen because that is the
+          first place a person decides whether to trust the app with money, and
+          because the name on their bank statement will be Zivana's, not the
+          brand's. Kept small and muted — disclosure, not marketing. */}
+      <Text style={styles.operatorLine}>
+        Powered by Zivana Innovations LLP{'\n'}
+        part of Tesserix Pty Ltd · ACN 694 070 865 · ABN 59 694 070 865
+      </Text>
+
       <View style={styles.bottomGap} />
     </Screen>
   );
@@ -356,6 +365,15 @@ export function LoginScreen({
 const styles = StyleSheet.create({
   topGap: { height: theme.spacing[6] },
   bottomGap: { height: theme.spacing[8] },
+
+  operatorLine: {
+    marginTop: theme.spacing[6],
+    textAlign: 'center',
+    fontFamily: 'Inter',
+    fontSize: 11,
+    lineHeight: 16,
+    color: theme.colors.ink.muted,
+  },
 
   brand: {
     fontFamily: 'Inter-SemiBold',

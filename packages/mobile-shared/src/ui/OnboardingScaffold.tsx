@@ -1,5 +1,8 @@
-import type { ReactNode, RefObject } from 'react';
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -35,6 +38,10 @@ interface OnboardingScaffoldProps {
   /** Optional back action. When provided, renders a top-left chevron text
    *  link "Back". */
   onBack?: () => void;
+  /** One short line of encouragement for this step — what the chef gets out of
+   *  finishing it, not what the form wants. A signup wizard reads as paperwork
+   *  without it; this is the line that answers "why bother". */
+  encouragement?: string;
   /** Optional ref to the internal form ScrollView. Forms with react-hook-form
    *  validation pass this so an invalid submit can scroll the first errored
    *  field into view (R14) — the ScrollView otherwise isn't reachable from
@@ -73,8 +80,42 @@ export function OnboardingScaffold({
   primaryLoading = false,
   primaryDisabled = false,
   onBack,
+  encouragement,
   scrollRef,
 }: OnboardingScaffoldProps) {
+  // Completion counts *finished* steps, so step 1 honestly reads 0% rather than
+  // taking credit for work not yet done; the last step lands on 100%.
+  const percent = Math.round(((step - 1) / Math.max(total - 1, 1)) * 100);
+
+  const fill = useRef(new Animated.Value(percent)).current;
+  const reduceMotion = useRef(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((on) => { reduceMotion.current = on; })
+      .catch(() => { /* default: animate */ });
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion.current) {
+      fill.setValue(percent);
+      return;
+    }
+    Animated.timing(fill, {
+      toValue: percent,
+      duration: 400,
+      // Brand easing — decelerate, no overshoot. Width can't use the native
+      // driver, hence animating a percentage rather than a transform.
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [percent, fill]);
+
+  const fillWidth = fill.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       {/* iOS uses 'padding' to lift the sticky CTA above the keyboard. On
@@ -110,36 +151,34 @@ export function OnboardingScaffold({
           ) : (
             <View />
           )}
-          <Text style={styles.stepLabel} accessibilityLabel={`Step ${step} of ${total}`}>
+          <Text
+            style={styles.stepLabel}
+            accessibilityLabel={`Step ${step} of ${total}, ${percent} percent complete`}
+          >
             Step {step} of {total}
+            <Text style={styles.stepDivider}>{'  ·  '}</Text>
+            <Text style={styles.percentLabel}>{percent}%</Text>
           </Text>
         </View>
 
-        {/* Progress bar — one segment per step: done = ink.soft, current = full
-            ink AND a wider pill ("you are here" reads from both weight and
-            width, not just position), upcoming = mist. This scaffold is
-            vendor-exclusive (only vendor onboarding screens import it), so it
-            stays on the monochrome ink palette rather than the retired
-            persimmon accent. */}
+        {/* Progress — one continuous track with an animated ink fill, plus a
+            tick per step boundary. The segmented bar showed position but never
+            how much was LEFT; the percentage and the growing fill are what make
+            progress feel like progress. Monochrome by design: this scaffold is
+            vendor-exclusive and carries no persimmon. */}
         <View
           style={styles.progressRow}
           accessibilityRole="progressbar"
-          accessibilityValue={{ min: 0, max: total, now: step }}
+          accessibilityValue={{ min: 0, max: 100, now: percent }}
         >
-          {Array.from({ length: total }).map((_, i) => {
-            const isDone = i < step - 1;
-            const isCurrent = i === step - 1;
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  isDone && styles.dotDone,
-                  isCurrent && styles.dotCurrent,
-                ]}
-              />
-            );
-          })}
+          <View style={styles.track}>
+            <Animated.View style={[styles.trackFill, { width: fillWidth }]} />
+            <View style={styles.tickRow} pointerEvents="none">
+              {Array.from({ length: total - 1 }).map((_, i) => (
+                <View key={i} style={styles.tick} />
+              ))}
+            </View>
+          </View>
         </View>
 
         <ScrollView
@@ -151,7 +190,16 @@ export function OnboardingScaffold({
         >
           {stepName ? <Text style={styles.eyebrow}>{stepName}</Text> : null}
           <Text style={styles.title}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          {subtitle ? (
+            <Text style={[styles.subtitle, encouragement && styles.subtitleTight]}>
+              {subtitle}
+            </Text>
+          ) : null}
+          {encouragement ? (
+            <View style={styles.encouragement}>
+              <Text style={styles.encouragementText}>{encouragement}</Text>
+            </View>
+          ) : null}
           <View style={styles.form}>{children}</View>
         </ScrollView>
 
@@ -193,27 +241,59 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   stepDivider: { color: theme.colors.mist.strong },
+  percentLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.label.size,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
 
   progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[6],
     paddingBottom: theme.spacing[4],
   },
-  dot: {
-    flex: 1,
+  track: {
     height: 4,
     borderRadius: 2,
     backgroundColor: theme.colors.mist.DEFAULT,
+    overflow: 'hidden',
+    justifyContent: 'center',
   },
-  // Done — soft ink, distinct from both the upcoming mist and the current
-  // step's full ink (the vendor app carries zero persimmon, so "done" vs
-  // "current" has to read from ink weight, not a second accent colour).
-  dotDone: { backgroundColor: theme.colors.ink.soft },
-  // Current step — full ink AND a wider pill than every other segment, so
-  // "you are here" is unambiguous even at a glance.
-  dotCurrent: { flex: 2.2, backgroundColor: theme.colors.ink.DEFAULT },
+  trackFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 2,
+    backgroundColor: theme.colors.ink.DEFAULT,
+  },
+  // Hairline ticks keep the "N discrete steps" reading that the segmented bar
+  // gave, without losing the continuous sense of how far is left.
+  tickRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    height: '100%',
+  },
+  tick: {
+    width: 1,
+    height: '100%',
+    backgroundColor: theme.colors.paper,
+    opacity: 0.9,
+  },
+
+  encouragement: {
+    borderLeftWidth: 2,
+    borderLeftColor: theme.colors.ink.DEFAULT,
+    paddingLeft: theme.spacing[3],
+    marginBottom: theme.spacing[5],
+  },
+  encouragementText: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    lineHeight: theme.typography.size.bodySm.size * 1.45,
+    color: theme.colors.ink.soft,
+  },
 
   scroll: { flex: 1 },
   scrollContent: {
@@ -246,6 +326,9 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.muted,
     marginBottom: theme.spacing[5],
   },
+  // The encouragement block carries the gap when present, so the subtitle
+  // tightens rather than leaving a double space.
+  subtitleTight: { marginBottom: theme.spacing[3] },
   form: { gap: theme.spacing[1] },
 
   ctaWrap: {

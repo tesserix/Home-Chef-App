@@ -1,4 +1,4 @@
-import { CONTACT_EMAIL, INSTAGRAM_URL, X_URL } from '@/lib/site';
+import { CONTACT_EMAIL, INSTAGRAM_URL, POWERED_BY_LINE, X_URL } from '@/lib/site';
 import { StoreBadges } from '@/components/store-badges';
 import { Wordmark } from '@/components/wordmark';
 
@@ -97,9 +97,15 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col gap-2 border-t border-hairline pt-6 text-sm text-charcoal-soft sm:flex-row sm:items-center sm:justify-between">
-          <p>&copy; {new Date().getFullYear()} Fe3dr &middot; fe3dr.com</p>
-          <p>Made with care, like the food.</p>
+        <div className="mt-12 border-t border-hairline pt-6 text-sm text-charcoal-soft">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p>&copy; {new Date().getFullYear()} Fe3dr &middot; fe3dr.com</p>
+            <p>Made with care, like the food.</p>
+          </div>
+          {/* Who actually takes the payment. Shown on every page, not buried in
+              the terms — a customer should be able to match the name on their
+              bank statement to the site they bought from. */}
+          <p className="mt-4 text-xs leading-relaxed text-charcoal-soft">{POWERED_BY_LINE}</p>
         </div>
       </div>
     </footer>

@@ -5,6 +5,7 @@ import { LegalPage, type LegalSection } from '@/components/legal-page';
 import {
   LEGAL_GRIEVANCE_EMAIL,
   LEGAL_LAST_UPDATED,
+  LEGAL_INDIA_OPERATOR,
   LEGAL_OPERATOR,
   LEGAL_OPERATOR_FULL,
   LEGAL_SUPPORT_EMAIL,
@@ -51,6 +52,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '5. Payouts',
     paragraphs: [
+      `Your payouts are made by ${LEGAL_INDIA_OPERATOR}, the Fe3dr operating entity in India, which is part of ${LEGAL_OPERATOR}. That is the name that will appear on your bank statement.`,
       'We collect customer payments through our payment partner (Razorpay) and hold order proceeds until the order is delivered. After delivery, your share — order value less commission, platform fee, and applicable taxes — is settled to your registered bank account or UPI ID on a weekly payout cycle, subject to the Reserve Bank of India Payment Aggregator framework.',
       'You are responsible for keeping your payout details accurate. Payouts may be held where an order is under dispute, a refund or chargeback is pending, or we are required to withhold by law.',
     ],
