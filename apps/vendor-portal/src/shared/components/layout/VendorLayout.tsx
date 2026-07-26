@@ -28,6 +28,7 @@ import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
 import { useNotificationsWS } from '@/shared/hooks/useNotificationsWS';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 import { ThemeToggle } from '@/shared/theme';
+import { TestModeBanner } from '@/shared/components/TestModeBanner';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -245,6 +246,9 @@ export function VendorLayout() {
         </header>
 
         {/* Page content */}
+        {/* Above the scroll container so it stays visible on every page — a
+            chef must never read sandbox earnings as real money. */}
+        <TestModeBanner />
         <main id="main" className={`flex-1 overflow-y-auto p-4 lg:p-8 ${isMobile ? 'pb-20' : ''}`}>
           <ErrorBoundary>
             <Outlet />
