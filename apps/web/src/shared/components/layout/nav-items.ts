@@ -15,6 +15,14 @@ import {
   Store,
   type LucideIcon,
 } from 'lucide-react';
+import {
+  CATERING_ENABLED,
+  SOCIAL_ENABLED,
+  TIFFIN_ENABLED,
+  WALLET_ENABLED,
+  REWARDS_ENABLED,
+  REFERRAL_ENABLED,
+} from '@/shared/config/features';
 
 // Single source of truth for the customer navigation, shared by the fixed
 // sidebar and the account drawer.
@@ -43,22 +51,28 @@ export interface NavItem {
   external?: boolean;
 }
 
-/** The fixed rail — browse and discovery only. */
+/**
+ * The fixed rail — browse and discovery only.
+ *
+ * Catering and the Social Feed are gated: the mobile app hides both for v1, and
+ * advertising them on web meant leading customers into flows the product has
+ * deferred. They reappear the moment the flags flip.
+ */
 export const RAIL_NAV: NavItem[] = [
   { name: 'Home', href: '/', icon: Home },
   { name: 'Browse Chefs', href: '/chefs', icon: ChefHat },
-  { name: 'Catering', href: '/catering', icon: Utensils },
-  { name: 'Social Feed', href: '/feed', icon: Newspaper },
+  ...(CATERING_ENABLED ? [{ name: 'Catering', href: '/catering', icon: Utensils }] : []),
+  ...(SOCIAL_ENABLED ? [{ name: 'Social Feed', href: '/feed', icon: Newspaper }] : []),
 ];
 
 /** Account drawer — mirrors the quick tiles and list rows on mobile Profile. */
 export const ACCOUNT_NAV: NavItem[] = [
   { name: 'Orders', href: '/orders', icon: Package },
   { name: 'Saved', href: '/favorites', icon: Heart },
-  { name: 'Wallet', href: '/wallet', icon: Wallet },
-  { name: 'Meal Plans', href: '/subscriptions', icon: CalendarDays },
-  { name: 'Rewards', href: '/loyalty', icon: Award },
-  { name: 'Invite friends', href: '/referral', icon: Gift },
+  ...(WALLET_ENABLED ? [{ name: 'Wallet', href: '/wallet', icon: Wallet }] : []),
+  ...(TIFFIN_ENABLED ? [{ name: 'Meal Plans', href: '/subscriptions', icon: CalendarDays }] : []),
+  ...(REWARDS_ENABLED ? [{ name: 'Rewards', href: '/loyalty', icon: Award }] : []),
+  ...(REFERRAL_ENABLED ? [{ name: 'Invite friends', href: '/referral', icon: Gift }] : []),
 ];
 
 /** Legal, shown to everyone — signed in or out. */

@@ -11,6 +11,7 @@ import { CurrencySelector } from '@/shared/components/CurrencySelector';
 import { Button } from '@/shared/components/ui';
 import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
 import { CookieBanner } from '../cookie-banner/CookieBanner';
+import { CATERING_ENABLED, SOCIAL_ENABLED } from '@/shared/config/features';
 import { AppSidebar } from './AppSidebar';
 import { AccountDrawer } from './AccountDrawer';
 
@@ -180,16 +181,22 @@ export function MainLayout() {
                         Browse Chefs
                       </Link>
                     </li>
-                    <li>
-                      <Link to="/catering" className="text-ink-muted hover:text-ink">
-                        Catering
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="/feed" className="text-ink-muted hover:text-ink">
-                        Food Feed
-                      </Link>
-                    </li>
+                    {/* Same v1 gates as the nav — the footer was still
+                        advertising both deferred surfaces. */}
+                    {CATERING_ENABLED && (
+                      <li>
+                        <Link to="/catering" className="text-ink-muted hover:text-ink">
+                          Catering
+                        </Link>
+                      </li>
+                    )}
+                    {SOCIAL_ENABLED && (
+                      <li>
+                        <Link to="/feed" className="text-ink-muted hover:text-ink">
+                          Food Feed
+                        </Link>
+                      </li>
+                    )}
                   </ul>
                 </div>
 
