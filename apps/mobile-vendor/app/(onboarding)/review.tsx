@@ -210,6 +210,7 @@ export default function ReviewScreen() {
       stepName={t('onboarding.stepReview')}
       title={t('onboarding.reviewTitle')}
       subtitle={t('onboarding.reviewSubtitle')}
+      encouragement={t('onboarding.encReview')}
       primaryLabel={submitting ? '' : t('onboarding.submitApplication')}
       onPrimary={onSubmit}
       primaryLoading={submitting}

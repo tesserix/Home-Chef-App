@@ -5,6 +5,7 @@ import { LegalPage, type LegalSection } from '@/components/legal-page';
 import {
   LEGAL_GRIEVANCE_EMAIL,
   LEGAL_LAST_UPDATED,
+  LEGAL_INDIA_OPERATOR,
   LEGAL_OPERATOR,
   LEGAL_OPERATOR_FULL,
   LEGAL_SUPPORT_EMAIL,
@@ -53,6 +54,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '5. Payment',
     paragraphs: [
+      `Your payment is collected and held by ${LEGAL_INDIA_OPERATOR}, the Fe3dr operating entity in India, which is part of ${LEGAL_OPERATOR}. That is the name that may appear on your bank or card statement. It also pays chefs their share.`,
       'We accept payment in Indian rupees through our regulated payment partners, currently Razorpay and Stripe. We never store your full card number — the partner you use stores the card details on their systems.',
       'We collect the money for the chef and driver and hold it in escrow until the order is delivered. After delivery, we release the chef share on their settlement cycle and the driver share to the driver. Settlement timings are governed by the Reserve Bank of India Payment Aggregator framework.',
       'Menu prices include the chef cooking charges. We also charge a delivery fee and a small platform fee, both shown at checkout before you pay. Taxes such as GST are shown as a separate line, calculated as required by Indian tax law. When a refund is due, we start it within 24 hours of approval and the money usually reaches your account within seven working days.',

@@ -1,6 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
+  Animated,
+  Easing,
   Platform,
   Pressable,
   RefreshControl,
@@ -143,6 +146,10 @@ export default function PendingScreen() {
       >
         {isRejected ? (
           <>
+            <CelebrationBanner
+              title={t('onboarding.celebrateTitle')}
+              body={t('onboarding.celebrateBody')}
+            />
             <View style={styles.statusRow}>
               <View
                 style={[
@@ -329,7 +336,99 @@ function UnlockItem({ text }: { text: string }) {
   );
 }
 
+/**
+ * The one moment of celebration in the whole wizard.
+ *
+ * Finishing six screens of forms and landing straight on "UNDER REVIEW" reads as
+ * anticlimax; this marks the achievement before the status information. Kept
+ * restrained per the brand: opacity + transform only, decelerating easing, no
+ * bounce or confetti, monochrome ink (this app carries no persimmon), and it
+ * holds completely still when the user has asked for reduced motion.
+ */
+function CelebrationBanner({ title, body }: { title: string; body: string }) {
+  const enter = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((reduced) => {
+        if (cancelled) return;
+        if (reduced) { enter.setValue(1); return; }
+        Animated.timing(enter, {
+          toValue: 1,
+          duration: 400,
+          easing: Easing.bezier(0.22, 1, 0.36, 1),
+          useNativeDriver: true,
+        }).start();
+      })
+      .catch(() => enter.setValue(1));
+    return () => { cancelled = true; };
+  }, [enter]);
+
+  return (
+    <Animated.View
+      accessibilityRole="summary"
+      accessibilityLabel={`${title}. ${body}`}
+      style={[
+        styles.celebrate,
+        {
+          opacity: enter,
+          transform: [
+            { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) },
+            { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) },
+          ],
+        },
+      ]}
+    >
+      <View style={styles.celebrateMark}>
+        <Text style={styles.celebrateTick}>✓</Text>
+      </View>
+      <View style={styles.celebrateCopy}>
+        <Text style={styles.celebrateTitle}>{title}</Text>
+        <Text style={styles.celebrateBody}>{body}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
+  celebrate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.DEFAULT,
+    padding: theme.spacing[4],
+    marginBottom: theme.spacing[5],
+  },
+  celebrateMark: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.colors.ink.DEFAULT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  celebrateTick: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 18,
+    lineHeight: 22,
+    color: theme.colors.paper,
+  },
+  celebrateCopy: { flex: 1 },
+  celebrateTitle: {
+    fontFamily: 'Geist',
+    fontSize: theme.typography.size.h2.size,
+    color: theme.colors.ink.DEFAULT,
+    marginBottom: 2,
+  },
+  celebrateBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    lineHeight: theme.typography.size.bodySm.size * 1.4,
+    color: theme.colors.ink.soft,
+  },
+
   root: { flex: 1, backgroundColor: theme.colors.paper },
   loadingScreen: {
     flex: 1,

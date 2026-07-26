@@ -106,6 +106,7 @@ export default function OperationsScreen() {
       stepName={t('onboarding.stepOperations')}
       title={t('onboarding.operationsTitle')}
       subtitle={t('onboarding.operationsSubtitle')}
+      encouragement={t('onboarding.encOperations')}
       primaryLabel={t('onboarding.continue')}
       onPrimary={onNext}
       scrollRef={scrollRef}
