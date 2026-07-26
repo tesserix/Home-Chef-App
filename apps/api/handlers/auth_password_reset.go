@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -52,6 +53,13 @@ func (h *PasswordResetHandler) RequestPasswordReset(c *gin.Context) {
 		// A real infrastructure failure (no Redis, mailer down, GIP unreachable)
 		// is worth telling the user about — silently swallowing it would leave
 		// them waiting for an email that is never coming.
+		//
+		// LOG IT. Returning 503 with nothing in the logs makes this class of
+		// failure invisible: the user sees a generic apology, the operator sees
+		// a bare status code, and nobody can tell whether it was GIP, Redis or
+		// the mailer. The error text is safe — the service layer deliberately
+		// keeps the address and the reset link out of it.
+		log.Printf("password-reset: request failed: %v", err)
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "We couldn't send the reset email just now. Please try again in a few minutes.",
 		})
