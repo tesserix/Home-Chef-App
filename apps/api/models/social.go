@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,39 @@ const (
 	PostStatusFlagged   PostStatus = "flagged"
 )
 
+// PostKind separates a short social update from a ChefBook article. They share
+// one table so likes, comments, moderation and the feed query aren't
+// duplicated; only the rendering and the required fields differ.
+type PostKind string
+
+const (
+	PostKindPost PostKind = "post"
+	PostKindBlog PostKind = "blog"
+)
+
+// KindOrDefault treats an empty Kind as a short post. Rows written before
+// ChefBook existed have no value for the column in flight (the DB default only
+// applies on insert), and a client branching on kind should never see "".
+func (p *Post) KindOrDefault() PostKind {
+	if p.Kind == PostKindBlog {
+		return PostKindBlog
+	}
+	return PostKindPost
+}
+
+// EstimateReadingMinutes returns a whole-minute estimate at 200 wpm, floored at
+// 1 for any non-empty body — "0 min read" reads like an error.
+func EstimateReadingMinutes(body string) int {
+	words := len(strings.Fields(body))
+	if words == 0 {
+		return 0
+	}
+	if m := words / 200; m > 0 {
+		return m
+	}
+	return 1
+}
+
 type Post struct {
 	ID       uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	ChefID   uuid.UUID      `gorm:"type:uuid;not null;index" json:"chefId"`
@@ -24,6 +58,20 @@ type Post struct {
 	Content  string         `gorm:"type:text;not null" json:"content"`
 	Images   pq.StringArray `gorm:"type:text[]" json:"images"`
 	Hashtags pq.StringArray `gorm:"type:text[]" json:"hashtags"`
+
+	// ChefBook (long-form). Kind discriminates a short update from an article;
+	// it defaults to PostKindPost so every row written before ChefBook existed
+	// keeps behaving exactly as it did. Title and CoverImage are only
+	// meaningful — and only required — when Kind is PostKindBlog.
+	Kind           PostKind `gorm:"type:varchar(16);not null;default:'post';index" json:"kind"`
+	Title          string   `gorm:"type:text" json:"title,omitempty"`
+	CoverImage     string   `gorm:"type:text" json:"coverImage,omitempty"`
+	ReadingMinutes int      `gorm:"not null;default:0" json:"readingMinutes"`
+
+	// TopicFlagged marks content that passed the culinary check only weakly.
+	// Content with no culinary signal at all is rejected outright, so this is
+	// the "let through but worth a human look" bucket rather than a block.
+	TopicFlagged bool `gorm:"not null;default:false" json:"topicFlagged"`
 
 	// Linked Menu Item (optional)
 	MenuItemID *uuid.UUID `gorm:"type:uuid" json:"menuItemId,omitempty"`
@@ -77,19 +125,27 @@ type PostComment struct {
 
 // DTOs
 type PostResponse struct {
-	ID            uuid.UUID      `json:"id"`
-	ChefID        uuid.UUID      `json:"chefId"`
-	Chef          ChefPostInfo   `json:"chef"`
-	Status        PostStatus     `json:"status"`
-	Content       string         `json:"content"`
-	Images        []string       `json:"images"`
-	Hashtags      []string       `json:"hashtags"`
-	MenuItemID    *uuid.UUID     `json:"menuItemId,omitempty"`
-	MenuItem      *MenuItemBasic `json:"menuItem,omitempty"`
-	LikesCount    int            `json:"likesCount"`
-	CommentsCount int            `json:"commentsCount"`
-	IsLiked       bool           `json:"isLiked"`
-	CreatedAt     time.Time      `json:"createdAt"`
+	ID         uuid.UUID      `json:"id"`
+	ChefID     uuid.UUID      `json:"chefId"`
+	Chef       ChefPostInfo   `json:"chef"`
+	Status     PostStatus     `json:"status"`
+	Content    string         `json:"content"`
+	Images     []string       `json:"images"`
+	Hashtags   []string       `json:"hashtags"`
+	MenuItemID *uuid.UUID     `json:"menuItemId,omitempty"`
+	MenuItem   *MenuItemBasic `json:"menuItem,omitempty"`
+
+	// ChefBook. Kind is always present so a client can branch without
+	// inferring from the presence of a title.
+	Kind           PostKind `json:"kind"`
+	Title          string   `json:"title,omitempty"`
+	CoverImage     string   `json:"coverImage,omitempty"`
+	ReadingMinutes int      `json:"readingMinutes,omitempty"`
+
+	LikesCount    int       `json:"likesCount"`
+	CommentsCount int       `json:"commentsCount"`
+	IsLiked       bool      `json:"isLiked"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 type ChefPostInfo struct {
@@ -136,16 +192,20 @@ func (p *Post) ToResponse(userID *uuid.UUID) PostResponse {
 	}
 
 	response := PostResponse{
-		ID:            p.ID,
-		ChefID:        p.ChefID,
-		Status:        p.Status,
-		Content:       p.Content,
-		Images:        images,
-		Hashtags:      hashtags,
-		MenuItemID:    p.MenuItemID,
-		LikesCount:    p.LikesCount,
-		CommentsCount: p.CommentsCount,
-		CreatedAt:     p.CreatedAt,
+		ID:             p.ID,
+		ChefID:         p.ChefID,
+		Status:         p.Status,
+		Content:        p.Content,
+		Images:         images,
+		Hashtags:       hashtags,
+		MenuItemID:     p.MenuItemID,
+		Kind:           p.KindOrDefault(),
+		Title:          p.Title,
+		CoverImage:     p.CoverImage,
+		ReadingMinutes: p.ReadingMinutes,
+		LikesCount:     p.LikesCount,
+		CommentsCount:  p.CommentsCount,
+		CreatedAt:      p.CreatedAt,
 	}
 
 	if p.Chef.ID != uuid.Nil {

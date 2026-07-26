@@ -36,8 +36,12 @@ export const REWARDS_ENABLED: boolean = true;
 /** Referral / refer-&-earn program. */
 export const REFERRAL_ENABLED: boolean = true;
 
-/** Social feed / community — built and wired, off by flag (v2-deferred). */
-export const SOCIAL_ENABLED: boolean = false;
+/**
+ * Social feed / community — ChefBook. Verified live before switching on:
+ * GET /api/v1/social/feed returns 200 and the posts/post_likes/post_comments
+ * tables exist in prod.
+ */
+export const SOCIAL_ENABLED: boolean = true;
 
 /** In-app messaging. Backed by MongoDB, not provisioned in prod yet. */
 export const MESSAGING_ENABLED: boolean = false;

@@ -71,6 +71,22 @@ func (h *SocialHandler) GetFeed(c *gin.Context) {
 		query = query.Where("? = ANY(hashtags)", strings.ToLower(hashtag))
 	}
 
+	// ?kind=blog narrows the feed to ChefBook articles (and ?kind=post to short
+	// updates). Omitting it returns both, which is what the existing clients
+	// already ask for — so their behaviour is unchanged.
+	if kind := models.PostKind(strings.TrimSpace(c.Query("kind"))); kind != "" {
+		if kind != models.PostKindPost && kind != models.PostKindBlog {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "kind must be 'post' or 'blog'"})
+			return
+		}
+		// Rows written before ChefBook have NULL/'' rather than 'post'.
+		if kind == models.PostKindPost {
+			query = query.Where("kind IS NULL OR kind = ?", models.PostKindPost)
+		} else {
+			query = query.Where("kind = ?", kind)
+		}
+	}
+
 	// App Review 1.2, the filtering half: content taken down by a moderator, or
 	// auto-hidden after crossing the report threshold, must not keep appearing
 	// in the feed. Without this the report button files a record and changes
@@ -391,6 +407,39 @@ func (h *SocialHandler) CreatePost(c *gin.Context) {
 		return
 	}
 
+	// ChefBook: a blog is the same row with a title and a cover, so the only
+	// extra requirement is that a titled article actually has a title.
+	kind := models.PostKind(strings.TrimSpace(c.PostForm("kind")))
+	if kind == "" {
+		kind = models.PostKindPost
+	}
+	if kind != models.PostKindPost && kind != models.PostKindBlog {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "kind must be 'post' or 'blog'"})
+		return
+	}
+	title := strings.TrimSpace(c.PostForm("title"))
+	if kind == models.PostKindBlog && title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A title is required for a ChefBook article"})
+		return
+	}
+
+	// ChefBook is for food and cooking. Content with no culinary signal at all
+	// is refused here rather than moderated after the fact; borderline content
+	// is allowed through and flagged so a human decides instead of the
+	// heuristic guessing. See services.CheckCulinaryTopic.
+	topic := services.CheckCulinaryTopic(title, content)
+	if !topic.OnTopic {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error": "ChefBook posts need to be about food or cooking. Tell us about the dish, the ingredients or the method.",
+			"code":  "off_topic",
+		})
+		return
+	}
+	if topic.Weak {
+		log.Printf("social: weak culinary signal on new post from chef %s (%d matches) — flagged for review",
+			chef.ID, topic.Matches)
+	}
+
 	// PII filter the content
 	sanitized, hasPII, violations := services.FilterChatMessage(content)
 	if hasPII {
@@ -460,6 +509,13 @@ func (h *SocialHandler) CreatePost(c *gin.Context) {
 		}
 	}
 
+	// A blog's cover defaults to its first uploaded image, so a chef doesn't
+	// have to upload the same picture twice to get an article header.
+	coverImage := strings.TrimSpace(c.PostForm("coverImage"))
+	if kind == models.PostKindBlog && coverImage == "" && len(imageURLs) > 0 {
+		coverImage = imageURLs[0]
+	}
+
 	post := models.Post{
 		ChefID:              chef.ID,
 		Content:             sanitized,
@@ -468,6 +524,11 @@ func (h *SocialHandler) CreatePost(c *gin.Context) {
 		MenuItemID:          menuItemID,
 		Status:              models.PostStatusPublished,
 		ContactInfoDetected: hasPII,
+		Kind:                kind,
+		Title:               title,
+		CoverImage:          coverImage,
+		ReadingMinutes:      models.EstimateReadingMinutes(sanitized),
+		TopicFlagged:        topic.Weak,
 	}
 
 	if err := database.DB.Create(&post).Error; err != nil {

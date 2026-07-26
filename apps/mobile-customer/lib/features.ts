@@ -35,8 +35,12 @@ export const REWARDS_ENABLED: boolean = true;
 /** Referral / refer-&-earn program (v2-deferred). */
 export const REFERRAL_ENABLED: boolean = true;
 
-/** Social feed / community (built & wired to /v1/social, off by flag — v2-deferred). */
-export const SOCIAL_ENABLED: boolean = false;
+/**
+ * Social feed / community — ChefBook. Wired to /api/v1/social; verified
+ * returning 200 against prod before switching on. Keep in lockstep with
+ * apps/web/src/shared/config/features.ts.
+ */
+export const SOCIAL_ENABLED: boolean = true;
 
 /**
  * In-app messaging / "Message support about this order" (#53). Backed by
