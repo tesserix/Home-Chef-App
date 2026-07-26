@@ -305,3 +305,51 @@ func TestPurgeRefusesAnOpenSession(t *testing.T) {
 	_, err = PurgeTestSession(db, s.ID)
 	require.ErrorIs(t, err, ErrSessionOpen)
 }
+
+// The guard this whole classification mechanism exists for. Adding a column to
+// a cloned table must STOP the clone until someone classifies it — because the
+// column nobody thought about is exactly the one that turns out to be a payment
+// token or a bank account number.
+//
+// Before #797 the opposite was true and documented as a convenience: the column
+// list came from the live schema, so a new column was copied into the test
+// partition automatically with nobody reviewing the decision.
+func TestCloneRefusesAnUnclassifiedColumn(t *testing.T) {
+	db := setupSessionDB(t)
+	chefID := seedChefWithData(t, db)
+
+	// A column an engineer might add next sprint without thinking about the
+	// live→test clone at all.
+	require.NoError(t, db.Exec(
+		`ALTER TABLE menu_items ADD COLUMN supplier_bank_account TEXT DEFAULT ''`).Error)
+
+	_, err := OpenTestSession(db, chefID, uuid.New(), "after a schema change", 30)
+	require.Error(t, err, "an unclassified column must stop the clone, not ride along")
+	require.Contains(t, err.Error(), "supplier_bank_account",
+		"the error must NAME the offending column: %v", err)
+	require.Contains(t, err.Error(), "unclassified")
+
+	// Fail closed: the kitchen must not be left in test mode by a refused clone.
+	var chef models.ChefProfile
+	require.NoError(t, db.First(&chef, "id = ?", chefID).Error)
+	require.False(t, chef.IsTestMode(), "a refused clone must leave the kitchen live")
+}
+
+// Classification is not merely advisory — a blanked column must come out empty
+// even if the caller forgets the override entirely.
+func TestClassificationBlanksGatewayIDsWithoutAnOverride(t *testing.T) {
+	live := []string{"id", "order_number", "razorpay_order_id", "mode"}
+	cols, classes, err := classifyColumns("orders", live)
+	require.NoError(t, err)
+	require.ElementsMatch(t, live, cols)
+	require.Equal(t, classBlank, classes["razorpay_order_id"])
+	require.Equal(t, classDerive, classes["order_number"])
+	require.Equal(t, classPartition, classes["mode"])
+}
+
+// A table nobody has classified may not be cloned at all.
+func TestClassifyRejectsAnUnknownTable(t *testing.T) {
+	_, _, err := classifyColumns("wallet_txns", []string{"id"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not classified")
+}

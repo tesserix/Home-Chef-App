@@ -148,9 +148,15 @@ func shortID(id uuid.UUID) string { return id.String()[:8] }
 // cloneRows copies matching rows of one table into the test partition.
 //
 // Implemented as INSERT … SELECT rather than load-mutate-save because it is a
-// pure data copy: no model hooks fire, no events are enqueued, no notifications
-// are sent, and the column list is derived from the live schema so a column
-// added later is copied automatically without touching this code.
+// pure data copy: no model hooks fire, no events are enqueued, and no
+// notifications are sent.
+//
+// The column list is NOT taken from the live schema. It is the intersection of
+// the live schema with the allow-list in test_sync_classification.go, and a
+// live column missing from that allow-list FAILS the clone. Deriving the list
+// from the schema — as this used to — meant any column added later was copied
+// into the test partition automatically, with nobody reviewing whether it was a
+// payment token or a bank account number (#797).
 //
 // The source table is aliased `t`, so `where` and `overrides` must qualify their
 // columns. An optional `join` brings in another table — used to remap a child
@@ -159,12 +165,19 @@ func shortID(id uuid.UUID) string { return id.String()[:8] }
 // overrides blanks or replaces specific columns on the copy: a plain value
 // becomes a literal, an sqlExpr is spliced in as SQL.
 func cloneRows(tx *gorm.DB, table string, session *models.ChefTestSession, where string, args []any, overrides map[string]any, join string) (int, error) {
-	cols, err := tableColumns(tx, table)
+	live, err := tableColumns(tx, table)
 	if err != nil {
 		return 0, fmt.Errorf("clone: columns for %s: %w", table, err)
 	}
-	if len(cols) == 0 {
+	if len(live) == 0 {
 		return 0, nil // table absent in this environment (sqlite fixtures)
+	}
+
+	// Fail closed: an unclassified column stops the clone rather than riding
+	// along unnoticed.
+	cols, classes, err := classifyColumns(table, live)
+	if err != nil {
+		return 0, err
 	}
 
 	selects := make([]string, 0, len(cols))
@@ -178,12 +191,31 @@ func cloneRows(tx *gorm.DB, table string, session *models.ChefTestSession, where
 			// A fresh identity per copy. The original is recorded in
 			// cloned_from_id, so provenance survives.
 			selects = append(selects, newIDExpr(tx))
+			continue
 		case "mode":
 			selects = append(selects, "'"+models.ChefModeTest+"'")
+			continue
 		case "test_session_id":
 			selects = append(selects, "'"+session.ID.String()+"'")
+			continue
 		case "cloned_from_id":
 			selects = append(selects, "t.id")
+			continue
+		}
+		switch classes[col] {
+		case classBlank:
+			// Gateway identifiers. Blanked from the classification rather than
+			// relying on the caller remembering an override — a forgotten
+			// override would silently ship a live payment id into test.
+			selects = append(selects, "''")
+		case classDerive:
+			// Derived columns MUST be supplied by the caller. Falling back to a
+			// verbatim copy would reintroduce the collision the class exists to
+			// prevent (a globally-unique order_number duplicated from its own
+			// source), so this fails closed instead.
+			return 0, fmt.Errorf(
+				"clone: %s.%s is classified as derived but no override was supplied — "+
+					"a derived column must never fall back to a verbatim copy", table, col)
 		default:
 			selects = append(selects, "t."+col)
 		}
