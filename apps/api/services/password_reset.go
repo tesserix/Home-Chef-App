@@ -85,6 +85,20 @@ func TenantForApp(app string) string {
 	}
 }
 
+// resetLatestKey points at the most recent token minted for an address, so a
+// re-request can retire the previous one.
+//
+// Identity Platform invalidates an earlier PASSWORD_RESET code as soon as a new
+// one is minted for the same address — sound behaviour, but it means an older
+// link in the inbox is dead while OUR wrapper token is still alive. Following
+// it would bounce the user to the provider's bare "expired or already used"
+// page. Retiring our own token in step keeps them on our page, which at least
+// tells them what to do next.
+func resetLatestKey(email string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(email)))
+	return "pwreset:latest:" + hex.EncodeToString(sum[:])
+}
+
 func resetTokenKey(token string) string {
 	// The token is stored hashed. A Redis dump, a log line, or a support engineer
 	// glancing at keys then yields nothing that can actually reset an account.
@@ -139,9 +153,16 @@ func RequestPasswordReset(ctx context.Context, email, app, clientIP string) erro
 	if err != nil {
 		return fmt.Errorf("password reset: mint token: %w", err)
 	}
+	// Retire the previous link for this address before publishing the new one.
+	// Only ever one live reset link per account.
+	if prev, err := r.Get(ctx, resetLatestKey(email)); err == nil && prev != "" {
+		_ = r.Del(ctx, prev)
+	}
 	if err := r.Set(ctx, resetTokenKey(token), firebaseLink, PasswordResetTTL); err != nil {
 		return fmt.Errorf("password reset: store token: %w", err)
 	}
+	// Tracked for the same TTL — once the token is gone there is nothing to retire.
+	_ = r.Set(ctx, resetLatestKey(email), resetTokenKey(token), PasswordResetTTL)
 
 	if err := GetEmailService().SendPasswordResetLink(email, PasswordResetLinkURL(token), PasswordResetTTL); err != nil {
 		// Drop the token rather than leave a live credential pointing at a mail

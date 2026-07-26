@@ -161,3 +161,26 @@ func restoreAppConfig(t *testing.T) {
 	prev := config.AppConfig
 	t.Cleanup(func() { config.AppConfig = prev })
 }
+
+// Only one reset link per address may be live at a time.
+//
+// Identity Platform kills an earlier code as soon as a newer one is minted, so
+// an older link in the inbox is already dead on the provider side. If our
+// wrapper token outlived it, following that link would bounce the user to the
+// provider's bare "expired or already used" page instead of ours.
+func TestLatestKeyIsPerAddressAndHashed(t *testing.T) {
+	a := resetLatestKey("Chef@Example.com")
+	b := resetLatestKey("chef@example.com")
+	if a != b {
+		t.Fatal("the pointer must be case-insensitive, or a re-request would not retire the old link")
+	}
+	if strings.Contains(a, "chef@example.com") {
+		t.Fatal("the address must never appear in a Redis key")
+	}
+	if a == resetLatestKey("someone@else.com") {
+		t.Fatal("two addresses must not share a pointer")
+	}
+	if !strings.HasPrefix(a, "pwreset:latest:") {
+		t.Fatalf("unexpected key shape: %s", a)
+	}
+}
