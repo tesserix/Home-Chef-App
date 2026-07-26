@@ -69,12 +69,17 @@ export default function PaymentResult() {
   // the user can retry — never an endless spinner. A late webhook that flips the
   // status to 'completed' still wins (success is checked first and the poll keeps
   // running while pending), so a slow-but-successful payment recovers to success.
+  //
+  // The timeout arm needs no "and not completed" guard: the success branch above
+  // already claimed every 'completed' status, so by here it cannot be completed.
+  // Spelling it out again was not just redundant but a type error — tsc narrows
+  // paymentStatus to 'pending' | 'refunded' | undefined at this point.
   const state: 'checking' | 'success' | 'failure' =
     paymentStatus === 'completed'
       ? 'success'
       : paymentStatus === 'failed' ||
           (!orderId && Boolean(params.error)) ||
-          (timedOut && paymentStatus !== 'completed')
+          timedOut
         ? 'failure'
         : 'checking';
 
