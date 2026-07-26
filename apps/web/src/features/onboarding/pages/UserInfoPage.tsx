@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -44,6 +44,20 @@ export default function UserInfoPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Email-verification gate (#12). The API requires an OTP-verified email before
+  // it will accept the completed profile; this UI had no step for it.
+  const [needsEmailVerify, setNeedsEmailVerify] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown((s) => (s > 0 ? s - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
   // Pre-fill from session user
   if (user?.firstName && !data.firstName) {
     useOnboardingStore.getState().updateData({
@@ -63,17 +77,68 @@ export default function UserInfoPage() {
     setErrors({});
   };
 
+  const submitOnboarding = async () => {
+    await apiClient.post('/customer/onboarding/complete', data);
+    toast.success('Your preferences have been saved!');
+    reset();
+    useAuthStore.getState().setOnboardingCompleted(true);
+    navigate('/', { replace: true });
+  };
+
   const handleComplete = async () => {
     setIsSubmitting(true);
     try {
-      await apiClient.post('/customer/onboarding/complete', data);
-      toast.success('Your preferences have been saved!');
-      reset();
-      useAuthStore.getState().setOnboardingCompleted(true);
-      navigate('/', { replace: true });
-    } catch {
-      toast.error('Failed to save. Please try again.');
+      await submitOnboarding();
+    } catch (err: unknown) {
+      const e = err as { status?: number; error?: string };
+      // 428 = the API's email-verification gate (EnsureLoginEmailVerified).
+      // There was no way to satisfy it from this UI at all, so completing the
+      // profile was impossible: every attempt failed and the generic "try
+      // again" told people to repeat something that could never succeed.
+      if (e?.status === 428) {
+        setNeedsEmailVerify(true);
+        void sendOtp();
+        return;
+      }
+      // Otherwise show what the server actually said, not a blanket message.
+      toast.error(e?.error || 'Failed to save. Please try again.');
     } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const sendOtp = async () => {
+    if (otpBusy || cooldown > 0) return;
+    setOtpBusy(true);
+    try {
+      await apiClient.post('/account/email/otp/request', { email: user?.email });
+      setOtpSent(true);
+      setCooldown(60);
+      toast.success('Verification code sent to your email');
+    } catch (err: unknown) {
+      const e = err as { error?: string };
+      toast.error(e?.error || "Couldn't send the code. Please try again.");
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  const verifyOtpAndFinish = async () => {
+    if (otpCode.length !== 6) return;
+    setOtpBusy(true);
+    try {
+      await apiClient.post('/account/email/otp/verify', {
+        email: user?.email,
+        code: otpCode,
+      });
+      setNeedsEmailVerify(false);
+      setIsSubmitting(true);
+      await submitOnboarding();
+    } catch (err: unknown) {
+      const e = err as { error?: string };
+      toast.error(e?.error || 'That code did not work. Please try again.');
+    } finally {
+      setOtpBusy(false);
       setIsSubmitting(false);
     }
   };
@@ -152,6 +217,54 @@ export default function UserInfoPage() {
             {currentStep === 2 && <StepAddress />}
           </motion.div>
         </AnimatePresence>
+
+        {/* Email verification — shown only once the API tells us it's required,
+            so the common path stays a three-step wizard. */}
+        {needsEmailVerify && (
+          <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-4">
+            <h2 className="text-sm font-semibold text-foreground">
+              Verify your email to finish
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {otpSent
+                ? `We sent a 6-digit code to ${user?.email ?? 'your email'}. Enter it below to save your profile.`
+                : `We need to confirm ${user?.email ?? 'your email'} before saving your profile.`}
+            </p>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label htmlFor="otp-code" className="sr-only">
+                Verification code
+              </label>
+              <input
+                id="otp-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                className="w-32 rounded-md border bg-background px-3 py-2 text-center tracking-[0.3em] tabular-nums"
+              />
+              <Button
+                type="button"
+                variant="primary"
+                onClick={verifyOtpAndFinish}
+                isLoading={otpBusy}
+                disabled={otpCode.length !== 6 || otpBusy}
+              >
+                Verify &amp; save
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={sendOtp}
+                disabled={cooldown > 0 || otpBusy}
+              >
+                {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Navigation */}
         <div className="mt-8 flex items-center justify-between border-t pt-6">

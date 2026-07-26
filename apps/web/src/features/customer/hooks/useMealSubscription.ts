@@ -20,6 +20,7 @@ export interface MealSubscription {
   slots: string[];
   days: number[];
   variant: string;
+  dayVariants?: string;
   cadence: string;
   cycleAmount: number;
   status: 'trialing' | 'active' | 'paused' | 'past_due' | 'cancelled';
@@ -37,7 +38,14 @@ export interface MealSelection {
   chefId: string;
   slots: string[];
   days: number[];
+  /** The plan-wide veg/nonveg default. */
   variant: string;
+  /**
+   * Optional per-day overrides keyed by day-of-week ("0"=Sun .. "6"=Sat).
+   * Any day not listed uses `variant`, so omitting this is the pre-existing
+   * behaviour.
+   */
+  dayVariants?: Record<string, string>;
   cadence: string;
 }
 

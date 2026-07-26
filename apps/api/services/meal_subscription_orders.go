@@ -73,7 +73,11 @@ func GenerateMealSubscriptionDay(db *gorm.DB, sub *models.MealSubscription, date
 			continue
 		}
 
-		dish := weeklyDishFor(db, sub.ChefID, weekday, slot, sub.Variant)
+		// VariantForDay, not sub.Variant: a subscription may carry a per-day
+		// veg/nonveg override. It falls back to sub.Variant for any day without
+		// one, so subscriptions created before per-day choice existed generate
+		// exactly the same orders as before.
+		dish := weeklyDishFor(db, sub.ChefID, weekday, slot, sub.VariantForDay(weekday))
 		if dish == nil {
 			continue // chef has no dish for this cell today — nothing to deliver
 		}

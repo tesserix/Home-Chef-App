@@ -795,9 +795,20 @@ function ReviewsList({ reviews }: { reviews: Review[] }) {
 // Read-only fixed weekly menu on chef detail (#1). Grouped by day (Mon-first),
 // each cell shows a veg/non-veg dot, slot, dish, price. Presentational.
 const WM_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
-const WM_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WM_SLOT_ORDER: WeeklyMenuItem['slot'][] = ['lunch', 'dinner'];
 
+const WM_DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * The weekly tiffin menu, as day tabs rather than the full 7-day grid.
+ *
+ * Rendering all seven days inline pushed the à la carte menu roughly seven
+ * screens down, so anyone who wanted a single dish had to scroll past a week of
+ * tiffin they hadn't asked about. Showing one day at a time — today first, since
+ * that's the day a browsing customer cares about — keeps the whole week
+ * discoverable (every day is one click away, and the tabs prove the week is
+ * covered) while giving the à la carte list back its place near the top.
+ */
 function WeeklyMenuSection({ items, fp }: { items: WeeklyMenuItem[]; fp: (amount: number) => string }) {
   const byDay = new Map<number, WeeklyMenuItem[]>();
   for (const it of items) {
@@ -807,40 +818,63 @@ function WeeklyMenuSection({ items, fp }: { items: WeeklyMenuItem[]; fp: (amount
   }
   const days = WM_DAY_ORDER.filter((d) => byDay.has(d));
 
+  // Default to today when the chef cooks today, else the first day they do.
+  const todayIdx = new Date().getDay();
+  const [activeDay, setActiveDay] = useState<number>(
+    days.includes(todayIdx) ? todayIdx : (days[0] ?? 1)
+  );
+  const selected = days.includes(activeDay) ? activeDay : (days[0] ?? 1);
+
+  const cells = (byDay.get(selected) ?? []).slice().sort((a, b) => {
+    const s = WM_SLOT_ORDER.indexOf(a.slot) - WM_SLOT_ORDER.indexOf(b.slot);
+    return s !== 0 ? s : a.variant.localeCompare(b.variant);
+  });
+
   return (
     <section aria-label="This week's menu">
       <h2 className="font-display text-display-xs text-ink">This week&apos;s menu</h2>
       <p className="mt-1 text-sm text-ink-soft">
         A fixed menu — every subscriber gets the same dish each day.
       </p>
-      <div className="mt-4 space-y-5">
+
+      <div className="mt-4 flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Day of the week">
         {days.map((day) => {
-          const cells = (byDay.get(day) ?? []).slice().sort((a, b) => {
-            const s = WM_SLOT_ORDER.indexOf(a.slot) - WM_SLOT_ORDER.indexOf(b.slot);
-            return s !== 0 ? s : a.variant.localeCompare(b.variant);
-          });
+          const isActive = day === selected;
           return (
-            <div key={day}>
-              <h3 className="mb-2 text-sm font-semibold text-ink">{WM_DAY_NAMES[day]}</h3>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {cells.map((c, i) => {
-                  const isVeg = c.variant === 'veg';
-                  return (
-                    <div key={c.id ?? `${day}-${c.slot}-${c.variant}-${i}`} className="rounded-lg border border-mist bg-paper p-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`h-2 w-2 rounded-sm ${isVeg ? 'bg-herb' : 'bg-paprika'}`} aria-hidden="true" />
-                        <span className="text-xs font-medium text-ink-soft">
-                          {c.slot === 'lunch' ? 'Lunch' : 'Dinner'} · {isVeg ? 'Veg' : 'Non-veg'}
-                        </span>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-sm font-semibold text-ink">{c.name}</p>
-                      {c.price > 0 ? (
-                        <p className="mt-0.5 text-sm font-semibold tabular-nums text-ink">{fp(c.price)}</p>
-                      ) : null}
-                    </div>
-                  );
-                })}
+            <button
+              key={day}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveDay(day)}
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-ink text-paper'
+                  : 'border border-mist bg-paper text-ink-soft hover:text-ink'
+              }`}
+            >
+              {WM_DAY_SHORT[day]}
+              {day === todayIdx ? <span className="ml-1 text-xs opacity-70">Today</span> : null}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" role="tabpanel">
+        {cells.map((c, i) => {
+          const isVeg = c.variant === 'veg';
+          return (
+            <div key={c.id ?? `${selected}-${c.slot}-${c.variant}-${i}`} className="rounded-lg border border-mist bg-paper p-3">
+              <div className="flex items-center gap-1.5">
+                <span className={`h-2 w-2 rounded-sm ${isVeg ? 'bg-herb' : 'bg-paprika'}`} aria-hidden="true" />
+                <span className="text-xs font-medium text-ink-soft">
+                  {c.slot === 'lunch' ? 'Lunch' : 'Dinner'} · {isVeg ? 'Veg' : 'Non-veg'}
+                </span>
               </div>
+              <p className="mt-1 line-clamp-2 text-sm font-semibold text-ink">{c.name}</p>
+              {c.price > 0 ? (
+                <p className="mt-0.5 text-sm font-semibold tabular-nums text-ink">{fp(c.price)}</p>
+              ) : null}
             </div>
           );
         })}

@@ -647,21 +647,29 @@ export function MenuItemForm({
 
   const footerTranslate = useRef(new Animated.Value(mode === 'new' ? 0 : 80)).current;
 
-  // We use useRef to compare against the previous isDirty without triggering
-  // an extra render on every keystroke.
-  const prevDirty = useRef(mode === 'new' ? true : false);
-  if (prevDirty.current !== isDirty) {
-    prevDirty.current = isDirty;
+  // Drive the sticky footer from an effect, not from the render body. Starting
+  // an animation during render is a side effect on a path React may run more
+  // than once (or throw away) per commit, which leaves the native view tree
+  // being mutated for a render that never landed. The cleanup also stops an
+  // in-flight animation when the screen unmounts — backing out mid-slide would
+  // otherwise keep driving a view that is being torn down.
+  //
+  // Both the initial Animated.Value and isDirty's initial state already agree
+  // per mode, so the first run is a no-op rather than an animation on mount.
+  useEffect(() => {
+    const to = isDirty ? 0 : 80;
     if (reduceMotion) {
-      footerTranslate.setValue(isDirty ? 0 : 80);
-    } else {
-      Animated.timing(footerTranslate, {
-        toValue: isDirty ? 0 : 80,
-        duration: theme.motion.duration.default,
-        useNativeDriver: true,
-      }).start();
+      footerTranslate.setValue(to);
+      return;
     }
-  }
+    const anim = Animated.timing(footerTranslate, {
+      toValue: to,
+      duration: theme.motion.duration.default,
+      useNativeDriver: true,
+    });
+    anim.start();
+    return () => anim.stop();
+  }, [isDirty, reduceMotion, footerTranslate, theme.motion.duration.default]);
 
   // ---- Validation -----------------------------------------------------------
 

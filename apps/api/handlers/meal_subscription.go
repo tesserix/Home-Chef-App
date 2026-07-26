@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -175,12 +177,50 @@ func (h *MealSubscriptionHandler) PreviewPrice(c *gin.Context) {
 // ── Customer: subscribe + lifecycle ─────────────────────────────────────────
 
 type mealSubSelection struct {
-	ChefID    string   `json:"chefId" binding:"required"`
-	Slots     []string `json:"slots" binding:"required"`
-	Days      []int64  `json:"days" binding:"required"`
-	Variant   string   `json:"variant"`
-	Cadence   string   `json:"cadence" binding:"required"`
-	AddressID string   `json:"addressId"`
+	ChefID  string   `json:"chefId" binding:"required"`
+	Slots   []string `json:"slots" binding:"required"`
+	Days    []int64  `json:"days" binding:"required"`
+	Variant string   `json:"variant"`
+	// DayVariants is the optional per-day override, keyed by day-of-week as a
+	// string: {"1":"veg","6":"nonveg"}. Omitted or empty means Variant applies
+	// to every day, which is exactly how every existing client behaves.
+	DayVariants map[string]string `json:"dayVariants"`
+	Cadence     string            `json:"cadence" binding:"required"`
+	AddressID   string            `json:"addressId"`
+}
+
+// normaliseDayVariants keeps only well-formed entries: a day the customer
+// actually subscribed to, and a variant the chef actually offers. Anything else
+// is dropped rather than stored, so VariantForDay never has to defend against
+// junk and the plan default cleanly covers the gap. Returns "" when nothing
+// survives, which is the "no override" state.
+func normaliseDayVariants(in map[string]string, days []int64) string {
+	if len(in) == 0 {
+		return ""
+	}
+	allowed := make(map[string]bool, len(days))
+	for _, d := range days {
+		allowed[strconv.FormatInt(d, 10)] = true
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		if !allowed[k] {
+			continue
+		}
+		mv := models.MealVariant(v)
+		if mv != models.MealVariantVeg && mv != models.MealVariantNonVeg {
+			continue
+		}
+		out[k] = string(mv)
+	}
+	if len(out) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // Subscribe creates a meal subscription. NOTE (#281): this foundation activates the
@@ -241,6 +281,7 @@ func (h *MealSubscriptionHandler) Subscribe(c *gin.Context) {
 		Slots:              req.Slots,
 		Days:               req.Days,
 		Variant:            variant,
+		DayVariants:        normaliseDayVariants(req.DayVariants, req.Days),
 		Cadence:            req.Cadence,
 		PerMealPrice:       cfg.PerMealPrice,
 		DeliveryFee:        cfg.DeliveryFee,

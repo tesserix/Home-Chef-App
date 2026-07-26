@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -76,8 +77,67 @@ func setupMealOrderDB(t *testing.T) *gorm.DB {
 
 func seedDish(t *testing.T, db *gorm.DB, chefID uuid.UUID, weekday int, slot models.MealSlot, name string, price float64) {
 	t.Helper()
+	seedDishVariant(t, db, chefID, weekday, slot, models.MealVariantVeg, name, price)
+}
+
+func seedDishVariant(t *testing.T, db *gorm.DB, chefID uuid.UUID, weekday int, slot models.MealSlot, variant models.MealVariant, name string, price float64) {
+	t.Helper()
 	require.NoError(t, db.Exec(`INSERT INTO weekly_menu_items (id, chef_id, day_of_week, slot, variant, name, price)
-		VALUES (?, ?, ?, ?, 'veg', ?, ?)`, uuid.New().String(), chefID.String(), weekday, string(slot), name, price).Error)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, uuid.New().String(), chefID.String(), weekday, string(slot), string(variant), name, price).Error)
+}
+
+// A subscription's per-day override decides which dish is generated. Both a veg
+// and a non-veg dish exist for the day, so picking the wrong one shows up as the
+// wrong dish name rather than as no order at all.
+//
+// The date is marked skipped so the assertion runs through the skipped-
+// fulfillment branch: it records the same resolved dish but doesn't touch the
+// orders/payments tables, which this sqlite harness doesn't create. Dish
+// resolution — the thing under test — is identical on both branches.
+func TestGenerateMealSubscriptionDay_PerDayVariant(t *testing.T) {
+	run := func(t *testing.T, dayVariants string, wantDish string) {
+		t.Helper()
+		db := setupMealOrderDB(t)
+		chef, cust := uuid.New(), uuid.New()
+		date := nextWeekday(time.Thursday)
+		wd := int(date.Weekday())
+		seedDishVariant(t, db, chef, wd, models.MealSlotLunch, models.MealVariantVeg, "Dalma Rice", 120)
+		seedDishVariant(t, db, chef, wd, models.MealSlotLunch, models.MealVariantNonVeg, "Chicken Curry Rice", 180)
+
+		sub := &models.MealSubscription{
+			ID: uuid.New(), CustomerID: cust, ChefID: chef, Currency: "INR",
+			Status: models.MealSubStatusActive, Days: []int64{int64(wd)}, Slots: []string{"lunch"},
+			Variant: models.MealVariantVeg, DayVariants: dayVariants,
+		}
+		require.NoError(t, db.Exec(`INSERT INTO meal_subscription_skips (id, meal_subscription_id, date) VALUES (?, ?, ?)`,
+			uuid.New().String(), sub.ID.String(), date).Error)
+
+		_, err := GenerateMealSubscriptionDay(db, sub, date, models.Address{City: "X"})
+		require.NoError(t, err)
+
+		var got string
+		require.NoError(t, db.Raw(`SELECT dish_name FROM meal_subscription_fulfillments WHERE meal_subscription_id = ?`,
+			sub.ID.String()).Scan(&got).Error)
+		assert.Equal(t, wantDish, got)
+	}
+
+	thursday := int(nextWeekday(time.Thursday).Weekday())
+
+	t.Run("override for this day wins over the plan default", func(t *testing.T) {
+		run(t, fmt.Sprintf(`{"%d":"nonveg"}`, thursday), "Chicken Curry Rice")
+	})
+
+	t.Run("no override falls back to the plan default", func(t *testing.T) {
+		run(t, "", "Dalma Rice")
+	})
+
+	t.Run("override for a different day is ignored", func(t *testing.T) {
+		run(t, fmt.Sprintf(`{"%d":"nonveg"}`, (thursday+1)%7), "Dalma Rice")
+	})
+
+	t.Run("malformed JSON degrades to the plan default", func(t *testing.T) {
+		run(t, `{not json`, "Dalma Rice")
+	})
 }
 
 func TestGenerateMealSubscriptionDay(t *testing.T) {
