@@ -348,7 +348,7 @@ func (h *StaffHandler) CreateInvitation(c *gin.Context) {
 		}
 	}
 
-	// Send invitation email via SendGrid
+	// Send invitation email
 	inviterName := ""
 	if invitation.InvitedBy.FirstName != "" {
 		inviterName = invitation.InvitedBy.FirstName + " " + invitation.InvitedBy.LastName

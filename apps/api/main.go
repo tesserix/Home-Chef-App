@@ -17,11 +17,11 @@ import (
 	"time"
 
 	"github.com/homechef/api/config"
-	"github.com/homechef/api/piicrypto"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/handlers"
 	"github.com/homechef/api/internal/observability"
 	"github.com/homechef/api/logger"
+	"github.com/homechef/api/piicrypto"
 	"github.com/homechef/api/routes"
 	"github.com/homechef/api/services"
 	"github.com/homechef/api/temporal"
@@ -162,7 +162,7 @@ func main() {
 	// decides which one handles a given order.
 	services.InitStripe()
 
-	// Initialize email service (SendGrid primary, Resend fallback)
+	// Initialize email service (Resend — the only provider our domain authenticates)
 	services.InitEmailService()
 
 	// Initialize FCM push notification service
