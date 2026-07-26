@@ -18,9 +18,13 @@ type DailyMenu struct {
 	// Live/test data partition. See models.ModePartition.
 	ModePartition
 
-	ID          uuid.UUID       `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	ChefID      uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex:idx_daily_menu_chef_date" json:"chefId"`
-	Date        time.Time       `gorm:"type:date;not null;uniqueIndex:idx_daily_menu_chef_date" json:"date"`
+	ID uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	// The (chef, date) pair is unique per MODE — see the
+	// idx_daily_menu_chef_date_live / _test pair in database.go's postMigrate
+	// block. Mode-blind uniqueness here would reject the live→test clone.
+	// Named _lookup so it does not collide with the legacy index postMigrate drops.
+	ChefID      uuid.UUID       `gorm:"type:uuid;not null;index:idx_daily_menu_chef_date_lookup" json:"chefId"`
+	Date        time.Time       `gorm:"type:date;not null;index:idx_daily_menu_chef_date_lookup" json:"date"`
 	IsPublished bool            `gorm:"default:false" json:"isPublished"`
 	PublishedAt *time.Time      `gorm:"" json:"publishedAt,omitempty"`
 	CreatedAt   time.Time       `gorm:"autoCreateTime" json:"createdAt"`

@@ -70,18 +70,36 @@ func CloneChefIntoSession(tx *gorm.DB, chefID uuid.UUID, session *models.ChefTes
 
 	// Configuration: copied in full, so the sandbox kitchen behaves exactly like
 	// the real one — same menu, same schedule, same capacity, same prices.
+	//
+	// ORDER MATTERS: a menu's items are remapped onto the cloned header via its
+	// cloned_from_id, so the header must already exist when the items are copied.
 	cfg := []struct {
-		table string
-		where string
-		args  []any
+		table     string
+		where     string
+		args      []any
+		join      string
+		overrides map[string]any
 	}{
-		{"menu_items", "chef_id = ? AND mode = ? AND deleted_at IS NULL", []any{chefID, models.ChefModeLive}},
-		{"chef_schedules", "chef_id = ? AND mode = ?", []any{chefID, models.ChefModeLive}},
-		{"weekly_menus", "chef_id = ? AND mode = ?", []any{chefID, models.ChefModeLive}},
-		{"daily_menus", "chef_id = ? AND mode = ?", []any{chefID, models.ChefModeLive}},
+		{table: "menu_items", where: "t.chef_id = ? AND t.mode = ? AND t.deleted_at IS NULL", args: []any{chefID, models.ChefModeLive}},
+		{table: "chef_schedules", where: "t.chef_id = ? AND t.mode = ?", args: []any{chefID, models.ChefModeLive}},
+		{table: "weekly_menus", where: "t.chef_id = ? AND t.mode = ?", args: []any{chefID, models.ChefModeLive}},
+		// Keyed by chef_id rather than by the weekly_menus row, so no remap.
+		{table: "weekly_menu_items", where: "t.chef_id = ? AND t.mode = ?", args: []any{chefID, models.ChefModeLive}},
+		{table: "daily_menus", where: "t.chef_id = ? AND t.mode = ?", args: []any{chefID, models.ChefModeLive}},
+		// daily_menu_items DOES point at its header by id, so daily_menu_id has to
+		// be rewritten to the clone's id — copying it verbatim would leave the
+		// sandbox menu reading through to live rows.
+		{
+			table: "daily_menu_items",
+			where: "t.chef_id = ? AND t.mode = ?",
+			args:  []any{chefID, models.ChefModeLive},
+			join: "JOIN daily_menus p ON p.cloned_from_id = t.daily_menu_id AND p.test_session_id = '" +
+				session.ID.String() + "'",
+			overrides: map[string]any{"daily_menu_id": sqlExpr("p.id")},
+		},
 	}
 	for _, c := range cfg {
-		n, err := cloneRows(tx, c.table, session, c.where, c.args, nil)
+		n, err := cloneRows(tx, c.table, session, c.where, c.args, c.overrides, c.join)
 		if err != nil {
 			return "", err
 		}
@@ -90,15 +108,21 @@ func CloneChefIntoSession(tx *gorm.DB, chefID uuid.UUID, session *models.ChefTes
 
 	// History: a bounded window, enough to debug against the order that broke.
 	// Gateway identifiers are blanked so a replica can never move real money.
+	//
+	// order_number is DERIVED, not copied: it is globally unique (invoicing keys
+	// off it), so a verbatim copy collides with its own original. The session
+	// suffix also keeps two sessions over the same window from colliding with
+	// each other, since a closed session's rows survive until an explicit purge.
 	n, err := cloneRows(tx, "orders", session,
-		"chef_id = ? AND mode = ? AND created_at >= ? AND deleted_at IS NULL",
+		"t.chef_id = ? AND t.mode = ? AND t.created_at >= ? AND t.deleted_at IS NULL",
 		[]any{chefID, models.ChefModeLive, since},
 		map[string]any{
+			"order_number":        sqlExpr("t.order_number || '-T" + shortID(session.ID) + "'"),
 			"razorpay_order_id":   "",
 			"razorpay_payment_id": "",
 			"payout_transfer_id":  "",
 			"refund_id":           "",
-		})
+		}, "")
 	if err != nil {
 		return "", err
 	}
@@ -111,6 +135,16 @@ func CloneChefIntoSession(tx *gorm.DB, chefID uuid.UUID, session *models.ChefTes
 	return string(raw), nil
 }
 
+// sqlExpr is an override rendered as raw SQL instead of a quoted literal, so a
+// cloned column can be DERIVED from the row being copied (a per-session order
+// number) or from a joined table (a remapped parent id) rather than being set to
+// a constant. Only ever constructed from values this package supplies.
+type sqlExpr string
+
+// shortID is the leading segment of a UUID — enough to keep per-session derived
+// values distinct without making them unwieldy in an admin UI.
+func shortID(id uuid.UUID) string { return id.String()[:8] }
+
 // cloneRows copies matching rows of one table into the test partition.
 //
 // Implemented as INSERT … SELECT rather than load-mutate-save because it is a
@@ -118,8 +152,13 @@ func CloneChefIntoSession(tx *gorm.DB, chefID uuid.UUID, session *models.ChefTes
 // are sent, and the column list is derived from the live schema so a column
 // added later is copied automatically without touching this code.
 //
-// overrides blanks or replaces specific columns on the copy (gateway ids).
-func cloneRows(tx *gorm.DB, table string, session *models.ChefTestSession, where string, args []any, overrides map[string]any) (int, error) {
+// The source table is aliased `t`, so `where` and `overrides` must qualify their
+// columns. An optional `join` brings in another table — used to remap a child
+// row onto its cloned parent via the parent's cloned_from_id.
+//
+// overrides blanks or replaces specific columns on the copy: a plain value
+// becomes a literal, an sqlExpr is spliced in as SQL.
+func cloneRows(tx *gorm.DB, table string, session *models.ChefTestSession, where string, args []any, overrides map[string]any, join string) (int, error) {
 	cols, err := tableColumns(tx, table)
 	if err != nil {
 		return 0, fmt.Errorf("clone: columns for %s: %w", table, err)
@@ -130,6 +169,10 @@ func cloneRows(tx *gorm.DB, table string, session *models.ChefTestSession, where
 
 	selects := make([]string, 0, len(cols))
 	for _, col := range cols {
+		if v, ok := overrides[col]; ok {
+			selects = append(selects, quoteLiteral(v))
+			continue
+		}
 		switch col {
 		case "id":
 			// A fresh identity per copy. The original is recorded in
@@ -140,18 +183,14 @@ func cloneRows(tx *gorm.DB, table string, session *models.ChefTestSession, where
 		case "test_session_id":
 			selects = append(selects, "'"+session.ID.String()+"'")
 		case "cloned_from_id":
-			selects = append(selects, "id")
+			selects = append(selects, "t.id")
 		default:
-			if v, ok := overrides[col]; ok {
-				selects = append(selects, quoteLiteral(v))
-				continue
-			}
-			selects = append(selects, col)
+			selects = append(selects, "t."+col)
 		}
 	}
 
-	sql := fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s WHERE %s",
-		table, joinCols(cols), joinCols(selects), table, where)
+	sql := fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s t %s WHERE %s",
+		table, joinCols(cols), joinCols(selects), table, join, where)
 	res := tx.Exec(sql, args...)
 	if res.Error != nil {
 		return 0, fmt.Errorf("clone: copy %s: %w", table, res.Error)
@@ -186,6 +225,8 @@ func joinCols(c []string) string {
 // with values this package supplies (blank gateway ids), never with user input.
 func quoteLiteral(v any) string {
 	switch t := v.(type) {
+	case sqlExpr:
+		return string(t) // raw SQL by construction — see sqlExpr
 	case string:
 		if t == "" {
 			return "''"

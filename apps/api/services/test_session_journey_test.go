@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -27,14 +28,14 @@ func countScoped(t *testing.T, db *gorm.DB, table string, chefID uuid.UUID) int6
 // follows to debug a production issue on a REAL kitchen, and asserts the
 // property that makes it safe to do at all: no live data is lost or altered.
 //
-//	1. "Amma ka Kitchen" is live, with real orders and a real menu.
-//	2. A customer reports a bug. The engineer flips the kitchen to Test.
-//	3. The kitchen's setup and recent orders are cloned into a sandbox session.
-//	4. The chef and engineer work in the sandbox: place fake orders, change the
-//	   menu, break things. None of it touches real data.
-//	5. The fix ships. The engineer flips back to Live.
-//	6. The real kitchen resumes EXACTLY as it was — same orders, same menu,
-//	   same totals — and the sandbox evidence is retained for reference.
+//  1. "Amma ka Kitchen" is live, with real orders and a real menu.
+//  2. A customer reports a bug. The engineer flips the kitchen to Test.
+//  3. The kitchen's setup and recent orders are cloned into a sandbox session.
+//  4. The chef and engineer work in the sandbox: place fake orders, change the
+//     menu, break things. None of it touches real data.
+//  5. The fix ships. The engineer flips back to Live.
+//  6. The real kitchen resumes EXACTLY as it was — same orders, same menu,
+//     same totals — and the sandbox evidence is retained for reference.
 func TestSupportEngineerJourney(t *testing.T) {
 	db := setupSessionDB(t)
 	engineer := uuid.New()
@@ -79,7 +80,7 @@ func TestSupportEngineerJourney(t *testing.T) {
 		require.NoError(t, db.Exec(
 			`INSERT INTO orders (id, chef_id, order_number, status, total, mode, test_session_id, created_at)
 			 VALUES (?,?,?,?,?,?,?,?)`,
-			uuid.New().String(), chefID.String(), "TEST-REPRO", "delivered", 999.0,
+			uuid.New().String(), chefID.String(), fmt.Sprintf("TEST-REPRO-%d", i), "delivered", 999.0,
 			models.ChefModeTest, session.ID.String(), time.Now()).Error)
 	}
 	require.NoError(t, db.Exec(`UPDATE orders SET status='cancelled' WHERE mode='test'`).Error)
