@@ -43,5 +43,10 @@ export const REFERRAL_ENABLED: boolean = true;
  */
 export const SOCIAL_ENABLED: boolean = true;
 
-/** In-app messaging. Backed by MongoDB, not provisioned in prod yet. */
+/**
+ * In-app messaging. Still off, but NOT for the reason previously recorded
+ * here: MongoDB *is* provisioned — homechef-mongodb is a healthy 3-node
+ * replica set and the API has MONGODB_URI configured. Whatever remains before
+ * messaging can ship needs re-checking rather than assuming the old note.
+ */
 export const MESSAGING_ENABLED: boolean = false;

@@ -43,8 +43,9 @@ export const REFERRAL_ENABLED: boolean = true;
 export const SOCIAL_ENABLED: boolean = true;
 
 /**
- * In-app messaging / "Message support about this order" (#53). Backed by
- * MongoDB, which is NOT provisioned in prod yet, so the endpoints 503. Hidden
- * until MONGODB_URI is set on the backend — flip to true then.
+ * In-app messaging / "Message support about this order" (#53). Still off, but
+ * the old note here ("MongoDB is NOT provisioned") is out of date: the
+ * homechef-mongodb replica set is healthy and the API has MONGODB_URI set.
+ * Re-verify what actually blocks messaging before flipping this.
  */
 export const MESSAGING_ENABLED: boolean = false;
