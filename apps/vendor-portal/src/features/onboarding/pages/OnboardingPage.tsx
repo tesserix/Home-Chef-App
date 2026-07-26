@@ -80,7 +80,7 @@ const LOCKED_STATUSES = new Set(['pending_review', 'submitted', 'verified']);
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const { user, onboardingStatus, adminNotes } = useAuth();
+  const { user, logout, onboardingStatus, adminNotes } = useAuth();
   const {
     currentStep,
     data,
@@ -203,6 +203,12 @@ export default function OnboardingPage() {
     }
   };
 
+  const handleSignOut = async () => {
+    // logout() clears the persisted onboarding draft as well as the session,
+    // so the next person to open this page starts from a blank form.
+    await logout();
+  };
+
   const displayStep = showReview ? TOTAL_DISPLAY_STEPS : currentStep;
 
   return (
@@ -219,6 +225,19 @@ export default function OnboardingPage() {
                 : `Step ${currentStep + 1} of ${TOTAL_WIZARD_STEPS}`}
             </p>
           </div>
+
+          {/* Escape hatch. A half-finished application is saved as you go, so
+              someone landing on a form that isn't theirs — a shared device, a
+              stale draft — needs a way out that also clears the saved answers.
+              logout() resets the onboarding store, so this genuinely starts
+              clean rather than just navigating away. */}
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="ml-auto rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {user?.email ? `Not ${user.email}? Sign out` : 'Sign out & start fresh'}
+          </button>
         </div>
       </header>
 
