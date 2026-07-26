@@ -51,6 +51,22 @@ func setupSessionDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, chef_id TEXT, status TEXT DEFAULT 'completed',
 			mode TEXT DEFAULT 'live', test_session_id TEXT, cloned_from_id TEXT,
 			created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE weekly_menus (id TEXT PRIMARY KEY, chef_id TEXT, is_published BOOLEAN DEFAULT 0,
+			published_at DATETIME, mode TEXT DEFAULT 'live', test_session_id TEXT, cloned_from_id TEXT,
+			created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE weekly_menu_items (id TEXT PRIMARY KEY, chef_id TEXT, day_of_week INTEGER DEFAULT 0,
+			slot TEXT DEFAULT 'lunch', variant TEXT DEFAULT 'veg', name TEXT DEFAULT '',
+			price REAL DEFAULT 0, mode TEXT DEFAULT 'live', test_session_id TEXT, cloned_from_id TEXT,
+			created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE daily_menus (id TEXT PRIMARY KEY, chef_id TEXT, date DATE,
+			is_published BOOLEAN DEFAULT 0, published_at DATETIME,
+			mode TEXT DEFAULT 'live', test_session_id TEXT, cloned_from_id TEXT,
+			created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE daily_menu_items (id TEXT PRIMARY KEY, daily_menu_id TEXT, chef_id TEXT,
+			date DATE, slot TEXT DEFAULT 'lunch', variant TEXT DEFAULT 'veg', name TEXT DEFAULT '',
+			price REAL DEFAULT 0, sort_order INTEGER DEFAULT 0,
+			mode TEXT DEFAULT 'live', test_session_id TEXT, cloned_from_id TEXT,
+			created_at DATETIME, updated_at DATETIME)`,
 		// The clone enqueues nothing; these exist so the test can PROVE it.
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT)`,
 		`CREATE TABLE notifications (id TEXT PRIMARY KEY, user_id TEXT)`,
@@ -58,7 +74,30 @@ func setupSessionDB(t *testing.T) *gorm.DB {
 	for _, s := range stmts {
 		require.NoError(t, db.Exec(s).Error)
 	}
+
+	// The production unique indexes, which the fixtures previously omitted
+	// entirely. Without them the INSERT…SELECT clone never meets the constraint
+	// it actually violates in prod, which is how the mode-blind
+	// idx_weekly_menus_chef_id shipped. These mirror the postMigrate block in
+	// database.go — if that block changes, change these with it.
+	for _, s := range prodUniqueIndexes {
+		require.NoError(t, db.Exec(s).Error)
+	}
 	return db
+}
+
+// prodUniqueIndexes are the partitioned-table unique indexes as they exist in
+// Postgres after database.go's postMigrate block runs. A clone writes a second
+// row for the same natural key differing only by mode, so every one of these
+// must be either mode-scoped or derived per session.
+var prodUniqueIndexes = []string{
+	`CREATE UNIQUE INDEX idx_orders_order_number ON orders (order_number)`,
+	`CREATE UNIQUE INDEX idx_weekly_menus_chef_live ON weekly_menus (chef_id) WHERE mode = 'live'`,
+	`CREATE UNIQUE INDEX idx_weekly_menus_chef_test ON weekly_menus (chef_id, test_session_id) WHERE mode = 'test'`,
+	`CREATE UNIQUE INDEX idx_weekly_cell_live ON weekly_menu_items (chef_id, day_of_week, slot, variant) WHERE mode = 'live'`,
+	`CREATE UNIQUE INDEX idx_weekly_cell_test ON weekly_menu_items (chef_id, day_of_week, slot, variant, test_session_id) WHERE mode = 'test'`,
+	`CREATE UNIQUE INDEX idx_daily_menu_chef_date_live ON daily_menus (chef_id, date) WHERE mode = 'live'`,
+	`CREATE UNIQUE INDEX idx_daily_menu_chef_date_test ON daily_menus (chef_id, date, test_session_id) WHERE mode = 'test'`,
 }
 
 func seedLiveChef(t *testing.T, db *gorm.DB) uuid.UUID {

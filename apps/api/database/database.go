@@ -394,6 +394,31 @@ func Migrate() error {
 		// location is never ambiguous. Mirrors migration
 		// 20260705000002 (golang-migrate files don't run here; this is the live copy).
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_addresses_one_default_per_user ON addresses (user_id) WHERE is_default`,
+		// Mode-aware uniqueness for the tiffin menu tables. The live→test clone
+		// (services/test_session_clone.go) copies a kitchen's rows back into the
+		// SAME table changing only mode/test_session_id/cloned_from_id, so a
+		// unique index that ignores mode rejects the copy: opening a session for
+		// any chef holding a weekly menu failed with 23505 on
+		// idx_weekly_menus_chef_id.
+		//
+		// SPLIT rather than simply adding mode to the key, because a closed
+		// session's rows survive until an explicit purge — one index keeps the
+		// live invariant strict (exactly one live weekly menu per chef), the
+		// other scopes test rows to their session so consecutive sessions don't
+		// collide with each other's leftovers.
+		//
+		// AutoMigrate only ever adds indexes, so the mode-blind originals must be
+		// dropped here; the GORM tags that created them are gone from
+		// models/weekly_menu.go and models/daily_menu.go.
+		`DROP INDEX IF EXISTS idx_weekly_menus_chef_id`,
+		`DROP INDEX IF EXISTS idx_weekly_cell`,
+		`DROP INDEX IF EXISTS idx_daily_menu_chef_date`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_weekly_menus_chef_live ON weekly_menus (chef_id) WHERE mode = 'live'`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_weekly_menus_chef_test ON weekly_menus (chef_id, test_session_id) WHERE mode = 'test'`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_weekly_cell_live ON weekly_menu_items (chef_id, day_of_week, slot, variant) WHERE mode = 'live'`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_weekly_cell_test ON weekly_menu_items (chef_id, day_of_week, slot, variant, test_session_id) WHERE mode = 'test'`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_menu_chef_date_live ON daily_menus (chef_id, date) WHERE mode = 'live'`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_menu_chef_date_test ON daily_menus (chef_id, date, test_session_id) WHERE mode = 'test'`,
 	}
 	for _, stmt := range postMigrate {
 		if err := DB.Exec(stmt).Error; err != nil {

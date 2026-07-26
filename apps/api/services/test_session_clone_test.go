@@ -38,6 +38,104 @@ func TestCloneCopiesConfigAndWindowedOrders(t *testing.T) {
 	require.EqualValues(t, 3, liveItems, "cloning must not consume the live rows")
 }
 
+// seedChefMenus gives a kitchen the tiffin configuration that carries unique
+// constraints: a weekly template and a dated daily menu, both with dishes.
+func seedChefMenus(t *testing.T, db *gorm.DB, chefID uuid.UUID) {
+	t.Helper()
+	require.NoError(t, db.Exec(
+		`INSERT INTO weekly_menus (id, chef_id, is_published, mode) VALUES (?,?,?,?)`,
+		uuid.New().String(), chefID.String(), true, "live").Error)
+	for _, day := range []int{1, 2} {
+		require.NoError(t, db.Exec(
+			`INSERT INTO weekly_menu_items (id, chef_id, day_of_week, slot, variant, name, price, mode)
+			 VALUES (?,?,?,?,?,?,?,?)`,
+			uuid.New().String(), chefID.String(), day, "lunch", "veg", "Dal Chawal", 140.0, "live").Error)
+	}
+
+	dailyID := uuid.New()
+	date := time.Now().Format("2006-01-02")
+	require.NoError(t, db.Exec(
+		`INSERT INTO daily_menus (id, chef_id, date, is_published, mode) VALUES (?,?,?,?,?)`,
+		dailyID.String(), chefID.String(), date, true, "live").Error)
+	for _, dish := range []string{"Rajma", "Jeera Rice"} {
+		require.NoError(t, db.Exec(
+			`INSERT INTO daily_menu_items (id, daily_menu_id, chef_id, date, slot, variant, name, price, mode)
+			 VALUES (?,?,?,?,?,?,?,?,?)`,
+			uuid.New().String(), dailyID.String(), chefID.String(), date,
+			"lunch", "veg", dish, 120.0, "live").Error)
+	}
+}
+
+// The regression this whole change exists for. The clone writes a second row
+// for the same natural key differing only by mode, so any unique index that
+// omits mode rejects it — in prod that was idx_weekly_menus_chef_id, and
+// opening a session for a chef with a weekly menu failed outright with 23505.
+//
+// TWO consecutive sessions, because a closed session's test rows survive until
+// an explicit purge: a mode-only constraint would pass the first open and fail
+// the second against session 1's leftovers.
+func TestCloneSurvivesUniqueConstraintsAcrossSessions(t *testing.T) {
+	db := setupSessionDB(t)
+	chefID := seedChefWithData(t, db)
+	seedChefMenus(t, db, chefID)
+	adminID := uuid.New()
+
+	s1, err := OpenTestSession(db, chefID, adminID, "first", 30)
+	require.NoError(t, err, "a kitchen with a weekly menu must be able to enter test mode")
+	require.NoError(t, CloseTestSession(db, chefID, adminID))
+
+	// Deliberately NOT purged — session 1's test rows are still present.
+	s2, err := OpenTestSession(db, chefID, adminID, "second", 30)
+	require.NoError(t, err, "a second session must not collide with the first session's rows")
+	require.NoError(t, CloseTestSession(db, chefID, adminID))
+
+	// The live originals are untouched and still singular.
+	var liveWeekly int64
+	require.NoError(t, db.Table("weekly_menus").
+		Where("chef_id = ? AND mode = ?", chefID.String(), models.ChefModeLive).
+		Count(&liveWeekly).Error)
+	require.EqualValues(t, 1, liveWeekly, "the live weekly menu must survive untouched")
+
+	// Each session got its own copy.
+	for _, s := range []*models.ChefTestSession{s1, s2} {
+		var n int64
+		require.NoError(t, db.Table("weekly_menus").
+			Where("test_session_id = ?", s.ID).Count(&n).Error)
+		require.EqualValues(t, 1, n, "session %s must have its own weekly menu", s.ID)
+	}
+}
+
+// A cloned menu with no dishes in it is useless for reproducing a menu bug.
+// weekly_menu_items and daily_menu_items are in partitionedTables — so purge
+// removes them — but were never added to the clone.
+func TestCloneCopiesMenuItems(t *testing.T) {
+	db := setupSessionDB(t)
+	chefID := seedChefWithData(t, db)
+	seedChefMenus(t, db, chefID)
+
+	session, err := OpenTestSession(db, chefID, uuid.New(), "menu bug", 30)
+	require.NoError(t, err)
+
+	var weeklyItems, dailyItems int64
+	require.NoError(t, db.Table("weekly_menu_items").
+		Where("test_session_id = ?", session.ID).Count(&weeklyItems).Error)
+	require.EqualValues(t, 2, weeklyItems, "the weekly template's dishes must be cloned")
+
+	require.NoError(t, db.Table("daily_menu_items").
+		Where("test_session_id = ?", session.ID).Count(&dailyItems).Error)
+	require.EqualValues(t, 2, dailyItems, "the daily menu's dishes must be cloned")
+
+	// The child rows must hang off the CLONED parent, not the live one, or the
+	// sandbox menu reads through to live data.
+	var orphans int64
+	require.NoError(t, db.Raw(
+		`SELECT count(*) FROM daily_menu_items i
+		 WHERE i.test_session_id = ?
+		   AND i.daily_menu_id NOT IN (SELECT id FROM daily_menus WHERE test_session_id = ?)`,
+		session.ID, session.ID).Scan(&orphans).Error)
+	require.Zero(t, orphans, "cloned daily items must point at the cloned daily menu")
+}
+
 // Cloned rows are historical replicas. If they carried live gateway ids they
 // could be charged or refunded against a real payment.
 func TestClonedOrdersCarryNoGatewayIdentifiers(t *testing.T) {

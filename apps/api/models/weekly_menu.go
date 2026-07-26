@@ -17,8 +17,11 @@ type WeeklyMenu struct {
 	// Live/test data partition. See models.ModePartition.
 	ModePartition
 
-	ID          uuid.UUID        `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	ChefID      uuid.UUID        `gorm:"type:uuid;uniqueIndex;not null" json:"chefId"`
+	ID uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	// Uniqueness is mode-aware and lives in database.go's postMigrate block —
+	// one live menu per chef, one test menu per chef PER SESSION. A plain
+	// uniqueIndex tag here would be mode-blind and reject the live→test clone.
+	ChefID      uuid.UUID        `gorm:"type:uuid;index;not null" json:"chefId"`
 	IsPublished bool             `gorm:"default:false" json:"isPublished"`
 	PublishedAt *time.Time       `gorm:"" json:"publishedAt,omitempty"`
 	CreatedAt   time.Time        `gorm:"autoCreateTime" json:"createdAt"`
@@ -32,11 +35,16 @@ type WeeklyMenuItem struct {
 	// Live/test data partition. See models.ModePartition.
 	ModePartition
 
-	ID          uuid.UUID   `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	ChefID      uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:idx_weekly_cell" json:"chefId"`
-	DayOfWeek   int         `gorm:"not null;uniqueIndex:idx_weekly_cell" json:"dayOfWeek"`
-	Slot        MealSlot    `gorm:"type:varchar(10);not null;uniqueIndex:idx_weekly_cell" json:"slot"`
-	Variant     MealVariant `gorm:"type:varchar(10);not null;uniqueIndex:idx_weekly_cell" json:"variant"`
+	ID uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	// The (chef, day, slot, variant) cell is unique per MODE — see the
+	// idx_weekly_cell_live / idx_weekly_cell_test pair in database.go's
+	// postMigrate block. Mode-blind uniqueness here would reject the clone.
+	// Named _lookup so it does not collide with the legacy mode-blind
+	// idx_weekly_cell that postMigrate drops.
+	ChefID      uuid.UUID   `gorm:"type:uuid;not null;index:idx_weekly_cell_lookup" json:"chefId"`
+	DayOfWeek   int         `gorm:"not null;index:idx_weekly_cell_lookup" json:"dayOfWeek"`
+	Slot        MealSlot    `gorm:"type:varchar(10);not null;index:idx_weekly_cell_lookup" json:"slot"`
+	Variant     MealVariant `gorm:"type:varchar(10);not null;index:idx_weekly_cell_lookup" json:"variant"`
 	Name        string      `gorm:"not null" json:"name"`
 	Description string      `gorm:"type:text" json:"description,omitempty"`
 	Price       float64     `gorm:"default:0" json:"price"`
