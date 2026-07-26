@@ -56,6 +56,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initialize();
   }, [initialize]);
 
+  // No session on load? Drop any persisted onboarding draft.
+  //
+  // logout() already clears it, but that only helps people who actually log
+  // out. A draft left behind by an abandoned signup — or by someone who just
+  // closed the tab — otherwise survives in localStorage and rehydrates for
+  // whoever opens the browser next, showing a stranger's name, phone, address
+  // and email. On a shared or family device that is a straightforward PII leak,
+  // and it is also why a logged-out visitor could see a half-filled form
+  // instead of a clean one.
+  useEffect(() => {
+    if (isLoading || isAuthenticated) return;
+    import('@/app/store/onboarding-store').then(({ useOnboardingStore }) => {
+      useOnboardingStore.getState().reset();
+    });
+  }, [isAuthenticated, isLoading]);
+
   // After auth, check if chef profile exists and hydrate form data from server
   useEffect(() => {
     if (!isAuthenticated || isLoading || onboardingChecked) return;
