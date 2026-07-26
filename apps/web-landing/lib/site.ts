@@ -120,7 +120,7 @@ export const LEGAL_OPERATOR_FULL =
 // LEGAL_SUPPORT_EMAIL; mark8ly exposes a dedicated dpo@ alongside general support.
 // TODO(ops): provision dpo@fe3dr.com mailbox + name a resident Grievance Officer (DPDP §13)
 export const LEGAL_GRIEVANCE_EMAIL = 'dpo@fe3dr.com';
-export const LEGAL_LAST_UPDATED = '11 June 2026';
+export const LEGAL_LAST_UPDATED = '26 July 2026';
 
 // TODO(owner): real social profiles (placeholders until accounts exist).
 export const INSTAGRAM_URL = 'https://instagram.com/fe3dr';

@@ -802,10 +802,25 @@ func (h *AdminHandler) GetChefDocuments(c *gin.Context) {
 	var docs []models.ChefDocument
 	database.DB.Where("chef_id = ?", id).Order("created_at DESC").Find(&docs)
 	out := make([]models.ChefDocumentResponse, len(docs))
+	signingFailed := 0
 	for i, doc := range docs {
 		resp := doc.ToResponse()
 		if models.IsPrivateDoc(doc.Type) {
-			if url, err := services.GenerateSignedURL(c.Request.Context(), doc.FilePath, 15*time.Minute); err == nil {
+			url, err := services.GenerateSignedURL(c.Request.Context(), doc.FilePath, 15*time.Minute)
+			if err != nil {
+				// Previously this error was discarded, leaving FileURL as the raw
+				// private-bucket path — which the admin's browser cannot fetch. The
+				// reviewer saw a broken image with no explanation and nothing was
+				// logged, so a signing misconfiguration looked like a UI bug.
+				// Blank the URL so the client can render "unavailable" honestly,
+				// and say loudly why in the logs.
+				signingFailed++
+				log.Printf("admin: signed URL failed for chef=%s doc=%s type=%s: %v "+
+					"(the API service account needs roles/iam.serviceAccountTokenCreator "+
+					"on itself for signBlob under Workload Identity)",
+					id, doc.ID, doc.Type, err)
+				resp.FileURL = ""
+			} else {
 				resp.FileURL = url
 			}
 		} else {
@@ -814,9 +829,12 @@ func (h *AdminHandler) GetChefDocuments(c *gin.Context) {
 		out[i] = resp
 	}
 
+	// Surfaced so the admin UI can tell the reviewer the documents exist but
+	// could not be signed, rather than implying the chef never uploaded them.
 	c.JSON(http.StatusOK, gin.H{
-		"documents":     out,
-		"kitchenPhotos": []string(chef.KitchenPhotos),
+		"documents":         out,
+		"kitchenPhotos":     []string(chef.KitchenPhotos),
+		"signedUrlFailures": signingFailed,
 	})
 }
 

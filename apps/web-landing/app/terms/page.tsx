@@ -95,7 +95,46 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: '10. Liability',
+    heading: '10. Refund fraud and payment disputes',
+    paragraphs: [
+      'Most refund claims are honest and we settle them quickly. This section is about the small number that are not.',
+      'Please do not:',
+      '• claim an order never arrived when it did;',
+      '• claim food was unsafe, missing, or wrong when it was not;',
+      '• use photos or messages that are not from your own order to support a claim;',
+      '• repeat the same claim across many orders to get free food;',
+      '• ask your bank or card issuer to reverse a payment (a chargeback) for an order you received and were happy with, instead of raising it with us first.',
+      'How we decide: we look at the order record, delivery data, the chef record, and your claim history, and we ask you for your side before we decide.',
+      'If we find a claim was deliberately false, we may refuse the refund, pause or close your account, recover any amount already refunded to you along with bank charges we paid, as a debt, and report the matter to the police or another authority with the records that relate to it.',
+      'A refund we decline is not automatically a dishonest claim. We treat a claim as dishonest only where the evidence shows it was deliberately false. Honest mistakes are not penalised.',
+    ],
+  },
+  {
+    heading: '11. False statements that damage a chef or Fe3dr',
+    paragraphs: [
+      'You are free to leave an honest review, including a very critical one. We will not act against you for a truthful account of your experience. Your rights under consumer-protection law are not affected by anything in this section.',
+      'What is not allowed is publishing something you know to be untrue that harms a chef, a driver, or us. For example, saying a chef\u2019s food made you ill when it did not, or that a kitchen is unlicensed when it holds a valid FSSAI registration.',
+      'If you publish a knowingly false statement of that kind, we may remove it, pause or close your account, and pursue any legal remedy open to us or to the chef affected.',
+    ],
+  },
+  {
+    heading: '12. Information you give us',
+    paragraphs: [
+      'You are responsible for what you tell us, because we and the chef act on it.',
+      '• Allergies. If you have an allergy or intolerance, read the dish details and message the chef before ordering. Please do not rely on the app alone. No dish can be guaranteed free of an ingredient, because home kitchens prepare many dishes in one space.',
+      '• Delivery details. Give an address and phone number that are correct and reachable. An order sent to details you entered incorrectly is not refundable.',
+      '• Who collects. If someone else receives the order for you, that is your responsibility.',
+    ],
+  },
+  {
+    heading: '13. Costs you cause us',
+    paragraphs: [
+      'If you break these terms and that causes a claim, a loss, or a cost to us, a chef, or a driver, you agree to cover it, including reasonable legal costs.',
+      'This does not apply to anything caused by our own breach or negligence, and it does not apply where the law does not allow it.',
+    ],
+  },
+  {
+    heading: '14. Liability',
     paragraphs: [
       'Nothing in these terms removes any right you have under Indian consumer-protection law, including the Consumer Protection Act, 2019 and the Consumer Protection (E-Commerce) Rules, 2020, that we cannot remove by contract.',
       'For everything else, our total liability to you for any single order is limited to the platform fees we collected from you for that order. We do not guarantee food quality, taste, or freshness beyond what a reasonable home cook can deliver, or any specific delivery time. We are not liable for indirect or consequential loss, including missed meetings, lost income, or emotional distress, except where Indian law requires otherwise.',
@@ -103,14 +142,14 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: '11. Intermediary status',
+    heading: '15. Intermediary status',
     paragraphs: [
       'We operate Fe3dr as an intermediary under section 79 of the Information Technology Act, 2000 and the IT (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021. We host content that chefs, drivers, and customers post; we do not author menus, reviews, or driver messages, and we are not responsible for them in the way the author is.',
       'Chefs and drivers are independent. They are not our employees. They are responsible for their own tax, their own insurance, and their own compliance with the law. We follow the takedown process the Intermediary Rules require: if you believe content on Fe3dr is unlawful, report it to our Grievance Officer and we respond within the timelines those rules require.',
     ],
   },
   {
-    heading: '12. Governing law and dispute resolution',
+    heading: '16. Governing law and dispute resolution',
     paragraphs: [
       'Governing law. These terms are governed by the laws of New South Wales, Australia, without regard to conflict-of-laws principles.',
       'Jurisdiction. The courts of New South Wales have exclusive jurisdiction, subject to any non-excludable consumer-protection forum rules in your jurisdiction. If you are a consumer, nothing here stops you from bringing a complaint to a District Consumer Disputes Redressal Commission with jurisdiction over your place of residence, as the Consumer Protection Act, 2019 allows.',
@@ -119,14 +158,14 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: '13. Privacy and changes',
+    heading: '17. Privacy and changes',
     paragraphs: [
       `${LEGAL_OPERATOR} handles personal data in line with the Australian Privacy Principles (APP) and, for our India operations, in alignment with India's Digital Personal Data Protection Act, 2023 (DPDP). Our Privacy Policy at fe3dr.com/privacy explains what we collect, why, how long we keep it, and how to exercise your rights. By using Fe3dr, you confirm that you have read it.`,
       'We may update these terms. When we do, we update the "Last updated" date at the top of this page. For material changes — for example a change to how we handle refunds, how disputes are resolved, or what fees you pay — we give you 30 days notice by email and in the app. We do not change the terms that apply to an order you have already placed.',
     ],
   },
   {
-    heading: '14. Contact us',
+    heading: '18. Contact us',
     paragraphs: [
       `For routine questions, and for complaints and notices that need a formal response, contact our general support and legal team at ${LEGAL_SUPPORT_EMAIL}. For India data-protection grievances, our Grievance Officer is reachable at ${LEGAL_GRIEVANCE_EMAIL}. We acknowledge complaints within 48 hours and aim to resolve them within 30 days, in line with the Consumer Protection (E-Commerce) Rules, 2020 and the Digital Personal Data Protection Act, 2023.`,
     ],
