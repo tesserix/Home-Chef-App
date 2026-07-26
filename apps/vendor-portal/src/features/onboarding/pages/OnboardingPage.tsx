@@ -34,8 +34,17 @@ const STEPS = [
   { title: 'Policies & Review', description: 'Agreements & submit', icon: Shield },
 ];
 
-// We combine step 5 (policies) and review into one final step
-const TOTAL_DISPLAY_STEPS = 5;
+// The number of FORM steps (the entries in STEPS above).
+const TOTAL_DISPLAY_STEPS = STEPS.length;
+
+// What the chef actually sees in the stepper: every form step plus the final
+// Review screen.
+//
+// The header used to say "Step 1 of 5" while the stepper rendered six dots,
+// because the two numbers were written independently — the header used the form
+// count and the stepper added one for Review. Both now derive from STEPS, so
+// adding or removing a step can no longer make them disagree.
+const TOTAL_WIZARD_STEPS = TOTAL_DISPLAY_STEPS + 1;
 
 function validateStep(step: number, data: ReturnType<typeof useOnboardingStore.getState>['data']): Record<string, string> {
   const errors: Record<string, string> = {};
@@ -207,7 +216,7 @@ export default function OnboardingPage() {
             <p className="text-xs text-muted-foreground">
               {showReview
                 ? 'Review your application'
-                : `Step ${currentStep + 1} of ${TOTAL_DISPLAY_STEPS}`}
+                : `Step ${currentStep + 1} of ${TOTAL_WIZARD_STEPS}`}
             </p>
           </div>
         </div>
@@ -246,7 +255,7 @@ export default function OnboardingPage() {
 
         {/* Stepper */}
         <div className="mb-8 hidden sm:block">
-          <Stepper currentStep={displayStep + 1} totalSteps={TOTAL_DISPLAY_STEPS + 1}>
+          <Stepper currentStep={displayStep + 1} totalSteps={TOTAL_WIZARD_STEPS}>
             {STEPS.map((step, i) => (
               <StepperItem
                 key={i}
@@ -256,7 +265,7 @@ export default function OnboardingPage() {
               />
             ))}
             <StepperItem
-              step={TOTAL_DISPLAY_STEPS + 1}
+              step={TOTAL_WIZARD_STEPS}
               title="Review"
               description="Submit application"
             />
@@ -270,7 +279,7 @@ export default function OnboardingPage() {
               {showReview ? 'Review & Submit' : STEPS[currentStep]?.title}
             </span>
             <span className="text-muted-foreground">
-              {showReview ? `${TOTAL_DISPLAY_STEPS + 1}` : `${currentStep + 1}`}/{TOTAL_DISPLAY_STEPS + 1}
+              {showReview ? `${TOTAL_WIZARD_STEPS}` : `${currentStep + 1}`}/{TOTAL_WIZARD_STEPS}
             </span>
           </div>
           <div className="mt-2 h-2 rounded-full bg-secondary">

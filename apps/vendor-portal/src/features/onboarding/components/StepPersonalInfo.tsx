@@ -12,11 +12,18 @@ interface Props {
   errors: Record<string, string>;
 }
 
+// Mirrors GET /locations/countries exactly. It previously declared `id` and
+// `phoneCode`, neither of which the API returns — so TypeScript was validating
+// against a fiction and `selectedCountry.phoneCode` silently produced
+// undefined, rendering the literal placeholder "undefined ...".
 interface Country {
-  id: string;
   code: string;
   name: string;
-  phoneCode: string;
+  nativeName?: string;
+  callingCode: string;
+  currencyCode?: string;
+  flagEmoji?: string;
+  region?: string;
 }
 
 interface StateItem {
@@ -231,7 +238,7 @@ export function StepPersonalInfo({ errors }: Props) {
             <Input
               label="Phone Number"
               type="tel"
-              placeholder={selectedCountry ? `${selectedCountry.phoneCode} ...` : '+91 98765 43210'}
+              placeholder={selectedCountry?.callingCode ? `${selectedCountry.callingCode} ...` : '+91 98765 43210'}
               value={data.phone}
               onChange={(e) => updateData({ phone: e.target.value })}
               leftIcon={<Phone className="h-4 w-4" />}
