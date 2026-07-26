@@ -172,6 +172,7 @@ func SetupRouter() *gin.Engine {
 	currencyHandler := handlers.NewCurrencyHandler()
 	adminHandler := handlers.NewAdminHandler()
 	testModeHandler := handlers.NewTestModeHandler()
+	passwordResetHandler := handlers.NewPasswordResetHandler()
 	approvalHandler := handlers.NewApprovalHandler()
 	notificationHandler := handlers.NewNotificationHandler()
 	walletHandler := handlers.NewWalletHandler()
@@ -403,6 +404,17 @@ func SetupRouter() *gin.Engine {
 
 		// Staff invitation acceptance — the auth-bff session is required so
 		// the invitee is bound to a real GIP identity at accept time.
+		// Self-service password reset. Unauthenticated by necessity — someone who
+		// cannot sign in is exactly who needs this — so both answer identically
+		// whether or not the account exists, and the service layer rate limits by
+		// email and by client IP.
+		//
+		// We mint the link ourselves rather than let Firebase email it: Firebase
+		// sends from an unauthenticated firebaseapp.com address that Gmail files as
+		// spam, branded with the GCP project name, containing a raw provider URL.
+		v1.POST("/auth/password-reset/request", passwordResetHandler.RequestPasswordReset)
+		v1.GET("/auth/password-reset/consume", passwordResetHandler.ConsumePasswordResetToken)
+
 		staffInvite := v1.Group("/staff/invitations")
 		staffInvite.Use(bffAuth(bffKey, bffWindow))
 		{

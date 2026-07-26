@@ -24,7 +24,10 @@ var (
 )
 
 const (
-	emailOTPTTL            = 10 * time.Minute
+	// A one-time code is a live credential sitting in an inbox. Five minutes
+	// is long enough to switch apps and type six digits, and short enough that
+	// a mailbox someone else later reads holds nothing usable.
+	emailOTPTTL            = 5 * time.Minute
 	emailOTPVerifiedTTL    = 2 * time.Hour
 	emailOTPResendCooldown = 60 * time.Second
 	emailOTPSendWindow     = time.Hour

@@ -96,3 +96,42 @@ export function getLinkedProviderIds(): string[] {
 export function hasPasswordProvider(): boolean {
   return getLinkedProviderIds().includes("password");
 }
+
+/**
+ * Ask the Fe3dr API to email a password-reset link.
+ *
+ * Deliberately NOT Firebase's own sendPasswordResetEmail. Firebase mints a
+ * valid token but delivers it from noreply@<project>.firebaseapp.com — an
+ * unauthenticated domain Gmail files as spam — branded with the GCP project
+ * name and containing a raw firebaseapp.com URL that reads as phishing.
+ *
+ * Our API mints the same Firebase token server-side and sends it through the
+ * platform's authenticated sender with the Fe3dr template, wrapped in a
+ * single-use link that expires in 15 minutes.
+ *
+ * `app` selects the Identity Platform tenant. It is required, and it matters:
+ * accounts are tenant-scoped, so a chef's address genuinely does not exist in
+ * the customer tenant. Sending the wrong one is exactly how a reset request
+ * ends in a "check your inbox" message for a mail that was never sent.
+ *
+ * Resolves on every outcome the server treats as normal — including "no such
+ * account" — because the server answers identically either way (anti-
+ * enumeration). Rejects only when the request itself could not be delivered,
+ * so the UI can distinguish "we've sent it if it exists" from "we're down".
+ */
+export async function requestPasswordReset(
+  apiUrl: string,
+  email: string,
+  app: "customer" | "vendor" | "delivery"
+): Promise<void> {
+  const res = await fetch(`${apiUrl.replace(/\/$/, "")}/auth/password-reset/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, app }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      "We couldn't send the reset email just now. Please check your connection and try again."
+    );
+  }
+}

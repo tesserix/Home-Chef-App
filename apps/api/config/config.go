@@ -51,6 +51,19 @@ type Config struct {
 	StripeWebhookSecret  string
 	StripePublishableKey string
 
+	// Google Identity Platform tenants. GIP accounts are tenant-scoped, so any
+	// admin-side identity operation (password reset, account deletion) has to
+	// target the tenant the account actually lives in — a customer's address
+	// simply does not exist in the vendor tenant, and vice versa.
+	GIPCustomerTenantID string
+	GIPBusinessTenantID string
+	GIPDeliveryTenantID string
+
+	// PublicAPIBaseURL is this API's externally reachable origin. Used to build
+	// links we put in emails, so recipients see a hostname they recognise
+	// instead of a raw provider URL.
+	PublicAPIBaseURL string
+
 	// Razorpay
 	RazorpayKeyID         string
 	RazorpayKeySecret     string
@@ -366,6 +379,11 @@ func Load() {
 		StripeSecretKey:      getEnv("STRIPE_SECRET_KEY", ""),
 		StripeWebhookSecret:  getEnv("STRIPE_WEBHOOK_SECRET", ""),
 		StripePublishableKey: getEnv("STRIPE_PUBLISHABLE_KEY", ""),
+
+		GIPCustomerTenantID: getEnv("GIP_CUSTOMER_TENANT_ID", "HomeChef-Customer-rqg8a"),
+		GIPBusinessTenantID: getEnv("GIP_BUSINESS_TENANT_ID", "HomeChef-Business-8s8ql"),
+		GIPDeliveryTenantID: getEnv("GIP_DELIVERY_TENANT_ID", "HomeChef-Customer-rqg8a"),
+		PublicAPIBaseURL:    getEnv("PUBLIC_API_BASE_URL", "https://api.fe3dr.com"),
 
 		// Razorpay
 		RazorpayKeyID:         getEnv("RAZORPAY_KEY_ID", ""),

@@ -128,8 +128,14 @@ jobs:
             VITE_GOOGLE_CLIENT_ID=849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com
           secrets: |
             npm_token=${{ secrets.NPM_TOKEN }}
-          cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
-          cache-to: type=registry,ref=${{ steps.cache.outputs.ref }},mode=max
+          # The GHCR login step above is skipped on pull_request, so the
+          # registry cache has no credentials there: cache-from 401s and
+          # cache-to 403s, failing a build that never pushes an image anyway.
+          # Gate the cache on the same condition as the login so a PR
+          # build-validates cleanly (uncached, which is fine — it is a
+          # correctness check, not a release).
+          cache-from: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}', steps.cache.outputs.ref) || '' }}
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0},mode=max', steps.cache.outputs.ref) || '' }}
 
       # Image push only — deployment is handled by Kargo via the git commit
       # graph: the `homechef-ensure-image-tags` workflow guarantees every
