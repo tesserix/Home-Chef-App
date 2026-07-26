@@ -5,7 +5,7 @@ import { User, LogOut, X } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLockBodyScroll } from '@/shared/hooks/useMobile';
 import { Button } from '@/shared/components/ui';
-import { ACCOUNT_NAV, ACCOUNT_SECONDARY_NAV, RAIL_NAV, DISCOVER_NAV, type NavItem } from './nav-items';
+import { ACCOUNT_NAV, ACCOUNT_SECONDARY_NAV, RAIL_NAV, type NavItem } from './nav-items';
 
 // The account drawer behind the hamburger — the web counterpart of mobile's
 // Profile tab, reachable from every page instead of being a destination you
@@ -191,11 +191,9 @@ export function AccountDrawer({ open, onClose, returnFocusRef }: AccountDrawerPr
             <div className="lg:hidden">
               <hr className="mx-3 my-2 border-mist" />
               <nav aria-label="Browse" className="flex flex-col gap-1 px-3 pb-2">
-                {[...RAIL_NAV, ...DISCOVER_NAV]
-                  .filter((i) => !i.authOnly || isAuthenticated)
-                  .map((item) => (
-                    <DrawerLink key={`browse-${item.href}`} item={item} onClose={onClose} />
-                  ))}
+                {RAIL_NAV.map((item) => (
+                  <DrawerLink key={`browse-${item.href}`} item={item} onClose={onClose} />
+                ))}
               </nav>
             </div>
 
