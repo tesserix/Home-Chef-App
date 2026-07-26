@@ -36,6 +36,8 @@ import { KeyboardAwareScrollView, useDialog } from '@homechef/mobile-shared/ui';
 import { hasPasswordProvider } from '@homechef/mobile-shared/auth';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { Alert } from 'react-native';
+import { GuestGate } from '../../components/GuestGate';
+import { useIsGuest } from '../../hooks/useRequireAccount';
 
 // Profile — a HUB, not a form.
 //
@@ -129,6 +131,19 @@ function QuickTile({
 }
 
 export default function ProfileScreen() {
+  // App Review 5.1.1(iv): everything on this screen is tied to an identity,
+  // so a guest gets a way in rather than a profile full of blanks.
+  const isGuest = useIsGuest();
+  if (isGuest) {
+    return (
+      <GuestGate
+        icon={UserMinus}
+        title="Your account"
+        body="Sign in to manage addresses, payments, your wallet and your data."
+      />
+    );
+  }
+
   const router = useRouter();
   const { data: profile, isLoading } = useProfile();
   const dockClearance = useDockClearance();

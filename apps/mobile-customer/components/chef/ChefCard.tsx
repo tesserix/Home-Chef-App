@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { Clock, Heart, UtensilsCrossed } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
+import { useRequireAccount } from '../../hooks/useRequireAccount';
 import type { Chef } from '../../types/customer';
 
 // Android ripple tints — translucent colours derived from existing tokens
@@ -34,6 +35,7 @@ export function ChefCard({ chef }: ChefCardProps) {
     false;
 
   const toggleFavorite = useToggleFavorite();
+  const requireAccount = useRequireAccount();
 
   // Heart scale-pop: 1 → 1.2 → 1 in 150ms, gated by useReducedMotion.
   const heartScale = useSharedValue(1);
@@ -42,6 +44,9 @@ export function ChefCard({ chef }: ChefCardProps) {
   }));
 
   function handleToggleFavorite() {
+    // Favourites live server-side against a user id, so this is one of the
+    // actions that genuinely needs an account (App Review 5.1.1(iv)).
+    if (!requireAccount('save a chef')) return;
     if (!reduceMotion) {
       heartScale.value = withSequence(
         withTiming(1.25, { duration: 75 }),

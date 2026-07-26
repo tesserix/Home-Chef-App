@@ -9,6 +9,7 @@ export const STORAGE_KEYS = {
   REFRESH_TOKEN: 'refresh_token',
   BIOMETRICS_ENABLED: 'biometrics_enabled',
   ONBOARDING_COMPLETE: 'onboarding_complete',
+  GUEST_MODE: 'guest_mode',
 } as const;
 
 // Auth tokens must survive app restarts and be readable on a launch that
@@ -124,4 +125,19 @@ export async function isOnboardingComplete(): Promise<boolean> {
 
 export async function setOnboardingCompleteInStore(complete: boolean): Promise<void> {
   await secureSet(STORAGE_KEYS.ONBOARDING_COMPLETE, complete ? 'true' : 'false');
+}
+
+/**
+ * Whether the user chose to browse without an account.
+ *
+ * Persisted so the choice survives a restart — a guest who is bounced back to
+ * the login wall every cold start has not really been let in, which is the
+ * situation App Review guideline 5.1.1(iv) is about.
+ */
+export async function isGuestMode(): Promise<boolean> {
+  return (await secureGet(STORAGE_KEYS.GUEST_MODE)) === 'true';
+}
+
+export async function setGuestModeInStore(guest: boolean): Promise<void> {
+  await secureSet(STORAGE_KEYS.GUEST_MODE, guest ? 'true' : 'false');
 }

@@ -142,6 +142,12 @@ export default function LoginPage() {
       onGoogleSignIn={handleGoogleSignIn}
       onAppleSignIn={Platform.OS === 'ios' ? handleAppleSignIn : undefined}
       onBiometricLogin={biometricsEnabled ? handleBiometricLogin : undefined}
+      // App Review 5.1.1(iv): browsing chefs and menus needs no account, so the
+      // wall moves to the point of ordering (hooks/useRequireAccount.ts).
+      onContinueAsGuest={async () => {
+        await useAuthStore.getState().setGuest(true);
+        router.replace('/(tabs)');
+      }}
     />
   );
 }

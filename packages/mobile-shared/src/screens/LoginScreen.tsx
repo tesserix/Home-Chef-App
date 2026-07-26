@@ -53,6 +53,15 @@ interface LoginScreenProps {
    *  customer spec's "coral, no underline" link style. Defaults to `accent`
    *  when omitted, so vendor/driver are unaffected. */
   linkColor?: string;
+  /**
+   * Optional "browse without an account" escape hatch.
+   *
+   * App Review guideline 5.1.1(iv): an app may only require an account for
+   * features that genuinely need one. The customer app passes this so people
+   * can look at chefs and menus before committing; the vendor app does not,
+   * because every screen behind it is tied to a specific kitchen.
+   */
+  onContinueAsGuest?: () => void;
 }
 
 /**
@@ -84,6 +93,7 @@ export function LoginScreen({
   brand,
   accent,
   linkColor,
+  onContinueAsGuest,
 }: LoginScreenProps) {
   const resolvedLinkColor = linkColor ?? accent;
   const [error, setError] = useState<string | null>(null);
@@ -291,6 +301,27 @@ export function LoginScreen({
         </>
       ) : null}
 
+      {onContinueAsGuest ? (
+        <View style={styles.guestRow}>
+          <Pressable
+            onPress={onContinueAsGuest}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Browse without an account"
+            style={styles.guestButton}
+          >
+            <Text
+              style={[
+                styles.guestText,
+                resolvedLinkColor ? { color: resolvedLinkColor } : null,
+              ]}
+            >
+              Browse without an account
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {onNavigateToRegister ? (
         <View style={styles.signupRow}>
           <Pressable
@@ -408,6 +439,20 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[6],
   },
 
+  guestRow: {
+    alignItems: 'center',
+    marginTop: theme.spacing[4],
+  },
+  guestButton: {
+    minHeight: 44, // touch-target floor — this is a real action, not fine print
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing[4],
+  },
+  guestText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
   signupRow: {
     alignItems: 'center',
     marginTop: theme.spacing[2],

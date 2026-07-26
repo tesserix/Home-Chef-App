@@ -10,6 +10,8 @@ import { useDockClearance } from '../../components/navigation/Dock';
 import { ScreenTitle } from '../../components/shared/ScreenTitle';
 import { MenuItemCard } from '../../components/chef/MenuItemCard';
 import { ChefGrid } from '../../components/chef/ChefGrid';
+import { GuestGate } from '../../components/GuestGate';
+import { useIsGuest } from '../../hooks/useRequireAccount';
 
 // ─── Loading skeleton ────────────────────────────────────────────────────────
 
@@ -211,6 +213,19 @@ function FavoriteTabs({
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function FavoritesScreen() {
+  // App Review 5.1.1(iv): this tab is account-based, so a guest gets an
+  // explanation and a way in rather than an error or an empty list.
+  const isGuest = useIsGuest();
+  if (isGuest) {
+    return (
+      <GuestGate
+        icon={Heart}
+        title="Save the chefs you love"
+        body="Sign in to keep a list of your favourite kitchens and get told when they post a new menu."
+      />
+    );
+  }
+
   const dockClearance = useDockClearance();
   const [tab, setTab] = useState<FavTab>('chefs');
 
