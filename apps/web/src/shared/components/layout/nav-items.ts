@@ -16,50 +16,36 @@ import {
 } from 'lucide-react';
 
 // Single source of truth for the customer navigation, shared by the fixed
-// sidebar and the account drawer so the two can never drift apart.
+// sidebar and the account drawer.
 //
-// The groupings deliberately mirror the mobile customer app so the two clients
-// teach the same mental model:
-//   - RAIL_NAV       ← mobile's five bottom tabs (Home/Orders/Plans/Saved/…)
-//   - DISCOVER_NAV   ← the browse rows on mobile's Profile screen
-//   - ACCOUNT_NAV    ← mobile Profile's quick tiles + list rows
+// The two surfaces are deliberately DISJOINT — no destination appears in both:
+//
+//   RAIL_NAV     browse: where you go to find food. Public, no session needed.
+//   ACCOUNT_NAV  account: your own stuff. Requires a session.
+//
+// An earlier cut repeated Orders/Saved/Plans/Rewards/Invite across both, which
+// made the rail and the drawer read as two half-copies of one menu. Keeping the
+// split clean means each surface answers exactly one question: "what can I
+// order?" vs "what's mine?".
 //
 // Every href is a route that exists in app/routes/index.tsx. Mobile also has
-// blocked-accounts and support-chat screens which the web has no route for, so
-// they are omitted rather than linked into a 404. The footer separately links
-// to /help, /about, /become-chef and /chef-resources, which 404 today — those
-// are deliberately NOT repeated here.
+// blocked-accounts and support-chat screens the web has no route for, so they
+// are omitted rather than linked into a 404. The footer separately links to
+// /help, /about, /become-chef and /chef-resources, which 404 today — those are
+// deliberately NOT repeated here.
 
 export interface NavItem {
   name: string;
   href: string;
   icon: LucideIcon;
-  /** Only render when the visitor is signed in. */
-  authOnly?: boolean;
 }
 
-/**
- * The fixed rail — the web equivalent of mobile's bottom tab bar, plus the two
- * browse destinations that a wide viewport has room to promote.
- */
+/** The fixed rail — browse and discovery only. */
 export const RAIL_NAV: NavItem[] = [
   { name: 'Home', href: '/', icon: Home },
   { name: 'Browse Chefs', href: '/chefs', icon: ChefHat },
-  { name: 'Orders', href: '/orders', icon: Package, authOnly: true },
-  { name: 'Plans', href: '/subscriptions', icon: CalendarDays, authOnly: true },
-  { name: 'Saved', href: '/favorites', icon: Heart },
-];
-
-/** Secondary discovery, below a divider in the rail. */
-export const DISCOVER_NAV: NavItem[] = [
   { name: 'Catering', href: '/catering', icon: Utensils },
   { name: 'Social Feed', href: '/feed', icon: Newspaper },
-  { name: 'Rewards', href: '/loyalty', icon: Award, authOnly: true },
-];
-
-/** Bottom of the rail — set apart so it reads as an offer, not a section. */
-export const OFFERS_NAV: NavItem[] = [
-  { name: 'Invite & Earn', href: '/referral', icon: Gift, authOnly: true },
 ];
 
 /** Account drawer — mirrors the quick tiles and list rows on mobile Profile. */
