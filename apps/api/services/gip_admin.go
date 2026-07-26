@@ -177,9 +177,15 @@ func GenerateGIPPasswordResetLink(ctx context.Context, tenantID, email string) (
 		if strings.Contains(string(payload), "EMAIL_NOT_FOUND") {
 			return "", ErrGIPAccountNotFound
 		}
-		// Deliberately does NOT include the response body: an error string can
-		// end up in a log, and this endpoint's payloads carry the reset link.
-		return "", fmt.Errorf("gip: request reset link: status %d", resp.StatusCode)
+		// The body IS included, deliberately. It was omitted at first out of
+		// caution about the reset link leaking into logs — but oobLink is only
+		// ever present on a 200, so a failure body cannot carry it. All that
+		// caution achieved was hiding the reason for a production 400 behind a
+		// bare status code. Identity Platform puts a machine-readable reason
+		// here (INVALID_EMAIL, OPERATION_NOT_ALLOWED, …) and it is the only
+		// thing that makes this failure diagnosable.
+		return "", fmt.Errorf("gip: request reset link: status %d: %s",
+			resp.StatusCode, strings.TrimSpace(string(payload)))
 	}
 
 	var out struct {
