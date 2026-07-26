@@ -1,10 +1,9 @@
-import { forwardRef } from 'react';
+import { forwardRef, cloneElement, isValidElement } from 'react';
 import {
   Button as DSButton,
   buttonVariants as dsButtonVariants,
 } from '@tesserix/web';
 import { cn } from '@tesserix/web';
-import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
 
@@ -196,11 +195,27 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     }
 
     // For extended variants/features, use local CVA with wrapper
-    const Comp = asChild ? Slot : 'button';
+    const classes = cn(buttonVariants({ variant, size, fullWidth, className }));
+
+    // asChild clones the child directly instead of going through Radix's Slot.
+    // Slot dropped the computed class string on the floor here — every
+    // `<Button asChild><Link/></Button>` rendered as unstyled bare text — so
+    // the merge is done explicitly, which is also easier to reason about than
+    // Slot's prop-merging rules.
+    if (asChild && isValidElement(children)) {
+      const child = children as React.ReactElement<{ className?: string }>;
+      return cloneElement(child, {
+        ...props,
+        className: cn(classes, child.props.className),
+        ref,
+      } as Partial<unknown> & React.Attributes);
+    }
+
+    const Comp = 'button';
 
     return (
       <Comp
-        className={cn(buttonVariants({ variant, size, fullWidth, className }))}
+        className={classes}
         ref={ref}
         disabled={disabled || isLoading}
         {...props}
