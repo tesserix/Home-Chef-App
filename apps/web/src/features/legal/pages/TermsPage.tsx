@@ -565,10 +565,10 @@ export default function TermsPage() {
             <p className="mt-3">
               For routine questions, please email{' '}
               <a
-                href="mailto:support@homechef.in"
+                href="mailto:support@fe3dr.com"
                 className="text-herb underline decoration-herb/40 underline-offset-4 hover:decoration-herb"
               >
-                support@homechef.in
+                support@fe3dr.com
               </a>
               .
             </p>
@@ -579,7 +579,7 @@ export default function TermsPage() {
             {/* TODO: replace [Grievance Officer Name] and phone with the real appointed person before public launch (DPDP §13 requirement) */}
             <div className="mt-4 rounded-md border border-border bg-bone p-4 text-sm text-ink">
               <p className="font-semibold">Grievance officer, Fe3dr</p>
-              <p className="mt-1">Email: grievance@homechef.in</p>
+              <p className="mt-1">Email: dpo@fe3dr.com</p>
               <p>Postal: Tesserix Pty Ltd, New South Wales, Australia (operations: Mumbai, India and Sydney, Australia)</p>
               <p className="mt-2 text-ink-soft">
                 We acknowledge complaints within 48 hours and aim to resolve them within

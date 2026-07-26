@@ -39,7 +39,7 @@ export function OttoChat() {
     <OttoWidget
       apiBaseUrl="/api/otto"
       buildWsUrl={buildConversationWsUrl}
-      productName="HomeChef Support"
+      productName="Fe3dr Support"
       tenantId="homechef"
       reasons={HOMECHEF_REASONS}
       statusPlaceholder="e.g. Order #ORD-2041 stuck on 'preparing'"

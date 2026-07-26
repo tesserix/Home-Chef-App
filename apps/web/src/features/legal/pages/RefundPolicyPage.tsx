@@ -773,7 +773,7 @@ export default function RefundPolicyPage() {
                     Grievance Officer, Fe3dr
                   </dd>
                   <dt className="font-medium text-ink">Email:</dt>
-                  <dd className="text-ink-soft">grievance@homechef.in</dd>
+                  <dd className="text-ink-soft">dpo@fe3dr.com</dd>
                   <dt className="font-medium text-ink">Response:</dt>
                   <dd className="text-ink-soft">
                     Within 48 hours of your complaint
@@ -836,7 +836,7 @@ export default function RefundPolicyPage() {
               versions of this policy for at least three years. If you're
               looking at an old order and want to know which rules applied at
               the time, email{' '}
-              <span className="font-mono">legal@homechef.in</span> and we'll
+              <span className="font-mono">support@fe3dr.com</span> and we'll
               send the relevant version.
             </p>
           </div>

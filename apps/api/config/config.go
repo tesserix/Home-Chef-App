@@ -431,10 +431,17 @@ func Load() {
 		ShadowfaxAPIToken:      getEnv("SHADOWFAX_API_TOKEN", ""),
 		ShadowfaxWebhookSecret: getEnv("SHADOWFAX_WEBHOOK_SECRET", ""),
 
-		// Email — Resend only
+		// Email — Resend only.
+		//
+		// The FROM_EMAIL domain must be VERIFIED as a sending domain in Resend
+		// (DKIM CNAMEs + an SPF include). fe3dr.com currently publishes only
+		// Cloudflare's inbound routing — "v=spf1 include:_spf.mx.cloudflare.net
+		// ~all" — which does not authorise Resend to send as @fe3dr.com. Verify
+		// the domain in Resend BEFORE pointing prod at this default, or mail
+		// starts failing SPF and landing in spam.
 		ResendAPIKey: getEnv("RESEND_API_KEY", ""),
-		FromEmail:    getEnv("FROM_EMAIL", "noreply@homechef.com"),
-		FromName:     getEnv("FROM_NAME", "HomeChef"),
+		FromEmail:    getEnv("FROM_EMAIL", "noreply@fe3dr.com"),
+		FromName:     getEnv("FROM_NAME", "Fe3dr"),
 
 		// Twilio
 		TwilioAccountSID:  getEnv("TWILIO_ACCOUNT_SID", ""),
