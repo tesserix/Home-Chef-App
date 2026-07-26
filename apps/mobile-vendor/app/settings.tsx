@@ -206,7 +206,9 @@ async function triggerTestNotification(orderId: string | null): Promise<void> {
         // testing the cold-cache deep-link path.
         orderId: orderId ?? 'test-no-cache',
       },
-      sound: 'default',
+      // No sound key — same reason as the channels in _layout.tsx: the string
+      // 'default' is read as a bundled custom sound filename, not "the default
+      // sound". Omitting it lets the new-orders channel's own sound apply.
       categoryIdentifier: Platform.OS === 'ios' ? 'new_order' : undefined,
     },
     trigger: {
