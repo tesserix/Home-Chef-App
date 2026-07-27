@@ -18,8 +18,6 @@ import {
   Check,
   UtensilsCrossed,
   Lock,
-  Eye,
-  EyeOff,
   Info,
   Copy,
   Download,
@@ -31,6 +29,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useAuthStore } from '@/app/store/auth-store';
 import { apiClient } from '@/shared/services/api-client';
+import { sendPasswordReset } from '@/features/auth/services/auth-service';
 import { usePreferences } from '@/shared/hooks/usePreferences';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
@@ -1551,47 +1550,33 @@ function TwoFactorSection() {
 }
 
 function SecurityTab() {
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [authProvider, setAuthProvider] = useState<string>('email');
+  const [email, setEmail] = useState('');
 
   useEffect(() => {
     apiClient.get<CustomerProfile>('/customer/profile').then((profile) => {
       setAuthProvider(profile.authProvider || 'email');
+      setEmail(profile.email || '');
     }).catch(() => {});
   }, []);
 
   const isSocialLogin = authProvider !== 'email';
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-    if (newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters');
-      return;
-    }
+  const handleChangePassword = async () => {
+    if (saving) return;
     setSaving(true);
     try {
-      await apiClient.put('/profile/password', {
-        currentPassword,
-        newPassword,
-      });
-      toast.success('Password updated successfully');
-      setShowPasswordForm(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch {
-      toast.error('Failed to update password');
+      await sendPasswordReset(email);
+      toast.success('Reset link sent — check your inbox.');
+    } catch (err: unknown) {
+      // sendPasswordReset only rejects on transport failure and its message is
+      // already written for a human — never surface a raw status or exception.
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "We couldn't send the reset email just now. Please try again in a few minutes.",
+      );
     } finally {
       setSaving(false);
     }
@@ -1619,71 +1604,20 @@ function SecurityTab() {
               </p>
             </div>
           </div>
-        ) : showPasswordForm ? (
-          <form onSubmit={handleChangePassword} className="mt-6 space-y-4">
-            <Input
-              label="Current password"
-              type={showCurrent ? 'text' : 'password'}
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              leftIcon={<Lock className="h-4 w-4"  aria-hidden="true" />}
-              rightIcon={
-                <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="cursor-pointer">
-                  {showCurrent ? <EyeOff className="h-4 w-4"  aria-hidden="true" /> : <Eye className="h-4 w-4"  aria-hidden="true" />}
-                </button>
-              }
-              required
-            />
-            <Input
-              label="New password"
-              type={showNew ? 'text' : 'password'}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              leftIcon={<Lock className="h-4 w-4"  aria-hidden="true" />}
-              rightIcon={
-                <button type="button" onClick={() => setShowNew(!showNew)} className="cursor-pointer">
-                  {showNew ? <EyeOff className="h-4 w-4"  aria-hidden="true" /> : <Eye className="h-4 w-4"  aria-hidden="true" />}
-                </button>
-              }
-              hint="Must be at least 8 characters"
-              required
-            />
-            <Input
-              label="Confirm new password"
-              type={showConfirm ? 'text' : 'password'}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              leftIcon={<Lock className="h-4 w-4"  aria-hidden="true" />}
-              rightIcon={
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="cursor-pointer">
-                  {showConfirm ? <EyeOff className="h-4 w-4"  aria-hidden="true" /> : <Eye className="h-4 w-4"  aria-hidden="true" />}
-                </button>
-              }
-              error={confirmPassword && newPassword !== confirmPassword ? 'Passwords do not match' : undefined}
-              required
-            />
-            <div className="flex gap-3 pt-2">
-              <Button type="submit" variant="primary" isLoading={saving}>
-                Update Password
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShowPasswordForm(false);
-                  setCurrentPassword('');
-                  setNewPassword('');
-                  setConfirmPassword('');
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
         ) : (
-          <Button variant="outline" className="mt-4" onClick={() => setShowPasswordForm(true)}>
-            Change Password
-          </Button>
+          /* Emails a reset link instead of taking a new password inline. The
+             old form posted PUT /profile/password — a route the API has never
+             registered — so every attempt failed with a generic error. The
+             mobile app's "Change password" row opens the same reset flow. */
+          <>
+            <Button variant="outline" className="mt-4" isLoading={saving} onClick={handleChangePassword}>
+              Email me a reset link
+            </Button>
+            <p className="mt-3 text-sm text-ink-muted">
+              We'll send a link to {email || 'your email address'}. It expires in 15 minutes
+              and can only be used once.
+            </p>
+          </>
         )}
       </div>
 

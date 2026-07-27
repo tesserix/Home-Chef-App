@@ -3,6 +3,7 @@ import { Suspense, lazy } from 'react';
 import { useAuth } from '../providers/AuthProvider';
 import { LoadingScreen } from '@/shared/components/LoadingScreen';
 import { MainLayout } from '@/shared/components/layout/MainLayout';
+import { SOCIAL_ENABLED } from '@/shared/config/features';
 
 /**
  * Wraps a dynamic import with retry + full-page reload on failure.
@@ -57,6 +58,7 @@ const UserInfoPage = lazyWithRetry(() => import('@/features/onboarding/pages/Use
 // Auth pages
 const LoginPage = lazyWithRetry(() => import('@/features/auth/pages/LoginPage'));
 const RegisterPage = lazyWithRetry(() => import('@/features/auth/pages/RegisterPage'));
+const ForgotPasswordPage = lazyWithRetry(() => import('@/features/auth/pages/ForgotPasswordPage'));
 
 // Legal pages
 const TermsPage = lazyWithRetry(() => import('@/features/legal/pages/TermsPage'));
@@ -90,6 +92,7 @@ export function AppRoutes() {
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
         {/* Customer onboarding (no MainLayout — standalone page) */}
         <Route
@@ -108,7 +111,10 @@ export function AppRoutes() {
           <Route path="chefs/:id" element={<ChefDetailPage />} />
           <Route path="chefs/:id/subscribe" element={<MealSubscribePage />} />
           <Route path="subscriptions" element={<SubscriptionsPage />} />
-          <Route path="feed" element={<SocialFeedPage />} />
+          {/* Gated to match the nav and footer, which already hide the feed
+              behind SOCIAL_ENABLED. The route was left ungated, so the page
+              stayed reachable by URL while the product had deferred it. */}
+          {SOCIAL_ENABLED && <Route path="feed" element={<SocialFeedPage />} />}
           <Route path="favorites" element={<FavoritesPage />} />
 
           {/* Legal pages — public, under MainLayout shell */}

@@ -33,6 +33,7 @@ function lazyWithRetry(factory: () => Promise<{ default: React.ComponentType }>)
 // Auth pages
 const LoginPage = lazyWithRetry(() => import('@/features/auth/pages/LoginPage'));
 const RegisterPage = lazyWithRetry(() => import('@/features/auth/pages/RegisterPage'));
+const ForgotPasswordPage = lazyWithRetry(() => import('@/features/auth/pages/ForgotPasswordPage'));
 
 // Onboarding
 const OnboardingPage = lazyWithRetry(() => import('@/features/onboarding/pages/OnboardingPage'));
@@ -97,6 +98,7 @@ export function AppRoutes() {
         {/* Public routes - redirect to dashboard if already logged in */}
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+        <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
 
         {/* Onboarding - authenticated but no layout (standalone fullscreen wizard) */}
         <Route

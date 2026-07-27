@@ -1,26 +1,29 @@
-# apps/web — PAUSED (temporarily disabled)
+# apps/web — ACTIVE again (was paused)
 
-This React (Vite) customer **web ordering** app is **temporarily disabled / paused**, **not
-decommissioned** — it is **planned to return** (owner direction 2026-06-18: "don't remove, just
-disable it, we'll bring back our web"). For now Home Chef is app-first: customers order on the
-mobile apps while the web is paused.
+> **This file described a pause that is over.** It is kept because the history explains the
+> odd shape of the CI setup, but the "paused / not built / manual-dispatch only" statements
+> below no longer hold. Verify from `.github/workflows/`, not from this file.
 
-**Kept on purpose** — the app code stays in the repo so it can be brought back. It is just not
-built or deployed at the moment.
+This React (Vite) customer **web ordering** app is **built and deployed on every `main`
+commit** as of 2026-07-27. It was paused 2026-06-11 and always intended to return (owner
+direction 2026-06-18: "don't remove, just disable it, we'll bring back our web").
 
-**While paused:**
-- `apps/web-landing` (Next.js marketing landing) serves `fe3dr.com`. Run it with `pnpm dev:landing`.
-- The `web` service was removed from `docker-compose.yml`.
-- `.github/workflows/homechef-web-build.yml` is **kept but disabled** — manual-dispatch only, never
-  runs automatically (and its deploy job is gated to push-on-`main`, so even a manual run won't
-  deploy). Re-enable the commented-out `push` / `pull_request` triggers to reactivate.
-- `homechef-web-release.yml` (semver release builds) is not present right now.
+**Current state:**
+- `.github/workflows/homechef-web-build.yml` has a **live `push: main` trigger** and
+  publishes its own image, `homechef-web-app`.
+- The separate image name is what un-blocked it. While the SPA and the marketing landing
+  both published to `homechef-web`, the landing always won the tag and the SPA could never
+  ship — which is why the workflow had been disabled rather than deleted.
+- Kargo **requires** it to build on every promoted commit: the prod Stage derives
+  `image.tag = main-<sha7>`, so an image has to exist at that tag for every commit that
+  changes the app.
+- `apps/web-landing` (Next.js marketing landing) still serves `fe3dr.com`. Run it with
+  `pnpm dev:landing`.
+- The `web` service is still absent from `docker-compose.yml`.
+- `homechef-web-release.yml` (semver release builds) is still not present.
 
-**To bring the web back:**
-1. Uncomment the `push` / `pull_request` triggers in `homechef-web-build.yml`.
-2. Coordinate the `homechef-web` ksvc slot — it currently serves the `web-landing` image, so decide
-   the routing/cutover in `tesserix-k8s` + Cloudflare before re-enabling deploys.
-3. (Optional) restore a `homechef-web-release.yml` for semver release images.
+**Still outstanding:** the `homechef-web` ksvc slot serves the landing image, so the
+routing/cutover for the SPA in `tesserix-k8s` + Cloudflare has not been decided.
 
 > Note: `vendors.fe3dr.com` (mobile API / auth-bff host) is **unaffected** — only the customer web
 > UI is paused.

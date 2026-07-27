@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChefHat, Check, Loader2, Eye, EyeOff, Apple } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
@@ -257,9 +257,17 @@ export default function LoginPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="login-password" className="block text-sm font-medium text-foreground">
-                      Password
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="login-password" className="block text-sm font-medium text-foreground">
+                        Password
+                      </label>
+                      <Link
+                        to="/forgot-password"
+                        className="text-sm font-medium text-primary hover:underline"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
                     <div className="relative mt-1">
                       <input
                         id="login-password"

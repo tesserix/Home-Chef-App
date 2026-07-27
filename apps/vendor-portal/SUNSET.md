@@ -5,11 +5,16 @@ This React (Vite) vendor/chef **web portal** is **decommissioned**. Home Chef is
 
 **Replaced by:** `apps/mobile-vendor` (Expo). The marketing landing at `fe3dr.com` is the only web surface.
 
-**De-wired (2026-06-12):**
-- Removed `.github/workflows/homechef-vendor-portal-build.yml` (no more image builds/deploys for this app).
+**De-wired (2026-06-12), partially reversed since:**
+- `.github/workflows/homechef-vendor-portal-build.yml` was **not** removed, contrary to what
+  this file said. It still exists with its `push` trigger commented out but `pull_request`
+  live, so the app is linted/built/tested on every PR that touches it — just not deployed.
 - (It was never a `docker-compose.yml` dev service.)
 
-**Kept** in the repo for history/reference — not deleted, not built, not deployed.
+**Kept** in the repo for history/reference — and still being maintained: the portal is
+receiving fixes again as of 2026-07-27 (see `.planning/quick/260727-web-mobile-consistency/`
+and `260727-web-password-and-social-fixes/`). Treat "decommissioned" above as the intent,
+not the current state; verify from `.github/workflows/` before assuming this app is dead.
 
 **Deferred to the production cutover** (owner-controlled, in `tesserix-infra` + Cloudflare — NOT done here):
 retire the `homechef-vendor-portal` ArgoCD app and 301 the web route → landing. Until that flip,

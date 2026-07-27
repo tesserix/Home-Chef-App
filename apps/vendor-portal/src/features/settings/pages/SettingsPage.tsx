@@ -4,6 +4,8 @@ import { Bell, Power, Lock, Trash2, Banknote, CheckCircle2, XCircle, Globe, Exte
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { useAuth } from '@/app/providers/AuthProvider';
+import { sendPasswordReset } from '@/features/auth/services/auth-service';
 import { Button } from '@/shared/components/ui/Button';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
 
@@ -37,6 +39,7 @@ interface PayoutData {
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['chef-settings'],
@@ -99,11 +102,7 @@ export default function SettingsPage() {
     onError: () => toast.error('Failed to save payout details'),
   });
 
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
+  const [sendingReset, setSendingReset] = useState(false);
 
   if (isLoading || !localSettings) {
     return (
@@ -392,57 +391,37 @@ export default function SettingsPage() {
             <Lock className="h-5 w-5 text-herb" />
             <h2 className="text-lg font-semibold text-ink">Change Password</h2>
           </div>
+          {/* Emails a reset link rather than taking a new password inline.
+              The inline form posted PUT /profile/password, which the API has
+              never had a route for — every submit failed with "check your
+              current password", pointing the chef at a problem that wasn't
+              theirs. The mobile vendor app routes its Change password row to
+              the same reset flow, so this now matches it. */}
           <div className="mt-4 max-w-md space-y-4">
-            <div>
-              <label htmlFor="settings-current-password" className="block text-sm font-medium text-ink-soft">Current Password</label>
-              <input
-                id="settings-current-password"
-                type="password"
-                autoComplete="current-password"
-                value={passwordForm.currentPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
-              />
-            </div>
-            <div>
-              <label htmlFor="settings-new-password" className="block text-sm font-medium text-ink-soft">New Password</label>
-              <input
-                id="settings-new-password"
-                type="password"
-                autoComplete="new-password"
-                value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
-              />
-            </div>
-            <div>
-              <label htmlFor="settings-confirm-password" className="block text-sm font-medium text-ink-soft">Confirm New Password</label>
-              <input
-                id="settings-confirm-password"
-                type="password"
-                autoComplete="new-password"
-                value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
-              />
-            </div>
+            <p className="text-sm text-ink-soft">
+              We'll email you a link to set a new password. It expires in 15 minutes and
+              can only be used once.
+            </p>
             <Button
               size="sm"
-              disabled={!passwordForm.currentPassword || !passwordForm.newPassword || passwordForm.newPassword !== passwordForm.confirmPassword}
+              disabled={sendingReset}
               onClick={async () => {
+                setSendingReset(true);
                 try {
-                  await apiClient.put('/profile/password', {
-                    currentPassword: passwordForm.currentPassword,
-                    newPassword: passwordForm.newPassword,
-                  });
-                  toast.success('Password updated successfully');
-                  setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-                } catch {
-                  toast.error('Failed to update password. Check your current password.');
+                  await sendPasswordReset(user?.email ?? '');
+                  toast.success('Reset link sent — check your inbox.');
+                } catch (err: unknown) {
+                  toast.error(
+                    err instanceof Error
+                      ? err.message
+                      : "We couldn't send the reset email just now. Please try again in a few minutes.",
+                  );
+                } finally {
+                  setSendingReset(false);
                 }
               }}
             >
-              Update Password
+              {sendingReset ? 'Sending…' : 'Email me a reset link'}
             </Button>
           </div>
         </motion.div>
