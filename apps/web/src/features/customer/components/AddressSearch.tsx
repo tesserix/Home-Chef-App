@@ -99,23 +99,29 @@ export function AddressSearch({ label, placeholder, hint, onPick }: AddressSearc
               </button>
             </li>
           ))}
-          {/* Every non-result state says which one it is. Rendering nothing for a
-              failed lookup made a broken search indistinguishable from an address
-              the geocoder genuinely doesn't know. */}
+          {/* A pending first lookup gets its own row. Without it the list showed
+              "no matches" while the request was still in flight, which reads as
+              a definitive answer to a question that hasn't been answered yet. */}
           {isFetching && suggestions.length === 0 && (
             <li className="px-3 py-2.5 text-sm text-ink-muted">Searching…</li>
           )}
-          {isError && !isFetching && (
-            <li className="px-3 py-2.5 text-sm text-paprika">
-              Address search is unavailable right now.{' '}
+          {/* An outage and an empty result used to look identical here: both
+              showed "no matches", telling the customer their address doesn't
+              exist when the geocoder was simply down. The API now says which
+              it is (503 `geocoder_unavailable`), so this can offer a retry
+              instead of a dead end. */}
+          {!isFetching && isError && (
+            <li className="px-3 py-2.5 text-sm text-ink-soft">
+              Address lookup is unavailable right now.{' '}
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => refetch()}
-                className="underline"
+                className="font-medium text-herb underline underline-offset-2"
               >
-                Retry
+                Try again
               </button>
+              , or type your address into the fields below.
             </li>
           )}
           {!isFetching && !isError && suggestions.length === 0 && (

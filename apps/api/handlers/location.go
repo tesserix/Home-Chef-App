@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -277,9 +278,22 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 		return
 	}
 
+	// Track whether any provider actually answered. Previously every failure —
+	// a dead geocoder, an expired credential, a timeout — returned the same
+	// 200 with an empty list as a genuine "no such place", so a broken lookup
+	// was indistinguishable from a bad search term and left nothing in the
+	// logs to diagnose. attempted/failed is what separates the two below.
+	attempted, failed := 0, 0
+
 	// Primary: Mappls. One call returns flat-level matches with coordinates.
 	if mapplsConfigured() {
-		if out, err := fetchMapplsSuggestions(c.Request.Context(), q); err == nil && len(out) > 0 {
+		attempted++
+		out, err := fetchMapplsSuggestions(c.Request.Context(), q)
+		switch {
+		case err != nil:
+			failed++
+			log.Printf("locations: mappls lookup failed for %q: %v", truncateQuery(q), err)
+		case len(out) > 0:
 			c.JSON(http.StatusOK, dataEnvelope{Data: out})
 			return
 		}
@@ -290,9 +304,14 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 	// number, then fall back to the trailing city/state) until one finds the area,
 	// so a full "Flat 104 Asima Residency Kalarahanga Bhubaneswar Odisha" still
 	// yields a real, coordinate-bearing match instead of an empty box.
-	for _, variant := range photonQueryVariants(q) {
+	variants := photonQueryVariants(q)
+	photonErrors := 0
+	for _, variant := range variants {
+		attempted++
 		out, err := fetchPhotonSuggestions(c.Request.Context(), variant)
 		if err != nil {
+			failed++
+			photonErrors++
 			continue // Photon hiccup on this variant — try the next.
 		}
 		if len(out) > 0 {
@@ -300,9 +319,36 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 			return
 		}
 	}
-	// Nothing matched (or both providers are down) — empty so the seeded
+	if photonErrors > 0 {
+		log.Printf("locations: photon failed on %d/%d variants for %q",
+			photonErrors, len(variants), truncateQuery(q))
+	}
+
+	// Every provider we tried errored: this is an outage, not an empty result.
+	// Saying so lets the client offer "try again" instead of telling the
+	// customer their address doesn't exist.
+	if attempted > 0 && failed == attempted {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Address lookup is temporarily unavailable. Please try again, or enter your address manually.",
+			"code":  "geocoder_unavailable",
+		})
+		return
+	}
+
+	// A provider answered and genuinely had no match — empty so the seeded
 	// /postcodes/search fallback stays usable.
 	c.JSON(http.StatusOK, dataEnvelope{Data: []AddressSuggestion{}})
+}
+
+// truncateQuery bounds what a user-supplied search term can write into the
+// logs. An address query is personal data, so it's kept short and is only ever
+// logged alongside a real failure.
+func truncateQuery(q string) string {
+	const max = 60
+	if len(q) <= max {
+		return q
+	}
+	return q[:max] + "…"
 }
 
 // photonNoisePrefix matches a leading flat/house-number token ("Flat 104",
