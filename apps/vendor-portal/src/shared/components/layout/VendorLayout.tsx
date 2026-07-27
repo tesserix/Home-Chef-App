@@ -251,10 +251,17 @@ export function VendorLayout() {
         {/* Above the scroll container so it stays visible on every page — a
             chef must never read sandbox earnings as real money. */}
         <TestModeBanner />
-        <main id="main" className={`flex-1 overflow-y-auto p-4 lg:p-8 ${isMobile ? 'pb-20' : ''}`}>
-          <ErrorBoundary>
-            <Outlet />
-          </ErrorBoundary>
+        {/* One content container for every page.
+            Pages previously each decided their own width and padding, so the
+            portal had eight different measures: some full-bleed, some centred,
+            and Subscriptions pinned to the left edge with a wide gap beside it.
+            Padding lives here so a page adding its own no longer doubles it. */}
+        <main id="main" className={`flex-1 overflow-y-auto ${isMobile ? 'pb-20' : ''}`}>
+          <div className="mx-auto w-full max-w-6xl p-4 lg:p-8">
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
+          </div>
         </main>
       </div>
 
