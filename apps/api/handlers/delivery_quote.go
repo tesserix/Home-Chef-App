@@ -40,6 +40,11 @@ type deliveryQuoteRequest struct {
 	// arithmetic itself, which is exactly the drift this feature removes.
 	Discount    float64 `json:"discount"`
 	Fulfillment string  `json:"fulfillment"`
+	// Tip rides in the total but never in the redeemable base — CreateOrder adds it
+	// after tax and PlanCheckoutCredit's food branch excludes it. Sending it here
+	// keeps the previewed `payable` equal to what the gateway will be asked for;
+	// without it a tipped order previewed a payable short by the tip.
+	Tip float64 `json:"tip"`
 	services.CreditRequest
 }
 
@@ -144,13 +149,19 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		// Mirrors CreateOrder exactly. An inclusive rate is already inside taxBase, so
 		// it is backed out for display and NOT added to the total; adding it would
 		// charge the customer the tax twice.
+		// A negative tip is a client bug, never an instruction — floor it rather than
+		// letting it shrink the total the customer is quoted.
+		tip := req.Tip
+		if tip < 0 {
+			tip = 0
+		}
 		var tax, total float64
 		if taxRule.Inclusive {
 			tax = taxBase - (taxBase / (1 + taxRule.Rate/100.0))
-			total = req.Subtotal + effectiveDelivery + serviceFee - req.Discount
+			total = req.Subtotal + effectiveDelivery + serviceFee + tip - req.Discount
 		} else {
 			tax = taxBase * (taxRule.Rate / 100.0)
-			total = req.Subtotal + effectiveDelivery + serviceFee + tax - req.Discount
+			total = req.Subtotal + effectiveDelivery + serviceFee + tax + tip - req.Discount
 		}
 
 		preview := &models.Order{

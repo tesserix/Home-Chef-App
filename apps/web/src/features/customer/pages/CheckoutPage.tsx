@@ -22,6 +22,8 @@ import { loadStripeJs } from '@/shared/utils/load-stripe';
 import { resolveCssVarColor } from '@/shared/utils/css-color';
 import { Button } from '@/shared/components/ui';
 import type { Order, Address } from '@/shared/types';
+import { useDeliveryQuote, type CreditIntent } from '../hooks/useDeliveryQuote';
+import { CheckoutCredits } from '../components/CheckoutCredits';
 
 const addressSchema = z.object({
   label: z.string().min(1, 'Label is required'),
@@ -34,6 +36,15 @@ const addressSchema = z.object({
 });
 
 type AddressFormData = z.infer<typeof addressSchema>;
+
+// Tip presets, in the order currency. Whole amounts a customer would actually
+// leave on a home-kitchen order — the previous 2/5/10 were a pre-INR holdover
+// that offered a ₹2 tip on a ₹270 order. Kept in lockstep with
+// apps/mobile-customer/app/checkout.tsx.
+const TIP_PRESETS = [0, 20, 30, 50];
+// A ceiling on the custom field: a fat-fingered 99999 tip is a support ticket,
+// not a generous customer.
+const MAX_TIP = 5000;
 
 // Scheduled delivery slots (#51) — mirrors the API GET /chefs/:id/delivery-slots
 // response (services.SlotAvailability).
@@ -129,6 +140,11 @@ export default function CheckoutPage() {
   const dietaryWarnings = dietaryCheck?.warnings ?? [];
 
   const [tip, setTip] = useState<number>(0);
+  const [customTip, setCustomTip] = useState('');
+  // Credit intent. Both rails default ON so the customer always spends the credit
+  // they hold; undefined amounts mean "auto" — the server applies as much as its
+  // ceilings allow. Touching either control pins both.
+  const [credit, setCredit] = useState<CreditIntent>({ useWallet: true, useLoyalty: true });
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   // CW-01d: explicit T&C + Refund Policy consent is required per order
@@ -141,37 +157,53 @@ export default function CheckoutPage() {
   // back to INR so pre-multi-gateway chef profiles keep rendering.
   const orderCurrency = (cart.chef as { currency?: string } | null)?.currency || 'INR';
 
-  // Tax rate preview comes from the public /tax-rates/lookup endpoint and
-  // is driven by the delivery address the customer selects. The real tax
-  // applied at order creation is recomputed server-side — this is just to
-  // keep the displayed total honest between address pick and checkout.
   const selectedAddressObj = savedAddresses.find((a) => a.id === selectedAddress);
-  const taxCountry = (selectedAddressObj as { country?: string } | undefined)?.country || 'IN';
-  const taxRegion = (selectedAddressObj as { state?: string } | undefined)?.state || '';
-  const { data: taxRule } = useQuery({
-    queryKey: ['tax-rate', taxCountry, taxRegion],
-    queryFn: () =>
-      apiClient.get<{ rate: number; taxName: string; inclusive: boolean }>(
-        `/tax-rates/lookup?country=${encodeURIComponent(taxCountry)}&region=${encodeURIComponent(taxRegion)}`
-      ),
-    enabled: Boolean(taxCountry),
-  });
+  const taxCountry = selectedAddressObj?.country || 'IN';
 
   const subtotal = cart.getSubtotal();
-  const deliveryFee = cart.chef?.deliveryFee || 0;
-  const serviceFee = subtotal * 0.05;
   // Applied promo discount (#39), clamped to the subtotal. Mirrors the server,
   // which taxes the post-discount base; server is authoritative at order time.
+  // Declared before the quote because the credit ceiling is computed on the
+  // DISCOUNTED food value, so the server needs it.
   const discount = cart.promoCode ? Math.min(cart.promoDiscount, subtotal) : 0;
-  const rate = taxRule?.rate ?? 0;
-  const isInclusive = taxRule?.inclusive ?? false;
-  const taxBase = subtotal + deliveryFee + serviceFee - discount;
-  const tax = isInclusive
-    ? taxBase - taxBase / (1 + rate / 100)
-    : taxBase * (rate / 100);
+
+  // Fees, tax AND the wallet/loyalty allocation all come from the one endpoint
+  // CreateOrder itself prices against. The page used to invent its own delivery
+  // fee (the chef's flat column) and service fee (a hardcoded 5%), so the total
+  // it showed was not the total it charged — and it had no access to the credit
+  // block at all, which is why wallet and points were unspendable here.
+  const { data: quote } = useDeliveryQuote(cart.chefId ?? undefined, {
+    latitude: selectedAddressObj?.latitude,
+    longitude: selectedAddressObj?.longitude,
+    city: selectedAddressObj?.city,
+    state: selectedAddressObj?.state,
+    country: taxCountry,
+    subtotal,
+    discount,
+    tip,
+    credit,
+  });
+
+  const deliveryFee = quote?.deliveryFee ?? 0;
+  const serviceFee = quote?.serviceFee ?? 0;
+  const rate = quote?.taxRatePercent ?? 0;
+  const isInclusive = quote?.taxInclusive ?? false;
+  const taxBase = Math.max(0, subtotal + deliveryFee + serviceFee - discount);
+  const tax = isInclusive ? taxBase - taxBase / (1 + rate / 100) : taxBase * (rate / 100);
+  // Tip is added after tax, mirroring CreateOrder — it is a pass-through to the
+  // chef, so it is neither taxed nor fee-bearing.
   const total = isInclusive
-    ? subtotal + deliveryFee + serviceFee - discount + tip
-    : subtotal + deliveryFee + serviceFee - discount + tax + tip;
+    ? Math.max(0, subtotal + deliveryFee + serviceFee - discount) + tip
+    : Math.max(0, subtotal + deliveryFee + serviceFee + tax - discount) + tip;
+
+  // Wallet + loyalty credit. Every figure comes from the server quote; the page
+  // does no money arithmetic of its own here. `payable` is what the gateway will
+  // be asked for, and it is what the CTA must say.
+  const creditQuote = quote?.credit;
+  const walletApplied = creditQuote && credit.useWallet ? creditQuote.walletApplied : 0;
+  const loyaltyApplied = creditQuote && credit.useLoyalty ? creditQuote.pointsValue : 0;
+  const creditApplied = walletApplied + loyaltyApplied;
+  const payable = creditQuote ? creditQuote.payable : total;
 
   const {
     register,
@@ -221,6 +253,7 @@ export default function CheckoutPage() {
       // clientSecret + publishable key.
       type RazorpayPayment = {
         provider: 'razorpay';
+        paid?: boolean;
         razorpayOrderId: string;
         razorpayKeyId: string;
         amount: number;
@@ -228,16 +261,32 @@ export default function CheckoutPage() {
       };
       type StripePayment = {
         provider: 'stripe';
+        paid?: boolean;
         stripePaymentIntentId: string;
         clientSecret: string;
         publishableKey: string;
         amount: number;
         currency: string;
       };
-      const paymentData = await apiClient.post<RazorpayPayment | StripePayment>(
+      // Credit covered the whole total — the server has already marked the order
+      // paid and there is nothing for a gateway to collect.
+      type WalletPayment = { provider: 'wallet'; paid?: boolean };
+
+      // The client sends INTENT, never a computed payable: the server re-runs the
+      // whole allocation from the live balance and the real order, and its answer
+      // is what is charged. Posting an amount is what would let the screen show
+      // one figure while the gateway took another.
+      const paymentData = await apiClient.post<RazorpayPayment | StripePayment | WalletPayment>(
         `/payments/order/${order.id}/create`,
-        {}
+        credit
       );
+
+      if (paymentData.provider === 'wallet' || paymentData.paid) {
+        cart.clearCart();
+        toast.success('Paid with your credits!');
+        navigate(`/orders/${order.id}`);
+        return;
+      }
 
       if (paymentData.provider === 'stripe') {
         await confirmStripePayment(order.id, paymentData);
@@ -260,7 +309,12 @@ export default function CheckoutPage() {
         cart.clearPromo();
         toast.error(msg || 'That promo code is no longer available. Please try again.');
       } else {
-        toast.error('Failed to initiate payment. Please try again.');
+        // This block also catches order CREATION failures, which have real,
+        // actionable reasons — an out-of-range address, a kitchen that stopped
+        // accepting orders, an item that sold out. Flattening all of them to
+        // "Failed to initiate payment" told the customer to retry the one thing
+        // that would fail identically. Show what the server actually said.
+        toast.error(msg || 'Failed to initiate payment. Please try again.');
       }
     } finally {
       setIsProcessing(false);
@@ -721,29 +775,59 @@ export default function CheckoutPage() {
               </p>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {[0, 2, 5, 10].map((amount) => (
-                  <button type="button"
-                    key={amount}
-                    onClick={() => setTip(amount)}
-                    className={`rounded-lg px-4 py-2 transition-colors ${
-                      tip === amount
-                        ? 'bg-herb text-paper'
-                        : 'bg-mist text-ink-soft hover:bg-mist'
-                    }`}
-                  >
-                    {amount === 0 ? 'No tip' : fp(amount)}
-                  </button>
-                ))}
+                {TIP_PRESETS.map((amount) => {
+                  const selected = tip === amount && !customTip;
+                  return (
+                    <button
+                      type="button"
+                      key={amount}
+                      onClick={() => {
+                        setCustomTip('');
+                        setTip(amount);
+                      }}
+                      aria-pressed={selected}
+                      className={`rounded-lg px-4 py-2 tabular-nums transition-colors ${
+                        selected ? 'bg-herb text-paper' : 'bg-mist text-ink-soft hover:bg-mist-strong'
+                      }`}
+                    >
+                      {amount === 0 ? 'No tip' : fp(amount, { currency: orderCurrency })}
+                    </button>
+                  );
+                })}
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="Custom"
-                  min="0"
-                  value={tip > 10 ? tip : ''}
-                  onChange={(e) => setTip(Number(e.target.value) || 0)}
-                  className="w-24 rounded-lg border px-3 py-2 text-center"
+                  value={customTip}
+                  onChange={(e) => {
+                    // Digits only — a tip is whole rupees, and the server floors
+                    // a negative one anyway.
+                    const digits = e.target.value.replace(/[^0-9]/g, '');
+                    setCustomTip(digits);
+                    setTip(Math.min(MAX_TIP, Number(digits) || 0));
+                  }}
+                  maxLength={5}
+                  aria-label="Custom tip amount"
+                  className={`w-24 rounded-lg border px-3 py-2 text-center tabular-nums ${
+                    customTip ? 'border-herb bg-herb-tint' : 'border-mist'
+                  }`}
                 />
               </div>
             </section>
+
+            {/* Pay with your credits — wallet + loyalty. Renders only when at
+                least one rail is live and has something to spend; the server
+                decides that, so a stale build can't disagree with the API about
+                whether the feature exists. */}
+            {creditQuote && (
+              <CheckoutCredits
+                quote={creditQuote}
+                useWallet={credit.useWallet}
+                useLoyalty={credit.useLoyalty}
+                currency={orderCurrency}
+                onChange={setCredit}
+              />
+            )}
 
             {/* Special Instructions */}
             <section className="rounded-xl bg-bone p-6 shadow-1">
@@ -814,29 +898,61 @@ export default function CheckoutPage() {
                     <span>−{fp(discount, { currency: orderCurrency })}</span>
                   </div>
                 )}
-                {/* CW-01d / LEG-COREUX-031: Clarify GST line for IN orders.
-                    TODO(CW-01e): backend to split out GST line with HSN/SAC
-                    code per CGST Act 2017 §31 — currently we render whatever
-                    label the backend returns and fall back to "GST" for IN
-                    orders so customers see the legally-required name. */}
-                <div className="flex justify-between text-ink-soft">
-                  <span>
-                    {taxRule?.taxName || (taxCountry === 'IN' ? 'GST' : 'Tax')}
-                    {rate > 0 ? ` (${rate}%${isInclusive ? ' incl.' : ''})` : ''}
-                  </span>
-                  <span>{fp(tax, { currency: orderCurrency })}</span>
-                </div>
+                {/* CW-01d / LEG-COREUX-031: GST-compliant tax lines. An Indian
+                    intra-state supply is CGST+SGST, inter-state is IGST; other
+                    countries keep a single line. The split mirrors the mobile
+                    app, which has shown it since #invoice.
+                    TODO(CW-01e): backend to attach the HSN/SAC code per CGST
+                    Act 2017 §31. */}
+                {tax > 0 &&
+                  (quote?.taxCountry === 'IN'
+                    ? quote?.taxIntraState
+                      ? [
+                          { label: `CGST (${rate / 2}%)`, amt: tax / 2 },
+                          { label: `SGST (${rate / 2}%)`, amt: tax - tax / 2 },
+                        ]
+                      : [{ label: `IGST (${rate}%)`, amt: tax }]
+                    : [
+                        {
+                          label: `${quote?.taxName || 'Tax'}${
+                            rate > 0 ? ` (${rate}%${isInclusive ? ' incl.' : ''})` : ''
+                          }`,
+                          amt: tax,
+                        },
+                      ]
+                  ).map((row) => (
+                    <div key={row.label} className="flex justify-between text-ink-soft">
+                      <span>{row.label}</span>
+                      <span className="tabular-nums">{fp(row.amt, { currency: orderCurrency })}</span>
+                    </div>
+                  ))}
                 {tip > 0 && (
                   <div className="flex justify-between text-ink-soft">
-                    <span>Tip</span>
-                    <span>{fp(tip, { currency: orderCurrency })}</span>
+                    <span>Tip for the chef</span>
+                    <span className="tabular-nums">{fp(tip, { currency: orderCurrency })}</span>
+                  </div>
+                )}
+                {walletApplied > 0 && (
+                  <div className="flex justify-between text-herb">
+                    <span>Wallet credit</span>
+                    <span className="tabular-nums">
+                      −{fp(walletApplied, { currency: orderCurrency })}
+                    </span>
+                  </div>
+                )}
+                {loyaltyApplied > 0 && (
+                  <div className="flex justify-between text-herb">
+                    <span>Loyalty points</span>
+                    <span className="tabular-nums">
+                      −{fp(loyaltyApplied, { currency: orderCurrency })}
+                    </span>
                   </div>
                 )}
               </div>
 
               <div className="mt-4 flex justify-between border-t pt-4 text-lg font-semibold">
-                <span>Total</span>
-                <span>{fp(total, { currency: orderCurrency })}</span>
+                <span>{creditApplied > 0 ? 'To pay' : 'Total'}</span>
+                <span className="tabular-nums">{fp(payable, { currency: orderCurrency })}</span>
               </div>
 
               {/* CW-01d: explicit per-order T&C + Refund Policy consent.
@@ -877,7 +993,9 @@ export default function CheckoutPage() {
                 rightIcon={!isProcessing ? <ChevronRight aria-hidden="true" className="h-5 w-5" /> : undefined}
                 className="mt-4"
               >
-                {isProcessing ? 'Placing Order...' : `Place Order - ${fp(total, { currency: orderCurrency })}`}
+                {isProcessing
+                  ? 'Placing Order...'
+                  : `Place Order - ${fp(payable, { currency: orderCurrency })}`}
               </Button>
             </div>
           </div>
