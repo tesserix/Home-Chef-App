@@ -11,13 +11,20 @@ name: HomeChef - Ensure Image Tags & Advance Deploy
 # Because CI is path-filtered, a commit only rebuilds the services whose
 # sources changed. This workflow therefore GUARANTEES every service image
 # carries a `main-<sha>` tag for the commit BEFORE advancing `deploy`:
-#   * changed + buildable (api, auth-bff, web<-web-landing):
-#     wait for the service's own build workflow to push main-<sha>.
-#   * unchanged / non-built (incl. vendor-portal, delivery-portal which have
-#     no build workflow): re-tag the image carried by the previous deploy
-#     commit (main-<prev sha7>) forward to main-<sha>. On first run (no deploy
-#     branch yet) bootstrap that source from each service's currently-deployed
-#     tag in tesserix-k8s.
+#   * changed + buildable (api, auth-bff, web<-web-landing, web-app, and now
+#     vendor-portal): wait for the service's own build workflow to push
+#     main-<sha>.
+#   * unchanged / non-built (delivery-portal, which still has no
+#     push-triggered build workflow): re-tag the image carried by the previous
+#     deploy commit (main-<prev sha7>) forward to main-<sha>. On first run (no
+#     deploy branch yet) bootstrap that source from each service's
+#     currently-deployed tag in tesserix-k8s.
+#
+# Carrying a service forward while its build is genuinely running is NOT
+# harmless: this job would tag the old image as main-<sha>, the build would
+# then re-point that tag, and the GAR pull-through caches tag->digest — so the
+# cluster keeps pulling the carried-forward digest until the cached tag is
+# purged by hand. Hence POLL must be true for every service that really builds.
 # Only once all six tags exist is `deploy` fast-forwarded, so Kargo never
 # promotes a commit whose images aren't all pullable — which also prevents the
 # GAR pull-through mirror from negative-caching a 404 for a not-yet-pushed tag.
@@ -103,14 +110,41 @@ jobs:
           fi
           echo "Changed files:"; echo "${FILES:-<none>}"
           changed() { printf '%s\n' "${FILES}" | grep -q "^$1" && echo true || echo false; }
+          # True if ANY of the given prefixes changed. Each service's prefix list
+          # MUST mirror its own build workflow's `push.paths`, because that is
+          # what decides whether a build is actually running for this commit:
+          #
+          #   homechef-web-app      apps/web/**, packages/**, pnpm-lock.yaml
+          #   homechef-web          apps/web-landing/**, pnpm-lock.yaml
+          #   homechef-vendor-portal apps/vendor-portal/**, packages/**, pnpm-lock.yaml
+          #   homechef-api          apps/api/**            (single prefix, uses changed)
+          #   homechef-auth-bff     apps/auth-bff/**       (single prefix, uses changed)
+          #
+          # Under-detecting is the dangerous direction: a lockfile-only commit
+          # rebuilds web-app and vendor-portal, and calling them "unchanged"
+          # carries a stale image forward under this commit's tag while that
+          # build is mid-flight. Over-detecting is merely slow — it waits for a
+          # build that never comes and eventually times out without advancing
+          # deploy — so never list a path the service's build does not trigger on.
+          changed_any() {
+            local p
+            for p in "$@"; do
+              printf '%s\n' "${FILES}" | grep -q "^${p}" && { echo true; return; }
+            done
+            echo false
+          }
           {
             echo "api=$(changed 'apps/api/')"
             echo "auth_bff=$(changed 'apps/auth-bff/')"
-            echo "web=$(changed 'apps/web-landing/')"
+            echo "web=$(changed_any 'apps/web-landing/' 'pnpm-lock.yaml')"
             # homechef-web is the marketing landing; the customer SPA publishes
             # separately as homechef-web-app. '^apps/web/' needs the trailing
             # slash so it doesn't also match apps/web-landing/.
-            echo "web_app=$(changed 'apps/web/')"
+            echo "web_app=$(changed_any 'apps/web/' 'packages/' 'pnpm-lock.yaml')"
+            # Mirrors homechef-vendor-portal-build.yml's own path filter, which
+            # includes packages/ and the lockfile — so whenever that build runs
+            # and publishes, this workflow waits for it instead of racing it.
+            echo "vendor_portal=$(changed_any 'apps/vendor-portal/' 'packages/' 'pnpm-lock.yaml')"
           } >> "$GITHUB_OUTPUT"
 
       - name: Ensure tags + advance deploy
@@ -121,19 +155,27 @@ jobs:
           AUTHBFF_CHANGED: ${{ steps.changed.outputs.auth_bff }}
           WEB_CHANGED: ${{ steps.changed.outputs.web }}
           WEB_APP_CHANGED: ${{ steps.changed.outputs.web_app }}
+          VENDOR_PORTAL_CHANGED: ${{ steps.changed.outputs.vendor_portal }}
         run: |
           set -euo pipefail
           NEW_TAG="main-${SHORT_SHA}"
           REG="${REGISTRY}/${IMAGE_PREFIX}"
 
-          # buildable&changed? vendor/delivery have no build workflow -> always
-          # carry forward.
+          # buildable&changed? delivery-portal still has no push-triggered build
+          # workflow -> always carry forward.
+          #
+          # vendor-portal DOES build on main now. Leaving it "false" here would
+          # be actively harmful: this job would carry the previous image forward
+          # under NEW_TAG while the real build was still running, the build would
+          # then re-point that same tag, and the GAR pull-through — which caches
+          # tag->digest — would keep serving the carried-forward digest. That is
+          # exactly the failure that had prod running a stale vendor-portal.
           declare -A POLL=(
             [homechef-api]="${API_CHANGED}"
             [homechef-auth-bff]="${AUTHBFF_CHANGED}"
             [homechef-web]="${WEB_CHANGED}"
             [homechef-web-app]="${WEB_APP_CHANGED}"
-            [homechef-vendor-portal]="false"
+            [homechef-vendor-portal]="${VENDOR_PORTAL_CHANGED}"
             [homechef-delivery-portal]="false"
           )
           # tesserix-k8s ArgoCD app file -> used ONLY to bootstrap the
