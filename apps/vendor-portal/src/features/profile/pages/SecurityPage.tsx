@@ -105,7 +105,7 @@ export function SecurityPage() {
 
   if (!status?.featureEnabled) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
+      <div className="mx-auto max-w-2xl">
         <p className="text-sm text-neutral-600">Two-factor authentication isn't available yet.</p>
       </div>
     );
@@ -113,7 +113,7 @@ export function SecurityPage() {
 
   if (freshCodes) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 p-6">
+      <div className="mx-auto max-w-2xl space-y-4">
         <h1 className="text-xl font-semibold text-neutral-900">Save your backup codes</h1>
         <p className="text-sm text-neutral-600">
           Each code works once. They are the only way back in if you lose access to your email and
@@ -141,7 +141,7 @@ export function SecurityPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 p-6">
+    <div className="mx-auto max-w-2xl space-y-8">
       <header className="space-y-1">
         <h1 className="flex items-center gap-2 text-xl font-semibold text-neutral-900">
           <ShieldCheck className="h-5 w-5" /> Two-factor authentication

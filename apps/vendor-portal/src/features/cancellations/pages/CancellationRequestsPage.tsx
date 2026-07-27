@@ -15,7 +15,7 @@ export function CancellationRequestsPage() {
   const requests = data?.data ?? [];
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 sm:px-5">
+    <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">Cancellation requests</h1>
       <p className="mt-1 text-sm text-ink-soft">
         A customer asked to cancel. Tell us where the order is and we'll issue the right refund — your

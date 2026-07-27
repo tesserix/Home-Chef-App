@@ -71,7 +71,7 @@ export default function SubscriptionSetupPage() {
   const canEnable = hasMenu && form.perMealPrice > 0;
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6">
       <div className="page-header">
         <h1 className="page-title">Tiffin Subscriptions</h1>
         <p className="page-description">
