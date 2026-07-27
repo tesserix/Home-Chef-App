@@ -10,6 +10,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronDown, MapPin } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useActiveAddress } from '../../hooks/useCustomerCoords';
+import { useIsGuest } from '../../hooks/useRequireAccount';
 
 interface AddressSwitcherProps {
   /** Opens the address sheet. The sheet is mounted at the screen root (a
@@ -21,21 +22,29 @@ interface AddressSwitcherProps {
 
 export function AddressSwitcher({ onOpen }: AddressSwitcherProps) {
   const { address, addresses, isLoading } = useActiveAddress();
+  const isGuest = useIsGuest();
 
   const hasAnyAddress = addresses.length > 0;
-  const triggerLabel = isLoading
-    ? 'Loading address…'
-    : address
-      ? `${address.label || 'Address'} · ${address.city}`
-      : hasAnyAddress
-        ? 'Select delivery address'
-        : 'Add delivery address';
+  // A guest has no saved addresses to load, so "Loading address…" would be a
+  // spinner that never resolves. Ask for the area instead — picking one is what
+  // makes the distance, fee and open/closed times on the cards correct.
+  const triggerLabel = isGuest
+    ? 'Set your location'
+    : isLoading
+      ? 'Loading address…'
+      : address
+        ? `${address.label || 'Address'} · ${address.city}`
+        : hasAnyAddress
+          ? 'Select delivery address'
+          : 'Add delivery address';
 
-  const accessibilityLabel = address
-    ? `Delivering to ${address.label || 'address'}, ${address.city}. Tap to change address.`
-    : hasAnyAddress
-      ? 'No address selected for delivery. Tap to choose one.'
-      : 'No delivery address saved. Tap to add one.';
+  const accessibilityLabel = isGuest
+    ? 'No location set. Tap to choose your area.'
+    : address
+      ? `Delivering to ${address.label || 'address'}, ${address.city}. Tap to change address.`
+      : hasAnyAddress
+        ? 'No address selected for delivery. Tap to choose one.'
+        : 'No delivery address saved. Tap to add one.';
 
   return (
     <Pressable

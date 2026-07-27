@@ -13,7 +13,6 @@ import { router } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
 
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { useAuthStore } from '../store/auth-store';
 
 interface GuestGateProps {
   /** Icon for the tab this is standing in for. */
@@ -26,9 +25,9 @@ interface GuestGateProps {
 
 export function GuestGate({ icon: Icon, title, body }: GuestGateProps) {
   function goToSignIn(): void {
-    // Leave guest mode first, or the root auth gate sees isGuest and bounces
-    // straight back to the tabs.
-    void useAuthStore.getState().setGuest(false);
+    // Guest mode is deliberately left alone — see the note in useRequireAccount.
+    // The root gate no longer treats "not a guest" as "show me login", so
+    // clearing it here would only bounce back through guest on the next render.
     router.push('/(auth)/login');
   }
 

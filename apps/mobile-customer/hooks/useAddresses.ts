@@ -12,6 +12,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { useAuthStore } from '../store/auth-store';
 import type { Address } from '../types/customer';
 
 // Raw address shape as returned by the Go API.
@@ -44,8 +45,15 @@ function mapAddress(a: ApiAddress): Address {
 }
 
 export function useAddresses() {
+  // Saved addresses belong to an account. Signed out, GET /v1/addresses is a
+  // guaranteed 401, and the header pill that reads this query sat on
+  // "Loading address…" forever because the request never resolved into data.
+  // Disabled for a guest, the query settles immediately and the pill can say
+  // something true instead.
+  const hasAccount = useAuthStore((s) => s.isAuthenticated);
   return useQuery<{ data: Address[] }>({
     queryKey: ['addresses'],
+    enabled: hasAccount,
     queryFn: () =>
       api.get<ApiAddress[]>('/v1/addresses').then((r) => ({
         data: (r.data ?? []).map(mapAddress),

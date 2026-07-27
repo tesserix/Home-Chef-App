@@ -46,9 +46,11 @@ export function useRequireAccount(): (action: string) => boolean {
           {
             text: 'Sign in',
             onPress: () => {
-              // Leave guest mode before navigating, or the root auth gate sees
-              // isGuest and bounces straight back to the tabs.
-              void useAuthStore.getState().setGuest(false);
+              // Guest mode is NOT cleared here. It used to be, as the signal that
+              // told the root gate to show login — but browsing is now the default
+              // for anyone signed out, so clearing it would just re-enter guest on
+              // the next render. The root gate leaves the (auth) group alone
+              // instead, so pushing the screen is enough.
               router.push('/(auth)/login');
             },
           },

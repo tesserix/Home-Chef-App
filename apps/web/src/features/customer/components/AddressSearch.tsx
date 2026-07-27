@@ -24,7 +24,7 @@ export function AddressSearch({ label, placeholder, hint, onPick }: AddressSearc
   const id = useId();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const { data: suggestions = [], isFetching } = useAddressAutocomplete(query);
+  const { data: suggestions = [], isFetching, isError, refetch } = useAddressAutocomplete(query);
 
   const showList = open && query.trim().length >= 3;
 
@@ -47,9 +47,17 @@ export function AddressSearch({ label, placeholder, hint, onPick }: AddressSearc
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          // Blur is deferred so a click on a suggestion lands before the list
-          // unmounts — otherwise the option disappears out from under the cursor.
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          // The list closes only on a real focus change to something OUTSIDE this
+          // control. The previous 150ms blur timer raced anything that touched
+          // focus mid-typing (devtools, a re-render, the browser chrome) and the
+          // list would vanish with no way to tell that from "found nothing".
+          // Suggestion clicks are handled by onMouseDown-preventDefault below, so
+          // focus never leaves the input for them at all.
+          onBlur={(e) => {
+            if (!e.currentTarget.parentElement?.parentElement?.contains(e.relatedTarget)) {
+              setOpen(false);
+            }
+          }}
           placeholder={placeholder ?? 'Start typing your street, area or landmark'}
           autoComplete="off"
           role="combobox"
@@ -76,6 +84,9 @@ export function AddressSearch({ label, placeholder, hint, onPick }: AddressSearc
             <li key={`${s.description}-${i}`} role="option" aria-selected={false}>
               <button
                 type="button"
+                // Keeps focus in the input so the click always lands — the old
+                // deferred-blur approach could unmount the row mid-click.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   onPick(s);
                   setQuery('');
@@ -88,7 +99,26 @@ export function AddressSearch({ label, placeholder, hint, onPick }: AddressSearc
               </button>
             </li>
           ))}
-          {!isFetching && suggestions.length === 0 && (
+          {/* Every non-result state says which one it is. Rendering nothing for a
+              failed lookup made a broken search indistinguishable from an address
+              the geocoder genuinely doesn't know. */}
+          {isFetching && suggestions.length === 0 && (
+            <li className="px-3 py-2.5 text-sm text-ink-muted">Searching…</li>
+          )}
+          {isError && !isFetching && (
+            <li className="px-3 py-2.5 text-sm text-paprika">
+              Address search is unavailable right now.{' '}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => refetch()}
+                className="underline"
+              >
+                Retry
+              </button>
+            </li>
+          )}
+          {!isFetching && !isError && suggestions.length === 0 && (
             <li className="px-3 py-2.5 text-sm text-ink-muted">
               No matches. Try a nearby landmark or just the area name.
             </li>

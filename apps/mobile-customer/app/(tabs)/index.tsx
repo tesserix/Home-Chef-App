@@ -56,6 +56,7 @@ import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { FilterSheet } from '../../components/home/FilterSheet';
 import { CATERING_ENABLED, SOCIAL_ENABLED, WALLET_ENABLED } from '../../lib/features';
+import { useIsGuest } from '../../hooks/useRequireAccount';
 import { type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
 import { useOrderStatusWS } from '../../hooks/useOrderStatusWS';
@@ -162,7 +163,10 @@ export default function HomeScreen() {
   });
 
   // Header wallet chip (only when the wallet surface is enabled) — glanceable
-  // available balance that taps through to the full wallet screen.
+  // available balance that taps through to the full wallet screen. Hidden for
+  // guests: money is account-bound, so a signed-out visitor would get a ₹0 chip
+  // leading to a screen they cannot use.
+  const isGuest = useIsGuest();
   const { data: wallet } = useWallet();
 
   // Ref for opening the FilterSheet imperatively on Filters pill tap.
@@ -228,7 +232,7 @@ export default function HomeScreen() {
         <View style={styles.addressRowPill}>
           <AddressSwitcher onOpen={() => addressSheetRef.current?.present()} />
         </View>
-        {WALLET_ENABLED ? (
+        {WALLET_ENABLED && !isGuest ? (
           <Pressable
             onPress={() => router.push('/wallet')}
             accessibilityRole="button"
