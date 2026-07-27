@@ -1,13 +1,25 @@
 name: HomeChef Vendor Portal - CI Build
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Build validation for apps/vendor-portal. Runs on PRs that touch the app so
-# regressions are caught before merge, mirroring homechef-web-build.yml.
+# Build validation for apps/vendor-portal, and the image publish that Kargo
+# deploys from. Mirrors homechef-web-build.yml.
 #
-# Deploy stays manual: `inputs.deploy` gates the image push. The
-# homechef-vendor-portal image has its own ksvc slot (no shared-slot conflict
-# like homechef-web/web-landing), but push-to-main deploys are still opt-in
-# until this workflow has run on a few PRs.
+# Publishes on every main commit that touches the app. It has to: the
+# `homechef-ensure-image-tags` workflow guarantees every service image carries a
+# main-<sha> tag, and for a service that does NOT build it does so by
+# **carrying the previous image forward** under the new tag. So while this
+# workflow was dispatch-only, `main-<sha>` on homechef-vendor-portal was
+# cosmetic — the tag advanced while the running binary stayed at whatever was
+# last manually dispatched, and a green ArgoCD showing the latest sha proved
+# nothing.
+#
+# Worse, a later `deploy=true` dispatch re-pointed a tag the GAR pull-through
+# had already cached against the carried-forward blob, so the mirror kept
+# serving the stale digest until the cached tag was purged by hand. Building on
+# push mints each tag once, against the right image, and avoids that entirely.
+#
+# `workflow_dispatch` + `inputs.deploy` is kept for manually shipping a commit
+# that didn't touch these paths.
 # ──────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -17,19 +29,14 @@ on:
         description: "Push the image so Kargo deploys it to the homechef-vendor-portal slot. Leave false to only build-validate apps/vendor-portal (no push, no deploy)."
         type: boolean
         default: false
-  # Re-enable once push-to-main deploys are ready for vendor-portal:
-  # push:
-  #   branches:
-  #     - main
-  #     - 'feat/**'
-  #     - 'feature/**'
-  #     - 'bugfix/**'
-  #     - 'hotfix/**'
-  #   paths:
-  #     - 'apps/vendor-portal/**'
-  #     - 'packages/**'
-  #     - 'pnpm-lock.yaml'
-  #     - '.github/workflows/homechef-vendor-portal-build.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/vendor-portal/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/homechef-vendor-portal-build.yml'
   pull_request:
     branches: [main]
     paths:
@@ -102,9 +109,14 @@ jobs:
           context: .
           file: apps/vendor-portal/Dockerfile
           platforms: linux/amd64
-          # Push (→ Kargo deploys) only on an explicit deploy=true dispatch.
-          # The default build-validates apps/vendor-portal only.
-          push: ${{ inputs.deploy == true }}
+          # Push (→ Kargo deploys) on a main commit, or on an explicit
+          # deploy=true dispatch. PRs build-validate only.
+          #
+          # `inputs.deploy` alone is NOT enough: on a push event `inputs` is
+          # empty, so `inputs.deploy == true` is false and the job would build
+          # and silently never publish — leaving ensure-image-tags to carry the
+          # previous image forward under the new tag.
+          push: ${{ github.event_name == 'push' || inputs.deploy == true }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -135,8 +147,9 @@ jobs:
       # --- Security scanning (gated: fails the build on CRITICAL+HIGH) ---
       - name: Run Trivy vulnerability scanner
         id: trivy
-        # Scans the pushed image by digest, so only when we actually pushed.
-        if: inputs.deploy == true
+        # Scans the pushed image by digest, so only when we actually pushed —
+        # which now includes main commits, not just deploy=true dispatches.
+        if: github.event_name == 'push' || inputs.deploy == true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build_push.outputs.digest }}
@@ -148,7 +161,7 @@ jobs:
           limit-severities-for-sarif: true
 
       - name: Upload Trivy results to GitHub Security tab
-        if: always() && inputs.deploy == true
+        if: always() && (github.event_name == 'push' || inputs.deploy == true)
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
