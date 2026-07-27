@@ -21,6 +21,7 @@ import {
   Star,
   User,
   XCircle,
+  BookOpen,
 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -54,6 +55,7 @@ const ALL_SECTIONS: NavSection[] = [
       { labelKey: 'capacity', caption: 'Daily caps and order cutoffs', route: '/capacity', Icon: Gauge },
       { labelKey: 'catering', caption: 'Event requests, quotes, bookings', route: '/catering', Icon: ChefHat },
       { labelKey: 'reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
+      { labelKey: 'chefbook', caption: 'Write recipes customers can read', route: '/chefbook', Icon: BookOpen },
     ],
   },
   {
