@@ -101,8 +101,14 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	// Region gate: when the customer's selected delivery address carries a state,
 	// hide kitchens in other states outright — a home cook in Maharashtra is never
 	// relevant to a customer ordering to Odisha, regardless of the distance box.
-	if stateFilter != "" {
-		query = query.Where("LOWER(state) = LOWER(?)", stateFilter)
+	//
+	// Matched against every spelling of the state, not the raw string. A chef
+	// profile stores the full name ("Odisha") while an address geocoded by
+	// Mappls/Photon stores the ISO code ("OR") — so the old
+	// LOWER(state) = LOWER(?) returned ZERO kitchens for a customer in the same
+	// state as the only kitchen there, and the feed read "No chefs found".
+	if vals := services.StateMatchValues(stateFilter); len(vals) > 0 {
+		query = query.Where("LOWER(state) IN ?", vals)
 	}
 
 	// Search filter
