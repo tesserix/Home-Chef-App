@@ -20,6 +20,7 @@ import {
   Salad,
   LifeBuoy,
   ShieldOff,
+  BookOpen,
 } from 'lucide-react-native';
 import { useProfile } from '../../hooks/useProfile';
 import {
@@ -314,6 +315,11 @@ export default function ProfileScreen() {
               icon: <MessageSquare size={18} color={customerColors.charcoal.soft} />,
               label: 'Social Feed',
               route: '/social',
+            },
+            SOCIAL_ENABLED && {
+              icon: <BookOpen size={18} color={customerColors.charcoal.soft} />,
+              label: 'ChefBook',
+              route: '/chefbook',
             },
             CATERING_ENABLED && {
               icon: <UtensilsCrossed size={18} color={customerColors.charcoal.soft} />,

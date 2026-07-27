@@ -416,7 +416,8 @@
       "requests": "Requests",
       "account": "Account"
     },
-    "legal": "Legal"
+    "legal": "Legal",
+    "chefbook": "ChefBook"
   },
   "language": {
     "title": "Language",
