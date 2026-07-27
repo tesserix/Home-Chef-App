@@ -114,11 +114,9 @@ jobs:
           # MUST mirror its own build workflow's `push.paths`, because that is
           # what decides whether a build is actually running for this commit:
           #
-          #   homechef-web-app      apps/web/**, packages/**, pnpm-lock.yaml
-          #   homechef-web          apps/web-landing/**, pnpm-lock.yaml
-          #   homechef-vendor-portal apps/vendor-portal/**, packages/**, pnpm-lock.yaml
-          #   homechef-api          apps/api/**            (single prefix, uses changed)
-          #   homechef-auth-bff     apps/auth-bff/**       (single prefix, uses changed)
+          # Every list must also include that service's OWN build workflow file,
+          # which is in its push.paths — a workflow-only edit really does rebuild
+          # and republish the service.
           #
           # Under-detecting is the dangerous direction: a lockfile-only commit
           # rebuilds web-app and vendor-portal, and calling them "unchanged"
@@ -133,18 +131,21 @@ jobs:
             done
             echo false
           }
+          # Each list mirrors that service's build workflow push.paths EXACTLY,
+          # including the build workflow's own file — editing a build workflow
+          # triggers that build, and omitting the path here made this job carry a
+          # stale image forward while the build was mid-flight. (Observed on
+          # 6e7cced: a workflow-only commit rebuilt vendor-portal, this job
+          # carried it forward anyway, and the build then re-pointed the tag.)
           {
-            echo "api=$(changed 'apps/api/')"
-            echo "auth_bff=$(changed 'apps/auth-bff/')"
-            echo "web=$(changed_any 'apps/web-landing/' 'pnpm-lock.yaml')"
+            echo "api=$(changed_any 'apps/api/' '.github/workflows/homechef-api-build.yml')"
+            echo "auth_bff=$(changed_any 'apps/auth-bff/' '.github/workflows/homechef-auth-bff-build.yml')"
+            echo "web=$(changed_any 'apps/web-landing/' 'pnpm-lock.yaml' '.github/workflows/homechef-web-landing-build.yml')"
             # homechef-web is the marketing landing; the customer SPA publishes
             # separately as homechef-web-app. '^apps/web/' needs the trailing
             # slash so it doesn't also match apps/web-landing/.
-            echo "web_app=$(changed_any 'apps/web/' 'packages/' 'pnpm-lock.yaml')"
-            # Mirrors homechef-vendor-portal-build.yml's own path filter, which
-            # includes packages/ and the lockfile — so whenever that build runs
-            # and publishes, this workflow waits for it instead of racing it.
-            echo "vendor_portal=$(changed_any 'apps/vendor-portal/' 'packages/' 'pnpm-lock.yaml')"
+            echo "web_app=$(changed_any 'apps/web/' 'packages/' 'pnpm-lock.yaml' '.github/workflows/homechef-web-build.yml')"
+            echo "vendor_portal=$(changed_any 'apps/vendor-portal/' 'packages/' 'pnpm-lock.yaml' '.github/workflows/homechef-vendor-portal-build.yml')"
           } >> "$GITHUB_OUTPUT"
 
       - name: Ensure tags + advance deploy
