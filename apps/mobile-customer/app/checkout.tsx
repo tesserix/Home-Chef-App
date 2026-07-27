@@ -73,6 +73,14 @@ const CORAL_RIPPLE = `${customerColors.coral.DEFAULT}22`;
 const CHARCOAL_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const CANVAS_RIPPLE = `${customerColors.canvas}33`;
 
+// Tip presets, in rupees. Whole-rupee amounts a customer would actually leave on
+// a home-kitchen order — a ₹2 tip reads as an insult, not a default. "No tip"
+// leads so the screen never pre-charges a tip the customer didn't choose.
+const TIP_PRESETS = [0, 20, 30, 50] as const;
+// A ceiling on the custom field: a fat-fingered ₹99999 tip is a support ticket,
+// not a generous customer.
+const MAX_TIP = 5000;
+
 // ─── Address form schema ──────────────────────────────────────────────────────
 
 const addressSchema = z.object({
@@ -200,6 +208,11 @@ export default function CheckoutScreen() {
   // spends the credit they hold; undefined amounts mean "auto" — the server
   // applies as much as its ceilings allow. Touching either control pins both.
   const [credit, setCredit] = useState<CreditIntent>({ useWallet: true, useLoyalty: true });
+  // Tip to the chef. 100% passes through — it is not fee-bearing, not taxed and
+  // not redeemable against wallet/points, so it is added on top of the payable.
+  // Defaults to no tip: a pre-selected amount is a dark pattern, not a default.
+  const [tip, setTip] = useState(0);
+  const [customTip, setCustomTip] = useState('');
   const [note, setNote] = useState('');
   // Persist the optional note-to-chef so it survives a background/kill (the
   // cart itself is already persisted by cart-store). Cleared once the order is
@@ -442,6 +455,8 @@ export default function CheckoutScreen() {
         // Home-tiffin suggested time (#709) — the chef confirms/proposes at accept.
         requestedFulfillmentAt: requestedTime?.toISOString(),
         promoCode: appliedPromo?.code,
+        // Omit a zero tip rather than posting 0 — the server default is already 0.
+        tip: tip > 0 ? tip : undefined,
       });
 
       const orderId = orderResult.data.id;
@@ -510,6 +525,7 @@ export default function CheckoutScreen() {
     subtotal,
     discount,
     fulfillment,
+    tip,
     credit,
   });
   const quote = useStaleValue(quoteFresh);
@@ -542,9 +558,11 @@ export default function CheckoutScreen() {
   const taxName = quote?.taxName || 'Tax';
   const taxBase = Math.max(0, subtotal + deliveryFee + serviceFee - discount);
   const tax = taxInclusive ? taxBase - taxBase / (1 + taxRate / 100) : taxBase * (taxRate / 100);
+  // Tip is added AFTER tax, mirroring CreateOrder — it is a pass-through to the
+  // chef, so it is neither taxed nor fee-bearing.
   const total = taxInclusive
-    ? Math.max(0, subtotal + deliveryFee + serviceFee - discount)
-    : Math.max(0, subtotal + deliveryFee + serviceFee + tax - discount);
+    ? Math.max(0, subtotal + deliveryFee + serviceFee - discount) + tip
+    : Math.max(0, subtotal + deliveryFee + serviceFee + tax - discount) + tip;
   // The Place Order button is live only when the order is placeable AND not an
   // out-of-range delivery (which the server would reject anyway).
   const placeEnabled = canPlaceOrder && !deliveryOutOfRange && !deliveryNeedsLocation;
@@ -1096,6 +1114,73 @@ export default function CheckoutScreen() {
           />
         </View>
 
+        {/* ── Add a tip ──
+            Sits between the items and Price Details so the tip is decided while
+            the order is still in view, and its line appears in the breakdown
+            directly below. 100% goes to the chef: it is excluded from the tax
+            base and from the credit ceiling, so it is always paid in real money
+            on top of whatever wallet/points cover. */}
+        <View className="bg-canvas border-t border-hairline p-4">
+          <Text className="text-base font-semibold text-charcoal">Add a tip</Text>
+          <Text className="text-xs text-charcoal-soft mt-0.5 mb-3 leading-4">
+            100% of your tip goes to the home chef.
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {TIP_PRESETS.map((amount) => {
+              const selected = tip === amount && !customTip;
+              return (
+                <Pressable
+                  key={amount}
+                  onPress={() => {
+                    setCustomTip('');
+                    setTip(amount);
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={amount === 0 ? 'No tip' : `Tip ₹${amount}`}
+                  android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
+                >
+                  {({ pressed }) => (
+                    <View
+                      className={`px-4 items-center justify-center rounded-xl border ${
+                        selected ? 'border-coral bg-coral' : 'border-hairline bg-surface-soft'
+                      } ${pressed && Platform.OS === 'ios' && !selected ? 'bg-hairline' : ''}`}
+                      style={{ minHeight: 44, minWidth: 64 }}
+                    >
+                      <Text
+                        className={`text-sm font-medium ${selected ? 'text-canvas' : 'text-charcoal'}`}
+                        style={{ fontVariant: ['tabular-nums'] }}
+                      >
+                        {amount === 0 ? 'No tip' : `₹${amount}`}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+            <TextInput
+              value={customTip}
+              onChangeText={(text) => {
+                // Digits only — a tip is whole rupees, and the server floors a
+                // negative one anyway.
+                const digits = text.replace(/[^0-9]/g, '');
+                setCustomTip(digits);
+                setTip(Math.min(MAX_TIP, Number(digits) || 0));
+              }}
+              placeholder="Custom"
+              placeholderTextColor={customerColors.charcoal.soft}
+              keyboardType="number-pad"
+              returnKeyType="done"
+              maxLength={5}
+              accessibilityLabel="Custom tip amount in rupees"
+              className={`w-24 rounded-xl border px-3 text-sm text-charcoal text-center ${
+                customTip ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
+              }`}
+              style={{ minHeight: 44, fontVariant: ['tabular-nums'] }}
+            />
+          </View>
+        </View>
+
         {/* ── Pay with your credits ──
             Above Price Details, not buried under the promo field: as a bare
             checkbox between the promo input and the total it was missed entirely
@@ -1350,6 +1435,20 @@ export default function CheckoutScreen() {
                 {promoError ? <Text className="text-xs text-destructive">{promoError}</Text> : null}
               </View>
             )}
+
+            {/* Tip — after tax and after the promo, because it is neither taxed
+                nor discounted; it rides straight through to the chef. */}
+            {tip > 0 ? (
+              <View className="flex-row justify-between">
+                <Text className="text-sm text-charcoal-soft">Tip for the chef</Text>
+                <Text
+                  className="text-sm text-charcoal font-medium"
+                  style={{ fontVariant: ['tabular-nums'] }}
+                >
+                  ₹{tip.toFixed(2)}
+                </Text>
+              </View>
+            ) : null}
 
             <View className="flex-row justify-between pt-1 border-t border-hairline">
               <Text className="text-base font-medium text-charcoal">

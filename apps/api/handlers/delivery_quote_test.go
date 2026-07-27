@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm"
 	glogger "gorm.io/gorm/logger"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/services"
 )
@@ -114,6 +115,77 @@ func TestQuoteEndpoint_NoSelfDeliveryEstimateWhenNotOffered(t *testing.T) {
 	require.Equal(t, false, out["offersSelfDelivery"])
 	_, has := out["selfDeliveryFee"]
 	require.False(t, has, "no self-delivery estimate when the chef doesn't offer it")
+}
+
+// creditRailsOff pins both credit rails closed. The tip assertions below are
+// about the TOTAL, not about allocation, so keeping the rails shut means the
+// quote never reaches for wallet/loyalty tables this in-memory DB doesn't have.
+func creditRailsOff(t *testing.T) {
+	t.Helper()
+	prev := config.AppConfig
+	config.AppConfig = &config.Config{Environment: "test"}
+	t.Cleanup(func() { config.AppConfig = prev })
+}
+
+// quoteAs runs the endpoint with a signed-in viewer, so the response carries the
+// `credit` block (the anonymous helper above never does).
+func quoteAs(t *testing.T, chefID, userID uuid.UUID, body string) map[string]any {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.POST("/chefs/:id/delivery-quote", func(c *gin.Context) {
+		c.Set("userID", userID)
+	}, (&OrderHandler{}).QuoteDeliveryFee)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/chefs/"+chefID.String()+"/delivery-quote", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
+	return out
+}
+
+// A tip lands in the previewed payable pound-for-pound, and nowhere else: it is
+// not redeemable against credit and it does not move the fee or tax lines. Before
+// the tip was sent, checkout previewed a payable short by the tip and the gateway
+// then asked for more than the screen had shown.
+func TestQuoteEndpoint_TipRaisesPayableByExactlyTheTip(t *testing.T) {
+	db := setupQuoteDB(t)
+	creditRailsOff(t)
+	chefID, userID := uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id) VALUES (?,?)`,
+		chefID.String(), uuid.NewString()).Error)
+
+	base := quoteAs(t, chefID, userID, `{"subtotal":270,"city":"Pune","country":"IN"}`)
+	tipped := quoteAs(t, chefID, userID, `{"subtotal":270,"city":"Pune","country":"IN","tip":25}`)
+
+	baseCredit, ok := base["credit"].(map[string]any)
+	require.True(t, ok, "a signed-in viewer gets a credit block")
+	tippedCredit, ok := tipped["credit"].(map[string]any)
+	require.True(t, ok)
+
+	require.InDelta(t, baseCredit["payable"].(float64)+25, tippedCredit["payable"].(float64), 0.001,
+		"the tip is added to what the customer pays, in full")
+	require.Equal(t, baseCredit["redeemableCap"], tippedCredit["redeemableCap"],
+		"a tip is never redeemable against wallet or points")
+	require.Equal(t, base["serviceFee"], tipped["serviceFee"], "a tip is not fee-bearing")
+}
+
+// A negative tip is a client bug, not a discount — it must never shrink the bill.
+func TestQuoteEndpoint_NegativeTipIsIgnored(t *testing.T) {
+	db := setupQuoteDB(t)
+	creditRailsOff(t)
+	chefID, userID := uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id) VALUES (?,?)`,
+		chefID.String(), uuid.NewString()).Error)
+
+	base := quoteAs(t, chefID, userID, `{"subtotal":270,"country":"IN"}`)
+	negative := quoteAs(t, chefID, userID, `{"subtotal":270,"country":"IN","tip":-100}`)
+
+	require.Equal(t,
+		base["credit"].(map[string]any)["payable"],
+		negative["credit"].(map[string]any)["payable"])
 }
 
 func TestQuoteEndpoint_UnknownChef_Is404(t *testing.T) {

@@ -22,6 +22,10 @@ import { loadStripeJs } from '@/shared/utils/load-stripe';
 import { resolveCssVarColor } from '@/shared/utils/css-color';
 import { Button } from '@/shared/components/ui';
 import type { Order, Address } from '@/shared/types';
+import { useDeliveryQuote, type CreditIntent } from '../hooks/useDeliveryQuote';
+import { CheckoutCredits } from '../components/CheckoutCredits';
+import { AddressSearch } from '../components/AddressSearch';
+import { suggestionCoords, type AddressSuggestion } from '../hooks/useAddressAutocomplete';
 
 const addressSchema = z.object({
   label: z.string().min(1, 'Label is required'),
@@ -34,6 +38,15 @@ const addressSchema = z.object({
 });
 
 type AddressFormData = z.infer<typeof addressSchema>;
+
+// Tip presets, in the order currency. Whole amounts a customer would actually
+// leave on a home-kitchen order — the previous 2/5/10 were a pre-INR holdover
+// that offered a ₹2 tip on a ₹270 order. Kept in lockstep with
+// apps/mobile-customer/app/checkout.tsx.
+const TIP_PRESETS = [0, 20, 30, 50];
+// A ceiling on the custom field: a fat-fingered 99999 tip is a support ticket,
+// not a generous customer.
+const MAX_TIP = 5000;
 
 // Scheduled delivery slots (#51) — mirrors the API GET /chefs/:id/delivery-slots
 // response (services.SlotAvailability).
@@ -129,6 +142,11 @@ export default function CheckoutPage() {
   const dietaryWarnings = dietaryCheck?.warnings ?? [];
 
   const [tip, setTip] = useState<number>(0);
+  const [customTip, setCustomTip] = useState('');
+  // Credit intent. Both rails default ON so the customer always spends the credit
+  // they hold; undefined amounts mean "auto" — the server applies as much as its
+  // ceilings allow. Touching either control pins both.
+  const [credit, setCredit] = useState<CreditIntent>({ useWallet: true, useLoyalty: true });
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   // CW-01d: explicit T&C + Refund Policy consent is required per order
@@ -141,50 +159,143 @@ export default function CheckoutPage() {
   // back to INR so pre-multi-gateway chef profiles keep rendering.
   const orderCurrency = (cart.chef as { currency?: string } | null)?.currency || 'INR';
 
-  // Tax rate preview comes from the public /tax-rates/lookup endpoint and
-  // is driven by the delivery address the customer selects. The real tax
-  // applied at order creation is recomputed server-side — this is just to
-  // keep the displayed total honest between address pick and checkout.
   const selectedAddressObj = savedAddresses.find((a) => a.id === selectedAddress);
-  const taxCountry = (selectedAddressObj as { country?: string } | undefined)?.country || 'IN';
-  const taxRegion = (selectedAddressObj as { state?: string } | undefined)?.state || '';
-  const { data: taxRule } = useQuery({
-    queryKey: ['tax-rate', taxCountry, taxRegion],
-    queryFn: () =>
-      apiClient.get<{ rate: number; taxName: string; inclusive: boolean }>(
-        `/tax-rates/lookup?country=${encodeURIComponent(taxCountry)}&region=${encodeURIComponent(taxRegion)}`
-      ),
-    enabled: Boolean(taxCountry),
-  });
+  const taxCountry = selectedAddressObj?.country || 'IN';
 
   const subtotal = cart.getSubtotal();
-  const deliveryFee = cart.chef?.deliveryFee || 0;
-  const serviceFee = subtotal * 0.05;
   // Applied promo discount (#39), clamped to the subtotal. Mirrors the server,
   // which taxes the post-discount base; server is authoritative at order time.
+  // Declared before the quote because the credit ceiling is computed on the
+  // DISCOUNTED food value, so the server needs it.
   const discount = cart.promoCode ? Math.min(cart.promoDiscount, subtotal) : 0;
-  const rate = taxRule?.rate ?? 0;
-  const isInclusive = taxRule?.inclusive ?? false;
-  const taxBase = subtotal + deliveryFee + serviceFee - discount;
-  const tax = isInclusive
-    ? taxBase - taxBase / (1 + rate / 100)
-    : taxBase * (rate / 100);
+
+  // Fees, tax AND the wallet/loyalty allocation all come from the one endpoint
+  // CreateOrder itself prices against. The page used to invent its own delivery
+  // fee (the chef's flat column) and service fee (a hardcoded 5%), so the total
+  // it showed was not the total it charged — and it had no access to the credit
+  // block at all, which is why wallet and points were unspendable here.
+  const { data: quote } = useDeliveryQuote(cart.chefId ?? undefined, {
+    latitude: selectedAddressObj?.latitude,
+    longitude: selectedAddressObj?.longitude,
+    city: selectedAddressObj?.city,
+    state: selectedAddressObj?.state,
+    country: taxCountry,
+    subtotal,
+    discount,
+    tip,
+    credit,
+  });
+
+  const deliveryFee = quote?.deliveryFee ?? 0;
+  const serviceFee = quote?.serviceFee ?? 0;
+  const rate = quote?.taxRatePercent ?? 0;
+  const isInclusive = quote?.taxInclusive ?? false;
+  const taxBase = Math.max(0, subtotal + deliveryFee + serviceFee - discount);
+  const tax = isInclusive ? taxBase - taxBase / (1 + rate / 100) : taxBase * (rate / 100);
+  // Tip is added after tax, mirroring CreateOrder — it is a pass-through to the
+  // chef, so it is neither taxed nor fee-bearing.
   const total = isInclusive
-    ? subtotal + deliveryFee + serviceFee - discount + tip
-    : subtotal + deliveryFee + serviceFee - discount + tax + tip;
+    ? Math.max(0, subtotal + deliveryFee + serviceFee - discount) + tip
+    : Math.max(0, subtotal + deliveryFee + serviceFee + tax - discount) + tip;
+
+  // Wallet + loyalty credit. Every figure comes from the server quote; the page
+  // does no money arithmetic of its own here. `payable` is what the gateway will
+  // be asked for, and it is what the CTA must say.
+  const creditQuote = quote?.credit;
+  const walletApplied = creditQuote && credit.useWallet ? creditQuote.walletApplied : 0;
+  const loyaltyApplied = creditQuote && credit.useLoyalty ? creditQuote.pointsValue : 0;
+  const creditApplied = walletApplied + loyaltyApplied;
+  const payable = creditQuote ? creditQuote.payable : total;
+
+  // Serviceability (#709). CreateOrder HARD-rejects a delivery order it cannot
+  // range-check: no coordinates on the address is a 422 `delivery_location_
+  // required`, and beyond the kitchen's radius is a 422 `outside_delivery_range`.
+  // Web had neither guard AND no way to put coordinates on an address, so every
+  // web order 422'd and the customer saw only "Failed to initiate payment".
+  const addressNeedsLocation =
+    Boolean(selectedAddressObj) &&
+    !(selectedAddressObj?.latitude && selectedAddressObj?.longitude);
+  const deliveryOutOfRange = quote?.rangeKnown === true && quote?.deliverable === false;
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
+    setValue,
   } = useForm<AddressFormData>({
     resolver: zodResolver(addressSchema),
   });
 
+  // Coordinates of the picked suggestion, persisted with the new address. Without
+  // them the address is unorderable — see addressNeedsLocation above.
+  const [newAddressCoords, setNewAddressCoords] = useState<{ lat: number; lon: number } | null>(
+    null
+  );
+
+  // Fill the form from a geocoder suggestion. The fields stay editable — the
+  // suggestion supplies the coordinates and a sane starting point, not the last
+  // word on the flat number.
+  const applySuggestion = (s: AddressSuggestion) => {
+    setValue('line1', s.line1 || s.description, { shouldValidate: true });
+    if (s.city) setValue('city', s.city, { shouldValidate: true });
+    if (s.region) setValue('state', s.region, { shouldValidate: true });
+    if (s.postal) setValue('postalCode', s.postal, { shouldValidate: true });
+    setNewAddressCoords(suggestionCoords(s));
+  };
+
+  // Pin an EXISTING saved address that predates the geocoder. Every address the
+  // web created before this shipped has no coordinates, so without a repair path
+  // those customers would have to re-add addresses they already saved.
+  const [isPinning, setIsPinning] = useState(false);
+  const pinExistingAddress = async (s: AddressSuggestion) => {
+    const coords = suggestionCoords(s);
+    if (!coords || !selectedAddressObj) {
+      toast.error("That suggestion has no location — try a nearby landmark or the area name.");
+      return;
+    }
+    setIsPinning(true);
+    try {
+      // UpdateAddress replaces the record wholesale, so every field has to ride
+      // along or the untouched ones would be blanked.
+      await apiClient.put(`/addresses/${selectedAddressObj.id}`, {
+        label: selectedAddressObj.label,
+        line1: selectedAddressObj.line1,
+        line2: selectedAddressObj.line2,
+        city: selectedAddressObj.city,
+        state: selectedAddressObj.state,
+        postalCode: selectedAddressObj.postalCode,
+        country: selectedAddressObj.country || 'IN',
+        latitude: coords.lat,
+        longitude: coords.lon,
+        isDefault: selectedAddressObj.isDefault,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['addresses'] });
+      toast.success('Delivery location saved');
+    } catch {
+      toast.error('Could not save that location. Please try again.');
+    } finally {
+      setIsPinning(false);
+    }
+  };
+
   const handlePlaceOrder = async () => {
     if (!cart.chefId || !selectedAddress) {
       toast.error('Please select a delivery address');
+      return;
+    }
+    if (addressNeedsLocation) {
+      toast.error(
+        "Set this address's delivery location so we can confirm it's within the kitchen's range."
+      );
+      return;
+    }
+    if (deliveryOutOfRange) {
+      toast.error(
+        `This address is ${(quote?.distanceKm ?? 0).toFixed(1)} km from the kitchen — beyond its ${(
+          quote?.maxRadiusKm ?? 10
+        ).toFixed(0)} km delivery range.`
+      );
       return;
     }
     if (!acceptedTerms) {
@@ -221,6 +332,7 @@ export default function CheckoutPage() {
       // clientSecret + publishable key.
       type RazorpayPayment = {
         provider: 'razorpay';
+        paid?: boolean;
         razorpayOrderId: string;
         razorpayKeyId: string;
         amount: number;
@@ -228,16 +340,32 @@ export default function CheckoutPage() {
       };
       type StripePayment = {
         provider: 'stripe';
+        paid?: boolean;
         stripePaymentIntentId: string;
         clientSecret: string;
         publishableKey: string;
         amount: number;
         currency: string;
       };
-      const paymentData = await apiClient.post<RazorpayPayment | StripePayment>(
+      // Credit covered the whole total — the server has already marked the order
+      // paid and there is nothing for a gateway to collect.
+      type WalletPayment = { provider: 'wallet'; paid?: boolean };
+
+      // The client sends INTENT, never a computed payable: the server re-runs the
+      // whole allocation from the live balance and the real order, and its answer
+      // is what is charged. Posting an amount is what would let the screen show
+      // one figure while the gateway took another.
+      const paymentData = await apiClient.post<RazorpayPayment | StripePayment | WalletPayment>(
         `/payments/order/${order.id}/create`,
-        {}
+        credit
       );
+
+      if (paymentData.provider === 'wallet' || paymentData.paid) {
+        cart.clearCart();
+        toast.success('Paid with your credits!');
+        navigate(`/orders/${order.id}`);
+        return;
+      }
 
       if (paymentData.provider === 'stripe') {
         await confirmStripePayment(order.id, paymentData);
@@ -260,7 +388,12 @@ export default function CheckoutPage() {
         cart.clearPromo();
         toast.error(msg || 'That promo code is no longer available. Please try again.');
       } else {
-        toast.error('Failed to initiate payment. Please try again.');
+        // This block also catches order CREATION failures, which have real,
+        // actionable reasons — an out-of-range address, a kitchen that stopped
+        // accepting orders, an item that sold out. Flattening all of them to
+        // "Failed to initiate payment" told the customer to retry the one thing
+        // that would fail identically. Show what the server actually said.
+        toast.error(msg || 'Failed to initiate payment. Please try again.');
       }
     } finally {
       setIsProcessing(false);
@@ -365,6 +498,10 @@ export default function CheckoutPage() {
       const created = await apiClient.post<Address>('/addresses', {
         ...data,
         country: 'IN',
+        // The coordinates are the point of the search box above: an address
+        // without them can never be range-checked, so it can never be ordered to.
+        latitude: newAddressCoords?.lat,
+        longitude: newAddressCoords?.lon,
         isDefault: false,
       });
       // Refresh the list + select the brand-new one.
@@ -372,6 +509,7 @@ export default function CheckoutPage() {
       setSelectedAddress(created.id);
       setShowNewAddress(false);
       reset();
+      setNewAddressCoords(null);
       toast.success('Address saved');
     } catch {
       toast.error('Failed to save address');
@@ -408,6 +546,19 @@ export default function CheckoutPage() {
 
               {showNewAddress ? (
                 <form onSubmit={handleSubmit(onAddressSubmit)} className="mt-4 space-y-4">
+                  {/* Search first, then refine. This is what supplies the
+                      coordinates the order is range-checked against. */}
+                  <AddressSearch
+                    label="Find your address"
+                    hint="Pick your area from the list, then add your flat or house number below."
+                    onPick={applySuggestion}
+                  />
+                  {!newAddressCoords && (
+                    <p className="flex items-start gap-2 text-xs text-ink-muted">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                      Choose a suggestion above so we can check the kitchen delivers to you.
+                    </p>
+                  )}
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label htmlFor="addr-label" className="block text-sm font-medium text-ink-soft">
@@ -555,6 +706,46 @@ export default function CheckoutPage() {
                       )}
                     </label>
                   ))}
+                </div>
+              )}
+
+              {/* Repair path for addresses saved before the web had a geocoder.
+                  Every one of them has no coordinates, so without this the
+                  customer would have to re-add an address they already have. */}
+              {!showNewAddress && addressNeedsLocation && (
+                <div className="mt-4 rounded-lg border border-amber/40 bg-amber-tint p-4">
+                  <p className="flex items-start gap-2 text-sm font-medium text-ink">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    This address has no delivery location saved
+                  </p>
+                  <p className="mt-1 text-sm text-ink-soft">
+                    We need it to confirm the kitchen delivers to you. Search for your area below —
+                    the address itself stays exactly as it is.
+                  </p>
+                  <div className="mt-3">
+                    <AddressSearch
+                      label="Set delivery location"
+                      placeholder="Search your street, area or a nearby landmark"
+                      onPick={pinExistingAddress}
+                    />
+                  </div>
+                  {isPinning && <p className="mt-2 text-xs text-ink-muted">Saving location…</p>}
+                </div>
+              )}
+
+              {/* Out of range: the server would reject this order anyway, so say
+                  so here rather than letting the customer discover it at payment. */}
+              {!addressNeedsLocation && deliveryOutOfRange && (
+                <div className="mt-4 rounded-lg border border-paprika/30 bg-paprika-tint p-4">
+                  <p className="flex items-start gap-2 text-sm font-medium text-paprika">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    Outside this kitchen&apos;s delivery range
+                  </p>
+                  <p className="mt-1 text-sm text-paprika tabular-nums">
+                    This address is {(quote?.distanceKm ?? 0).toFixed(1)} km away — beyond the{' '}
+                    {(quote?.maxRadiusKm ?? 10).toFixed(0)} km this kitchen delivers. Pick an address
+                    closer to the kitchen.
+                  </p>
                 </div>
               )}
             </section>
@@ -721,29 +912,59 @@ export default function CheckoutPage() {
               </p>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {[0, 2, 5, 10].map((amount) => (
-                  <button type="button"
-                    key={amount}
-                    onClick={() => setTip(amount)}
-                    className={`rounded-lg px-4 py-2 transition-colors ${
-                      tip === amount
-                        ? 'bg-herb text-paper'
-                        : 'bg-mist text-ink-soft hover:bg-mist'
-                    }`}
-                  >
-                    {amount === 0 ? 'No tip' : fp(amount)}
-                  </button>
-                ))}
+                {TIP_PRESETS.map((amount) => {
+                  const selected = tip === amount && !customTip;
+                  return (
+                    <button
+                      type="button"
+                      key={amount}
+                      onClick={() => {
+                        setCustomTip('');
+                        setTip(amount);
+                      }}
+                      aria-pressed={selected}
+                      className={`rounded-lg px-4 py-2 tabular-nums transition-colors ${
+                        selected ? 'bg-herb text-paper' : 'bg-mist text-ink-soft hover:bg-mist-strong'
+                      }`}
+                    >
+                      {amount === 0 ? 'No tip' : fp(amount, { currency: orderCurrency })}
+                    </button>
+                  );
+                })}
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="Custom"
-                  min="0"
-                  value={tip > 10 ? tip : ''}
-                  onChange={(e) => setTip(Number(e.target.value) || 0)}
-                  className="w-24 rounded-lg border px-3 py-2 text-center"
+                  value={customTip}
+                  onChange={(e) => {
+                    // Digits only — a tip is whole rupees, and the server floors
+                    // a negative one anyway.
+                    const digits = e.target.value.replace(/[^0-9]/g, '');
+                    setCustomTip(digits);
+                    setTip(Math.min(MAX_TIP, Number(digits) || 0));
+                  }}
+                  maxLength={5}
+                  aria-label="Custom tip amount"
+                  className={`w-24 rounded-lg border px-3 py-2 text-center tabular-nums ${
+                    customTip ? 'border-herb bg-herb-tint' : 'border-mist'
+                  }`}
                 />
               </div>
             </section>
+
+            {/* Pay with your credits — wallet + loyalty. Renders only when at
+                least one rail is live and has something to spend; the server
+                decides that, so a stale build can't disagree with the API about
+                whether the feature exists. */}
+            {creditQuote && (
+              <CheckoutCredits
+                quote={creditQuote}
+                useWallet={credit.useWallet}
+                useLoyalty={credit.useLoyalty}
+                currency={orderCurrency}
+                onChange={setCredit}
+              />
+            )}
 
             {/* Special Instructions */}
             <section className="rounded-xl bg-bone p-6 shadow-1">
@@ -814,29 +1035,61 @@ export default function CheckoutPage() {
                     <span>−{fp(discount, { currency: orderCurrency })}</span>
                   </div>
                 )}
-                {/* CW-01d / LEG-COREUX-031: Clarify GST line for IN orders.
-                    TODO(CW-01e): backend to split out GST line with HSN/SAC
-                    code per CGST Act 2017 §31 — currently we render whatever
-                    label the backend returns and fall back to "GST" for IN
-                    orders so customers see the legally-required name. */}
-                <div className="flex justify-between text-ink-soft">
-                  <span>
-                    {taxRule?.taxName || (taxCountry === 'IN' ? 'GST' : 'Tax')}
-                    {rate > 0 ? ` (${rate}%${isInclusive ? ' incl.' : ''})` : ''}
-                  </span>
-                  <span>{fp(tax, { currency: orderCurrency })}</span>
-                </div>
+                {/* CW-01d / LEG-COREUX-031: GST-compliant tax lines. An Indian
+                    intra-state supply is CGST+SGST, inter-state is IGST; other
+                    countries keep a single line. The split mirrors the mobile
+                    app, which has shown it since #invoice.
+                    TODO(CW-01e): backend to attach the HSN/SAC code per CGST
+                    Act 2017 §31. */}
+                {tax > 0 &&
+                  (quote?.taxCountry === 'IN'
+                    ? quote?.taxIntraState
+                      ? [
+                          { label: `CGST (${rate / 2}%)`, amt: tax / 2 },
+                          { label: `SGST (${rate / 2}%)`, amt: tax - tax / 2 },
+                        ]
+                      : [{ label: `IGST (${rate}%)`, amt: tax }]
+                    : [
+                        {
+                          label: `${quote?.taxName || 'Tax'}${
+                            rate > 0 ? ` (${rate}%${isInclusive ? ' incl.' : ''})` : ''
+                          }`,
+                          amt: tax,
+                        },
+                      ]
+                  ).map((row) => (
+                    <div key={row.label} className="flex justify-between text-ink-soft">
+                      <span>{row.label}</span>
+                      <span className="tabular-nums">{fp(row.amt, { currency: orderCurrency })}</span>
+                    </div>
+                  ))}
                 {tip > 0 && (
                   <div className="flex justify-between text-ink-soft">
-                    <span>Tip</span>
-                    <span>{fp(tip, { currency: orderCurrency })}</span>
+                    <span>Tip for the chef</span>
+                    <span className="tabular-nums">{fp(tip, { currency: orderCurrency })}</span>
+                  </div>
+                )}
+                {walletApplied > 0 && (
+                  <div className="flex justify-between text-herb">
+                    <span>Wallet credit</span>
+                    <span className="tabular-nums">
+                      −{fp(walletApplied, { currency: orderCurrency })}
+                    </span>
+                  </div>
+                )}
+                {loyaltyApplied > 0 && (
+                  <div className="flex justify-between text-herb">
+                    <span>Loyalty points</span>
+                    <span className="tabular-nums">
+                      −{fp(loyaltyApplied, { currency: orderCurrency })}
+                    </span>
                   </div>
                 )}
               </div>
 
               <div className="mt-4 flex justify-between border-t pt-4 text-lg font-semibold">
-                <span>Total</span>
-                <span>{fp(total, { currency: orderCurrency })}</span>
+                <span>{creditApplied > 0 ? 'To pay' : 'Total'}</span>
+                <span className="tabular-nums">{fp(payable, { currency: orderCurrency })}</span>
               </div>
 
               {/* CW-01d: explicit per-order T&C + Refund Policy consent.
@@ -873,11 +1126,19 @@ export default function CheckoutPage() {
                 fullWidth
                 isLoading={isProcessing}
                 onClick={handlePlaceOrder}
-                disabled={isProcessing || !selectedAddress || !acceptedTerms}
+                disabled={
+                  isProcessing ||
+                  !selectedAddress ||
+                  !acceptedTerms ||
+                  addressNeedsLocation ||
+                  deliveryOutOfRange
+                }
                 rightIcon={!isProcessing ? <ChevronRight aria-hidden="true" className="h-5 w-5" /> : undefined}
                 className="mt-4"
               >
-                {isProcessing ? 'Placing Order...' : `Place Order - ${fp(total, { currency: orderCurrency })}`}
+                {isProcessing
+                  ? 'Placing Order...'
+                  : `Place Order - ${fp(payable, { currency: orderCurrency })}`}
               </Button>
             </div>
           </div>

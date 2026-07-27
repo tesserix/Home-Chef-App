@@ -29,6 +29,9 @@ interface CreateOrderPayload {
   // Applied promo code (#39). The server re-validates and computes the discount;
   // an invalid/exhausted code is rejected so the client can't fake a discount.
   promoCode?: string;
+  // Tip to the chef, in rupees. Added to the total after tax and passed through
+  // in full — it is never fee-bearing and never redeemable against credit.
+  tip?: number;
   // 'delivery' (default) | 'chef_delivery' | 'pickup'. Omit → server defaults
   // to delivery.
   fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';

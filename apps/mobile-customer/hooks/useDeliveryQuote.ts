@@ -132,17 +132,20 @@ export function useDeliveryQuote(
     discount?: number;
     /** 'pickup' zeroes the delivery fee in the credit ceiling, as the order will. */
     fulfillment?: string;
+    /** Tip to the chef. Rides in the payable but never in the redeemable base —
+     *  sending it keeps the previewed "to pay" equal to what the gateway charges. */
+    tip?: number;
     /** Which credit rails to apply, and optionally how much of each. */
     credit?: CreditIntent;
   },
 ) {
-  const { latitude, longitude, city, country, state, subtotal, discount, fulfillment, credit } = drop;
+  const { latitude, longitude, city, country, state, subtotal, discount, fulfillment, tip, credit } = drop;
   return useQuery<DeliveryQuote>({
     // Keyed on everything that moves the fee, the tax OR the credit allocation —
     // a stale credit block would put the screen back in the business of guessing.
     queryKey: [
       'delivery-quote', chefId, latitude, longitude, city, state, subtotal,
-      discount, fulfillment, credit?.useWallet, credit?.walletAmount,
+      discount, fulfillment, tip, credit?.useWallet, credit?.walletAmount,
       credit?.useLoyalty, credit?.loyaltyPoints,
     ],
     queryFn: async () =>
@@ -156,6 +159,7 @@ export function useDeliveryQuote(
           subtotal,
           discount,
           fulfillment,
+          tip,
           ...credit,
         })
       ).data as DeliveryQuote,
