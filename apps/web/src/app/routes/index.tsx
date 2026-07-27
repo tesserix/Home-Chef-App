@@ -48,6 +48,8 @@ const WalletPage = lazyWithRetry(() => import('@/features/customer/pages/WalletP
 const LoyaltyPage = lazyWithRetry(() => import('@/features/customer/pages/LoyaltyPage'));
 const ReferralPage = lazyWithRetry(() => import('@/features/customer/pages/ReferralPage'));
 const SocialFeedPage = lazyWithRetry(() => import('@/features/social/pages/SocialFeedPage'));
+const ChefBookFeedPage = lazyWithRetry(() => import('@/features/chefbook/pages/ChefBookFeedPage'));
+const ArticlePage = lazyWithRetry(() => import('@/features/chefbook/pages/ArticlePage'));
 const FavoritesPage = lazyWithRetry(() => import('@/features/customer/pages/FavoritesPage'));
 const CateringRequestPage = lazyWithRetry(() => import('@/features/catering/pages/CateringRequestPage'));
 const CateringQuotesPage = lazyWithRetry(() => import('@/features/catering/pages/CateringQuotesPage'));
@@ -115,6 +117,10 @@ export function AppRoutes() {
               behind SOCIAL_ENABLED. The route was left ungated, so the page
               stayed reachable by URL while the product had deferred it. */}
           {SOCIAL_ENABLED && <Route path="feed" element={<SocialFeedPage />} />}
+          {/* ChefBook is public — an article is meant to be shareable to
+              someone who has never opened the app. */}
+          {SOCIAL_ENABLED && <Route path="chefbook" element={<ChefBookFeedPage />} />}
+          {SOCIAL_ENABLED && <Route path="chefbook/:slug" element={<ArticlePage />} />}
           <Route path="favorites" element={<FavoritesPage />} />
 
           {/* Legal pages — public, under MainLayout shell */}

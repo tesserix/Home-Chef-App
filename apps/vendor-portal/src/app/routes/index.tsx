@@ -32,6 +32,7 @@ function lazyWithRetry(factory: () => Promise<{ default: React.ComponentType }>)
 
 // Auth pages
 const LoginPage = lazyWithRetry(() => import('@/features/auth/pages/LoginPage'));
+const ChefBookPage = lazyWithRetry(() => import('@/features/chefbook/pages/ChefBookPage'));
 const RegisterPage = lazyWithRetry(() => import('@/features/auth/pages/RegisterPage'));
 const ForgotPasswordPage = lazyWithRetry(() => import('@/features/auth/pages/ForgotPasswordPage'));
 
@@ -139,6 +140,7 @@ export function AppRoutes() {
           <Route path="reviews" element={<ReviewsPage />} />
           <Route path="admin-requests" element={<AdminRequestsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="chefbook" element={<ChefBookPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 
