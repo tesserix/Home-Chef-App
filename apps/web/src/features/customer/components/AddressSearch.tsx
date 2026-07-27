@@ -24,7 +24,7 @@ export function AddressSearch({ label, placeholder, hint, onPick }: AddressSearc
   const id = useId();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const { data: suggestions = [], isFetching } = useAddressAutocomplete(query);
+  const { data: suggestions = [], isFetching, isError, refetch } = useAddressAutocomplete(query);
 
   const showList = open && query.trim().length >= 3;
 
@@ -88,7 +88,26 @@ export function AddressSearch({ label, placeholder, hint, onPick }: AddressSearc
               </button>
             </li>
           ))}
-          {!isFetching && suggestions.length === 0 && (
+          {/* An outage and an empty result used to look identical here: both
+              showed "no matches", telling the customer their address doesn't
+              exist when the geocoder was simply down. The API now says which
+              it is (503 `geocoder_unavailable`), so this can offer a retry
+              instead of a dead end. */}
+          {!isFetching && isError && (
+            <li className="px-3 py-2.5 text-sm text-ink-soft">
+              Address lookup is unavailable right now.{' '}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => refetch()}
+                className="font-medium text-herb underline underline-offset-2"
+              >
+                Try again
+              </button>
+              , or type your address into the fields below.
+            </li>
+          )}
+          {!isFetching && !isError && suggestions.length === 0 && (
             <li className="px-3 py-2.5 text-sm text-ink-muted">
               No matches. Try a nearby landmark or just the area name.
             </li>
