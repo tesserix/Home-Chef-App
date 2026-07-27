@@ -46,9 +46,11 @@ export function useRequireAccount(): (action: string) => boolean {
           {
             text: 'Sign in',
             onPress: () => {
-              // Leave guest mode before navigating, or the root auth gate sees
-              // isGuest and bounces straight back to the tabs.
-              void useAuthStore.getState().setGuest(false);
+              // Guest mode is NOT cleared here. It used to be, as the signal that
+              // told the root gate to show login — but browsing is now the default
+              // for anyone signed out, so clearing it would just re-enter guest on
+              // the next render. The root gate leaves the (auth) group alone
+              // instead, so pushing the screen is enough.
               router.push('/(auth)/login');
             },
           },
@@ -65,7 +67,18 @@ export function useRequireAccount(): (action: string) => boolean {
  *
  * For rendering — hiding a "Your orders" section, showing a sign-in banner.
  * Use requireAccount() for the actual gate; a hidden button is not a guard.
+ *
+ * Derived purely from "signed out, and we know it" — it deliberately does NOT
+ * read the persisted `isGuest` flag. That flag is written asynchronously, so
+ * anything that re-ran hydration could read it back before the write landed and
+ * flip this to false for a frame; with the root layout writing it on every pass,
+ * the two fought each other and the header visibly oscillated between the guest
+ * and signed-in treatments. Persisted state is the wrong tool for a question
+ * that `isAuthenticated` already answers exactly.
+ *
+ * `isLoading` keeps the first frames neutral, so a returning signed-in customer
+ * never gets a flash of the guest UI while the session rehydrates.
  */
 export function useIsGuest(): boolean {
-  return useAuthStore((s) => s.isGuest && !s.isAuthenticated);
+  return useAuthStore((s) => !s.isAuthenticated && !s.isLoading);
 }

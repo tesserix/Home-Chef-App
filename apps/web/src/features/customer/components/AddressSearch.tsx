@@ -47,9 +47,17 @@ export function AddressSearch({ label, placeholder, hint, onPick }: AddressSearc
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          // Blur is deferred so a click on a suggestion lands before the list
-          // unmounts — otherwise the option disappears out from under the cursor.
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          // The list closes only on a real focus change to something OUTSIDE this
+          // control. The previous 150ms blur timer raced anything that touched
+          // focus mid-typing (devtools, a re-render, the browser chrome) and the
+          // list would vanish with no way to tell that from "found nothing".
+          // Suggestion clicks are handled by onMouseDown-preventDefault below, so
+          // focus never leaves the input for them at all.
+          onBlur={(e) => {
+            if (!e.currentTarget.parentElement?.parentElement?.contains(e.relatedTarget)) {
+              setOpen(false);
+            }
+          }}
           placeholder={placeholder ?? 'Start typing your street, area or landmark'}
           autoComplete="off"
           role="combobox"
@@ -76,6 +84,9 @@ export function AddressSearch({ label, placeholder, hint, onPick }: AddressSearc
             <li key={`${s.description}-${i}`} role="option" aria-selected={false}>
               <button
                 type="button"
+                // Keeps focus in the input so the click always lands — the old
+                // deferred-blur approach could unmount the row mid-click.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   onPick(s);
                   setQuery('');
@@ -88,6 +99,12 @@ export function AddressSearch({ label, placeholder, hint, onPick }: AddressSearc
               </button>
             </li>
           ))}
+          {/* A pending first lookup gets its own row. Without it the list showed
+              "no matches" while the request was still in flight, which reads as
+              a definitive answer to a question that hasn't been answered yet. */}
+          {isFetching && suggestions.length === 0 && (
+            <li className="px-3 py-2.5 text-sm text-ink-muted">Searching…</li>
+          )}
           {/* An outage and an empty result used to look identical here: both
               showed "no matches", telling the customer their address doesn't
               exist when the geocoder was simply down. The API now says which

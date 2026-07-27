@@ -3,7 +3,7 @@ import '../global.css';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, type AppStateStatus, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
 import {
@@ -60,9 +60,16 @@ export default function RootLayout() {
     'Inter-SemiBold': Inter_600SemiBold,
   });
 
-  const { isAuthenticated, isLoading, onboardingComplete, isGuest, hydrateFromStorage } =
+  const { isAuthenticated, isLoading, onboardingComplete, hydrateFromStorage } =
     useAuthStore();
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
+  // Which route group is on screen. The auth gate below uses it to leave the
+  // sign-in screen alone once someone has deliberately opened it, and to avoid
+  // re-replacing browse with itself.
+  const segments = useSegments();
+  const inAuthGroup = segments[0] === '(auth)';
+  const inTabsGroup = segments[0] === '(tabs)';
+  const inOnboardingGroup = segments[0] === '(onboarding)';
   // Whether we've reconciled onboarding state with the SERVER for this session.
   // The local `onboardingComplete` flag is device-only and is cleared on logout,
   // so on re-login we must ask the server before deciding — otherwise a returning
@@ -258,20 +265,52 @@ export default function RootLayout() {
     if (!fontsLoaded) return;
     if (isLoading) return;
     if (!isAuthenticated) {
-      // App Review 5.1.1(iv): an account may only be required for features that
-      // genuinely need one. Browsing chefs and menus does not, so a guest goes
-      // straight to the tabs; the account gate moves to the point of ordering
-      // (see requireAccount in hooks/useRequireAccount.ts).
-      router.replace(isGuest ? '/(tabs)' : '/(auth)/login');
+      // Browse is the front door, the way it is on Uber Eats or Airbnb. App
+      // Review 5.1.1(iv) says an account may only be required for features that
+      // genuinely need one — browsing kitchens, their open/closed state and
+      // their menus does not, so nobody is asked to sign in to look around. The
+      // account gate lives on the actions that cannot work without one: paying,
+      // order history, wallet, saved chefs (see hooks/useRequireAccount.ts).
+      //
+      // This used to send a first-time visitor to /(auth)/login and only let
+      // them browse if they found the "Browse without an account" link — a login
+      // wall on the front door, which is exactly what the comment above it said
+      // the app didn't do.
+      // Nothing is written to storage here. An earlier cut called setGuest(true)
+      // on this path; the write is async, so any pass that re-read the flag
+      // before it landed saw "not a guest", set it again, and the header
+      // flickered between the two treatments. Being signed out is already the
+      // whole condition — see useIsGuest.
+      //
+      // Redirect only when they are somewhere that isn't browse. Replacing
+      // unconditionally re-ran on every pass and remounted the tabs underneath
+      // the customer, which is the other half of what made the screen flicker.
+      if (!inAuthGroup && !inTabsGroup) router.replace('/(tabs)');
     } else if (!onboardingComplete) {
       // Wait for the server reconciliation before deciding, so we never flash the
       // setup wizard at a returning user whose profile is already complete.
       if (!onboardingChecked) return;
-      router.replace('/(onboarding)/user-info');
-    } else {
+      if (!inOnboardingGroup) router.replace('/(onboarding)/user-info');
+    } else if (inAuthGroup || inOnboardingGroup) {
+      // Signed in and set up: the only reason to move them is that they are
+      // still sitting on sign-in or setup, which they have now finished.
+      //
+      // This branch MUST NOT fire for any other route. The effect re-runs
+      // whenever the route group changes, so replacing unconditionally would
+      // bounce a signed-in customer back to the tabs the instant they opened
+      // the cart, checkout or an order — the screen would appear and vanish.
       router.replace('/(tabs)');
     }
-  }, [fontsLoaded, isAuthenticated, isLoading, isGuest, onboardingComplete, onboardingChecked]);
+  }, [
+    fontsLoaded,
+    isAuthenticated,
+    isLoading,
+    inAuthGroup,
+    inTabsGroup,
+    inOnboardingGroup,
+    onboardingComplete,
+    onboardingChecked,
+  ]);
 
   // Fonts must resolve BEFORE the tree mounts. The previous approach rendered
   // the whole app under an opaque overlay while fonts loaded — every Text was
