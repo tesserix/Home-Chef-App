@@ -3,8 +3,17 @@ import { Link } from 'react-router-dom';
 import { sendPasswordReset } from '@/features/auth/services/auth-service';
 
 /**
- * Password reset is handled by Firebase (GIP). The user submits their email
- * here and Firebase emails them a reset link directly.
+ * Chef password recovery. Mirrors the mobile vendor app's
+ * (auth)/forgot-password screen.
+ *
+ * NOT Firebase's own mailer, despite what this comment used to claim:
+ * `sendPasswordReset` posts to our API, which mints the token server-side and
+ * sends it from the verified platform sender as a single-use link that expires
+ * in 15 minutes. It passes app='vendor' to select the business Identity
+ * Platform tenant — chef accounts don't exist in the customer one.
+ *
+ * The success state is shown for any well-formed address, including one with no
+ * account: the API answers identically either way (anti-enumeration).
  */
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');

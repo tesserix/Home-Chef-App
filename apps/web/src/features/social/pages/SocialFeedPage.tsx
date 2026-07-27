@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Heart,
   MessageCircle,
-  Bookmark,
   Share2,
   MoreHorizontal,
   ChefHat,
@@ -32,10 +31,13 @@ export default function SocialFeedPage() {
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // GET /social/feed — NOT /social/posts, which this used to call and the API
+  // has never served. mobile-customer's useSocial hook uses the same two
+  // endpoints (feed + like); there is no save endpoint on either.
   const { data, isLoading } = useQuery({
     queryKey: ['social-feed', selectedHashtag],
     queryFn: () =>
-      apiClient.get<PaginatedResponse<SocialPost>>('/social/posts', {
+      apiClient.get<PaginatedResponse<SocialPost>>('/social/feed', {
         hashtag: selectedHashtag || undefined,
       }),
   });
@@ -47,27 +49,12 @@ export default function SocialFeedPage() {
     },
   });
 
-  const saveMutation = useMutation({
-    mutationFn: (postId: string) => apiClient.post(`/social/posts/${postId}/save`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['social-feed'] });
-    },
-  });
-
   const handleLike = (postId: string) => {
     if (!isAuthenticated) {
       toast.error('Please log in to like posts');
       return;
     }
     likeMutation.mutate(postId);
-  };
-
-  const handleSave = (postId: string) => {
-    if (!isAuthenticated) {
-      toast.error('Please log in to save posts');
-      return;
-    }
-    saveMutation.mutate(postId);
   };
 
   const posts = data?.data || [];
@@ -148,7 +135,6 @@ export default function SocialFeedPage() {
                     key={post.id}
                     post={post}
                     onLike={() => handleLike(post.id)}
-                    onSave={() => handleSave(post.id)}
                   />
                 ))}
               </div>
@@ -218,11 +204,9 @@ export default function SocialFeedPage() {
 function PostCard({
   post,
   onLike,
-  onSave,
 }: {
   post: SocialPost;
   onLike: () => void;
-  onSave: () => void;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [imageIndex, setImageIndex] = useState(0);
@@ -311,12 +295,9 @@ function PostCard({
             <Share2 className="h-6 w-6"  aria-hidden="true" />
           </button>
         </div>
-        <button type="button"
-          onClick={onSave}
-          className={`${post.isSaved ? 'text-herb' : 'text-ink-soft hover:text-herb'}`}
-        >
-          <Bookmark className={`h-6 w-6 ${post.isSaved ? 'fill-current' : ''}`}  aria-hidden="true" />
-        </button>
+        {/* No save/bookmark control: it posted to /social/posts/:id/save, which
+            exists in neither the API nor the mobile app. A button that always
+            failed is worse than no button. */}
       </div>
 
       {/* Content */}
