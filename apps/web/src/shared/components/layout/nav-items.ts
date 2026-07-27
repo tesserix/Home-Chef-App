@@ -13,6 +13,7 @@ import {
   FileText,
   Store,
   type LucideIcon,
+  BookOpen,
 } from 'lucide-react';
 import {
   CATERING_ENABLED,
@@ -62,6 +63,7 @@ export const RAIL_NAV: NavItem[] = [
   { name: 'Browse Chefs', href: '/chefs', icon: ChefHat },
   ...(CATERING_ENABLED ? [{ name: 'Catering', href: '/catering', icon: Utensils }] : []),
   ...(SOCIAL_ENABLED ? [{ name: 'Social Feed', href: '/feed', icon: Newspaper }] : []),
+  ...(SOCIAL_ENABLED ? [{ name: 'ChefBook', href: '/chefbook', icon: BookOpen }] : []),
 ];
 
 /** Account drawer — mirrors the quick tiles and list rows on mobile Profile. */
