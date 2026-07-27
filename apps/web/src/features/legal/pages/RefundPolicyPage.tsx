@@ -860,13 +860,6 @@ export default function RefundPolicyPage() {
             >
               Privacy Policy
             </Link>
-            <span aria-hidden="true">·</span>
-            <Link
-              to="/help"
-              className="font-medium text-herb underline-offset-4 hover:underline"
-            >
-              Help Centre
-            </Link>
           </div>
         </footer>
       </article>

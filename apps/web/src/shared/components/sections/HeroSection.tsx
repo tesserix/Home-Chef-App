@@ -84,12 +84,11 @@ export function HeroSection({ variant = 'home', className }: HeroSectionProps) {
 
           {variant === 'home' && <SearchBar />}
 
+          {/* The secondary CTA pointed at /how-it-works, which has never been a
+              route here — it fell through the catch-all straight back to home. */}
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Button asChild variant="primary" size="lg">
               <Link to={content.ctaLink}>{content.cta}</Link>
-            </Button>
-            <Button asChild variant="outline" size="lg">
-              <Link to="/how-it-works">How It Works</Link>
             </Button>
           </div>
 
