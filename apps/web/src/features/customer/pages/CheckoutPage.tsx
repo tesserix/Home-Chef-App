@@ -24,6 +24,8 @@ import { Button } from '@/shared/components/ui';
 import type { Order, Address } from '@/shared/types';
 import { useDeliveryQuote, type CreditIntent } from '../hooks/useDeliveryQuote';
 import { CheckoutCredits } from '../components/CheckoutCredits';
+import { AddressSearch } from '../components/AddressSearch';
+import { suggestionCoords, type AddressSuggestion } from '../hooks/useAddressAutocomplete';
 
 const addressSchema = z.object({
   label: z.string().min(1, 'Label is required'),
@@ -205,18 +207,95 @@ export default function CheckoutPage() {
   const creditApplied = walletApplied + loyaltyApplied;
   const payable = creditQuote ? creditQuote.payable : total;
 
+  // Serviceability (#709). CreateOrder HARD-rejects a delivery order it cannot
+  // range-check: no coordinates on the address is a 422 `delivery_location_
+  // required`, and beyond the kitchen's radius is a 422 `outside_delivery_range`.
+  // Web had neither guard AND no way to put coordinates on an address, so every
+  // web order 422'd and the customer saw only "Failed to initiate payment".
+  const addressNeedsLocation =
+    Boolean(selectedAddressObj) &&
+    !(selectedAddressObj?.latitude && selectedAddressObj?.longitude);
+  const deliveryOutOfRange = quote?.rangeKnown === true && quote?.deliverable === false;
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
+    setValue,
   } = useForm<AddressFormData>({
     resolver: zodResolver(addressSchema),
   });
 
+  // Coordinates of the picked suggestion, persisted with the new address. Without
+  // them the address is unorderable — see addressNeedsLocation above.
+  const [newAddressCoords, setNewAddressCoords] = useState<{ lat: number; lon: number } | null>(
+    null
+  );
+
+  // Fill the form from a geocoder suggestion. The fields stay editable — the
+  // suggestion supplies the coordinates and a sane starting point, not the last
+  // word on the flat number.
+  const applySuggestion = (s: AddressSuggestion) => {
+    setValue('line1', s.line1 || s.description, { shouldValidate: true });
+    if (s.city) setValue('city', s.city, { shouldValidate: true });
+    if (s.region) setValue('state', s.region, { shouldValidate: true });
+    if (s.postal) setValue('postalCode', s.postal, { shouldValidate: true });
+    setNewAddressCoords(suggestionCoords(s));
+  };
+
+  // Pin an EXISTING saved address that predates the geocoder. Every address the
+  // web created before this shipped has no coordinates, so without a repair path
+  // those customers would have to re-add addresses they already saved.
+  const [isPinning, setIsPinning] = useState(false);
+  const pinExistingAddress = async (s: AddressSuggestion) => {
+    const coords = suggestionCoords(s);
+    if (!coords || !selectedAddressObj) {
+      toast.error("That suggestion has no location — try a nearby landmark or the area name.");
+      return;
+    }
+    setIsPinning(true);
+    try {
+      // UpdateAddress replaces the record wholesale, so every field has to ride
+      // along or the untouched ones would be blanked.
+      await apiClient.put(`/addresses/${selectedAddressObj.id}`, {
+        label: selectedAddressObj.label,
+        line1: selectedAddressObj.line1,
+        line2: selectedAddressObj.line2,
+        city: selectedAddressObj.city,
+        state: selectedAddressObj.state,
+        postalCode: selectedAddressObj.postalCode,
+        country: selectedAddressObj.country || 'IN',
+        latitude: coords.lat,
+        longitude: coords.lon,
+        isDefault: selectedAddressObj.isDefault,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['addresses'] });
+      toast.success('Delivery location saved');
+    } catch {
+      toast.error('Could not save that location. Please try again.');
+    } finally {
+      setIsPinning(false);
+    }
+  };
+
   const handlePlaceOrder = async () => {
     if (!cart.chefId || !selectedAddress) {
       toast.error('Please select a delivery address');
+      return;
+    }
+    if (addressNeedsLocation) {
+      toast.error(
+        "Set this address's delivery location so we can confirm it's within the kitchen's range."
+      );
+      return;
+    }
+    if (deliveryOutOfRange) {
+      toast.error(
+        `This address is ${(quote?.distanceKm ?? 0).toFixed(1)} km from the kitchen — beyond its ${(
+          quote?.maxRadiusKm ?? 10
+        ).toFixed(0)} km delivery range.`
+      );
       return;
     }
     if (!acceptedTerms) {
@@ -419,6 +498,10 @@ export default function CheckoutPage() {
       const created = await apiClient.post<Address>('/addresses', {
         ...data,
         country: 'IN',
+        // The coordinates are the point of the search box above: an address
+        // without them can never be range-checked, so it can never be ordered to.
+        latitude: newAddressCoords?.lat,
+        longitude: newAddressCoords?.lon,
         isDefault: false,
       });
       // Refresh the list + select the brand-new one.
@@ -426,6 +509,7 @@ export default function CheckoutPage() {
       setSelectedAddress(created.id);
       setShowNewAddress(false);
       reset();
+      setNewAddressCoords(null);
       toast.success('Address saved');
     } catch {
       toast.error('Failed to save address');
@@ -462,6 +546,19 @@ export default function CheckoutPage() {
 
               {showNewAddress ? (
                 <form onSubmit={handleSubmit(onAddressSubmit)} className="mt-4 space-y-4">
+                  {/* Search first, then refine. This is what supplies the
+                      coordinates the order is range-checked against. */}
+                  <AddressSearch
+                    label="Find your address"
+                    hint="Pick your area from the list, then add your flat or house number below."
+                    onPick={applySuggestion}
+                  />
+                  {!newAddressCoords && (
+                    <p className="flex items-start gap-2 text-xs text-ink-muted">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                      Choose a suggestion above so we can check the kitchen delivers to you.
+                    </p>
+                  )}
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label htmlFor="addr-label" className="block text-sm font-medium text-ink-soft">
@@ -609,6 +706,46 @@ export default function CheckoutPage() {
                       )}
                     </label>
                   ))}
+                </div>
+              )}
+
+              {/* Repair path for addresses saved before the web had a geocoder.
+                  Every one of them has no coordinates, so without this the
+                  customer would have to re-add an address they already have. */}
+              {!showNewAddress && addressNeedsLocation && (
+                <div className="mt-4 rounded-lg border border-amber/40 bg-amber-tint p-4">
+                  <p className="flex items-start gap-2 text-sm font-medium text-ink">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    This address has no delivery location saved
+                  </p>
+                  <p className="mt-1 text-sm text-ink-soft">
+                    We need it to confirm the kitchen delivers to you. Search for your area below —
+                    the address itself stays exactly as it is.
+                  </p>
+                  <div className="mt-3">
+                    <AddressSearch
+                      label="Set delivery location"
+                      placeholder="Search your street, area or a nearby landmark"
+                      onPick={pinExistingAddress}
+                    />
+                  </div>
+                  {isPinning && <p className="mt-2 text-xs text-ink-muted">Saving location…</p>}
+                </div>
+              )}
+
+              {/* Out of range: the server would reject this order anyway, so say
+                  so here rather than letting the customer discover it at payment. */}
+              {!addressNeedsLocation && deliveryOutOfRange && (
+                <div className="mt-4 rounded-lg border border-paprika/30 bg-paprika-tint p-4">
+                  <p className="flex items-start gap-2 text-sm font-medium text-paprika">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    Outside this kitchen&apos;s delivery range
+                  </p>
+                  <p className="mt-1 text-sm text-paprika tabular-nums">
+                    This address is {(quote?.distanceKm ?? 0).toFixed(1)} km away — beyond the{' '}
+                    {(quote?.maxRadiusKm ?? 10).toFixed(0)} km this kitchen delivers. Pick an address
+                    closer to the kitchen.
+                  </p>
                 </div>
               )}
             </section>
@@ -989,7 +1126,13 @@ export default function CheckoutPage() {
                 fullWidth
                 isLoading={isProcessing}
                 onClick={handlePlaceOrder}
-                disabled={isProcessing || !selectedAddress || !acceptedTerms}
+                disabled={
+                  isProcessing ||
+                  !selectedAddress ||
+                  !acceptedTerms ||
+                  addressNeedsLocation ||
+                  deliveryOutOfRange
+                }
                 rightIcon={!isProcessing ? <ChevronRight aria-hidden="true" className="h-5 w-5" /> : undefined}
                 className="mt-4"
               >
