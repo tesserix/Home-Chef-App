@@ -73,3 +73,37 @@ describe('AddressSearch', () => {
     expect(get).not.toHaveBeenCalled();
   });
 });
+
+describe('AddressSearch when the geocoder is down', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // An outage and a genuine miss used to render identically — both said "no
+  // matches", which tells the customer their address doesn't exist when the
+  // truth is the lookup is broken. These two cases must stay distinguishable.
+  it('offers a retry instead of claiming the address does not exist', async () => {
+    vi.spyOn(apiClient, 'get').mockRejectedValue(
+      Object.assign(new Error('geocoder down'), { status: 503, code: 'geocoder_unavailable' }),
+    );
+    const user = userEvent.setup();
+    renderSearch();
+
+    await user.type(screen.getByLabelText('Find your address'), 'kalarahanga');
+
+    expect(await screen.findByText(/unavailable right now/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no matches/i)).not.toBeInTheDocument();
+  });
+
+  it('still says "no matches" when the geocoder simply found nothing', async () => {
+    vi.spyOn(apiClient, 'get').mockResolvedValue({ data: [] });
+    const user = userEvent.setup();
+    renderSearch();
+
+    await user.type(screen.getByLabelText('Find your address'), 'zzzzzzz');
+
+    expect(await screen.findByText(/no matches/i)).toBeInTheDocument();
+    expect(screen.queryByText(/unavailable right now/i)).not.toBeInTheDocument();
+  });
+});
