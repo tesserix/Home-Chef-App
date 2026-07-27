@@ -485,12 +485,14 @@ export default function HomePage() {
                     Turn your passion into income. Join our community of home chefs
                     and start earning by sharing your delicious homemade food.
                   </p>
+                  {/* Both CTAs used to point at /become-chef and
+                      /chef-resources — neither is a route in this app, so the
+                      catch-all bounced people back to this same page. Chef
+                      signup lives on the vendor portal; there is no separate
+                      resources page to send them to. */}
                   <div className="mt-8 flex flex-wrap gap-4">
                     <Button asChild variant="primary" size="lg">
-                      <Link to="/become-chef">Become a Chef</Link>
-                    </Button>
-                    <Button asChild variant="outline" size="lg" className="border-ink-soft text-paper hover:bg-ink">
-                      <Link to="/chef-resources">Learn More</Link>
+                      <a href="https://vendors.fe3dr.com">Become a Chef</a>
                     </Button>
                   </div>
                 </div>

@@ -200,35 +200,29 @@ export function MainLayout() {
                   </ul>
                 </div>
 
+                {/* Chef signup lives on the vendor portal, the same destination
+                    PARTNER_NAV uses. The old /become-chef and /chef-resources
+                    links pointed at routes this app has never had, so they fell
+                    through the catch-all and silently returned people home. */}
                 <div>
                   <h3 className="font-semibold text-ink">For Chefs</h3>
                   <ul className="mt-4 space-y-2 text-sm">
                     <li>
-                      <Link to="/become-chef" className="text-ink-muted hover:text-ink">
+                      <a
+                        href="https://vendors.fe3dr.com"
+                        className="text-ink-muted hover:text-ink"
+                      >
                         Become a Chef
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="/chef-resources" className="text-ink-muted hover:text-ink">
-                        Resources
-                      </Link>
+                      </a>
                     </li>
                   </ul>
                 </div>
 
+                {/* About Us and Help Center were dead links too. The legal
+                    pages below are the only Company routes that exist. */}
                 <div>
                   <h3 className="font-semibold text-ink">Company</h3>
                   <ul className="mt-4 space-y-2 text-sm">
-                    <li>
-                      <Link to="/about" className="text-ink-muted hover:text-ink">
-                        About Us
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="/help" className="text-ink-muted hover:text-ink">
-                        Help Center
-                      </Link>
-                    </li>
                     <li>
                       <Link to="/privacy" className="text-ink-muted hover:text-ink">
                         Privacy Policy
@@ -237,6 +231,11 @@ export function MainLayout() {
                     <li>
                       <Link to="/terms" className="text-ink-muted hover:text-ink">
                         Terms of Service
+                      </Link>
+                    </li>
+                    <li>
+                      <Link to="/refund" className="text-ink-muted hover:text-ink">
+                        Refund Policy
                       </Link>
                     </li>
                   </ul>

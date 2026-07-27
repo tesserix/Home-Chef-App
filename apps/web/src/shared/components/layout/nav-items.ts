@@ -9,7 +9,6 @@ import {
   Gift,
   Package,
   Wallet,
-  Settings,
   ShieldCheck,
   FileText,
   Store,
@@ -39,9 +38,9 @@ import {
 //
 // Every href is a route that exists in app/routes/index.tsx. Mobile also has
 // blocked-accounts and support-chat screens the web has no route for, so they
-// are omitted rather than linked into a 404. The footer separately links to
-// /help, /about, /become-chef and /chef-resources, which 404 today — those are
-// deliberately NOT repeated here.
+// are omitted rather than linked into a 404. The footer used to link /help,
+// /about, /become-chef and /chef-resources, which 404'd; those have since been
+// removed or repointed, so the whole app now links only to real routes.
 
 export interface NavItem {
   name: string;
@@ -82,14 +81,15 @@ export const LEGAL_NAV: NavItem[] = [
 ];
 
 /**
- * Drawer footer group for a signed-in visitor. Settings sits here rather than
- * in LEGAL_NAV because it configures *your* account — it means nothing to
- * someone who hasn't signed in, so the signed-out drawer shows LEGAL_NAV only.
+ * Drawer footer group for a signed-in visitor.
+ *
+ * This used to lead with a Settings row pointing at /settings. No such route
+ * exists — the only `settings` path in the app belonged to the embedded admin
+ * tree (/admin/settings), which has since moved out to its own app — so every
+ * signed-in customer got a menu row that dumped them on the home page. Account
+ * settings live on /profile, which the drawer header already links to.
  */
-export const ACCOUNT_SECONDARY_NAV: NavItem[] = [
-  { name: 'Settings', href: '/settings', icon: Settings },
-  ...LEGAL_NAV,
-];
+export const ACCOUNT_SECONDARY_NAV: NavItem[] = [...LEGAL_NAV];
 
 /**
  * The other ways in — our counterpart to Uber Eats' "Add your restaurant" /

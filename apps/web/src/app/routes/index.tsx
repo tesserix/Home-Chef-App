@@ -3,9 +3,6 @@ import { Suspense, lazy } from 'react';
 import { useAuth } from '../providers/AuthProvider';
 import { LoadingScreen } from '@/shared/components/LoadingScreen';
 import { MainLayout } from '@/shared/components/layout/MainLayout';
-import { ChefLayout } from '@/shared/components/layout/ChefLayout';
-import { AdminLayout } from '@/shared/components/layout/AdminLayout';
-import { DeliveryLayout } from '@/shared/components/layout/DeliveryLayout';
 
 /**
  * Wraps a dynamic import with retry + full-page reload on failure.
@@ -61,43 +58,19 @@ const UserInfoPage = lazyWithRetry(() => import('@/features/onboarding/pages/Use
 const LoginPage = lazyWithRetry(() => import('@/features/auth/pages/LoginPage'));
 const RegisterPage = lazyWithRetry(() => import('@/features/auth/pages/RegisterPage'));
 
-// Chef pages
-const ChefDashboardPage = lazyWithRetry(() => import('@/features/chef/pages/DashboardPage'));
-const ChefMenuPage = lazyWithRetry(() => import('@/features/chef/pages/MenuPage'));
-const ChefOrdersPage = lazyWithRetry(() => import('@/features/chef/pages/OrdersPage'));
-const ChefEarningsPage = lazyWithRetry(() => import('@/features/chef/pages/EarningsPage'));
-const ChefProfilePage = lazyWithRetry(() => import('@/features/chef/pages/ProfilePage'));
-const ChefSocialPage = lazyWithRetry(() => import('@/features/chef/pages/SocialPage'));
-const ChefCateringPage = lazyWithRetry(() => import('@/features/chef/pages/CateringPage'));
-
-// Admin pages
-const AdminDashboardPage = lazyWithRetry(() => import('@/features/admin/pages/DashboardPage'));
-const AdminUsersPage = lazyWithRetry(() => import('@/features/admin/pages/UsersPage'));
-const AdminChefsPage = lazyWithRetry(() => import('@/features/admin/pages/ChefsPage'));
-const AdminOrdersPage = lazyWithRetry(() => import('@/features/admin/pages/OrdersPage'));
-const AdminAnalyticsPage = lazyWithRetry(() => import('@/features/admin/pages/AnalyticsPage'));
-const AdminSettingsPage = lazyWithRetry(() => import('@/features/admin/pages/SettingsPage'));
-
-// Delivery pages
-const DeliveryDashboardPage = lazyWithRetry(() => import('@/features/delivery/pages/DashboardPage'));
-const DeliveryOrdersPage = lazyWithRetry(() => import('@/features/delivery/pages/OrdersPage'));
-const DeliveryEarningsPage = lazyWithRetry(() => import('@/features/delivery/pages/EarningsPage'));
-
 // Legal pages
 const TermsPage = lazyWithRetry(() => import('@/features/legal/pages/TermsPage'));
 const PrivacyPolicyPage = lazyWithRetry(() => import('@/features/legal/pages/PrivacyPolicyPage'));
 const RefundPolicyPage = lazyWithRetry(() => import('@/features/legal/pages/RefundPolicyPage'));
 const CookiePolicyPage = lazyWithRetry(() => import('@/features/legal/pages/CookiePolicyPage'));
 
-// Protected route wrapper
-function ProtectedRoute({
-  children,
-  roles,
-}: {
-  children: React.ReactNode;
-  roles?: string[];
-}) {
-  const { user, isLoading, isAuthenticated } = useAuth();
+// Protected route wrapper.
+//
+// Deliberately has no role check: every route in this app is a customer route,
+// so a session is the only gate. The chef/admin/delivery role guards that used
+// to live here went with those route trees to their own apps.
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isLoading, isAuthenticated } = useAuth();
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -105,10 +78,6 @@ function ProtectedRoute({
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
-  }
-
-  if (roles && user && !roles.some(r => user.roles?.includes(r))) {
-    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
@@ -271,57 +240,10 @@ export function AppRoutes() {
           />
         </Route>
 
-        {/* Chef routes */}
-        <Route
-          path="chef"
-          element={
-            <ProtectedRoute roles={['chef']}>
-              <ChefLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<ChefDashboardPage />} />
-          <Route path="menu" element={<ChefMenuPage />} />
-          <Route path="orders" element={<ChefOrdersPage />} />
-          <Route path="earnings" element={<ChefEarningsPage />} />
-          <Route path="profile" element={<ChefProfilePage />} />
-          <Route path="social" element={<ChefSocialPage />} />
-          <Route path="catering" element={<ChefCateringPage />} />
-        </Route>
-
-        {/* Admin routes */}
-        <Route
-          path="admin"
-          element={
-            <ProtectedRoute roles={['admin', 'super_admin']}>
-              <AdminLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<AdminDashboardPage />} />
-          <Route path="users" element={<AdminUsersPage />} />
-          <Route path="chefs" element={<AdminChefsPage />} />
-          <Route path="orders" element={<AdminOrdersPage />} />
-          <Route path="analytics" element={<AdminAnalyticsPage />} />
-          <Route path="settings" element={<AdminSettingsPage />} />
-        </Route>
-
-        {/* Delivery partner routes */}
-        <Route
-          path="delivery"
-          element={
-            <ProtectedRoute roles={['delivery']}>
-              <DeliveryLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<DeliveryDashboardPage />} />
-          <Route path="orders" element={<DeliveryOrdersPage />} />
-          <Route path="earnings" element={<DeliveryEarningsPage />} />
-        </Route>
+        {/* Chef, admin and delivery-partner surfaces deliberately live in their
+            own apps — vendor-portal / mobile-vendor, mobile-admin, and
+            delivery-portal / mobile-delivery. This app is customer-only, which
+            is what mobile-customer ships. */}
 
         {/* 404 */}
         <Route path="*" element={<Navigate to="/" replace />} />

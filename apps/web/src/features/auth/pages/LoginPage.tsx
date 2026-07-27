@@ -215,16 +215,15 @@ export default function LoginPage() {
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between">
+                    {/* No "Forgot password?" link: it pointed at
+                        /forgot-password, which this app has no route for, so it
+                        dropped people on the home page mid-recovery. The mobile
+                        apps do ship the flow — see the follow-ups in
+                        .planning/quick/260727-web-mobile-consistency/SUMMARY.md. */}
+                    <div>
                       <label htmlFor="login-password" className="block text-sm font-medium text-ink-soft">
                         Password
                       </label>
-                      <Link
-                        to="/forgot-password"
-                        className="text-sm text-herb hover:text-herb"
-                      >
-                        Forgot password?
-                      </Link>
                     </div>
                     <div className="relative mt-1">
                       <input
