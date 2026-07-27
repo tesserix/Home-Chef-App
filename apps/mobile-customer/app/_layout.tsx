@@ -60,14 +60,16 @@ export default function RootLayout() {
     'Inter-SemiBold': Inter_600SemiBold,
   });
 
-  const { isAuthenticated, isLoading, onboardingComplete, isGuest, hydrateFromStorage } =
+  const { isAuthenticated, isLoading, onboardingComplete, hydrateFromStorage } =
     useAuthStore();
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
-  const setGuest = useAuthStore((s) => s.setGuest);
   // Which route group is on screen. The auth gate below uses it to leave the
-  // sign-in screen alone once someone has deliberately opened it.
+  // sign-in screen alone once someone has deliberately opened it, and to avoid
+  // re-replacing browse with itself.
   const segments = useSegments();
   const inAuthGroup = segments[0] === '(auth)';
+  const inTabsGroup = segments[0] === '(tabs)';
+  const inOnboardingGroup = segments[0] === '(onboarding)';
   // Whether we've reconciled onboarding state with the SERVER for this session.
   // The local `onboardingComplete` flag is device-only and is cleared on logout,
   // so on re-login we must ask the server before deciding — otherwise a returning
@@ -274,26 +276,38 @@ export default function RootLayout() {
       // them browse if they found the "Browse without an account" link — a login
       // wall on the front door, which is exactly what the comment above it said
       // the app didn't do.
-      if (!isGuest) void setGuest(true);
-      // Never yank someone off a screen they deliberately opened. Without this
-      // the effect would re-fire on the next state change and replace the login
-      // screen with the tabs mid-sign-in.
-      if (!inAuthGroup) router.replace('/(tabs)');
+      // Nothing is written to storage here. An earlier cut called setGuest(true)
+      // on this path; the write is async, so any pass that re-read the flag
+      // before it landed saw "not a guest", set it again, and the header
+      // flickered between the two treatments. Being signed out is already the
+      // whole condition — see useIsGuest.
+      //
+      // Redirect only when they are somewhere that isn't browse. Replacing
+      // unconditionally re-ran on every pass and remounted the tabs underneath
+      // the customer, which is the other half of what made the screen flicker.
+      if (!inAuthGroup && !inTabsGroup) router.replace('/(tabs)');
     } else if (!onboardingComplete) {
       // Wait for the server reconciliation before deciding, so we never flash the
       // setup wizard at a returning user whose profile is already complete.
       if (!onboardingChecked) return;
-      router.replace('/(onboarding)/user-info');
-    } else {
+      if (!inOnboardingGroup) router.replace('/(onboarding)/user-info');
+    } else if (inAuthGroup || inOnboardingGroup) {
+      // Signed in and set up: the only reason to move them is that they are
+      // still sitting on sign-in or setup, which they have now finished.
+      //
+      // This branch MUST NOT fire for any other route. The effect re-runs
+      // whenever the route group changes, so replacing unconditionally would
+      // bounce a signed-in customer back to the tabs the instant they opened
+      // the cart, checkout or an order — the screen would appear and vanish.
       router.replace('/(tabs)');
     }
   }, [
     fontsLoaded,
     isAuthenticated,
     isLoading,
-    isGuest,
-    setGuest,
     inAuthGroup,
+    inTabsGroup,
+    inOnboardingGroup,
     onboardingComplete,
     onboardingChecked,
   ]);

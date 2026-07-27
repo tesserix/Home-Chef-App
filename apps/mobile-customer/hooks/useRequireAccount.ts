@@ -67,7 +67,18 @@ export function useRequireAccount(): (action: string) => boolean {
  *
  * For rendering — hiding a "Your orders" section, showing a sign-in banner.
  * Use requireAccount() for the actual gate; a hidden button is not a guard.
+ *
+ * Derived purely from "signed out, and we know it" — it deliberately does NOT
+ * read the persisted `isGuest` flag. That flag is written asynchronously, so
+ * anything that re-ran hydration could read it back before the write landed and
+ * flip this to false for a frame; with the root layout writing it on every pass,
+ * the two fought each other and the header visibly oscillated between the guest
+ * and signed-in treatments. Persisted state is the wrong tool for a question
+ * that `isAuthenticated` already answers exactly.
+ *
+ * `isLoading` keeps the first frames neutral, so a returning signed-in customer
+ * never gets a flash of the guest UI while the session rehydrates.
  */
 export function useIsGuest(): boolean {
-  return useAuthStore((s) => s.isGuest && !s.isAuthenticated);
+  return useAuthStore((s) => !s.isAuthenticated && !s.isLoading);
 }

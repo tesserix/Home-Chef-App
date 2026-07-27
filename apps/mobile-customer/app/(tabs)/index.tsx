@@ -254,6 +254,29 @@ export default function HomeScreen() {
             )}
           </Pressable>
         ) : null}
+        {/* Sign in — the guest's way back to an account, in the spot the wallet
+            chip occupies once they have one. Browsing needs no account, but the
+            offer to make one should be visible rather than buried behind a tab
+            they have no reason to open. */}
+        {isGuest ? (
+          <Pressable
+            onPress={() => router.push('/(auth)/login')}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in or create an account"
+            android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.signInPill,
+                  pressed && Platform.OS === 'ios' && styles.pressedIOS,
+                ]}
+              >
+                <Text style={styles.signInPillText}>Sign in</Text>
+              </View>
+            )}
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={() => router.push('/chefs-map')}
           accessibilityRole="button"
@@ -714,6 +737,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: customerColors.charcoal.DEFAULT,
     fontVariant: ['tabular-nums'],
+  },
+  // Same geometry and quiet surface as the wallet pill it stands in for, so the
+  // header keeps its rhythm whether or not the visitor has an account.
+  //
+  // Deliberately NOT a coral fill. Coral is the single brand accent reserved for
+  // the primary action, and the header already spends it on the selected
+  // category and the Home tab — a third one turned the row into three things
+  // shouting at once. Signing in is an offer, not the job the customer came to
+  // do, so it sits at the same weight as the map and bell beside it.
+  signInPill: {
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    backgroundColor: customerColors.surface.DEFAULT,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+  },
+  signInPillText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: customerColors.charcoal.DEFAULT,
   },
   bellBadge: {
     position: 'absolute',

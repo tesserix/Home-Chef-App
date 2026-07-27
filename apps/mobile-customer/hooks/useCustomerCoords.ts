@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useAddresses } from './useAddresses';
+import { useDeviceLocation } from './useDeviceLocation';
 import type { Address } from '../types/customer';
 
 export interface Coords {
@@ -48,12 +49,21 @@ export function pickActiveAddress(addresses: Address[]): Address | undefined {
 export function useCustomerCoords(): Coords | null {
   const { data } = useAddresses();
   const addresses = data?.data ?? [];
+  // A guest has no saved addresses at all, so without this the whole app ran
+  // un-located for them — every chef equally "near", no delivery-reach hint.
+  // The device's own position stands in. A SAVED address always wins: it is an
+  // explicit choice about where the food should go, which the phone's current
+  // position is not.
+  const { location } = useDeviceLocation();
 
   return useMemo(() => {
     const active = pickActiveAddress(addresses);
-    if (!active || !hasUsableCoords(active)) return null;
-    return { lat: active.latitude as number, lng: active.longitude as number };
-  }, [addresses]);
+    if (active && hasUsableCoords(active)) {
+      return { lat: active.latitude as number, lng: active.longitude as number };
+    }
+    if (location) return { lat: location.lat, lng: location.lng };
+    return null;
+  }, [addresses, location]);
 }
 
 /**
