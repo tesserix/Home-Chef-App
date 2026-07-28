@@ -39,7 +39,13 @@ func IsIntraStateSupply(sellerState, buyerState string) bool {
 	if s == "" || b == "" {
 		return true
 	}
-	return s == b
+	// Resolved through the seeded states table, not compared as raw strings: a
+	// chef stores "Odisha" while an address geocoded by Mappls/Photon stores
+	// "OR", and a plain comparison called that inter-state — putting IGST on a
+	// Bhubaneswar → Bhubaneswar invoice where CGST+SGST was due. See
+	// state_resolve.go. Unseeded states fall back to comparing themselves, which
+	// is the previous behaviour exactly.
+	return SameState(s, b)
 }
 
 // SplitIndiaGST breaks a GST amount (at ratePercent) into the compliant
