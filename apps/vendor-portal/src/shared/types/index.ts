@@ -290,6 +290,10 @@ export type OrderStatus =
   | 'rejected'
   | 'refunded';
 
+/** How an order reaches the customer. Legacy rows without the column read as
+ *  'delivery' (the API defaults it in ToResponse). */
+export type FulfillmentType = 'delivery' | 'chef_delivery' | 'pickup';
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -297,6 +301,7 @@ export interface Order {
   chefId: string;
   deliveryPartnerId?: string;
   status: OrderStatus;
+  fulfillmentType?: FulfillmentType;
   items: OrderItem[];
   deliveryAddress: Address;
   subtotal: number;
@@ -320,6 +325,19 @@ export interface Order {
   paymentId?: string;
   paymentStatus: PaymentStatus;
   paymentMethod?: string;
+  // True while an OPEN delivery-failure review is in flight (#393): the order
+  // is an admin's call now, so it leaves the chef's live queue.
+  deliveryFailureReported?: boolean;
+  // Carrier capabilities, per chef / per platform. `riderDispatchAvailable`
+  // false means no 3PL provider is enabled, so no rider will ever collect a
+  // `delivery` order — self-delivery is then the only route to `delivered`.
+  offersSelfDelivery?: boolean;
+  riderDispatchAvailable?: boolean;
+  // Lifecycle photos (public URLs) the chef attaches at the photo-gated
+  // transitions: the food-ready shot is shown to the customer, the handover
+  // shot is the pickup dispute evidence. Absent until the chef uploads one.
+  readyPhotoUrl?: string;
+  handoverPhotoUrl?: string;
   createdAt: string;
 }
 

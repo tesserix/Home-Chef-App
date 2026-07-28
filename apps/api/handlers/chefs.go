@@ -1179,6 +1179,14 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 	// query rather than a per-order count, so History can close them off.
 	underReview := openDeliveryFailureOrderIDs(orderIDs)
 
+	// Carrier capabilities are per-chef / per-platform, not per-order, so resolve
+	// them once for the whole page. They let a chef surface offer the carrier
+	// escape straight from a list card: with 3PL dark, a `delivery` order sitting
+	// at `ready` has no rider coming and self-delivery is the only way it ever
+	// completes.
+	offersSelfDelivery := chef.OffersSelfDelivery
+	riderDispatchAvailable := services.ThirdPartyDeliveryEnabled()
+
 	responses := make([]models.OrderResponse, len(orders))
 	for i, order := range orders {
 		// Chef view: area-only address, no phone, first name only (privacy).
@@ -1187,6 +1195,8 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 		// Lets the app route a still-picked_up "couldn't deliver" order to
 		// History (isHistoryOrder) instead of leaving it in the live list.
 		responses[i].DeliveryFailureReported = underReview[order.ID]
+		responses[i].OffersSelfDelivery = offersSelfDelivery
+		responses[i].RiderDispatchAvailable = riderDispatchAvailable
 	}
 
 	// Mobile (`useVendorPendingOrders`, `useVendorOrderHistory`) consumes the

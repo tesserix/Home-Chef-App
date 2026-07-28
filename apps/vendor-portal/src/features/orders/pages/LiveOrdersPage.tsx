@@ -5,13 +5,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Clock,
-  ChefHat,
   CheckCircle2,
   XCircle,
-  Package,
   History,
   RefreshCw,
   Inbox,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
@@ -21,11 +20,19 @@ import { Card } from '@/shared/components/ui/Card';
 import { OrderStatusBadge } from '@/shared/components/ui/Badge';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
 import { OrderMessageThread } from '@/features/orders/components/OrderMessageThread';
+import { OrderActionButton } from '@/features/orders/components/OrderActionButton';
+import { CarrierSwitchButton } from '@/features/orders/components/CarrierSwitchButton';
+import { OrderLifecyclePhotos } from '@/features/orders/components/OrderLifecyclePhotos';
+import { getChefOrderAction, isLiveChefOrder } from '@/features/orders/order-actions';
+import type { Carrier } from '@/features/orders/order-actions';
 import type { ChefOrdersResponse, Order, OrderStatus } from '@/shared/types';
 
 type LiveTab = 'all' | 'pending' | 'accepted' | 'preparing' | 'ready';
 
-const LIVE_STATUSES = 'pending,accepted,preparing,ready';
+// `picked_up` is included so a self-delivering chef's order stays in the live
+// queue while they're en route — isLiveChefOrder drops the 3PL/pickup ones,
+// which are out of the chef's hands.
+const LIVE_STATUSES = 'pending,accepted,preparing,ready,picked_up';
 
 const tabs: { key: LiveTab; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -34,17 +41,6 @@ const tabs: { key: LiveTab; label: string }[] = [
   { key: 'preparing', label: 'Preparing' },
   { key: 'ready', label: 'Ready' },
 ];
-
-function getNextStatusAction(status: OrderStatus): { label: string; nextStatus: OrderStatus; variant: 'default' | 'success' | 'destructive' } | null {
-  switch (status) {
-    case 'accepted':
-      return { label: 'Start Preparing', nextStatus: 'preparing', variant: 'default' };
-    case 'preparing':
-      return { label: 'Mark Ready', nextStatus: 'ready', variant: 'success' };
-    default:
-      return null;
-  }
-}
 
 export default function LiveOrdersPage() {
   const [activeTab, setActiveTab] = useState<LiveTab>('all');
@@ -56,19 +52,40 @@ export default function LiveOrdersPage() {
     queryFn: () =>
       apiClient
         .get<ChefOrdersResponse>('/chef/orders', { status: LIVE_STATUSES })
-        .then((r) => r.orders ?? []),
+        .then((r) => (r.orders ?? []).filter(isLiveChefOrder)),
     refetchInterval: 30000,
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ orderId, status }: { orderId: string; status: OrderStatus }) =>
-      apiClient.put(`/chef/orders/${orderId}/status`, { status }),
-    onSuccess: () => {
+    // `carrier` re-stamps the same status with a different fulfilment route
+    // (deliver-it-myself ↔ hand-to-a-rider). The API treats a same-status write
+    // as an idempotent no-op, so only the carrier changes.
+    mutationFn: ({
+      orderId,
+      status,
+      carrier,
+    }: {
+      orderId: string;
+      status: OrderStatus;
+      carrier?: Carrier;
+    }) => apiClient.put(`/chef/orders/${orderId}/status`, { status, ...(carrier ? { carrier } : {}) }),
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['chef-orders'] });
-      toast.success('Order status updated');
+      toast.success(
+        variables.carrier === 'chef_delivery'
+          ? "You're delivering this order — mark it out for delivery when you leave."
+          : variables.carrier === 'delivery'
+            ? 'Handed back to a rider.'
+            : 'Order status updated'
+      );
     },
-    onError: () => {
-      toast.error('Failed to update order status');
+    onError: (err) => {
+      // Surface the API's reason (e.g. "no delivery partner is available right
+      // now") — a generic failure leaves the chef with no idea what to do next.
+      const message =
+        (err as { error?: { message?: string } })?.error?.message ??
+        (err as { message?: string })?.message;
+      toast.error(message || 'Failed to update order status');
     },
   });
 
@@ -80,8 +97,15 @@ export default function LiveOrdersPage() {
     updateStatusMutation.mutate({ orderId, status: 'rejected' });
   };
 
-  const handleStatusAdvance = (orderId: string, nextStatus: OrderStatus) => {
-    updateStatusMutation.mutate({ orderId, status: nextStatus });
+  const handleStatusAdvance = (orderId: string, nextStatus: OrderStatus, carrier?: Carrier) => {
+    updateStatusMutation.mutate({ orderId, status: nextStatus, carrier });
+  };
+
+  // Re-send the CURRENT status with the other carrier — the order stays `ready`
+  // and only the fulfilment route flips. This is what rescues a delivery order
+  // when no rider can be dispatched.
+  const handleSwitchCarrier = (orderId: string, status: OrderStatus, carrier: Carrier) => {
+    updateStatusMutation.mutate({ orderId, status, carrier });
   };
 
   const filteredOrders = activeTab === 'all'
@@ -199,7 +223,13 @@ export default function LiveOrdersPage() {
       ) : (
         <motion.div variants={staggerContainer} className="space-y-4">
           {filteredOrders.map((order) => {
-            const nextAction = getNextStatusAction(order.status);
+            const nextAction = getChefOrderAction(order.status, order.fulfillmentType, {
+              offersSelfDelivery: order.offersSelfDelivery,
+              riderDispatchAvailable: order.riderDispatchAvailable,
+            });
+            const isOrderPending =
+              updateStatusMutation.isPending &&
+              updateStatusMutation.variables?.orderId === order.id;
 
             return (
               <motion.div key={order.id} variants={fadeInUp}>
@@ -339,34 +369,63 @@ export default function LiveOrdersPage() {
                         </Button>
                       </>
                     )}
-                    {nextAction && (
-                      <Button
-                        variant={nextAction.variant}
-                        size="sm"
-                        className="flex-1"
-                        leftIcon={
-                          nextAction.nextStatus === 'preparing' ? (
-                            <ChefHat className="h-4 w-4" />
-                          ) : (
-                            <Package className="h-4 w-4" />
-                          )
-                        }
-                        onClick={() => handleStatusAdvance(order.id, nextAction.nextStatus)}
-                        isLoading={
-                          updateStatusMutation.isPending &&
-                          updateStatusMutation.variables?.orderId === order.id
-                        }
-                      >
-                        {nextAction.label}
-                      </Button>
+                    {nextAction?.kind === 'advance' && (
+                      <div className="flex flex-1 flex-col gap-1.5">
+                        <OrderActionButton
+                          orderId={order.id}
+                          action={nextAction}
+                          isPending={isOrderPending}
+                          onAdvance={(nextStatus, carrier) =>
+                            handleStatusAdvance(order.id, nextStatus, carrier)
+                          }
+                        />
+                        {nextAction.switchTo && (
+                          <CarrierSwitchButton
+                            switchTo={nextAction.switchTo}
+                            disabled={isOrderPending}
+                            onSwitch={(carrier) =>
+                              handleSwitchCarrier(order.id, order.status, carrier)
+                            }
+                          />
+                        )}
+                      </div>
                     )}
-                    {order.status === 'ready' && (
-                      <div className="flex flex-1 items-center justify-center rounded-lg border border-success/30 bg-success/5 px-3 py-2 text-sm font-medium text-success">
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Waiting for pickup
+                    {nextAction?.kind === 'waiting' && (
+                      <div className="flex flex-1 flex-col gap-1.5">
+                        <div
+                          className={`flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-medium ${
+                            nextAction.switchTo?.hint
+                              ? 'border-warning/30 bg-warning/5 text-warning'
+                              : 'border-success/30 bg-success/5 text-success'
+                          }`}
+                        >
+                          {nextAction.switchTo?.hint ? (
+                            <AlertTriangle aria-hidden="true" className="mr-2 h-4 w-4" />
+                          ) : (
+                            <CheckCircle2 aria-hidden="true" className="mr-2 h-4 w-4" />
+                          )}
+                          {nextAction.caption}
+                        </div>
+                        {nextAction.switchTo && (
+                          <CarrierSwitchButton
+                            switchTo={nextAction.switchTo}
+                            disabled={isOrderPending}
+                            onSwitch={(carrier) =>
+                              handleSwitchCarrier(order.id, order.status, carrier)
+                            }
+                          />
+                        )}
                       </div>
                     )}
                   </div>
+
+                  {/* Lifecycle photos already attached — the chef's proof the
+                      food-ready / handover upload landed. */}
+                  <OrderLifecyclePhotos
+                    orderNumber={order.orderNumber}
+                    readyPhotoUrl={order.readyPhotoUrl}
+                    handoverPhotoUrl={order.handoverPhotoUrl}
+                  />
 
                   {/* Admin-mediated customer messaging (#53). */}
                   <OrderMessageThread orderId={order.id} />
