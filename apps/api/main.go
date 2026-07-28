@@ -145,10 +145,14 @@ func main() {
 	// PII column encryption (#710). Off by default; when enabled, unwrap the DEK
 	// (GCP KMS) + load the blind-index key at boot. Fatal if it can't init while
 	// enabled — an enabled-but-uninitialised state would silently store plaintext.
+	if err := piicrypto.InitIfEnabled(
+		context.Background(),
+		config.AppConfig.PIIEncryptionEnabled,
+		config.AppConfig.GCSProjectID,
+	); err != nil {
+		log.Fatalf("PII encryption enabled but failed to initialize: %v", err)
+	}
 	if config.AppConfig.PIIEncryptionEnabled {
-		if err := piicrypto.Init(context.Background(), config.AppConfig.GCSProjectID); err != nil {
-			log.Fatalf("PII encryption enabled but failed to initialize: %v", err)
-		}
 		log.Println("PII column encryption initialized")
 	}
 
