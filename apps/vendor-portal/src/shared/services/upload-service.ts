@@ -109,6 +109,42 @@ export async function deleteMenuItemImage(
   }
 }
 
+/** Lifecycle photo kinds the chef attaches to an order. Mirrors the vendor
+ *  app's `OrderPhotoKind` and the API's `kind` form field. */
+export type OrderPhotoKind = 'ready' | 'handover';
+
+/**
+ * Uploads a required lifecycle photo (food-ready or proof-of-handover) for an
+ * order and returns its public URL. Callers must await this BEFORE the matching
+ * status update, so a failed upload leaves the order where it was and the chef
+ * simply retries — the same ordering the vendor app uses.
+ */
+export async function uploadOrderPhoto(
+  orderId: string,
+  kind: OrderPhotoKind,
+  file: File
+): Promise<{ kind: OrderPhotoKind; url: string }> {
+  const error = validateFile(file, ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE);
+  if (error) throw new Error(error);
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('kind', kind);
+
+  const res = await fetch(`${BFF_URL}/api/v1/chef/orders/${orderId}/photos`, {
+    method: 'POST',
+    body: formData,
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(err.error || err.message || 'Upload failed');
+  }
+
+  return res.json();
+}
+
 export async function uploadBannerImage(file: File): Promise<string> {
   const error = validateFile(file, ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE);
   if (error) throw new Error(error);

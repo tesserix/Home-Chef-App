@@ -14,6 +14,7 @@ import { Button } from '@/shared/components/ui/Button';
 import { Card } from '@/shared/components/ui/Card';
 import { OrderStatusBadge } from '@/shared/components/ui/Badge';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
+import { OrderLifecyclePhotos } from '@/features/orders/components/OrderLifecyclePhotos';
 import type { ChefOrdersResponse, Order } from '@/shared/types';
 
 type DateRange = 'today' | '7days' | '30days' | 'all';
@@ -212,6 +213,15 @@ export default function OrderHistoryPage() {
                     {(order.items ?? []).map((item) => `${item.quantity}x ${item.name}`).join(', ')}
                   </span>
                 </div>
+
+                {/* Lifecycle photos — the record the chef points at in a
+                    "it never arrived" dispute after the fact. */}
+                <OrderLifecyclePhotos
+                  orderNumber={order.orderNumber}
+                  readyPhotoUrl={order.readyPhotoUrl}
+                  handoverPhotoUrl={order.handoverPhotoUrl}
+                  size="sm"
+                />
 
                 {/* Cancelled reason */}
                 {order.status === 'cancelled' && order.cancelReason && (

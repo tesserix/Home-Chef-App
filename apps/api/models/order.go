@@ -380,6 +380,20 @@ type OrderResponse struct {
 	// route the order to History instead of the live queue. Set by the chef-orders
 	// handler (absent from the base DTO / ToResponse).
 	DeliveryFailureReported bool `json:"deliveryFailureReported,omitempty"`
+	// OffersSelfDelivery is the chef's self-delivery CAPABILITY (the "I deliver
+	// myself" toggle) — the authoritative gate for offering the carrier choice,
+	// NOT the distance fields (which are 0 when no radius is set and so cannot
+	// tell "can't self-deliver" apart from "no radius configured").
+	//
+	// RiderDispatchAvailable is COMPUTED: whether any 3PL provider is enabled,
+	// i.e. whether "hand to a rider" is a real option at all. With every provider
+	// disabled a `delivery` order at `ready` has NO carrier coming for it, so the
+	// chef surfaces must offer self-delivery or the order can never complete.
+	//
+	// Both are set by the chef-facing handlers (list + detail) and absent from
+	// the base DTO, so customer endpoints never carry chef configuration.
+	OffersSelfDelivery     bool `json:"offersSelfDelivery,omitempty"`
+	RiderDispatchAvailable bool `json:"riderDispatchAvailable,omitempty"`
 	// CustomerName and CustomerPhone are populated by handlers that load the
 	// Customer relation (e.g. chef order list, chef order detail). They are
 	// intentionally absent from the base DTO so customer-facing endpoints
@@ -510,19 +524,10 @@ type ChefOrderDetailResponse struct {
 	DeliveryInstructions string `json:"deliveryInstructions,omitempty"`
 	// Payment method
 	PaymentMethod string `json:"paymentMethod,omitempty"`
-	// OffersSelfDelivery is the chef's self-delivery CAPABILITY (the "I deliver
-	// myself" toggle), surfaced so the vendor app can offer the Mark-Ready
-	// carrier choice on a delivery order. This is the authoritative gate — NOT
-	// the distance fields below, which are 0 when the chef set no radius or
-	// coords are missing and must never be used to infer the capability.
-	OffersSelfDelivery bool `json:"offersSelfDelivery"`
-	// RiderDispatchAvailable is a COMPUTED flag: whether a 3PL provider is
-	// currently enabled, i.e. whether "hand to a rider" is a real option. The
-	// vendor app gates the Mark-Ready rider button (and the mid-ready "hand to a
-	// rider" switch) on this, so the chef is never offered a rider while 3PL is
-	// dark. Flipping a provider's is_enabled=true re-enables the rider path with
-	// no app change.
-	RiderDispatchAvailable bool `json:"riderDispatchAvailable"`
+	// OffersSelfDelivery and RiderDispatchAvailable are carried on the embedded
+	// OrderResponse (the chef order LIST needs them too, to offer the same
+	// carrier escape from a card) — see their doc there.
+	//
 	// Chef self-delivery distance gate (chef_delivery only). DistanceKm is the
 	// chef→drop straight-line distance; MaxDistanceKm is the chef's configured
 	// comfort radius. The vendor app shows a soft "beyond your range" warning
