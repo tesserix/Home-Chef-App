@@ -21,20 +21,28 @@ interface AccountMenuProps {
   /** Display name for the signed-in user; falls back to their email. */
   displayName: string;
   email?: string;
+  /** Identity of the signed-in account. Scopes the cached kitchen name so one
+   *  chef's kitchen can never be rendered under another chef's session. */
+  userId?: string;
   onLogout: () => void;
 }
 
-export function AccountMenu({ displayName, email, onLogout }: AccountMenuProps) {
+export function AccountMenu({ displayName, email, userId, onLogout }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // The kitchen's name. Cached hard — it changes about once ever, and this
   // renders on every page, so it must not become a request per navigation.
   const { data: chef } = useQuery<ChefProfileSummary>({
-    queryKey: ['chef', 'profile', 'summary'],
+    // Keyed by account. AuthProvider already clears the cache when the identity
+    // changes; this makes the component correct on its own terms too, so a
+    // future provider refactor cannot silently reintroduce a cross-user leak in
+    // the one control whose whole job is telling the chef who they are.
+    queryKey: ['chef', 'profile', 'summary', userId ?? 'anonymous'],
     queryFn: () => apiClient.get<ChefProfileSummary>('/chef/profile'),
     staleTime: 5 * 60_000,
     retry: false,
+    enabled: Boolean(userId),
   });
   const businessName = chef?.businessName?.trim();
 

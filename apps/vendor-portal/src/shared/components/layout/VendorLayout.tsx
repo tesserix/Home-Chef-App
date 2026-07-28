@@ -197,7 +197,7 @@ export function VendorLayout() {
 
           {/* Account — top right, where every other product puts it. */}
           <div className="ml-2">
-            <AccountMenu displayName={displayName} email={user?.email} onLogout={logout} />
+            <AccountMenu displayName={displayName} email={user?.email} userId={user?.id} onLogout={logout} />
           </div>
         </header>
 
