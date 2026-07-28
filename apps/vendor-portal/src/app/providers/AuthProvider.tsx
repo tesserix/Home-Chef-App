@@ -4,9 +4,11 @@ import {
   useEffect,
   useCallback,
   useState,
+  useRef,
   type ReactNode,
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/auth-store';
 import type { SessionUser, SocialProvider } from '@/shared/types/auth';
 
@@ -38,7 +40,21 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const location = useLocation();
+  // Wipe the cache whenever the signed-in identity changes, not only on an
+  // explicit logout. A session that expires and is replaced by a different
+  // chef never runs logout(), and the QueryClient lives at module scope, so
+  // the previous account's data would otherwise be served to the new one.
+  // Same guard the customer app keeps in its root layout.
+  const signedInUserId = useAuthStore((s) => s.user?.id ?? null);
+  const prevUserIdRef = useRef<string | null>(signedInUserId);
+  useEffect(() => {
+    if (prevUserIdRef.current !== signedInUserId) {
+      queryClient.clear();
+      prevUserIdRef.current = signedInUserId;
+    }
+  }, [signedInUserId, queryClient]);
   const {
     user,
     isAuthenticated,
@@ -181,6 +197,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { authService } = await import('@/features/auth/services/auth-service');
     await authService.logout();
     clearAuth();
+    // Drop every cached server response for the account that just left.
+    //
+    // The QueryClient is created once at module scope and logout is an SPA
+    // navigation, so without this the cache OUTLIVES the session: the next chef
+    // to sign in on this browser is served the previous one's data until each
+    // query happens to refetch — and the default staleTime here is five
+    // minutes. That is a cross-user leak of business name, orders, earnings and
+    // profile, and the account menu now renders another chef's kitchen name in
+    // the header on every page.
+    queryClient.clear();
     setOnboardingChecked(false);
     setNeedsOnboarding(false);
     // Clear onboarding form data to prevent cross-user contamination
@@ -188,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       useOnboardingStore.getState().reset();
     });
     navigate('/login');
-  }, [clearAuth, navigate]);
+  }, [clearAuth, navigate, queryClient]);
 
   const value: AuthContextValue = {
     user,
