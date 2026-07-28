@@ -17,7 +17,9 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -49,10 +51,36 @@ func Init(ctx context.Context, serviceName string) (func(context.Context) error,
 		return noop, nil
 	}
 
-	// otlptracegrpc/otlpmetricgrpc want a host:port without the scheme; an
-	// http:// prefix means plaintext (insecure). https:// keeps TLS on.
+	// The exporters want a host:port without the scheme; an http:// prefix
+	// means plaintext (insecure). https:// keeps TLS on.
 	insecure := !strings.HasPrefix(endpoint, "https://")
 	target := strings.TrimPrefix(strings.TrimPrefix(endpoint, "https://"), "http://")
+
+	// Choose gRPC or HTTP.
+	//
+	// This is not a preference — gRPC does not work from this namespace.
+	// homechef runs under Istio ambient mesh, so ztunnel intercepts outbound
+	// traffic and attempts HBONE to the destination; the observability
+	// namespace is outside the mesh and cannot answer, and the HTTP/2 preface
+	// is reset before the connection is established:
+	//
+	//   traces export: rpc error: code = Unavailable ...
+	//   "error reading server preface: connection reset by peer"
+	//
+	// Every trace was being dropped. devai is also ambient and exports fine
+	// over OTLP/HTTP on 4318, which is the evidence this follows. mark8ly uses
+	// gRPC successfully only because it is NOT in the mesh.
+	//
+	// Inferred from the port so the deployment decides by pointing at 4317 or
+	// 4318, with OTEL_EXPORTER_OTLP_PROTOCOL as an explicit override for the
+	// case where the ports are ever remapped.
+	useHTTP := strings.HasSuffix(target, ":4318")
+	switch strings.TrimSpace(strings.ToLower(os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL"))) {
+	case "http/protobuf", "http":
+		useHTTP = true
+	case "grpc":
+		useHTTP = false
+	}
 
 	res, err := resource.New(ctx,
 		resource.WithAttributes(semconv.ServiceName(serviceName)),
@@ -63,23 +91,49 @@ func Init(ctx context.Context, serviceName string) (func(context.Context) error,
 		res = resource.Default()
 	}
 
-	traceOpts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(target)}
-	metricOpts := []otlpmetricgrpc.Option{otlpmetricgrpc.WithEndpoint(target)}
-	if insecure {
-		traceOpts = append(traceOpts, otlptracegrpc.WithInsecure())
-		metricOpts = append(metricOpts, otlpmetricgrpc.WithInsecure())
-	}
+	var (
+		traceExp  sdktrace.SpanExporter
+		metricExp sdkmetric.Exporter
+	)
 
-	traceExp, err := otlptracegrpc.New(ctx, traceOpts...)
-	if err != nil {
-		return noop, fmt.Errorf("otlp trace exporter: %w", err)
-	}
+	if useHTTP {
+		traceOpts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(target)}
+		metricOpts := []otlpmetrichttp.Option{otlpmetrichttp.WithEndpoint(target)}
+		if insecure {
+			traceOpts = append(traceOpts, otlptracehttp.WithInsecure())
+			metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
+		}
 
-	metricExp, err := otlpmetricgrpc.New(ctx, metricOpts...)
-	if err != nil {
-		// Don't leak the trace exporter if metrics fail to start.
-		_ = traceExp.Shutdown(ctx)
-		return noop, fmt.Errorf("otlp metric exporter: %w", err)
+		traceExp, err = otlptracehttp.New(ctx, traceOpts...)
+		if err != nil {
+			return noop, fmt.Errorf("otlp trace exporter (http): %w", err)
+		}
+
+		metricExp, err = otlpmetrichttp.New(ctx, metricOpts...)
+		if err != nil {
+			// Don't leak the trace exporter if metrics fail to start.
+			_ = traceExp.Shutdown(ctx)
+			return noop, fmt.Errorf("otlp metric exporter (http): %w", err)
+		}
+	} else {
+		traceOpts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(target)}
+		metricOpts := []otlpmetricgrpc.Option{otlpmetricgrpc.WithEndpoint(target)}
+		if insecure {
+			traceOpts = append(traceOpts, otlptracegrpc.WithInsecure())
+			metricOpts = append(metricOpts, otlpmetricgrpc.WithInsecure())
+		}
+
+		traceExp, err = otlptracegrpc.New(ctx, traceOpts...)
+		if err != nil {
+			return noop, fmt.Errorf("otlp trace exporter: %w", err)
+		}
+
+		metricExp, err = otlpmetricgrpc.New(ctx, metricOpts...)
+		if err != nil {
+			// Don't leak the trace exporter if metrics fail to start.
+			_ = traceExp.Shutdown(ctx)
+			return noop, fmt.Errorf("otlp metric exporter: %w", err)
+		}
 	}
 
 	tp := sdktrace.NewTracerProvider(
