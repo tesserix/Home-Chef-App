@@ -70,6 +70,9 @@ const AdminRequestsPage = lazyWithRetry(
 const NotificationsPage = lazyWithRetry(
   () => import('@/features/notifications/pages/NotificationsPage'),
 );
+const AccountLifecyclePage = lazyWithRetry(
+  () => import('@/features/account/pages/AccountLifecyclePage'),
+);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useAuth();
@@ -148,6 +151,7 @@ export function AppRoutes() {
           <Route path="reviews" element={<ReviewsPage />} />
           <Route path="admin-requests" element={<AdminRequestsPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="account" element={<AccountLifecyclePage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="chefbook" element={<ChefBookPage />} />
           <Route path="settings" element={<SettingsPage />} />

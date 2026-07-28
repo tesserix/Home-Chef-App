@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Bell, Power, Lock, Trash2, Banknote, CheckCircle2, XCircle, Globe, ExternalLink } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -104,6 +105,24 @@ export default function SettingsPage() {
 
   const [sendingReset, setSendingReset] = useState(false);
 
+  // Auto open/close by hours. Reads and writes the CHEF PROFILE rather than
+  // /chef/settings — the pointer-based PUT /chef/profile touches only this field
+  // so it never disturbs the rest of the profile.
+  const { data: profile } = useQuery({
+    queryKey: ['chef', 'profile', 'auto-schedule'],
+    queryFn: () => apiClient.get<{ autoScheduleEnabled?: boolean }>('/chef/profile'),
+  });
+  const [autoSchedule, setAutoSchedule] = useState(false);
+  useEffect(() => {
+    if (profile) setAutoSchedule(profile.autoScheduleEnabled ?? false);
+  }, [profile]);
+  const saveAutoSchedule = useMutation({
+    mutationFn: (value: boolean) => apiClient.put('/chef/profile', { autoScheduleEnabled: value }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['chef', 'profile', 'auto-schedule'] });
+    },
+  });
+
   if (isLoading || !localSettings) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -143,6 +162,25 @@ export default function SettingsPage() {
             onChange={() =>
               setLocalSettings({ ...localSettings, acceptingOrders: !localSettings.acceptingOrders })
             }
+          />
+          {/* Auto open/close lives on the CHEF PROFILE, not /chef/settings, so
+              it saves immediately via its own pointer-based PUT rather than
+              riding along with the Save button — mixing it into localSettings
+              would post it to an endpoint that does not know the field. */}
+          <ToggleRow
+            label="Auto open/close by hours"
+            description="Open and close your kitchen automatically to match your operating hours"
+            checked={autoSchedule}
+            onChange={() => {
+              const next = !autoSchedule;
+              setAutoSchedule(next); // optimistic: the switch must feel instant
+              saveAutoSchedule.mutate(next, {
+                onError: () => {
+                  setAutoSchedule(!next);
+                  toast.error("Couldn't change auto open/close. Please try again.");
+                },
+              });
+            }}
           />
           <ToggleRow
             label="Auto-accept Orders"
@@ -445,16 +483,16 @@ export default function SettingsPage() {
           <Trash2 className="h-5 w-5 text-paprika" />
           <h2 className="text-lg font-semibold text-paprika">Danger Zone</h2>
         </div>
+        {/* This was a stub that toasted "not available in demo mode" — in
+            production, at a chef who was trying to stop trading. The endpoints
+            (/chef/me/deactivate, /chef/me/delete) have existed all along and
+            mobile has used them since store submission. */}
         <p className="mt-2 text-sm text-ink-soft">
-          Deactivating your account will hide your kitchen from customers and pause all orders.
+          Pause your kitchen to hide it from customers and stop new orders — reversible, and
+          nothing is deleted. Deleting your account is separate, and starts a retention clock.
         </p>
-        <Button
-          variant="danger"
-          size="sm"
-          className="mt-4"
-          onClick={() => toast.error('Account deactivation is not available in demo mode')}
-        >
-          Deactivate Account
+        <Button asChild variant="danger" size="sm" className="mt-4">
+          <Link to="/account">Pause or delete account</Link>
         </Button>
       </motion.div>
 
