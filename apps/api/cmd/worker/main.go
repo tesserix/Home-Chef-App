@@ -12,6 +12,7 @@ import (
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/piicrypto"
 	"github.com/homechef/api/services"
 	"github.com/homechef/api/temporal"
 	"github.com/homechef/api/temporal/workflows"
@@ -24,6 +25,19 @@ func main() {
 	// dependencies the activities touch.
 	if err := database.Connect(); err != nil {
 		log.Fatalf("worker: database connect: %v", err)
+	}
+	// PII column encryption (#710). The worker is a full app process: its
+	// activities GORM-scan orders and users, so it needs the DEK exactly as much
+	// as the API server does. Without this every activity that loads a row with
+	// an encrypted column fails permanently ("encrypted value but crypto not
+	// initialized") and Temporal retries it forever — silent to the API's own
+	// health checks. Fatal when enabled-but-failing, matching main.go.
+	if err := piicrypto.InitIfEnabled(
+		context.Background(),
+		config.AppConfig.PIIEncryptionEnabled,
+		config.AppConfig.GCSProjectID,
+	); err != nil {
+		log.Fatalf("worker: PII encryption enabled but failed to initialize: %v", err)
 	}
 	services.InitEmailService()
 	if err := services.InitPushService(); err != nil {

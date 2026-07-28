@@ -68,10 +68,31 @@ func Active() bool {
 	return pii.active
 }
 
+// InitIfEnabled is the startup hook EVERY binary that touches the database must
+// call — the API server, the Temporal worker, and any future entrypoint.
+//
+// It exists because "which processes need the key" is not a per-binary decision:
+// the flag is deployment-wide, and any process that GORM-scans a row with an
+// encrypted column needs the key to decrypt it. When the worker skipped this,
+// every activity that loaded an order failed permanently with "encrypted value
+// but crypto not initialized" — a delivery dispatch retried 50+ times and the
+// confirm-receipt reminder/auto-confirm flow could never run at all.
+//
+// Disabled → no-op, so a deployment with the flag off is unaffected. Enabled but
+// failing to initialize is returned as an error for the caller to treat as
+// fatal: continuing would silently write plaintext into columns the rest of the
+// fleet reads as ciphertext.
+func InitIfEnabled(ctx context.Context, enabled bool, projectID string) error {
+	if !enabled {
+		return nil
+	}
+	return Init(ctx, projectID)
+}
+
 // Init loads and unwraps the DEK + blind-index key. Call once at startup ONLY
 // when the feature flag is on; a disabled deployment never calls it and every
 // primitive stays a pass-through. projectID is the GCP project holding the KMS
-// key + secrets.
+// key + secrets. Prefer InitIfEnabled, which carries the flag check with it.
 func Init(ctx context.Context, projectID string) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
