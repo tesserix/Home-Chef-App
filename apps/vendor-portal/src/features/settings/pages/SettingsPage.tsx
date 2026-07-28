@@ -155,7 +155,7 @@ export default function SettingsPage() {
           {localSettings.autoAcceptOrders && (
             <div className="ml-8">
               <label htmlFor="settings-auto-accept-threshold" className="block text-sm font-medium text-ink-soft">
-                Auto-accept threshold ($)
+                Auto-accept threshold (₹)
               </label>
               <input
                 id="settings-auto-accept-threshold"

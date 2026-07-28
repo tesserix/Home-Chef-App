@@ -61,7 +61,15 @@ const AnalyticsPage = lazyWithRetry(() => import('@/features/analytics/pages/Ana
 const WeeklyMenuPage = lazyWithRetry(() => import('@/features/meal-plans/pages/WeeklyMenuPage'));
 const SubscriptionSetupPage = lazyWithRetry(() => import('@/features/subscriptions/pages/SubscriptionSetupPage'));
 const SettingsPage = lazyWithRetry(() => import('@/features/settings/pages/SettingsPage'));
-const AdminRequestsPage = lazyWithRetry(() => import('@/features/notifications/pages/NotificationsPage'));
+// These were ONE import: /admin-requests rendered NotificationsPage under an
+// AdminRequestsPage alias, so the portal had no admin-requests screen at all and
+// the notifications inbox was only reachable at the wrong URL.
+const AdminRequestsPage = lazyWithRetry(
+  () => import('@/features/admin-requests/pages/AdminRequestsPage'),
+);
+const NotificationsPage = lazyWithRetry(
+  () => import('@/features/notifications/pages/NotificationsPage'),
+);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useAuth();
@@ -139,6 +147,7 @@ export function AppRoutes() {
           <Route path="profile/kitchen" element={<KitchenSetupPage />} />
           <Route path="reviews" element={<ReviewsPage />} />
           <Route path="admin-requests" element={<AdminRequestsPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="chefbook" element={<ChefBookPage />} />
           <Route path="settings" element={<SettingsPage />} />

@@ -7,6 +7,8 @@ const API_URL = `${BFF_URL}/api/v1`;
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
+  /** Return the raw Blob instead of parsing the body as JSON (PDF downloads). */
+  raw?: boolean;
 }
 
 class ApiClient {
@@ -117,6 +119,13 @@ class ApiClient {
       throw error;
     }
 
+    // Binary endpoints (generated PDFs) opt out of JSON parsing — calling
+    // .json() on a PDF throws, which is why these had to bypass the client
+    // entirely before.
+    if (options.raw) {
+      return (await response.blob()) as T;
+    }
+
     // The Go API is mixed: some endpoints return raw JSON, others wrap
     // in { data: T, pagination: {...} }. Auto-detect and unwrap when needed.
     const json = await response.json();
@@ -128,6 +137,18 @@ class ApiClient {
 
   async get<T>(endpoint: string, params?: RequestOptions['params']): Promise<T> {
     return this.request<T>('GET', endpoint, { params });
+  }
+
+  /**
+   * GET a binary response (a generated PDF) as a Blob.
+   *
+   * These endpoints sit behind the same session auth as everything else, so a
+   * plain `<a href>` or `window.open` would arrive unauthenticated and land the
+   * chef on a 401 instead of a file. This reuses `request`'s auth, CSRF, MFA and
+   * 401-handling by asking it not to parse the body as JSON.
+   */
+  async getBlob(endpoint: string, params?: RequestOptions['params']): Promise<Blob> {
+    return this.request<Blob>('GET', endpoint, { params, raw: true });
   }
 
   async post<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {

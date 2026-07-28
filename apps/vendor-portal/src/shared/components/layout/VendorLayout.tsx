@@ -40,6 +40,7 @@ const navigation = [
   { name: 'Cancellations', href: '/cancel-requests', icon: ClipboardList },
   { name: 'Earnings', href: '/earnings', icon: DollarSign },
   { name: 'Admin Requests', href: '/admin-requests', icon: ClipboardList },
+  { name: 'Notifications', href: '/notifications', icon: Bell },
   { name: 'Reviews', href: '/reviews', icon: Star },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'ChefBook', href: '/chefbook', icon: BookOpen },

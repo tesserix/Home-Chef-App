@@ -11,6 +11,14 @@ import { Badge, type BadgeProps } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
 import { Skeleton } from '@/shared/components/ui/Skeleton';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
+import { toast } from 'sonner';
+import {
+  currentFyLabel,
+  downloadPdf,
+  useRefunds,
+  useWeeklyStatements,
+  type WeeklyStatement,
+} from '../hooks/useEarningsExtras';
 
 // ---- API contract types --------------------------------------------------
 // GET /chef/earnings/breakdown?period=week|month|cycle
@@ -436,7 +444,165 @@ export default function EarningsPage() {
             )}
           </Card>
         </motion.div>
+
+        {/* The three money views web was missing entirely — refunds taken back
+            out, the statements that settle the payouts, and the annual TDS
+            certificate. All three already existed on the API and on mobile. */}
+        <motion.div variants={fadeInUp}>
+          <RefundsCard />
+        </motion.div>
+        <motion.div variants={fadeInUp}>
+          <StatementsCard />
+        </motion.div>
+        <motion.div variants={fadeInUp}>
+          <TaxDocumentsCard />
+        </motion.div>
       </motion.div>
     </div>
+  );
+}
+
+/** Money taken back out — one entry per refunded order, newest first. */
+function RefundsCard() {
+  const { data: refunds = [], isLoading } = useRefunds();
+
+  return (
+    <Card className="p-5">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">Refunds</h2>
+      {isLoading ? (
+        <Skeleton className="mt-4 h-16 w-full" />
+      ) : refunds.length === 0 ? (
+        <p className="mt-3 text-sm text-ink-soft">
+          No refunds yet. Anything refunded to a customer shows here, so your payout always
+          reconciles.
+        </p>
+      ) : (
+        <div className="mt-3 divide-y divide-mist">
+          {refunds.map((r) => (
+            <Link
+              key={r.orderId}
+              to={`/orders/history?order=${r.orderNumber}`}
+              className="flex items-start justify-between gap-3 py-3 transition-colors hover:bg-paper"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink">#{r.orderNumber}</p>
+                {r.reason && (
+                  <p className="truncate text-xs text-ink-muted" title={r.reason}>
+                    {r.reason}
+                  </p>
+                )}
+                <p className="text-xs text-ink-muted tabular-nums">
+                  {format(new Date(r.refundedAt), 'dd MMM yyyy')}
+                </p>
+              </div>
+              {/* Negative and paprika: this is money leaving, and it must never
+                  be mistaken at a glance for revenue arriving. */}
+              <p className="shrink-0 text-sm font-semibold text-paprika tabular-nums">
+                − {formatCurrency(r.amount)}
+              </p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Issued weekly settlement statements, with the PDF each one generates. */
+function StatementsCard() {
+  const { data: statements = [], isLoading } = useWeeklyStatements();
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function download(s: WeeklyStatement) {
+    setBusy(s.id);
+    try {
+      await downloadPdf(
+        `/chef/statements/${s.id}/statement.pdf`,
+        `statement-${s.weekStart}.pdf`,
+      );
+    } catch {
+      toast.error('Could not download that statement. Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Card className="p-5">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
+        Settlement statements
+      </h2>
+      {isLoading ? (
+        <Skeleton className="mt-4 h-16 w-full" />
+      ) : statements.length === 0 ? (
+        <p className="mt-3 text-sm text-ink-soft">
+          Your first weekly statement appears here once a payout cycle closes.
+        </p>
+      ) : (
+        <div className="mt-3 divide-y divide-mist">
+          {statements.map((s) => (
+            <div key={s.id} className="flex items-center justify-between gap-3 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink tabular-nums">
+                  {format(new Date(s.weekStart), 'dd MMM')} –{' '}
+                  {format(new Date(s.weekEnd), 'dd MMM yyyy')}
+                </p>
+                <p className="text-xs text-ink-muted tabular-nums">
+                  {s.ordersCount} order{s.ordersCount === 1 ? '' : 's'} ·{' '}
+                  {formatCurrency(s.netPayout)} net
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <Badge variant={s.status === 'paid' ? 'success' : 'warning'}>
+                  {s.status === 'paid' ? 'Paid' : 'Pending'}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void download(s)}
+                  disabled={busy === s.id}
+                >
+                  {busy === s.id ? 'Downloading…' : 'Download'}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** The annual TDS certificate (Section 194-O). */
+function TaxDocumentsCard() {
+  const [busy, setBusy] = useState(false);
+  const fy = currentFyLabel();
+
+  async function download() {
+    setBusy(true);
+    try {
+      await downloadPdf('/chef/tax/certificate', `tds-certificate-${fy.replace(/\s/g, '')}.pdf`);
+    } catch {
+      toast.error('Could not download the certificate. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="p-5">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
+        Tax documents
+      </h2>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-ink">TDS certificate · {fy}</p>
+          <p className="text-xs text-ink-muted">Annual summary (Section 194-O)</p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => void download()} disabled={busy}>
+          {busy ? 'Downloading…' : 'Download'}
+        </Button>
+      </div>
+    </Card>
   );
 }
