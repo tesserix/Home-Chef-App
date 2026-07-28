@@ -1140,7 +1140,7 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 		return
 	}
 
-	status := c.Query("status")
+	statuses := statusValues(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset := (page - 1) * limit
@@ -1148,8 +1148,12 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 	// Only PAID orders reach the chef — the same chefVisibleOrders scope the
 	// dashboard counters use, so the tabs and the header always agree.
 	query := chefVisibleOrders(chef.ID)
-	if status != "" {
-		query = query.Where("status = ?", status)
+	// IN, not =. The vendor tabs each span several statuses and send them comma
+	// separated ("pending,accepted,preparing"); comparing that whole string with
+	// = asked for a row whose status was literally that, so a chef with a paid
+	// order waiting was told they had none.
+	if len(statuses) > 0 {
+		query = query.Where("status IN ?", statuses)
 	}
 
 	var total int64

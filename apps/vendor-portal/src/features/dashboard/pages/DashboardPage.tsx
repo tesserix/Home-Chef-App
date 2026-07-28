@@ -16,6 +16,7 @@ import {
 import { formatCurrency } from '@/shared/utils/format';
 import { Badge, OrderStatusBadge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
+import { UnacceptedOrdersAlert } from '../components/UnacceptedOrdersAlert';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -508,6 +509,13 @@ export default function DashboardPage() {
           </Button>
         </Link>
       </motion.header>
+
+      {/* A paid order the chef hasn't accepted is the only thing on this page
+          someone is actively waiting on, so it sits above the numbers and is
+          the only element that moves. */}
+      <motion.div variants={fadeInUp}>
+        <UnacceptedOrdersAlert orders={pendingOrders} />
+      </motion.div>
 
       {/* Lead block — Revenue + pending orders CTA */}
       <motion.section

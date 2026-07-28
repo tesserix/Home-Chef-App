@@ -196,6 +196,19 @@
   100% { background-position: 200% 0; }
 }
 
+/* Attention pulse — the unaccepted-order dot.
+   Opacity only (never scale/size), 1.8s, so it reads as a slow heartbeat a
+   chef catches from across the kitchen rather than a flashing alarm they
+   learn to tune out. Stripped entirely by the reduced-motion block below. */
+@keyframes attention-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+.animate-attention {
+  animation: attention-pulse 1.8s ease-in-out infinite;
+}
+
 /* Reduced motion — strip every animation/transition ----------- */
 @media (prefers-reduced-motion: reduce) {
   *,
