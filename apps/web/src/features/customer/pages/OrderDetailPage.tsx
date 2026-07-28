@@ -22,6 +22,8 @@ import {
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
 import { orderCancellable, useRequestCancellation } from '@/features/customer/hooks/useCancellation';
+import { useConfirmOrderReceived } from '@/features/customer/hooks/useConfirmReceived';
+import { canConfirmReceipt, payoutHoldMeta } from '@/features/customer/lib/payout-hold';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { formatDateTime, formatTime } from '@/shared/utils/format-date';
 import { friendlyErrorMessage } from '@/shared/utils/errors';
@@ -142,6 +144,11 @@ export default function OrderDetailPage() {
   // Requests a cancellation through the policy + refund engine. The old
   // POST /orders/:id/cancel skipped both.
   const cancelMutation = useRequestCancellation();
+
+  // Escrow confirmation (#617/#387) — the customer's half of the delivery
+  // handshake. Confirming releases the chef's held payout and ends the durable
+  // reminder flow early; ignoring it lets that flow auto-confirm later.
+  const confirmReceived = useConfirmOrderReceived();
 
   // Reorder (#238) — re-add a past order's still-available items to the cart,
   // resolving current add-on option IDs, then send the customer to the chef to
@@ -295,6 +302,10 @@ export default function OrderDetailPage() {
   const canCancel = orderCancellable(order.status);
   // Report-an-issue eligibility mirrors the API guard: paid order, not cancelled (#37).
   const canReport = order.paymentStatus === 'completed' && order.status !== 'cancelled';
+  // Escrow confirmation state (#617): the CTA while the hold awaits the
+  // customer, a quiet status line once it is confirmed/disputed.
+  const showConfirm = canConfirmReceipt(order);
+  const holdMeta = payoutHoldMeta(order.payoutHoldStatus);
 
   return (
     <div className="min-h-screen bg-paper py-8">
@@ -488,10 +499,52 @@ export default function OrderDetailPage() {
           </div>
         )}
 
+        {/* Escrow confirmation (#617/#387). While a delivered order awaits the
+            customer's confirmation this is THE action — it is what releases the
+            chef's held payout — so it sits above the rest and demotes "Leave a
+            Review" to outline. Once confirmed or disputed it becomes a quiet
+            status line. Renders nothing when there is no hold. */}
+        {showConfirm ? (
+          <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
+            <h2 className="text-lg font-semibold text-ink">Did your order arrive?</h2>
+            <p className="mt-1 text-sm text-ink-soft">
+              Confirming lets us pay your chef. Only confirm once your order has arrived — if
+              something went wrong, report an issue instead.
+            </p>
+            <Button
+              variant="primary"
+              className="mt-4"
+              isLoading={confirmReceived.isPending}
+              disabled={confirmReceived.isPending}
+              leftIcon={<CheckCircle aria-hidden="true" className="h-4 w-4" />}
+              onClick={() =>
+                confirmReceived.mutate(order.id, {
+                  onSuccess: (res) => toast.success(res.message),
+                  onError: (err) =>
+                    toast.error(
+                      friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
+                    ),
+                })
+              }
+            >
+              Confirm received
+            </Button>
+          </div>
+        ) : holdMeta.label ? (
+          <div className={`mt-6 flex items-center gap-2 text-sm font-medium ${holdMeta.className}`}>
+            <CheckCircle aria-hidden="true" className="h-4 w-4" />
+            <span>{holdMeta.label}</span>
+          </div>
+        ) : null}
+
         {/* Actions */}
         <div className="mt-6 flex flex-wrap gap-4">
           {order.status === 'delivered' && (
-            <Button asChild variant="primary" leftIcon={<Star aria-hidden="true" className="h-4 w-4" />}>
+            <Button
+              asChild
+              variant={showConfirm ? 'outline' : 'primary'}
+              leftIcon={<Star aria-hidden="true" className="h-4 w-4" />}
+            >
               <Link to={`/orders/${order.id}/review`}>Leave a Review</Link>
             </Button>
           )}
