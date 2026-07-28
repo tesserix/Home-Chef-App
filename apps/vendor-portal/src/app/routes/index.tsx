@@ -73,6 +73,11 @@ const NotificationsPage = lazyWithRetry(
 const AccountLifecyclePage = lazyWithRetry(
   () => import('@/features/account/pages/AccountLifecyclePage'),
 );
+const TiffinPlansPage = lazyWithRetry(() => import('@/features/meal-plans/pages/TiffinPlansPage'));
+const DailyMenuPage = lazyWithRetry(() => import('@/features/meal-plans/pages/DailyMenuPage'));
+const RefundDecisionsPage = lazyWithRetry(
+  () => import('@/features/meal-plans/pages/RefundDecisionsPage'),
+);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useAuth();
@@ -152,6 +157,9 @@ export function AppRoutes() {
           <Route path="admin-requests" element={<AdminRequestsPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="account" element={<AccountLifecyclePage />} />
+          <Route path="tiffin-plans" element={<TiffinPlansPage />} />
+          <Route path="daily-menu" element={<DailyMenuPage />} />
+          <Route path="refund-requests" element={<RefundDecisionsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="chefbook" element={<ChefBookPage />} />
           <Route path="settings" element={<SettingsPage />} />
