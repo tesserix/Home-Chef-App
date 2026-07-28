@@ -792,7 +792,12 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 			string(models.OrderStatusRefunded),
 		})
 	default:
-		query = query.Where("status = ?", status)
+		// A literal status, or several comma separated — the web Orders page
+		// joins its filter chips with "," and an = comparison against that
+		// whole string matches no row, silently emptying the list.
+		if vals := splitCSVParam(status); len(vals) > 0 {
+			query = query.Where("status IN ?", vals)
+		}
 	}
 
 	var total int64
