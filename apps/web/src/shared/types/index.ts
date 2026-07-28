@@ -240,8 +240,23 @@ export interface Order {
   paymentId?: string;
   paymentStatus: PaymentStatus;
   paymentMethod?: string;
+  // Escrow payout hold (#387/#617). A delivered, gateway-charged order parks at
+  // `awaiting_customer_confirmation` until the customer confirms receipt — that
+  // confirmation is what makes the chef's payout release-eligible.
+  payoutHoldStatus?: PayoutHoldStatus;
+  customerConfirmedAt?: string;
   createdAt: string;
 }
+
+/** Mirrors models/payout_hold.go PayoutHoldStatus. '' (or absent) = no hold. */
+export type PayoutHoldStatus =
+  | ''
+  | 'awaiting_customer_confirmation'
+  | 'release_eligible'
+  | 'released'
+  | 'disputed'
+  | 'withheld'
+  | 'reversed';
 
 export interface OrderItem {
   id: string;

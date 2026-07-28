@@ -13,9 +13,13 @@ import {
   ChevronRight,
   RotateCcw,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { useConfirmOrderReceived } from '@/features/customer/hooks/useConfirmReceived';
+import { canConfirmReceipt } from '@/features/customer/lib/payout-hold';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { formatDateTime, formatTime } from '@/shared/utils/format-date';
+import { friendlyErrorMessage } from '@/shared/utils/errors';
 import { Button } from '@/shared/components/ui';
 import type { Order, PaginatedResponse, OrderStatus } from '@/shared/types';
 
@@ -146,6 +150,10 @@ function OrderCard({ order }: { order: Order }) {
   const status = STATUS_CONFIG[order.status];
   const StatusIcon = status.icon;
   const isActive = !['delivered', 'cancelled', 'refunded'].includes(order.status);
+  // Escrow confirmation (#617) — reachable straight from the list, as on mobile,
+  // so the customer doesn't have to open the order to release the chef's payout.
+  const showConfirm = canConfirmReceipt(order);
+  const confirmReceived = useConfirmOrderReceived();
 
   return (
     <Link
@@ -242,6 +250,33 @@ function OrderCard({ order }: { order: Order }) {
             <ChevronRight className="h-4 w-4"  aria-hidden="true" />
           </div>
         </div>
+
+        {/* Confirm received — the card is a Link, so the click must not also
+            navigate to the order detail. */}
+        {showConfirm && (
+          <div className="mt-4 border-t pt-4">
+            <Button
+              variant="primary"
+              size="sm"
+              isLoading={confirmReceived.isPending}
+              disabled={confirmReceived.isPending}
+              leftIcon={<CheckCircle aria-hidden="true" className="h-4 w-4" />}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                confirmReceived.mutate(order.id, {
+                  onSuccess: (res) => toast.success(res.message),
+                  onError: (err) =>
+                    toast.error(
+                      friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
+                    ),
+                });
+              }}
+            >
+              Confirm received
+            </Button>
+          </div>
+        )}
       </div>
     </Link>
   );
