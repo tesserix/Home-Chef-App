@@ -74,7 +74,7 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 	h := s.handleBySubject
 	return []ConsumerSpec{
 		{Stream: "ORDERS", Durable: "notify-orders", Handler: h,
-			Subjects: []string{SubjectOrderCreated, SubjectOrderUpdated, SubjectOrderCancelled, SubjectOrderDelivered}},
+			Subjects: []string{SubjectOrderCreated, SubjectOrderUpdated, SubjectOrderCancelled, SubjectOrderDelivered, SubjectOrderReadyForPickup}},
 		// Auto-void (#694): the customer's apology + refund confirmation, and the
 		// chef's pre-close nudge. Own durable so this flow is independent of the
 		// order-lifecycle notifications above — a backlog on one must not stall the
@@ -156,6 +156,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleCancellationResolved)
 	case SubjectOrderDelivered:
 		return decodeThen(data, s.handleOrderDelivered)
+	case SubjectOrderReadyForPickup:
+		return decodeThen(data, s.handleOrderReadyForPickup)
 	case SubjectChefNewOrder:
 		return decodeThen(data, s.handleChefNewOrder)
 	case SubjectNotificationEmail:
@@ -340,11 +342,12 @@ func (s *NotificationService) handleOrderCreated(_ OrderEvent) error {
 
 func (s *NotificationService) handleOrderUpdated(event OrderEvent) error {
 	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String(), "status": event.Status})
+	msg := getOrderStatusMessage(event.Status, models.FulfillmentType(event.FulfillmentType))
 	if err := s.saveNotification(&models.Notification{
 		UserID:  event.CustomerID,
 		Type:    "order_status",
 		Title:   "Order Status Updated",
-		Message: getOrderStatusMessage(event.Status),
+		Message: msg,
 		Data:    string(data),
 	}); err != nil {
 		return fmt.Errorf("save order_status notification: %w", err)
@@ -354,9 +357,32 @@ func (s *NotificationService) handleOrderUpdated(event OrderEvent) error {
 	// decision 2026-07-20). This removes ~5 redundant emails per order lifecycle.
 	PublishNotification(NotificationEvent{
 		UserID: event.CustomerID, Type: "push",
-		Title: "Order Update", Message: getOrderStatusMessage(event.Status),
+		Title: "Order Update", Message: msg,
 		Data: map[string]any{"order_id": event.OrderID.String(), "status": event.Status},
 	})
+	return nil
+}
+
+// handleOrderReadyForPickup is the dedicated in-app notification for a pickup
+// order reaching `ready`. The push itself already went out synchronously from
+// NotifyOrderReadyForPickup (it needs the chef's name, which this event doesn't
+// carry); this consumer is what puts it in the notification list, so the customer
+// can still find it after dismissing the push.
+func (s *NotificationService) handleOrderReadyForPickup(event OrderEvent) error {
+	data, _ := json.Marshal(map[string]any{
+		"order_id": event.OrderID.String(),
+		"status":   event.Status,
+		"type":     "ready_for_pickup",
+	})
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.CustomerID,
+		Type:    "ready_for_pickup",
+		Title:   "Ready to collect",
+		Message: "Your order is ready to collect",
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save ready_for_pickup notification: %w", err)
+	}
 	return nil
 }
 
@@ -1670,7 +1696,30 @@ func (s *NotificationService) saveNotification(notification *models.Notification
 }
 
 // getOrderStatusMessage returns a customer-friendly status message.
-func getOrderStatusMessage(status string) string {
+// getOrderStatusMessage returns the customer-facing sentence for a status
+// change. `ready` is the one status whose meaning genuinely depends on the
+// fulfilment mode — for delivery it is a passive milestone (a carrier will take
+// it from here), for pickup it is a call to action — so it takes the mode.
+//
+// Callers that don't know the mode pass "" and get the delivery wording, which
+// is the server-side default for orders with no fulfillment_type.
+func getOrderStatusMessage(status string, fulfillment models.FulfillmentType) string {
+	if status == string(models.OrderStatusReady) {
+		// The old single entry read "Your order is ready for pickup/delivery" — a
+		// slash-phrase aimed at nobody, which told a pickup customer nothing about
+		// having to go and get it and told a delivery customer to go and get it.
+		if fulfillment == models.FulfillmentPickup {
+			return "Your order is ready to collect"
+		}
+		return "Your order is ready and will be on its way shortly"
+	}
+	if status == string(models.OrderStatusDelivered) && fulfillment == models.FulfillmentPickup {
+		return "Order collected. Enjoy!"
+	}
+	return orderStatusMessage(status)
+}
+
+func orderStatusMessage(status string) string {
 	// Keys MUST be models.OrderStatus values. "confirmed" and "on_the_way" used
 	// to sit here and matched nothing — the real statuses are "accepted" and
 	// "delivering" — so those two stages, plus "rejected" which was missing

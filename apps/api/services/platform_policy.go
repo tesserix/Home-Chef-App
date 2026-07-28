@@ -48,6 +48,11 @@ type PlatformPolicy struct {
 	// ON and the admin toggle can turn it OFF — a real runtime kill switch — so
 	// the gate reads this value directly (default true) rather than `env OR`.
 	ConfirmReceiptFlowEnabled bool `json:"confirmReceiptFlowEnabled"`
+
+	// PickupReadyFlowEnabled controls the durable ready-to-collect flow for
+	// pickup orders (ready notice → reminders → chef escalation). Same shape as
+	// ConfirmReceiptFlowEnabled: defaults ON, and the admin toggle turns it OFF.
+	PickupReadyFlowEnabled bool `json:"pickupReadyFlowEnabled"`
 }
 
 // DefaultPlatformPolicy matches what was hardcoded in handlers/orders.go
@@ -74,6 +79,9 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		// Default ON — the auto-confirm flow ships enabled; an admin disables it
 		// from the console (or ops via CONFIRM_RECEIPT_FLOW_ENABLED=false).
 		ConfirmReceiptFlowEnabled: true,
+		// Default ON — before this flow existed a pickup customer got one generic
+		// push and then silence, so shipping it disabled would preserve the bug.
+		PickupReadyFlowEnabled: true,
 	}
 }
 
@@ -266,6 +274,7 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 		// Pointer so an explicit admin `false` turns the default-on flow OFF
 		// (a plain bool couldn't distinguish "unset" from "disabled").
 		ConfirmReceiptFlowEnabled *bool `json:"confirmReceiptFlowEnabled"`
+		PickupReadyFlowEnabled    *bool `json:"pickupReadyFlowEnabled"`
 	}
 	var p partial
 	if err := json.Unmarshal([]byte(setting.Value), &p); err != nil {
@@ -311,6 +320,9 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 	}
 	if p.ConfirmReceiptFlowEnabled != nil {
 		out.ConfirmReceiptFlowEnabled = *p.ConfirmReceiptFlowEnabled
+	}
+	if p.PickupReadyFlowEnabled != nil {
+		out.PickupReadyFlowEnabled = *p.PickupReadyFlowEnabled
 	}
 	return out
 }

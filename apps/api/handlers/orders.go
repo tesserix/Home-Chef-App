@@ -927,6 +927,11 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		services.CaptureBackgroundError(rErr)
 	}
 
+	// A customer cancelling their own pickup order should stop the collection
+	// reminders too — otherwise the app keeps telling them to go and fetch an
+	// order they just cancelled. No-op when no flow is running.
+	services.SignalPickupCancelledFlow(order.ID)
+
 	// Cancel any booked 3PL delivery (no-op if none exists yet). Off the
 	// response path; failure must not fail the order cancellation.
 	//

@@ -1556,6 +1556,9 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 			ChefID:      order.ChefID,
 			Status:      string(order.Status),
 			Total:       order.Total,
+			// Carried so the notification consumer can say "ready to collect" vs
+			// "on its way" without re-reading the order.
+			FulfillmentType: string(order.FulfillmentType),
 		})
 	}); err != nil {
 		if errors.Is(err, errOrderStatusRaced) {
@@ -1596,6 +1599,12 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		services.SignalOrderReady(order.ID)
 	case models.OrderStatusDelivered:
 		services.SignalOrderDelivered(order.ID)
+		// For a pickup order, `delivered` means the customer turned up and took it
+		// — end the collection-reminder loop rather than letting it keep nagging
+		// someone who is already eating.
+		if order.FulfillmentType == models.FulfillmentPickup {
+			services.SignalOrderCollectedFlow(order.ID)
+		}
 		// Self-delivery release: a chef marking their OWN order delivered (tiffin
 		// days are usually chef-delivered) must release any held meal-plan-day /
 		// group-order payout — otherwise release only ever fires from the courier
@@ -1631,6 +1640,9 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 			services.CaptureBackgroundError(rErr)
 		}
 		services.SignalOrderCancelled(order.ID, "cancelled by chef")
+		// A cancelled pickup order has nothing left to collect — stop the reminders
+		// and the chef escalation. Harmless no-op when no flow is running.
+		services.SignalPickupCancelledFlow(order.ID)
 	}
 
 	// Auto-dispatch a 3PL delivery once the food is ready for pickup. Runs off
@@ -1643,6 +1655,15 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		// booking, survives crashes); falls back to the inline goroutine
 		// otherwise. Idempotent by order ID, so repeated "ready" updates are safe.
 		services.EnqueueDeliveryDispatch(order.ID)
+	}
+
+	// The pickup counterpart of that dispatch. A delivery order at `ready` hands
+	// off to a carrier that keeps driving it to a conclusion; a pickup order hands
+	// off to a customer who has to remember to turn up, and until now nothing on
+	// the platform followed that up. Starts the durable ready-notice + reminder
+	// flow, idempotent by order ID so a double "Mark ready" never double-notifies.
+	if order.Status == models.OrderStatusReady && order.FulfillmentType == models.FulfillmentPickup {
+		services.StartPickupReadyFlow(order.ID)
 	}
 
 	// Chef view: area-only address, no customer PII (privacy).

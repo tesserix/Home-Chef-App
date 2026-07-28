@@ -18,6 +18,7 @@ import {
   Copy,
   RefreshCw,
   FileText,
+  Store,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
@@ -29,6 +30,14 @@ import { formatDateTime, formatTime } from '@/shared/utils/format-date';
 import { friendlyErrorMessage } from '@/shared/utils/errors';
 import { Button } from '@/shared/components/ui';
 import { useCartStore } from '@/app/store/cart-store';
+import { useOrderTracking } from '@/features/customer/hooks/useOrderTracking';
+import {
+  getChipLabel,
+  getStepIndex,
+  getStepLabels,
+  getStepStatuses,
+  isPickupFulfillment,
+} from '@/features/customer/lib/orderSteps';
 import type { Order, OrderStatus, MenuItem, SelectedModifier } from '@/shared/types';
 
 // Reorder preview shape returned by POST /orders/:id/reorder (#238).
@@ -140,6 +149,15 @@ export default function OrderDetailPage() {
       return false;
     },
   });
+
+  // The kitchen's exact address, for a pickup order only. It is not on the order
+  // payload — the track endpoint is the only place that reveals it, and only for
+  // pickup (chefTrackCoords in apps/api/handlers/orders.go). Fetching it here
+  // means a customer who chose pickup can actually find the place.
+  const { data: tracking } = useOrderTracking(
+    id,
+    isPickupFulfillment(order?.fulfillmentType)
+  );
 
   // Requests a cancellation through the policy + refund engine. The old
   // POST /orders/:id/cancel skipped both.
@@ -299,6 +317,16 @@ export default function OrderDetailPage() {
   const status = STATUS_CONFIG[order.status];
   const StatusIcon = status.icon;
   const isActive = !['delivered', 'cancelled', 'refunded'].includes(order.status);
+  // Fulfilment drives every piece of wording below. Orders placed before the
+  // field existed have it undefined, which isPickupFulfillment reads as delivery
+  // — the server's own default.
+  const isPickup = isPickupFulfillment(order.fulfillmentType);
+  // The chip label from STATUS_CONFIG is delivery-shaped ("Ready for Pickup" for
+  // ready, "Delivered" for delivered). getChipLabel is the fulfilment-aware
+  // version: a delivery order at `ready` reads "Almost Ready" (it is waiting for a
+  // carrier, not for the customer), and a collected pickup order reads
+  // "Collected", not "Delivered".
+  const statusLabel = getChipLabel(order.status, order.fulfillmentType);
   const canCancel = orderCancellable(order.status);
   // Report-an-issue eligibility mirrors the API guard: paid order, not cancelled (#37).
   const canReport = order.paymentStatus === 'completed' && order.status !== 'cancelled';
@@ -353,7 +381,7 @@ export default function OrderDetailPage() {
                 className={`h-5 w-5 ${status.color} ${order.status === 'preparing' ? 'animate-bounce' : ''}`}
               />
               <span className={`font-medium ${status.color}`}>
-                {order.status === 'preparing' ? 'Cooking now' : status.label}
+                {order.status === 'preparing' ? 'Cooking now' : statusLabel}
               </span>
             </div>
           </div>
@@ -361,17 +389,48 @@ export default function OrderDetailPage() {
           {/* Progress */}
           {isActive && (
             <div className="mt-6">
-              <OrderProgress status={order.status} />
-              {order.estimatedDeliveryAt && (
+              <OrderProgress status={order.status} fulfillment={order.fulfillmentType} />
+              {/* The time the CHEF settled on (#709) outranks the generic
+                  estimate: it is an actual commitment from a person, not a
+                  computed guess, and for pickup it is the whole point — it is when
+                  the customer should show up. */}
+              {order.confirmedFulfillmentAt ? (
                 <div className="mt-4 flex items-center gap-2 text-sm text-ink-soft">
-                  <Clock className="h-4 w-4"  aria-hidden="true" />
+                  <Clock className="h-4 w-4" aria-hidden="true" />
                   <span>
-                    Estimated delivery:{' '}
+                    {isPickup ? 'Ready to collect at' : 'Chef confirmed for'}:{' '}
                     <span className="font-medium">
-                      {formatTime(order.estimatedDeliveryAt)}
+                      {formatTime(order.confirmedFulfillmentAt)}
                     </span>
+                    {order.fulfillmentTimeStatus === 'proposed' && (
+                      <span className="text-ink-muted"> (chef proposed this time)</span>
+                    )}
                   </span>
                 </div>
+              ) : order.requestedFulfillmentAt && order.fulfillmentTimeStatus === 'requested' ? (
+                <div className="mt-4 flex items-center gap-2 text-sm text-ink-soft">
+                  <Clock className="h-4 w-4" aria-hidden="true" />
+                  <span>
+                    You asked for{' '}
+                    <span className="font-medium">
+                      {formatTime(order.requestedFulfillmentAt)}
+                    </span>{' '}
+                    — waiting for the chef to confirm.
+                  </span>
+                </div>
+              ) : (
+                // A pickup order has no delivery ETA to show: nobody is driving it
+                // anywhere, so the delivery estimate would be meaningless.
+                !isPickup &&
+                order.estimatedDeliveryAt && (
+                  <div className="mt-4 flex items-center gap-2 text-sm text-ink-soft">
+                    <Clock className="h-4 w-4" aria-hidden="true" />
+                    <span>
+                      Estimated delivery:{' '}
+                      <span className="font-medium">{formatTime(order.estimatedDeliveryAt)}</span>
+                    </span>
+                  </div>
+                )
               )}
             </div>
           )}
@@ -419,29 +478,67 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {/* Delivery Address */}
-        <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-            <MapPin className="h-5 w-5 text-herb"  aria-hidden="true" />
-            Delivery Address
-          </h2>
-          <div className="mt-4">
-            <p className="font-medium text-ink">{order.deliveryAddress.label}</p>
-            <p className="mt-1 text-ink-soft">
-              {order.deliveryAddress.line1}
-              {order.deliveryAddress.line2 && `, ${order.deliveryAddress.line2}`}
-            </p>
-            <p className="text-ink-soft">
-              {order.deliveryAddress.city}, {order.deliveryAddress.state}{' '}
-              {order.deliveryAddress.postalCode}
-            </p>
-            {order.deliveryAddress.deliveryInstructions && (
-              <p className="mt-2 text-sm text-ink-muted italic">
-                {order.deliveryAddress.deliveryInstructions}
+        {/* Where the food goes. For pickup that's the other direction — the
+            customer goes to the kitchen — so this block shows the chef's address
+            and a map link instead of a drop address that was never captured. */}
+        {isPickup ? (
+          <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
+              <Store className="h-5 w-5 text-herb" aria-hidden="true" />
+              Collect from
+            </h2>
+            <div className="mt-4">
+              <p className="font-medium text-ink">
+                {tracking?.chef.name ?? order.chef?.businessName ?? order.chef?.name}
               </p>
-            )}
+              {tracking?.chef.address ? (
+                <>
+                  <p className="mt-1 text-ink-soft">{tracking.chef.address}</p>
+                  {/* Coordinates are 0,0 until the chef's address is geocoded;
+                      linking to that would send the customer to the Atlantic. */}
+                  {tracking.chef.latitude !== 0 && tracking.chef.longitude !== 0 && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${tracking.chef.latitude},${tracking.chef.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-herb hover:underline"
+                    >
+                      <MapPin className="h-4 w-4" aria-hidden="true" />
+                      Open in Maps
+                    </a>
+                  )}
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-ink-muted">
+                  The kitchen&apos;s address appears here once the chef accepts your order.
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
+              <MapPin className="h-5 w-5 text-herb"  aria-hidden="true" />
+              Delivery Address
+            </h2>
+            <div className="mt-4">
+              <p className="font-medium text-ink">{order.deliveryAddress.label}</p>
+              <p className="mt-1 text-ink-soft">
+                {order.deliveryAddress.line1}
+                {order.deliveryAddress.line2 && `, ${order.deliveryAddress.line2}`}
+              </p>
+              <p className="text-ink-soft">
+                {order.deliveryAddress.city}, {order.deliveryAddress.state}{' '}
+                {order.deliveryAddress.postalCode}
+              </p>
+              {order.deliveryAddress.deliveryInstructions && (
+                <p className="mt-2 text-sm text-ink-muted italic">
+                  {order.deliveryAddress.deliveryInstructions}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Payment Summary */}
         <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
@@ -805,17 +902,29 @@ export default function OrderDetailPage() {
   );
 }
 
-function OrderProgress({ status }: { status: OrderStatus }) {
-  const steps = [
-    { key: 'accepted', label: 'Confirmed', icon: CheckCircle },
-    { key: 'preparing', label: 'Preparing', icon: ChefHat },
-    { key: 'ready', label: 'Ready', icon: Package },
-    { key: 'delivering', label: 'On the Way', icon: Truck },
-    { key: 'delivered', label: 'Delivered', icon: CheckCircle },
-  ];
+/** Per-step icon, keyed by the status the step represents. */
+const STEP_ICONS: Partial<Record<OrderStatus, typeof CheckCircle>> = {
+  accepted: CheckCircle,
+  preparing: ChefHat,
+  ready: Package,
+  delivering: Truck,
+  delivered: CheckCircle,
+};
 
-  const statusOrder = ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'delivering', 'delivered'];
-  const currentIndex = statusOrder.indexOf(status);
+function OrderProgress({
+  status,
+  fulfillment,
+}: {
+  status: OrderStatus;
+  fulfillment: Order['fulfillmentType'];
+}) {
+  // Labels, per-step statuses and the active index all come from the shared
+  // fulfilment-aware model, so this bar tracks mobile exactly. It used to be a
+  // hardcoded five-step delivery ladder, which told a pickup customer their food
+  // was "On the Way" while it sat on the chef's counter waiting for them.
+  const labels = getStepLabels(fulfillment);
+  const stepStatuses = getStepStatuses(fulfillment);
+  const currentIndex = getStepIndex(status, fulfillment);
 
   return (
     <div className="relative">
@@ -824,35 +933,29 @@ function OrderProgress({ status }: { status: OrderStatus }) {
       <div
         className="absolute left-4 top-4 w-0.5 bg-herb transition-all"
         style={{
-          height: `${Math.min((currentIndex / (steps.length)) * 100, 100)}%`,
+          height: `${Math.min(Math.max(currentIndex, 0) * (100 / (labels.length - 1)), 100)}%`,
         }}
       />
 
       {/* Steps */}
       <div className="space-y-6">
-        {steps.map((step) => {
-          const stepIndex = statusOrder.indexOf(step.key);
-          const isCompleted = currentIndex >= stepIndex;
-          const isCurrent = status === step.key || (status === 'picked_up' && step.key === 'ready');
-          const StepIcon = step.icon;
+        {labels.map((label, i) => {
+          const stepStatus = stepStatuses[i];
+          const isCompleted = currentIndex >= i;
+          const isCurrent = currentIndex === i;
+          const StepIcon = (stepStatus && STEP_ICONS[stepStatus]) ?? CheckCircle;
 
           return (
-            <div key={step.key} className="flex items-center gap-4">
+            <div key={label} className="flex items-center gap-4">
               <div
                 className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full ${
-                  isCompleted
-                    ? 'bg-herb text-paper'
-                    : 'bg-mist text-ink-muted'
+                  isCompleted ? 'bg-herb text-paper' : 'bg-mist text-ink-muted'
                 } ${isCurrent ? 'ring-4 ring-herb/30' : ''}`}
               >
                 <StepIcon className="h-4 w-4" />
               </div>
-              <span
-                className={`font-medium ${
-                  isCompleted ? 'text-ink' : 'text-ink-muted'
-                }`}
-              >
-                {step.label}
+              <span className={`font-medium ${isCompleted ? 'text-ink' : 'text-ink-muted'}`}>
+                {label}
               </span>
             </div>
           );

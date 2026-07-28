@@ -210,6 +210,15 @@ type Config struct {
 	// payout-auto-confirm cron remains the fallback either way; this flow only
 	// shortens the wait when Temporal + this flag are both on.
 	ConfirmReceiptFlowEnabled bool
+	// PickupReadyFlowEnabled gates the durable ready-to-collect flow for PICKUP
+	// orders (temporal/workflows/pickup.go): the ready notice, then up to 3
+	// reminders 20 min apart, then an escalation to the chef if the food was never
+	// collected. Default ON — unlike the delivery flows this one has no cron
+	// fallback to fall back TO (there was never any follow-up for an uncollected
+	// pickup at all), and it only ever sends messages, so the blast radius of it
+	// running is a few extra notifications. Set PICKUP_READY_FLOW_ENABLED=false to
+	// hard-disable; the ordinary `ready` status push is unaffected either way.
+	PickupReadyFlowEnabled bool
 	// DeferredRefundFlowEnabled gates firing the durable Temporal retry
 	// (workflows.DeferredRefundWorkflow) the instant a chef-cancel gateway
 	// refund is deferred (Razorpay unreachable/erroring), instead of waiting
@@ -312,6 +321,7 @@ func Load() {
 	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
 	orderSaga, _ := strconv.ParseBool(getEnv("ORDER_SAGA_ENABLED", "false"))
 	confirmReceiptFlow, _ := strconv.ParseBool(getEnv("CONFIRM_RECEIPT_FLOW_ENABLED", "true"))
+	pickupReadyFlow, _ := strconv.ParseBool(getEnv("PICKUP_READY_FLOW_ENABLED", "true"))
 	deferredRefundFlow, _ := strconv.ParseBool(getEnv("DEFERRED_REFUND_FLOW_ENABLED", "true"))
 	onboardingWorkflow, _ := strconv.ParseBool(getEnv("ONBOARDING_WORKFLOW_ENABLED", "false"))
 	piiEncryption, _ := strconv.ParseBool(getEnv("PII_ENCRYPTION_ENABLED", "false"))
@@ -490,6 +500,7 @@ func Load() {
 		CateringDepositEnabled:          cateringDeposit,
 		OrderSagaEnabled:                orderSaga,
 		ConfirmReceiptFlowEnabled:       confirmReceiptFlow,
+		PickupReadyFlowEnabled:          pickupReadyFlow,
 		DeferredRefundFlowEnabled:       deferredRefundFlow,
 		OnboardingWorkflowEnabled:       onboardingWorkflow,
 		PIIEncryptionEnabled:            piiEncryption,

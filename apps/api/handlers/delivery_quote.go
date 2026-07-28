@@ -125,6 +125,17 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		"currency":           services.CurrencyForCountry(chef.PayoutCountry),
 		"offersPickup":       chef.OffersPickup,
 		"offersSelfDelivery": chef.OffersSelfDelivery,
+		// offersDelivery is the COMPUTED capability CreateOrder actually gates on
+		// (resolveFulfillment): a delivery order is fulfillable only if the chef
+		// self-delivers or a 3PL provider is live. It mirrors the same expression
+		// used for ChefResponse.OffersDelivery in handlers/chefs.go.
+		//
+		// Without it on this response a client has to fetch the chef separately to
+		// know whether Delivery is even offerable — and a client that assumes it is
+		// offers a mode the server will 422. That is not hypothetical: with every
+		// delivery_provider disabled and a chef who doesn't self-deliver, such an
+		// order reaches `ready` with no carrier and strands there.
+		"offersDelivery": chef.OffersSelfDelivery || services.ThirdPartyDeliveryEnabled(),
 		// Delivery serviceability for the drop coords the app sent.
 		"deliverable": deliverable,
 		"distanceKm":  models.RoundAmount(reach.DistanceKm),

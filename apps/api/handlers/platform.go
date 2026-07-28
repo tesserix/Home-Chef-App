@@ -146,6 +146,9 @@ func (h *PlatformHandler) AdminUpdatePolicy(c *gin.Context) {
 	if v, ok := req["confirmReceiptFlowEnabled"].(bool); ok {
 		current.ConfirmReceiptFlowEnabled = v
 	}
+	if v, ok := req["pickupReadyFlowEnabled"].(bool); ok {
+		current.PickupReadyFlowEnabled = v
+	}
 
 	if err := services.SavePlatformPolicy(current, &userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
