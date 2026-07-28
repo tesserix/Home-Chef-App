@@ -52,8 +52,14 @@ describe('AddressSearch', () => {
     vi.restoreAllMocks();
   });
 
+  // apiClient UNWRAPS a `{ data }` envelope that carries no `pagination`, so for
+  // this endpoint it resolves to the bare array — NOT `{ data: [...] }`.
+  // Mocking the envelope is what let a hook that read `.data` off an array pass
+  // its tests while returning nothing at all in production: the picker reported
+  // "No matches" for every address. The mock must match what the client really
+  // returns, or the test is only checking itself.
   it('hands the picked suggestion — coordinates and all — to the caller', async () => {
-    vi.spyOn(apiClient, 'get').mockResolvedValue({ data: [suggestion()] });
+    vi.spyOn(apiClient, 'get').mockResolvedValue([suggestion()]);
     const user = userEvent.setup();
     const onPick = renderSearch();
 
@@ -64,7 +70,7 @@ describe('AddressSearch', () => {
   });
 
   it('does not query the geocoder below its 3-character minimum', async () => {
-    const get = vi.spyOn(apiClient, 'get').mockResolvedValue({ data: [] });
+    const get = vi.spyOn(apiClient, 'get').mockResolvedValue([]);
     const user = userEvent.setup();
     renderSearch();
 
@@ -105,5 +111,31 @@ describe('AddressSearch when the geocoder is down', () => {
 
     expect(await screen.findByText(/no matches/i)).toBeInTheDocument();
     expect(screen.queryByText(/unavailable right now/i)).not.toBeInTheDocument();
+  });
+});
+describe('AddressSearch response-shape tolerance', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // apiClient UNWRAPS a `{ data }` envelope that carries no `pagination`, so for
+  // this endpoint it resolves to the BARE ARRAY. Mocking the envelope instead is
+  // what let a hook reading `.data` off an array pass its tests while returning
+  // nothing in production — the picker said "No matches" for every address.
+  //
+  // Both shapes are asserted so this cannot rot again if the server ever starts
+  // (or stops) paginating and apiClient's unwrapping flips with it.
+  it.each([
+    ['unwrapped array (what this endpoint returns today)', [suggestion()]],
+    ['envelope (if it ever becomes paginated)', { data: [suggestion()] }],
+  ])('reads suggestions from %s', async (_label, shape) => {
+    vi.spyOn(apiClient, 'get').mockResolvedValue(shape);
+    const user = userEvent.setup();
+    renderSearch();
+
+    await user.type(screen.getByLabelText('Find your address'), 'kalarahanga');
+
+    expect(await screen.findByText('Kalarahanga, Bhubaneswar, Odisha')).toBeInTheDocument();
+    expect(screen.queryByText(/no matches/i)).not.toBeInTheDocument();
   });
 });

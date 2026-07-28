@@ -26,8 +26,29 @@ export interface AddressSuggestion {
   lon?: number;
 }
 
-interface Envelope<T> {
-  data: T;
+/**
+ * What `apiClient` hands back for this endpoint.
+ *
+ * It is NOT simply the response body. apiClient unwraps envelopes, and which
+ * one you get depends on the shape the server sent:
+ *
+ *   { data, pagination }  → returned whole  (paginated endpoints)
+ *   { data }              → returned as `json.data`  ← this endpoint
+ *
+ * /locations/autocomplete returns `{ "data": [...] }` with no pagination, so
+ * apiClient already gives us the ARRAY. Reading `.data` off it — which is what
+ * the mobile version does, because axios has no unwrapping and hands back the
+ * raw body — yields undefined, and the picker silently reported "No matches"
+ * for every address on every lookup.
+ *
+ * Typed as both shapes and narrowed at runtime so this cannot rot again if the
+ * server ever starts (or stops) paginating.
+ */
+type AutocompleteResult = AddressSuggestion[] | { data?: AddressSuggestion[] };
+
+function toSuggestions(r: AutocompleteResult | null | undefined): AddressSuggestion[] {
+  if (Array.isArray(r)) return r;
+  return r?.data ?? [];
 }
 
 /** Keeps us from firing a request on every keystroke. 250ms is a comfortable
@@ -53,10 +74,10 @@ export function useAddressAutocomplete(query: string): UseQueryResult<AddressSug
   return useQuery<AddressSuggestion[]>({
     queryKey: ['locations', 'autocomplete', debounced],
     queryFn: async () => {
-      const r = await apiClient.get<Envelope<AddressSuggestion[]>>(
+      const r = await apiClient.get<AutocompleteResult>(
         `/locations/autocomplete?q=${encodeURIComponent(debounced)}`
       );
-      return r.data ?? [];
+      return toSuggestions(r);
     },
     enabled: debounced.length >= 3,
     staleTime: 60_000,
