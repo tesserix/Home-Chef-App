@@ -188,6 +188,25 @@ export type OrderStatus =
   | 'refunded';
 
 /**
+ * How an order reaches the customer. Mirrors models.FulfillmentType.
+ *
+ * The customer only ever chooses `delivery` vs `pickup`. WHO carries a delivery
+ * order — the chef themselves or a 3PL rider — is the chef's call at Mark Ready,
+ * which is why `chef_delivery` appears on responses but is never sent by this app.
+ */
+export type FulfillmentType = 'delivery' | 'chef_delivery' | 'pickup';
+
+/**
+ * Where the customer's suggested fulfilment time got to (#709).
+ *
+ * `requested` — the customer proposed it and the chef hasn't answered yet.
+ * `confirmed` — the chef agreed to the requested time.
+ * `proposed`  — the chef countered with a different time.
+ * `declined`  — the chef can't do a specific time.
+ */
+export type FulfillmentTimeStatus = 'requested' | 'confirmed' | 'proposed' | 'declined';
+
+/**
  * Chef identity as it appears on an order.
  *
  * The API never serializes the raw ChefProfile onto an order (that leaked
@@ -245,6 +264,15 @@ export interface Order {
   // confirmation is what makes the chef's payout release-eligible.
   payoutHoldStatus?: PayoutHoldStatus;
   customerConfirmedAt?: string;
+  // Fulfilment mode. Absent on orders placed before the field existed, which is
+  // why every consumer must treat undefined as 'delivery' (the server default)
+  // rather than assuming it is always present.
+  fulfillmentType?: FulfillmentType;
+  // The home-tiffin time handshake (#709): what the customer asked for, what the
+  // chef settled on, and where that negotiation stands.
+  requestedFulfillmentAt?: string;
+  confirmedFulfillmentAt?: string;
+  fulfillmentTimeStatus?: FulfillmentTimeStatus;
   createdAt: string;
 }
 

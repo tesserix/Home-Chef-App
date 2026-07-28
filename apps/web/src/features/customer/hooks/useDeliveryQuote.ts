@@ -56,6 +56,16 @@ export interface DeliveryQuote {
   currency: string;
   offersPickup: boolean;
   offersSelfDelivery: boolean;
+  /**
+   * Whether a DELIVERY order is fulfillable at all — the chef self-delivers, or a
+   * 3PL provider is live. This is the exact condition CreateOrder gates on, so
+   * when it is false the checkout must not offer delivery: the server would 422,
+   * and an order that slipped through would reach `ready` with no carrier and
+   * strand there.
+   *
+   * Defaults to true when an older API omits it, matching the mobile app.
+   */
+  offersDelivery?: boolean;
   /** Serviceability for the drop coords: within the kitchen's range, the
    *  straight-line distance, and the range cap. */
   deliverable: boolean;
@@ -96,6 +106,13 @@ export interface DeliveryQuoteInput {
   discount?: number;
   /** Tip to the chef — in the payable, never in the redeemable base. */
   tip?: number;
+  /**
+   * Chosen fulfilment mode. The server prices the credit ceiling against the
+   * EFFECTIVE carry fee, which is 0 for pickup — omitting it made the preview
+   * allocate credit against a delivery fee the pickup order would never be
+   * charged.
+   */
+  fulfillment?: 'delivery' | 'pickup';
   /** Which credit rails to apply, and optionally how much of each. */
   credit?: CreditIntent;
 }
@@ -108,7 +125,8 @@ export interface DeliveryQuoteInput {
  * Disabled until a chef id is known.
  */
 export function useDeliveryQuote(chefId: string | undefined, input: DeliveryQuoteInput) {
-  const { latitude, longitude, city, country, state, subtotal, discount, tip, credit } = input;
+  const { latitude, longitude, city, country, state, subtotal, discount, tip, fulfillment, credit } =
+    input;
   return useQuery<DeliveryQuote>({
     // Keyed on everything that moves the fee, the tax OR the credit allocation —
     // a stale credit block would put the screen back in the business of guessing.
@@ -122,6 +140,7 @@ export function useDeliveryQuote(chefId: string | undefined, input: DeliveryQuot
       subtotal,
       discount,
       tip,
+      fulfillment,
       credit?.useWallet,
       credit?.walletAmount,
       credit?.useLoyalty,
@@ -137,6 +156,7 @@ export function useDeliveryQuote(chefId: string | undefined, input: DeliveryQuot
         subtotal,
         discount,
         tip,
+        fulfillment,
         ...credit,
       }),
     enabled: Boolean(chefId),

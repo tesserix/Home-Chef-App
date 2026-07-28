@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -12,6 +12,7 @@ import {
   FileText,
   Shield,
   AlertTriangle,
+  Store,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCartStore } from '@/app/store/cart-store';
@@ -23,6 +24,12 @@ import { resolveCssVarColor } from '@/shared/utils/css-color';
 import { Button } from '@/shared/components/ui';
 import type { Order, Address } from '@/shared/types';
 import { useDeliveryQuote, type CreditIntent } from '../hooks/useDeliveryQuote';
+import {
+  useFulfillmentTimes,
+  groupFulfillmentTimes,
+  type FulfillmentTime,
+} from '../hooks/useFulfillmentTimes';
+import { getFeeRowLabel } from '../lib/orderSteps';
 import { CheckoutCredits } from '../components/CheckoutCredits';
 import { AddressSearch } from '../components/AddressSearch';
 import { suggestionCoords, type AddressSuggestion } from '../hooks/useAddressAutocomplete';
@@ -103,6 +110,13 @@ export default function CheckoutPage() {
     queryFn: () => apiClient.get<Address[]>('/addresses'),
   });
 
+  // Fulfilment mode. The customer chooses delivery vs pickup and nothing else —
+  // WHO carries a delivery order (the chef themselves vs a 3PL rider) is the
+  // chef's call at Mark Ready, resolved server-side, so `chef_delivery` is never
+  // sent from here. Mirrors apps/mobile-customer/app/checkout.tsx.
+  const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery');
+  const isPickup = fulfillment === 'pickup';
+
   const [selectedAddress, setSelectedAddress] = useState<string>('');
   // Default to the user's default address (or the first one) as soon as
   // the list loads. Resets if the previously-selected id disappears.
@@ -129,6 +143,19 @@ export default function CheckoutPage() {
     staleTime: 60_000,
   });
   const availableSlots = (slotsData?.slots ?? []).filter((s) => s.available);
+  // Windowed (restaurant-style) chefs keep the #51 slot picker; everyone else —
+  // the home-tiffin default — gets the suggested-time handshake (#709) below.
+  const useSlotPicker = Boolean(slotsData?.slotsEnabled) && availableSlots.length > 0;
+
+  // Home-tiffin suggested time (#709): the customer PROPOSES a preferred time and
+  // the chef confirms or counters at accept. null = "as soon as ready", which
+  // stays the default.
+  const [requestedTime, setRequestedTime] = useState<FulfillmentTime | null>(null);
+  const { data: fulfillmentTimesData } = useFulfillmentTimes(cart.chefId ?? undefined);
+  const fulfillmentTimeGroups = useMemo(
+    () => groupFulfillmentTimes(fulfillmentTimesData?.times ?? []),
+    [fulfillmentTimesData]
+  );
   // Dietary & allergen conflict warning (#41) — server-checks the cart's items
   // against the customer's saved profile. Non-blocking.
   const cartItemIds = cart.items.map((i) => i.menuItemId);
@@ -183,10 +210,39 @@ export default function CheckoutPage() {
     subtotal,
     discount,
     tip,
+    fulfillment,
     credit,
   });
 
-  const deliveryFee = quote?.deliveryFee ?? 0;
+  // What the chef actually offers. Both come from the quote the page already
+  // fetches, so there is no second round-trip. offersDelivery is the computed
+  // capability CreateOrder gates on (chef self-delivers OR a 3PL provider is
+  // live) — defaulting it to true keeps an older API working.
+  const offersPickup = quote?.offersPickup ?? false;
+  const offersDelivery = quote?.offersDelivery ?? true;
+  const fulfillmentModes: Array<'delivery' | 'pickup'> = [
+    ...(offersDelivery ? (['delivery'] as const) : []),
+    ...(offersPickup ? (['pickup'] as const) : []),
+  ];
+
+  // Snap the selection to something the chef actually offers. This is the guard
+  // that matters with 3PL dark and a non-self-delivering chef: without it the page
+  // posts a delivery order the server rejects, and the customer only finds out at
+  // payment. Runs on the quote, so it corrects as soon as capabilities are known.
+  useEffect(() => {
+    if (fulfillmentModes.length === 0) return;
+    if (!fulfillmentModes.includes(fulfillment)) {
+      setFulfillment(fulfillmentModes[0] as 'delivery' | 'pickup');
+    }
+    // fulfillmentModes is rebuilt every render; depend on its inputs instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offersDelivery, offersPickup, fulfillment]);
+
+  // Pickup is always free — the customer carries it. Delivery is the quoted fee.
+  const deliveryFee = isPickup ? 0 : quote?.deliveryFee ?? 0;
+  // What switching to pickup would save. Only real when delivery actually costs
+  // something; 0 means show no incentive rather than a fake one.
+  const pickupSaving = quote?.pickupSaving ?? 0;
   const serviceFee = quote?.serviceFee ?? 0;
   const rate = quote?.taxRatePercent ?? 0;
   const isInclusive = quote?.taxInclusive ?? false;
@@ -212,10 +268,17 @@ export default function CheckoutPage() {
   // required`, and beyond the kitchen's radius is a 422 `outside_delivery_range`.
   // Web had neither guard AND no way to put coordinates on an address, so every
   // web order 422'd and the customer saw only "Failed to initiate payment".
+  //
+  // Neither guard applies to pickup: there is no drop address to range-check
+  // because the customer comes to the kitchen. Gating them on !isPickup is what
+  // lets pickup stay orderable for a customer whose only saved address is
+  // unpinned or out of range — which is exactly when pickup is most useful.
   const addressNeedsLocation =
+    !isPickup &&
     Boolean(selectedAddressObj) &&
     !(selectedAddressObj?.latitude && selectedAddressObj?.longitude);
-  const deliveryOutOfRange = quote?.rangeKnown === true && quote?.deliverable === false;
+  const deliveryOutOfRange =
+    !isPickup && quote?.rangeKnown === true && quote?.deliverable === false;
 
   const {
     register,
@@ -280,7 +343,12 @@ export default function CheckoutPage() {
   };
 
   const handlePlaceOrder = async () => {
-    if (!cart.chefId || !selectedAddress) {
+    if (!cart.chefId) {
+      toast.error('Your cart is empty');
+      return;
+    }
+    // A pickup order has no drop address — the customer collects from the kitchen.
+    if (!isPickup && !selectedAddress) {
       toast.error('Please select a delivery address');
       return;
     }
@@ -317,11 +385,17 @@ export default function CheckoutPage() {
           modifierOptionIds: i.modifiers?.map((m) => m.optionId),
         })),
         chefId: cart.chefId,
-        deliveryAddressId: selectedAddress,
+        // Pickup carries no delivery address. Sending one anyway would make the
+        // server range-check a drop it will never make.
+        deliveryAddressId: isPickup ? undefined : selectedAddress,
+        fulfillmentType: fulfillment,
         tip,
         specialInstructions: specialInstructions || undefined,
         deliverySlot: selectedSlot?.slot,
         deliveryDate: selectedSlot?.date,
+        // The customer's suggested fulfilment time (#709) — a proposal, not a
+        // promise. The chef confirms or counters when they accept.
+        requestedFulfillmentAt: requestedTime?.at,
         // Applied promo (#39) — server re-validates + recomputes the discount.
         promoCode: cart.promoCode || undefined,
       });
@@ -529,7 +603,98 @@ export default function CheckoutPage() {
         <div className="mt-8 flex flex-col gap-8 lg:flex-row">
           {/* Main Form */}
           <div className="flex-1 space-y-6">
-            {/* Delivery Address */}
+            {/* Fulfilment choice — shown only when the chef offers more than one
+                mode. A single-mode chef gets no pointless toggle. */}
+            {fulfillmentModes.length > 1 && (
+              <section className="rounded-xl bg-bone p-6 shadow-1">
+                <h2 className="text-lg font-semibold text-ink">How would you like it?</h2>
+                <div
+                  role="radiogroup"
+                  aria-label="Fulfilment method"
+                  className="mt-4 grid grid-cols-2 gap-3"
+                >
+                  {fulfillmentModes.map((mode) => {
+                    const selected = fulfillment === mode;
+                    const isPickupMode = mode === 'pickup';
+                    return (
+                      <button
+                        type="button"
+                        key={mode}
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setFulfillment(mode)}
+                        className={`flex min-h-11 items-center gap-3 rounded-lg border p-4 text-left transition-colors ${
+                          selected ? 'border-herb bg-herb-tint' : 'border-mist hover:bg-paper'
+                        }`}
+                      >
+                        {isPickupMode ? (
+                          <Store
+                            className={`h-5 w-5 flex-shrink-0 ${selected ? 'text-herb' : 'text-ink-muted'}`}
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <MapPin
+                            className={`h-5 w-5 flex-shrink-0 ${selected ? 'text-herb' : 'text-ink-muted'}`}
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span>
+                          <span className="block font-medium text-ink">
+                            {isPickupMode ? 'Pickup' : 'Delivery'}
+                          </span>
+                          <span className="block text-xs text-ink-muted">
+                            {isPickupMode
+                              ? 'Collect from the kitchen — no delivery fee'
+                              : 'Brought to your address'}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Distance to the kitchen. This is the number that makes the
+                    delivery-vs-pickup choice a real decision rather than a guess —
+                    it is only knowable once the drop address has coordinates. */}
+                {!isPickup && quote?.rangeKnown && (
+                  <p className="mt-3 text-sm text-ink-soft tabular-nums">
+                    {quote.distanceKm.toFixed(1)} km from {cart.chef?.businessName ?? 'the kitchen'}
+                    {quote.maxRadiusKm > 0
+                      ? ` · delivers up to ${quote.maxRadiusKm.toFixed(0)} km`
+                      : ''}
+                  </p>
+                )}
+                {isPickup && quote?.rangeKnown && quote.distanceKm > 0 && (
+                  <p className="mt-3 text-sm text-ink-soft tabular-nums">
+                    The kitchen is {quote.distanceKm.toFixed(1)} km from your saved address. You
+                    will get the exact address and map pin once the chef accepts.
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* Pickup incentive — only when the customer is on delivery, pickup is
+                actually offered, and switching would genuinely save money. */}
+            {!isPickup && offersPickup && pickupSaving > 0 && (
+              <button
+                type="button"
+                onClick={() => setFulfillment('pickup')}
+                className="flex w-full items-center justify-between gap-3 rounded-xl bg-herb-tint p-4 text-left transition-colors hover:bg-herb-tint/70"
+              >
+                <span>
+                  <span className="block text-sm font-semibold text-herb tabular-nums">
+                    Pick up &amp; save {fp(pickupSaving, { currency: orderCurrency })}
+                  </span>
+                  <span className="block text-xs text-ink-soft">
+                    Collect from the kitchen — no delivery fee.
+                  </span>
+                </span>
+                <span className="text-sm font-semibold text-herb">Switch →</span>
+              </button>
+            )}
+
+            {/* Delivery Address — a pickup order has no drop address. */}
+            {!isPickup && (
             <section className="rounded-xl bg-bone p-6 shadow-1">
               <div className="flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
@@ -749,6 +914,29 @@ export default function CheckoutPage() {
                 </div>
               )}
             </section>
+            )}
+
+            {/* Pickup: where the food is collected from. The exact street address
+                and map pin are deliberately NOT shown here — they are revealed on
+                the order page once the chef accepts (chefTrackCoords in
+                handlers/orders.go returns the exact kitchen only for pickup). It
+                is a home kitchen, so the address is private until there is a real
+                order behind the request. */}
+            {isPickup && (
+              <section className="rounded-xl bg-bone p-6 shadow-1">
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
+                  <Store className="h-5 w-5 text-herb" aria-hidden="true" />
+                  Collect from
+                </h2>
+                <p className="mt-2 text-sm text-ink">
+                  {cart.chef?.businessName ?? 'The kitchen'}
+                </p>
+                <p className="mt-1 text-sm text-ink-soft">
+                  You&apos;ll get the full address and a map pin on your order page as soon as the
+                  chef accepts. No delivery fee — you&apos;re collecting this yourself.
+                </p>
+              </section>
+            )}
 
             {/* Dietary / allergen conflict warning (#41) — non-blocking */}
             {dietaryWarnings.length > 0 && (
@@ -774,43 +962,51 @@ export default function CheckoutPage() {
               </section>
             )}
 
-            {/* Delivery Time */}
+            {/* Timing. Two different pickers, and which one you get depends on the
+                chef, not the fulfilment mode:
+                  · a windowed (restaurant-style) chef keeps the #51 slot picker;
+                  · everyone else — the home-tiffin default — gets the suggested
+                    time handshake (#709), where the customer PROPOSES a time and
+                    the chef confirms or counters at accept.
+                The wording changes with the mode (collect vs delivered) but the
+                suggestions themselves don't: the food is ready when the chef cooks
+                it, and the mode only changes who carries it. */}
             <section className="rounded-xl bg-bone p-6 shadow-1">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-                <Clock className="h-5 w-5 text-herb"  aria-hidden="true" />
-                Delivery Time
+                <Clock className="h-5 w-5 text-herb" aria-hidden="true" />
+                {isPickup ? 'Pickup time' : 'Delivery time'}
               </h2>
 
-              <div className="mt-4 space-y-3">
-                {/* ASAP (default) */}
-                <label
-                  className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
-                    selectedSlot === null
-                      ? 'border-herb bg-herb-tint'
-                      : 'border-mist hover:bg-paper'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="time"
-                    checked={selectedSlot === null}
-                    onChange={() => setSelectedSlot(null)}
-                    className="h-4 w-4 text-herb focus-visible:ring-herb"
-                  />
-                  <div>
-                    <span className="font-medium text-ink">As soon as possible</span>
-                    <p className="text-sm text-ink-muted">
-                      Estimated 30-45 minutes after the chef accepts your order.
-                      Actual time depends on chef preparation and driver route.
-                    </p>
-                  </div>
-                </label>
+              {useSlotPicker ? (
+                <div className="mt-4 space-y-3">
+                  {/* ASAP (default) */}
+                  <label
+                    className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
+                      selectedSlot === null
+                        ? 'border-herb bg-herb-tint'
+                        : 'border-mist hover:bg-paper'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="time"
+                      checked={selectedSlot === null}
+                      onChange={() => setSelectedSlot(null)}
+                      className="h-4 w-4 text-herb focus-visible:ring-herb"
+                    />
+                    <div>
+                      <span className="font-medium text-ink">As soon as possible</span>
+                      <p className="text-sm text-ink-muted">
+                        {isPickup
+                          ? 'Estimated 30-45 minutes after the chef accepts. We’ll tell you the moment it’s ready to collect.'
+                          : 'Estimated 30-45 minutes after the chef accepts your order. Actual time depends on chef preparation and the route.'}
+                      </p>
+                    </div>
+                  </label>
 
-                {/* Scheduled slots (#51) — only when the chef offers them */}
-                {slotsData?.slotsEnabled &&
-                  availableSlots.map((s) => {
-                    const sel =
-                      selectedSlot?.slot === s.slot && selectedSlot?.date === s.date;
+                  {/* Scheduled slots (#51) */}
+                  {availableSlots.map((s) => {
+                    const sel = selectedSlot?.slot === s.slot && selectedSlot?.date === s.date;
                     return (
                       <label
                         key={`${s.date}-${s.slot}`}
@@ -837,13 +1033,77 @@ export default function CheckoutPage() {
                       </label>
                     );
                   })}
-
-                {slotsData?.slotsEnabled && availableSlots.length === 0 && (
-                  <p className="text-sm text-ink-muted">
-                    No delivery windows are open right now — your order will be delivered ASAP.
+                </div>
+              ) : (
+                <>
+                  <p className="mt-1 text-sm text-ink-muted">
+                    {isPickup
+                      ? 'When will you come to collect? It’s a home kitchen — the chef confirms once they accept.'
+                      : 'Suggest when you’d like it. It’s a home kitchen, not a restaurant — the chef confirms or proposes a time when they accept.'}
                   </p>
-                )}
-              </div>
+
+                  <div className="mt-4 space-y-3">
+                    {/* As soon as ready — the default, and deliberately the widest
+                        option so it reads as the primary choice. */}
+                    <label
+                      className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
+                        requestedTime === null
+                          ? 'border-herb bg-herb-tint'
+                          : 'border-mist hover:bg-paper'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="time"
+                        checked={requestedTime === null}
+                        onChange={() => setRequestedTime(null)}
+                        className="h-4 w-4 text-herb focus-visible:ring-herb"
+                      />
+                      <div>
+                        <span className="font-medium text-ink">As soon as ready</span>
+                        <p className="text-sm text-ink-muted">Chef decides when to start</p>
+                      </div>
+                    </label>
+
+                    {fulfillmentTimeGroups.map((group) => (
+                      <div key={group.key}>
+                        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
+                          {group.key}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {group.times.map((t) => {
+                            const sel = requestedTime?.at === t.at;
+                            return (
+                              <button
+                                type="button"
+                                key={t.at}
+                                onClick={() => setRequestedTime(t)}
+                                aria-pressed={sel}
+                                aria-label={`${isPickup ? 'Pickup' : 'Delivery'} around ${t.label}, ${t.day} ${t.meal}`}
+                                className={`min-h-11 rounded-lg border px-4 py-2 text-sm tabular-nums transition-colors ${
+                                  sel
+                                    ? 'border-herb bg-herb-tint font-medium text-herb'
+                                    : 'border-mist text-ink-soft hover:bg-paper'
+                                }`}
+                              >
+                                {t.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
+                    {fulfillmentTimeGroups.length === 0 && (
+                      <p className="text-sm text-ink-muted">
+                        {isPickup
+                          ? 'No specific pickup times to suggest right now — your order will be ready to collect as soon as the chef finishes.'
+                          : 'No specific times to suggest right now — your order will be sent as soon as it’s ready.'}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
             </section>
 
             {/* Payment */}
@@ -1022,8 +1282,16 @@ export default function CheckoutPage() {
                   <span>{fp(subtotal, { currency: orderCurrency })}</span>
                 </div>
                 <div className="flex justify-between text-ink-soft">
-                  <span>Delivery fee</span>
-                  <span>{fp(deliveryFee, { currency: orderCurrency })}</span>
+                  <span>{getFeeRowLabel(fulfillment)}</span>
+                  {/* Free reads as a benefit, not a zero — and pickup is always
+                      free, so rendering "₹0.00" there is just noise. */}
+                  {deliveryFee === 0 ? (
+                    <span className="font-medium text-herb">Free</span>
+                  ) : (
+                    <span className="tabular-nums">
+                      {fp(deliveryFee, { currency: orderCurrency })}
+                    </span>
+                  )}
                 </div>
                 <div className="flex justify-between text-ink-soft">
                   <span>Service fee</span>
@@ -1128,7 +1396,9 @@ export default function CheckoutPage() {
                 onClick={handlePlaceOrder}
                 disabled={
                   isProcessing ||
-                  !selectedAddress ||
+                  // Pickup needs no address — requiring one would make the CTA
+                  // permanently dead for a customer who has never saved one.
+                  (!isPickup && !selectedAddress) ||
                   !acceptedTerms ||
                   addressNeedsLocation ||
                   deliveryOutOfRange

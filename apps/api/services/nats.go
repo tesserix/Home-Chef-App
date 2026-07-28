@@ -25,10 +25,24 @@ const (
 	SubjectOrderVoided = "orders.voided"
 	// SubjectOrderAcceptReminder — an unaccepted order is inside the final two
 	// hours before the kitchen closes (#694).
-	SubjectOrderAcceptReminder  = "orders.accept_reminder"
-	SubjectOrderDelivered       = "orders.delivered"
-	SubjectOrderIssueReported   = "orders.issue_reported"   // → chef: a customer reported an order issue (#37)
-	SubjectOrderConfirmReminder = "orders.confirm_reminder" // → customer: reminder to confirm receipt (auto-confirm flow)
+	SubjectOrderAcceptReminder = "orders.accept_reminder"
+	SubjectOrderDelivered      = "orders.delivered"
+	// SubjectOrderReadyForPickup — a PICKUP order is cooked and waiting to be
+	// collected. Distinct from orders.updated on purpose: for a delivery order
+	// `ready` is a passive milestone the customer does nothing about, but for a
+	// pickup order it is the moment they have to act on, and the message needs the
+	// kitchen's name in it. Lumping the two together is why every pickup customer
+	// got the limp "ready for pickup/delivery" catch-all.
+	SubjectOrderReadyForPickup = "orders.ready_for_pickup"
+	// SubjectOrderPickupReminder — the customer still hasn't collected. Driven by
+	// the durable pickup flow, not a ticker.
+	SubjectOrderPickupReminder = "orders.pickup_reminder"
+	// SubjectOrderPickupUncollected — the reminder window is exhausted and the food
+	// is still on the chef's counter. Goes to the CHEF: they are the one holding
+	// cooked food and the only one who can decide what to do with it.
+	SubjectOrderPickupUncollected = "orders.pickup_uncollected"
+	SubjectOrderIssueReported     = "orders.issue_reported"   // → chef: a customer reported an order issue (#37)
+	SubjectOrderConfirmReminder   = "orders.confirm_reminder" // → customer: reminder to confirm receipt (auto-confirm flow)
 	// Cancellation with vendor arbitration (#475).
 	SubjectCancellationRequested = "orders.cancellation_requested" // → chef: confirm the cancellation
 	SubjectCancellationResolved  = "orders.cancellation_resolved"  // → customer: refund issued
@@ -95,9 +109,9 @@ const (
 	// #422 policy change: a skip is now an admin-reviewed REQUEST, not an auto-credit.
 	SubjectMealPlanDaySkipRequested = "meal_plans.day_skip_requested" // → chef: customer requested a skip, pending admin review
 	SubjectMealPlanDaySkipDeclined  = "meal_plans.day_skip_declined"  // → customer: admin declined the skip; the day stands
-	SubjectMealPlanCompleted      = "meal_plans.completed"        // → customer: every day served, plan done
-	SubjectMealPlanChefReminder   = "meal_plans.chef_cook_reminder" // → chef: tiffin meals to cook today/tomorrow
-	SubjectMealPlanPayoutReleased = "meal_plans.payout_released"  // → chef: a tiffin day's payment was released
+	SubjectMealPlanCompleted        = "meal_plans.completed"          // → customer: every day served, plan done
+	SubjectMealPlanChefReminder     = "meal_plans.chef_cook_reminder" // → chef: tiffin meals to cook today/tomorrow
+	SubjectMealPlanPayoutReleased   = "meal_plans.payout_released"    // → chef: a tiffin day's payment was released
 
 	SubjectDriverOnboardingSubmitted = "driver.onboarding.submitted"
 
@@ -146,6 +160,13 @@ type OrderEvent struct {
 	ChefID      uuid.UUID `json:"chef_id"`
 	Status      string    `json:"status"`
 	Total       float64   `json:"total"`
+	// FulfillmentType lets a consumer word the message correctly without
+	// re-reading the order. `ready` and `delivered` mean different things for a
+	// pickup order than a delivered one, and the notification handler is a NATS
+	// consumer with only this payload to go on. Omitempty keeps older queued
+	// events decoding cleanly — an absent value reads as delivery, the server's
+	// own default.
+	FulfillmentType string `json:"fulfillment_type,omitempty"`
 }
 
 // NotificationEvent represents a notification to be sent

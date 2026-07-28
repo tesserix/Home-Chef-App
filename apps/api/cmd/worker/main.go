@@ -64,6 +64,21 @@ func main() {
 		_, _, err := services.AutoConfirmOrderReceipt(database.DB, orderID)
 		return err
 	}
+	// Ready-to-collect flow for pickup orders: the ready notice, collection
+	// reminders, then a chef escalation if nobody ever came. Every one of these
+	// re-reads the order and no-ops once it has left `ready`, so an at-least-once
+	// activity retry can't double-notify.
+	workflows.PickupReadyNoticeFunc = func(_ context.Context, orderID uuid.UUID) error {
+		return services.NotifyOrderReadyForPickup(database.DB, orderID)
+	}
+	workflows.PickupReminderFunc = func(_ context.Context, orderID uuid.UUID, attempt int) error {
+		_, err := services.SendPickupReminder(database.DB, orderID, attempt)
+		return err
+	}
+	workflows.PickupUncollectedFunc = func(_ context.Context, orderID uuid.UUID) error {
+		_, err := services.EscalateUncollectedPickup(database.DB, orderID)
+		return err
+	}
 	// Admin-initiated two-factor reset, held for 24h so a compromised admin
 	// account cannot silently disarm someone's second factor (#login-otp-2fa).
 	workflows.MFAResetNoticeFunc = func(_ context.Context, userID uuid.UUID, _ int) error {
@@ -111,10 +126,13 @@ func main() {
 		// Order lifecycle saga (#122) — notify → accept → ready → dispatch →
 		// delivered → settle, with refund compensation.
 		temporal.Queue(temporal.TaskQueueOrders).
-			Workflows(workflows.OrderSagaWorkflow, workflows.ConfirmReceiptWorkflow).
+			Workflows(workflows.OrderSagaWorkflow, workflows.ConfirmReceiptWorkflow,
+				workflows.PickupReadyWorkflow).
 			Activities(workflows.NotifyChefActivity, workflows.DispatchDeliveryActivity,
 				workflows.OrderSettleActivity, workflows.OrderRefundActivity,
-				workflows.ReminderActivity, workflows.AutoConfirmActivity),
+				workflows.ReminderActivity, workflows.AutoConfirmActivity,
+				workflows.PickupReadyNoticeActivity, workflows.PickupReminderActivity,
+				workflows.PickupUncollectedActivity),
 		// Durable chef-onboarding activation (#126).
 		temporal.Queue(temporal.TaskQueueOnboarding).
 			Workflows(workflows.OnboardingActivationWorkflow).

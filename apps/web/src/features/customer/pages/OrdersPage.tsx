@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
 import { useConfirmOrderReceived } from '@/features/customer/hooks/useConfirmReceived';
 import { canConfirmReceipt } from '@/features/customer/lib/payout-hold';
+import { getChipLabel, getStepIndex, getStepLabels } from '@/features/customer/lib/orderSteps';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { formatDateTime, formatTime } from '@/shared/utils/format-date';
 import { friendlyErrorMessage } from '@/shared/utils/errors';
@@ -149,6 +150,9 @@ function OrderCard({ order }: { order: Order }) {
   const fp = useFormatPrice();
   const status = STATUS_CONFIG[order.status];
   const StatusIcon = status.icon;
+  // Fulfilment-aware chip text: a collected pickup order reads "Collected", not
+  // "Delivered", and a delivery order at `ready` reads "Almost Ready".
+  const statusLabel = getChipLabel(order.status, order.fulfillmentType);
   const isActive = !['delivered', 'cancelled', 'refunded'].includes(order.status);
   // Escrow confirmation (#617) — reachable straight from the list, as on mobile,
   // so the customer doesn't have to open the order to release the chef's payout.
@@ -168,7 +172,7 @@ function OrderCard({ order }: { order: Order }) {
               <span className="font-semibold text-ink">Order #{order.orderNumber}</span>
               <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${status.color}`}>
                 <StatusIcon className="h-3 w-3" />
-                {status.label}
+                {statusLabel}
               </span>
             </div>
             <p className="mt-1 text-sm text-ink-muted">
@@ -228,7 +232,7 @@ function OrderCard({ order }: { order: Order }) {
         {/* Progress for active orders */}
         {isActive && (
           <div className="mt-4 pt-4 border-t">
-            <OrderProgress status={order.status} />
+            <OrderProgress status={order.status} fulfillment={order.fulfillmentType} />
           </div>
         )}
 
@@ -282,27 +286,26 @@ function OrderCard({ order }: { order: Order }) {
   );
 }
 
-function OrderProgress({ status }: { status: OrderStatus }) {
-  const steps = [
-    { key: 'accepted', label: 'Confirmed' },
-    { key: 'preparing', label: 'Preparing' },
-    { key: 'ready', label: 'Ready' },
-    { key: 'delivering', label: 'On the Way' },
-    { key: 'delivered', label: 'Delivered' },
-  ];
-
-  const statusOrder = ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'delivering', 'delivered'];
-  const currentIndex = statusOrder.indexOf(status);
+function OrderProgress({
+  status,
+  fulfillment,
+}: {
+  status: OrderStatus;
+  fulfillment: Order['fulfillmentType'];
+}) {
+  // Shared fulfilment-aware model — see OrderDetailPage. A pickup order reads
+  // Confirmed → Preparing → Ready for pickup → Collected.
+  const labels = getStepLabels(fulfillment);
+  const currentIndex = getStepIndex(status, fulfillment);
 
   return (
     <div className="flex items-center gap-2">
-      {steps.map((step, index) => {
-        const stepIndex = statusOrder.indexOf(step.key);
-        const isCompleted = currentIndex >= stepIndex;
-        const isCurrent = status === step.key || (status === 'picked_up' && step.key === 'ready');
+      {labels.map((label, index) => {
+        const isCompleted = currentIndex >= index;
+        const isCurrent = currentIndex === index;
 
         return (
-          <div key={step.key} className="flex flex-1 items-center">
+          <div key={label} className="flex flex-1 items-center">
             <div className="flex flex-col items-center flex-1">
               <div
                 className={`h-2 w-2 rounded-full ${
@@ -310,13 +313,13 @@ function OrderProgress({ status }: { status: OrderStatus }) {
                 } ${isCurrent ? 'ring-4 ring-herb/30' : ''}`}
               />
               <span className={`mt-1 text-xs ${isCompleted ? 'text-herb' : 'text-ink-muted'}`}>
-                {step.label}
+                {label}
               </span>
             </div>
-            {index < steps.length - 1 && (
+            {index < labels.length - 1 && (
               <div
                 className={`h-0.5 flex-1 ${
-                  currentIndex > stepIndex ? 'bg-herb' : 'bg-mist-strong'
+                  currentIndex > index ? 'bg-herb' : 'bg-mist-strong'
                 }`}
               />
             )}
