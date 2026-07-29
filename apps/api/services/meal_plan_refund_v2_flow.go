@@ -6,13 +6,13 @@ package services
 // and the admin-executed gateway path.
 //
 // Money rules — v3 (#834). The percentage is a bounded 0–100 the chef agreed within the tier
-// floor, applied to the FULL gross the customer paid (food + GST + delivery — see
-// MealPlanRefundAmount):
-//   P% → customer gets P% of the day's gross; the chef's held transfer is reversed by P% of
+// floor, applied to the day's refund base — food MINUS the platform commission, plus that day's
+// GST and delivery (see MealPlanRefundAmount):
+//   P% → customer gets P% of the day's base; the chef's held transfer is reversed by P% of
 //        their net, so they keep (100−P)% as prep compensation.
 //   0% → no customer refund; the chef keeps 100% (transfer released); the day is skipped.
-// The platform is deliberately out of pocket its commission + GST + delivery on the refunded
-// slice; a GST credit note is issued for the tax component so filings stay correct.
+// The platform retains its commission on a refunded day and is out of pocket only the GST and
+// delivery it returns; a GST credit note is issued for the tax so filings stay correct.
 // Destination: wallet (CreditWallet → dual-writes the ledger) or source (gateway refund, RBI).
 // Idempotent on the day's refund_txn_id. No-op when escrow is off or the plan never captured.
 

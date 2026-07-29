@@ -36,9 +36,9 @@ func TestRefund_IssuesGSTCreditNote(t *testing.T) {
 	notes := creditNotesFor(t, db, day.ID)
 	require.Len(t, notes, 1)
 	n := notes[0]
-	require.Equal(t, 186.0, n.TotalAmount, "the note covers the whole refund")
+	require.Equal(t, 162.0, n.TotalAmount, "the note covers the whole refund")
 	require.Equal(t, 16.0, n.TaxAmount, "the GST slice is what the filing must reverse")
-	require.Equal(t, 170.0, n.TaxableValue, "total − tax")
+	require.Equal(t, 146.0, n.TaxableValue, "total − tax")
 	require.Equal(t, 100, n.RefundPercent)
 	require.Equal(t, plan.MealPlanNumber, n.Reference)
 	require.NotEmpty(t, n.CreditNoteNumber)
@@ -56,7 +56,7 @@ func TestRefund_PartialCreditNoteIsProportional(t *testing.T) {
 
 	notes := creditNotesFor(t, db, day.ID)
 	require.Len(t, notes, 1)
-	require.Equal(t, 139.5, notes[0].TotalAmount, "75% of 186")
+	require.Equal(t, 121.5, notes[0].TotalAmount, "75% of 162")
 	require.Equal(t, 12.0, notes[0].TaxAmount, "75% of the day's 16 GST")
 	require.Equal(t, 75, notes[0].RefundPercent)
 }
@@ -99,7 +99,7 @@ func TestRefund_LegacyPlanNoTaxNoCreditNote(t *testing.T) {
 	day := &models.MealPlanDay{ID: dayID, MealPlanID: planID, Price: 160, CommissionRate: 0.15}
 
 	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, 100, models.RefundDestinationWallet))
-	require.Equal(t, 160.0, v2WalletBalance(t, db, u), "food only — there was no GST to return")
+	require.Equal(t, 136.0, v2WalletBalance(t, db, u), "food net of commission — there was no GST to return")
 	require.Empty(t, creditNotesFor(t, db, dayID))
 }
 

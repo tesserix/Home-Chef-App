@@ -136,7 +136,7 @@ function DecisionCard({ day }: { day: RefundDecisionDay }) {
         </div>
         <p className="mt-2 text-xs text-ink-muted">
           {day.minPercent > 0
-            ? `At this much notice the minimum is ${day.minPercent}% (${formatCurrency(day.minRefund)}). This covers the food, tax and delivery the customer paid.`
+            ? `At this much notice the minimum is ${day.minPercent}% (${formatCurrency(day.minRefund)}). Amounts are the customer's food, tax and delivery, net of the platform's service charge.`
             : 'The meal is imminent, so no refund is owed — but you can still give one.'}
         </p>
       </div>

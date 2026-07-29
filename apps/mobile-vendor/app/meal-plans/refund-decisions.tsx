@@ -55,7 +55,7 @@ export default function RefundDecisionsScreen() {
       ? "You'll cook and deliver this day as planned — the customer is charged in full."
       : percent === 0
         ? "No refund — you keep the full payout (you'd started prep). The day won't be delivered."
-        : `${money(amount)} (${percent}% of what they paid) goes back to the customer; your payout for this day is reduced by the same share. They choose where it lands.`;
+        : `${money(amount)} (${percent}% of this day's refundable value) goes back to the customer; your payout for this day is reduced by the same share. They choose where it lands.`;
     showAlert(title, body, [
       { text: 'Back', style: 'cancel' },
       {
@@ -169,7 +169,7 @@ function DecisionCard({
           </Pressable>
           <View style={styles.pickerValue}>
             <Text style={styles.pickerAmount}>{money(refundAtPercent(day, percent))}</Text>
-            <Text style={styles.pickerPercent}>{percent}% of what they paid</Text>
+            <Text style={styles.pickerPercent}>{percent}% of the day's refund</Text>
           </View>
           <Pressable
             disabled={busy || percent >= 100}

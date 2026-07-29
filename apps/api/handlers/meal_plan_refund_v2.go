@@ -22,8 +22,8 @@ import (
 
 // chefRefundDecisionDay is one day awaiting the chef's decision, with the amounts they are
 // choosing between so the chef can weigh prep-done against refund. Amounts are ALWAYS
-// server-computed: the base is the full gross the customer paid (food + GST + delivery), which
-// a client cannot derive from foodPrice alone.
+// server-computed: the base is food less the platform commission, plus that day's GST and
+// delivery — which a client cannot derive from foodPrice alone.
 type chefRefundDecisionDay struct {
 	DayID          string  `json:"dayId"`
 	Date           string  `json:"date"`
@@ -36,7 +36,7 @@ type chefRefundDecisionDay struct {
 	// server rejects an attempt to. MinRefund is that floor in rupees.
 	MinPercent int     `json:"minPercent"`
 	MinRefund  float64 `json:"minRefund"`
-	// FullRefund is 100% of the day's gross — the top of the range the chef may choose.
+	// FullRefund is 100% of the day's refundable value — the top of the chef's range.
 	FullRefund float64 `json:"fullRefund"`
 	// HalfRefund is retained for pre-v3 clients that render a fixed Full/Half pair. Newer
 	// clients use minPercent..100 with fullRefund as the scale.
@@ -86,9 +86,9 @@ func (h *MealPlanHandler) GetChefPendingRefundDecisions(c *gin.Context) {
 }
 
 // ChefRefundDecision — POST /chef/meal-plan-days/:dayId/refund-decision. The chef resolves a day
-// awaiting them: {"percent":N} refunds N% of the full gross the customer paid, where N must be at
-// least the day's pinned lead-time floor; or {"decline":true} keeps the day (it will be cooked and
-// delivered and the customer charged).
+// awaiting them: {"percent":N} refunds N% of the day's refundable value (food less the platform
+// commission, plus that day's GST and delivery), where N must be at least the day's pinned
+// lead-time floor; or {"decline":true} keeps the day (it is cooked and the customer charged).
 //
 // The pre-v3 shape {"choice":"full|half|none"} is still accepted so a vendor app that has not been
 // updated keeps working — it maps to 100/50/0 and is then subject to the SAME floor check, so an

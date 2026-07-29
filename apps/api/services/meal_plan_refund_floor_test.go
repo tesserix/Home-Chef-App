@@ -70,9 +70,9 @@ func TestChefDecide_AtFloor_Accepted(t *testing.T) {
 	require.Equal(t, string(models.RefundProportionPartial), choice,
 		"75% has no legacy enum value, so the coarse label is 'partial'")
 
-	// The customer then picks wallet: 75% of the 186 gross = 139.50.
+	// The customer then picks wallet: 75% of the 162 base = 121.50.
 	require.NoError(t, CustomerChooseMealPlanRefundMedium(db, dayID, u, models.RefundDestinationWallet))
-	require.Equal(t, 139.5, v2WalletBalance(t, db, u))
+	require.Equal(t, 121.5, v2WalletBalance(t, db, u))
 }
 
 // Anything between the floor and 100 is allowed — the point of replacing the enum.

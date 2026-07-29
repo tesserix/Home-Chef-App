@@ -1,8 +1,9 @@
 # Meal-plan / Group-order Refund Workflow — Design (v2, SUPERSEDED)
 
 > **SUPERSEDED by `refund-policy-v3-spec.md` (#834).** §1's "FIRM RULE" — that the platform
-> fee, GST and delivery are *never* refunded — is **deliberately reversed** in v3: the refund
-> base is now everything the customer paid, and returned GST is matched by a credit note. §2's
+> fee, GST and delivery are *never* refunded — is **partly reversed** in v3: GST now IS
+> refunded (matched by a credit note), and delivery already was. The platform commission is
+> still retained, so the base is `food − commission + GST + delivery`. §2's
 > single 12h cutoff is replaced by a configurable lead-time tier table, and §3's
 > `{full, half, none}` proportion by a bounded percentage the chef sets above a floor.
 >

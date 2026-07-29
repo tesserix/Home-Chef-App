@@ -59,7 +59,7 @@ func TestCustomerChoose_Wallet_Refunds(t *testing.T) {
 	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, 100, false))
 
 	require.NoError(t, CustomerChooseMealPlanRefundMedium(db, dayID, u, models.RefundDestinationWallet))
-	require.Equal(t, 186.0, v2WalletBalance(t, db, u)) // v3: 160 food + 16 GST + 10 delivery
+	require.Equal(t, 162.0, v2WalletBalance(t, db, u)) // v3: (160 − 24 commission) + 16 GST + 10 delivery
 	status, stage, _, dest := v2DayRow(t, db, dayID)
 	require.Equal(t, string(models.MealPlanDayRefunded), status)
 	require.Equal(t, string(models.MPRefundResolved), stage)

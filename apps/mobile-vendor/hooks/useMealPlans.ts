@@ -265,9 +265,9 @@ export function useRespondMealPlan() {
 
 // ── Refund flow (docs/refund-policy-v3-spec.md, #834) ─────────────────────────
 // A late skip/cancel routes to the chef, who sets HOW MUCH to refund — any amount from
-// the day's lead-time floor up to 100%. The base is everything the customer paid for the
-// day (food + GST + delivery), so the amounts must come from the server; they cannot be
-// derived from foodPrice. The floor is enforced server-side.
+// the day's lead-time floor up to 100%. The base is the day's food net of the platform
+// commission, plus that day's GST and delivery, so the amounts must come from the server;
+// they cannot be derived from foodPrice. The floor is enforced server-side.
 
 export interface RefundDecisionDay {
   dayId: string;
@@ -280,7 +280,7 @@ export interface RefundDecisionDay {
   /** The least this day may be refunded, and that floor in rupees. */
   minPercent: number;
   minRefund: number;
-  /** 100% of what the customer paid for the day. */
+  /** 100% of the day's refundable value. */
   fullRefund: number;
   /** 50%. Retained from the pre-v3 fixed Full/Half pair. */
   halfRefund: number;

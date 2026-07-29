@@ -82,7 +82,7 @@ func v2DayRow(t *testing.T, db *gorm.DB, id uuid.UUID) (status, stage, choice, d
 	return
 }
 
-// v3: a 100% refund returns the FULL gross the customer paid (food + GST + delivery) to the
+// v3: a 100% refund returns food-minus-commission plus that day's GST and delivery to the
 // wallet; the day is refunded and the percentage + wallet destination recorded.
 func TestExecuteV2Refund_FullToWallet(t *testing.T) {
 	v2EscrowOn(t)
@@ -92,8 +92,8 @@ func TestExecuteV2Refund_FullToWallet(t *testing.T) {
 
 	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, 100, models.RefundDestinationWallet))
 
-	require.Equal(t, 186.0, v2WalletBalance(t, db, u),
-		"v3 full = 160 food + 16 GST + 10 delivery = 186 — everything the customer paid")
+	require.Equal(t, 162.0, v2WalletBalance(t, db, u),
+		"v3 full = (160 food − 24 commission) + 16 GST + 10 delivery = 162")
 	status, stage, choice, dest := v2DayRow(t, db, day.ID)
 	require.Equal(t, string(models.MealPlanDayRefunded), status)
 	require.Equal(t, string(models.MPRefundResolved), stage)
@@ -109,7 +109,7 @@ func TestExecuteV2Refund_HalfToWallet(t *testing.T) {
 	plan, day := seedV2Day(t, db, u)
 
 	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, 50, models.RefundDestinationWallet))
-	require.Equal(t, 93.0, v2WalletBalance(t, db, u), "half = 186/2")
+	require.Equal(t, 81.0, v2WalletBalance(t, db, u), "half = 162/2")
 	status, _, choice, _ := v2DayRow(t, db, day.ID)
 	require.Equal(t, string(models.MealPlanDayRefunded), status)
 	require.Equal(t, "half", choice)
@@ -141,5 +141,5 @@ func TestExecuteV2Refund_Idempotent(t *testing.T) {
 	// Reload the day (refund_txn_id + stage now set) and re-run.
 	day2 := &models.MealPlanDay{ID: day.ID, MealPlanID: plan.ID, Price: 160, CommissionRate: 0.15}
 	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day2, 100, models.RefundDestinationWallet))
-	require.Equal(t, 186.0, v2WalletBalance(t, db, u), "credited once, not twice")
+	require.Equal(t, 162.0, v2WalletBalance(t, db, u), "credited once, not twice")
 }

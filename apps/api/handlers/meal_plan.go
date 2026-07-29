@@ -670,7 +670,7 @@ func (h *MealPlanHandler) CancelMealPlan(c *gin.Context) {
 
 	// Refund flow (docs/refund-policy-v3-spec.md), gated: cancel resolves EACH unserved day by
 	// the same lead-time TIER table as a skip — the top tier auto-agrees, the rest route to the
-	// chef with a pinned floor — off the full gross the customer paid. Days already awaiting
+	// chef with a pinned floor — off the day's refundable value. Days already awaiting
 	// admin (chef decided) are left for the admin to pay. This replaces the legacy
 	// RefundUndeliveredDays(perDayGross) path, which 500'd on days already mid-skip (skip_req).
 	if services.MealPlanRefundFlowV2Active() {

@@ -29,8 +29,8 @@ export interface RefundDecisionDay {
   minPercent: number;
   /** That floor in rupees. */
   minRefund: number;
-  /** 100% of what the customer paid for the day — food, GST and delivery together.
-   *  Server-computed; the client cannot derive it from foodPrice. */
+  /** 100% of the day's refundable value — food net of the platform commission, plus that
+   *  day's GST and delivery. Server-computed; not derivable from foodPrice. */
   fullRefund: number;
   /** 50%. Retained from the pre-v3 fixed Full/Half pair. */
   halfRefund: number;

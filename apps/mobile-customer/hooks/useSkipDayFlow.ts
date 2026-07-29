@@ -51,7 +51,7 @@ export function useSkipDayFlow(planId: string | undefined) {
     if (!planId) return;
     showAlert(
       'Skip this day?',
-      'Well ahead of your meal, you get everything back for that day — food, taxes and delivery — and choose where it goes right away. Closer in, your chef reviews it (they may have started cooking) and there’s a minimum they must refund based on how much notice you gave. This can’t be undone.',
+      'Well ahead of your meal, your refund for that day is agreed right away and you choose where it goes. Closer in, your chef reviews it (they may have started cooking) and there’s a minimum they must refund based on how much notice you gave. A small service charge is retained. This can’t be undone.',
       [
         { text: 'Back', style: 'cancel' },
         {

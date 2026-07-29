@@ -9,12 +9,21 @@ the runtime policy below.
 
 ## Confirmed decisions
 
-1. **The refund base is everything the customer paid** — food + GST + delivery. The platform
-   keeps nothing on a refunded day. This reverses v2, which refunded food net of the platform
-   commission and always retained GST.
+1. **The refund base is `food − platform commission + GST + delivery`.** This changes exactly
+   one term from v2 (which never refunded GST): the tax now comes back. The platform **keeps
+   its commission** on a cancelled day.
    *There is no separate customer-facing "platform fee" line on a meal plan:* the platform's
-   take is the commission withheld from the **chef** inside the food price, so refunding 100%
-   of the food price is what "the platform fee is refunded too" means here.
+   take is the commission withheld from the **chef** inside the food price, so retaining it
+   means refunding food NET of that commission.
+
+   Worked example — a ₹100 day, 8% GST, ₹10 delivery, 15% commission:
+
+   | | Charged | Refunded at 100% |
+   |---|---|---|
+   | Food | ₹100.00 | ₹85.00 (less ₹15 commission) |
+   | GST | ₹8.00 | ₹8.00 |
+   | Delivery | ₹10.00 | ₹10.00 |
+   | **Total** | **₹118.00** | **₹103.00** |
 2. **GST is refunded, and a credit note is issued for it** — shipped together, because a
    refund that returns tax without a note creates a filing discrepancy on day one.
 3. **The chef chooses the amount; the server enforces the floor.** Web and mobile call the
@@ -99,11 +108,11 @@ under rather than being retroactively bound by a rule nobody told the chef about
 
 | Area | Change |
 |---|---|
-| Base | `MealPlanRefundAmount(plan, day, percent)` off `mealPlanDayGrossPaid` (food + GST + delivery). **Not** `perDayGross` — that divides delivery by `len(plan.Days)` and silently collapses to the bare food price for the narrow `Select`s every refund handler uses. |
+| Base | `MealPlanRefundAmount(plan, day, percent)` off `mealPlanDayRefundBase` (food − commission + GST + delivery). **Not** `perDayGross` — that divides delivery by `len(plan.Days)` and silently collapses to the bare food price for the narrow `Select`s every refund handler uses. |
 | Proportion | `MealPlanDay.RefundPercent` (0–100) is authoritative. `ChefRefundChoice` stays as a coarse label (`full`/`half`/`none`/`partial`) for pre-v3 readers. |
 | Tiers | `services/meal_plan_refund_tiers.go` — `ResolveMealPlanRefundTier(leadHours)`. |
 | Floor | `ChefDecideMealPlanRefund` rejects below-floor with `ErrRefundBelowFloor` → HTTP 422. |
-| Credit notes | `models.CreditNote` + `services/credit_note.go`. Issued **inside** the refund tx, so a note that cannot be written rolls the refund back. Idempotent on `source_key`. Covers both GST-returning paths: the v3 cancellation executor **and** `RefundDay` (declined / undelivered / failed days), which has always refunded gross — wiring it here closes that pre-existing gap rather than leaving half the tax-refunding paths unnoted. |
+| Credit notes | `models.CreditNote` + `services/credit_note.go`. Issued **inside** the refund tx, so a note that cannot be written rolls the refund back. Idempotent on `source_key`. Covers both GST-returning paths: the v3 cancellation executor **and** `RefundDay` (declined / undelivered / failed days), which has always refunded the full gross — wiring it here closes that pre-existing gap rather than leaving half the tax-refunding paths unnoted. |
 | Penalty | `models.ChefPenalty` + `services/chef_penalty.go`. Levied from `handlers/chef_order_cancel.go`, deducted in `services/statement.go`, surfaced at `/admin/chef-penalties` and `/chef/penalties`. |
 | Statement | `WeeklyStatement.PenaltyDeductions` — the levy's invoice line. `NetPayout` is after it. |
 
@@ -118,8 +127,9 @@ rather than read as 0%.
 ## Rollout notes
 
 - The base change is live the moment the code deploys (the flag was already on). Every
-  meal-plan refund becomes larger — the platform is now out of pocket its commission, the GST
-  and the delivery on any refunded day. Finance should expect that.
+  meal-plan refund grows by the day's GST — on the worked example, ₹95 under v2 becomes ₹103.
+  The platform keeps its commission but is now out of pocket the tax it returns (offset by the
+  credit note) plus the delivery. Finance should expect that delta.
 - The penalty defaults to **enabled**. Set `chefCancelPenaltyEnabled: false` in
   `platform_policy` to ship the refund change without the levy.
 - Old vendor builds keep working (see API compatibility) but cannot refund between the fixed
