@@ -17,6 +17,7 @@ import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Button, KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { ComboComposer } from '../../components/vendor/ComboComposer';
+import { DishPicker, PortionFields } from '../../components/vendor/DishPicker';
 import { useVendorMenu } from '../../hooks/useVendorMenu';
 import {
   useMyDailyMenu,
@@ -58,6 +59,7 @@ function blankRow(sortOrder: number): DailyMenuItemInput {
     price: 0,
     isCombo: false,
     comboComponents: [],
+    serves: 1,
     sortOrder,
   };
 }
@@ -111,6 +113,9 @@ export default function DailyMenuScreen() {
         price: it.price,
         isCombo: it.isCombo,
         comboComponents: it.comboComponents ?? [],
+        menuItemId: it.menuItemId ?? null,
+        portionSize: it.portionSize ?? '',
+        serves: it.serves ?? 1,
         sortOrder: i,
       })),
     );
@@ -238,13 +243,26 @@ export default function DailyMenuScreen() {
           {rows.map((row, i) => (
             <View key={rowKeys[i] ?? `row-fallback-${i}`} style={styles.card}>
               <View style={styles.cardTop}>
-                <TextInput
-                  value={row.name}
-                  onChangeText={(t) => patchRow(i, { name: t })}
-                  placeholder="Dish name"
-                  placeholderTextColor={theme.colors.ink.muted}
-                  style={styles.nameInput}
-                />
+                {/* Same picker as the weekly editor — the chef's own menu is
+                    the source of truth in both places. */}
+                <View style={styles.nameInput}>
+                  <DishPicker
+                    variant={row.variant}
+                    name={row.name}
+                    menuItemId={row.menuItemId}
+                    placeholder={row.isCombo ? 'Name this thali' : 'Choose a dish'}
+                    onPick={(p) =>
+                      patchRow(i, {
+                        menuItemId: p.menuItemId,
+                        name: p.name,
+                        price: p.price,
+                        portionSize: p.portionSize ?? '',
+                        serves: p.serves,
+                      })
+                    }
+                    onTypeName={(t) => patchRow(i, { name: t, menuItemId: null })}
+                  />
+                </View>
                 <Pressable
                   onPress={() => {
                     setRows((p) => p.filter((_, idx) => idx !== i));
@@ -340,6 +358,12 @@ export default function DailyMenuScreen() {
                   accessibilityLabel={`${row.name || 'This dish'} is a combo or thali, tap to toggle`}
                 />
               </View>
+
+              <PortionFields
+                portionSize={row.portionSize ?? ''}
+                serves={row.serves ?? 1}
+                onChange={(patch) => patchRow(i, patch)}
+              />
 
               {row.isCombo ? (
                 <ComboComposer

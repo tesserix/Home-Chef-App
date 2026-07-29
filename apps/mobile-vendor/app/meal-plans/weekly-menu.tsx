@@ -17,6 +17,9 @@ import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Button, KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
+import { DishPicker, PortionFields } from '../../components/vendor/DishPicker';
+import { ComboComposer } from '../../components/vendor/ComboComposer';
+import { useVendorMenu } from '../../hooks/useVendorMenu';
 import {
   useSaveWeeklyMenu,
   useWeeklyMenu,
@@ -50,6 +53,11 @@ const VARIANTS: { variant: MealVariant; label: string; color: string }[] = [
 interface Cell {
   name: string;
   price: string;
+  /** Set when the dish came from the chef's à-la-carte menu (DishPicker). */
+  menuItemId?: string | null;
+  /** How much food, and for how many people. */
+  portionSize?: string;
+  serves?: number;
   // Thali/combo: when on, the cell is a bundled set (`components`, comma-separated
   // in the input) at the one price, and `name` is the combo's name (e.g. "Veg Thali").
   isCombo?: boolean;
@@ -58,6 +66,19 @@ interface Cell {
 
 const cellKey = (dow: number, slot: MealSlot, variant: MealVariant) =>
   `${dow}-${slot}-${variant}`;
+
+/**
+ * The cell's combo components as a list.
+ *
+ * Storage stays a comma-joined string so the existing draft-restore and save
+ * paths are untouched; only the EDITOR changed from typing to picking.
+ */
+function componentList(cell: Cell | undefined): string[] {
+  return (cell?.components ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 // Weekly-menu editor (#192/#195): the fixed dishes a chef offers per
 // day × slot × veg/nonveg. Customers pre-book against these cells (#196).
@@ -70,6 +91,14 @@ export default function WeeklyMenuEditorScreen() {
   // background/kill before the server "Save draft" doesn't lose the chef's edits.
   const { ready, draft, saveDraft, clearDraft } =
     useFormDraft<Record<string, Cell>>('weekly-menu-draft');
+
+  // The chef's own dishes, for the thali composer. Same source the dish picker
+  // uses, so both controls agree on what is on the menu.
+  const { data: vendorMenu } = useVendorMenu();
+  const menuItemOptions = useMemo(
+    () => (vendorMenu?.items ?? []).map((m) => ({ id: m.id, name: m.name })),
+    [vendorMenu],
+  );
 
   const [selectedDow, setSelectedDow] = useState<number>(1);
   const [cells, setCells] = useState<Record<string, Cell>>({});
@@ -89,6 +118,9 @@ export default function WeeklyMenuEditorScreen() {
         next[cellKey(it.dayOfWeek, it.slot, it.variant)] = {
           name: it.name ?? '',
           price: it.price ? String(it.price) : '',
+          menuItemId: it.menuItemId ?? null,
+          portionSize: it.portionSize ?? '',
+          serves: it.serves ?? 1,
           isCombo: it.isCombo ?? false,
           components: (it.comboComponents ?? []).join(', '),
         };
@@ -166,6 +198,9 @@ export default function WeeklyMenuEditorScreen() {
         variant: variant as MealVariant,
         name: c.name.trim(),
         price: Number.parseFloat(c.price) || 0,
+        menuItemId: c.menuItemId ?? undefined,
+        portionSize: c.portionSize?.trim() || undefined,
+        serves: c.serves ?? 1,
         isCombo: c.isCombo ?? false,
         comboComponents:
           c.isCombo && c.components
@@ -355,13 +390,32 @@ export default function WeeklyMenuEditorScreen() {
                         {v.label}
                       </Text>
                     </View>
-                    <TextInput
-                      style={styles.nameInput}
-                      placeholder={c?.isCombo ? 'Thali name (e.g. Veg Thali)' : 'Dish name'}
-                      placeholderTextColor={theme.colors.ink.muted}
-                      value={c?.name ?? ''}
-                      onChangeText={(t) => setCell(day.dow, s.slot, v.variant, { name: t })}
-                    />
+                    {/* Pick, don't retype — the chef already built this dish on
+                        the Menu screen, and picking carries its price, portion,
+                        serves and tags across. */}
+                    <View style={styles.nameInput}>
+                      <DishPicker
+                        variant={v.variant}
+                        name={c?.name ?? ''}
+                        menuItemId={c?.menuItemId}
+                        placeholder={c?.isCombo ? 'Name this thali' : 'Choose a dish'}
+                        onPick={(p) =>
+                          setCell(day.dow, s.slot, v.variant, {
+                            menuItemId: p.menuItemId,
+                            name: p.name,
+                            price: String(p.price),
+                            portionSize: p.portionSize ?? '',
+                            serves: p.serves,
+                          })
+                        }
+                        onTypeName={(t) =>
+                          // Clear the link: this is no longer that catalogue
+                          // item, and keeping it would point customers at a
+                          // different dish.
+                          setCell(day.dow, s.slot, v.variant, { name: t, menuItemId: null })
+                        }
+                      />
+                    </View>
                     <TextInput
                       style={styles.priceInput}
                       placeholder="₹0"
@@ -375,6 +429,11 @@ export default function WeeklyMenuEditorScreen() {
                       }
                     />
                   </View>
+                  <PortionFields
+                    portionSize={c?.portionSize ?? ''}
+                    serves={c?.serves ?? 1}
+                    onChange={(patch) => setCell(day.dow, s.slot, v.variant, patch)}
+                  />
                   <View style={styles.comboRow}>
                     <Pressable
                       onPress={() =>
@@ -393,14 +452,17 @@ export default function WeeklyMenuEditorScreen() {
                         </Text>
                       </View>
                     </Pressable>
+                    {/* Was a comma-typed text field. The daily editor already
+                        multi-selects the chef's own dishes here (#431); weekly
+                        was the odd one out, so a thali built on one screen and
+                        the same thali built on the other produced differently
+                        spelled component lists. */}
                     {c?.isCombo ? (
-                      <TextInput
-                        style={styles.componentsInput}
-                        placeholder="Includes: rice, dal, sabji, roti…"
-                        placeholderTextColor={theme.colors.ink.muted}
-                        value={c?.components ?? ''}
-                        onChangeText={(t) =>
-                          setCell(day.dow, s.slot, v.variant, { components: t })
+                      <ComboComposer
+                        menuItems={menuItemOptions}
+                        value={componentList(c)}
+                        onChange={(names) =>
+                          setCell(day.dow, s.slot, v.variant, { components: names.join(', ') })
                         }
                       />
                     ) : null}

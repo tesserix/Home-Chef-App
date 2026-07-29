@@ -22,6 +22,11 @@ export interface MenuItem {
   dietaryTags: string[];
   // Declared allergens (#41) — surfaced as customer badges + checkout warnings.
   allergens: string[];
+  // How much food this dish is. Already returned by the API and already carried
+  // through by normalizeItem's spread — it was simply never typed, so the plan
+  // editors could not read it to pre-fill a cell's portion.
+  portionSize?: string;
+  serves?: number;
   // Weekly-menu schedule: weekdays (0=Sun..6=Sat) the dish is offered. Empty =
   // every day. Drives which dishes auto-show to customers each day.
   availableDays: number[];

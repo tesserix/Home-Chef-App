@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
+import { DishPicker } from '../components/DishPicker';
+import { ComboComponents, PortionFields } from '../components/ComboComponents';
 import {
   useWeeklyMenu,
   useSaveWeeklyMenu,
@@ -40,7 +42,17 @@ const VARIANTS: { variant: MealVariant; label: string; dot: string }[] = [
 interface Cell {
   name: string;
   price: string;
+  /** Set when the dish came from the chef's à-la-carte menu. */
+  menuItemId?: string | null;
+  isCombo?: boolean;
+  comboComponents?: string[];
+  portionSize?: string;
+  serves?: number;
+  dietaryTags?: string[];
+  allergens?: string[];
 }
+
+const EMPTY_CELL: Cell = { name: '', price: '', serves: 1 };
 const cellKey = (dow: number, slot: MealSlot, variant: MealVariant) => `${dow}-${slot}-${variant}`;
 
 export default function WeeklyMenuPage() {
@@ -60,6 +72,13 @@ export default function WeeklyMenuPage() {
       next[cellKey(it.dayOfWeek, it.slot, it.variant)] = {
         name: it.name ?? '',
         price: it.price ? String(it.price) : '',
+        menuItemId: it.menuItemId ?? null,
+        isCombo: it.isCombo ?? false,
+        comboComponents: it.comboComponents ?? [],
+        portionSize: it.portionSize ?? '',
+        serves: it.serves ?? 1,
+        dietaryTags: it.dietaryTags,
+        allergens: it.allergens,
       };
     }
     setCells(next);
@@ -77,7 +96,7 @@ export default function WeeklyMenuPage() {
 
   function setCell(dow: number, slot: MealSlot, variant: MealVariant, patch: Partial<Cell>) {
     const key = cellKey(dow, slot, variant);
-    setCells((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { name: '', price: '' }), ...patch } }));
+    setCells((prev) => ({ ...prev, [key]: { ...(prev[key] ?? EMPTY_CELL), ...patch } }));
   }
 
   // Copy convenience (#1): replicate the selected day's cells to every other day.
@@ -89,7 +108,7 @@ export default function WeeklyMenuPage() {
           const src = prev[cellKey(selectedDow, slot.slot, v.variant)];
           for (const d of DAYS) {
             if (d.dow === selectedDow) continue;
-            next[cellKey(d.dow, slot.slot, v.variant)] = src ? { ...src } : { name: '', price: '' };
+            next[cellKey(d.dow, slot.slot, v.variant)] = src ? { ...src } : EMPTY_CELL;
           }
         }
       }
@@ -109,6 +128,16 @@ export default function WeeklyMenuPage() {
         variant: variant as MealVariant,
         name: c.name.trim(),
         price: Number.parseFloat(c.price) || 0,
+        menuItemId: c.menuItemId ?? undefined,
+        isCombo: c.isCombo ?? false,
+        // Only send components for an actual combo — a stale list left behind
+        // by toggling the switch off would otherwise persist as "Includes: …"
+        // on a dish that is no longer a thali.
+        comboComponents: c.isCombo ? (c.comboComponents ?? []) : [],
+        portionSize: c.portionSize?.trim() || undefined,
+        serves: c.serves ?? 1,
+        dietaryTags: c.dietaryTags,
+        allergens: c.allergens,
       });
     }
     return items;
@@ -195,29 +224,82 @@ export default function WeeklyMenuPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   {VARIANTS.map((v) => {
                     const key = cellKey(selectedDow, slot.slot, v.variant);
-                    const cell = cells[key] ?? { name: '', price: '' };
+                    const cell = cells[key] ?? EMPTY_CELL;
                     return (
                       <div key={v.variant} className="rounded-lg border border-mist p-3">
                         <div className="mb-2 flex items-center gap-1.5">
                           <span className={`h-2 w-2 rounded-sm ${v.dot}`} aria-hidden="true" />
                           <span className="text-xs font-medium text-ink-soft">{v.label}</span>
                         </div>
-                        <input
-                          className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:border-herb focus:outline-none focus:ring-2 focus:ring-ring"
-                          placeholder="Dish name"
-                          value={cell.name}
-                          onChange={(e) => setCell(selectedDow, slot.slot, v.variant, { name: e.target.value })}
+                        {/* Pick, don't retype. Choosing carries the price,
+                            portion, serves and tags across; typing stays
+                            available for a dish that isn't sold à la carte. */}
+                        <DishPicker
+                          variant={v.variant}
+                          value={{ name: cell.name, menuItemId: cell.menuItemId }}
+                          onPick={(p) =>
+                            setCell(selectedDow, slot.slot, v.variant, {
+                              menuItemId: p.menuItemId,
+                              name: p.name,
+                              price: String(p.price),
+                              portionSize: p.portionSize ?? '',
+                              serves: p.serves,
+                              dietaryTags: p.dietaryTags,
+                              allergens: p.allergens,
+                            })
+                          }
+                          onTypeName={(name) =>
+                            // Clearing menuItemId matters: the cell is no longer
+                            // that catalogue item, and leaving the link would
+                            // point customers at a different dish.
+                            setCell(selectedDow, slot.slot, v.variant, { name, menuItemId: null })
+                          }
                         />
+
                         <div className="mt-2 flex h-9 items-center rounded-lg border border-input bg-background px-2">
                           <span className="text-sm text-muted-foreground">₹</span>
                           <input
-                            className="w-full bg-transparent px-1 text-sm focus:outline-none"
+                            className="w-full bg-transparent px-1 text-sm tabular-nums focus:outline-none"
                             placeholder="0"
                             inputMode="decimal"
+                            aria-label={`${v.label} ${slot.label} price`}
                             value={cell.price}
                             onChange={(e) => setCell(selectedDow, slot.slot, v.variant, { price: e.target.value.replace(/[^0-9.]/g, '') })}
                           />
                         </div>
+
+                        <div className="mt-3">
+                          <PortionFields
+                            portionSize={cell.portionSize ?? ''}
+                            serves={cell.serves ?? 1}
+                            onChange={(patch) => setCell(selectedDow, slot.slot, v.variant, patch)}
+                          />
+                        </div>
+
+                        {/* Thali/combo — web had no way to mark one at all,
+                            though the API and the mobile app both support it. */}
+                        <label className="mt-3 flex items-center gap-2 text-xs font-medium text-ink-soft">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(cell.isCombo)}
+                            onChange={(e) =>
+                              setCell(selectedDow, slot.slot, v.variant, { isCombo: e.target.checked })
+                            }
+                            className="h-3.5 w-3.5"
+                          />
+                          Thali / combo
+                        </label>
+
+                        {cell.isCombo && (
+                          <div className="mt-2">
+                            <ComboComponents
+                              value={cell.comboComponents ?? []}
+                              onChange={(next) =>
+                                setCell(selectedDow, slot.slot, v.variant, { comboComponents: next })
+                              }
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}

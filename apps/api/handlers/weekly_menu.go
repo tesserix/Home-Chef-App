@@ -33,6 +33,9 @@ type weeklyMenuCellInput struct {
 	// one Price, rather than a single dish.
 	IsCombo         bool     `json:"isCombo"`
 	ComboComponents []string `json:"comboComponents"`
+	// How much food this is — free text ("500 ml", "2 rotis") plus a head count.
+	PortionSize string `json:"portionSize"`
+	Serves      int    `json:"serves"`
 }
 
 type weeklyMenuUpsertRequest struct {
@@ -116,6 +119,8 @@ func (h *ChefHandler) PutWeeklyMenu(c *gin.Context) {
 			MenuItemID:      menuItemID,
 			IsCombo:         in.IsCombo,
 			ComboComponents: ensureStringArray(in.ComboComponents),
+			PortionSize:     in.PortionSize,
+			Serves:          normalizeServes(in.Serves),
 		})
 	}
 

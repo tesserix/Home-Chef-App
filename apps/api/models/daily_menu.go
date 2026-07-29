@@ -61,6 +61,10 @@ type DailyMenuItem struct {
 	// (#406)
 	IsCombo         bool           `gorm:"default:false" json:"isCombo"`
 	ComboComponents pq.StringArray `gorm:"type:text[]" json:"comboComponents"`
+	// How much food this entry actually is — see WeeklyMenuItem.PortionSize for
+	// why it lives on the entry rather than being read through MenuItemID.
+	PortionSize string `gorm:"" json:"portionSize,omitempty"`
+	Serves      int    `gorm:"default:1" json:"serves"`
 	// SortOrder controls display order within a (date, slot).
 	SortOrder int       `gorm:"default:0" json:"sortOrder"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`

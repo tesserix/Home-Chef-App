@@ -14,11 +14,9 @@ import {
   X,
   Bell,
   ChefHat,
-  ClipboardCheck,
   CalendarDays,
   CalendarClock,
   BookOpen,
-  RotateCcw,
   FileText,
   PartyPopper,
   LifeBuoy,
@@ -37,13 +35,11 @@ import { TestModeBanner } from '@/shared/components/TestModeBanner';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Menu', href: '/menu', icon: UtensilsCrossed },
-  // Tiffin plans is the hub; Weekly Menu / Daily menu / Prep / Refund requests
-  // all live under it, mirroring how the mobile app groups them.
+  // ONE entry, not five. Weekly Menu, Daily Menu, Prep and Refund Requests are
+  // all the same job — running the tiffin service — and listing them flat put
+  // four sibling links in the sidebar with nothing naming what they belong to.
+  // The hub page holds them, which is also how the mobile app groups them.
   { name: 'Tiffin Plans', href: '/tiffin-plans', icon: CalendarDays },
-  { name: 'Weekly Menu', href: '/weekly-menu', icon: CalendarDays },
-  { name: 'Daily Menu', href: '/daily-menu', icon: CalendarDays },
-  { name: 'Prep', href: '/prep', icon: ClipboardCheck },
-  { name: 'Refund Requests', href: '/refund-requests', icon: RotateCcw },
   { name: 'Subscriptions', href: '/subscriptions', icon: CalendarClock },
   { name: 'Capacity', href: '/capacity', icon: Gauge },
   { name: 'Orders', href: '/orders', icon: ClipboardList },
