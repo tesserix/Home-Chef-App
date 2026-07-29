@@ -62,6 +62,17 @@ type WeeklyMenuItem struct {
 	// "Combo" elsewhere. Mirrors DailyMenuItem (#406).
 	IsCombo         bool           `gorm:"default:false" json:"isCombo"`
 	ComboComponents pq.StringArray `gorm:"type:text[]" json:"comboComponents"`
-	CreatedAt       time.Time      `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt       time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
+	// How much food this cell actually is. A tiffin customer is buying a
+	// portion, not a dish name: "Dal Tadka ₹140" answers nothing about whether
+	// that feeds one person or three, and the price is meaningless without it.
+	//
+	// Held on the CELL rather than read through MenuItemID, for two reasons: a
+	// cell typed in by hand (a dish the chef never sells à la carte) still needs
+	// a portion, and a plan portion legitimately differs from the à-la-carte one
+	// — the same dal is often a bigger scoop in a tiffin than on a single order.
+	// Prefilled from the linked item when one is picked, then editable.
+	PortionSize string    `gorm:"" json:"portionSize,omitempty"`
+	Serves      int       `gorm:"default:1" json:"serves"`
+	CreatedAt   time.Time `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }

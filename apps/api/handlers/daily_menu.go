@@ -34,6 +34,9 @@ type dailyMenuItemInput struct {
 	// IsCombo + ComboComponents make this entry a priced bundle (#406).
 	IsCombo         bool     `json:"isCombo"`
 	ComboComponents []string `json:"comboComponents"`
+	// How much food this is — free text ("500 ml", "2 rotis") plus a head count.
+	PortionSize string `json:"portionSize"`
+	Serves      int    `json:"serves"`
 	SortOrder       int      `json:"sortOrder"`
 }
 
@@ -157,6 +160,8 @@ func (h *ChefHandler) PutDailyMenu(c *gin.Context) {
 			MenuItemID:      menuItemID,
 			IsCombo:         in.IsCombo,
 			ComboComponents: ensureStringArray(in.ComboComponents),
+			PortionSize:     in.PortionSize,
+			Serves:          normalizeServes(in.Serves),
 			SortOrder:       in.SortOrder,
 		})
 	}

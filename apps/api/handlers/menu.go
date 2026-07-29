@@ -902,6 +902,22 @@ func ensureStringArray(arr []string) pq.StringArray {
 	return pq.StringArray(arr)
 }
 
+// normalizeServes floors a plan item's head count at 1.
+//
+// The field is new, so every client that predates it sends 0 — and a portion
+// that "serves 0 people" would render as nonsense next to a price. Anything
+// below 1 therefore reads as "not stated", which is one person. Capped because
+// a mistyped 500 in a per-person price calculation is a support ticket.
+func normalizeServes(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > 50 {
+		return 50
+	}
+	return n
+}
+
 // sanitizeWeekdays validates a weekly-menu schedule: keeps only weekdays 0..6,
 // de-dupes, and preserves order. Invalid values are dropped rather than
 // rejected. Returns an empty (non-nil) array for "every day".
