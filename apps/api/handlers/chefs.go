@@ -1089,14 +1089,9 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 	// self-delivery distance work. Only when we have a street + city and the
 	// address actually changed enough to matter; failures are non-fatal.
 	if chef.AddressLine1 != "" && chef.City != "" {
-		parts := []string{}
-		for _, p := range []string{chef.AddressLine1, chef.AddressLine2, chef.City, chef.State, chef.PostalCode} {
-			if strings.TrimSpace(p) != "" {
-				parts = append(parts, p)
-			}
-		}
-		full := strings.Join(parts, ", ")
-		if lat, lng, ok := services.GeocodeAddress(full); ok {
+		if lat, lng, ok := services.GeocodeAddressParts(
+			chef.AddressLine1, chef.AddressLine2, chef.City, chef.State, chef.PostalCode,
+		); ok {
 			chef.Latitude, chef.Longitude = lat, lng
 			database.DB.Model(&chef).Updates(map[string]any{"latitude": lat, "longitude": lng})
 		}

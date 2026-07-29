@@ -34,6 +34,11 @@ const BrowseChefsPage = lazyWithRetry(() => import('@/features/customer/pages/Br
 const ChefDetailPage = lazyWithRetry(() => import('@/features/customer/pages/ChefDetailPage'));
 const MealSubscribePage = lazyWithRetry(() => import('@/features/customer/pages/MealSubscribePage'));
 const SubscriptionsPage = lazyWithRetry(() => import('@/features/customer/pages/SubscriptionsPage'));
+const MealPlansPage = lazyWithRetry(() => import('@/features/customer/pages/MealPlansPage'));
+const MealPlanDetailPage = lazyWithRetry(
+  () => import('@/features/customer/pages/MealPlanDetailPage'),
+);
+const BookMealPlanPage = lazyWithRetry(() => import('@/features/customer/pages/BookMealPlanPage'));
 const CartPage = lazyWithRetry(() => import('@/features/customer/pages/CartPage'));
 const CheckoutPage = lazyWithRetry(() => import('@/features/customer/pages/CheckoutPage'));
 const OrdersPage = lazyWithRetry(() => import('@/features/customer/pages/OrdersPage'));
@@ -113,6 +118,9 @@ export function AppRoutes() {
           <Route path="chefs/:id" element={<ChefDetailPage />} />
           <Route path="chefs/:id/subscribe" element={<MealSubscribePage />} />
           <Route path="subscriptions" element={<SubscriptionsPage />} />
+          <Route path="chefs/:chefId/plan-week" element={<BookMealPlanPage />} />
+          <Route path="meal-plans" element={<MealPlansPage />} />
+          <Route path="meal-plans/:id" element={<MealPlanDetailPage />} />
           {/* Gated to match the nav and footer, which already hide the feed
               behind SOCIAL_ENABLED. The route was left ungated, so the page
               stayed reachable by URL while the product had deferred it. */}
