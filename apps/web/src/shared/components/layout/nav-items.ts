@@ -5,6 +5,7 @@ import {
   Utensils,
   Newspaper,
   CalendarDays,
+  Repeat,
   Award,
   Gift,
   Package,
@@ -71,7 +72,12 @@ export const ACCOUNT_NAV: NavItem[] = [
   { name: 'Orders', href: '/orders', icon: Package },
   { name: 'Saved', href: '/favorites', icon: Heart },
   ...(WALLET_ENABLED ? [{ name: 'Wallet', href: '/wallet', icon: Wallet }] : []),
-  ...(TIFFIN_ENABLED ? [{ name: 'Meal Plans', href: '/subscriptions', icon: CalendarDays }] : []),
+  // Meal Plans and Subscriptions are DIFFERENT products: a plan is a one-off
+  // pre-booked week paid as an advance, a subscription is a recurring daily
+  // tiffin. "Meal Plans" used to point at /subscriptions, so a customer with a
+  // live plan was shown "No tiffin subscriptions yet" and had no way to reach it.
+  ...(TIFFIN_ENABLED ? [{ name: 'Meal Plans', href: '/meal-plans', icon: CalendarDays }] : []),
+  ...(TIFFIN_ENABLED ? [{ name: 'Subscriptions', href: '/subscriptions', icon: Repeat }] : []),
   ...(REWARDS_ENABLED ? [{ name: 'Rewards', href: '/loyalty', icon: Award }] : []),
   ...(REFERRAL_ENABLED ? [{ name: 'Invite friends', href: '/referral', icon: Gift }] : []),
 ];

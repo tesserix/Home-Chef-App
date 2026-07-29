@@ -78,6 +78,7 @@ const DailyMenuPage = lazyWithRetry(() => import('@/features/meal-plans/pages/Da
 const RefundDecisionsPage = lazyWithRetry(
   () => import('@/features/meal-plans/pages/RefundDecisionsPage'),
 );
+const PlanRequestPage = lazyWithRetry(() => import('@/features/meal-plans/pages/PlanRequestPage'));
 const DocumentsPage = lazyWithRetry(() => import('@/features/documents/pages/DocumentsPage'));
 const SupportPage = lazyWithRetry(() => import('@/features/support/pages/SupportPage'));
 const SupportTicketPage = lazyWithRetry(
@@ -165,6 +166,7 @@ export function AppRoutes() {
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="account" element={<AccountLifecyclePage />} />
           <Route path="tiffin-plans" element={<TiffinPlansPage />} />
+          <Route path="tiffin-plans/requests/:id" element={<PlanRequestPage />} />
           <Route path="daily-menu" element={<DailyMenuPage />} />
           <Route path="refund-requests" element={<RefundDecisionsPage />} />
           <Route path="documents" element={<DocumentsPage />} />

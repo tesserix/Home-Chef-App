@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
-import { CalendarDays, ChefHat, RotateCcw, UtensilsCrossed, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChefHat, Inbox, RotateCcw, UtensilsCrossed, ChevronRight } from 'lucide-react';
 import { Card } from '@/shared/components/ui/Card';
 import { Badge } from '@/shared/components/ui/Badge';
 import { useRefundDecisions } from '../hooks/useRefundDecisions';
+import { usePendingPlanRequests } from '../hooks/usePlanRequests';
+import { PlanRequestRow } from './PlanRequestPage';
 
 // Tiffin plans hub — the web twin of apps/mobile-vendor/app/meal-plans/index.tsx.
 //
@@ -46,6 +48,9 @@ export function TiffinPlansPage() {
   // QUEUE — a customer is waiting on the chef's answer, and money is held until
   // they give it.
   const { data: pending = [] } = useRefundDecisions();
+  // The other real queue: a customer has pre-booked and is waiting on the chef's
+  // yes/no. Web had no surface for it at all, so these requests silently expired.
+  const { data: requests } = usePendingPlanRequests();
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -78,6 +83,27 @@ export function TiffinPlansPage() {
           );
         })}
       </div>
+
+      <section className="mt-8">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+          Pending requests
+        </h2>
+        {requests.length === 0 ? (
+          <Card className="mt-3 flex flex-col items-center gap-2 p-8 text-center">
+            <Inbox className="h-7 w-7 text-ink-muted" aria-hidden="true" />
+            <p className="font-medium text-foreground">No pending requests</p>
+            <p className="text-sm text-ink-soft">
+              When a customer pre-books a plan, it appears here for you to accept or adjust.
+            </p>
+          </Card>
+        ) : (
+          <div className="mt-3 flex flex-col gap-3">
+            {requests.map((p) => (
+              <PlanRequestRow key={p.id} plan={p} />
+            ))}
+          </div>
+        )}
+      </section>
 
       <p className="mt-6 flex items-center gap-2 text-xs text-ink-muted">
         <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
