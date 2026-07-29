@@ -86,12 +86,32 @@ export default function WeeklyMenuPage() {
     setHydrated(true);
   }, [data, hydrated]);
 
-  const filledDays = useMemo(() => {
-    const set = new Set<number>();
+  /**
+   * How complete each day is — 'empty' | 'partial' | 'complete'.
+   *
+   * A single "has something" dot could not answer the question a chef actually
+   * has, which is "what still blocks me from publishing?". Publishing requires
+   * every offered (day × slot) to be filled, so a day with lunch but no dinner
+   * is exactly as blocking as an empty one while LOOKING identical. Splitting
+   * partial from complete puts that on the tab itself.
+   */
+  const dayStatus = useMemo(() => {
+    const bySlot = new Map<number, Set<string>>();
     for (const [key, c] of Object.entries(cells)) {
-      if (c?.name.trim()) set.add(Number(key.split('-')[0]));
+      if (!c?.name.trim()) continue;
+      const [dowStr, slot] = key.split('-');
+      const dow = Number(dowStr);
+      if (!bySlot.has(dow)) bySlot.set(dow, new Set());
+      if (slot) bySlot.get(dow)?.add(slot);
     }
-    return set;
+    const out = new Map<number, 'empty' | 'partial' | 'complete'>();
+    for (const d of DAYS) {
+      const slots = bySlot.get(d.dow);
+      if (!slots || slots.size === 0) out.set(d.dow, 'empty');
+      else if (slots.size >= SLOTS.length) out.set(d.dow, 'complete');
+      else out.set(d.dow, 'partial');
+    }
+    return out;
   }, [cells]);
 
   function setCell(dow: number, slot: MealSlot, variant: MealVariant, patch: Partial<Cell>) {
@@ -192,17 +212,37 @@ export default function WeeklyMenuPage() {
       <motion.div variants={fadeInUp} className="flex flex-wrap gap-2">
         {DAYS.map((d) => {
           const active = d.dow === selectedDow;
+          const status = dayStatus.get(d.dow) ?? 'empty';
+          // Green = both meals set, amber = half a day (still blocks publishing),
+          // hollow = untouched. On the selected pill the herb fill swallows those
+          // hues, so the dot inverts to paper.
+          const dot =
+            status === 'empty'
+              ? 'border border-current opacity-40'
+              : active
+                ? 'bg-paper'
+                : status === 'complete'
+                  ? 'bg-herb'
+                  : 'bg-amber';
           return (
             <button
               key={d.dow}
               type="button"
               onClick={() => setSelectedDow(d.dow)}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              aria-pressed={active}
+              title={
+                status === 'complete'
+                  ? `${d.long} — lunch and dinner set`
+                  : status === 'partial'
+                    ? `${d.long} — only one meal set`
+                    : `${d.long} — nothing set yet`
+              }
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 active ? 'bg-herb text-paper' : 'bg-mist text-ink-soft hover:bg-bone'
               }`}
             >
               {d.long.slice(0, 3)}
-              {filledDays.has(d.dow) ? <span className="ml-1 text-xs">•</span> : null}
+              <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden="true" />
             </button>
           );
         })}
