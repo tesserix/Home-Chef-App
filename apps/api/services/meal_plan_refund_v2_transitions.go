@@ -1,15 +1,23 @@
 package services
 
-// meal_plan_refund_v2_transitions.go — the v2 refund state machine
-// (docs/meal-plan-refund-flow-design.md). Per RBI the CUSTOMER — never the admin — chooses the
-// refund medium, so every agreed refund lands in `pending_customer` and the customer picks:
-//   AgreeMealPlanDayRefundFull            — >12h path: amount = full, → pending_customer.
-//   ChefDecideMealPlanRefund              — ≤12h: chef Full/Half (→ pending_customer) | None
-//                                           (→ resolved, no refund) | Decline (→ day served).
+// meal_plan_refund_v2_transitions.go — the refund state machine (docs/refund-policy-v3-spec.md).
+// Per RBI the CUSTOMER — never the admin — chooses the refund medium, so every agreed refund
+// lands in `pending_customer` and the customer picks:
+//   AgreeMealPlanDayRefundAuto            — top tier: auto-approved at the tier percentage,
+//                                           no chef step → pending_customer.
+//   ChefDecideMealPlanRefund              — lower tiers: the chef sets any percentage from the
+//                                           day's pinned FLOOR to 100 (→ pending_customer), or
+//                                           declines (→ day served).
 //   CustomerChooseMealPlanRefundMedium    — wallet → instant ledger credit (resolved); original →
-//                                           pending_admin (the admin only EXECUTES the gateway refund).
+//                                           pending_admin (the admin only EXECUTES the refund).
 //   AdminExecuteMealPlanRefund            — run the customer-chosen ORIGINAL (gateway) refund.
 // All are idempotent via the executor.
+//
+// v3 (#834): the CHEF chooses the amount and the FLOOR IS ENFORCED HERE — server-side, on the
+// day's PINNED floor. Both web and mobile call the same endpoint, so a client-side constraint
+// would be no constraint at all; and the floor is read from the day rather than recomputed off
+// the current clock, so a chef cannot shrink their own obligation by sitting on the decision
+// until the lead time falls into a lower band.
 
 import (
 	"errors"
@@ -24,8 +32,11 @@ import (
 var (
 	// ErrRefundStageMismatch — the day is not in the stage this transition expects.
 	ErrRefundStageMismatch = errors.New("meal-plan day is not in the expected refund stage")
-	// ErrInvalidRefundChoice — the chef choice is not full/half/none.
+	// ErrInvalidRefundChoice — the requested percentage is outside 0–100 (or a legacy choice is
+	// not full/half/none).
 	ErrInvalidRefundChoice = errors.New("invalid refund choice")
+	// ErrRefundBelowFloor — the chef tried to refund less than this day's lead-time floor.
+	ErrRefundBelowFloor = errors.New("refund is below the minimum for this cancellation window")
 	// ErrInvalidRefundMedium — the customer's medium is not wallet/source.
 	ErrInvalidRefundMedium = errors.New("invalid refund medium")
 )
@@ -43,9 +54,20 @@ func loadV2PlanDay(tx *gorm.DB, dayID uuid.UUID) (*models.MealPlan, *models.Meal
 	return &plan, &day, nil
 }
 
+// MealPlanDayRefundFloor is the floor the chef must honour for a day: the value PINNED when the
+// request was raised. A day with no pinned floor (a pre-v3 row, or a request raised before the
+// pin existed) falls back to 0 — the chef keeps the pre-v3 freedom to refund nothing rather
+// than being retroactively bound by a floor nobody told them about.
+func MealPlanDayRefundFloor(day *models.MealPlanDay) int {
+	if day == nil || day.RefundFloorPercent == nil {
+		return 0
+	}
+	return ClampRefundPercent(*day.RefundFloorPercent)
+}
+
 // notifyCustomerRefundReady best-effort pushes the customer to choose their refund medium.
 func notifyCustomerRefundReady(plan *models.MealPlan, day *models.MealPlanDay) {
-	amount := MealPlanRefundAmount(plan, day, day.ChefRefundChoice)
+	amount := MealPlanRefundAmountForDay(plan, day)
 	_ = SendPushNotification(plan.CustomerID,
 		"Choose where your refund goes",
 		fmt.Sprintf("Your ₹%.0f refund for %s is ready. Send it to your HomeChef wallet (instant) or back to your original payment method (5–7 days).",
@@ -54,21 +76,44 @@ func notifyCustomerRefundReady(plan *models.MealPlan, day *models.MealPlanDay) {
 	)
 }
 
-// AgreeMealPlanDayRefundFull is the >12h path: the refund amount is FULL (the chef has not started
-// prep), but per RBI the CUSTOMER still chooses the medium — so the day moves to pending_customer.
-// Runs in the caller's tx; the caller notifies the customer after commit.
-func AgreeMealPlanDayRefundFull(tx *gorm.DB, _ *models.MealPlan, day *models.MealPlanDay) error {
+// AgreeMealPlanDayRefundAuto is the top-tier path: the amount is agreed automatically at
+// `percent` with NO chef step (prep has not started, so there is nothing to compensate). Per
+// RBI the CUSTOMER still chooses the medium, so the day moves to pending_customer. Runs in the
+// caller's tx; the caller notifies the customer after commit.
+func AgreeMealPlanDayRefundAuto(tx *gorm.DB, _ *models.MealPlan, day *models.MealPlanDay, percent int) error {
+	percent = ClampRefundPercent(percent)
+	day.RefundPercent = &percent
+	day.RefundFloorPercent = &percent
+	day.ChefRefundChoice = models.RefundProportionLabel(percent)
 	return tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).Updates(map[string]any{
-		"chef_refund_choice": models.RefundProportionFull,
-		"refund_stage":       models.MPRefundPendingCustomer,
+		"refund_percent":       percent,
+		"refund_floor_percent": percent,
+		"chef_refund_choice":   day.ChefRefundChoice,
+		"refund_stage":         models.MPRefundPendingCustomer,
+	}).Error
+}
+
+// RouteMealPlanDayToChef parks a day for the chef's decision, PINNING the tier floor that applied
+// when the request was raised. Runs in the caller's tx.
+func RouteMealPlanDayToChef(tx *gorm.DB, day *models.MealPlanDay, floorPercent int) error {
+	floorPercent = ClampRefundPercent(floorPercent)
+	day.RefundFloorPercent = &floorPercent
+	day.RefundStage = models.MPRefundPendingChef
+	return tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).Updates(map[string]any{
+		"refund_stage":         models.MPRefundPendingChef,
+		"refund_floor_percent": floorPercent,
 	}).Error
 }
 
 // ChefDecideMealPlanRefund applies the chef's decision to a day awaiting them (pending_chef).
-// Full/Half → pending_customer (records the amount; the customer then picks the medium). None →
-// resolved via the executor (no refund, chef keeps payout, day skipped). Decline → the day returns
-// to `confirmed` (served; customer charged) and its frozen payout is restored.
-func ChefDecideMealPlanRefund(db *gorm.DB, dayID uuid.UUID, choice models.RefundProportion, decline bool) error {
+// A percentage at or above the day's floor moves the day to pending_customer (the customer then
+// picks the medium); 0 (only reachable when the floor is 0) resolves via the executor — no
+// refund, the chef keeps their payout, the day is skipped. Decline → the day returns to
+// `confirmed` (it is cooked and the customer charged) and its frozen payout is restored.
+//
+// Rejects anything below the floor with ErrRefundBelowFloor. This is the ONLY place the floor is
+// enforced, and it is enforced against the day's PINNED value, not the current clock.
+func ChefDecideMealPlanRefund(db *gorm.DB, dayID uuid.UUID, percent int, decline bool) error {
 	var notifyPlan *models.MealPlan
 	var notifyDay *models.MealPlanDay
 	err := db.Transaction(func(tx *gorm.DB) error {
@@ -87,22 +132,31 @@ func ChefDecideMealPlanRefund(db *gorm.DB, dayID uuid.UUID, choice models.Refund
 			}
 			return restoreDisputedDayHoldToNone(tx, dayID)
 		}
-		if !ValidRefundProportion(choice) {
+		if percent < 0 || percent > 100 {
 			return ErrInvalidRefundChoice
 		}
-		if choice == models.RefundProportionNone {
-			return ExecuteMealPlanV2Refund(tx, plan, day, models.RefundProportionNone, "")
+		if floor := MealPlanDayRefundFloor(day); percent < floor {
+			return fmt.Errorf("%w: minimum %d%%, requested %d%%", ErrRefundBelowFloor, floor, percent)
 		}
-		// Full/Half → the customer now chooses the medium.
+		if percent == 0 {
+			return ExecuteMealPlanV2Refund(tx, plan, day, 0, "")
+		}
+		// Any positive percentage → the customer now chooses the medium.
+		label := models.RefundProportionLabel(percent)
 		res := tx.Model(&models.MealPlanDay{}).Where("id = ? AND refund_stage = ?", dayID, models.MPRefundPendingChef).
-			Updates(map[string]any{"chef_refund_choice": choice, "refund_stage": models.MPRefundPendingCustomer})
+			Updates(map[string]any{
+				"refund_percent":     percent,
+				"chef_refund_choice": label,
+				"refund_stage":       models.MPRefundPendingCustomer,
+			})
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
 			return ErrRefundStageMismatch
 		}
-		day.ChefRefundChoice = choice
+		day.RefundPercent = &percent
+		day.ChefRefundChoice = label
 		notifyPlan, notifyDay = plan, day
 		return nil
 	})
@@ -133,7 +187,7 @@ func CustomerChooseMealPlanRefundMedium(db *gorm.DB, dayID, customerID uuid.UUID
 		}
 		if medium == models.RefundDestinationWallet {
 			// Instant: credit the wallet/ledger now — no admin, no external money.
-			return ExecuteMealPlanV2Refund(tx, plan, day, day.ChefRefundChoice, models.RefundDestinationWallet)
+			return ExecuteMealPlanV2Refund(tx, plan, day, day.RefundPercentOf(), models.RefundDestinationWallet)
 		}
 		// Original method: park for the admin to execute the gateway refund.
 		res := tx.Model(&models.MealPlanDay{}).Where("id = ? AND refund_stage = ?", dayID, models.MPRefundPendingCustomer).
@@ -159,6 +213,6 @@ func AdminExecuteMealPlanRefund(db *gorm.DB, dayID uuid.UUID) error {
 		if day.RefundStage != models.MPRefundPendingAdmin {
 			return ErrRefundStageMismatch
 		}
-		return ExecuteMealPlanV2Refund(tx, plan, day, day.ChefRefundChoice, models.RefundDestinationSource)
+		return ExecuteMealPlanV2Refund(tx, plan, day, day.RefundPercentOf(), models.RefundDestinationSource)
 	})
 }

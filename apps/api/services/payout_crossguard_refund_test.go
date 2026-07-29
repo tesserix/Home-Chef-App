@@ -53,6 +53,12 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
 			customer_id TEXT, chef_id TEXT, status TEXT, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0,
 			total REAL DEFAULT 0, created_at DATETIME, updated_at DATETIME)`,
+		// #834: a GST-returning refund issues a credit note in the SAME tx, so the harness
+		// must carry the table or the refund rolls back.
+		`CREATE TABLE credit_notes (id TEXT PRIMARY KEY, credit_note_number TEXT UNIQUE, source_key TEXT UNIQUE,
+			customer_id TEXT, chef_id TEXT, meal_plan_id TEXT, meal_plan_day_id TEXT, order_id TEXT,
+			reference TEXT, currency TEXT, taxable_value REAL, tax_amount REAL, total_amount REAL,
+			refund_percent INTEGER, reason TEXT, issued_at DATETIME, created_at DATETIME)`,
 		`CREATE TABLE group_orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			customer_confirmed_at DATETIME, delivered_at DATETIME, payout_settled_at DATETIME,

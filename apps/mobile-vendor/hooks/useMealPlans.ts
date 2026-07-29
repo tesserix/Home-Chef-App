@@ -263,9 +263,11 @@ export function useRespondMealPlan() {
   });
 }
 
-// ── v2 refund flow (docs/meal-plan-refund-flow-design.md) ──────────────────────
-// A ≤12h skip/cancel routes to the chef to decide how much to refund (they may have
-// started prep). The refund amounts are the fee/GST-excluded food × Full/Half.
+// ── Refund flow (docs/refund-policy-v3-spec.md, #834) ─────────────────────────
+// A late skip/cancel routes to the chef, who sets HOW MUCH to refund — any amount from
+// the day's lead-time floor up to 100%. The base is everything the customer paid for the
+// day (food + GST + delivery), so the amounts must come from the server; they cannot be
+// derived from foodPrice. The floor is enforced server-side.
 
 export interface RefundDecisionDay {
   dayId: string;
@@ -275,11 +277,22 @@ export interface RefundDecisionDay {
   customerName: string;
   mealPlanNumber: string;
   foodPrice: number;
+  /** The least this day may be refunded, and that floor in rupees. */
+  minPercent: number;
+  minRefund: number;
+  /** 100% of what the customer paid for the day. */
   fullRefund: number;
+  /** 50%. Retained from the pre-v3 fixed Full/Half pair. */
   halfRefund: number;
 }
 
-// Days awaiting THIS chef's Full/Half/None/Decline.
+/** The refund at `percent`, interpolated from the server's 100% figure so the picker
+ *  updates without a round-trip. The server recomputes it authoritatively on submit. */
+export function refundAtPercent(day: RefundDecisionDay, percent: number): number {
+  return Math.round(day.fullRefund * percent) / 100;
+}
+
+// Days awaiting THIS chef's decision.
 export function useChefPendingRefundDecisions() {
   return useQuery<{ data: RefundDecisionDay[] }>({
     queryKey: ['chef', 'refund-decisions'],
@@ -290,14 +303,15 @@ export function useChefPendingRefundDecisions() {
   });
 }
 
-// The chef's decision: refund full/half/none of the food, or decline (the day is served).
+// The chef's decision: refund `percent` of what the customer paid, or decline (the day
+// is cooked and the customer charged).
 export function useChefRefundDecision() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { dayId: string; choice?: 'full' | 'half' | 'none'; decline?: boolean }) =>
+    mutationFn: (vars: { dayId: string; percent?: number; decline?: boolean }) =>
       api
         .post(`/chef/meal-plan-days/${vars.dayId}/refund-decision`, {
-          choice: vars.choice,
+          percent: vars.percent ?? 0,
           decline: !!vars.decline,
         })
         .then((r) => r.data),

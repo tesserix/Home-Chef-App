@@ -205,9 +205,19 @@ type MealPlanDay struct {
 	// pending_admin (chef chose, awaiting admin pay), resolved (terminal). ChefRefundChoice is
 	// the chef's proportion; RefundDestination is the admin's payout target. Empty when the day
 	// is not in the v2 flow (or was auto-approved >12h, which resolves straight to refunded).
-	RefundStage       MealPlanRefundStage `gorm:"type:varchar(16);default:''" json:"refundStage,omitempty"`
-	ChefRefundChoice  RefundProportion    `gorm:"type:varchar(6);default:''" json:"chefRefundChoice,omitempty"`
-	RefundDestination RefundDestination   `gorm:"type:varchar(8);default:''" json:"refundDestination,omitempty"`
+	RefundStage      MealPlanRefundStage `gorm:"type:varchar(16);default:''" json:"refundStage,omitempty"`
+	ChefRefundChoice RefundProportion    `gorm:"type:varchar(8);default:''" json:"chefRefundChoice,omitempty"`
+	// RefundPercent is the AUTHORITATIVE agreed refund percentage, 0–100 (#834 v3).
+	// It replaces the three-value ChefRefundChoice enum, which could not express a
+	// floor or anything between half and full; that column is still written as a
+	// coarse label for legacy readers, but every amount is computed from this.
+	// nil ⇒ not yet decided (fall back to the enum for pre-v3 rows — RefundPercentOf).
+	RefundPercent *int `gorm:"" json:"refundPercent,omitempty"`
+	// RefundFloorPercent pins the tier floor AT THE MOMENT THE REQUEST WAS RAISED, so
+	// the chef cannot shrink their own obligation by sitting on the decision until the
+	// lead time drops into a lower band. The server rejects any decision below it.
+	RefundFloorPercent *int              `gorm:"" json:"refundFloorPercent,omitempty"`
+	RefundDestination  RefundDestination `gorm:"type:varchar(8);default:''" json:"refundDestination,omitempty"`
 
 	// Payout hold (#387). Same semantics as Order: on delivery the day's hold
 	// becomes awaiting_customer_confirmation (no release); the customer confirming
@@ -226,16 +236,59 @@ type MealPlanDay struct {
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
-// RefundProportion is how much of a day's fee/GST-excluded food base is refunded in the v2
-// meal-plan refund workflow: Full (100%; also the >12h auto-approve), Half (50%), None (0 — the
-// chef started prep and keeps full payout). Empty means no decision yet.
+// RefundProportion is the COARSE LABEL for a day's agreed refund. Under v2 it was the whole
+// decision — Full (100%), Half (50%), None (0) — computed against a fee/GST-excluded base.
+//
+// DEPRECATED as the decision itself since refund policy v3 (#834): the chef now agrees any
+// percentage from the tier floor to 100, which this enum cannot express, and the base is the
+// full amount the customer paid. MealPlanDay.RefundPercent is authoritative; this is still
+// written alongside it (Partial for anything that isn't exactly 100/50/0) so pre-v3 readers
+// and historical rows keep working. Empty means no decision yet.
 type RefundProportion string
 
 const (
-	RefundProportionFull RefundProportion = "full"
-	RefundProportionHalf RefundProportion = "half"
-	RefundProportionNone RefundProportion = "none"
+	RefundProportionFull    RefundProportion = "full"
+	RefundProportionHalf    RefundProportion = "half"
+	RefundProportionNone    RefundProportion = "none"
+	RefundProportionPartial RefundProportion = "partial" // v3: any other percentage
 )
+
+// RefundProportionLabel is the coarse legacy label for an agreed percentage.
+func RefundProportionLabel(percent int) RefundProportion {
+	switch percent {
+	case 100:
+		return RefundProportionFull
+	case 50:
+		return RefundProportionHalf
+	case 0:
+		return RefundProportionNone
+	default:
+		return RefundProportionPartial
+	}
+}
+
+// LegacyRefundPercent maps a pre-v3 enum value back to its percentage, so a day decided
+// before v3 shipped still prices correctly. Anything unrecognised is 0 (refund nothing),
+// which is the safe direction — money is never moved off an unreadable decision.
+func LegacyRefundPercent(p RefundProportion) int {
+	switch p {
+	case RefundProportionFull:
+		return 100
+	case RefundProportionHalf:
+		return 50
+	default:
+		return 0
+	}
+}
+
+// RefundPercentOf resolves the agreed refund percentage for a day: the v3 column when set,
+// otherwise the pre-v3 enum. The single reader every money path goes through.
+func (d *MealPlanDay) RefundPercentOf() int {
+	if d.RefundPercent != nil {
+		return *d.RefundPercent
+	}
+	return LegacyRefundPercent(d.ChefRefundChoice)
+}
 
 // MealPlanRefundStage is the v2 sub-state of a skip_req day (the Status column is too short to
 // hold these names, so they live in their own column).

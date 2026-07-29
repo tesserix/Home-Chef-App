@@ -53,6 +53,25 @@ type PlatformPolicy struct {
 	// pickup orders (ready notice → reminders → chef escalation). Same shape as
 	// ConfirmReceiptFlowEnabled: defaults ON, and the admin toggle turns it OFF.
 	PickupReadyFlowEnabled bool `json:"pickupReadyFlowEnabled"`
+
+	// ── Refund policy v3 (#834, docs/refund-policy-v3-spec.md) ────────────────
+	// MealPlanRefundTiers prices a customer cancellation by lead time before
+	// cook-start: each band carries a floor the chef may not refund below, and
+	// the top band can resolve automatically. Ops retunes the whole table here
+	// rather than through a deploy — including flipping the >12h band from
+	// auto-100% to a chef-decided 75% floor. Empty ⇒ DefaultMealPlanRefundTiers.
+	MealPlanRefundTiers []MealPlanRefundTier `json:"mealPlanRefundTiers"`
+
+	// ChefCancelPenalty* levies a percentage of the cancelled order's value on a
+	// chef who cancels close to service, deducted from their next weekly
+	// settlement. Guarded so a genuine one-off emergency is not auto-fined:
+	// GraceCancellations cancellations inside GraceWindowDays are exempt, and an
+	// admin can waive any levy outright.
+	ChefCancelPenaltyEnabled    bool    `json:"chefCancelPenaltyEnabled"`
+	ChefCancelPenaltyPercent    float64 `json:"chefCancelPenaltyPercent"`    // of the order value
+	ChefCancelPenaltyLeadHours  float64 `json:"chefCancelPenaltyLeadHours"`  // cancels with LESS lead than this are levied
+	ChefCancelPenaltyGraceCount int     `json:"chefCancelPenaltyGraceCount"` // free cancellations per window
+	ChefCancelPenaltyGraceDays  int     `json:"chefCancelPenaltyGraceDays"`  // rolling window length
 }
 
 // DefaultPlatformPolicy matches what was hardcoded in handlers/orders.go
@@ -82,6 +101,16 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		// Default ON — before this flow existed a pickup customer got one generic
 		// push and then silence, so shipping it disabled would preserve the bug.
 		PickupReadyFlowEnabled: true,
+		// Refund policy v3 (#834). The tier table ships with the recommended
+		// shape; see DefaultMealPlanRefundTiers for why >12h stays automatic.
+		MealPlanRefundTiers: DefaultMealPlanRefundTiers(),
+		// 6% of the cancelled order's value, on cancellations inside 4h of
+		// service, with the first cancellation in a rolling 30 days exempt.
+		ChefCancelPenaltyEnabled:    true,
+		ChefCancelPenaltyPercent:    6.0,
+		ChefCancelPenaltyLeadHours:  4.0,
+		ChefCancelPenaltyGraceCount: 1,
+		ChefCancelPenaltyGraceDays:  30,
 	}
 }
 
@@ -275,6 +304,15 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 		// (a plain bool couldn't distinguish "unset" from "disabled").
 		ConfirmReceiptFlowEnabled *bool `json:"confirmReceiptFlowEnabled"`
 		PickupReadyFlowEnabled    *bool `json:"pickupReadyFlowEnabled"`
+		// Refund policy v3 (#834). All pointers for the same reason: an admin
+		// setting the penalty to 0% (suspended) or the grace count to 0 (no free
+		// cancellation) must not be silently overwritten by the default.
+		MealPlanRefundTiers         *[]MealPlanRefundTier `json:"mealPlanRefundTiers"`
+		ChefCancelPenaltyEnabled    *bool                 `json:"chefCancelPenaltyEnabled"`
+		ChefCancelPenaltyPercent    *float64              `json:"chefCancelPenaltyPercent"`
+		ChefCancelPenaltyLeadHours  *float64              `json:"chefCancelPenaltyLeadHours"`
+		ChefCancelPenaltyGraceCount *int                  `json:"chefCancelPenaltyGraceCount"`
+		ChefCancelPenaltyGraceDays  *int                  `json:"chefCancelPenaltyGraceDays"`
 	}
 	var p partial
 	if err := json.Unmarshal([]byte(setting.Value), &p); err != nil {
@@ -323,6 +361,27 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 	}
 	if p.PickupReadyFlowEnabled != nil {
 		out.PickupReadyFlowEnabled = *p.PickupReadyFlowEnabled
+	}
+	// Refund policy v3. normalizeRefundTiers falls back to the default table for an
+	// empty or wholly-invalid configured one, so a bad save can't leave cancellations
+	// unpriced.
+	if p.MealPlanRefundTiers != nil {
+		out.MealPlanRefundTiers = normalizeRefundTiers(*p.MealPlanRefundTiers)
+	}
+	if p.ChefCancelPenaltyEnabled != nil {
+		out.ChefCancelPenaltyEnabled = *p.ChefCancelPenaltyEnabled
+	}
+	if p.ChefCancelPenaltyPercent != nil {
+		out.ChefCancelPenaltyPercent = *p.ChefCancelPenaltyPercent
+	}
+	if p.ChefCancelPenaltyLeadHours != nil {
+		out.ChefCancelPenaltyLeadHours = *p.ChefCancelPenaltyLeadHours
+	}
+	if p.ChefCancelPenaltyGraceCount != nil {
+		out.ChefCancelPenaltyGraceCount = *p.ChefCancelPenaltyGraceCount
+	}
+	if p.ChefCancelPenaltyGraceDays != nil {
+		out.ChefCancelPenaltyGraceDays = *p.ChefCancelPenaltyGraceDays
 	}
 	return out
 }

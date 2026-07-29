@@ -1,77 +1,126 @@
-# Refund policy v3 — implementation spec
+# Refund policy v3
 
-Status: SPEC ONLY. Nothing below is implemented. Supersedes the tier model in
-`meal-plan-refund-flow-design.md` (that doc's §1 "FIRM RULE" is deliberately reversed here).
+Status: **IMPLEMENTED** (#834). Supersedes the tier model *and* the §1 "FIRM RULE" of
+`meal-plan-refund-flow-design.md` — that document describes v2 and is kept only as the
+history of what this replaced.
+
+Gated by `MEALPLAN_REFUND_FLOW_V2_ENABLED` (the flag v2 shipped behind, `true` in prod) plus
+the runtime policy below.
 
 ## Confirmed decisions
 
-1. **GST is refunded**, and GST credit notes must be issued so filings stay correct.
-   This reverses the documented firm rule that GST is never refunded.
-2. **Chef-cancel penalty is in scope** — 6% levy, auto-deducted from the chef's next
-   payout, shown as an invoice line, with a customer-facing explanation.
+1. **The refund base is everything the customer paid** — food + GST + delivery. The platform
+   keeps nothing on a refunded day. This reverses v2, which refunded food net of the platform
+   commission and always retained GST.
+   *There is no separate customer-facing "platform fee" line on a meal plan:* the platform's
+   take is the commission withheld from the **chef** inside the food price, so refunding 100%
+   of the food price is what "the platform fee is refunded too" means here.
+2. **GST is refunded, and a credit note is issued for it** — shipped together, because a
+   refund that returns tax without a note creates a filing discrepancy on day one.
+3. **The chef chooses the amount; the server enforces the floor.** Web and mobile call the
+   same endpoint, so a client-side constraint is no constraint.
+4. **Chef-cancel penalty is in scope** — a percentage levy, netted off the next settlement,
+   shown as a statement line, with a customer-facing explanation.
 
-## BLOCKING — resolve before writing code
+## Target policy — customer cancels
 
-Both change who is out of pocket. Do not guess.
-
-- **Platform fee: refunded or retained?**
-  First statement: "75% + the gst ... − the platform fee" (retained).
-  Later statement: "gst and platform fees are included" (refunded).
-  These are opposite. Pick one.
-- **Who chooses the adjustable amount above the floor?**
-  First statement: chef approves and sets it. Later statement: customer selects 80/100%.
-  A customer always picks 100%, which makes a floor meaningless — so "customer selects"
-  probably means the chef picks within a floor, or the customer picks a *destination*
-  (wallet vs source, which already exists). Confirm.
-
-## Target policy
-
-### Customer cancels remaining plan
-Request routes to the chef, who approves and sets the amount subject to a floor by lead time:
-
-| Lead time before cook-start | Floor | Chef may set |
+| Lead before cook-start | Refund | Decided by |
 |---|---|---|
-| > 12h | 75% | 75–100% |
-| ≤ 6h  | 50% | 50–100% |
-| ≤ 2h  | 0%  | 0% unless chef judges it genuine and approves |
+| **> 12h** | **100%, automatic** | nobody — instant, unchanged from v2 |
+| 12h – 6h | floor 75% | chef sets 75–100% |
+| 6h – 2h | floor 50% | chef sets 50–100% |
+| < 2h | floor 0% | chef may still grant up to 100% |
 
-Refund base = food + GST (+ platform fee — SEE BLOCKING).
+**Why >12h stayed automatic** (this differs from the first draft, which put a 75% floor on
+it): the 12h cutoff exists *because prep has not started*, so withholding 25% there is a
+penalty with no cost behind it — the part a customer would dispute and win. It would also add
+an approval step to the most common and most benign cancellation, where chefs either
+rubber-stamp 100% (friction, no change) or habitually take a free 25% (customers worse off
+than before). The tiering intent is preserved; it begins where prep begins.
 
-### Chef cancels
-| Lead time | Customer refund | Chef penalty |
+This is a **policy call, not a technical constraint**: the whole table is configuration
+(below). Setting the top band to `{minLeadHours: 12, floorPercent: 75, autoApprove: false}`
+implements the original model with no code change.
+
+## Target policy — chef cancels
+
+| Lead | Customer refund | Chef penalty |
 |---|---|---|
-| > 12h | 100% incl. GST + platform fee | none |
-| < 4h  | 100% incl. GST + platform fee | **6%**, auto-deducted from next payout, invoice line, customer notified |
+| > 4h | 100% incl. GST + fees (already the behaviour) | none |
+| < 4h | 100% incl. GST + fees | **6%** of the order, deducted from the next settlement |
 
-## Gap against what exists
+Two guards, both configurable and both deliberate:
 
-- `models.RefundProportion` is a fixed enum `{full, half, none}` — cannot express a
-  floor or an adjustable percentage. Needs to become a bounded numeric.
-- **No 12h/6h/2h tier logic exists.** Only one cutoff:
-  `platform_settings` → `mealplan.refund_prep_cutoff_hours` (default 12).
-  Follow that config-driven pattern for the new tiers; do not hardcode.
-- `> 12h` currently **auto-approves 100% food, no chef step**. New policy adds a chef
-  step and can *reduce* that to 75% — a customer-facing downgrade. Confirm intended.
-- Refund base excludes GST/platform/delivery today (`refundableFood()`), and every
-  refund path computes off it. Changing the base touches all of them.
-- **No penalty mechanism of any kind exists.** `services/payout_recovery.go` is unrelated
-  (it recovers failed payouts, it does not levy). Needs: penalty ledger entry, next-payout
-  deduction, invoice line, customer notification.
-- No GST credit-note issuance exists anywhere.
+- **Grace** — the first N cancellations in a rolling window are exempt (default: 1 per 30
+  days). A genuine emergency is not fraud, and auto-fining it with no recourse costs chefs
+  faster than the levy recovers.
+- **Waiver** — an admin can cancel any pending levy, with the reason recorded.
 
-## Key files
+An order with no scheduled service time is treated as **zero lead**: it is on-demand, already
+accepted, and being cooked now.
 
-- `apps/api/handlers/meal_plan_refund_v2.go` — chef decision endpoint
-- `apps/api/services/meal_plan_refund_v2_flow.go` — state machine
-- `apps/api/services/meal_plan_refund_v2_transitions.go` — transitions
-- `apps/api/models/meal_plan.go` — `RefundProportion`, `MealPlanRefundStage`
-- `apps/api/services/meal_plan_escrow.go` — `MealPlanRefundAmount`, refund base
-- Chef-cancel full-refund path: see `project_chef_cancel_accountability` memory
-- Flag: `MEALPLAN_REFUND_FLOW_V2_ENABLED=true` in prod (v2 IS live)
+## Configuration
 
-## Testing
+Everything lives in the `platform_policy` `PlatformSettings` blob
+(`services/platform_policy.go`) and is admin-tunable at runtime:
 
-Every branch moves money — table-test each tier boundary (just-over / just-under 12h,
-6h, 2h), the floor enforcement, GST inclusion, penalty arithmetic, and idempotency on
-double-submit. The existing suites in `handlers/meal_plan_refund_v2*_test.go` are the
-pattern to follow.
+```jsonc
+{
+  "mealPlanRefundTiers": [
+    { "minLeadHours": 12, "floorPercent": 100, "autoApprove": true },
+    { "minLeadHours": 6,  "floorPercent": 75 },
+    { "minLeadHours": 2,  "floorPercent": 50 },
+    { "minLeadHours": 0,  "floorPercent": 0  }
+  ],
+  "chefCancelPenaltyEnabled": true,
+  "chefCancelPenaltyPercent": 6,
+  "chefCancelPenaltyLeadHours": 4,
+  "chefCancelPenaltyGraceCount": 1,
+  "chefCancelPenaltyGraceDays": 30
+}
+```
+
+Bands are matched highest-lead-first and a boundary belongs to the **higher** band (exactly
+12h out is still automatic). A configured table that is empty or wholly invalid falls back to
+the default; `autoApprove` below 100% is demoted to a chef decision, since resolving a partial
+refund with nobody having agreed to it is not something the system should be able to do.
+
+## The floor is pinned, not recomputed
+
+Raising a request stamps `meal_plan_days.refund_floor_percent` with the band that applied **at
+that moment**. The chef's decision is validated against that stored value, never against a
+fresh clock reading — otherwise a chef could shrink their own obligation simply by sitting on
+the decision until the meal was imminent.
+
+A pre-v3 day carries no pinned floor and falls back to 0: it keeps the freedom it was created
+under rather than being retroactively bound by a rule nobody told the chef about.
+
+## What changed in the code
+
+| Area | Change |
+|---|---|
+| Base | `MealPlanRefundAmount(plan, day, percent)` off `mealPlanDayGrossPaid` (food + GST + delivery). **Not** `perDayGross` — that divides delivery by `len(plan.Days)` and silently collapses to the bare food price for the narrow `Select`s every refund handler uses. |
+| Proportion | `MealPlanDay.RefundPercent` (0–100) is authoritative. `ChefRefundChoice` stays as a coarse label (`full`/`half`/`none`/`partial`) for pre-v3 readers. |
+| Tiers | `services/meal_plan_refund_tiers.go` — `ResolveMealPlanRefundTier(leadHours)`. |
+| Floor | `ChefDecideMealPlanRefund` rejects below-floor with `ErrRefundBelowFloor` → HTTP 422. |
+| Credit notes | `models.CreditNote` + `services/credit_note.go`. Issued **inside** the refund tx, so a note that cannot be written rolls the refund back. Idempotent on `source_key`. Covers both GST-returning paths: the v3 cancellation executor **and** `RefundDay` (declined / undelivered / failed days), which has always refunded gross — wiring it here closes that pre-existing gap rather than leaving half the tax-refunding paths unnoted. |
+| Penalty | `models.ChefPenalty` + `services/chef_penalty.go`. Levied from `handlers/chef_order_cancel.go`, deducted in `services/statement.go`, surfaced at `/admin/chef-penalties` and `/chef/penalties`. |
+| Statement | `WeeklyStatement.PenaltyDeductions` — the levy's invoice line. `NetPayout` is after it. |
+
+## API compatibility
+
+`POST /chef/meal-plan-days/:dayId/refund-decision` accepts the v3 `{"percent": N}` and the
+pre-v3 `{"choice": "full|half|none"}`. A legacy choice maps to 100/50/0 and is then subject to
+the **same** floor check — so an un-updated app asking for "none" on a 75%-floor day is
+rejected rather than silently under-refunding. An unrecognised choice is rejected outright
+rather than read as 0%.
+
+## Rollout notes
+
+- The base change is live the moment the code deploys (the flag was already on). Every
+  meal-plan refund becomes larger — the platform is now out of pocket its commission, the GST
+  and the delivery on any refunded day. Finance should expect that.
+- The penalty defaults to **enabled**. Set `chefCancelPenaltyEnabled: false` in
+  `platform_policy` to ship the refund change without the levy.
+- Old vendor builds keep working (see API compatibility) but cannot refund between the fixed
+  Full/Half/None points until they are updated.

@@ -1,9 +1,11 @@
-// Chef refund decisions (v2 refund flow — docs/meal-plan-refund-flow-design.md). A customer's
-// skip/cancel that lands within 12h of cook-start routes here: the chef may have started prep, so
-// they choose how much of the food to refund — Full / Half / None — or Decline (they'll serve it).
-// The amounts cover the food + that day's delivery fee, excluding GST + the platform fee. After the chef decides Full/Half, an
-// admin pays it to the customer's wallet or original method.
+// Chef refund decisions (refund policy v3 — docs/refund-policy-v3-spec.md, #834). A customer's
+// late skip/cancel routes here: the chef may have started prep, so they choose HOW MUCH to refund
+// — anything from the day's lead-time floor up to the whole amount — or Decline (they'll serve it).
+// The base is everything the customer paid for the day: food, GST and delivery. The floor is
+// pinned when the request is raised and enforced server-side; this screen only makes it visible.
+// Once the chef decides, the CUSTOMER picks where the money goes (wallet or original method).
 
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -20,6 +22,7 @@ import { ChevronLeft, Inbox } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 
 import {
+  refundAtPercent,
   useChefPendingRefundDecisions,
   useChefRefundDecision,
   type RefundDecisionDay,
@@ -41,27 +44,26 @@ export default function RefundDecisionsScreen() {
   const decide = useChefRefundDecision();
   const days = data?.data ?? [];
 
-  function act(d: RefundDecisionDay, choice?: 'full' | 'half' | 'none', decline?: boolean) {
+  function act(d: RefundDecisionDay, percent: number, decline?: boolean) {
+    const amount = refundAtPercent(d, percent);
     const title = decline
       ? 'Keep this day?'
-      : choice === 'none'
+      : percent === 0
         ? 'Refund nothing?'
-        : `Refund ${money(choice === 'half' ? d.halfRefund : d.fullRefund)}?`;
+        : `Refund ${money(amount)}?`;
     const body = decline
       ? "You'll cook and deliver this day as planned — the customer is charged in full."
-      : choice === 'none'
+      : percent === 0
         ? "No refund — you keep the full payout (you'd started prep). The day won't be delivered."
-        : choice === 'half'
-          ? `Half the food refunded to the customer; you keep the other half. An admin pays it out.`
-          : `Full food refunded to the customer; your payout for this day is reversed. An admin pays it out.`;
+        : `${money(amount)} (${percent}% of what they paid) goes back to the customer; your payout for this day is reduced by the same share. They choose where it lands.`;
     showAlert(title, body, [
       { text: 'Back', style: 'cancel' },
       {
         text: decline ? 'Keep it' : 'Confirm',
-        style: choice === 'full' || choice === 'half' ? 'destructive' : 'default',
+        style: percent > 0 ? 'destructive' : 'default',
         onPress: () =>
           decide.mutate(
-            { dayId: d.dayId, choice, decline },
+            { dayId: d.dayId, percent, decline },
             { onError: () => showAlert('Something went wrong', 'Please try again.') },
           ),
       },
@@ -104,63 +106,126 @@ export default function RefundDecisionsScreen() {
               <Inbox size={40} color={theme.colors.ink.muted} />
               <Text style={styles.emptyTitle}>No refund requests</Text>
               <Text style={styles.muted}>
-                When a customer skips or cancels a day within 12 hours of cooking, it shows here for
-                you to decide.
+                When a customer skips or cancels a day at short notice, it shows here for you to
+                decide how much to refund.
               </Text>
             </View>
           ) : (
-            days.map((d) => {
-              const busy = decide.isPending;
-              return (
-                <View key={d.dayId} style={styles.card}>
-                  <View style={styles.cardHead}>
-                    <Text style={styles.cardDate}>{dayLabel(d.date)}</Text>
-                    <Text style={styles.cardSlot}>{d.slot === 'lunch' ? 'Lunch' : 'Dinner'}</Text>
-                  </View>
-                  <Text style={styles.cardDish}>{d.dishName || '—'}</Text>
-                  <Text style={styles.cardSub}>
-                    {d.customerName || 'Customer'} · {d.mealPlanNumber} · food {money(d.foodPrice)}
-                  </Text>
-
-                  <View style={styles.actions}>
-                    <Pressable
-                      disabled={busy}
-                      onPress={() => act(d, 'full')}
-                      style={({ pressed }) => [styles.btnPrimary, pressed && { opacity: 0.9 }, busy && styles.btnDisabled]}
-                    >
-                      <Text style={styles.btnPrimaryText}>Refund {money(d.fullRefund)} · full</Text>
-                    </Pressable>
-                    <Pressable
-                      disabled={busy}
-                      onPress={() => act(d, 'half')}
-                      style={({ pressed }) => [styles.btnOutline, pressed && { opacity: 0.7 }, busy && styles.btnDisabled]}
-                    >
-                      <Text style={styles.btnOutlineText}>Refund {money(d.halfRefund)} · half</Text>
-                    </Pressable>
-                    <View style={styles.actionRow}>
-                      <Pressable
-                        disabled={busy}
-                        onPress={() => act(d, 'none')}
-                        style={({ pressed }) => [styles.btnGhost, pressed && { opacity: 0.7 }, busy && styles.btnDisabled]}
-                      >
-                        <Text style={styles.btnGhostText}>No refund</Text>
-                      </Pressable>
-                      <Pressable
-                        disabled={busy}
-                        onPress={() => act(d, undefined, true)}
-                        style={({ pressed }) => [styles.btnGhost, pressed && { opacity: 0.7 }, busy && styles.btnDisabled]}
-                      >
-                        <Text style={styles.btnGhostText}>Keep this day</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                </View>
-              );
-            })
+            days.map((d) => (
+              <DecisionCard key={d.dayId} day={d} busy={decide.isPending} onAct={act} />
+            ))
           )}
         </ScrollView>
       )}
     </SafeAreaView>
+  );
+}
+
+/** One request, with the chef's amount picker. Opens at the FLOOR — the option that
+ *  protects a chef who has already started cooking, and the one they most often want. */
+function DecisionCard({
+  day,
+  busy,
+  onAct,
+}: {
+  day: RefundDecisionDay;
+  busy: boolean;
+  onAct: (d: RefundDecisionDay, percent: number, decline?: boolean) => void;
+}) {
+  const [percent, setPercent] = useState(day.minPercent);
+  // Presets inside the permitted range, deduplicated — the common answers stay one tap away.
+  const presets = [day.minPercent, 75, 100].filter(
+    (p, i, all) => p >= day.minPercent && all.indexOf(p) === i,
+  );
+  const step = (delta: number) =>
+    setPercent((p) => Math.min(100, Math.max(day.minPercent, p + delta)));
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHead}>
+        <Text style={styles.cardDate}>{dayLabel(day.date)}</Text>
+        <Text style={styles.cardSlot}>{day.slot === 'lunch' ? 'Lunch' : 'Dinner'}</Text>
+      </View>
+      <Text style={styles.cardDish}>{day.dishName || '—'}</Text>
+      <Text style={styles.cardSub}>
+        {day.customerName || 'Customer'} · {day.mealPlanNumber} · food {money(day.foodPrice)}
+      </Text>
+
+      <View style={styles.picker}>
+        <View style={styles.pickerRow}>
+          <Pressable
+            disabled={busy || percent <= day.minPercent}
+            onPress={() => step(-5)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Refund less"
+            style={({ pressed }) => [
+              styles.stepBtn,
+              pressed && { opacity: 0.7 },
+              (busy || percent <= day.minPercent) && styles.btnDisabled,
+            ]}
+          >
+            <Text style={styles.stepBtnText}>−</Text>
+          </Pressable>
+          <View style={styles.pickerValue}>
+            <Text style={styles.pickerAmount}>{money(refundAtPercent(day, percent))}</Text>
+            <Text style={styles.pickerPercent}>{percent}% of what they paid</Text>
+          </View>
+          <Pressable
+            disabled={busy || percent >= 100}
+            onPress={() => step(5)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Refund more"
+            style={({ pressed }) => [
+              styles.stepBtn,
+              pressed && { opacity: 0.7 },
+              (busy || percent >= 100) && styles.btnDisabled,
+            ]}
+          >
+            <Text style={styles.stepBtnText}>+</Text>
+          </Pressable>
+        </View>
+        <View style={styles.presetRow}>
+          {presets.map((p) => (
+            <Pressable
+              key={p}
+              disabled={busy}
+              onPress={() => setPercent(p)}
+              style={({ pressed }) => [
+                styles.preset,
+                percent === p && styles.presetOn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={[styles.presetText, percent === p && styles.presetTextOn]}>{p}%</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={styles.pickerHint}>
+          {day.minPercent > 0
+            ? `At this much notice the least you can refund is ${day.minPercent}% (${money(day.minRefund)}).`
+            : 'The meal is imminent, so no refund is owed — but you can still give one.'}
+        </Text>
+      </View>
+
+      <View style={styles.actions}>
+        <Pressable
+          disabled={busy}
+          onPress={() => onAct(day, percent)}
+          style={({ pressed }) => [styles.btnPrimary, pressed && { opacity: 0.9 }, busy && styles.btnDisabled]}
+        >
+          <Text style={styles.btnPrimaryText}>Refund {money(refundAtPercent(day, percent))}</Text>
+        </Pressable>
+        <Pressable
+          disabled={busy}
+          onPress={() => onAct(day, 0, true)}
+          style={({ pressed }) => [styles.btnGhost, pressed && { opacity: 0.7 }, busy && styles.btnDisabled]}
+        >
+          <Text style={styles.btnGhostText}>Keep this day — cook it as planned</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -191,6 +256,43 @@ const styles = StyleSheet.create({
   cardSub: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 2 },
   actions: { marginTop: 12, gap: 8 },
   actionRow: { flexDirection: 'row', gap: 8 },
+  picker: {
+    marginTop: 12,
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: theme.colors.paper,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+  },
+  pickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pickerValue: { alignItems: 'center', flex: 1 },
+  pickerAmount: { fontFamily: 'Geist-SemiBold', fontSize: 22, color: theme.colors.ink.DEFAULT },
+  pickerPercent: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 2 },
+  pickerHint: { fontFamily: 'Inter', fontSize: 12, color: theme.colors.ink.muted, lineHeight: 17 },
+  stepBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+  },
+  stepBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 22, color: theme.colors.ink.DEFAULT },
+  presetRow: { flexDirection: 'row', gap: 8 },
+  preset: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+  },
+  presetOn: { backgroundColor: theme.colors.ink.DEFAULT, borderColor: theme.colors.ink.DEFAULT },
+  presetText: { fontFamily: 'Inter-Medium', fontSize: 14, color: theme.colors.ink.soft },
+  presetTextOn: { color: theme.colors.paper },
   btnPrimary: { backgroundColor: theme.colors.ink.DEFAULT, borderRadius: 10, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   btnPrimaryText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.paper },
   btnOutline: { borderRadius: 10, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.ink.DEFAULT },

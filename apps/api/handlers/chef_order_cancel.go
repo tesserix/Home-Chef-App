@@ -239,6 +239,25 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 
 	// order.RefundID post-refresh reflects the FINAL state: the real gateway id when the
 	// guarded replace above landed, or the sentinel when the refund is still deferred.
+	// #834 item 6: a chef who cancels close to service is charged a percentage of the order,
+	// netted off their next weekly settlement. Guarded by a grace allowance and waivable by an
+	// admin (services/chef_penalty.go). Best-effort BY CONTRACT — the customer's refund is the
+	// money that matters and is already committed above; a levy that fails to record is
+	// recoverable, a cancel that 500s because of it is not.
+	levied := false
+	if p, pErr := services.LevyChefCancelPenalty(database.DB, chef.ID, userID, order.ID,
+		order.OrderNumber, order.Total, chefCancelLeadHours(&order, now)); pErr != nil {
+		log.Printf("chef cancel: penalty levy failed for order %s: %v", order.OrderNumber, pErr)
+		services.CaptureBackgroundError(pErr)
+	} else if p != nil {
+		levied = true
+		services.LogAudit(c, "chef.penalty.levy", "chef_penalty", p.ID.String(), nil,
+			gin.H{"orderId": order.ID.String(), "amount": p.Amount, "leadHours": p.LeadHours})
+	}
+	// The customer is told what happened and that they are made whole — the notification the
+	// policy calls for. order.RefundAmount is post-refresh, so it is the full reserved amount.
+	services.NotifyCustomerOfChefCancelPenalty(order.CustomerID, order.OrderNumber, order.RefundAmount, levied)
+
 	services.LogAudit(c, "chef.order.cancel", "order", order.ID.String(),
 		nil, gin.H{"reason": string(reason), "refundAmount": order.RefundAmount, "refundId": order.RefundID})
 
@@ -259,6 +278,20 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	}()
 
 	c.JSON(http.StatusOK, order.ToChefResponse())
+}
+
+// chefCancelLeadHours is how much notice the customer got when the chef cancelled: the hours
+// between now and the order's scheduled service time.
+//
+// An order with NO scheduled time is on-demand — the chef accepted it and the kitchen is
+// cooking it right now — so its lead is 0 and it falls inside any penalty window. Treating an
+// unscheduled order as "infinite notice" would exempt the single most disruptive cancellation
+// there is: a hungry customer waiting on an order already in prep.
+func chefCancelLeadHours(order *models.Order, now time.Time) float64 {
+	if order.ScheduledFor == nil {
+		return 0
+	}
+	return order.ScheduledFor.Sub(now).Hours()
 }
 
 // splitCancelRefundAcrossRails credits the wallet + loyalty slices of a chef-cancel

@@ -668,11 +668,11 @@ func (h *MealPlanHandler) CancelMealPlan(c *gin.Context) {
 		models.MealPlanChefModified, models.MealPlanAwaitingCustomer, models.MealPlanConfirmed,
 	}
 
-	// v2 refund flow (docs/meal-plan-refund-flow-design.md), gated: cancel resolves EACH unserved
-	// day by the same 12h rule as a skip — >12h auto-refunds full to the wallet, ≤12h routes to the
-	// chef — off the fee/GST-excluded base. Days already awaiting admin (chef decided) are left for
-	// the admin to pay. This replaces the legacy RefundUndeliveredDays(perDayGross) path, which both
-	// over-refunded (GST+delivery) and 500'd on days already mid-skip (skip_req).
+	// Refund flow (docs/refund-policy-v3-spec.md), gated: cancel resolves EACH unserved day by
+	// the same lead-time TIER table as a skip — the top tier auto-agrees, the rest route to the
+	// chef with a pinned floor — off the full gross the customer paid. Days already awaiting
+	// admin (chef decided) are left for the admin to pay. This replaces the legacy
+	// RefundUndeliveredDays(perDayGross) path, which 500'd on days already mid-skip (skip_req).
 	if services.MealPlanRefundFlowV2Active() {
 		var schedules []models.ChefSchedule
 		database.DB.Where("chef_id = ?", plan.ChefID).Find(&schedules)
@@ -711,14 +711,15 @@ func (h *MealPlanHandler) CancelMealPlan(c *gin.Context) {
 						return err
 					}
 				}
-				early := now.Before(mealPlanDayStartIST(schedules, d).Add(-mealPlanLeadTime))
-				if early {
-					if err := services.AgreeMealPlanDayRefundFull(tx, &plan, d); err != nil {
+				tier := services.ResolveMealPlanRefundTier(mealPlanDayStartIST(schedules, d).Sub(now).Hours())
+				if tier.AutoApprove {
+					if err := services.AgreeMealPlanDayRefundAuto(tx, &plan, d, tier.FloorPercent); err != nil {
 						return err
 					}
 				} else if d.RefundStage != models.MPRefundPendingChef {
-					if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", d.ID).
-						Update("refund_stage", models.MPRefundPendingChef).Error; err != nil {
+					// Pin the floor that applies NOW, so a chef who sits on the decision until
+					// the day is imminent can't drop into a cheaper band.
+					if err := services.RouteMealPlanDayToChef(tx, d, tier.FloorPercent); err != nil {
 						return err
 					}
 				}
@@ -835,10 +836,12 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 	database.DB.Where("chef_id = ?", plan.ChefID).Find(&schedules)
 	start := mealPlanDayStartIST(schedules, day)
 	early := time.Now().Before(start.Add(-mealPlanLeadTime))
+	// Refund policy v3 (#834): the lead-time TIER decides. The top band auto-agrees the full
+	// amount with no chef step; every lower band routes to the chef with a floor pinned at
+	// request time. `early` above still gates the LEGACY (flow-off) path below, which hard-
+	// rejects a late skip — the tier table replaces it entirely when the flow is on.
+	tier := services.ResolveMealPlanRefundTier(start.Sub(time.Now()).Hours())
 
-	// v2 refund flow (docs/meal-plan-refund-flow-design.md), gated: a skip >12h before cook-start
-	// auto-approves a FULL refund to the wallet (chef hasn't started prep); a skip ≤12h routes to
-	// the CHEF to decide Full/Half/None (they may have started prep) instead of a hard reject.
 	if services.MealPlanRefundFlowV2Active() {
 		okLock, release := idempotencyGuard(c.Request.Context(), fmt.Sprintf("skipday:%s", day.ID))
 		if !okLock {
@@ -866,13 +869,14 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 			if err := services.SetMealPlanDayHoldDisputed(tx, day.ID); err != nil {
 				return err
 			}
-			if early {
-				// >12h: auto-approve the FULL refund to the wallet — no chef/admin step.
-				return services.AgreeMealPlanDayRefundFull(tx, &plan, day)
+			if tier.AutoApprove {
+				// Top band: agree the tier's amount outright — no chef step. The customer
+				// still picks the medium (RBI).
+				return services.AgreeMealPlanDayRefundAuto(tx, &plan, day, tier.FloorPercent)
 			}
-			// ≤12h: await the chef's decision. Record the stage + notify the chef.
-			if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).
-				Update("refund_stage", models.MPRefundPendingChef).Error; err != nil {
+			// Lower band: await the chef's decision, with THIS band's floor pinned onto the
+			// day so a delayed decision can't be priced against a cheaper one.
+			if err := services.RouteMealPlanDayToChef(tx, day, tier.FloorPercent); err != nil {
 				return err
 			}
 			if chef.UserID != uuid.Nil {
@@ -890,10 +894,17 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 			return
 		}
 		plan.ProjectForCustomer()
-		if early {
+		if tier.AutoApprove {
 			c.JSON(http.StatusOK, gin.H{"status": "pending_customer", "message": "You won't be served this day. Choose where your refund goes — your wallet (instant) or your original payment method (5–7 days).", "mealPlan": plan})
 		} else {
-			c.JSON(http.StatusOK, gin.H{"status": "pending_chef", "message": "Skip requested — your chef will review it.", "mealPlan": plan})
+			c.JSON(http.StatusOK, gin.H{
+				"status": "pending_chef",
+				"message": fmt.Sprintf(
+					"Skip requested — your chef will review it. At this notice you'll get back at least %d%% of what you paid for the day.",
+					tier.FloorPercent),
+				"minRefundPercent": tier.FloorPercent,
+				"mealPlan":         plan,
+			})
 		}
 		return
 	}
