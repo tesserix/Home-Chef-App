@@ -6,7 +6,7 @@ import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
 import { DishPicker } from '../components/DishPicker';
-import { ComboComponents, PortionFields } from '../components/ComboComponents';
+import { ComboComponents, PortionFields, PriceSummary } from '../components/ComboComponents';
 import {
   useWeeklyMenu,
   useSaveWeeklyMenu,
@@ -273,6 +273,14 @@ export default function WeeklyMenuPage() {
                             portionSize={cell.portionSize ?? ''}
                             serves={cell.serves ?? 1}
                             onChange={(patch) => setCell(selectedDow, slot.slot, v.variant, patch)}
+                          />
+                          {/* States the whole offer in one line, with the
+                              per-person figure DERIVED so it can never disagree
+                              with the price above. */}
+                          <PriceSummary
+                            price={Number.parseFloat(cell.price) || 0}
+                            portionSize={cell.portionSize ?? ''}
+                            serves={cell.serves ?? 1}
                           />
                         </div>
 

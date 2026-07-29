@@ -204,6 +204,36 @@ export function DishPicker({
   );
 }
 
+/**
+ * The one-line answer to "what am I actually selling here?".
+ *
+ * A bare "140" in a box says nothing — not the currency, not how much food, not
+ * what it works out to per head. This states the whole thing in the order a chef
+ * reasons about it: total, portion, how many it feeds, and the per-person figure
+ * derived rather than typed, so the two can never disagree.
+ */
+export function cellSummary(price: number, portionSize: string, serves: number): string {
+  const bits = [`₹${Math.round(price)}`];
+  if (portionSize.trim()) bits.push(portionSize.trim());
+  bits.push(serves > 1 ? `feeds ${serves}` : 'single portion');
+  let out = bits.join(' · ');
+  // Only worth showing when it differs from the total — "₹140 per person" under
+  // "₹140" is noise.
+  if (serves > 1 && price > 0) out += `  →  ₹${Math.round(price / serves)} per person`;
+  return out;
+}
+
+interface PriceSummaryProps {
+  price: number;
+  portionSize: string;
+  serves: number;
+}
+
+export function PriceSummary({ price, portionSize, serves }: PriceSummaryProps) {
+  if (!price) return null;
+  return <Text style={styles.summary}>{cellSummary(price, portionSize, serves)}</Text>;
+}
+
 interface PortionFieldsProps {
   portionSize: string;
   serves: number;
@@ -315,6 +345,11 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.mist.DEFAULT,
   },
   typeRowText: { fontSize: 14, fontWeight: '600', color: theme.colors.ink.DEFAULT },
+  summary: {
+    marginTop: 6,
+    fontSize: 12,
+    color: theme.colors.ink.soft,
+  },
   portionRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
   portionCol: { flex: 1 },
   servesCol: { width: 92 },
