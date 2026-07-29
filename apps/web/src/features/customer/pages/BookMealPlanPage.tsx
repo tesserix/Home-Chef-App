@@ -7,7 +7,11 @@ import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { Button } from '@/shared/components/ui';
 import type { MealSlot, MealVariant, WeeklyMenu, WeeklyMenuItem } from '@/shared/types';
-import { useCreateMealPlan, type BookDayInput } from '@/features/customer/hooks/useMealPlans';
+import {
+  apiErrorMessage,
+  useCreateMealPlan,
+  type BookDayInput,
+} from '@/features/customer/hooks/useMealPlans';
 
 // Plan your week — the web twin of apps/mobile-customer/app/book-meal-plan.tsx.
 //
@@ -99,8 +103,11 @@ export default function BookMealPlanPage() {
       toast.success('Request sent — your chef will confirm the days they can cook.');
       navigate('/meal-plans');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '';
-      toast.error(msg || 'Could not send your request. Please try again.');
+      // Show the server's reason verbatim. The common failure here is a 409
+      // duplicate_plan ("you already have a plan with this chef for these
+      // dates") — a generic "try again" tells the customer to repeat something
+      // that cannot succeed, and hides which dates actually clash.
+      toast.error(apiErrorMessage(err) || 'Could not send your request. Please try again.');
     }
   };
 

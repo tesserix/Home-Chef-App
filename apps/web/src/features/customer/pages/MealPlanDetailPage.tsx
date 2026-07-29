@@ -6,6 +6,7 @@ import { useFormatPrice } from '@/shared/utils/format-price';
 import { Button } from '@/shared/components/ui';
 import { openRazorpayCheckout } from '@/shared/utils/razorpay';
 import {
+  apiErrorMessage,
   useApproveMealPlan,
   useMealPlan,
   useMealPlanAction,
@@ -119,8 +120,8 @@ export default function MealPlanDetailPage() {
         },
         onDismiss: () => setPaying(false),
       });
-    } catch {
-      toast.error('Could not start the payment. Please try again.');
+    } catch (err) {
+      toast.error(apiErrorMessage(err) || 'Could not start the payment. Please try again.');
     } finally {
       setPaying(false);
     }
@@ -131,8 +132,8 @@ export default function MealPlanDetailPage() {
     try {
       await action.mutateAsync({ id, action: 'reject' });
       toast.success('Plan rejected.');
-    } catch {
-      toast.error('Could not reject the plan.');
+    } catch (err) {
+      toast.error(apiErrorMessage(err) || 'Could not reject the plan.');
     }
   };
 
@@ -141,8 +142,8 @@ export default function MealPlanDetailPage() {
     try {
       await action.mutateAsync({ id, action: 'cancel' });
       toast.success('Plan cancelled.');
-    } catch {
-      toast.error('Could not cancel the plan.');
+    } catch (err) {
+      toast.error(apiErrorMessage(err) || 'Could not cancel the plan.');
     }
   };
 
@@ -151,8 +152,8 @@ export default function MealPlanDetailPage() {
     try {
       await skip.mutateAsync({ id, dayId });
       toast.success('Skip requested.');
-    } catch {
-      toast.error('Could not request the skip.');
+    } catch (err) {
+      toast.error(apiErrorMessage(err) || 'Could not request the skip.');
     }
   };
 
