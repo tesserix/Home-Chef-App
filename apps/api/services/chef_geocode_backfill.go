@@ -2,7 +2,6 @@ package services
 
 import (
 	"log"
-	"strings"
 
 	"github.com/homechef/api/models"
 	"gorm.io/gorm"
@@ -18,20 +17,18 @@ func BackfillChefCoordinates(db *gorm.DB) {
 		log.Printf("chef-coord backfill: query failed: %v", err)
 		return
 	}
+	filled := 0
 	for _, ch := range chefs {
-		parts := []string{}
-		for _, p := range []string{ch.AddressLine1, ch.AddressLine2, ch.City, ch.State, ch.PostalCode} {
-			if strings.TrimSpace(p) != "" {
-				parts = append(parts, p)
-			}
-		}
-		full := strings.TrimSpace(strings.Join(parts, ", "))
-		lat, lng, ok := GeocodeAddress(full)
+		lat, lng, ok := GeocodeAddressParts(ch.AddressLine1, ch.AddressLine2, ch.City, ch.State, ch.PostalCode)
 		if !ok {
+			log.Printf("chef-coord backfill: no geocode match for chef %s (%s, %s) — still uncoordinated, so it stays hidden from located customers", ch.ID, ch.City, ch.State)
 			continue
 		}
+		filled++
 		db.Model(&models.ChefProfile{}).Where("id = ?", ch.ID).
 			Updates(map[string]any{"latitude": lat, "longitude": lng})
 	}
-	log.Printf("chef-coord backfill: processed %d chef(s)", len(chefs))
+	// Report both numbers: "processed N" alone hid the failure mode that left every
+	// kitchen at 0,0 and therefore undiscoverable.
+	log.Printf("chef-coord backfill: processed %d chef(s), filled %d", len(chefs), filled)
 }
