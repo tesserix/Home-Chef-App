@@ -4,7 +4,6 @@ import { Inter } from 'next/font/google';
 import {
   CONTACT_EMAIL,
   CUSTOMER_APP,
-  IMAGES,
   INSTAGRAM_URL,
   liveStoreUrls,
   SITE_NAME,
@@ -41,20 +40,16 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     title: TITLE,
     description: DESCRIPTION,
-    images: [
-      {
-        url: IMAGES.og,
-        width: 1200,
-        height: 630,
-        alt: 'A generous Indian home-cooked spread, ready to be delivered',
-      },
-    ],
+    // og:image is supplied by app/opengraph-image.tsx (Next file convention) —
+    // an on-domain generated PNG. Do not re-add an explicit `images` here: the
+    // previous hotlinked Unsplash WebP unfurled unreliably (WebP + third-party
+    // host), which is why LinkedIn rejected the link.
   },
   twitter: {
     card: 'summary_large_image',
     title: TITLE,
     description: DESCRIPTION,
-    images: [IMAGES.og],
+    // twitter:image also comes from app/opengraph-image.tsx.
   },
   applicationName: SITE_NAME,
   keywords: [
