@@ -6,6 +6,8 @@ import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Skeleton } from '@/shared/components/ui/Skeleton';
+import { DishPicker } from '../components/DishPicker';
+import { ComboComponents, PortionFields } from '../components/ComboComponents';
 import {
   useDailyMenu,
   useSaveDailyMenu,
@@ -25,7 +27,7 @@ const HORIZON_DAYS = 14;
 const SLOTS: MealSlot[] = ['lunch', 'dinner'];
 
 function emptyItem(slot: MealSlot): DailyMenuItem {
-  return { slot, variant: 'veg', name: '', description: '', price: 0 };
+  return { slot, variant: 'veg', name: '', description: '', price: 0, serves: 1 };
 }
 
 export function DailyMenuPage() {
@@ -170,13 +172,26 @@ function DayEditor({
                 {slotItems.map(({ it, idx }) => (
                   <div key={idx} className="rounded-lg border border-mist p-3">
                     <div className="flex gap-2">
-                      <input
-                        value={it.name}
-                        onChange={(e) => update(idx, { name: e.target.value })}
-                        placeholder="Dish name"
-                        aria-label={`${slot} dish name`}
-                        className="input-base flex-1"
-                      />
+                      <div className="flex-1">
+                        {/* Same picker as the weekly editor — the chef's menu is
+                            the source of truth in both places. */}
+                        <DishPicker
+                          variant={it.variant}
+                          value={{ name: it.name, menuItemId: it.menuItemId }}
+                          onPick={(p) =>
+                            update(idx, {
+                              menuItemId: p.menuItemId,
+                              name: p.name,
+                              price: p.price,
+                              portionSize: p.portionSize ?? '',
+                              serves: p.serves,
+                              dietaryTags: p.dietaryTags,
+                              allergens: p.allergens,
+                            })
+                          }
+                          onTypeName={(name) => update(idx, { name, menuItemId: null })}
+                        />
+                      </div>
                       <input
                         type="number"
                         min={0}
@@ -184,16 +199,24 @@ function DayEditor({
                         value={it.price}
                         onChange={(e) => update(idx, { price: Number(e.target.value) })}
                         aria-label={`${slot} dish price in rupees`}
-                        className="input-base w-24 tabular-nums"
+                        className="input-base h-11 w-24 tabular-nums"
                       />
                       <button
                         type="button"
                         onClick={() => setItems((cur) => cur.filter((_, i2) => i2 !== idx))}
                         aria-label={`Remove ${it.name || 'dish'}`}
-                        className="rounded-lg px-2 text-ink-muted transition-colors hover:bg-paprika-tint hover:text-paprika"
+                        className="h-11 rounded-lg px-2 text-ink-muted transition-colors hover:bg-paprika-tint hover:text-paprika"
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>
+                    </div>
+
+                    <div className="mt-2">
+                      <PortionFields
+                        portionSize={it.portionSize ?? ''}
+                        serves={it.serves ?? 1}
+                        onChange={(patch) => update(idx, patch)}
+                      />
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       {(['veg', 'nonveg'] as MealVariant[]).map((v) => (
@@ -218,9 +241,18 @@ function DayEditor({
                           onChange={(e) => update(idx, { isCombo: e.target.checked })}
                           className="h-3.5 w-3.5"
                         />
-                        Combo / thali
+                        Thali / combo
                       </label>
                     </div>
+
+                    {it.isCombo && (
+                      <div className="mt-2">
+                        <ComboComponents
+                          value={it.comboComponents ?? []}
+                          onChange={(next) => update(idx, { comboComponents: next })}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

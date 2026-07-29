@@ -16,6 +16,17 @@ export interface WeeklyMenuItem {
   description?: string;
   price: number;
   imageUrl?: string;
+  /** Links the cell to an à-la-carte MenuItem when the chef picked one rather
+   *  than typing. Absent for a hand-typed dish — see DishPicker. */
+  menuItemId?: string | null;
+  /** Thali/combo: one set price covering comboComponents. */
+  isCombo?: boolean;
+  comboComponents?: string[];
+  /** How much food, and for how many people. */
+  portionSize?: string;
+  serves?: number;
+  dietaryTags?: string[];
+  allergens?: string[];
 }
 
 export interface WeeklyMenu {

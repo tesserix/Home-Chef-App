@@ -28,6 +28,9 @@ export interface DailyMenuItem {
   /** A priced bundle (thali) rather than a single dish. */
   isCombo?: boolean;
   comboComponents?: string[];
+  /** How much food, and for how many people. */
+  portionSize?: string;
+  serves?: number;
 }
 
 export interface DailyMenuDay {
