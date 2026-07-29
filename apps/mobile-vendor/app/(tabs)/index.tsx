@@ -48,7 +48,11 @@ import {
   describeDocumentType,
 } from '../../hooks/useExpiringDocuments';
 import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
-import { useChefMealPlanRequests, type MealPlan } from '../../hooks/useMealPlans';
+import {
+  useChefMealPlanRequests,
+  useChefUpcoming,
+  type MealPlan,
+} from '../../hooks/useMealPlans';
 import { useCancellationRequests } from '../../hooks/useCancellations';
 import { useAuthStore } from '../../store/auth-store';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
@@ -341,6 +345,10 @@ export default function DashboardScreen() {
     pendingMealPlans.length > 0 ||
     (actionRequests?.length ?? 0) > 0 ||
     expiringDocs.length > 0;
+
+  // Meals due in the next 24h — plan days included, not just live orders.
+  const { data: upcomingData } = useChefUpcoming(24);
+  const upcomingMeals = upcomingData?.meals ?? [];
 
   // Nothing to act on → fill the empty space with the status prompt instead of a
   // blank screen. Broadened from the old 120-min "quiet" rule: a closed or idle
@@ -977,6 +985,32 @@ export default function DashboardScreen() {
           </Animated.View>
         )}
 
+        {/* What the kitchen owes in the next 24 hours, order or not.
+            The dashboard read only live orders, so a pre-booked tiffin day was
+            invisible until its order locked 12h before service — a chef with a
+            confirmed week still saw "Quiet right now". This renders above that
+            reassurance so committed meals are never hidden behind it. */}
+        {upcomingMeals.length > 0 && (
+          <View style={styles.upcomingSection}>
+            <Text style={styles.sectionLabel}>Next 24 hours</Text>
+            {upcomingMeals.map((m) => (
+              <View key={m.dayId} style={styles.upcomingRow}>
+                <View style={styles.upcomingMain}>
+                  <Text style={styles.upcomingDish} numberOfLines={1}>
+                    {m.dishName || 'Meal'}
+                  </Text>
+                  <Text style={styles.upcomingMeta} numberOfLines={1}>
+                    {m.slot} · {upcomingClock(m.startsAt)} · {m.customerName}
+                  </Text>
+                </View>
+                <Text style={styles.upcomingWhen}>
+                  {m.status === 'prepared' ? 'Prepared' : upcomingCountdown(m.startsAt)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Today's numbers now live in the dark hero banner above (Zone A). */}
 
         {/* Quiet state — dead-screen reassurance pushed to the visible
@@ -1010,6 +1044,19 @@ export default function DashboardScreen() {
   );
 }
 
+/** "in 3h" / "in 40m" — a chef reads time-to-cook, not a clock face. */
+function upcomingCountdown(iso: string): string {
+  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
+  if (mins <= 0) return 'now';
+  if (mins < 60) return `in ${mins}m`;
+  const h = Math.floor(mins / 60);
+  return h < 24 ? `in ${h}h` : `in ${Math.floor(h / 24)}d`;
+}
+
+function upcomingClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bone },
   scrollContent: {
@@ -1021,6 +1068,19 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
     gap: theme.spacing[4],
   },
+  upcomingSection: { marginTop: 24 },
+  upcomingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+  },
+  upcomingMain: { flex: 1, minWidth: 0 },
+  upcomingDish: { fontSize: 15, fontWeight: '600', color: theme.colors.ink.DEFAULT },
+  upcomingMeta: { fontSize: 13, color: theme.colors.ink.soft, marginTop: 2, textTransform: 'capitalize' },
+  upcomingWhen: { fontSize: 13, fontWeight: '600', color: theme.colors.ink.soft },
   sectionLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,

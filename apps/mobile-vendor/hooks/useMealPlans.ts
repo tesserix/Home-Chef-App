@@ -307,3 +307,44 @@ export function useChefRefundDecision() {
     },
   });
 }
+
+// ── Next-24h dashboard window ───────────────────────────────────────────────
+
+/** One meal the kitchen owes soon, whether or not it has become an order yet. */
+export interface UpcomingMeal {
+  dayId: string;
+  planNumber: string;
+  startsAt: string;
+  slot: string;
+  variant: string;
+  dishName: string;
+  status: string;
+  customerName: string;
+  /** Empty until the day's order locks — the signal it is live in the kitchen. */
+  orderNumber?: string;
+}
+
+export interface UpcomingResponse {
+  hours: number;
+  total: number;
+  lunch: number;
+  dinner: number;
+  meals: UpcomingMeal[];
+}
+
+/**
+ * What the chef owes in the next `hours`.
+ *
+ * The dashboard read only live orders, so a pre-booked tiffin day was invisible
+ * until its order locked 12h before service — a chef with a confirmed week still
+ * saw an empty screen. This answers from the plan days themselves.
+ */
+export function useChefUpcoming(hours: number = 24) {
+  return useQuery<UpcomingResponse>({
+    queryKey: ['chef', 'upcoming', hours],
+    queryFn: () =>
+      api.get<UpcomingResponse>(`/chef/prep/upcoming?hours=${hours}`).then((r) => r.data),
+    refetchInterval: 60_000, // time-sensitive; a dashboard left open must not go stale
+    staleTime: 30_000,
+  });
+}
