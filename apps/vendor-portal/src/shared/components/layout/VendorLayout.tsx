@@ -20,6 +20,9 @@ import {
   BookOpen,
   RotateCcw,
   FileText,
+  PartyPopper,
+  LifeBuoy,
+  Scale,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -49,6 +52,9 @@ const navigation = [
   { name: 'Admin Requests', href: '/admin-requests', icon: ClipboardList },
   { name: 'Notifications', href: '/notifications', icon: Bell },
   { name: 'Documents', href: '/documents', icon: FileText },
+  { name: 'Catering', href: '/catering', icon: PartyPopper },
+  { name: 'Help & Support', href: '/support', icon: LifeBuoy },
+  { name: 'Legal', href: '/legal', icon: Scale },
   { name: 'Reviews', href: '/reviews', icon: Star },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'ChefBook', href: '/chefbook', icon: BookOpen },

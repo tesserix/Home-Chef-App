@@ -79,6 +79,12 @@ const RefundDecisionsPage = lazyWithRetry(
   () => import('@/features/meal-plans/pages/RefundDecisionsPage'),
 );
 const DocumentsPage = lazyWithRetry(() => import('@/features/documents/pages/DocumentsPage'));
+const SupportPage = lazyWithRetry(() => import('@/features/support/pages/SupportPage'));
+const SupportTicketPage = lazyWithRetry(
+  () => import('@/features/support/pages/SupportTicketPage'),
+);
+const CateringPage = lazyWithRetry(() => import('@/features/catering/pages/CateringPage'));
+const LegalPage = lazyWithRetry(() => import('@/features/legal/pages/LegalPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useAuth();
@@ -162,6 +168,10 @@ export function AppRoutes() {
           <Route path="daily-menu" element={<DailyMenuPage />} />
           <Route path="refund-requests" element={<RefundDecisionsPage />} />
           <Route path="documents" element={<DocumentsPage />} />
+          <Route path="support" element={<SupportPage />} />
+          <Route path="support/:id" element={<SupportTicketPage />} />
+          <Route path="catering" element={<CateringPage />} />
+          <Route path="legal" element={<LegalPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="chefbook" element={<ChefBookPage />} />
           <Route path="settings" element={<SettingsPage />} />
