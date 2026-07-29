@@ -49,6 +49,25 @@ func ClampRefundPercent(p int) int {
 	return p
 }
 
+// floorPaise truncates to whole paise instead of rounding to nearest.
+//
+// THIS DIRECTION IS DELIBERATE AND LOAD-BEARING. Each day's refund is computed and rounded
+// INDEPENDENTLY, but the exact (unrounded) per-day shares sum to precisely the plan total.
+// Round-to-nearest lets several days each round UP, so the plan's refunds can add up to more
+// than the customer ever paid — a 13-day plan at ₹49.99 with 5% GST refunds ₹682.37 against
+// ₹682.36 charged. Truncating guarantees every day's share is at or below its exact value, so
+// the sum can never cross the amount captured. The cost is at most one paise per day, retained
+// by the platform; the alternative is minting money.
+//
+// The epsilon absorbs binary-float representation error (92.59 + 7.41 lands a hair above 100.0)
+// so an exact figure is not truncated to a paise below itself.
+func floorPaise(v float64) float64 {
+	if v <= 0 {
+		return 0
+	}
+	return float64(int64(v*100+1e-9)) / 100
+}
+
 // mealPlanDayGrossPaid is the v3 refund base: the FULL amount the customer paid for one day —
 // food + that day's proportional GST + that day's delivery share.
 //
@@ -58,21 +77,36 @@ func ClampRefundPercent(p int) int {
 // silently collapses to the bare food price — dropping the very GST and delivery this policy
 // exists to return. For equal-priced days the two agree exactly.
 //
+// TWO CEILINGS enforce "never refund more than was paid":
+//   - floorPaise, so independently-rounded days can't sum past the plan total (see above);
+//   - a hard cap at plan.Total, the amount the Razorpay advance actually captured
+//     (VerifyMealPlanAdvance binds the payment to it). The proportional share is only
+//     meaningful while the day prices sum to plan.Subtotal, which every legitimate flow
+//     maintains — the cap is the backstop for data where they don't, so a single corrupt day
+//     price can never draw more out of escrow than went into it.
+//
 // Falls back to the bare food price when the plan carries no snapshotted totals (legacy rows).
 func mealPlanDayGrossPaid(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 	if plan == nil {
-		return Round2(day.Price)
+		return floorPaise(day.Price)
 	}
-	return Round2(day.Price + perDayFoodGST(plan, day) + perDayDeliveryRefund(plan, day))
+	gross := day.Price + perDayFoodGST(plan, day) + perDayDeliveryRefund(plan, day)
+	if plan.Total > 0 && gross > plan.Total {
+		gross = plan.Total
+	}
+	return floorPaise(gross)
 }
 
 // MealPlanRefundGSTComponent is the GST slice of a refund at the given percentage — the amount
 // a credit note must cover so the returned tax is backed out of the filing.
+//
+// Floored for the same reason the refund is: a note must never claim more output tax reversed
+// than was actually returned, or the filing adjustment overshoots in the platform's favour.
 func MealPlanRefundGSTComponent(plan *models.MealPlan, day *models.MealPlanDay, percent int) float64 {
 	if plan == nil {
 		return 0
 	}
-	return Round2(perDayFoodGST(plan, day) * float64(ClampRefundPercent(percent)) / 100)
+	return floorPaise(perDayFoodGST(plan, day) * float64(ClampRefundPercent(percent)) / 100)
 }
 
 // MealPlanRefundAmount is the customer refund for one day at the agreed percentage, computed
@@ -82,7 +116,9 @@ func MealPlanRefundGSTComponent(plan *models.MealPlan, day *models.MealPlanDay, 
 // NOTE: the plan must carry its snapshotted totals (Subtotal/Tax/Total) for the GST and
 // delivery terms — callers that Select a subset of columns must include them.
 func MealPlanRefundAmount(plan *models.MealPlan, day *models.MealPlanDay, percent int) float64 {
-	return Round2(mealPlanDayGrossPaid(plan, day) * float64(ClampRefundPercent(percent)) / 100)
+	// floorPaise again on the way out: a percentage of an already-floored base can itself land
+	// mid-paise, and rounding that up would put a partial refund above its exact share.
+	return floorPaise(mealPlanDayGrossPaid(plan, day) * float64(ClampRefundPercent(percent)) / 100)
 }
 
 // MealPlanRefundAmountForDay is MealPlanRefundAmount at the percentage already agreed on the
