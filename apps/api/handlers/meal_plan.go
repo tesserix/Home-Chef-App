@@ -302,21 +302,31 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		}
 	}
 
-	// #409: one active plan per (customer, chef, week). Block a second request that
-	// overlaps an existing plan still in the pending→active lifecycle, so a
-	// customer can't double-book a chef for the same dates. Re-allowed once the
-	// prior plan is rejected/expired/cancelled or its dates pass.
+	// ONE LIVE PLAN PER (CUSTOMER, CHEF) — the same rule meal subscriptions already use.
+	//
+	// This used to be scoped to overlapping DATES, so a customer could stack
+	// several concurrent plans with one kitchen simply by picking different days.
+	// Each one carries its own escrow, its own per-day orders and its own refund
+	// surface, which is confusing for the customer and genuinely hard for the chef
+	// to reason about. A plan is now blocked while ANY earlier plan with that chef
+	// is still in the pending→active lifecycle, regardless of dates.
+	//
+	// Re-allowed the moment the prior plan reaches a terminal state — rejected,
+	// expired, cancelled or completed — so this restricts concurrency, never the
+	// customer's ability to book that kitchen again.
 	liveStatuses := []models.MealPlanStatus{
 		models.MealPlanPendingChef, models.MealPlanChefAcceptedFull, models.MealPlanChefModified,
 		models.MealPlanAwaitingCustomer, models.MealPlanConfirmed, models.MealPlanActive,
 	}
 	var existing models.MealPlan
 	if err := database.DB.
-		Where("customer_id = ? AND chef_id = ? AND status IN ? AND start_date <= ? AND end_date >= ?",
-			customerID, chefID, liveStatuses, maxDate, minDate).
+		Where("customer_id = ? AND chef_id = ? AND status IN ?", customerID, chefID, liveStatuses).
+		Order("created_at DESC").
 		First(&existing).Error; err == nil {
 		c.JSON(http.StatusConflict, gin.H{
-			"error":          "You already have a plan with this chef for these dates — it's with the chef for approval.",
+			"error": fmt.Sprintf(
+				"You already have a plan with this chef (%s). Cancel or finish it before booking another.",
+				existing.MealPlanNumber),
 			"code":           "duplicate_plan",
 			"existingPlanId": existing.ID,
 		})

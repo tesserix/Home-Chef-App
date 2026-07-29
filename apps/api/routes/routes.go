@@ -704,6 +704,10 @@ func SetupRouter() *gin.Engine {
 			mealSubs.POST("", mealSubHandler.Subscribe)
 			mealSubs.GET("", mealSubHandler.GetMySubscriptions)
 			mealSubs.GET("/:id/fulfillments", mealSubHandler.GetFulfillments)
+			// Edit rather than re-subscribe: one live subscription per (customer,
+			// chef) is enforced at create, so without this a customer could never
+			// change their days/slots short of cancelling and losing the paid cycle.
+			mealSubs.PUT("/:id", mealSubHandler.UpdateSubscription)
 			mealSubs.POST("/:id/pause", mealSubHandler.Pause)
 			mealSubs.POST("/:id/resume", mealSubHandler.Resume)
 			mealSubs.POST("/:id/skip", mealSubHandler.Skip)
