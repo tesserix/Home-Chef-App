@@ -25,6 +25,9 @@ export interface WeeklyMenuItem {
   isCombo?: boolean;
   /** The dishes the thali/combo includes (e.g. ["Rice","Dal","Sabji"]). */
   comboComponents?: string[];
+  /** How much food, and for how many people. */
+  portionSize?: string;
+  serves?: number;
 }
 
 export interface WeeklyMenu {
@@ -119,6 +122,11 @@ export interface DailyMenuItemInput {
   imageUrl?: string;
   isCombo: boolean;
   comboComponents: string[];
+  /** Set when the dish came from the chef's à-la-carte menu (DishPicker). */
+  menuItemId?: string | null;
+  /** How much food, and for how many people. */
+  portionSize?: string;
+  serves?: number;
   sortOrder: number;
 }
 
