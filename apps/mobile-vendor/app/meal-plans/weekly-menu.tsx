@@ -144,16 +144,33 @@ export default function WeeklyMenuEditorScreen() {
     saveDraft(cells);
   }, [hydrated, cells, saveDraft]);
 
-  const filledByDay = useMemo(() => {
-    const set = new Set<number>();
+  /**
+   * How complete each day is — 'empty' | 'partial' | 'complete'.
+   *
+   * A single "has something" dot could not answer the question a chef actually
+   * has, which is "what still blocks me from publishing?". Publishing requires
+   * every offered (day × slot) to be filled, so a day with lunch but no dinner
+   * is exactly as blocking as an empty one while LOOKING identical. Splitting
+   * partial from complete puts that on the tab itself.
+   */
+  const dayStatus = useMemo(() => {
+    const bySlot = new Map<number, Set<string>>();
     for (const key of Object.keys(cells)) {
       const c = cells[key];
-      if (c && c.name.trim()) {
-        const dow = Number(key.split('-')[0]);
-        set.add(dow);
-      }
+      if (!c || !c.name.trim()) continue;
+      const [dowStr, slot] = key.split('-');
+      const dow = Number(dowStr);
+      if (!bySlot.has(dow)) bySlot.set(dow, new Set());
+      if (slot) bySlot.get(dow)?.add(slot);
     }
-    return set;
+    const out = new Map<number, 'empty' | 'partial' | 'complete'>();
+    for (const d of DAYS) {
+      const slots = bySlot.get(d.dow);
+      if (!slots || slots.size === 0) out.set(d.dow, 'empty');
+      else if (slots.size >= SLOTS.length) out.set(d.dow, 'complete');
+      else out.set(d.dow, 'partial');
+    }
+    return out;
   }, [cells]);
 
   function setCell(
@@ -339,16 +356,27 @@ export default function WeeklyMenuEditorScreen() {
                   <Text style={[styles.dayTabText, active && styles.dayTabTextActive]}>
                     {d.short}
                   </Text>
-                  {filledByDay.has(d.dow) ? (
-                    <View
-                      style={[
-                        styles.dot,
-                        { backgroundColor: active ? theme.colors.paper : theme.colors.ink.DEFAULT },
-                      ]}
-                    />
-                  ) : (
-                    <View style={styles.dotPlaceholder} />
-                  )}
+                  {/* Green = both meals set, amber = half a day (still blocks
+                      publishing), nothing = untouched. On the selected tab the
+                      dark pill swallows those hues, so it inverts to paper. */}
+                  {(() => {
+                    const st = dayStatus.get(d.dow) ?? 'empty';
+                    if (st === 'empty') return <View style={styles.dotPlaceholder} />;
+                    return (
+                      <View
+                        style={[
+                          styles.dot,
+                          {
+                            backgroundColor: active
+                              ? theme.colors.paper
+                              : st === 'complete'
+                                ? theme.colors.diet.veg
+                                : theme.colors.amber.DEFAULT,
+                          },
+                        ]}
+                      />
+                    );
+                  })()}
                 </View>
               )}
             </Pressable>
@@ -467,12 +495,20 @@ export default function WeeklyMenuEditorScreen() {
                         </Text>
                       </View>
                     </Pressable>
-                    {/* Was a comma-typed text field. The daily editor already
-                        multi-selects the chef's own dishes here (#431); weekly
-                        was the odd one out, so a thali built on one screen and
-                        the same thali built on the other produced differently
-                        spelled component lists. */}
-                    {c?.isCombo ? (
+                  </View>
+                  {/* The composer is a full-width block, so it sits OUTSIDE the
+                      chip's row. Nested inside it (flexDirection: 'row') it was
+                      squeezed into whatever space the chip left over and spilled
+                      off the right edge of the card — the hint text and the
+                      custom-item field were both clipped.
+
+                      Was a comma-typed text field. The daily editor already
+                      multi-selects the chef's own dishes here (#431); weekly was
+                      the odd one out, so a thali built on one screen and the same
+                      thali built on the other produced differently spelled
+                      component lists. */}
+                  {c?.isCombo ? (
+                    <View style={styles.comboComposerWrap}>
                       <ComboComposer
                         menuItems={menuItemOptions}
                         value={componentList(c)}
@@ -480,8 +516,8 @@ export default function WeeklyMenuEditorScreen() {
                           setCell(day.dow, s.slot, v.variant, { components: names.join(', ') })
                         }
                       />
-                    ) : null}
-                  </View>
+                    </View>
+                  ) : null}
                 </View>
               );
             })}
@@ -651,6 +687,9 @@ const styles = StyleSheet.create({
     // now sits between, so that indent left the chip floating in the middle of
     // the card, attached to nothing. Flush left ties it to the cell it belongs
     // to.
+    marginTop: theme.spacing[2],
+  },
+  comboComposerWrap: {
     marginTop: theme.spacing[2],
   },
   comboChip: {
