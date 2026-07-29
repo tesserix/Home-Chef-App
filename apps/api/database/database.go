@@ -419,6 +419,11 @@ func Migrate() error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_weekly_cell_test ON weekly_menu_items (chef_id, day_of_week, slot, variant, test_session_id) WHERE mode = 'test'`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_menu_chef_date_live ON daily_menus (chef_id, date) WHERE mode = 'live'`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_menu_chef_date_test ON daily_menus (chef_id, date, test_session_id) WHERE mode = 'test'`,
+		// The stranded-delivery sweep (services/delivery_failure_reconcile.go)
+		// scans failed/returned rows oldest-first inside a grace window. Without
+		// this it is a full scan of every delivery ever made on every tick.
+		// AutoMigrate creates the deliveries.updated_at column this indexes.
+		`CREATE INDEX IF NOT EXISTS ix_deliveries_status_updated ON deliveries (status, updated_at)`,
 	}
 	for _, stmt := range postMigrate {
 		if err := DB.Exec(stmt).Error; err != nil {
