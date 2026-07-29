@@ -133,18 +133,37 @@ func TestCreateMealPlan_BlocksDuplicateOverlappingPlan(t *testing.T) {
 }
 
 // #409: a NON-overlapping request (a later week) is NOT blocked by an existing plan.
-func TestCreateMealPlan_AllowsNonOverlappingPlan(t *testing.T) {
+func TestCreateMealPlan_BlocksSecondPlanWithSameChefEvenOnDifferentDates(t *testing.T) {
 	db, userID, chefID := setupBookingDB(t)
 	require.NoError(t, db.Exec(`INSERT INTO meal_plans (id, meal_plan_number, customer_id, chef_id, status, start_date, end_date, total)
 		VALUES (?,?,?,?,?,?,?,?)`,
 		uuid.NewString(), "MP-existing", userID.String(), chefID.String(), "pending_chef", "2027-01-01", "2027-01-05", 200.0).Error)
 
-	// bookDate (March) doesn't overlap January → passes the duplicate guard. It then
-	// reaches the GORM insert which SQLite can't run (uuid default), so we only assert
-	// it's NOT a 409 duplicate_plan.
+	// bookDate (March) does NOT overlap the existing January plan, and used to be
+	// allowed. The rule is now one LIVE plan per (customer, chef) regardless of
+	// dates — stacking concurrent plans against one kitchen gave each its own
+	// escrow, orders and refund surface, which neither side could reason about.
 	w := mealPlanReq(t, userID, map[string]any{
 		"chefId": chefID.String(),
 		"days":   []map[string]any{{"date": bookDate, "slot": "lunch", "variant": "veg"}},
 	})
-	require.NotEqual(t, http.StatusConflict, w.Code, "a non-overlapping plan must not hit the duplicate guard")
+	require.Equal(t, http.StatusConflict, w.Code, "a second live plan with the same chef must be refused")
+	require.Contains(t, w.Body.String(), "duplicate_plan")
+}
+
+func TestCreateMealPlan_AllowsNewPlanOnceThePriorOneIsTerminal(t *testing.T) {
+	db, userID, chefID := setupBookingDB(t)
+	// Cancelled is terminal, so it must NOT block a fresh booking — the rule
+	// restricts concurrency, never the customer's ability to book that kitchen again.
+	require.NoError(t, db.Exec(`INSERT INTO meal_plans (id, meal_plan_number, customer_id, chef_id, status, start_date, end_date, total)
+		VALUES (?,?,?,?,?,?,?,?)`,
+		uuid.NewString(), "MP-done", userID.String(), chefID.String(), "cancelled", "2027-01-01", "2027-01-05", 200.0).Error)
+
+	// Reaches the GORM insert, which SQLite can't run (uuid default), so we only
+	// assert it is NOT refused as a duplicate.
+	w := mealPlanReq(t, userID, map[string]any{
+		"chefId": chefID.String(),
+		"days":   []map[string]any{{"date": bookDate, "slot": "lunch", "variant": "veg"}},
+	})
+	require.NotEqual(t, http.StatusConflict, w.Code, "a terminal prior plan must not block a new booking")
 }
