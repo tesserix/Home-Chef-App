@@ -129,8 +129,10 @@ func idempotencyGuard(ctx context.Context, key string) (bool, func()) {
 	return true, func() { _ = r.Del(ctx, "mealplan:lock:"+key) }
 }
 
-func mealPlanNumber() string {
-	return "MP-" + uuid.NewString()[:8]
+// mealPlanNumber builds a kitchen-prefixed plan reference:
+// "AMMA-KA-KITCHEN-MP-31e3a741".
+func mealPlanNumber(businessName string) string {
+	return services.ChefRef(businessName, "MP-"+uuid.NewString()[:8])
 }
 
 // ───────────────────────── Customer ─────────────────────────
@@ -336,7 +338,7 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 	respondBy := time.Now().Add(chefRespondWindow)
 	plan := models.MealPlan{
 		ModePartition:  models.ModePartition{Mode: services.PaymentModeForChef(chefID)},
-		MealPlanNumber: mealPlanNumber(),
+		MealPlanNumber: mealPlanNumber(chef.BusinessName),
 		CustomerID:     customerID,
 		ChefID:         chefID,
 		Status:         models.MealPlanPendingChef,

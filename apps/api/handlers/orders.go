@@ -556,8 +556,8 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		}
 	}
 
-	// Generate order number
-	orderNumber := generateOrderNumber()
+	// Generate order number (kitchen-prefixed — `chef` is loaded above)
+	orderNumber := generateOrderNumber(chef.BusinessName)
 
 	// Inherit the chef's current gateway so VerifyPayment / refund later
 	// read the same provider this order was created against. Falls back to
@@ -1183,9 +1183,11 @@ func (h *OrderHandler) TrackOrderWS(c *gin.Context) {
 	}
 }
 
-// Helper to generate order number
-func generateOrderNumber() string {
+// generateOrderNumber builds a customer-facing order number, prefixed with the
+// kitchen it belongs to: "AMMA-KA-KITCHEN-HC26072808359105". Pass the chef's
+// business name; an empty one falls back to the bare HC… form.
+func generateOrderNumber(businessName string) string {
 	timestamp := time.Now().Format("0601021504")
 	random := rand.Intn(9999)
-	return fmt.Sprintf("HC%s%04d", timestamp, random)
+	return services.ChefRef(businessName, fmt.Sprintf("HC%s%04d", timestamp, random))
 }

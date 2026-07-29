@@ -232,7 +232,7 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		order := models.Order{
-			OrderNumber:               mealPlanOrderNumber(),
+			OrderNumber:               mealPlanOrderNumber(chefBusinessName(p.ChefID)),
 			CustomerID:                p.CustomerID,
 			ChefID:                    p.ChefID,
 			Status:                    models.OrderStatusPending,
@@ -397,8 +397,20 @@ func defaultAddress(userID uuid.UUID) (models.Address, bool) {
 	return a, true
 }
 
-func mealPlanOrderNumber() string {
-	return "HCMP" + uuid.NewString()[:10]
+// mealPlanOrderNumber builds a kitchen-prefixed number for the per-day order a
+// plan generates: "AMMA-KA-KITCHEN-HCMP1a2b3c4d5e".
+func mealPlanOrderNumber(businessName string) string {
+	return ChefRef(businessName, "HCMP"+uuid.NewString()[:10])
+}
+
+// chefBusinessName looks up a kitchen's display name for reference prefixing.
+// Best-effort: a miss yields "", and ChefRef falls back to the bare number.
+func chefBusinessName(chefID uuid.UUID) string {
+	var chef models.ChefProfile
+	if err := database.DB.Select("business_name").First(&chef, "id = ?", chefID).Error; err != nil {
+		return ""
+	}
+	return chef.BusinessName
 }
 
 // allDaysTerminal reports whether every day has reached a terminal state.
