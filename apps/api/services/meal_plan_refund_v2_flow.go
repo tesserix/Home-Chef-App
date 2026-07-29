@@ -1,14 +1,18 @@
 package services
 
-// meal_plan_refund_v2_flow.go — the v2 refund executor + chef/admin transitions
-// (docs/meal-plan-refund-flow-design.md). ExecuteMealPlanV2Refund is the single money+state seam
-// every v2 path funnels through: the >12h auto path (Full → wallet), the admin-pay path (chef's
-// Full/Half after admin picks a destination), and the None path (no customer refund, chef paid).
+// meal_plan_refund_v2_flow.go — the refund executor + chef/admin transitions
+// (docs/refund-policy-v3-spec.md). ExecuteMealPlanV2Refund is the single money+state seam every
+// path funnels through: the auto-approve path (top tier, no chef step), the customer-medium path,
+// and the admin-executed gateway path.
 //
-// Money rules (all off the fee/GST-EXCLUDED base — see MealPlanRefundAmount):
-//   Full → customer gets 100% of base; chef's held transfer fully reversed (chef 0 for the day).
-//   Half → customer gets 50%; chef keeps 50% of their net payout (transfer half-reversed).
-//   None → customer gets 0; chef keeps 100% (transfer released); day skipped.
+// Money rules — v3 (#834). The percentage is a bounded 0–100 the chef agreed within the tier
+// floor, applied to the day's refund base — food MINUS the platform commission, plus that day's
+// GST and delivery (see MealPlanRefundAmount):
+//   P% → customer gets P% of the day's base; the chef's held transfer is reversed by P% of
+//        their net, so they keep (100−P)% as prep compensation.
+//   0% → no customer refund; the chef keeps 100% (transfer released); the day is skipped.
+// The platform retains its commission on a refunded day and is out of pocket only the GST and
+// delivery it returns; a GST credit note is issued for the tax so filings stay correct.
 // Destination: wallet (CreditWallet → dual-writes the ledger) or source (gateway refund, RBI).
 // Idempotent on the day's refund_txn_id. No-op when escrow is off or the plan never captured.
 
@@ -31,12 +35,13 @@ func dayCommissionRate(tx *gorm.DB, day *models.MealPlanDay) float64 {
 	return rate
 }
 
-// ExecuteMealPlanV2Refund resolves one day's refund at the chef-chosen proportion to the chosen
+// ExecuteMealPlanV2Refund resolves one day's refund at the chef-agreed percentage to the chosen
 // destination, and drives the day terminal. Runs in the caller's tx.
-func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, proportion models.RefundProportion, dest models.RefundDestination) error {
+func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, percent int, dest models.RefundDestination) error {
+	percent = ClampRefundPercent(percent)
 	if !MealPlanEscrowActive() || plan.EscrowPaymentID == "" {
 		// Nothing captured → no money to move; just terminalize the state.
-		return terminalizeV2Day(tx, day, proportion, dest, false)
+		return terminalizeV2Day(tx, day, percent, dest, false)
 	}
 
 	// Idempotency: re-read refund_txn_id under a row lock; a prior writer already refunded.
@@ -53,22 +58,22 @@ func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.Mea
 		return nil // already resolved by a prior/concurrent writer
 	}
 
-	amount := MealPlanRefundAmount(plan, day, proportion)
+	amount := MealPlanRefundAmount(plan, day, percent)
 
-	// NONE (or a zero base): no customer refund; the chef keeps their full payout (release the
+	// 0% (or a zero base): no customer refund; the chef keeps their full payout (release the
 	// held transfer) and the day is skipped (customer forfeits).
-	if proportion == models.RefundProportionNone || amount <= 0 {
+	if percent <= 0 || amount <= 0 {
 		if err := ReleaseDayPayout(tx, day); err != nil {
 			return fmt.Errorf("v2 refund day %s: release chef payout (none): %w", day.ID, err)
 		}
-		return terminalizeV2Day(tx, day, models.RefundProportionNone, dest, false)
+		return terminalizeV2Day(tx, day, 0, dest, false)
 	}
 
-	// Reverse the chef's held transfer by the refunded proportion (Full → full, Half → half); the
-	// chef keeps (1 − proportion) of their net payout. Best-effort on the gateway (a failed
-	// reverse is left as re-drivable drift for the payout-reconcile cron), never blocking the
-	// customer refund. No-op when the chef has no Route transfer for the day.
-	reverseChefTransferForV2(tx, plan, day, proportion)
+	// Reverse the chef's held transfer by the refunded percentage; the chef keeps (100−P)% of
+	// their net payout as prep compensation. Best-effort on the gateway (a failed reverse is
+	// left as re-drivable drift for the payout-reconcile cron), never blocking the customer
+	// refund. No-op when the chef has no Route transfer for the day.
+	reverseChefTransferForV2(tx, plan, day, percent)
 
 	// Drive the day's hold OUT of the payout-release queue so a refunded day can never also be
 	// released to the chef (double-pay). Money-safe for every case; for Half, the chef's kept
@@ -77,7 +82,7 @@ func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.Mea
 		return fmt.Errorf("v2 refund day %s: hold reversal: %w", day.ID, err)
 	}
 
-	reason := fmt.Sprintf("Tiffin %s — refund (%s)", plan.MealPlanNumber, proportion)
+	reason := fmt.Sprintf("Tiffin %s — refund (%d%%)", plan.MealPlanNumber, percent)
 	if dest == models.RefundDestinationSource {
 		// Original method: reverse the escrow charge to the customer's card/UPI (RBI ~5-7 days).
 		refID, err := gatewayRefundToSource(plan, amount, reason, dayRefundKey(day.ID)+":src")
@@ -85,7 +90,10 @@ func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.Mea
 			return fmt.Errorf("v2 refund day %s to source: %w", day.ID, err)
 		}
 		day.RefundDestination = models.RefundDestinationSource
-		return terminalizeV2DayWithGatewayRef(tx, day, proportion, refID)
+		if err := terminalizeV2DayWithGatewayRef(tx, day, percent, refID); err != nil {
+			return err
+		}
+		return issueRefundCreditNote(tx, plan, day, percent, amount)
 	}
 
 	// Wallet (default, instant): CreditWallet dual-writes into the ledger's user_wallet_refund
@@ -96,13 +104,34 @@ func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.Mea
 	}
 	day.RefundTxnID = &txn.ID
 	day.RefundDestination = models.RefundDestinationWallet
-	return terminalizeV2Day(tx, day, proportion, models.RefundDestinationWallet, true)
+	if err := terminalizeV2Day(tx, day, percent, models.RefundDestinationWallet, true); err != nil {
+		return err
+	}
+	return issueRefundCreditNote(tx, plan, day, percent, amount)
 }
 
-// terminalizeV2Day persists the day's terminal v2 state: refunded (a customer refund landed) or
-// skipped (none / nothing captured), stage resolved, with the chef's choice + destination.
-func terminalizeV2Day(tx *gorm.DB, day *models.MealPlanDay, proportion models.RefundProportion, dest models.RefundDestination, refunded bool) error {
-	day.ChefRefundChoice = proportion
+// issueRefundCreditNote records the GST credit note for a landed refund (#834 item 2). v3
+// returns the tax the platform collected, so every refund must be matched by a credit note or
+// the GST filing overstates output tax from the first refund onward. Idempotent per day.
+//
+// A zero-GST refund (legacy plan with no snapshotted tax) needs no note. Runs INSIDE the refund
+// tx: a note that cannot be written rolls the refund back rather than returning tax silently.
+func issueRefundCreditNote(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, percent int, refundAmount float64) error {
+	gst := MealPlanRefundGSTComponent(plan, day, percent)
+	if gst <= 0 {
+		return nil
+	}
+	return IssueMealPlanDayCreditNote(tx, plan, day, refundAmount, gst)
+}
+
+// terminalizeV2Day persists the day's terminal state: refunded (a customer refund landed) or
+// skipped (0% / nothing captured), stage resolved, with the agreed percentage + destination.
+// The legacy chef_refund_choice enum is written alongside as a coarse label so pre-v3 readers
+// (and the sqlite fixtures) keep working; refund_percent is the authoritative value.
+func terminalizeV2Day(tx *gorm.DB, day *models.MealPlanDay, percent int, dest models.RefundDestination, refunded bool) error {
+	percent = ClampRefundPercent(percent)
+	day.RefundPercent = &percent
+	day.ChefRefundChoice = models.RefundProportionLabel(percent)
 	day.RefundStage = models.MPRefundResolved
 	if dest != "" {
 		day.RefundDestination = dest
@@ -115,6 +144,7 @@ func terminalizeV2Day(tx *gorm.DB, day *models.MealPlanDay, proportion models.Re
 	updates := map[string]any{
 		"status":             day.Status,
 		"refund_stage":       day.RefundStage,
+		"refund_percent":     percent,
 		"chef_refund_choice": day.ChefRefundChoice,
 		"refund_destination": day.RefundDestination,
 	}
@@ -126,23 +156,26 @@ func terminalizeV2Day(tx *gorm.DB, day *models.MealPlanDay, proportion models.Re
 
 // terminalizeV2DayWithGatewayRef records a source (gateway) refund: no wallet txn id, but a
 // refund reference so the day reads refunded.
-func terminalizeV2DayWithGatewayRef(tx *gorm.DB, day *models.MealPlanDay, proportion models.RefundProportion, gatewayRefID string) error {
-	day.ChefRefundChoice = proportion
+func terminalizeV2DayWithGatewayRef(tx *gorm.DB, day *models.MealPlanDay, percent int, _ string) error {
+	percent = ClampRefundPercent(percent)
+	day.RefundPercent = &percent
+	day.ChefRefundChoice = models.RefundProportionLabel(percent)
 	day.RefundStage = models.MPRefundResolved
 	day.RefundDestination = models.RefundDestinationSource
 	day.Status = models.MealPlanDayRefunded
 	return tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).Updates(map[string]any{
 		"status":             day.Status,
 		"refund_stage":       day.RefundStage,
+		"refund_percent":     percent,
 		"chef_refund_choice": day.ChefRefundChoice,
 		"refund_destination": day.RefundDestination,
 	}).Error
 }
 
-// reverseChefTransferForV2 reverses the chef's held Route transfer by the refunded proportion.
+// reverseChefTransferForV2 reverses the chef's held Route transfer by the refunded percentage.
 // Best-effort: a failed reverse is logged and left for the payout-reconcile cron. No-op when the
 // day has no transfer (e.g. a chef without a Route account) or Razorpay is unavailable.
-func reverseChefTransferForV2(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, proportion models.RefundProportion) {
+func reverseChefTransferForV2(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, percent int) {
 	if day.PayoutTransferID == "" {
 		return
 	}
@@ -150,18 +183,18 @@ func reverseChefTransferForV2(tx *gorm.DB, plan *models.MealPlan, day *models.Me
 	if rz == nil {
 		return
 	}
-	factor := refundProportionFactor(proportion)
-	if factor <= 0 {
+	percent = ClampRefundPercent(percent)
+	if percent <= 0 {
 		return
 	}
 	net := perDayNetPayout(plan, day, dayCommissionRate(tx, day))
-	reversePaise := 0 // 0 = full reverse for a Full refund
-	if factor < 1 {
-		reversePaise = ToPaise(Round2(net * factor))
+	reversePaise := 0 // 0 = full reverse at 100%
+	if percent < 100 {
+		reversePaise = ToPaise(Round2(net * float64(percent) / 100))
 	}
 	if _, err := rz.ReverseTransfer(day.PayoutTransferID, reversePaise); err != nil {
 		if !isAlreadyReversedErr(err) {
-			log.Printf("v2 refund: reverse transfer %s (proportion %s) failed — reconcile cron will re-drive: %v", day.PayoutTransferID, proportion, err)
+			log.Printf("v2 refund: reverse transfer %s (%d%%) failed — reconcile cron will re-drive: %v", day.PayoutTransferID, percent, err)
 		}
 	}
 }

@@ -302,9 +302,14 @@ func Migrate() error {
 
 		// Invoices
 		&models.OrderInvoice{},
+		// GST credit notes — refund policy v3 returns collected tax, so every refund
+		// must be matched by a note or the filing overstates output tax (#834).
+		&models.CreditNote{},
 
 		// Weekly settlement statements
 		&models.WeeklyStatement{},
+		// Chef cancellation levies, netted off the next settlement (#834).
+		&models.ChefPenalty{},
 
 		// Support Tickets
 		&models.SupportTicket{},

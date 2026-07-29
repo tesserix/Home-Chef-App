@@ -25,6 +25,7 @@ func setupV2RefundDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, status TEXT, price REAL,
 			commission_rate REAL, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			refund_txn_id TEXT, refund_stage TEXT DEFAULT '', chef_refund_choice TEXT DEFAULT '',
+			refund_percent INTEGER, refund_floor_percent INTEGER,
 			refund_destination TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, meal_plan_number TEXT,
 			escrow_payment_id TEXT DEFAULT '', subtotal REAL, tax REAL, total REAL, created_at DATETIME, updated_at DATETIME)`,
@@ -33,6 +34,12 @@ func setupV2RefundDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE wallet_txns (id TEXT PRIMARY KEY, wallet_id TEXT, user_id TEXT, type TEXT, source TEXT,
 			amount REAL, balance_after REAL, currency TEXT, order_id TEXT, reason TEXT, created_by TEXT,
 			idempotency_key TEXT UNIQUE, created_at DATETIME)`,
+		// v3 (#834): the executor issues a GST credit note inside the refund tx, so the
+		// harness must carry the table or every refund rolls back.
+		`CREATE TABLE credit_notes (id TEXT PRIMARY KEY, credit_note_number TEXT UNIQUE, source_key TEXT UNIQUE,
+			customer_id TEXT, chef_id TEXT, meal_plan_id TEXT, meal_plan_day_id TEXT, order_id TEXT,
+			reference TEXT, currency TEXT, taxable_value REAL, tax_amount REAL, total_amount REAL,
+			refund_percent INTEGER, reason TEXT, issued_at DATETIME, created_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
@@ -75,16 +82,18 @@ func v2DayRow(t *testing.T, db *gorm.DB, id uuid.UUID) (status, stage, choice, d
 	return
 }
 
-// Full refund → base (food − commission) to the wallet; day refunded; chef choice + wallet dest recorded.
+// v3: a 100% refund returns food-minus-commission plus that day's GST and delivery to the
+// wallet; the day is refunded and the percentage + wallet destination recorded.
 func TestExecuteV2Refund_FullToWallet(t *testing.T) {
 	v2EscrowOn(t)
 	db := setupV2RefundDB(t)
 	u := uuid.New()
 	plan, day := seedV2Day(t, db, u)
 
-	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, models.RefundProportionFull, models.RefundDestinationWallet))
+	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, 100, models.RefundDestinationWallet))
 
-	require.Equal(t, 146.0, v2WalletBalance(t, db, u), "full = (160 − 0.15×160) + 10 delivery = 146 (GST excluded, delivery included)")
+	require.Equal(t, 162.0, v2WalletBalance(t, db, u),
+		"v3 full = (160 food − 24 commission) + 16 GST + 10 delivery = 162")
 	status, stage, choice, dest := v2DayRow(t, db, day.ID)
 	require.Equal(t, string(models.MealPlanDayRefunded), status)
 	require.Equal(t, string(models.MPRefundResolved), stage)
@@ -92,29 +101,29 @@ func TestExecuteV2Refund_FullToWallet(t *testing.T) {
 	require.Equal(t, "wallet", dest)
 }
 
-// Half refund → 50% of the base.
+// 50% refund → half the gross.
 func TestExecuteV2Refund_HalfToWallet(t *testing.T) {
 	v2EscrowOn(t)
 	db := setupV2RefundDB(t)
 	u := uuid.New()
 	plan, day := seedV2Day(t, db, u)
 
-	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, models.RefundProportionHalf, models.RefundDestinationWallet))
-	require.Equal(t, 73.0, v2WalletBalance(t, db, u), "half = 146/2")
+	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, 50, models.RefundDestinationWallet))
+	require.Equal(t, 81.0, v2WalletBalance(t, db, u), "half = 162/2")
 	status, _, choice, _ := v2DayRow(t, db, day.ID)
 	require.Equal(t, string(models.MealPlanDayRefunded), status)
 	require.Equal(t, "half", choice)
 }
 
-// None → no customer refund; day skipped (customer forfeits, chef keeps payout).
+// 0% → no customer refund; day skipped (customer forfeits, chef keeps payout).
 func TestExecuteV2Refund_NoneNoRefund(t *testing.T) {
 	v2EscrowOn(t)
 	db := setupV2RefundDB(t)
 	u := uuid.New()
 	plan, day := seedV2Day(t, db, u)
 
-	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, models.RefundProportionNone, models.RefundDestinationWallet))
-	require.Equal(t, 0.0, v2WalletBalance(t, db, u), "none refunds nothing")
+	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, 0, models.RefundDestinationWallet))
+	require.Equal(t, 0.0, v2WalletBalance(t, db, u), "0% refunds nothing")
 	status, stage, choice, _ := v2DayRow(t, db, day.ID)
 	require.Equal(t, string(models.MealPlanDaySkipped), status)
 	require.Equal(t, string(models.MPRefundResolved), stage)
@@ -128,9 +137,9 @@ func TestExecuteV2Refund_Idempotent(t *testing.T) {
 	u := uuid.New()
 	plan, day := seedV2Day(t, db, u)
 
-	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, models.RefundProportionFull, models.RefundDestinationWallet))
+	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day, 100, models.RefundDestinationWallet))
 	// Reload the day (refund_txn_id + stage now set) and re-run.
 	day2 := &models.MealPlanDay{ID: day.ID, MealPlanID: plan.ID, Price: 160, CommissionRate: 0.15}
-	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day2, models.RefundProportionFull, models.RefundDestinationWallet))
-	require.Equal(t, 146.0, v2WalletBalance(t, db, u), "credited once, not twice")
+	require.NoError(t, ExecuteMealPlanV2Refund(db, plan, day2, 100, models.RefundDestinationWallet))
+	require.Equal(t, 162.0, v2WalletBalance(t, db, u), "credited once, not twice")
 }

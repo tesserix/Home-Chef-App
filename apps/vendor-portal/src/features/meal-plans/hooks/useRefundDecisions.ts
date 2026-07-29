@@ -1,15 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
 
-// Chef refund decisions on late meal-plan skips/cancels (meal-plan refund v2).
+// Chef refund decisions on late meal-plan skips/cancels (refund policy v3, #834).
 //
-// When a customer skips or cancels a tiffin day with ≤12h notice, the chef has
-// already bought ingredients — so instead of an automatic full refund, the chef
-// decides: Full, Half, None, or Decline the request outright. Over 12h it
-// auto-agrees a full refund and never reaches this queue.
+// When a customer cancels a tiffin day at short notice the chef has already bought
+// ingredients, so instead of an automatic full refund the chef sets how much to give
+// back — any amount from the day's lead-time FLOOR up to 100%. The floor comes from
+// the server (pinned when the request was raised) and the server rejects anything
+// below it, so this UI constrains the input for usability, not for safety.
 //
-// The portal had no way to make that decision, so a web-only chef silently left
-// customers waiting on a refund they had asked for.
+// A cancellation with plenty of notice auto-agrees the full amount and never reaches
+// this queue.
 //
 // Backed by GET /chef/meal-plan-days/pending-refund-decisions and
 // POST /chef/meal-plan-days/:dayId/refund-decision.
@@ -22,18 +23,22 @@ export interface RefundDecisionDay {
   dishName: string;
   customerName: string;
   mealPlanNumber: string;
-  /** What the food itself cost — the base the refund options are computed from. */
+  /** What the food itself cost. NOT the refund base — see fullRefund. */
   foodPrice: number;
-  /** Server-computed amounts. The UI never derives these: the fee, GST and
-   *  delivery slices are excluded server-side and halving foodPrice here would
-   *  quietly disagree with what is actually paid out. */
+  /** This day's lead-time floor: the least the chef may refund. */
+  minPercent: number;
+  /** That floor in rupees. */
+  minRefund: number;
+  /** 100% of the day's refundable value — food net of the platform commission, plus that
+   *  day's GST and delivery. Server-computed; not derivable from foodPrice. */
   fullRefund: number;
+  /** 50%. Retained from the pre-v3 fixed Full/Half pair. */
   halfRefund: number;
 }
 
 export type RefundChoice = 'full' | 'half' | 'none';
 
-/** Days awaiting this chef's decision. Empty when the v2 flow is gated off. */
+/** Days awaiting this chef's decision. Empty when the flow is gated off. */
 export function useRefundDecisions() {
   return useQuery<RefundDecisionDay[]>({
     queryKey: ['chef', 'refund-decisions'],
@@ -47,18 +52,24 @@ export function useRefundDecisions() {
 
 interface DecisionInput {
   dayId: string;
-  /** Ignored by the server when `decline` is true. */
-  choice: RefundChoice;
+  /** 0–100, at or above the day's minPercent. Ignored when `decline` is true. */
+  percent: number;
   decline?: boolean;
 }
 
 export function useSubmitRefundDecision() {
   const qc = useQueryClient();
   return useMutation<unknown, unknown, DecisionInput>({
-    mutationFn: ({ dayId, choice, decline }) =>
-      apiClient.post(`/chef/meal-plan-days/${dayId}/refund-decision`, { choice, decline }),
+    mutationFn: ({ dayId, percent, decline }) =>
+      apiClient.post(`/chef/meal-plan-days/${dayId}/refund-decision`, { percent, decline }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['chef', 'refund-decisions'] });
     },
   });
+}
+
+/** The refund at `percent`, interpolated from the server's 100% figure so the preview
+ *  tracks the slider without a round-trip. The server recomputes it authoritatively. */
+export function refundAtPercent(day: RefundDecisionDay, percent: number): number {
+  return Math.round(day.fullRefund * percent) / 100;
 }

@@ -37,7 +37,11 @@ type WeeklyStatement struct {
 	SGST               float64 `gorm:"default:0" json:"sgst"`
 	IGST               float64 `gorm:"default:0" json:"igst"`
 	TDS                float64 `gorm:"default:0" json:"tds"`
-	NetPayout          float64 `gorm:"default:0" json:"netPayout"`
+	// PenaltyDeductions is the total of ChefPenalty levies netted off this settlement
+	// (#834 item 6) — the statement's own invoice line for them. NetPayout is AFTER this
+	// deduction, so a chef reading it sees what will actually be paid.
+	PenaltyDeductions float64 `gorm:"default:0" json:"penaltyDeductions"`
+	NetPayout         float64 `gorm:"default:0" json:"netPayout"`
 
 	// Payout disbursement tracking (admin). Statements are computed weekly by
 	// the cron; disbursement is currently MANUAL (RazorpayX automation is

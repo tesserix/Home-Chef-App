@@ -114,7 +114,7 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			continue
 		}
 		b.totals.Round()
-		created, err := upsertWeeklyStatement(chefID, b.userID, weekStart, weekEnd, b.totals)
+		created, stmt, err := upsertWeeklyStatement(chefID, b.userID, weekStart, weekEnd, b.totals)
 		if err != nil {
 			log.Printf("weekly-statement: persist failed for chef=%s week=%s: %v",
 				chefID, weekStart.Format("2006-01-02"), err)
@@ -123,7 +123,16 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 		if !created {
 			continue // already existed — no duplicate push
 		}
-		if err := sendStatementReadyPush(b.userID, weekStart, weekEnd, b.totals.NetPayout); err != nil {
+		// #834: net any outstanding cancellation levies off this settlement and record them
+		// as its penalty line. Claim-guarded, so a re-run can't deduct twice. A failure here
+		// leaves the levies pending for the NEXT statement rather than losing them — the
+		// statement is still valid, it just didn't collect this week.
+		if _, pErr := ApplyChefPenaltiesToStatement(database.DB, stmt); pErr != nil {
+			log.Printf("weekly-statement: penalty deduction failed for chef=%s week=%s (levies stay pending): %v",
+				chefID, weekStart.Format("2006-01-02"), pErr)
+		}
+		// Push the payout AFTER deductions — the number the chef will actually receive.
+		if err := sendStatementReadyPush(b.userID, weekStart, weekEnd, stmt.NetPayout); err != nil {
 			log.Printf("weekly-statement: push failed for chef=%s: %v", chefID, err)
 		}
 		issued++
@@ -150,19 +159,20 @@ func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, 
 
 // upsertWeeklyStatement creates the statement row, returning created=false if
 // one already exists for (chef, week). The DB unique index makes the insert
-// the authoritative race-winner across pods.
+// the authoritative race-winner across pods. The created row is returned so the
+// caller can apply post-creation adjustments (penalty deductions, #834).
 func upsertWeeklyStatement(
 	chefID, userID uuid.UUID, weekStart, weekEnd time.Time, t EarningsTotals,
-) (bool, error) {
+) (bool, *models.WeeklyStatement, error) {
 	var existing models.WeeklyStatement
 	err := database.DB.
 		Where("chef_id = ? AND week_start = ?", chefID, weekStart).
 		First(&existing).Error
 	if err == nil {
-		return false, nil
+		return false, &existing, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, err
+		return false, nil, err
 	}
 
 	stmt := models.WeeklyStatement{
@@ -182,9 +192,9 @@ func upsertWeeklyStatement(
 	}
 	if err := database.DB.Create(&stmt).Error; err != nil {
 		// Lost the race to a concurrent pod — treat as "already issued".
-		return false, nil
+		return false, nil, nil
 	}
-	return true, nil
+	return true, &stmt, nil
 }
 
 // claimStatementGeneration gates each (chef, week) tuple through Redis SETNX

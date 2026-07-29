@@ -1,8 +1,9 @@
 package handlers
 
-// meal_plan_refund_v2.go — HTTP endpoints for the v2 meal-plan refund workflow
-// (docs/meal-plan-refund-flow-design.md): the CHEF decides a late (≤12h) skip/cancel (Full/Half/
-// None/Decline), then an ADMIN pays it to the wallet or original method. Both gated by the flow flag.
+// meal_plan_refund_v2.go — HTTP endpoints for the meal-plan refund workflow
+// (docs/refund-policy-v3-spec.md): the CHEF sets the refund percentage for a late skip/cancel
+// (bounded below by the day's lead-time floor), the CUSTOMER picks the medium, and an ADMIN only
+// EXECUTES a gateway refund. All gated by the flow flag.
 
 import (
 	"errors"
@@ -19,8 +20,10 @@ import (
 	"github.com/homechef/api/services"
 )
 
-// chefRefundDecisionDay is one day awaiting the chef's Full/Half/None/Decline, with the
-// fee/GST-excluded refund amounts so the chef can weigh prep-done vs refund.
+// chefRefundDecisionDay is one day awaiting the chef's decision, with the amounts they are
+// choosing between so the chef can weigh prep-done against refund. Amounts are ALWAYS
+// server-computed: the base is food less the platform commission, plus that day's GST and
+// delivery — which a client cannot derive from foodPrice alone.
 type chefRefundDecisionDay struct {
 	DayID          string  `json:"dayId"`
 	Date           string  `json:"date"`
@@ -29,8 +32,15 @@ type chefRefundDecisionDay struct {
 	CustomerName   string  `json:"customerName"`
 	MealPlanNumber string  `json:"mealPlanNumber"`
 	FoodPrice      float64 `json:"foodPrice"`
-	FullRefund     float64 `json:"fullRefund"`
-	HalfRefund     float64 `json:"halfRefund"`
+	// MinPercent is this day's pinned lead-time floor — the chef may not go below it and the
+	// server rejects an attempt to. MinRefund is that floor in rupees.
+	MinPercent int     `json:"minPercent"`
+	MinRefund  float64 `json:"minRefund"`
+	// FullRefund is 100% of the day's refundable value — the top of the chef's range.
+	FullRefund float64 `json:"fullRefund"`
+	// HalfRefund is retained for pre-v3 clients that render a fixed Full/Half pair. Newer
+	// clients use minPercent..100 with fullRefund as the scale.
+	HalfRefund float64 `json:"halfRefund"`
 }
 
 // GetChefPendingRefundDecisions — GET /chef/meal-plan-days/pending-refund-decisions. Lists the days
@@ -61,21 +71,28 @@ func (h *MealPlanHandler) GetChefPendingRefundDecisions(c *gin.Context) {
 		}
 		var cust models.User
 		database.DB.Select("first_name", "last_name").First(&cust, "id = ?", plan.CustomerID)
+		floor := services.MealPlanDayRefundFloor(d)
 		out = append(out, chefRefundDecisionDay{
 			DayID: d.ID.String(), Date: d.Date.Format("2006-01-02"), Slot: string(d.Slot),
 			DishName: d.DishName, CustomerName: strings.TrimSpace(cust.FirstName + " " + cust.LastName),
 			MealPlanNumber: plan.MealPlanNumber, FoodPrice: d.Price,
-			FullRefund: services.MealPlanRefundAmount(&plan, d, models.RefundProportionFull),
-			HalfRefund: services.MealPlanRefundAmount(&plan, d, models.RefundProportionHalf),
+			MinPercent: floor,
+			MinRefund:  services.MealPlanRefundAmount(&plan, d, floor),
+			FullRefund: services.MealPlanRefundAmount(&plan, d, 100),
+			HalfRefund: services.MealPlanRefundAmount(&plan, d, 50),
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"data": out})
 }
 
-// ChefRefundDecision — POST /chef/meal-plans/days/:dayId/refund-decision. The chef resolves a day
-// awaiting them (a ≤12h skip/cancel): {"choice":"full|half|none"} refunds that proportion of the
-// fee/GST-excluded food (Full/Half go to the admin to pay; None resolves now, chef keeps payout),
-// or {"decline":true} keeps the day (it will be cooked and delivered).
+// ChefRefundDecision — POST /chef/meal-plan-days/:dayId/refund-decision. The chef resolves a day
+// awaiting them: {"percent":N} refunds N% of the day's refundable value (food less the platform
+// commission, plus that day's GST and delivery), where N must be at least the day's pinned
+// lead-time floor; or {"decline":true} keeps the day (it is cooked and the customer charged).
+//
+// The pre-v3 shape {"choice":"full|half|none"} is still accepted so a vendor app that has not been
+// updated keeps working — it maps to 100/50/0 and is then subject to the SAME floor check, so an
+// old client asking for "none" on a 75%-floor day is rejected rather than silently under-refunding.
 func (h *MealPlanHandler) ChefRefundDecision(c *gin.Context) {
 	if !services.MealPlanRefundFlowV2Active() {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Not available"})
@@ -87,10 +104,28 @@ func (h *MealPlanHandler) ChefRefundDecision(c *gin.Context) {
 		return
 	}
 	var req struct {
+		// Percent is the v3 field: 0–100, bounded below by the day's floor. A pointer so an
+		// omitted field is distinguishable from an explicit 0 (which is a real decision when
+		// the floor is 0).
+		Percent *int `json:"percent"`
+		// Choice is the pre-v3 field, kept for un-updated clients.
 		Choice  models.RefundProportion `json:"choice"`
 		Decline bool                    `json:"decline"`
 	}
 	_ = c.ShouldBindJSON(&req)
+
+	// Resolve the requested percentage. A legacy `choice` must be a recognised value —
+	// silently treating an unknown string as 0% would refund the customer nothing.
+	percent := 0
+	if req.Percent != nil {
+		percent = *req.Percent
+	} else if !req.Decline {
+		if !services.ValidRefundProportion(req.Choice) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Send percent (0-100), or choice full/half/none, or decline"})
+			return
+		}
+		percent = models.LegacyRefundPercent(req.Choice)
+	}
 
 	// Authorize: the day's plan must belong to the authenticated chef.
 	userID, _ := middleware.GetUserID(c)
@@ -110,18 +145,22 @@ func (h *MealPlanHandler) ChefRefundDecision(c *gin.Context) {
 		return
 	}
 
-	if err := services.ChefDecideMealPlanRefund(database.DB, dayID, req.Choice, req.Decline); err != nil {
+	if err := services.ChefDecideMealPlanRefund(database.DB, dayID, percent, req.Decline); err != nil {
 		switch {
 		case errors.Is(err, services.ErrRefundStageMismatch):
 			c.JSON(http.StatusConflict, gin.H{"error": "This day is no longer awaiting your decision"})
+		case errors.Is(err, services.ErrRefundBelowFloor):
+			// 422, not 400: the request was well-formed, the AMOUNT is not permitted. The
+			// message carries the floor so the client can correct without a second round-trip.
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrInvalidRefundChoice):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Choice must be full, half, or none (or decline)"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Refund percent must be between 0 and 100"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record decision"})
 		}
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "percent": percent, "declined": req.Decline})
 }
 
 // adminPendingRefundDay is one day whose refund the customer routed to their ORIGINAL method,
@@ -165,7 +204,7 @@ func (h *MealPlanHandler) GetAdminPendingRefunds(c *gin.Context) {
 			DishName: d.DishName, CustomerName: strings.TrimSpace(cust.FirstName + " " + cust.LastName),
 			ChefName: chef.BusinessName, MealPlanNumber: plan.MealPlanNumber,
 			ChefChoice:   string(d.ChefRefundChoice),
-			RefundAmount: services.MealPlanRefundAmount(&plan, d, d.ChefRefundChoice),
+			RefundAmount: services.MealPlanRefundAmountForDay(&plan, d),
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"data": out})
@@ -246,7 +285,7 @@ func (h *MealPlanHandler) GetCustomerPendingRefundChoices(c *gin.Context) {
 		out = append(out, customerRefundChoiceDay{
 			DayID: d.ID.String(), MealPlanID: d.MealPlanID.String(), MealPlanNumber: plan.MealPlanNumber,
 			Date: d.Date.Format("2006-01-02"), Slot: string(d.Slot), DishName: d.DishName,
-			Amount: services.MealPlanRefundAmount(&plan, d, d.ChefRefundChoice),
+			Amount: services.MealPlanRefundAmountForDay(&plan, d),
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"data": out})

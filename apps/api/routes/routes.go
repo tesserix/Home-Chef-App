@@ -195,6 +195,7 @@ func SetupRouter() *gin.Engine {
 	chefBookHandler := handlers.NewChefBookHandler()
 	cateringHandler := handlers.NewCateringHandler()
 	mealPlanHandler := handlers.NewMealPlanHandler()
+	chefPenaltyHandler := handlers.NewChefPenaltyHandler()
 	cancellationHandler := handlers.NewCancellationHandler()
 	supportHandler := handlers.NewSupportHandler()
 	supportChatHandler := handlers.NewSupportChatHandler()
@@ -598,6 +599,9 @@ func SetupRouter() *gin.Engine {
 			// Chef can download the same GSTIN tax invoice the customer
 			// gets — used for their own bookkeeping. Wave 3 §invoicing.
 			chefDashboard.GET("/orders/:orderId/invoice.pdf", chefOrderCancelHandler.GetOrderInvoicePDF)
+			// The chef's own cancellation levies (#834) — visible BEFORE they land as a
+			// deduction on a settlement, so a penalty is never discovered after the fact.
+			chefDashboard.GET("/penalties", chefPenaltyHandler.GetMyChefPenalties)
 			// GET /chef/earnings/breakdown?period=week|month|cycle
 			chefDashboard.GET("/earnings/breakdown", chefEarningsHandler.GetEarningsBreakdown)
 			// Weekly settlement statements — list + per-statement PDF.
@@ -1142,6 +1146,14 @@ func SetupRouter() *gin.Engine {
 			// the gateway refund. The customer chose the medium (RBI); the admin only executes.
 			admin.GET("/meal-plan-days/pending-refunds", mealPlanHandler.GetAdminPendingRefunds)
 			admin.POST("/meal-plan-days/:dayId/execute-refund", mealPlanHandler.AdminExecuteMealPlanDayRefund)
+
+			// Refund policy v3 (#834). Chef cancellation levies: the queue plus the
+			// waiver, which is what keeps an auto-fine defensible when a cancellation
+			// was a genuine emergency. Credit notes: the GST reversal artefacts the
+			// filing adjustment is built from.
+			admin.GET("/chef-penalties", chefPenaltyHandler.ListChefPenalties)
+			admin.POST("/chef-penalties/:id/waive", chefPenaltyHandler.WaiveChefPenalty)
+			admin.GET("/credit-notes", chefPenaltyHandler.ListCreditNotes)
 
 			// Promotions (featured ads)
 			admin.GET("/promotions", promotionHandler.AdminListPromotions)

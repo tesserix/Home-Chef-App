@@ -51,7 +51,7 @@ export function useSkipDayFlow(planId: string | undefined) {
     if (!planId) return;
     showAlert(
       'Skip this day?',
-      'More than 12 hours before your meal? You choose your refund right away. Closer than that, your chef reviews it (they may have started cooking). The refund covers the food and that day’s delivery fee — the GST and platform fee aren’t refunded. This can’t be undone.',
+      'Well ahead of your meal, your refund for that day is agreed right away and you choose where it goes. Closer in, your chef reviews it (they may have started cooking) and there’s a minimum they must refund based on how much notice you gave. A small service charge is retained. This can’t be undone.',
       [
         { text: 'Back', style: 'cancel' },
         {
@@ -62,15 +62,19 @@ export function useSkipDayFlow(planId: string | undefined) {
               { planId, dayId },
               {
                 onSuccess: (res) => {
-                  const r = res as { status?: string } | undefined;
+                  const r = res as { status?: string; minRefundPercent?: number } | undefined;
                   if (r?.status === 'pending_customer') {
-                    // Agreed (>12h) — the customer now picks the medium.
+                    // Auto-agreed (top tier) — the customer now picks the medium.
                     promptMedium(dayId);
                   } else {
-                    // Within 12h — the chef decides the amount first.
+                    // A lower tier: the chef sets the amount, no lower than the floor the
+                    // server pinned. Show that floor so the outcome isn't a black box.
+                    const floor = r?.minRefundPercent;
                     showAlert(
                       'Skip requested',
-                      'Your chef will review this (they may have started cooking). We’ll notify you when your refund is ready to choose.',
+                      floor
+                        ? `Your chef will review this (they may have started cooking). You’ll get back at least ${floor}% of what you paid for the day — we’ll notify you when it’s ready to choose.`
+                        : 'Your chef will review this (they may have started cooking). We’ll notify you when your refund is ready to choose.',
                     );
                   }
                 },

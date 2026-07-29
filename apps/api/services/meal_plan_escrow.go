@@ -361,7 +361,22 @@ func isAlreadyReversedErr(err error) bool {
 // callers (RefundDeclinedDays / RefundUndeliveredDays / sweepStuckDays /
 // ResolveMealPlanDayFailure) keep refunding the full perDayGross.
 func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reason string) error {
-	return refundDayAmount(tx, plan, day, perDayGross(plan, day), reason)
+	amount := perDayGross(plan, day)
+	if err := refundDayAmount(tx, plan, day, amount, reason); err != nil {
+		return err
+	}
+	// #834: this path returns the day's GST in full (perDayGross includes it), so it needs a
+	// credit note for the same reason the v3 cancellation path does — returned output tax has
+	// to be backed out of the filing. Idempotent per day, and a no-op for a legacy plan with
+	// no snapshotted tax. Runs in the caller's tx alongside the refund it reverses.
+	//
+	// This path PRE-dates v3 (it has always refunded gross), so wiring it here also closes the
+	// pre-existing gap rather than leaving half the tax-refunding paths unnoted.
+	gst := perDayFoodGST(plan, day)
+	if gst <= 0 || !MealPlanEscrowActive() {
+		return nil
+	}
+	return IssueMealPlanDayCreditNote(tx, plan, day, amount, gst)
 }
 
 // refundDayAmount is the shared per-day refund money seam: it credits `amount` to the

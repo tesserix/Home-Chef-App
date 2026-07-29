@@ -41,7 +41,7 @@ func TestChefDecide_Full_ToPendingCustomer(t *testing.T) {
 	u := uuid.New()
 	_, dayID := seedV2FlowRow(t, db, u)
 
-	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, models.RefundProportionFull, false))
+	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, 100, false))
 
 	require.Equal(t, 0.0, v2WalletBalance(t, db, u), "chef decision moves no money")
 	status, stage, choice, _ := v2DayRow(t, db, dayID)
@@ -56,10 +56,10 @@ func TestCustomerChoose_Wallet_Refunds(t *testing.T) {
 	db := setupV2RefundDB(t)
 	u := uuid.New()
 	_, dayID := seedV2FlowRow(t, db, u)
-	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, models.RefundProportionFull, false))
+	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, 100, false))
 
 	require.NoError(t, CustomerChooseMealPlanRefundMedium(db, dayID, u, models.RefundDestinationWallet))
-	require.Equal(t, 146.0, v2WalletBalance(t, db, u)) // (160 − 0.15×160) + 10 delivery
+	require.Equal(t, 162.0, v2WalletBalance(t, db, u)) // v3: (160 − 24 commission) + 16 GST + 10 delivery
 	status, stage, _, dest := v2DayRow(t, db, dayID)
 	require.Equal(t, string(models.MealPlanDayRefunded), status)
 	require.Equal(t, string(models.MPRefundResolved), stage)
@@ -72,7 +72,7 @@ func TestCustomerChoose_Source_ToPendingAdmin(t *testing.T) {
 	db := setupV2RefundDB(t)
 	u := uuid.New()
 	_, dayID := seedV2FlowRow(t, db, u)
-	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, models.RefundProportionFull, false))
+	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, 100, false))
 
 	require.NoError(t, CustomerChooseMealPlanRefundMedium(db, dayID, u, models.RefundDestinationSource))
 	require.Equal(t, 0.0, v2WalletBalance(t, db, u), "original method moves no wallet money")
@@ -87,7 +87,7 @@ func TestCustomerChoose_WrongOwner(t *testing.T) {
 	db := setupV2RefundDB(t)
 	u := uuid.New()
 	_, dayID := seedV2FlowRow(t, db, u)
-	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, models.RefundProportionFull, false))
+	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, 100, false))
 	require.ErrorIs(t, CustomerChooseMealPlanRefundMedium(db, dayID, uuid.New(), models.RefundDestinationWallet), gorm.ErrRecordNotFound)
 }
 
@@ -97,7 +97,7 @@ func TestCustomerChoose_InvalidMedium(t *testing.T) {
 	db := setupV2RefundDB(t)
 	u := uuid.New()
 	_, dayID := seedV2FlowRow(t, db, u)
-	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, models.RefundProportionFull, false))
+	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, 100, false))
 	require.ErrorIs(t, CustomerChooseMealPlanRefundMedium(db, dayID, u, "bank"), ErrInvalidRefundMedium)
 }
 
@@ -108,7 +108,7 @@ func TestChefDecide_None_Skipped(t *testing.T) {
 	u := uuid.New()
 	_, dayID := seedV2FlowRow(t, db, u)
 
-	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, models.RefundProportionNone, false))
+	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, 0, false))
 	require.Equal(t, 0.0, v2WalletBalance(t, db, u))
 	status, stage, choice, _ := v2DayRow(t, db, dayID)
 	require.Equal(t, string(models.MealPlanDaySkipped), status)
@@ -123,14 +123,14 @@ func TestChefDecide_Decline_Confirmed(t *testing.T) {
 	u := uuid.New()
 	_, dayID := seedV2FlowRow(t, db, u)
 
-	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, "", true))
+	require.NoError(t, ChefDecideMealPlanRefund(db, dayID, 0, true))
 	status, stage, _, _ := v2DayRow(t, db, dayID)
 	require.Equal(t, string(models.MealPlanDayConfirmed), status)
 	require.Equal(t, "", stage)
 	require.Equal(t, string(models.PayoutHoldNone), v2HoldStatus(t, db, dayID), "frozen hold restored")
 }
 
-// The >12h auto path agrees FULL and hands the medium choice to the customer (pending_customer).
+// The top-tier auto path agrees 100% and hands the medium choice to the customer.
 func TestAgreeFull_ToPendingCustomer(t *testing.T) {
 	v2EscrowOn(t)
 	db := setupV2RefundDB(t)
@@ -138,7 +138,7 @@ func TestAgreeFull_ToPendingCustomer(t *testing.T) {
 	plan, day := seedV2Day(t, db, u)
 
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-		return AgreeMealPlanDayRefundFull(tx, plan, day)
+		return AgreeMealPlanDayRefundAuto(tx, plan, day, 100)
 	}))
 	require.Equal(t, 0.0, v2WalletBalance(t, db, u), "no money until the customer picks a medium")
 	_, stage, choice, _ := v2DayRow(t, db, day.ID)
