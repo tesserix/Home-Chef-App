@@ -280,6 +280,23 @@ type Delivery struct {
 	CancelledAt  *time.Time `gorm:"" json:"cancelledAt,omitempty"`
 	CancelReason string     `gorm:"" json:"cancelReason,omitempty"`
 
+	// This table had NO timestamps at all, which silently disabled a safety net.
+	//
+	// services/delivery_failure_reconcile.go — the sweep that catches an order
+	// stranded by a failed or returned delivery — filters and orders on
+	// `deliveries.updated_at`. Because the column did not exist, all four of its
+	// queries failed with SQLSTATE 42703 on every 10-minute tick and the sweep
+	// has never run once. A delivery that fails with no webhook follow-up
+	// therefore strands its order indefinitely, which is exactly how order
+	// HC26072808359105 sat at `ready` with no carrier until a human looked.
+	//
+	// UpdatedAt is what makes that sweep's grace window meaningful: it is bumped
+	// by every provider webhook re-fire, so a row stays inside the window while
+	// the provider is still retrying and only becomes actionable once the
+	// retries have genuinely stopped.
+	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+
 	// Relationships
 	Order           Order             `gorm:"foreignKey:OrderID" json:"order,omitempty"`
 	DeliveryPartner DeliveryPartner   `gorm:"foreignKey:DeliveryPartnerID" json:"deliveryPartner,omitempty"`

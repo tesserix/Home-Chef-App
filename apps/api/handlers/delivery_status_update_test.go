@@ -61,7 +61,8 @@ func setupDeliveryStatusDB(t *testing.T) *gorm.DB {
 		rider_latitude REAL DEFAULT 0, rider_longitude REAL DEFAULT 0, provider_status TEXT DEFAULT '',
 		delivery_fee REAL DEFAULT 0, tip REAL DEFAULT 0, total_payout REAL DEFAULT 0,
 		assigned_at DATETIME, picked_up_at DATETIME, delivered_at DATETIME,
-		cancelled_at DATETIME, cancel_reason TEXT DEFAULT ''
+		cancelled_at DATETIME, cancel_reason TEXT DEFAULT '',
+		created_at DATETIME, updated_at DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_number TEXT, customer_id TEXT, chef_id TEXT, delivery_id TEXT,
