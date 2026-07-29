@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
+import { useAuth } from '@/app/providers/AuthProvider';
 import type { MealSlot, MealVariant } from '@/shared/types';
 
 // Tiffin meal plans ("plan a week") for the customer web app.
@@ -13,6 +14,22 @@ import type { MealSlot, MealVariant } from '@/shared/types';
 //
 // Backed by /meal-plans (POST create, GET list/detail, PUT approve/reject/cancel,
 // PUT days/:dayId/skip, POST verify-payment).
+
+/**
+ * Pull the server's own message off a failed apiClient call.
+ *
+ * apiClient throws `Object.assign(body, {status})` — a PLAIN OBJECT shaped
+ * `{success, error: {code, message}, status}`, not an Error. So `instanceof
+ * Error` is always false and `err.message` is undefined, which is how a precise
+ * 409 ("You already have a plan with this chef for these dates") surfaced to the
+ * customer as "Could not send your request. Please try again." — telling them to
+ * retry something that could never succeed.
+ */
+export function apiErrorMessage(err: unknown): string {
+  if (!err || typeof err !== 'object') return '';
+  const e = err as { error?: { message?: string }; message?: string };
+  return e.error?.message ?? e.message ?? '';
+}
 
 export type MealPlanStatus =
   | 'pending_chef'
@@ -63,22 +80,36 @@ export interface MealPlan {
   chef?: { businessName?: string; profileImage?: string };
 }
 
+// Every /meal-plans route is bffAuth-only: it is reachable ONLY through the BFF
+// proxy, and apiClient picks that proxy over the direct API purely on
+// `isAuthenticated`. A query that fires before auth hydrates therefore goes
+// direct and comes back 401 — so these must be gated, as the rest of the app's
+// authenticated queries already are.
+
 export function useMealPlans() {
+  const { isAuthenticated } = useAuth();
   return useQuery<MealPlan[]>({
     queryKey: ['meal-plans'],
-    queryFn: () => apiClient.get<{ data: MealPlan[] }>('/meal-plans').then((r) => r?.data ?? []),
+    // NO `.data` unwrap here: this app's apiClient already unwraps a bare
+    // `{data: …}` envelope (unlike the vendor portal's, which only unwraps when
+    // `pagination` is present too). Unwrapping again yielded undefined, so the
+    // list rendered empty even for a customer with live plans.
+    queryFn: () => apiClient.get<MealPlan[]>('/meal-plans'),
+    enabled: isAuthenticated,
     staleTime: 15_000,
   });
 }
 
 export function useMealPlan(id: string | undefined) {
+  const { isAuthenticated } = useAuth();
   return useQuery<MealPlan>({
     queryKey: ['meal-plans', id],
-    // Detail is wrapped in `mealPlan` while the list is wrapped in `data` — the
-    // envelopes differ per endpoint, so unwrap explicitly rather than assuming.
+    // Detail is wrapped in `mealPlan`, which apiClient does NOT auto-unwrap —
+    // only a `data` key gets that treatment. Envelopes differ per endpoint, so
+    // unwrap explicitly rather than assuming.
     queryFn: () =>
       apiClient.get<{ mealPlan: MealPlan }>(`/meal-plans/${id}`).then((r) => r.mealPlan),
-    enabled: !!id,
+    enabled: !!id && isAuthenticated,
   });
 }
 

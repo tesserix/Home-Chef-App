@@ -946,6 +946,10 @@ func SetupRouter() *gin.Engine {
 		chefPrep.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
 		{
 			chefPrep.GET("", mealPlanHandler.GetPrepManifest)
+			// What the kitchen owes next, whether or not it has become an order yet
+			// — the dashboard read /chef/orders only, so a plan day was invisible
+			// until its order locked 12h before service.
+			chefPrep.GET("/upcoming", mealPlanHandler.GetChefUpcoming)
 			chefPrep.POST("/mark", mealPlanHandler.MarkPrepBulk)
 			chefPrep.POST("/day/:dayId", mealPlanHandler.MarkDayPrepared)
 		}

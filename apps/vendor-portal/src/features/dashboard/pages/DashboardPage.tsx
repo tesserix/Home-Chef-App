@@ -17,6 +17,7 @@ import { formatCurrency } from '@/shared/utils/format';
 import { Badge, OrderStatusBadge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
 import { UnacceptedOrdersAlert } from '../components/UnacceptedOrdersAlert';
+import { UpcomingMeals } from '../components/UpcomingMeals';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -574,6 +575,11 @@ export default function DashboardPage() {
         />
         <StatRow label="All-time orders" value={stats?.totalOrders ?? 0} />
       </motion.section>
+
+      {/* What the kitchen owes next. Sits ABOVE the revenue chart because it is
+          the only actionable thing on this page — and because a pre-booked plan
+          day used to appear nowhere on the dashboard until its order locked. */}
+      <UpcomingMeals />
 
       {/* Weekly revenue chart + pending orders */}
       <div className="grid gap-6 lg:grid-cols-3">
