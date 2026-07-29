@@ -7,6 +7,8 @@ const API_URL = `${BFF_URL}/api/v1`;
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
+  /** Return the raw Blob instead of parsing the body as JSON (PDF downloads). */
+  raw?: boolean;
 }
 
 class ApiClient {
@@ -50,9 +52,14 @@ class ApiClient {
     // The auth-bff in front is Fastify-based and rejects
     // (FST_ERR_CTP_EMPTY_JSON_BODY / 400) any POST that claims
     // Content-Type: application/json but arrives empty.
+    // FormData must NOT be labelled application/json — the browser has to set
+    // its own multipart Content-Type including the boundary, and overriding it
+    // yields a body the server cannot parse.
+    const isFormData =
+      typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
     const hasBody = fetchOptions.body !== undefined && fetchOptions.body !== null;
     const headers: HeadersInit = {
-      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+      ...(hasBody && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers,
     };
 
@@ -117,6 +124,13 @@ class ApiClient {
       throw error;
     }
 
+    // Binary endpoints (generated PDFs) opt out of JSON parsing — calling
+    // .json() on a PDF throws, which is why these had to bypass the client
+    // entirely before.
+    if (options.raw) {
+      return (await response.blob()) as T;
+    }
+
     // The Go API is mixed: some endpoints return raw JSON, others wrap
     // in { data: T, pagination: {...} }. Auto-detect and unwrap when needed.
     const json = await response.json();
@@ -130,11 +144,35 @@ class ApiClient {
     return this.request<T>('GET', endpoint, { params });
   }
 
+  /**
+   * GET a binary response (a generated PDF) as a Blob.
+   *
+   * These endpoints sit behind the same session auth as everything else, so a
+   * plain `<a href>` or `window.open` would arrive unauthenticated and land the
+   * chef on a 401 instead of a file. This reuses `request`'s auth, CSRF, MFA and
+   * 401-handling by asking it not to parse the body as JSON.
+   */
+  async getBlob(endpoint: string, params?: RequestOptions['params']): Promise<Blob> {
+    return this.request<Blob>('GET', endpoint, { params, raw: true });
+  }
+
   async post<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {
     return this.request<T>('POST', endpoint, {
       ...options,
       body: body ? JSON.stringify(body) : undefined,
     });
+  }
+
+  /**
+   * POST multipart form data (file uploads).
+   *
+   * Separate from `post` because that JSON-serializes the body and sets
+   * Content-Type: application/json. For FormData the header must be left
+   * unset so the browser can add its own multipart boundary — setting it by
+   * hand produces a body the server cannot parse.
+   */
+  async postForm<T>(endpoint: string, form: FormData, options?: RequestOptions): Promise<T> {
+    return this.request<T>('POST', endpoint, { ...options, body: form });
   }
 
   async put<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {

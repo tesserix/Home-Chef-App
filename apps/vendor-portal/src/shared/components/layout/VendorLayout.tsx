@@ -18,6 +18,11 @@ import {
   CalendarDays,
   CalendarClock,
   BookOpen,
+  RotateCcw,
+  FileText,
+  PartyPopper,
+  LifeBuoy,
+  Scale,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -32,14 +37,24 @@ import { TestModeBanner } from '@/shared/components/TestModeBanner';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Menu', href: '/menu', icon: UtensilsCrossed },
+  // Tiffin plans is the hub; Weekly Menu / Daily menu / Prep / Refund requests
+  // all live under it, mirroring how the mobile app groups them.
+  { name: 'Tiffin Plans', href: '/tiffin-plans', icon: CalendarDays },
   { name: 'Weekly Menu', href: '/weekly-menu', icon: CalendarDays },
+  { name: 'Daily Menu', href: '/daily-menu', icon: CalendarDays },
   { name: 'Prep', href: '/prep', icon: ClipboardCheck },
+  { name: 'Refund Requests', href: '/refund-requests', icon: RotateCcw },
   { name: 'Subscriptions', href: '/subscriptions', icon: CalendarClock },
   { name: 'Capacity', href: '/capacity', icon: Gauge },
   { name: 'Orders', href: '/orders', icon: ClipboardList },
   { name: 'Cancellations', href: '/cancel-requests', icon: ClipboardList },
   { name: 'Earnings', href: '/earnings', icon: DollarSign },
   { name: 'Admin Requests', href: '/admin-requests', icon: ClipboardList },
+  { name: 'Notifications', href: '/notifications', icon: Bell },
+  { name: 'Documents', href: '/documents', icon: FileText },
+  { name: 'Catering', href: '/catering', icon: PartyPopper },
+  { name: 'Help & Support', href: '/support', icon: LifeBuoy },
+  { name: 'Legal', href: '/legal', icon: Scale },
   { name: 'Reviews', href: '/reviews', icon: Star },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'ChefBook', href: '/chefbook', icon: BookOpen },

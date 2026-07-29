@@ -61,7 +61,30 @@ const AnalyticsPage = lazyWithRetry(() => import('@/features/analytics/pages/Ana
 const WeeklyMenuPage = lazyWithRetry(() => import('@/features/meal-plans/pages/WeeklyMenuPage'));
 const SubscriptionSetupPage = lazyWithRetry(() => import('@/features/subscriptions/pages/SubscriptionSetupPage'));
 const SettingsPage = lazyWithRetry(() => import('@/features/settings/pages/SettingsPage'));
-const AdminRequestsPage = lazyWithRetry(() => import('@/features/notifications/pages/NotificationsPage'));
+// These were ONE import: /admin-requests rendered NotificationsPage under an
+// AdminRequestsPage alias, so the portal had no admin-requests screen at all and
+// the notifications inbox was only reachable at the wrong URL.
+const AdminRequestsPage = lazyWithRetry(
+  () => import('@/features/admin-requests/pages/AdminRequestsPage'),
+);
+const NotificationsPage = lazyWithRetry(
+  () => import('@/features/notifications/pages/NotificationsPage'),
+);
+const AccountLifecyclePage = lazyWithRetry(
+  () => import('@/features/account/pages/AccountLifecyclePage'),
+);
+const TiffinPlansPage = lazyWithRetry(() => import('@/features/meal-plans/pages/TiffinPlansPage'));
+const DailyMenuPage = lazyWithRetry(() => import('@/features/meal-plans/pages/DailyMenuPage'));
+const RefundDecisionsPage = lazyWithRetry(
+  () => import('@/features/meal-plans/pages/RefundDecisionsPage'),
+);
+const DocumentsPage = lazyWithRetry(() => import('@/features/documents/pages/DocumentsPage'));
+const SupportPage = lazyWithRetry(() => import('@/features/support/pages/SupportPage'));
+const SupportTicketPage = lazyWithRetry(
+  () => import('@/features/support/pages/SupportTicketPage'),
+);
+const CateringPage = lazyWithRetry(() => import('@/features/catering/pages/CateringPage'));
+const LegalPage = lazyWithRetry(() => import('@/features/legal/pages/LegalPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useAuth();
@@ -139,6 +162,16 @@ export function AppRoutes() {
           <Route path="profile/kitchen" element={<KitchenSetupPage />} />
           <Route path="reviews" element={<ReviewsPage />} />
           <Route path="admin-requests" element={<AdminRequestsPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="account" element={<AccountLifecyclePage />} />
+          <Route path="tiffin-plans" element={<TiffinPlansPage />} />
+          <Route path="daily-menu" element={<DailyMenuPage />} />
+          <Route path="refund-requests" element={<RefundDecisionsPage />} />
+          <Route path="documents" element={<DocumentsPage />} />
+          <Route path="support" element={<SupportPage />} />
+          <Route path="support/:id" element={<SupportTicketPage />} />
+          <Route path="catering" element={<CateringPage />} />
+          <Route path="legal" element={<LegalPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="chefbook" element={<ChefBookPage />} />
           <Route path="settings" element={<SettingsPage />} />
