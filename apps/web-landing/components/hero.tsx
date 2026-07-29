@@ -1,4 +1,5 @@
-import { IMAGES, APP_LOGIN_PATH, WEB_APP_LIVE } from '@/lib/site';
+import { IMAGES, WEB_APP_LIVE } from '@/lib/site';
+import { AddressSearch } from '@/components/address-search';
 import { Parallax } from '@/components/parallax';
 import { RouteMotif } from '@/components/route-motif';
 import { StoreBadges } from '@/components/store-badges';
@@ -42,35 +43,35 @@ export function Hero() {
             dinner travel from their stove to your door.
           </p>
 
-          <div
-            id="get-the-app"
-            className="fade-up mt-9 scroll-mt-28"
-            style={{ animationDelay: '440ms' }}
-          >
-            <StoreBadges />
-          </div>
-
+          {/* The primary action is ordering, not installing.
+              This block used to lead with two "coming soon" store badges — so
+              the loudest control on the page was one nobody can press, while
+              the path that works today sat below it as a text link. Ordering
+              now leads; the badges stay for people who want the app, demoted to
+              what they are until the listings are live. */}
           {WEB_APP_LIVE ? (
-            <p
-              className="fade-up mt-6 text-sm text-charcoal-soft"
-              style={{ animationDelay: '540ms' }}
-            >
-              Prefer your browser?{' '}
-              <a
-                href={APP_LOGIN_PATH}
-                className="font-medium text-coral underline-offset-4 hover:underline"
-              >
-                Order on the web
-              </a>
-            </p>
+            <div className="fade-up mt-8" style={{ animationDelay: '440ms' }}>
+              <AddressSearch />
+            </div>
           ) : null}
 
           <p
-            className="fade-up mt-3 text-sm text-charcoal-soft"
-            style={{ animationDelay: '600ms' }}
+            className="fade-up mt-5 text-sm text-charcoal-soft"
+            style={{ animationDelay: '560ms' }}
           >
             FSSAI-verified kitchens&ensp;&middot;&ensp;Secure payments
           </p>
+
+          <div
+            id="get-the-app"
+            className="fade-up mt-8 scroll-mt-28 border-t border-hairline pt-7"
+            style={{ animationDelay: '640ms' }}
+          >
+            <p className="mb-3 text-sm font-medium text-charcoal">
+              Prefer an app? It&rsquo;s on the way.
+            </p>
+            <StoreBadges />
+          </div>
         </div>
 
         {/* Collage — layered depth, food is the star */}

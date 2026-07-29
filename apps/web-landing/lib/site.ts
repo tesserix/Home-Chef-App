@@ -16,6 +16,17 @@ export const APP_LOGIN_PATH = '/login';
 export const APP_REGISTER_PATH = '/register';
 
 /**
+ * The SPA's kitchen browse. This is where the landing hands a visitor off once
+ * they have told us where they are — it is guest-accessible, so no sign-in wall
+ * stands between "I typed my area" and "here are the kitchens near me".
+ *
+ * It reads `?lat&lng&sort` from the query string (BrowseChefsPage), which is why
+ * the address search resolves coordinates before navigating rather than passing
+ * the raw text along for the SPA to re-interpret.
+ */
+export const BROWSE_PATH = '/chefs';
+
+/**
  * Whether the customer SPA (apps/web) is actually served on this origin.
  *
  * True since 2026-07-25: fe3dr.com is split by path between this landing and
