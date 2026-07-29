@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { cn } from '@tesserix/web';
 import { Wordmark } from '@/components/wordmark';
-import { APP_LOGIN_PATH, WEB_APP_LIVE } from '@/lib/site';
+import { APP_LOGIN_PATH, BROWSE_PATH, WEB_APP_LIVE } from '@/lib/site';
 
 interface SiteNavProps {
   /**
@@ -20,8 +20,13 @@ interface SiteNavProps {
  * faint shadow appear once the page scrolls.
  */
 export function SiteNav({
-  ctaHref = '/download/',
-  ctaLabel = 'Get the app',
+  // The CTA points at ORDERING, not at the app store. While both listings are
+  // still "coming soon", a nav button labelled "Get the app" sends the one
+  // visitor who is ready to buy to a page that cannot sell them anything.
+  // Browse is guest-accessible, so this is a real destination for a first-time
+  // visitor, not a sign-in wall.
+  ctaHref = WEB_APP_LIVE ? BROWSE_PATH : '/download/',
+  ctaLabel = WEB_APP_LIVE ? 'Order now' : 'Get the app',
 }: SiteNavProps = {}) {
   const [scrolled, setScrolled] = useState(false);
 
