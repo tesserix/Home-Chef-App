@@ -96,7 +96,7 @@ func GenerateMealSubscriptionDay(db *gorm.DB, sub *models.MealSubscription, date
 				menuItemID = *dish.MenuItemID
 			}
 			order := models.Order{
-				OrderNumber:               mealSubOrderNumber(),
+				OrderNumber:               mealSubOrderNumber(chefBusinessName(sub.ChefID)),
 				CustomerID:                sub.CustomerID,
 				ChefID:                    sub.ChefID,
 				Status:                    models.OrderStatusPending,
@@ -225,6 +225,8 @@ func GetMealAdherence(db *gorm.DB, subID uuid.UUID) MealAdherence {
 	return a
 }
 
-func mealSubOrderNumber() string {
-	return fmt.Sprintf("MSO-%d-%s", time.Now().Unix(), uuid.NewString()[:6])
+// mealSubOrderNumber builds a kitchen-prefixed number for a subscription's daily
+// order: "AMMA-KA-KITCHEN-MSO-1769..-a1b2c3".
+func mealSubOrderNumber(businessName string) string {
+	return ChefRef(businessName, fmt.Sprintf("MSO-%d-%s", time.Now().Unix(), uuid.NewString()[:6]))
 }

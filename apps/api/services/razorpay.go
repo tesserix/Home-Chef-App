@@ -338,8 +338,31 @@ type OrderResponse struct {
 	Status   string `json:"status"`
 }
 
+// razorpayReceiptMax is Razorpay's hard limit on the `receipt` field. Exceeding
+// it fails order creation outright — i.e. the customer cannot pay.
+const razorpayReceiptMax = 40
+
+// clampReceipt keeps a receipt inside Razorpay's limit.
+//
+// Reference numbers are kitchen-prefixed (ChefRef), and several call sites add
+// their own prefix on top ("refund-", "TIP-"), so a long kitchen name can push a
+// receipt past 40. This is the single place that guarantees it never reaches
+// Razorpay — which is why ChefRefPrefix is free to favour readable prefixes over
+// a cap tight enough to make the arithmetic work unaided.
+//
+// Truncation keeps the TAIL, because the unique part of every reference number
+// lives at the end — trimming the front costs readability, trimming the back
+// would let two receipts collide and break reconciliation.
+func clampReceipt(s string) string {
+	if len(s) <= razorpayReceiptMax {
+		return s
+	}
+	return s[len(s)-razorpayReceiptMax:]
+}
+
 // CreateOrder creates a Razorpay order with Route transfer splits
 func (c *RazorpayClient) CreateOrder(req *OrderRequest) (*OrderResponse, error) {
+	req.Receipt = clampReceipt(req.Receipt)
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)

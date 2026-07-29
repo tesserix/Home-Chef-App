@@ -770,14 +770,16 @@ func (h *GroupOrderHandler) maybeConsolidate(groupID uuid.UUID) (bool, error) {
 
 	now := time.Now()
 	chefAccount := ""
+	chefName := ""
 	if g.Chef != nil {
 		chefAccount = g.Chef.RazorpayAccountID
+		chefName = g.Chef.BusinessName
 	}
 
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		// Build the single consolidated Order from all participants' items.
 		order := models.Order{
-			OrderNumber:               generateOrderNumber(),
+			OrderNumber:               generateOrderNumber(chefName),
 			CustomerID:                g.HostID,
 			ChefID:                    g.ChefID,
 			Status:                    models.OrderStatusPending,
