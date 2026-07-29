@@ -20,6 +20,12 @@ import { MealPlanRequestCard } from '../../components/vendor/MealPlanRequestCard
 export default function MealPlansScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useChefMealPlanRequests();
   const requests = data?.data ?? [];
+  // Plans already agreed but not yet fully cooked. Without this the kitchen had
+  // no view of its own commitments: an accepted plan disappeared from every
+  // chef-facing screen and only resurfaced as individual orders 12h before each
+  // meal, so a week booked in advance was invisible to the chef who took it.
+  const { data: upcomingData } = useChefMealPlanRequests('confirmed,active');
+  const upcoming = upcomingData?.data ?? [];
   const { data: refundData } = useChefPendingRefundDecisions();
   const refundCount = refundData?.data?.length ?? 0;
 
@@ -219,6 +225,26 @@ export default function MealPlansScreen() {
                 When a customer pre-books a plan, it appears here for you to
                 accept or adjust.
               </Text>
+            </View>
+          }
+          ListFooterComponent={
+            <View>
+              <Text style={styles.sectionLabel}>Upcoming plans</Text>
+              {upcoming.length === 0 ? (
+                <View style={styles.empty}>
+                  <Text style={styles.emptyText}>
+                    Plans you&apos;ve accepted stay here until every day is cooked.
+                  </Text>
+                </View>
+              ) : (
+                upcoming.map((p) => (
+                  <MealPlanRequestCard
+                    key={p.id}
+                    plan={p}
+                    onPress={() => router.push(`/meal-plans/${p.id}` as never)}
+                  />
+                ))
+              )}
             </View>
           }
         />

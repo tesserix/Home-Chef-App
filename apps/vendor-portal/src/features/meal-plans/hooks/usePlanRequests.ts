@@ -43,26 +43,53 @@ export interface PlanRequest {
 }
 
 /**
- * Every plan this chef has, newest first. The server returns the full history,
- * so callers filter to the states they care about rather than re-querying.
+ * Plans in the given states, newest first.
+ *
+ * The server filters by status — it does NOT return the full history — so the
+ * states you want must be asked for explicitly.
  */
-export function usePlanRequests() {
+function usePlansByStatus(statuses: string[]) {
+  const key = statuses.join(',');
   return useQuery<PlanRequest[]>({
-    queryKey: ['chef', 'meal-plans'],
+    queryKey: ['chef', 'meal-plans', key],
     queryFn: () =>
-      apiClient.get<{ data: PlanRequest[] }>('/chef/meal-plans').then((r) => r?.data ?? []),
+      apiClient
+        .get<{ data: PlanRequest[] }>(`/chef/meal-plans?status=${encodeURIComponent(key)}`)
+        .then((r) => r?.data ?? []),
     staleTime: 30_000,
   });
 }
 
 /**
- * Only the plans actually waiting on this chef. `pending_chef` is the one state
- * where the chef is the blocker — everything else is with the customer, already
- * confirmed, or finished.
+ * Plans actually waiting on this chef. `pending_chef` is the one state where the
+ * chef is the blocker — everything else is with the customer, already agreed, or
+ * finished.
  */
 export function usePendingPlanRequests() {
-  const q = usePlanRequests();
-  return { ...q, data: (q.data ?? []).filter((p) => p.status === 'pending_chef') };
+  return usePlansByStatus(['pending_chef']);
+}
+
+/**
+ * Plans the chef has agreed to cook but hasn't finished.
+ *
+ * Without this the kitchen had no view of its own commitments: a plan vanished
+ * from every chef-facing surface the moment it was accepted, and only
+ * reappeared as individual orders 12h before each meal. A week booked in advance
+ * was invisible to the person who agreed to cook it.
+ */
+export function useUpcomingPlans() {
+  return usePlansByStatus(['confirmed', 'active']);
+}
+
+/** One plan by id, looked up across the states a chef can act on or watch. */
+export function usePlanRequest(id: string | undefined) {
+  const pending = usePendingPlanRequests();
+  const upcoming = useUpcomingPlans();
+  const all = [...(pending.data ?? []), ...(upcoming.data ?? [])];
+  return {
+    isLoading: pending.isLoading || upcoming.isLoading,
+    plan: id ? all.find((p) => p.id === id) : undefined,
+  };
 }
 
 interface RespondInput {
