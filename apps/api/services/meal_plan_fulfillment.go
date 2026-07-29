@@ -54,6 +54,16 @@ func runMealPlanFulfillment(_ context.Context) {
 
 // generateDueDayOrders creates an Order for each confirmed day coming due that
 // doesn't yet have one, and flips the plan active.
+// dayAwaitingOrder reports whether a day still needs an order generated for it.
+//
+// Both `confirmed` (the customer paid, nothing has happened yet) and `prepared`
+// (the chef cooked it ahead of the lock) are pre-order states — neither has an
+// order_id, and both must still get one. Every other status is either terminal or
+// already has an order, so it is not a candidate.
+func dayAwaitingOrder(s models.MealPlanDayStatus) bool {
+	return s == models.MealPlanDayConfirmed || s == models.MealPlanDayPrepared
+}
+
 func generateDueDayOrders() {
 	now := time.Now()
 	var plans []models.MealPlan
@@ -73,7 +83,15 @@ func generateDueDayOrders() {
 		generated := 0
 		for j := range p.Days {
 			d := &p.Days[j]
-			if d.OrderID != nil || d.Status != models.MealPlanDayConfirmed {
+			// `prepared` counts as due alongside `confirmed`. A chef can mark a day
+			// prepared from "Tomorrow's prep" LONG before the order locks (orders
+			// generate mealPlanLockLead=12h before cook-start, so a lunch locks at
+			// midnight while the chef preps it the previous afternoon). Gating on
+			// `confirmed` alone meant such a day never got an order, so it could
+			// never be delivered, never be swept, and never terminalize — its escrow
+			// sat parked forever and the plan could not complete. Cooking early must
+			// not void the day.
+			if d.OrderID != nil || !dayAwaitingOrder(d.Status) {
 				continue
 			}
 			// UNIFIED skip/lock boundary (#422): generate (lock) the order exactly
@@ -135,7 +153,11 @@ func sweepStuckDays() {
 		p := &plans[i]
 		for j := range p.Days {
 			d := &p.Days[j]
-			if d.Status != models.MealPlanDayConfirmed || d.OrderID != nil || d.RefundTxnID != nil || !d.Date.Before(cutoff) {
+			// Sweep `prepared` days too (see dayAwaitingOrder): a day cooked ahead of
+			// the lock that still never got an order is just as stranded as a
+			// confirmed one, and previously fell through BOTH this sweep and
+			// generation — money parked with no path out.
+			if !dayAwaitingOrder(d.Status) || d.OrderID != nil || d.RefundTxnID != nil || !d.Date.Before(cutoff) {
 				continue
 			}
 			if err := database.DB.Transaction(func(tx *gorm.DB) error {
@@ -143,7 +165,8 @@ func sweepStuckDays() {
 				// already gave the day an order, RowsAffected==0 → return before any
 				// money moves (the day is being fulfilled, not voided).
 				res := tx.Model(&models.MealPlanDay{}).
-					Where("id = ? AND status = ? AND order_id IS NULL", d.ID, models.MealPlanDayConfirmed).
+					Where("id = ? AND status IN ? AND order_id IS NULL", d.ID,
+						[]models.MealPlanDayStatus{models.MealPlanDayConfirmed, models.MealPlanDayPrepared}).
 					Update("status", models.MealPlanDayRefunded)
 				if res.Error != nil {
 					return res.Error
