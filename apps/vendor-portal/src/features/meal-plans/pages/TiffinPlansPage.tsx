@@ -3,7 +3,7 @@ import { CalendarDays, ChefHat, Inbox, RotateCcw, UtensilsCrossed, ChevronRight 
 import { Card } from '@/shared/components/ui/Card';
 import { Badge } from '@/shared/components/ui/Badge';
 import { useRefundDecisions } from '../hooks/useRefundDecisions';
-import { usePendingPlanRequests } from '../hooks/usePlanRequests';
+import { usePendingPlanRequests, useUpcomingPlans } from '../hooks/usePlanRequests';
 import { PlanRequestRow } from './PlanRequestPage';
 
 // Tiffin plans hub — the web twin of apps/mobile-vendor/app/meal-plans/index.tsx.
@@ -50,7 +50,11 @@ export function TiffinPlansPage() {
   const { data: pending = [] } = useRefundDecisions();
   // The other real queue: a customer has pre-booked and is waiting on the chef's
   // yes/no. Web had no surface for it at all, so these requests silently expired.
-  const { data: requests } = usePendingPlanRequests();
+  const { data: requests = [] } = usePendingPlanRequests();
+  // Plans already agreed but not yet cooked. Not a queue — the chef isn't
+  // blocking anything — but without it the kitchen cannot see what it has
+  // committed to until each meal's order locks 12h before service.
+  const { data: upcoming = [] } = useUpcomingPlans();
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -105,9 +109,29 @@ export function TiffinPlansPage() {
         )}
       </section>
 
+      <section className="mt-8">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+          Upcoming plans
+        </h2>
+        {upcoming.length === 0 ? (
+          <Card className="mt-3 p-6 text-center">
+            <p className="text-sm text-ink-soft">
+              Plans you&apos;ve accepted will sit here until every day is cooked.
+            </p>
+          </Card>
+        ) : (
+          <div className="mt-3 flex flex-col gap-3">
+            {upcoming.map((p) => (
+              <PlanRequestRow key={p.id} plan={p} tone="upcoming" />
+            ))}
+          </div>
+        )}
+      </section>
+
       <p className="mt-6 flex items-center gap-2 text-xs text-ink-muted">
         <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
-        Customers pre-book from your published menus; accepted plans appear in your orders.
+        Customers pre-book from your published menus; each day becomes an order 12 hours before
+        you cook it.
       </p>
     </div>
   );

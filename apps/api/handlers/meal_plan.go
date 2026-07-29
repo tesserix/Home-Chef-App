@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -989,18 +990,53 @@ func (h *MealPlanHandler) GetChefMealPlanRequests(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
-	status := c.DefaultQuery("status", string(models.MealPlanPendingChef))
+	// Accepts a COMMA-SEPARATED list so one call can fetch a whole lane — e.g.
+	// "confirmed,active" for the plans a chef has committed to but not yet cooked.
+	// It used to take a single status defaulting to pending_chef, which meant that
+	// the moment a chef accepted a plan it vanished from every chef-facing surface
+	// until its day-orders generated 12h before each meal. A week booked in advance
+	// was simply invisible to the kitchen that had agreed to cook it.
+	statuses := splitStatuses(c.DefaultQuery("status", string(models.MealPlanPendingChef)))
+	if len(statuses) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status must name at least one plan status"})
+		return
+	}
 	var plans []models.MealPlan
 	// Payment now happens AFTER the customer approves the chef's response (not at
 	// create), so a pending request is legitimately unpaid — the chef reviews and
 	// responds first. Do NOT gate on escrow_payment_id here or the chef would never
 	// see a request to act on.
-	q := database.DB.Where("chef_id = ? AND status = ?", chef.ID, status)
+	q := database.DB.Where("chef_id = ? AND status IN ?", chef.ID, statuses)
 	q.Preload("Days").Preload("Customer").Order("created_at DESC").Find(&plans)
 	for i := range plans {
 		plans[i].ProjectForChef()
 	}
 	c.JSON(http.StatusOK, gin.H{"data": plans})
+}
+
+// splitStatuses parses the comma-separated `status` query into a validated list.
+//
+// Unknown names are DROPPED rather than passed to the query: a typo would
+// otherwise return an empty list that looks exactly like "you have no plans",
+// which is the failure mode this endpoint already had once.
+func splitStatuses(raw string) []models.MealPlanStatus {
+	known := map[models.MealPlanStatus]bool{
+		models.MealPlanPendingChef: true, models.MealPlanChefAcceptedFull: true,
+		models.MealPlanChefModified: true, models.MealPlanAwaitingCustomer: true,
+		models.MealPlanConfirmed: true, models.MealPlanActive: true,
+		models.MealPlanCompleted: true, models.MealPlanCancelled: true,
+		models.MealPlanExpired: true,
+	}
+	out := make([]models.MealPlanStatus, 0, 4)
+	seen := map[models.MealPlanStatus]bool{}
+	for _, part := range strings.Split(raw, ",") {
+		s := models.MealPlanStatus(strings.TrimSpace(part))
+		if known[s] && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 type respondMealPlanRequest struct {

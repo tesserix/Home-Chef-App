@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from '@/shared/components/ui/Dialog';
 import { formatCurrency } from '@/shared/utils/format';
-import { usePlanRequests, useRespondToPlanRequest, type PlanRequestDay } from '../hooks/usePlanRequests';
+import { usePlanRequest, useRespondToPlanRequest, type PlanRequestDay } from '../hooks/usePlanRequests';
 
 // Review one pending tiffin plan request — the web twin of the mobile review
 // screen. The chef leaves every day on to accept the plan whole, or toggles off
@@ -43,10 +43,9 @@ function sortDays(days: PlanRequestDay[]): PlanRequestDay[] {
 export function PlanRequestPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: plans = [], isLoading } = usePlanRequests();
+  const { plan, isLoading } = usePlanRequest(id);
   const respond = useRespondToPlanRequest();
 
-  const plan = plans.find((p) => p.id === id);
   const days = useMemo(() => sortDays(plan?.days ?? []), [plan]);
 
   // Everything starts on: accepting the whole plan is the common case, and the
@@ -214,11 +213,35 @@ export function PlanRequestPage() {
   );
 }
 
-/** Compact pending-request row for the Tiffin plans hub. */
-export function PlanRequestRow({ plan }: { plan: { id: string; mealPlanNumber: string; total: number; startDate: string; endDate: string; days?: PlanRequestDay[]; customer?: { firstName?: string; lastName?: string } } }) {
+interface PlanRowPlan {
+  id: string;
+  mealPlanNumber: string;
+  total: number;
+  startDate: string;
+  endDate: string;
+  days?: PlanRequestDay[];
+  customer?: { firstName?: string; lastName?: string };
+}
+
+/**
+ * Compact plan row for the Tiffin plans hub.
+ *
+ * `tone` distinguishes the two lanes: a pending request needs an answer, an
+ * upcoming plan is already agreed and just needs cooking. Same shape, different
+ * call to action — collapsing them would hide which one is actually waiting on
+ * the chef.
+ */
+export function PlanRequestRow({
+  plan,
+  tone = 'pending',
+}: {
+  plan: PlanRowPlan;
+  tone?: 'pending' | 'upcoming';
+}) {
   const count = plan.days?.length ?? 0;
   const name =
     [plan.customer?.firstName, plan.customer?.lastName].filter(Boolean).join(' ') || 'Customer';
+  const cooked = plan.days?.filter((d) => d.status === 'delivered').length ?? 0;
   return (
     <Link to={`/tiffin-plans/requests/${plan.id}`} className="block">
       <Card className="p-4 transition-colors hover:bg-paper">
@@ -233,8 +256,16 @@ export function PlanRequestRow({ plan }: { plan: { id: string; mealPlanNumber: s
           {count === 1 ? 'meal' : 'meals'}
         </p>
         <div className="mt-2 flex items-center justify-between">
-          <Badge variant="warning">Needs your answer</Badge>
-          <span className="text-sm font-medium text-primary">Review</span>
+          {tone === 'pending' ? (
+            <Badge variant="warning">Needs your answer</Badge>
+          ) : (
+            <Badge variant="secondary">
+              {cooked} of {count} delivered
+            </Badge>
+          )}
+          <span className="text-sm font-medium text-primary">
+            {tone === 'pending' ? 'Review' : 'View'}
+          </span>
         </div>
       </Card>
     </Link>

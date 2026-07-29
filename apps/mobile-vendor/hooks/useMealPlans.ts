@@ -168,13 +168,17 @@ export function useSaveDailyMenu() {
   });
 }
 
-/** The chef's meal-plan requests for a given status (default: awaiting their response). */
+/**
+ * The chef's meal plans in one or more statuses (comma-separated; default:
+ * awaiting their response). The server filters — it does NOT return the full
+ * history — so the states you want must be named explicitly.
+ */
 export function useChefMealPlanRequests(status: string = 'pending_chef') {
   return useQuery<{ data: MealPlan[] }>({
     queryKey: ['chef', 'meal-plans', status],
     queryFn: () =>
       api
-        .get<{ data: MealPlan[] }>(`/chef/meal-plans?status=${status}`)
+        .get<{ data: MealPlan[] }>(`/chef/meal-plans?status=${encodeURIComponent(status)}`)
         .then((r) => r.data),
     refetchInterval: 30_000, // requests are time-boxed (24h) — keep the inbox fresh
     staleTime: 10_000,
