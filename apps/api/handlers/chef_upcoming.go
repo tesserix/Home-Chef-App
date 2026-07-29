@@ -87,8 +87,20 @@ func (h *MealPlanHandler) GetChefUpcoming(c *gin.Context) {
 	// Pull a generous date range and filter precisely on cook-start below. The
 	// stored Date is IST midnight, so a ±1 day margin covers a window that starts
 	// late in the day without missing a dinner slot at the far edge.
+	//
+	// Columns are listed FLAT rather than embedding models.MealPlanDay: Scan does
+	// not flatten an anonymously-embedded struct, so Date and Slot came back zero,
+	// every cook-start resolved to year 1 — i.e. "already passed" — and the
+	// endpoint returned 200 with an empty list while the SQL behind it matched
+	// rows perfectly. A silent empty result is the worst shape this bug could take,
+	// since it is indistinguishable from "nothing to cook".
 	var rows []struct {
-		models.MealPlanDay
+		ID            uuid.UUID
+		Date          time.Time
+		Slot          string
+		Variant       string
+		Status        string
+		DishName      string
 		PlanNumber    string
 		CustomerFirst string
 		CustomerLast  string
@@ -122,7 +134,7 @@ func (h *MealPlanHandler) GetChefUpcoming(c *gin.Context) {
 	resp := upcomingResponse{Hours: hours, Meals: []upcomingMeal{}}
 	for i := range rows {
 		r := &rows[i]
-		day := r.MealPlanDay
+		day := models.MealPlanDay{Date: r.Date, Slot: models.MealSlot(r.Slot)}
 		startsAt := services.MealPlanDayStartIST(schedules, &day)
 		// Strictly inside the window. A meal whose cook-start has already passed is
 		// the kitchen's current work, not something "upcoming".
@@ -140,18 +152,18 @@ func (h *MealPlanHandler) GetChefUpcoming(c *gin.Context) {
 			name = "Customer"
 		}
 		resp.Meals = append(resp.Meals, upcomingMeal{
-			DayID:        day.ID,
+			DayID:        r.ID,
 			PlanNumber:   r.PlanNumber,
-			Date:         day.Date,
+			Date:         r.Date,
 			StartsAt:     startsAt,
-			Slot:         string(day.Slot),
-			Variant:      string(day.Variant),
-			DishName:     day.DishName,
-			Status:       string(day.Status),
+			Slot:         r.Slot,
+			Variant:      r.Variant,
+			DishName:     r.DishName,
+			Status:       r.Status,
 			CustomerName: name,
 			OrderNumber:  r.OrderNumber,
 		})
-		if day.Slot == models.MealSlotDinner {
+		if models.MealSlot(r.Slot) == models.MealSlotDinner {
 			resp.Dinner++
 		} else {
 			resp.Lunch++
