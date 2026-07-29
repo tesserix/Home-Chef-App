@@ -52,9 +52,14 @@ class ApiClient {
     // The auth-bff in front is Fastify-based and rejects
     // (FST_ERR_CTP_EMPTY_JSON_BODY / 400) any POST that claims
     // Content-Type: application/json but arrives empty.
+    // FormData must NOT be labelled application/json — the browser has to set
+    // its own multipart Content-Type including the boundary, and overriding it
+    // yields a body the server cannot parse.
+    const isFormData =
+      typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
     const hasBody = fetchOptions.body !== undefined && fetchOptions.body !== null;
     const headers: HeadersInit = {
-      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+      ...(hasBody && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers,
     };
 
@@ -156,6 +161,18 @@ class ApiClient {
       ...options,
       body: body ? JSON.stringify(body) : undefined,
     });
+  }
+
+  /**
+   * POST multipart form data (file uploads).
+   *
+   * Separate from `post` because that JSON-serializes the body and sets
+   * Content-Type: application/json. For FormData the header must be left
+   * unset so the browser can add its own multipart boundary — setting it by
+   * hand produces a body the server cannot parse.
+   */
+  async postForm<T>(endpoint: string, form: FormData, options?: RequestOptions): Promise<T> {
+    return this.request<T>('POST', endpoint, { ...options, body: form });
   }
 
   async put<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {

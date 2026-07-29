@@ -78,6 +78,7 @@ const DailyMenuPage = lazyWithRetry(() => import('@/features/meal-plans/pages/Da
 const RefundDecisionsPage = lazyWithRetry(
   () => import('@/features/meal-plans/pages/RefundDecisionsPage'),
 );
+const DocumentsPage = lazyWithRetry(() => import('@/features/documents/pages/DocumentsPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useAuth();
@@ -160,6 +161,7 @@ export function AppRoutes() {
           <Route path="tiffin-plans" element={<TiffinPlansPage />} />
           <Route path="daily-menu" element={<DailyMenuPage />} />
           <Route path="refund-requests" element={<RefundDecisionsPage />} />
+          <Route path="documents" element={<DocumentsPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="chefbook" element={<ChefBookPage />} />
           <Route path="settings" element={<SettingsPage />} />

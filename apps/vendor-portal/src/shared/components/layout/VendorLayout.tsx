@@ -19,6 +19,7 @@ import {
   CalendarClock,
   BookOpen,
   RotateCcw,
+  FileText,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -47,6 +48,7 @@ const navigation = [
   { name: 'Earnings', href: '/earnings', icon: DollarSign },
   { name: 'Admin Requests', href: '/admin-requests', icon: ClipboardList },
   { name: 'Notifications', href: '/notifications', icon: Bell },
+  { name: 'Documents', href: '/documents', icon: FileText },
   { name: 'Reviews', href: '/reviews', icon: Star },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'ChefBook', href: '/chefbook', icon: BookOpen },
