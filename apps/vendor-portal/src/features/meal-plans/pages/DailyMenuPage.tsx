@@ -7,7 +7,7 @@ import { Button } from '@/shared/components/ui/Button';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Skeleton } from '@/shared/components/ui/Skeleton';
 import { DishPicker } from '../components/DishPicker';
-import { ComboComponents, PortionFields } from '../components/ComboComponents';
+import { ComboComponents, PortionFields, PriceSummary } from '../components/ComboComponents';
 import {
   useDailyMenu,
   useSaveDailyMenu,
@@ -192,15 +192,21 @@ function DayEditor({
                           onTypeName={(name) => update(idx, { name, menuItemId: null })}
                         />
                       </div>
-                      <input
-                        type="number"
-                        min={0}
-                        inputMode="numeric"
-                        value={it.price}
-                        onChange={(e) => update(idx, { price: Number(e.target.value) })}
-                        aria-label={`${slot} dish price in rupees`}
-                        className="input-base h-11 w-24 tabular-nums"
-                      />
+                      {/* Currency alongside the field, not as a placeholder —
+                          a placeholder disappears the moment a chef types,
+                          leaving a bare number with no unit. */}
+                      <div className="flex h-11 w-24 items-center rounded-lg border border-input bg-background px-2">
+                        <span className="text-sm text-muted-foreground">₹</span>
+                        <input
+                          type="number"
+                          min={0}
+                          inputMode="numeric"
+                          value={it.price}
+                          onChange={(e) => update(idx, { price: Number(e.target.value) })}
+                          aria-label={`${slot} dish price in rupees`}
+                          className="w-full bg-transparent px-1 text-sm tabular-nums focus:outline-none"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => setItems((cur) => cur.filter((_, i2) => i2 !== idx))}
@@ -216,6 +222,11 @@ function DayEditor({
                         portionSize={it.portionSize ?? ''}
                         serves={it.serves ?? 1}
                         onChange={(patch) => update(idx, patch)}
+                      />
+                      <PriceSummary
+                        price={it.price || 0}
+                        portionSize={it.portionSize ?? ''}
+                        serves={it.serves ?? 1}
                       />
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">

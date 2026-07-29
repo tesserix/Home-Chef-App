@@ -17,7 +17,7 @@ import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Button, KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
-import { DishPicker, PortionFields } from '../../components/vendor/DishPicker';
+import { DishPicker, PortionFields, PriceSummary } from '../../components/vendor/DishPicker';
 import { ComboComposer } from '../../components/vendor/ComboComposer';
 import { useVendorMenu } from '../../hooks/useVendorMenu';
 import {
@@ -416,23 +416,38 @@ export default function WeeklyMenuEditorScreen() {
                         }
                       />
                     </View>
-                    <TextInput
-                      style={styles.priceInput}
-                      placeholder="₹0"
-                      placeholderTextColor={theme.colors.ink.muted}
-                      keyboardType="numeric"
-                      value={c?.price ?? ''}
-                      onChangeText={(t) =>
-                        setCell(day.dow, s.slot, v.variant, {
-                          price: t.replace(/[^0-9.]/g, ''),
-                        })
-                      }
-                    />
+                    {/* The currency lives OUTSIDE the input so it is always
+                        visible — as a placeholder it vanished the moment a chef
+                        typed, leaving a bare "140" that could be rupees, a
+                        portion size or a quantity. */}
+                    <View style={styles.priceWrap}>
+                      <Text style={styles.priceSymbol}>₹</Text>
+                      <TextInput
+                        style={styles.priceInput}
+                        placeholder="0"
+                        placeholderTextColor={theme.colors.ink.muted}
+                        keyboardType="numeric"
+                        accessibilityLabel={`${v.label} ${s.label} price in rupees`}
+                        value={c?.price ?? ''}
+                        onChangeText={(t) =>
+                          setCell(day.dow, s.slot, v.variant, {
+                            price: t.replace(/[^0-9.]/g, ''),
+                          })
+                        }
+                      />
+                    </View>
                   </View>
                   <PortionFields
                     portionSize={c?.portionSize ?? ''}
                     serves={c?.serves ?? 1}
                     onChange={(patch) => setCell(day.dow, s.slot, v.variant, patch)}
+                  />
+                  {/* States the whole offer in one line, with the per-person
+                      figure DERIVED so it can never disagree with the price. */}
+                  <PriceSummary
+                    price={Number.parseFloat(c?.price ?? '') || 0}
+                    portionSize={c?.portionSize ?? ''}
+                    serves={c?.serves ?? 1}
                   />
                   <View style={styles.comboRow}>
                     <Pressable
@@ -632,7 +647,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[2],
-    paddingLeft: 86,
+    // Was paddingLeft: 86, to sit under the old dish-name input. Portion/Serves
+    // now sits between, so that indent left the chip floating in the middle of
+    // the card, attached to nothing. Flush left ties it to the cell it belongs
+    // to.
+    marginTop: theme.spacing[2],
   },
   comboChip: {
     paddingHorizontal: theme.spacing[2],
@@ -684,16 +703,26 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bone,
     borderRadius: theme.radius.DEFAULT,
   },
+  priceWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.DEFAULT,
+    paddingLeft: theme.spacing[2],
+  },
+  priceSymbol: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: theme.colors.ink.muted,
+  },
   priceInput: {
-    width: 64,
+    width: 52,
     fontFamily: 'Inter-SemiBold',
     fontSize: 15,
     color: theme.colors.ink.DEFAULT,
     paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    backgroundColor: theme.colors.bone,
-    borderRadius: theme.radius.DEFAULT,
-    textAlign: 'center',
+    paddingHorizontal: 2,
+    textAlign: 'left',
     fontVariant: ['tabular-nums'],
   },
   publishRow: {
