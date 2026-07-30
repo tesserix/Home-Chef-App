@@ -134,6 +134,10 @@ function QuickTile({
 export default function ProfileScreen() {
   // App Review 5.1.1(iv): everything on this screen is tied to an identity,
   // so a guest gets a way in rather than a profile full of blanks.
+  //
+  // Wrapper around a separate body, not an early return above the body's hooks
+  // — an auth flip while mounted would otherwise change this component's hook
+  // count and crash ("Rendered fewer hooks"). See OrdersScreen.
   const isGuest = useIsGuest();
   if (isGuest) {
     return (
@@ -144,7 +148,10 @@ export default function ProfileScreen() {
       />
     );
   }
+  return <ProfileScreenBody />;
+}
 
+function ProfileScreenBody() {
   const router = useRouter();
   const { data: profile, isLoading } = useProfile();
   const dockClearance = useDockClearance();

@@ -215,6 +215,10 @@ function FavoriteTabs({
 export default function FavoritesScreen() {
   // App Review 5.1.1(iv): this tab is account-based, so a guest gets an
   // explanation and a way in rather than an error or an empty list.
+  //
+  // Wrapper around a separate body, not an early return above the body's hooks
+  // — an auth flip while mounted would otherwise change this component's hook
+  // count and crash ("Rendered fewer hooks"). See OrdersScreen.
   const isGuest = useIsGuest();
   if (isGuest) {
     return (
@@ -225,7 +229,10 @@ export default function FavoritesScreen() {
       />
     );
   }
+  return <FavoritesScreenBody />;
+}
 
+function FavoritesScreenBody() {
   const dockClearance = useDockClearance();
   const [tab, setTab] = useState<FavTab>('chefs');
 

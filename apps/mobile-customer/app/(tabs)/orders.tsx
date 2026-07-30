@@ -264,6 +264,13 @@ const emptyStyles = StyleSheet.create({
 export default function OrdersScreen() {
   // App Review 5.1.1(iv): this tab is account-based, so a guest gets an
   // explanation and a way in rather than an error or an empty list.
+  //
+  // The gate is a WRAPPER around a separate body component, not an early return
+  // above the body's hooks. When auth flips while this tab is mounted (sign-out,
+  // account deletion landing on guest Home), an early return would re-render
+  // THIS component with a different hook count — "Rendered fewer hooks than
+  // expected", the crash seen live on the vendor dashboard's identical pattern.
+  // A wrapper just unmounts the body, which is always legal.
   const isGuest = useIsGuest();
   if (isGuest) {
     return (
@@ -274,7 +281,10 @@ export default function OrdersScreen() {
       />
     );
   }
+  return <OrdersScreenBody />;
+}
 
+function OrdersScreenBody() {
   const dockClearance = useDockClearance();
   const [mode, setMode] = useState<TabMode>('orders');
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
