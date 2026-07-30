@@ -93,6 +93,26 @@ func EnsurePayoutMethod(ctx context.Context, db *gorm.DB, ref payouts.PayeeRef, 
 	if err != nil {
 		return nil, err
 	}
+	return EnsurePayoutMethodWith(ctx, db, ref, mode, instrument, name)
+}
+
+// EnsurePayoutMethodWith is EnsurePayoutMethod for a caller that ALREADY holds
+// the instrument, and must not read it back from Secret Manager.
+//
+// That caller is the payout-details handler. It writes the chef's bank details to
+// Secret Manager in a fire-and-forget goroutine, so a read-back here would race
+// the write and register a beneficiary from stale — or entirely absent — details.
+// It has the values in hand; taking them directly removes both the race and a
+// pointless round-trip.
+//
+// The instrument is used and dropped. Nothing here persists it.
+func EnsurePayoutMethodWith(
+	ctx context.Context, db *gorm.DB, ref payouts.PayeeRef, mode string,
+	instrument payouts.Instrument, name string,
+) (*payouts.PayoutMethod, error) {
+	if !instrument.Valid() {
+		return nil, fmt.Errorf("payouts: payee %s has no usable payout destination", ref.ID)
+	}
 	if name == "" {
 		// The rail matches the name against the account and rejects a mismatch,
 		// so registering with a guessed name would produce an INVALID
@@ -136,7 +156,7 @@ func EnsurePayoutMethod(ctx context.Context, db *gorm.DB, ref payouts.PayeeRef, 
 
 	// Upsert on (tenant, payee, rail): one registration per payee per rail.
 	var existing payouts.PayoutMethod
-	err = db.Where("tenant_id = ? AND payee_type = ? AND payee_id = ? AND rail = ?",
+	err := db.Where("tenant_id = ? AND payee_type = ? AND payee_id = ? AND rail = ?",
 		PayoutTenantID, ref.Type, ref.ID, rail.Name()).First(&existing).Error
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):

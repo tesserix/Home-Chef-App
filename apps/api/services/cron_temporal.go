@@ -49,6 +49,12 @@ func cronJobs() []cronJob {
 		{"accept-reminder", acceptReminderInterval, runAcceptReminderScan, StartAcceptReminderCron},
 		{"payout-auto-confirm", payoutAutoConfirmInterval, runPayoutAutoConfirmScan, StartPayoutAutoConfirmCron},
 		{"payout-reconcile", payoutReconcileInterval, runPayoutReconcileScan, StartPayoutReconcileCron},
+		// Cashfree Payouts disbursement status. NOT a backstop — webhooks are not
+		// in use and the rail is asynchronous, so this is the only path from an
+		// in-flight transfer to a paid statement. If it stops, nothing errors:
+		// money still leaves correctly, but every statement stays "pending"
+		// forever. See payout_status_cron.go.
+		{"payout-status", payoutStatusInterval, runPayoutStatusScan, StartPayoutStatusCron},
 		{"cancellation-sweep", cancellationSweepInterval, runCancellationSweep, StartCancellationCron},
 		// #741 — release matured, unblocked order payouts. Gated by
 		// payout.sweep_enabled, which ships off.
