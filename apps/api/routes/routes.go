@@ -1362,7 +1362,7 @@ func SetupRouter() *gin.Engine {
 			customerDPDPHandler := handlers.NewCustomerDPDPHandler()
 			customer.GET("/me/export", customerDPDPHandler.ExportMyData)
 			// /me/delete keeps its path (already shipped in the customer app)
-			// but now runs the lifecycle handler: blocker checks, a 180-day
+			// but now runs the lifecycle handler: blocker checks, the
 			// restore window and GIP credential teardown.
 			customer.POST("/me/delete", accountLifecycle.DeleteAccount)
 			customer.GET("/me/deletion-eligibility", accountLifecycle.DeletionEligibility)

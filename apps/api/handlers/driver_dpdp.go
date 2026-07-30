@@ -12,7 +12,7 @@ import (
 //   - GET  /driver/me/export → dump of the driver's personal + delivery data
 //
 // Deletion is NOT here: it lives in account_lifecycle.go, which adds blocker
-// checks, the 180-day restore window and GIP credential teardown.
+// checks, the restore window (services.RestoreWindow) and GIP credential teardown.
 type DriverDPDPHandler struct{}
 
 func NewDriverDPDPHandler() *DriverDPDPHandler { return &DriverDPDPHandler{} }

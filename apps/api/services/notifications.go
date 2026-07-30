@@ -92,7 +92,7 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		{Stream: "NOTIFICATIONS", Durable: "notify-dispatch", Handler: h,
 			Subjects: []string{SubjectNotificationEmail, SubjectNotificationPush, SubjectNotificationSMS}},
 		{Stream: "USERS", Durable: "notify-users", Handler: h,
-			Subjects: []string{SubjectUserRegistered}},
+			Subjects: []string{SubjectUserRegistered, SubjectAccountDeleted, SubjectAccountRestored}},
 		{Stream: "CHEF", Durable: "notify-chef", Handler: h,
 			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified, SubjectChefTipReceived}},
 		// Follower fan-out when a favorited chef publishes a weekly menu (#239).
@@ -168,6 +168,10 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.sendSMSNotification)
 	case SubjectUserRegistered:
 		return decodeThen(data, s.handleUserRegistered)
+	case SubjectAccountDeleted:
+		return decodeThen(data, s.handleAccountDeleted)
+	case SubjectAccountRestored:
+		return decodeThen(data, s.handleAccountRestored)
 	case SubjectChefVerified:
 		return decodeThen(data, s.handleChefVerified)
 	case SubjectWeeklyMenuPublished:
@@ -601,6 +605,49 @@ func (s *NotificationService) handleUserRegistered(event Event) error {
 		UserID: event.UserID, Type: "email",
 		Title:   "Welcome to HomeChef!",
 		Message: "Thank you for joining HomeChef. Discover amazing home-cooked meals near you!",
+		Data:    event.Data,
+	})
+	return nil
+}
+
+// handleAccountDeleted confirms a deletion by email, with the restore deadline.
+//
+// Sent directly rather than through PublishNotification: the generic email
+// dispatcher resolves the user with a SCOPED lookup, and this row is soft-
+// deleted by the time the consumer runs — the confirmation would silently
+// drop. It also bypasses notification preferences deliberately: a destructive,
+// security-grade action must be confirmed even to a user who muted account
+// email.
+func (s *NotificationService) handleAccountDeleted(event Event) error {
+	var user models.User
+	if err := database.DB.Unscoped().Select("id, email, first_name").
+		First(&user, "id = ?", event.UserID).Error; err != nil || user.Email == "" {
+		log.Printf("account_deleted: user %s not resolvable for confirmation (dropping): %v", event.UserID, err)
+		return nil // the row may already be purged — not retryable
+	}
+	days, _ := event.Data["retention_days"].(float64) // JSON numbers decode as float64
+	if days == 0 {
+		days = RestoreWindow.Hours() / 24
+	}
+	body := fmt.Sprintf(
+		"<p>Your HomeChef account has been deleted and your sign-in no longer works.</p>"+
+			"<p>If you change your mind, sign up again with this email address within "+
+			"<strong>%d days</strong> and your history will be restored. After that, "+
+			"everything is erased permanently.</p>", int(days))
+	if err := GetEmailService().Send(user.Email, "Your HomeChef account has been deleted", body); err != nil {
+		log.Printf("account_deleted: confirmation email to user %s failed: %v", event.UserID, err)
+	}
+	return nil
+}
+
+// handleAccountRestored welcomes a restored account back. The row is live
+// again, so the in-app notification works too; chefs and drivers additionally
+// re-enter the approval queue, which its own flow notifies about.
+func (s *NotificationService) handleAccountRestored(event Event) error {
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "email",
+		Title:   "Welcome back to HomeChef",
+		Message: "Your account has been restored and your history is back.",
 		Data:    event.Data,
 	})
 	return nil

@@ -68,7 +68,15 @@ const (
 	SubjectHoldDisputed        = "payments.hold_disputed"         // → hold advanced awaiting → disputed
 	SubjectHoldReleased        = "payments.hold_released"         // → admin payout queue released the hold (#388)
 	SubjectUserRegistered      = "users.registered"
-	SubjectChefVerified        = "chef.verified"
+	// Account lifecycle (DPDP). deleted/restored notify the user — the deleted
+	// handler resolves the address with an Unscoped lookup, because the row is
+	// soft-deleted by the time the consumer runs. purged is downstream-only:
+	// the account no longer exists to notify, but analytics/cleanup consumers
+	// need to know the erasure completed.
+	SubjectAccountDeleted  = "users.account_deleted"
+	SubjectAccountRestored = "users.account_restored"
+	SubjectAccountPurged   = "users.account_purged"
+	SubjectChefVerified    = "chef.verified"
 	// SubjectChefAvailabilityChanged — the chef opened, closed or paused their
 	// kitchen. Customers browsing a closed kitchen would otherwise keep seeing
 	// it as open until their chef list happens to refetch.

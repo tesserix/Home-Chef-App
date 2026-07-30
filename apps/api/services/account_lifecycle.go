@@ -32,7 +32,16 @@ import (
 // RestoreWindow is how long a deleted account can be restored before the
 // sweeper erases it. The privacy policy and both stores' Data Safety forms
 // quote this figure — change them together.
-const RestoreWindow = 180 * 24 * time.Hour
+//
+// 360 days: a returning customer is common enough in food delivery (someone
+// leaves a city for a year and comes back) that a shorter window threw away
+// history people wanted back. Everything the account owns is retained for the
+// window and then erased — see the purge cascades in account_cascades.go.
+//
+// Financial records are the exception and outlive this window: they are archived
+// PII-free (ArchiveAccountFinancials) because CGST Act §36 requires invoice
+// retention for 72 months, which no account-deletion request can shorten.
+const RestoreWindow = 360 * 24 * time.Hour
 
 // ErrBlocked is returned by RequestDeletion when preconditions are unmet. The
 // handler turns it into a 409 carrying the blockers.
@@ -163,7 +172,15 @@ func RequestDeletion(db *gorm.DB, user *models.User, reason string) ([]Blocker, 
 		if err := tx.Delete(&models.User{}, "id = ?", user.ID).Error; err != nil {
 			return fmt.Errorf("account: soft delete user: %w", err)
 		}
-		return nil
+		// Transactional outbox, same as the meal-plan money paths: the
+		// confirmation (with the restore deadline) is enqueued in the SAME tx as
+		// the soft delete, so a user is never deleted-but-unnotified or
+		// notified-but-not-deleted.
+		return EnqueueEvent(tx, SubjectAccountDeleted, "account.deletion_requested", user.ID, map[string]any{
+			"purge_after":    purgeAfter.Format(time.RFC3339),
+			"retention_days": int(RestoreWindow.Hours() / 24),
+			"role":           string(user.Role),
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -211,7 +228,12 @@ func Restore(db *gorm.DB, userID uuid.UUID, newGIPUid, newTenant, newProvider st
 			true, now, newGIPUid, newTenant, newProvider, userID).Error; err != nil {
 			return fmt.Errorf("account: restore user: %w", err)
 		}
-		return CascadeFor(user.Role).OnRestore(tx, userID)
+		if err := CascadeFor(user.Role).OnRestore(tx, userID); err != nil {
+			return err
+		}
+		return EnqueueEvent(tx, SubjectAccountRestored, "account.restored", userID, map[string]any{
+			"role": string(user.Role),
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -240,6 +262,11 @@ func PurgeUser(db *gorm.DB, userID uuid.UUID, role models.UserRole) error {
 		if err := tx.Unscoped().Delete(&models.User{}, "id = ?", userID).Error; err != nil {
 			return fmt.Errorf("account: purge user row: %w", err)
 		}
-		return nil
+		// Downstream-only: nobody to notify (the account is gone), but analytics
+		// and cleanup consumers need to know the erasure completed. User id and
+		// role only — this is the erasure path, no PII in the payload.
+		return EnqueueEvent(tx, SubjectAccountPurged, "account.purged", userID, map[string]any{
+			"role": string(role),
+		})
 	})
 }
