@@ -26,7 +26,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
@@ -61,16 +60,13 @@ func (OrderRefundGateway) RefundPayment(_ context.Context, req orderrefund.Gatew
 		return "", fmt.Errorf("orderrefund-gateway: load order %s: %w", req.OrderID, err)
 	}
 
-	provider := strings.ToLower(order.PaymentProvider)
-	if provider == "" {
-		provider = "razorpay"
-	}
+	provider := models.NormalizeProvider(order.PaymentProvider)
 
 	// Chef is read by exactly one thing — Stripe's currency fallback when the order has no
 	// currency of its own — so it is loaded only then, rather than joined onto every refund.
 	// Best-effort: CurrencyForCountry("") already has a default, which is the same position
 	// the legacy path is in when its caller didn't preload.
-	if provider == "stripe" && order.Currency == "" {
+	if provider == models.PaymentProviderStripe && order.Currency == "" {
 		if err := database.DB.Preload("Chef").First(&order, "id = ?", req.OrderID).Error; err != nil {
 			log.Printf("orderrefund-gateway: load chef for stripe currency on order %s: %v", req.OrderID, err)
 		}
@@ -92,7 +88,7 @@ func (OrderRefundGateway) RefundPayment(_ context.Context, req orderrefund.Gatew
 	// monthly redemption cap is NOT released on refund (see MonthlyRedeemedPaise), so
 	// a redeem-then-cancel loop can convert at most MonthlyRedeemCap per customer per
 	// 30 days, no more than they could have spent outright.
-	if provider != "wallet" && (order.WalletApplied > 0 || order.LoyaltyApplied > 0) {
+	if provider != models.PaymentProviderWallet && (order.WalletApplied > 0 || order.LoyaltyApplied > 0) {
 		split := SplitRefundByFunding(&order, ToPaise(req.Amount))
 
 		// Keyed on the coordinator's per-scope operation id, NOT on the order: two

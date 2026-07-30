@@ -102,23 +102,22 @@ func retryOneDeferredCancelRefund(orderID uuid.UUID) bool {
 			return nil
 		}
 
-		rzp := GetRazorpayFor(o.Mode)
-		if rzp == nil {
+		// Provider-agnostic: the deferral that created this sentinel could have come
+		// from any gateway, so the retry must route the same way the original call
+		// did (gateway_refund.go) rather than assuming Razorpay — a Cashfree order
+		// deferred here would otherwise be retried against a Razorpay payment id it
+		// does not have, and would never heal.
+		if !GatewayRefundAvailable(&o) {
 			return nil // gateway still unavailable — leave the sentinel, retry next sweep
 		}
 
-		refundResp, cErr := rzp.CreateRefund(o.RazorpayPaymentID, &RefundRequest{
-			Amount: paise,
-			Speed:  "normal",
-			Notes: map[string]string{
-				"order_id":  o.ID.String(),
-				"reason":    "deferred chef cancel",
-				"initiator": "reconcile",
-			},
+		refundResp, cErr := IssueOrderGatewayRefund(&o, paise, map[string]string{
+			"order_id":  o.ID.String(),
+			"reason":    "deferred chef cancel",
+			"initiator": "reconcile",
 			// SAME key CancelOrder used — a lost-response success dedups here instead of
 			// double-refunding. See the file header.
-			IdempotencyKey: RefundFullIdempotencyKey(o.ID),
-		})
+		}, RefundFullIdempotencyKey(o.ID))
 		if cErr != nil {
 			log.Printf("deferred-cancel-refund: gateway refund still failing for order %s: %v", orderID, cErr)
 			return nil // leave the sentinel; the next sweep retries
@@ -126,7 +125,7 @@ func retryOneDeferredCancelRefund(orderID uuid.UUID) bool {
 
 		res := tx.Model(&models.Order{}).
 			Where("id = ? AND refund_id LIKE ?", orderID, DeferredCancelRefundPrefix+"%").
-			Update("refund_id", refundResp.ID)
+			Update("refund_id", refundResp.RefundID)
 		if res.Error != nil {
 			return res.Error
 		}

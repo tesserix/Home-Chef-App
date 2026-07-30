@@ -1218,6 +1218,207 @@ func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 	})
 }
 
+// GetCashfreeGatewayStatus reports whether one Cashfree credential slot is
+// configured and reachable.
+//
+// Mirrors GetPaymentGatewayStatus (the Razorpay one) including the ?mode=
+// slot selector, so the admin UI renders a parallel card with the same
+// live/test toggle. The two gateways' slots are wholly independent: a broken
+// test slot says nothing about live, and vice versa.
+//
+// GET /admin/payment-gateway/cashfree/status?mode=live|test
+func (h *AdminHandler) GetCashfreeGatewayStatus(c *gin.Context) {
+	slot := models.NormalizeMode(c.Query("mode"))
+	client := services.GetCashfreeFor(slot)
+
+	// One dashboard-configured URL per environment, and it must be the /api form:
+	// publicly only /api and /ws are routed to this service, so a root /webhooks/*
+	// path falls through to the web frontend and 404s.
+	webhookURL := "https://api.fe3dr.com/api/webhooks/cashfree"
+
+	if client == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"configured":       false,
+			"slot":             slot,
+			"mode":             slot,
+			"environment":      "unknown",
+			"webhookUrl":       webhookURL,
+			"webhookSecretSet": false,
+			"keyPrefix":        "",
+			"error":            fmt.Sprintf("Cashfree %s slot is not configured. Enter the App ID and Secret Key to enable it.", slot),
+		})
+		return
+	}
+
+	appID := client.GetAppID()
+	keyPrefix := appID
+	if len(appID) > 12 {
+		keyPrefix = appID[:12] + "..."
+	}
+
+	// Environment comes from the resolved HOST, not from the slot name — that is
+	// the only thing that determines whether real money moves. A test slot
+	// pointing at production would be reported as PRODUCTION here, which is
+	// exactly the alarm an operator needs.
+	environment := "production"
+	if client.IsSandbox() {
+		environment = "sandbox"
+	}
+
+	healthErr := ""
+	configured := true
+	if err := client.HealthCheck(); err != nil {
+		healthErr = err.Error()
+		configured = false
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"configured":       configured,
+		"slot":             slot,
+		"mode":             slot,
+		"environment":      environment,
+		"webhookUrl":       webhookURL,
+		"webhookSecretSet": client.HasWebhookSecret(),
+		"keyPrefix":        keyPrefix,
+		"slotWarning":      cashfreeSlotWarning(slot, environment, client.GetAppID()),
+		"error":            healthErr,
+	})
+}
+
+// cashfreeSlotWarning flags a slot whose resolved environment contradicts its
+// name.
+//
+// With Razorpay this can only be detected from a key prefix; with Cashfree the
+// environment IS the hostname, so a mismatch is structurally impossible unless
+// someone injects a client — which means in practice this warns only about the
+// genuinely dangerous direction and stays silent otherwise. Kept as a warning
+// rather than an error for the same reason razorpaySlotWarning is: the interim
+// state while real credentials are pending must remain reachable.
+func cashfreeSlotWarning(slot, environment, appID string) string {
+	// Cashfree sandbox App IDs are prefixed "TEST". A test App ID in the LIVE slot
+	// is a hard failure, not a degraded state, and it is worth calling out
+	// explicitly: the live slot resolves to api.cashfree.com, where test
+	// credentials return 401 — so live checkout would fail outright rather than
+	// quietly capture nothing.
+	//
+	// This is a normal interim state while a merchant account is still in review,
+	// which is why it is a WARNING and the save is still allowed (mirroring
+	// razorpaySlotWarning). SelectCheckoutGateway is what keeps real orders
+	// flowing meanwhile, by degrading those checkouts to Razorpay.
+	testAppID := strings.HasPrefix(strings.ToUpper(appID), "TEST")
+	switch {
+	case !models.IsTestMode(slot) && testAppID:
+		return "The Live slot is holding a TEST App ID — Cashfree separates environments by host, so live payments will fail with 401 until real live credentials are entered. Live checkout falls back to Razorpay meanwhile."
+	case models.IsTestMode(slot) && appID != "" && !testAppID:
+		return "The Test slot is holding what looks like a LIVE App ID — sandbox orders could charge real cards. Replace it before using test mode."
+	case !models.IsTestMode(slot) && environment == "sandbox":
+		return "The Live slot is resolving to the Cashfree SANDBOX — no real payment will be captured until live credentials are entered."
+	case models.IsTestMode(slot) && environment == "production":
+		return "The Test slot is resolving to Cashfree PRODUCTION — sandbox orders would charge real cards. Fix this before using test mode."
+	default:
+		return ""
+	}
+}
+
+// UpdateCashfreeGatewayKeys writes one Cashfree credential slot to GCP Secret
+// Manager, invalidates that slot's cached client, and runs an immediate health
+// check so the admin sees pass/fail in the same response.
+//
+// Same contract as UpdatePaymentGatewayKeys (Razorpay), including per-slot
+// invalidation: saving test keys can never knock a healthy live gateway offline.
+// Secrets are never written to the DB or to config — the app reads them from
+// Secret Manager on demand.
+//
+// PUT /admin/payment-gateway/cashfree/keys
+func (h *AdminHandler) UpdateCashfreeGatewayKeys(c *gin.Context) {
+	var req struct {
+		AppID         string `json:"appId"`
+		SecretKey     string `json:"secretKey"`
+		WebhookSecret string `json:"webhookSecret"`
+		// Mode picks the credential slot: "live" (default) or "test".
+		Mode string `json:"mode"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.AppID == "" && req.SecretKey == "" && req.WebhookSecret == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "At least one field is required"})
+		return
+	}
+
+	// Writing the app id and secret key together is the only sensible mode — a
+	// mismatched pair guarantees a 401 from Cashfree. Require both or neither.
+	if (req.AppID == "") != (req.SecretKey == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "appId and secretKey must be provided together"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	slot := models.NormalizeMode(req.Mode)
+	// Read the slot's secret names from the SAME helper the client reads them
+	// with, so the slot an admin saves into and the slot the app loads from cannot
+	// drift apart. A drift of exactly this kind once made admin-entered Razorpay
+	// keys silently invisible to the app.
+	appIDName, secretName, webhookName := services.CashfreeSecretNames(slot)
+	for secretName, value := range map[string]string{
+		appIDName:   req.AppID,
+		secretName:  req.SecretKey,
+		webhookName: req.WebhookSecret,
+	} {
+		if value == "" {
+			continue
+		}
+		if err := services.StorePlatformSecret(ctx, secretName, value); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to store %s: %v", secretName, err)})
+			return
+		}
+	}
+
+	services.InvalidateCashfreeFor(slot)
+	services.LogAudit(c, "payment.keys.update", "payment_gateway", models.PaymentProviderCashfree, nil, map[string]any{
+		"slot": slot,
+		"updatedFields": []string{
+			boolField("appId", req.AppID != ""),
+			boolField("secretKey", req.SecretKey != ""),
+			boolField("webhookSecret", req.WebhookSecret != ""),
+		},
+	})
+
+	// Validate by actually calling Cashfree, so wrong keys surface immediately
+	// rather than at a customer's checkout.
+	client := services.GetCashfreeFor(slot)
+	if client == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Saved to Secret Manager, but client failed to initialize"})
+		return
+	}
+	environment := "production"
+	if client.IsSandbox() {
+		environment = "sandbox"
+	}
+	warning := cashfreeSlotWarning(slot, environment, client.GetAppID())
+	if err := client.HealthCheck(); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message":     "Keys saved, but validation failed",
+			"testError":   err.Error(),
+			"slot":        slot,
+			"environment": environment,
+			"slotWarning": warning,
+			"verified":    false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "Cashfree gateway keys saved and verified",
+		"slot":        slot,
+		"environment": environment,
+		"slotWarning": warning,
+		"verified":    true,
+	})
+}
+
 // GetStripeGatewayStatus reports whether Stripe is configured and reachable.
 // Mirrors GetPaymentGatewayStatus (the Razorpay one) so the admin UI can
 // render a parallel card for the Stripe provider.

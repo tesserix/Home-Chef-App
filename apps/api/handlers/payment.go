@@ -108,16 +108,17 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 		order.CommissionRate = rate // same request uses the frozen rate
 	}
 
-	// Pick gateway from chef's configured provider. Falls back to razorpay
-	// for older chef profiles that don't have the column populated yet.
-	provider := strings.ToLower(order.Chef.PaymentProvider)
-	if provider == "" {
-		provider = "razorpay"
-	}
-
-	switch provider {
-	case "stripe":
+	// Pick the gateway from the chef's configured provider, degrading to Razorpay
+	// when the configured one has no credentials for this order's mode (see
+	// services.SelectCheckoutGateway — this is what keeps live checkout working
+	// while the preferred gateway's live slot is still being provisioned). The
+	// branch taken is also what stamps order.payment_provider, so the gateway that
+	// takes the money and the gateway a later refund goes to cannot disagree.
+	switch provider := services.SelectCheckoutGateway(order.Chef.PaymentProvider, order.Mode); provider {
+	case models.PaymentProviderStripe:
 		h.createStripePayment(c, &order, userID)
+	case models.PaymentProviderCashfree:
+		h.createCashfreePayment(c, &order, userID, creditReq)
 	default:
 		h.createRazorpayPayment(c, &order, userID, creditReq)
 	}
@@ -437,6 +438,18 @@ func settleOrderWallet(order *models.Order) {
 		services.CaptureBackgroundError(err)
 		return
 	}
+	// The chef/driver top-ups only exist to make up what a GATEWAY SPLIT could not
+	// cover: Route funds each settlement from the capture as far as it reaches, and
+	// the platform balance pays the rest. A provider that doesn't split at the
+	// gateway has no shortfall to top up — the whole amount was captured to the
+	// platform, and the chef/rider are paid through the statement/payout path. Running
+	// the top-ups anyway would pay them a second time out of the platform balance.
+	//
+	// The debit above still had to happen: the customer's credit was applied and
+	// spent regardless of which gateway took the remainder.
+	if !models.ProviderSupportsGatewaySplit(order.PaymentProvider) {
+		return
+	}
 	// The top-up plan must reconstruct the FULL credit applied — wallet plus the
 	// loyalty slice — or the chef/driver would be short-paid by the points portion.
 	appliedPaise := services.ToPaise(order.WalletApplied) + services.ToPaise(order.LoyaltyApplied)
@@ -686,6 +699,10 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 		RazorpaySignature string `json:"razorpaySignature"`
 		// Stripe
 		StripePaymentIntentID string `json:"stripePaymentIntentId"`
+		// Cashfree. Only the order id — there is no client-side payment id or
+		// signature to send, and none would be trusted: the Cashfree leg reads
+		// the captured payment from the gateway itself.
+		CashfreeOrderID string `json:"cashfreeOrderId"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -704,14 +721,11 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 		return
 	}
 
-	provider := strings.ToLower(order.PaymentProvider)
-	if provider == "" {
-		provider = "razorpay"
-	}
-
-	switch provider {
-	case "stripe":
+	switch provider := models.NormalizeProvider(order.PaymentProvider); provider {
+	case models.PaymentProviderStripe:
 		h.verifyStripePayment(c, &order, req.StripePaymentIntentID)
+	case models.PaymentProviderCashfree:
+		h.verifyCashfreePayment(c, &order, req.CashfreeOrderID)
 	default:
 		h.verifyRazorpayPayment(c, &order, req.RazorpayPaymentID, req.RazorpayOrderID, req.RazorpaySignature)
 	}
@@ -1205,10 +1219,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return
 	}
 
-	provider := strings.ToLower(order.PaymentProvider)
-	if provider == "" {
-		provider = "razorpay"
-	}
+	provider := models.NormalizeProvider(order.PaymentProvider)
 
 	// Wallet-at-checkout refunds (#141): a wallet-funded order only captured
 	// (Total − WalletApplied) at the gateway, so the gateway can't refund more than
@@ -1240,7 +1251,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	var refundID, refundStatus string
 
 	switch provider {
-	case "wallet":
+	case models.PaymentProviderWallet:
 		// Full-wallet order (no gateway payment): the entire refund returns as
 		// store credit.
 		txn, werr := services.CreditWallet(database.DB, order.CustomerID, refundAmount,
@@ -1255,7 +1266,39 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		}
 		refundID = "wallet:" + txn.ID.String()
 		refundStatus = "processed"
-	case "stripe":
+	case models.PaymentProviderCashfree:
+		if order.RazorpayOrderID == "" {
+			// Cashfree refunds are issued against the ORDER, not the payment — so
+			// the gateway order id is what's required here, unlike the Razorpay
+			// branch below which needs the payment id.
+			releaseReservation()
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No Cashfree payment found for this order"})
+			return
+		}
+		cf := services.GetCashfreeFor(order.Mode)
+		if cf == nil {
+			releaseReservation()
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
+			return
+		}
+		r, err := cf.CreateRefund(order.RazorpayOrderID, &services.CashfreeRefundRequest{
+			AmountPaise: services.CashfreeAmountFromPaise(services.ToPaise(refundAmount)),
+			Note:        fmt.Sprintf("refund-%s: %s", order.OrderNumber, req.Reason),
+			// Same prior-refunded basis as every other branch (#611): the atomic
+			// reserve serializes concurrent submits, and a retry re-derives this key
+			// so Cashfree dedups it — here natively, since the key becomes the
+			// refund_id itself rather than a header. #574.
+			IdempotencyKey: services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(priorRefunded)),
+		})
+		if err != nil {
+			log.Printf("Failed to create Cashfree refund for order %s: %v", order.OrderNumber, err)
+			releaseReservation()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
+			return
+		}
+		refundID = r.RefundID
+		refundStatus = services.PlatformRefundStatus(r.RefundStatus)
+	case models.PaymentProviderStripe:
 		if order.StripePaymentIntentID == "" {
 			releaseReservation()
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No Stripe payment found for this order"})

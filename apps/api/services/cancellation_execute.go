@@ -159,23 +159,21 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 				if cardPaise > 0 {
 					// Only a non-zero card slice needs a captured gateway payment — a fully
 					// credit-funded order (wallet + loyalty cover the whole refund) never
-					// touched Razorpay at all, so requiring one here would wrongly block it.
-					if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
-						return fmt.Errorf("original-method refund needs a razorpay payment")
+					// touched a gateway at all, so requiring one here would wrongly block it.
+					if !order.GatewayRefundable() {
+						return fmt.Errorf("original-method refund needs a captured gateway payment")
 					}
-					rzp := GetRazorpayFor(order.Mode)
-					if rzp == nil {
-						return fmt.Errorf("razorpay unavailable")
-					}
-					resp, rErr := rzp.CreateRefund(order.RazorpayPaymentID, &RefundRequest{
-						Amount: cardPaise, Speed: "normal",
-						Notes:          map[string]string{"order_id": order.ID.String(), "scope": "cancellation", "reason": cr.VendorReason},
-						IdempotencyKey: RefundFullIdempotencyKey(order.ID), // one cancellation refund per order; claim + sweep re-drive with the same key. #574
-					})
+					// Routed through the shared provider switch (gateway_refund.go) rather
+					// than calling Razorpay directly — this was one of the sites that would
+					// have refused a Cashfree order outright.
+					resp, rErr := IssueOrderGatewayRefund(order, cardPaise,
+						map[string]string{"order_id": order.ID.String(), "scope": "cancellation", "reason": cr.VendorReason},
+						// one cancellation refund per order; claim + sweep re-drive with the same key. #574
+						RefundFullIdempotencyKey(order.ID))
 					if rErr != nil {
 						return rErr
 					}
-					cr.RefundRef = resp.ID
+					cr.RefundRef = resp.RefundID
 				} else {
 					cr.RefundRef = "wallet:cancel:" + cr.ID.String()
 				}

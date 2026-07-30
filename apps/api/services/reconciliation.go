@@ -115,15 +115,91 @@ func ReconcileSettlements(ctx context.Context, windowStart, windowEnd time.Time)
 // reconcileOne reconciles a single order. The bool is false when the order
 // can't be reconciled (no gateway reference or provider not configured) — that
 // is a skip, not a drift.
+// Dispatch is on PROVIDER first, then on the presence of a reference. Testing the
+// reference alone (the original shape) breaks the moment two gateways share the
+// razorpay_payment_id column: a Cashfree order is non-empty there, so it would be
+// reconciled against Razorpay's API with a Cashfree payment id and report
+// DriftGatewayUnreachable on every single sweep — drowning the real findings.
 func reconcileOne(o *models.Order) ([]Drift, bool) {
-	switch {
-	case o.RazorpayPaymentID != "":
-		return reconcileRazorpay(o), true
-	case o.StripePaymentIntentID != "":
+	switch models.NormalizeProvider(o.PaymentProvider) {
+	case models.PaymentProviderCashfree:
+		if o.RazorpayOrderID == "" {
+			return nil, false
+		}
+		return reconcileCashfree(o), true
+	case models.PaymentProviderStripe:
+		if o.StripePaymentIntentID == "" {
+			return nil, false
+		}
 		return reconcileStripe(o), true
+	case models.PaymentProviderWallet:
+		return nil, false // no gateway to reconcile against
 	default:
-		return nil, false
+		if o.RazorpayPaymentID == "" {
+			return nil, false
+		}
+		return reconcileRazorpay(o), true
 	}
+}
+
+// reconcileCashfree cross-checks one Cashfree order against the gateway.
+//
+// Cashfree has no single "payment" object carrying a cumulative amount_refunded
+// the way Razorpay does, so the refunded total is summed from the order's refunds.
+// Everything else — the drift kinds, the captured-amount basis, the
+// error-propagating per-line read — is deliberately identical to
+// reconcileRazorpay, so a drift means the same thing whichever gateway produced it.
+func reconcileCashfree(o *models.Order) []Drift {
+	// Live slot on purpose: reconciliation covers real money only, and its queries
+	// exclude the test partition.
+	client := GetCashfree()
+	if client == nil {
+		return nil // not configured — skip silently (logged once at startup)
+	}
+
+	payment, err := client.SuccessfulPayment(o.RazorpayOrderID)
+	if err != nil {
+		return []Drift{driftFor(o, models.PaymentProviderCashfree, DriftGatewayUnreachable,
+			fmt.Sprintf("fetch payments for order %s: %v", o.RazorpayOrderID, err), 0, 0)}
+	}
+
+	var drifts []Drift
+	if payment == nil {
+		return append(drifts, driftFor(o, models.PaymentProviderCashfree, DriftPaymentNotCaptured,
+			"no SUCCESS payment on the gateway order", o.Total, 0))
+	}
+
+	refunds, err := client.OrderRefundedPaise(o.RazorpayOrderID)
+	if err != nil {
+		return append(drifts, driftFor(o, models.PaymentProviderCashfree, DriftGatewayUnreachable,
+			fmt.Sprintf("fetch refunds for order %s: %v", o.RazorpayOrderID, err), 0, 0))
+	}
+
+	// Same discipline as the Razorpay path: an error-PROPAGATING per-line read, so a
+	// DB blip skips this order rather than understating captured and spuriously
+	// flagging DriftFullRefundUnstamped.
+	perLine, plErr := PerLineRefundedTotalTxErr(database.DB, o.ID)
+	if plErr != nil {
+		log.Printf("reconciliation: skip cashfree order %s — per-line refund read failed: %v", o.ID, plErr)
+		return drifts
+	}
+	localRefunded := o.RefundAmount + perLine
+	gatewayRefunded := FromPaise(refunds)
+	// Original captured amount: Total is mutated down by per-line cancels so add them
+	// back; the credit rails were never charged to the gateway so subtract them.
+	capturedPaise := ToPaise(o.Total+perLine-o.WalletApplied) - ToPaise(o.LoyaltyApplied)
+
+	switch {
+	case capturedPaise > 0 && refunds >= capturedPaise && o.RefundedAt == nil:
+		drifts = append(drifts, driftFor(o, models.PaymentProviderCashfree, DriftFullRefundUnstamped,
+			"gateway refunds >= captured but refunded_at is NULL (cumulative/out-of-band full refund)",
+			localRefunded, gatewayRefunded))
+	case math.Abs(gatewayRefunded-localRefunded) > reconAmountTolerance:
+		drifts = append(drifts, driftFor(o, models.PaymentProviderCashfree, DriftRefundMismatch,
+			"gateway refunds != platform cumulative refunded (RefundAmount + per-line)",
+			localRefunded, gatewayRefunded))
+	}
+	return drifts
 }
 
 func reconcileRazorpay(o *models.Order) []Drift {

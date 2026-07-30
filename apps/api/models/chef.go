@@ -107,8 +107,16 @@ type ChefProfile struct {
 	StripeAccountID   string `gorm:"" json:"-"`
 	RazorpayAccountID string `gorm:"" json:"-"` // Razorpay Route linked account ID
 	// PaymentProvider picks which gateway a customer's order gets routed
-	// through. "razorpay" (India) or "stripe" (international). Defaults to
-	// razorpay so existing chefs keep working after the column is added.
+	// through: "cashfree" or "razorpay" (India), "stripe" (international).
+	//
+	// The COLUMN default stays 'razorpay' deliberately, even though Cashfree is
+	// now the preferred choice for new kitchens. The default is what an existing
+	// row that predates this column resolves to, and every one of those really is
+	// a Razorpay order — flipping it would reinterpret their history and route
+	// their refunds to a gateway that never took the money.
+	//
+	// New chefs get the preferred provider stamped EXPLICITLY at creation, via
+	// services.DefaultChefPaymentProvider. See models.PreferredChefPaymentProvider.
 	PaymentProvider string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
 	// PayoutCountry is the ISO-3166 alpha-2 country for Stripe Connect
 	// onboarding (US, GB, AE, …). Unused for Razorpay chefs.

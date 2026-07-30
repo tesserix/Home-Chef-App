@@ -159,9 +159,15 @@ func scanHeldOrders(rz *RazorpayClient) int {
 	var orders []models.Order
 	// Only aggregates that carry an escrow hold AND a gateway order to fetch transfers from.
 	// payout_hold_status <> '' is empty for every order while the escrow flags are OFF.
+	//
+	// payment_provider is filtered to Razorpay because razorpay_order_id is the shared
+	// gateway-order-id column: a Cashfree order is non-empty there but has no Route
+	// transfers behind it, so including it would fetch nothing, report phantom drift on
+	// every sweep, and bury the real findings.
 	if err := database.DB.
 		Select("id", "order_number", "razorpay_order_id", "payout_hold_status", "refunded_at", "status").
-		Where("payout_hold_status <> '' AND razorpay_order_id <> ''").
+		Where("payout_hold_status <> '' AND razorpay_order_id <> '' AND payment_provider = ?",
+			models.PaymentProviderRazorpay).
 		Order("updated_at ASC").
 		Limit(sweepBatchLimit).
 		Find(&orders).Error; err != nil {

@@ -5,6 +5,8 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/homechef/api/models"
 )
 
 // order_payout_partial.go — #549. A PARTIAL goodwill refund must NOT forfeit the
@@ -50,13 +52,22 @@ func ReverseOrderChefTransferPartial(db *gorm.DB, orderID uuid.UUID, refundedPai
 	var row struct {
 		RazorpayOrderID   string
 		RazorpayAccountID string
+		PaymentProvider   string
 	}
-	if err := db.Raw(`SELECT o.razorpay_order_id AS razorpay_order_id, c.razorpay_account_id AS razorpay_account_id
+	if err := db.Raw(`SELECT o.razorpay_order_id AS razorpay_order_id, o.payment_provider AS payment_provider,
+		c.razorpay_account_id AS razorpay_account_id
 		FROM orders o JOIN chef_profiles c ON c.id = o.chef_id WHERE o.id = ?`, orderID.String()).
 		Scan(&row).Error; err != nil {
 		return fmt.Errorf("order-payout: load order/chef %s for partial reverse: %w", orderID, err)
 	}
 	if row.RazorpayOrderID == "" || row.RazorpayAccountID == "" {
+		return nil
+	}
+	// razorpay_order_id is the SHARED gateway-order-id column, so a Cashfree order
+	// is non-empty above while having no Route transfer to claw back. Without this
+	// the reversal would hand a Cashfree order id to FetchOrderTransfers and error
+	// on every partial refund of such an order.
+	if !models.ProviderSupportsGatewaySplit(row.PaymentProvider) {
 		return nil
 	}
 	rz := GetRazorpayFor(PaymentModeForOrder(orderID))

@@ -27,7 +27,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
@@ -124,8 +123,8 @@ func RefundOrderForCancellation(order *models.Order, initiatedBy, reason string)
 // no error, no trace, just missing money. The wallet branch keys its own credit off the
 // same value for the same reason.
 func runCancellationGatewayRefund(order *models.Order, provider string, refundAmount float64, initiatedBy, reason, idempotencyKey string) (string, error) {
-	switch provider {
-	case "wallet":
+	switch models.NormalizeProvider(provider) {
+	case models.PaymentProviderWallet:
 		txn, werr := CreditWallet(database.DB, order.CustomerID, refundAmount,
 			models.WalletSourceRefund, &order.ID,
 			fmt.Sprintf("Refund for order %s: %s", order.OrderNumber, reason),
@@ -134,56 +133,22 @@ func runCancellationGatewayRefund(order *models.Order, provider string, refundAm
 			return "", werr
 		}
 		return "wallet:" + txn.ID.String(), nil
-	case "stripe":
-		if order.StripePaymentIntentID == "" {
-			return "", fmt.Errorf("no stripe payment on order")
-		}
-		st := GetStripe()
-		if st == nil {
-			return "", fmt.Errorf("stripe gateway not configured")
-		}
-		currency := strings.ToLower(order.Currency)
-		if currency == "" {
-			currency = CurrencyForCountry(order.Chef.PayoutCountry)
-		}
-		r, err := st.CreateRefund(&StripeRefundRequest{
-			PaymentIntent:        order.StripePaymentIntentID,
-			Amount:               ToMinor(refundAmount, currency),
-			Reason:               "requested_by_customer",
-			ReverseTransfer:      true,
-			RefundApplicationFee: true,
-			Metadata: map[string]string{
-				"order_id": order.ID.String(), "order_number": order.OrderNumber,
-				"reason": reason, "initiated_by": initiatedBy,
-			},
-		})
+	default:
+		// Every gateway provider routes through the ONE switch in
+		// gateway_refund.go. What used to be three near-identical branches here was
+		// the second copy of that switch, and the copy is what let a new provider be
+		// added in one place and silently missed in the other.
+		//
+		// The caller's logical key (#574/#690) is passed straight through —
+		// RefundFullIdempotencyKey for the cancellation path, a per-scope key when
+		// the coordinator drives this.
+		res, err := IssueOrderGatewayRefund(order, ToPaise(refundAmount), map[string]string{
+			"order_id": order.ID.String(), "order_number": order.OrderNumber,
+			"reason": reason, "initiated_by": initiatedBy,
+		}, idempotencyKey)
 		if err != nil {
 			return "", err
 		}
-		return r.ID, nil
-	default: // razorpay
-		if order.RazorpayPaymentID == "" {
-			return "", fmt.Errorf("no razorpay payment on order")
-		}
-		rz := GetRazorpayFor(order.Mode)
-		if rz == nil {
-			return "", fmt.Errorf("razorpay gateway not configured")
-		}
-		r, err := rz.CreateRefund(order.RazorpayPaymentID, &RefundRequest{
-			Amount: ToPaise(refundAmount),
-			Speed:  "normal",
-			Notes: map[string]string{
-				"order_id": order.ID.String(), "order_number": order.OrderNumber,
-				"reason": reason, "initiated_by": initiatedBy,
-			},
-			Receipt: fmt.Sprintf("refund-%s", order.OrderNumber),
-			// The caller's logical key (#574/#690) — RefundFullIdempotencyKey for the
-			// cancellation path, a per-scope key when the coordinator drives this.
-			IdempotencyKey: idempotencyKey,
-		})
-		if err != nil {
-			return "", err
-		}
-		return r.ID, nil
+		return res.RefundID, nil
 	}
 }

@@ -33,12 +33,27 @@ func payoutMovementEnabled() bool {
 	return config.AppConfig != nil && config.AppConfig.OrderPayoutAutoReleaseEnabled
 }
 
-// orderRazorpayID loads the order's Razorpay order id, or "" if it isn't a
-// gateway-charged regular order.
+// orderRazorpayID loads the order's Razorpay order id, or "" if the order has no
+// Route transfers to act on.
+//
+// The provider check is load-bearing, not defensive. razorpay_order_id is the
+// shared gateway-order-id column (see models.GatewayOrderIDColumn), so a Cashfree
+// order has a NON-EMPTY value here — one that means nothing to Razorpay. Testing
+// only for emptiness, as this did when Razorpay was the sole INR gateway, would
+// hand a Cashfree order id to FetchOrderTransfers and get a 400 back on every
+// release, reversal and reconcile sweep for that order.
+//
+// Returning "" for a Cashfree order is the CORRECT answer, not a workaround:
+// nothing was split at the gateway, so there is genuinely no transfer to release
+// or reverse. Its chef/rider money settles through the statement/payout path.
 func orderRazorpayID(orderID uuid.UUID) (string, error) {
 	var order models.Order
-	if err := database.DB.Select("id", "razorpay_order_id").First(&order, "id = ?", orderID).Error; err != nil {
+	if err := database.DB.Select("id", "razorpay_order_id", "payment_provider").
+		First(&order, "id = ?", orderID).Error; err != nil {
 		return "", err
+	}
+	if !models.ProviderSupportsGatewaySplit(order.PaymentProvider) {
+		return "", nil
 	}
 	return order.RazorpayOrderID, nil
 }
