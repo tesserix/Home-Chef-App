@@ -115,6 +115,12 @@ func (h *AccountLifecycleHandler) DeletionEligibility(c *gin.Context) {
 		"deletable":     len(blockers) == 0,
 		"blockers":      blockers,
 		"retentionDays": int(services.RestoreWindow.Hours() / 24),
+		// The account's own email, for the type-to-confirm check. The apps used
+		// to read it from the client-side auth store, which is populated only at
+		// login and never rehydrated — so after any cold start the delete button
+		// compared against "" and stayed disabled forever. The caller is
+		// authenticated as exactly this user, so returning it leaks nothing.
+		"email": user.Email,
 	})
 }
 

@@ -30,6 +30,10 @@ export interface DeletionEligibility {
   deletable: boolean;
   blockers: DeletionBlocker[];
   retentionDays: number;
+  /** The account's own email, for the type-to-confirm check. Server-fetched
+   * because the auth store's user is set only at login and never rehydrated —
+   * comparing against it after a cold start disabled deletion forever. */
+  email?: string;
 }
 
 export interface DeleteAccountResult {
