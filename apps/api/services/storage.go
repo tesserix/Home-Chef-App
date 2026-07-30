@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -31,8 +32,20 @@ func CloseStorage() {
 	}
 }
 
+// ErrStorageUnavailable is returned when the GCS client was never initialised.
+//
+// InitStorage is non-fatal in both entrypoints, so storageClient can legitimately
+// be nil in a running process. Dereferencing it panicked instead of erroring —
+// which took down the whole account-purge batch rather than one upload, because
+// that sweeper recovers at the top of its scan. A typed error lets callers log,
+// retry, or continue as their situation warrants.
+var ErrStorageUnavailable = errors.New("storage: GCS client not initialised")
+
 // UploadFile uploads a file to the specified bucket and returns the object path
 func UploadFile(ctx context.Context, bucket, objectPath string, reader io.Reader, contentType string) (string, error) {
+	if storageClient == nil {
+		return "", ErrStorageUnavailable
+	}
 	obj := storageClient.Bucket(bucket).Object(objectPath)
 	writer := obj.NewWriter(ctx)
 	writer.ContentType = contentType
@@ -78,6 +91,9 @@ func UploadPrivateFile(ctx context.Context, folder string, fileName string, read
 
 // GenerateSignedURL generates a temporary signed URL for a private file
 func GenerateSignedURL(ctx context.Context, objectPath string, expiry time.Duration) (string, error) {
+	if storageClient == nil {
+		return "", ErrStorageUnavailable
+	}
 	bucket := config.AppConfig.GCSPrivateBucket
 	url, err := storageClient.Bucket(bucket).SignedURL(objectPath, &storage.SignedURLOptions{
 		Method:  "GET",
@@ -91,6 +107,9 @@ func GenerateSignedURL(ctx context.Context, objectPath string, expiry time.Durat
 
 // DeleteFile removes a file from a bucket
 func DeleteFile(ctx context.Context, bucket, objectPath string) error {
+	if storageClient == nil {
+		return ErrStorageUnavailable
+	}
 	return storageClient.Bucket(bucket).Object(objectPath).Delete(ctx)
 }
 

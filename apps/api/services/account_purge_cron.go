@@ -78,38 +78,58 @@ func runAccountPurgeScan(ctx context.Context) {
 
 	var purged, failed int
 	for i := range due {
-		user := due[i]
-
-		// Archive before erasing. A failed archive must not stop the erasure:
-		// the user asked to be deleted, and holding their data back because a
-		// bucket write failed would be the worse outcome of the two.
-		if err := ArchiveAccountFinancials(ctx, user); err != nil {
-			log.Printf("account-purge: archive failed for user=%s (continuing): %v", user.ID, err)
-		}
-
-		// Last chance to kill the credential, in case the post-commit attempt
-		// at deletion time failed.
-		if user.GIPUid != "" {
-			if err := DeleteGIPAccount(ctx, user.GIPTenantID, user.GIPUid); err != nil {
-				log.Printf("account-purge: GIP delete failed for user=%s: %v", user.ID, err)
-			}
-		}
-
-		// Same for the Apple grant — this is the last moment the refresh token
-		// still exists, since PurgeUser erases the row that holds it.
-		RevokeAppleGrantForUser(ctx, &user)
-
-		// Isolate per user: one bad row must not strand the rest of the batch.
-		if err := PurgeUser(database.DB.WithContext(ctx), user.ID, user.Role); err != nil {
-			log.Printf("account-purge: purge failed for user=%s: %v", user.ID, err)
+		if purgeOneAccount(ctx, due[i]) {
+			purged++
+		} else {
 			failed++
-			continue
 		}
-		purged++
-		// User id only — never the email. This is the erasure path.
-		log.Printf("account-purge: erased user=%s role=%s", user.ID, user.Role)
 	}
 
 	log.Printf("account-purge: scan complete (due=%d purged=%d failed=%d)",
 		len(due), purged, failed)
+}
+
+// purgeOneAccount erases a single due account, reporting whether it succeeded.
+//
+// It recovers per USER. The scan-level recover above only stops a panic from
+// killing the cron goroutine — it cannot resume the loop, so a single panicking
+// account silently abandoned every remaining account in the batch. That is how a
+// nil GCS client in the worker (InitStorage was never called there) turned one
+// bad archive into "no account is ever erased", with a single recovered-panic
+// line as the only evidence. The retention window is a legal commitment, so the
+// batch must survive one bad row.
+func purgeOneAccount(ctx context.Context, user models.User) (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			// User id only — never the email. This is the erasure path.
+			log.Printf("account-purge: panic purging user=%s (batch continues): %v", user.ID, r)
+			ok = false
+		}
+	}()
+
+	// Archive before erasing. A failed archive must not stop the erasure: the
+	// user asked to be deleted, and holding their data back because a bucket
+	// write failed would be the worse outcome of the two.
+	if err := ArchiveAccountFinancials(ctx, user); err != nil {
+		log.Printf("account-purge: archive failed for user=%s (continuing): %v", user.ID, err)
+	}
+
+	// Last chance to kill the credential, in case the post-commit attempt at
+	// deletion time failed.
+	if user.GIPUid != "" {
+		if err := DeleteGIPAccount(ctx, user.GIPTenantID, user.GIPUid); err != nil {
+			log.Printf("account-purge: GIP delete failed for user=%s: %v", user.ID, err)
+		}
+	}
+
+	// Same for the Apple grant — this is the last moment the refresh token still
+	// exists, since PurgeUser erases the row that holds it.
+	RevokeAppleGrantForUser(ctx, &user)
+
+	if err := PurgeUser(database.DB.WithContext(ctx), user.ID, user.Role); err != nil {
+		log.Printf("account-purge: purge failed for user=%s: %v", user.ID, err)
+		return false
+	}
+	log.Printf("account-purge: erased user=%s role=%s", user.ID, user.Role)
+	return true
 }
