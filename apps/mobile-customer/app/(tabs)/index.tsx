@@ -146,7 +146,10 @@ export default function HomeScreen() {
   const { orders: activeOrders } = useActiveOrder();
   // Stack up to 3 active-order cards in the floating anchor; more than that is
   // rare and would bury the feed. Each card is ~106px tall (incl. its margin).
-  const visibleActiveOrders = activeOrders.slice(0, 3);
+  // ALL active orders, not a slice: the tracker renders only the most recent one
+  // and needs the true remainder for its "N more active orders" row. Slicing to 3
+  // dated from the collapsible stack, which drew a card per order.
+  const visibleActiveOrders = activeOrders;
 
   // Live stage changes on the active-order card (#716). The notification stream
   // is user-scoped, so one socket covers every card in the stack — no orderId.
@@ -627,9 +630,9 @@ export default function HomeScreen() {
           }
         />
 
-        {/* Floating active-order stack — pinned just above the tab bar. With
-            more than one in-flight order it collapses into a card stack (front
-            card + peeking layers); tap to expand the full list. Absolute
+        {/* Floating active-order tracker — pinned just above the tab bar. Shows
+            the most recent in-flight order only; any others are reached through
+            its "N more active orders" row, which opens the Orders tab. Absolute
             positioning keeps it out of the scroll flow. */}
         {visibleActiveOrders.length > 0 && (
           <View
