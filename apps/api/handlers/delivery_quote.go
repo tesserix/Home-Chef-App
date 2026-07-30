@@ -175,9 +175,18 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 			total = req.Subtotal + effectiveDelivery + platformFee + tax + tip - req.Discount
 		}
 
+		// The RESOLVED gateway, not the chef's stored column. Two things read it:
+		// the credit quote below, and — via the response — the RBI Payment
+		// Aggregator disclosure the checkout screen must render. That disclosure
+		// has to name the aggregator that will actually process the payment, so it
+		// must come from the same resolution the charge itself uses rather than
+		// from a column the selection may override.
+		resolvedProvider := services.SelectCheckoutGateway(chef.PaymentProvider, chef.Mode)
+		resp["paymentProvider"] = resolvedProvider
+
 		preview := &models.Order{
 			CustomerID: userID, Currency: services.CurrencyForCountry(chef.PayoutCountry),
-			PaymentProvider: chef.PaymentProvider,
+			PaymentProvider: resolvedProvider,
 			Subtotal:        req.Subtotal, Discount: req.Discount, DeliveryFee: effectiveDelivery,
 			PlatformFee: platformFee, Tax: tax, Total: total,
 		}

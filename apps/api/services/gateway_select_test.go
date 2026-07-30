@@ -62,14 +62,50 @@ func TestSelectCheckoutGateway_StripeNeverFallsBack(t *testing.T) {
 		SelectCheckoutGateway(models.PaymentProviderStripe, models.ChefModeLive))
 }
 
-// A blank or unknown provider is an unstamped historical row, which really is
-// Razorpay — it must NOT be reinterpreted as the new preferred gateway.
-func TestSelectCheckoutGateway_BlankStaysRazorpay(t *testing.T) {
+// Cashfree is the platform default for EVERY INR kitchen, including ones whose
+// stored provider is razorpay or blank.
+//
+// That stored value is not a choice the chef made — it is what every row held
+// before there was an alternative — so honouring it would strand the entire
+// existing estate on the old gateway. Overriding it is safe because the ORDER,
+// not the chef, is authoritative afterwards: the gateway that takes the payment
+// is stamped on the order, and refunds and reconciliation read that.
+func TestSelectCheckoutGateway_PrefersCashfreeForExistingRazorpayChefs(t *testing.T) {
 	withCashfreeClient(t, models.ChefModeLive,
 		NewCashfreeTestClient("", "app", "sk", "wh", models.ChefModeLive))
 
-	require.Equal(t, models.PaymentProviderRazorpay, SelectCheckoutGateway("", models.ChefModeLive))
-	require.Equal(t, models.PaymentProviderRazorpay, SelectCheckoutGateway("nonsense", models.ChefModeLive))
+	require.Equal(t, models.PaymentProviderCashfree, SelectCheckoutGateway("", models.ChefModeLive))
+	require.Equal(t, models.PaymentProviderCashfree,
+		SelectCheckoutGateway(models.PaymentProviderRazorpay, models.ChefModeLive))
+	require.Equal(t, models.PaymentProviderCashfree, SelectCheckoutGateway("nonsense", models.ChefModeLive))
+}
+
+// The stored-value MEANING is untouched by that preference. NormalizeProvider
+// still reads a blank row as razorpay, which is what keeps historical orders'
+// refunds routed to the gateway that actually took their money.
+func TestSelectCheckoutGateway_DoesNotChangeStoredProviderMeaning(t *testing.T) {
+	require.Equal(t, models.PaymentProviderRazorpay, models.NormalizeProvider(""))
+	require.Equal(t, models.PaymentProviderRazorpay, models.NormalizeProvider("nonsense"))
+}
+
+// A slot that just failed to create an order is skipped until the cooldown
+// lapses, so a broken gateway costs ONE checkout a round-trip rather than every
+// checkout — which matters now that Cashfree is tried first for everyone.
+func TestSelectCheckoutGateway_BreakerSkipsAFailingSlot(t *testing.T) {
+	withCashfreeClient(t, models.ChefModeLive,
+		NewCashfreeTestClient("", "app", "sk", "wh", models.ChefModeLive))
+	t.Cleanup(func() { cashfreeGatewayBreaker.Delete(models.ChefModeLive) })
+
+	require.Equal(t, models.PaymentProviderCashfree, SelectCheckoutGateway("", models.ChefModeLive))
+
+	NoteCashfreeGatewayFailure(models.ChefModeLive)
+	require.Equal(t, models.PaymentProviderRazorpay, SelectCheckoutGateway("", models.ChefModeLive),
+		"a slot that just failed must be skipped, not retried per checkout")
+
+	// The breaker is scoped per mode — a failing live slot must not disable test.
+	withCashfreeClient(t, models.ChefModeTest,
+		NewCashfreeTestClient("", "app_t", "sk_t", "wh_t", models.ChefModeTest))
+	require.Equal(t, models.PaymentProviderCashfree, SelectCheckoutGateway("", models.ChefModeTest))
 }
 
 // A new chef gets the preferred gateway when it is usable for their mode.

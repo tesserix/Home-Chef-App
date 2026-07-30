@@ -185,6 +185,11 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 		// not fix itself within one request.
 		log.Printf("cashfree: order create failed for %s (%v) — falling back to razorpay for this checkout",
 			order.OrderNumber, err)
+		// Open the breaker so the NEXT customer's checkout skips Cashfree instead
+		// of paying the same failed round-trip to rediscover this. Now that
+		// Cashfree is the platform default, without this a broken slot would cost
+		// every single order an extra gateway call on the critical path.
+		services.NoteCashfreeGatewayFailure(order.Mode)
 		if services.GetRazorpayFor(order.Mode) != nil {
 			h.createRazorpayPayment(c, order, userID, creditReq)
 			return

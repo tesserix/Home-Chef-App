@@ -48,7 +48,7 @@ export interface SessionResponse {
 }
 
 /** Supported social login providers (Firebase / GIP provider IDs, abbreviated). */
-export type SocialProvider = 'google' | 'facebook' | 'apple' | 'phone';
+export type SocialProvider = 'google' | 'apple' | 'phone';
 
 // Permission types for RBAC
 export type Permission =

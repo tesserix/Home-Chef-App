@@ -174,7 +174,7 @@ export default function PrivacyPolicyPage() {
             </ul>
 
             <h3 className="text-lg font-semibold text-ink mt-6 mb-2">
-              When you sign in with Google, Facebook, or Apple
+              When you sign in with Google or Apple
             </h3>
             <p className="text-ink leading-relaxed">
               We receive your name, email, profile photo, and a unique account

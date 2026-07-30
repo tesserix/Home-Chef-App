@@ -1,7 +1,6 @@
 import {
   signInWithPopup,
   OAuthProvider,
-  FacebookAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   PhoneAuthProvider,
@@ -137,12 +136,6 @@ export async function signInWithApple(): Promise<AuthSession> {
   provider.addScope('email');
   provider.addScope('name');
   const cred = await signInWithPopup(firebaseAuth, provider);
-  const idToken = await cred.user.getIdToken();
-  return postExchange(idToken);
-}
-
-export async function signInWithFacebook(): Promise<AuthSession> {
-  const cred = await signInWithPopup(firebaseAuth, new FacebookAuthProvider());
   const idToken = await cred.user.getIdToken();
   return postExchange(idToken);
 }
@@ -303,7 +296,7 @@ export async function fetchCsrfToken(): Promise<string | null> {
 
 export const authService = {
   /**
-   * Deprecated. Callers should call `signInWithGoogle()` / `signInWithFacebook()`
+   * Deprecated. Callers should call `signInWithGoogle()`
    * directly. Returns null so existing callsites can detect the new auth flow
    * and adapt.
    */

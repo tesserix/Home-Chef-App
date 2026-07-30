@@ -135,11 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (provider?: SocialProvider) => {
     const svc = await import('@/features/auth/services/auth-service');
     const session =
-      provider === 'facebook'
-        ? await svc.signInWithFacebook()
-        : provider === 'apple'
-          ? await svc.signInWithApple()
-          : await svc.signInWithGoogle();
+      provider === 'apple' ? await svc.signInWithApple() : await svc.signInWithGoogle();
     const { setApiAuth } = useAuthStore.getState();
     setApiAuth(svc.toSessionUser(session), '', '');
   }, []);

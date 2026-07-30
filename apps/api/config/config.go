@@ -39,7 +39,6 @@ type Config struct {
 	// apps/auth-bff via Google Identity Platform). Kept here because
 	// some frontends still receive the public ID from server config.
 	GoogleClientID string
-	FacebookAppID  string
 
 	// GCS Storage
 	GCSProjectID     string
@@ -426,7 +425,6 @@ func Load() {
 		GoogleWeatherAPIKey: getEnv("GOOGLE_WEATHER_API_KEY", ""),
 		MapplsClientID:      getEnv("MAPPLS_CLIENT_ID", ""),
 		MapplsClientSecret:  getEnv("MAPPLS_CLIENT_SECRET", ""),
-		FacebookAppID:       getEnv("FACEBOOK_APP_ID", ""),
 
 		// GCS Storage
 		GCSProjectID:     getEnv("GCS_PROJECT_ID", "tesseracthub-480811"),
