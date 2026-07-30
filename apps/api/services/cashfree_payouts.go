@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -692,14 +693,15 @@ func (c *CashfreePayoutClient) signRequest() (string, error) {
 		return "", nil
 	}
 	payload := c.clientID + "." + strconv.FormatInt(time.Now().Unix(), 10)
-	// PKCS#1 v1.5 is REQUIRED by Cashfree's scheme, not chosen. Go marks it
-	// deprecated in favour of OAEP and that advice is correct in general — but
-	// Cashfree's server decrypts with v1.5, so switching to OAEP produces a
-	// signature it cannot read and every payout call 403s. Do not "fix" this.
-	// The padding-oracle risk v1.5 carries does not apply here: we encrypt, we
-	// never decrypt attacker-supplied ciphertext, and the plaintext is a client
-	// id and a timestamp rather than a secret.
-	cipher, err := rsa.EncryptPKCS1v15(rand.Reader, c.publicKey, []byte(payload))
+	// RSA-OAEP with SHA-1 (MGF1-SHA1). Verified against the live sandbox, not
+	// taken from the documentation — which describes only "RSA encryption" and is
+	// widely paraphrased as PKCS#1 v1.5. It is not: v1.5 and OAEP-SHA256 both
+	// return `401 Signature mismatch`, and only OAEP-SHA1 authenticates.
+	//
+	// SHA-1 here is OAEP's mask/label hash, not a signature digest, so this is
+	// not a collision-resistance dependency — and the choice is Cashfree's
+	// server-side decryption anyway, not ours.
+	cipher, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, c.publicKey, []byte(payload), nil)
 	if err != nil {
 		return "", fmt.Errorf("cashfree-payouts: sign request: %w", err)
 	}
