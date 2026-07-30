@@ -303,6 +303,15 @@ export default function DashboardScreen() {
     }
   }
 
+  // Meals due in the next 24h — plan days included, not just live orders.
+  // MUST stay above the isError early return (hooks rule): this hook was added
+  // below it (#831), so the render after ANY dashboard-query error — including
+  // the 401s every screen gets once an account is deleted — had one hook fewer
+  // than the render before it. React throws "Rendered fewer hooks than
+  // expected" and the error boundary swallowed the whole app.
+  const { data: upcomingData } = useChefUpcoming(24);
+  const upcomingMeals = upcomingData?.meals ?? [];
+
   if (isError) {
     return (
       <SafeAreaView style={styles.errorScreen}>
@@ -345,10 +354,6 @@ export default function DashboardScreen() {
     pendingMealPlans.length > 0 ||
     (actionRequests?.length ?? 0) > 0 ||
     expiringDocs.length > 0;
-
-  // Meals due in the next 24h — plan days included, not just live orders.
-  const { data: upcomingData } = useChefUpcoming(24);
-  const upcomingMeals = upcomingData?.meals ?? [];
 
   // Nothing to act on → fill the empty space with the status prompt instead of a
   // blank screen. Broadened from the old 120-min "quiet" rule: a closed or idle
