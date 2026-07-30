@@ -43,6 +43,24 @@ func main() {
 	if err := services.InitPushService(); err != nil {
 		log.Printf("worker: push service init failed (push activities will error): %v", err)
 	}
+	// GCS. Same reasoning as the PII DEK above: the worker is a full app process
+	// and its activities write objects, so it needs the storage client exactly as
+	// much as the API does.
+	//
+	// Without this the account-purge cron panicked on every run: it archives an
+	// account's financial records to the private bucket before erasing the row, and
+	// UploadFile dereferenced a nil storageClient. runAccountPurgeScan recovers at
+	// the top of the scan, so the panic aborted the WHOLE batch and no account was
+	// ever erased — a silent DPDP retention failure that the API's own logs never
+	// showed, because the cron runs here and not there.
+	//
+	// Non-fatal, matching main.go: an activity that cannot upload should fail and be
+	// retried by Temporal, not stop the worker from serving every other task queue.
+	if err := services.InitStorage(); err != nil {
+		log.Printf("worker: GCS storage init failed (upload activities will error): %v", err)
+	} else {
+		defer services.CloseStorage()
+	}
 
 	// Wire activity transports to the real services.* implementations.
 	workflows.SendFunc = services.DispatchNotification
