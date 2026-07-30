@@ -1111,6 +1111,22 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/payouts/release-bulk", payoutPerm, adminPayoutHandler.BulkReleasePayouts)
 			// Blocked-chef visibility + the per-chef automation switch (#747).
 			admin.GET("/payouts/blocked-chefs", payoutPerm, adminPayoutHandler.GetBlockedChefs)
+
+			// Cashfree Payouts rail — credentials, the approval queue, and the
+			// auto-disburse flag. Behind the same payout permission as the
+			// escrow-release queue above: both move money to chefs.
+			payoutRailHandler := handlers.NewAdminPayoutRailHandler()
+			admin.GET("/payouts/cashfree/status", payoutPerm, payoutRailHandler.GetCashfreePayoutStatus)
+			admin.PUT("/payouts/cashfree/keys", payoutPerm, payoutRailHandler.UpdateCashfreePayoutKeys)
+			admin.GET("/payouts/batches", payoutPerm, payoutRailHandler.ListPayoutBatches)
+			admin.POST("/payouts/batches/:batchId/approve", payoutPerm, payoutRailHandler.ApprovePayoutBatch)
+			admin.POST("/payouts/batches/:batchId/cancel", payoutPerm, payoutRailHandler.CancelPayoutBatch)
+			// Moves real money. Deliberately separate from approve, so the act
+			// that disburses is always an explicit call of its own.
+			admin.POST("/payouts/batches/:batchId/execute", payoutPerm, payoutRailHandler.ExecutePayoutBatch)
+			admin.POST("/payouts/statements/:statementId/prepare", payoutPerm, payoutRailHandler.PrepareStatementPayout)
+			admin.GET("/payouts/settings", payoutPerm, payoutRailHandler.GetPayoutSettings)
+			admin.PUT("/payouts/settings", payoutPerm, payoutRailHandler.UpdatePayoutSettings)
 			admin.PUT("/chefs/:id/payout-automation", payoutPerm, adminPayoutHandler.SetPayoutAutomation)
 
 			// Review moderation (#35) — list, hide, unhide (audited; recomputes rating)

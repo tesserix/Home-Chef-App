@@ -1634,7 +1634,6 @@ function SecurityTab() {
         <div className="mt-4 space-y-3">
           {[
             { name: 'Google', provider: 'google' },
-            { name: 'Facebook', provider: 'facebook' },
             { name: 'Apple', provider: 'apple' },
           ].map((account) => (
             <div

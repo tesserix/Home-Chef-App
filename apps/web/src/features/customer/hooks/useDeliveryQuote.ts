@@ -50,6 +50,17 @@ export interface CreditQuote {
 }
 
 export interface DeliveryQuote {
+  /**
+   * The gateway that will actually process this order, resolved server-side.
+   *
+   * NOT the chef's stored provider: the server may prefer a different gateway,
+   * so this is the only value safe to render. The checkout's RBI Payment
+   * Aggregator disclosure names an aggregator, and naming the wrong one is a
+   * compliance problem rather than a cosmetic bug — so it reads this and nothing
+   * else. Absent on an older API, which the UI handles by falling back to
+   * neutral wording.
+   */
+  paymentProvider?: string;
   deliveryFee: number;
   pickupFee: number;
   pickupSaving: number;

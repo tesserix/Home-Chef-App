@@ -215,6 +215,20 @@ export default function CheckoutPage() {
     credit,
   });
 
+
+  // The aggregator named in the RBI PA disclosure below. Driven by the
+  // SERVER-resolved gateway, never by a hardcoded name — the platform can route
+  // an order to a different gateway than the chef's stored one, and this block
+  // is a regulatory disclosure that has to say who actually processes the money.
+  // Unknown resolves to neutral wording rather than guessing.
+  const gatewayName =
+    quote?.paymentProvider === 'cashfree'
+      ? 'Cashfree'
+      : quote?.paymentProvider === 'razorpay'
+        ? 'Razorpay'
+        : quote?.paymentProvider === 'stripe'
+          ? 'Stripe'
+          : null;
   // What the chef actually offers. Both come from the quote the page already
   // fetches, so there is no second round-trip. offersDelivery is the computed
   // capability CreateOrder gates on (chef self-delivers OR a 3PL provider is
@@ -1179,7 +1193,9 @@ export default function CheckoutPage() {
                   className="h-6 w-6 shrink-0"
                 />
                 <div>
-                  <p className="text-sm font-medium text-ink">Powered by Razorpay</p>
+                  <p className="text-sm font-medium text-ink">
+                    {gatewayName ? `Powered by ${gatewayName}` : 'Secure payment'}
+                  </p>
                   <p className="text-xs text-ink-muted">
                     Pay securely via UPI, cards, net banking, or wallets
                   </p>
@@ -1193,8 +1209,10 @@ export default function CheckoutPage() {
                 <div>
                   <div className="mb-1 font-medium text-ink">Payment &amp; refund summary</div>
                   <p>
-                    Payments are processed by Razorpay (RBI-licensed payment aggregator).
-                    Tesserix Pty Ltd (operator of Fe3dr) facilitates the transaction;
+                    Payments are processed by{' '}
+                    {gatewayName ? `${gatewayName} (RBI-licensed payment aggregator)` :
+                      'an RBI-licensed payment aggregator'}
+                    . Tesserix Pty Ltd (operator of Fe3dr) facilitates the transaction;
                     order proceeds go to your chef minus the platform commission.
                   </p>
                 </div>

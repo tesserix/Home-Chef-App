@@ -39,7 +39,6 @@ type Config struct {
 	// apps/auth-bff via Google Identity Platform). Kept here because
 	// some frontends still receive the public ID from server config.
 	GoogleClientID string
-	FacebookAppID  string
 
 	// GCS Storage
 	GCSProjectID     string
@@ -94,6 +93,13 @@ type Config struct {
 	CashfreeAppID         string
 	CashfreeSecretKey     string
 	CashfreeWebhookSecret string
+
+	// Cashfree PAYOUTS — a separate product from the PG above, with its own
+	// dashboard keys and hosts. Local-dev fallback only, live slot only, for the
+	// same reasons; the stakes are higher here because this rail sends money OUT.
+	CashfreePayoutClientID      string
+	CashfreePayoutClientSecret  string
+	CashfreePayoutWebhookSecret string
 
 	// Shadowfax 3PL (from Secret Manager; empty leaves the provider disabled)
 	ShadowfaxAPIToken      string
@@ -419,7 +425,6 @@ func Load() {
 		GoogleWeatherAPIKey: getEnv("GOOGLE_WEATHER_API_KEY", ""),
 		MapplsClientID:      getEnv("MAPPLS_CLIENT_ID", ""),
 		MapplsClientSecret:  getEnv("MAPPLS_CLIENT_SECRET", ""),
-		FacebookAppID:       getEnv("FACEBOOK_APP_ID", ""),
 
 		// GCS Storage
 		GCSProjectID:     getEnv("GCS_PROJECT_ID", "tesseracthub-480811"),
@@ -451,6 +456,11 @@ func Load() {
 		CashfreeAppID:         getEnv("CASHFREE_APP_ID", ""),
 		CashfreeSecretKey:     getEnv("CASHFREE_SECRET_KEY", ""),
 		CashfreeWebhookSecret: getEnv("CASHFREE_WEBHOOK_SECRET", ""),
+
+		// Cashfree Payouts
+		CashfreePayoutClientID:      getEnv("CASHFREE_PAYOUT_CLIENT_ID", ""),
+		CashfreePayoutClientSecret:  getEnv("CASHFREE_PAYOUT_CLIENT_SECRET", ""),
+		CashfreePayoutWebhookSecret: getEnv("CASHFREE_PAYOUT_WEBHOOK_SECRET", ""),
 
 		ShadowfaxAPIToken:      getEnv("SHADOWFAX_API_TOKEN", ""),
 		ShadowfaxWebhookSecret: getEnv("SHADOWFAX_WEBHOOK_SECRET", ""),

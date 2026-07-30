@@ -17,6 +17,7 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/payouts"
 	"github.com/homechef/api/services"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -2503,6 +2504,40 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		services.CaptureBackgroundError(settlementErr)
 	}
 
+	// Register the same destination with the Cashfree Payouts rail, so the chef
+	// is payable by the disbursement engine as well as by Route.
+	//
+	// AFTER the transaction, not inside it: the tx above already carries up to
+	// four sequential Razorpay calls, and adding a second gateway's round-trip
+	// would hold the chef row locked for the duration of both. Still synchronous
+	// within the request, for the reason the Route block states — a chef whose
+	// bank details were rejected has to learn it from the screen they are looking
+	// at, not from an unsettled payout days later.
+	//
+	// The instrument is passed from the request rather than read back from
+	// Secret Manager, because the secrets above are stored in a fire-and-forget
+	// goroutine and a read-back would race it.
+	payoutMethodErrorCode := ""
+	if services.GetCashfreePayoutFor(chef.Mode) != nil {
+		instrument := payouts.Instrument{Kind: payouts.MethodBankAccount,
+			AccountNumber: req.BankAccountNumber, IFSC: req.BankIFSC}
+		if instrument.AccountNumber == "" || instrument.IFSC == "" {
+			instrument = payouts.Instrument{Kind: payouts.MethodUPI, VPA: req.UpiID}
+		}
+		if instrument.Valid() {
+			if _, pErr := services.EnsurePayoutMethodWith(c.Request.Context(), database.DB,
+				payouts.PayeeRef{Type: payouts.PayeeChef, ID: chef.ID}, chef.Mode,
+				instrument, req.BankAccountName); pErr != nil {
+				// A rejected beneficiary is the chef's problem to fix (wrong
+				// IFSC, name mismatch), so it is surfaced — but it must NOT fail
+				// the save: the details are already stored and Route may well
+				// have accepted them.
+				payoutMethodErrorCode = "payout_beneficiary_failed"
+				log.Printf("payout-rail: beneficiary registration failed for vendor %s: %v", vendorID, pErr)
+			}
+		}
+	}
+
 	// Audit the payout change. NEVER store raw bank details in the audit row —
 	// only the method + masked account so the trail is useful without leaking PII.
 	services.LogAudit(c, "chef.payout.update", "chef", vendorID, nil, gin.H{
@@ -2526,6 +2561,12 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		// Present even for the UPI case: the response must not read as an
 		// unqualified success when the chef has no way to be paid yet.
 		resp["razorpaySettlementError"] = settlementErrorCode
+	}
+	if payoutMethodErrorCode != "" {
+		// Same reasoning for the payout rail: a chef whose beneficiary was
+		// rejected is not payable by the disbursement engine, and the screen
+		// must say so rather than reporting a clean save.
+		resp["payoutMethodError"] = payoutMethodErrorCode
 	}
 
 	c.JSON(http.StatusOK, resp)

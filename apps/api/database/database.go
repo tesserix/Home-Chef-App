@@ -346,6 +346,11 @@ func Migrate() error {
 		&payouts.LedgerEntry{},
 		&payouts.Batch{},
 		&payouts.BatchItem{},
+		// Batch.MethodID has always pointed here; this is the row it points to.
+		// Holds no account number, IFSC or VPA — those stay in Secret Manager
+		// (see payouts/method.go), so this table carries only a masked hint, the
+		// rail's verdict, and the rail's opaque beneficiary id.
+		&payouts.PayoutMethod{},
 	)
 
 	if err != nil {
@@ -365,6 +370,14 @@ func Migrate() error {
 	// golang-migrate SQL files; the .up.sql sat dead in the repo. This block
 	// is the live version that ships with the service.
 	postMigrate := []string{
+		// One PRIMARY payout destination per (tenant, payee, kind). A partial
+		// unique index rather than only application logic, because two primaries
+		// would make destination selection depend on row order — and row order is
+		// not a thing to pay people by. AutoMigrate cannot express the WHERE.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payout_method_primary ON payout_methods (tenant_id, payee_type, payee_id, kind) WHERE "primary" = true`,
+		// One registration per payee per rail — what makes EnsurePayoutMethod's
+		// upsert safe under concurrency.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payout_method_payee_rail ON payout_methods (tenant_id, payee_type, payee_id, rail)`,
 		// New schema. gip_uid is already covered by the model's uniqueIndex tag
 		// but stating it here keeps this block self-documenting.
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_gip_uid ON users (gip_uid) WHERE gip_uid IS NOT NULL`,
