@@ -87,18 +87,51 @@ var cashfreeGatewayBreaker sync.Map // mode -> time.Time (when the cooldown ends
 const cashfreeGatewayCooldown = 90 * time.Second
 
 // cashfreeUsableFor reports whether Cashfree should be tried for this mode.
+//
+// "Configured" is NOT the same as "will work", and the difference is visible to
+// customers. The delivery quote calls this to decide which payment aggregator to
+// name in the RBI PA disclosure on the checkout screen — a regulatory statement
+// about who processes the money. If this answered optimistically and the charge
+// then fell back to Razorpay, the page would have named the wrong aggregator.
+//
+// So a slot is only usable once it has been PROVED usable: presence, then the
+// breaker, then a real health check whose result is cached for the same cooldown
+// window. The check costs one cheap authenticated request per mode per 90s, not
+// one per checkout, and it is what makes the quote and the charge agree.
 func cashfreeUsableFor(mode string) bool {
-	if GetCashfreeFor(mode) == nil {
+	c := GetCashfreeFor(mode)
+	if c == nil {
 		return false
 	}
 	if until, ok := cashfreeGatewayBreaker.Load(mode); ok {
 		if t, _ := until.(time.Time); time.Now().Before(t) {
 			return false
 		}
+		// Cooldown lapsed. Do NOT optimistically assume recovery — re-probe, so
+		// a persistently broken slot stays unusable instead of flapping back to
+		// "usable" every 90s and misreporting the aggregator each time.
 		cashfreeGatewayBreaker.Delete(mode)
 	}
-	return true
+	if healthy, known := cashfreeHealth.Load(mode); known {
+		if h, _ := healthy.(cashfreeHealthResult); time.Now().Before(h.until) {
+			return h.ok
+		}
+	}
+	ok := c.HealthCheck() == nil
+	cashfreeHealth.Store(mode, cashfreeHealthResult{ok: ok, until: time.Now().Add(cashfreeGatewayCooldown)})
+	if !ok {
+		log.Printf("gateway-select: cashfree[%s] failed its health check — treating as unusable", mode)
+	}
+	return ok
 }
+
+// cashfreeHealthResult caches one slot's probe outcome until `until`.
+type cashfreeHealthResult struct {
+	ok    bool
+	until time.Time
+}
+
+var cashfreeHealth sync.Map // mode -> cashfreeHealthResult
 
 // NoteCashfreeGatewayFailure opens the breaker for a mode after a failed order
 // creation, so subsequent checkouts skip straight to the fallback.
@@ -109,6 +142,9 @@ func cashfreeUsableFor(mode string) bool {
 func NoteCashfreeGatewayFailure(mode string) {
 	mode = models.NormalizeMode(mode)
 	cashfreeGatewayBreaker.Store(mode, time.Now().Add(cashfreeGatewayCooldown))
+	// Drop any cached "healthy" verdict: a real order-create failure is stronger
+	// evidence than a probe that passed a moment earlier.
+	cashfreeHealth.Delete(mode)
 	log.Printf("gateway-select: cashfree[%s] marked unusable for %s after an order-create failure",
 		mode, cashfreeGatewayCooldown)
 }

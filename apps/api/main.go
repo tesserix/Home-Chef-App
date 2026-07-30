@@ -166,6 +166,14 @@ func main() {
 	// than at a test kitchen's first checkout.
 	services.InitCashfree()
 
+	// Cashfree PAYOUTS — a separate product from the gateway above, with its own
+	// credentials. Probed at boot for the same reason the others are, and with
+	// more reason than any of them: this is the rail that sends money OUT, and
+	// "are the payout credentials actually configured in this environment?"
+	// should be answerable from the startup log rather than discovered when a
+	// disbursement silently no-ops.
+	services.InitCashfreePayouts()
+
 	// Same for Stripe — payment provider for markets where Razorpay
 	// isn't available. All clients coexist; per-chef PaymentProvider
 	// decides which one handles a given order.
