@@ -19,6 +19,12 @@ export interface RazorpayPaymentData {
   loyaltyApplied?: number;
   /** Server-authoritative amount still due at the gateway. */
   payable?: number;
+  // Cashfree hands back a payment_session_id instead of an (order id, key id)
+  // pair, plus the environment — sandbox and production are different hosts, so
+  // unlike Razorpay's key prefix there is nothing for the client to infer it from.
+  cashfreePaymentSessionId?: string;
+  cashfreeOrderId?: string;
+  cashfreeEnv?: string;
   razorpayOrderId: string;
   razorpayKeyId: string;
   amount: number;
@@ -79,6 +85,21 @@ export async function startOrderPayment(
   if (data.provider === 'wallet' || data.paid) {
     useCartStore.getState().clearCart();
     router.replace(`/payment/result?order_id=${orderId}`);
+    return;
+  }
+
+  // Cashfree kitchens open the v3 web SDK in a WebView rather than a native
+  // sheet. That is a deliberate trade: the Cashfree RN SDK is a native module, so
+  // using it would gate the gateway behind a new EAS build and a store release,
+  // whereas the WebView ships OTA. The sheet itself (including UPI intent) is the
+  // same one the native SDK presents.
+  if (data.provider === 'cashfree') {
+    router.push(
+      `/payment/cashfree?orderId=${encodeURIComponent(orderId)}` +
+        `&paymentSessionId=${encodeURIComponent(data.cashfreePaymentSessionId ?? '')}` +
+        `&cashfreeOrderId=${encodeURIComponent(data.cashfreeOrderId ?? '')}` +
+        `&env=${encodeURIComponent(data.cashfreeEnv ?? '')}`,
+    );
     return;
   }
 

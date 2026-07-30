@@ -20,6 +20,7 @@ import { useAuth } from '@/app/providers/AuthProvider';
 import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { loadStripeJs } from '@/shared/utils/load-stripe';
+import { openCashfreeCheckout } from '@/shared/utils/cashfree';
 import { resolveCssVarColor } from '@/shared/utils/css-color';
 import { Button } from '@/shared/components/ui';
 import type { Order, Address } from '@/shared/types';
@@ -421,6 +422,18 @@ export default function CheckoutPage() {
         amount: number;
         currency: string;
       };
+      // Cashfree returns a payment_session_id the SDK opens checkout with, plus
+      // the environment — there is no publishable key, and no client-side
+      // signature comes back, so the server's verify call is the only authority.
+      type CashfreePayment = {
+        provider: 'cashfree';
+        paid?: boolean;
+        cashfreePaymentSessionId: string;
+        cashfreeOrderId: string;
+        cashfreeEnv?: string;
+        amount: number;
+        currency: string;
+      };
       // Credit covered the whole total — the server has already marked the order
       // paid and there is nothing for a gateway to collect.
       type WalletPayment = { provider: 'wallet'; paid?: boolean };
@@ -429,10 +442,9 @@ export default function CheckoutPage() {
       // whole allocation from the live balance and the real order, and its answer
       // is what is charged. Posting an amount is what would let the screen show
       // one figure while the gateway took another.
-      const paymentData = await apiClient.post<RazorpayPayment | StripePayment | WalletPayment>(
-        `/payments/order/${order.id}/create`,
-        credit
-      );
+      const paymentData = await apiClient.post<
+        RazorpayPayment | CashfreePayment | StripePayment | WalletPayment
+      >(`/payments/order/${order.id}/create`, credit);
 
       if (paymentData.provider === 'wallet' || paymentData.paid) {
         cart.clearCart();
@@ -443,6 +455,8 @@ export default function CheckoutPage() {
 
       if (paymentData.provider === 'stripe') {
         await confirmStripePayment(order.id, paymentData);
+      } else if (paymentData.provider === 'cashfree') {
+        await confirmCashfreePayment(order, paymentData);
       } else {
         await confirmRazorpayPayment(order, paymentData);
       }
@@ -521,6 +535,48 @@ export default function CheckoutPage() {
       },
     };
     new window.Razorpay(options).open();
+  };
+
+  // Open the Cashfree modal, then let the SERVER decide whether it was paid.
+  //
+  // Unlike the Razorpay handler above there is no (payment_id, order_id,
+  // signature) triple to hand back — Cashfree's SDK returns no client-verifiable
+  // proof. So the verify call posts only the order id, and the server reads the
+  // captured payment from Cashfree itself. That is why this runs on ANY non-error
+  // close rather than on a "success" callback: the customer may well have paid on
+  // a sheet that closed untidily, and the only way to know is to ask the gateway.
+  //
+  // A verify failure is therefore not automatically a payment failure. The order
+  // page is authoritative (it polls the real paymentStatus, which the webhook also
+  // drives), so we send the customer there rather than claiming it failed.
+  const confirmCashfreePayment = async (
+    order: Order,
+    paymentData: {
+      cashfreePaymentSessionId: string;
+      cashfreeOrderId: string;
+      cashfreeEnv?: string;
+      amount: number;
+      currency: string;
+    }
+  ) => {
+    await openCashfreeCheckout({
+      data: paymentData,
+      onSettled: async () => {
+        try {
+          await apiClient.post(`/payments/order/${order.id}/verify`, {
+            cashfreeOrderId: paymentData.cashfreeOrderId,
+          });
+          cart.clearCart();
+          toast.success('Payment successful!');
+        } catch {
+          // Not "verification failed" — the payment may still be settling, and
+          // the webhook completes it server-side either way.
+          toast.message('Confirming your payment…');
+        }
+        navigate(`/orders/${order.id}`);
+      },
+      onDismiss: () => toast.error('Payment cancelled'),
+    });
   };
 
   // Launch the Stripe hosted-redirect flow. We use the Checkout redirect
