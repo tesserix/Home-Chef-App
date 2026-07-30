@@ -350,6 +350,11 @@ func (chefCascade) OnRestore(tx *gorm.DB, userID uuid.UUID) error {
 // the kitchen DO go: content about a kitchen that no longer exists serves
 // nobody, and leaving it keyed to a purged chef is retention without purpose.
 var chefPurgeTables = []string{
+	// Approval workflow rows embed the submitted onboarding form (submitted_data),
+	// which can carry identity details — verified on a real purge: 23 rows
+	// survived. The decision trail the platform needs long-term is audit_logs,
+	// which has its own retention cron.
+	"approval_requests",
 	"catering_quotes",
 	"chef_capacity_settings",
 	"chef_documents",

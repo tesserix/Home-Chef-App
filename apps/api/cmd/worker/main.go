@@ -61,6 +61,13 @@ func main() {
 	} else {
 		defer services.CloseStorage()
 	}
+	// Secret Manager, for the same reason. The account purge deletes a chef's
+	// payout bank secrets; without this client every attempt logged "secret
+	// manager not initialized" and the most sensitive thing a vendor gives us
+	// outlived their erasure. Non-fatal, matching main.go.
+	if err := services.InitSecretManager(); err != nil {
+		log.Printf("worker: secret manager init failed (secret deletion will be skipped): %v", err)
+	}
 
 	// Wire activity transports to the real services.* implementations.
 	workflows.SendFunc = services.DispatchNotification
