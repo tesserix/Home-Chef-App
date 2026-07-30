@@ -16,6 +16,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
@@ -250,7 +252,26 @@ func BFFAuth(cfg BFFAuthConfig) gin.HandlerFunc {
 				// a deleted user's existing session kept working — handlers read
 				// the user id from the token, not from this row.
 				var user models.User
-				if err := database.DB.Unscoped().First(&user, "id = ?", parsed).Error; err == nil {
+				err := database.DB.Unscoped().First(&user, "id = ?", parsed).Error
+				// A token whose subject no longer EXISTS is not a session — it is
+				// a leftover credential for a purged account. This used to fall
+				// through silently (the block below only ran on err == nil), so a
+				// purged user kept browsing with signed-in chrome: the profile
+				// screen rendered its shell, the wallet chip read ₹0, and no call
+				// ever returned the 401 that tells the app to sign out. 401 (not
+				// the 403 account statuses): there is no account left to explain,
+				// and 401 is what the mobile clients' interceptor turns into
+				// clear-tokens → refresh-attempt (fails; the GIP credential was
+				// deleted with the account) → logout → guest landing.
+				// Only ErrRecordNotFound: a transient DB error must keep failing
+				// open here rather than signing out every live user.
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+						"error": "This session belongs to an account that no longer exists.",
+					})
+					return
+				}
+				if err == nil {
 					if user.DeletedAt.Valid {
 						c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 							"error":  "This account has been deleted.",
