@@ -95,6 +95,13 @@ type Config struct {
 	CashfreeSecretKey     string
 	CashfreeWebhookSecret string
 
+	// Cashfree PAYOUTS — a separate product from the PG above, with its own
+	// dashboard keys and hosts. Local-dev fallback only, live slot only, for the
+	// same reasons; the stakes are higher here because this rail sends money OUT.
+	CashfreePayoutClientID      string
+	CashfreePayoutClientSecret  string
+	CashfreePayoutWebhookSecret string
+
 	// Shadowfax 3PL (from Secret Manager; empty leaves the provider disabled)
 	ShadowfaxAPIToken      string
 	ShadowfaxWebhookSecret string
@@ -451,6 +458,11 @@ func Load() {
 		CashfreeAppID:         getEnv("CASHFREE_APP_ID", ""),
 		CashfreeSecretKey:     getEnv("CASHFREE_SECRET_KEY", ""),
 		CashfreeWebhookSecret: getEnv("CASHFREE_WEBHOOK_SECRET", ""),
+
+		// Cashfree Payouts
+		CashfreePayoutClientID:      getEnv("CASHFREE_PAYOUT_CLIENT_ID", ""),
+		CashfreePayoutClientSecret:  getEnv("CASHFREE_PAYOUT_CLIENT_SECRET", ""),
+		CashfreePayoutWebhookSecret: getEnv("CASHFREE_PAYOUT_WEBHOOK_SECRET", ""),
 
 		ShadowfaxAPIToken:      getEnv("SHADOWFAX_API_TOKEN", ""),
 		ShadowfaxWebhookSecret: getEnv("SHADOWFAX_WEBHOOK_SECRET", ""),
