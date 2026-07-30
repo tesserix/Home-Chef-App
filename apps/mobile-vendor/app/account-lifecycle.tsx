@@ -43,7 +43,11 @@ export default function AccountLifecycleScreen() {
   const exportData = useExportMyData();
   const [confirmEmail, setConfirmEmail] = useState('');
 
-  const email = profile?.email ?? '';
+  // Server first: the auth store's user exists only in the session that logged
+  // in — after a cold start it is null, and gating on it left the delete
+  // button permanently disabled. The eligibility payload is authenticated as
+  // exactly this account, so its email is the same truth, restart-proof.
+  const email = eligibility.data?.email ?? profile?.email ?? '';
   const blockers = eligibility.data?.blockers ?? [];
   const blocked = blockers.length > 0;
   // Fallback mirrors services.RestoreWindow — the API's retentionDays is the
