@@ -199,7 +199,7 @@ type OrderInvoiceDetails struct {
 	// Tax breakdown
 	Subtotal    float64
 	DeliveryFee float64
-	ServiceFee  float64
+	PlatformFee float64
 	Discount    float64
 	CGSTAmount  float64 // intra-state component
 	SGSTAmount  float64 // intra-state component
@@ -358,7 +358,7 @@ func renderFulfilmentBlock(d *OrderInvoiceDetails) string {
 // renderInvoiceSummary returns the GST breakup rows. Empty when no GST data
 // is supplied so the legacy "total only" email stays unchanged.
 func renderInvoiceSummary(d *OrderInvoiceDetails) string {
-	hasBreakdown := d.Subtotal > 0 || d.DeliveryFee > 0 || d.ServiceFee > 0 ||
+	hasBreakdown := d.Subtotal > 0 || d.DeliveryFee > 0 || d.PlatformFee > 0 ||
 		d.CGSTAmount > 0 || d.SGSTAmount > 0 || d.IGSTAmount > 0
 	if !hasBreakdown {
 		return ""
@@ -371,8 +371,8 @@ func renderInvoiceSummary(d *OrderInvoiceDetails) string {
 	if d.DeliveryFee > 0 {
 		rows += fmt.Sprintf(rowFmt, "Delivery fee", d.DeliveryFee)
 	}
-	if d.ServiceFee > 0 {
-		rows += fmt.Sprintf(rowFmt, "Service / platform fee", d.ServiceFee)
+	if d.PlatformFee > 0 {
+		rows += fmt.Sprintf(rowFmt, "Service / platform fee", d.PlatformFee)
 	}
 	if d.Discount > 0 {
 		rows += fmt.Sprintf(`<tr><td style="padding:6px 0;color:#15803D;font-size:14px;">Discount</td><td style="padding:6px 0;text-align:right;color:#15803D;font-size:14px;">-₹%.2f</td></tr>`, d.Discount)

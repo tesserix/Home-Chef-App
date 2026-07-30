@@ -306,7 +306,7 @@ export interface Order {
   deliveryAddress: Address;
   subtotal: number;
   deliveryFee: number;
-  serviceFee: number;
+  platformFee: number;
   tax: number;
   discount: number;
   tip: number;

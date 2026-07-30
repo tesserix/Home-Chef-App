@@ -42,30 +42,64 @@ func dayRefundKey(dayID uuid.UUID) string {
 	return "mealplan-refund:" + dayID.String()
 }
 
-// MealPlanFeeTotals computes the GST + per-day delivery the customer pays ON TOP
-// of the food subtotal, from the current platform policy. The chef is paid only
-// the food price; the platform keeps GST + delivery (it remits the tax and covers
-// logistics). These are snapshotted onto the plan (Subtotal/Tax/Total) at booking
-// so later per-day refunds don't drift if policy changes. Returns (tax, delivery).
-func MealPlanFeeTotals(subtotal float64, numDays int) (float64, float64) {
+// MealPlanFeeTotals computes the platform fee + GST + per-day delivery the customer
+// pays ON TOP of the food subtotal, from the current platform policy. The chef is
+// paid only the food price; the platform keeps its fee + GST + delivery (it remits
+// the tax and covers logistics). These are snapshotted onto the plan
+// (Subtotal/PlatformFee/TaxRate/Tax/Total) at booking so later per-day refunds don't
+// drift if policy changes. Returns (platformFee, tax, taxRate, delivery).
+//
+// The platform fee is charged on meal plans on the SAME basis as an à la carte order
+// (subtotal × PlatformFeePercent) so a customer pays the same platform fee whichever
+// way they order. GST stays on the food subtotal alone here — meal-plan tax is a
+// snapshot the chef day-transfer and TDS reporting are withheld against
+// (perDayFoodGST), so widening its base would shift already-reconciled payout math.
+func MealPlanFeeTotals(subtotal float64, numDays int) (float64, float64, float64, float64) {
 	policy := GetPlatformPolicy()
+	platformFee := Round2(subtotal * (policy.PlatformFeePercent / 100.0))
 	tax := Round2(subtotal * (policy.TaxPercent / 100.0))
 	delivery := Round2(policy.BaseDeliveryFee * float64(numDays))
-	return tax, delivery
+	return platformFee, tax, policy.TaxPercent, delivery
+}
+
+// planDeliveryTotal is the plan's total delivery charge, derived from the snapshot
+// rather than stored: Total − Subtotal − PlatformFee − Tax. Every component added to
+// Total MUST be subtracted here, otherwise it is silently misread as delivery and
+// refunded on a skip (where delivery is refundable but the platform fee is not).
+func planDeliveryTotal(plan *models.MealPlan) float64 {
+	return plan.Total - plan.Subtotal - plan.PlatformFee - plan.Tax
+}
+
+// perDayPlatformFee is the proportional platform fee for one day — plan.PlatformFee
+// apportioned by the day's share of the plan subtotal, the same basis perDayFoodGST
+// uses. Included in the make-whole perDayGross refund; excluded from perDaySkipRefund.
+func perDayPlatformFee(plan *models.MealPlan, day *models.MealPlanDay) float64 {
+	if plan == nil || plan.Subtotal <= 0 {
+		return 0
+	}
+	return plan.PlatformFee * (day.Price / plan.Subtotal)
 }
 
 // perDayGross is the full amount the customer paid for a single day — food +
-// proportional GST + flat per-day delivery — derived from the plan's snapshotted
-// totals (not live policy), so a per-day refund makes the customer whole for the
-// whole day they paid for regardless of later policy changes.
+// proportional platform fee + proportional GST + flat per-day delivery — derived from
+// the plan's snapshotted totals (not live policy), so a per-day refund makes the
+// customer whole for the whole day they paid for regardless of later policy changes.
+//
+// The platform fee is INCLUDED here because this is the make-whole refund used when
+// the platform or the chef is at fault (meal_plan_day_resolve.go): the customer got no
+// meal, so they get every rupee back. It must also be included to keep the
+// conservation invariant sum(perDayGross) == plan.Total once the fee is part of Total
+// (TestPerDayGrossConservation). The customer-initiated skip path deliberately keeps
+// the fee — see perDaySkipRefund.
 func perDayGross(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 	n := len(plan.Days)
 	if plan.Subtotal <= 0 || n == 0 {
 		return day.Price
 	}
 	tax := perDayFoodGST(plan, day)
-	delivery := (plan.Total - plan.Subtotal - plan.Tax) / float64(n)
-	return Round2(day.Price + tax + delivery)
+	fee := perDayPlatformFee(plan, day)
+	delivery := planDeliveryTotal(plan) / float64(n)
+	return Round2(day.Price + fee + tax + delivery)
 }
 
 // perDayFoodGST is the proportional food GST for one day — plan.Tax apportioned by the day's
@@ -82,15 +116,16 @@ func perDayFoodGST(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 
 // perDayDeliveryRefund is the delivery fee the customer paid for ONE day, apportioned by that
 // day's share of the plan's food subtotal — the same basis perDayFoodGST uses (for equal-priced
-// days this equals the flat per-day delivery). The plan's total delivery is Total − Subtotal − Tax
-// (snapshotted at booking). Refunded on a cancelled/skipped meal-plan day (policy: the delivery fee
-// IS refundable; GST and the platform commission are not). 0 when the plan isn't loaded with its
+// days this equals the flat per-day delivery). The plan's total delivery is derived by
+// planDeliveryTotal (Total − Subtotal − PlatformFee − Tax, snapshotted at booking). Refunded on a
+// cancelled/skipped meal-plan day (policy: the delivery fee IS refundable; GST, the platform fee,
+// and the platform commission are not). 0 when the plan isn't loaded with its
 // snapshotted totals (e.g. a caller that Selected only id/number).
 func perDayDeliveryRefund(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 	if plan == nil || plan.Subtotal <= 0 {
 		return 0
 	}
-	totalDelivery := plan.Total - plan.Subtotal - plan.Tax
+	totalDelivery := planDeliveryTotal(plan)
 	if totalDelivery <= 0 {
 		return 0
 	}
@@ -100,7 +135,9 @@ func perDayDeliveryRefund(plan *models.MealPlan, day *models.MealPlanDay) float6
 // perDaySkipRefund is the amount refunded to the customer when a customer's day-skip / plan-cancel
 // is approved: the day's FOOD price minus the platform commission on that food, PLUS the day's
 // delivery fee. Policy (2026-07): the delivery fee for a cancelled/skipped meal-plan day IS
-// refunded; the customer forfeits only GST + the platform commission. The chef, who never cooked
+// refunded; the customer forfeits GST, the platform fee, and the platform commission. The platform
+// fee is deliberately NOT added here (it is nonrefundable on a customer-initiated skip, matching the
+// à la carte cancellation policy) — only the make-whole perDayGross returns it. The chef, who never cooked
 // the meal, gets 0 (the full held transfer is reversed by refundDayAmount). Distinct from perDayGross
 // (the FULL make-whole refund, which also returns GST). A missing/legacy rate falls back to the flat
 // DefaultCommissionRate, matching perDayNetPayout. Delivery is only added when the plan carries its
@@ -418,7 +455,7 @@ func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay
 	}
 	if locked.RefundTxnID != nil {
 		day.RefundTxnID = locked.RefundTxnID // reconcile the caller's struct to the DB truth
-		return nil                            // already refunded by a prior/concurrent writer
+		return nil                           // already refunded by a prior/concurrent writer
 	}
 	rz := GetRazorpayFor(day.Mode)
 	if rz == nil {

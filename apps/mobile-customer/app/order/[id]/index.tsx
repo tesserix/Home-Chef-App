@@ -324,7 +324,7 @@ export default function OrderDetailScreen() {
   // "delivery fee" as (total − subtotal), which mislabels service fee + tax.
   const isPickup = order.fulfillmentType === 'pickup';
   const deliveryFee = order.deliveryFee ?? 0;
-  const serviceFee = order.serviceFee ?? 0;
+  const platformFee = order.platformFee ?? 0;
   const tax = order.tax ?? 0;
   const discount = order.discount ?? 0;
   // Chef pickup address comes from TrackOrder (only populated for pickup orders).
@@ -916,10 +916,10 @@ export default function OrderDetailScreen() {
               {isPickup ? 'Free' : `₹${deliveryFee.toFixed(2)}`}
             </Text>
           </View>
-          {serviceFee > 0 ? (
+          {platformFee > 0 ? (
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Service Fee</Text>
-              <Text style={styles.priceValue}>₹{serviceFee.toFixed(2)}</Text>
+              <Text style={styles.priceValue}>₹{platformFee.toFixed(2)}</Text>
             </View>
           ) : null}
           {tax > 0 ? (

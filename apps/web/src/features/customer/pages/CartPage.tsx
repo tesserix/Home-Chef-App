@@ -38,11 +38,11 @@ export default function CartPage() {
 
   const subtotal = cart.getSubtotal();
   const deliveryFee = cart.chef?.deliveryFee || 0;
-  const serviceFee = subtotal * 0.05; // 5% service fee
+  const platformFee = subtotal * 0.05; // 5% service fee
   // Server-validated promo discount (#39), clamped to the subtotal. The server
   // re-validates + recomputes at order time, so this is a preview for display.
   const discount = cart.promoCode ? Math.min(cart.promoDiscount, subtotal) : 0;
-  const total = Math.max(0, subtotal + deliveryFee + serviceFee - discount);
+  const total = Math.max(0, subtotal + deliveryFee + platformFee - discount);
   const minimumOrder = cart.chef?.minimumOrder || 0;
   const belowMinimum = subtotal < minimumOrder;
 
@@ -272,8 +272,8 @@ export default function CartPage() {
                   <span>{fp(deliveryFee)}</span>
                 </div>
                 <div className="flex justify-between text-ink-soft">
-                  <span>Service fee</span>
-                  <span>{fp(serviceFee)}</span>
+                  <span>Platform fee</span>
+                  <span>{fp(platformFee)}</span>
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between text-herb">

@@ -32,7 +32,7 @@ type archivedOrder struct {
 	Status      string    `json:"status"`
 	Subtotal    float64   `json:"subtotal"`
 	DeliveryFee float64   `json:"deliveryFee"`
-	ServiceFee  float64   `json:"serviceFee"`
+	PlatformFee float64   `json:"platformFee"`
 	Tax         float64   `json:"tax"`
 	TaxName     string    `json:"taxName"`
 	Total       float64   `json:"total"`
@@ -64,7 +64,7 @@ func ArchiveAccountFinancials(ctx context.Context, user models.User) error {
 			Status:      string(o.Status),
 			Subtotal:    o.Subtotal,
 			DeliveryFee: o.DeliveryFee,
-			ServiceFee:  o.ServiceFee,
+			PlatformFee: o.PlatformFee,
 			Tax:         o.Tax,
 			TaxName:     o.TaxName,
 			Total:       o.Total,

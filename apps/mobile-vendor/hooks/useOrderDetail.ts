@@ -48,7 +48,7 @@ export interface OrderDetailPricing {
   deliveryFee: number;
   // The chef's chosen delivery fee at accept (#703); null = charged as-is.
   deliveryFeeFinal?: number | null;
-  serviceFee: number;
+  platformFee: number;
   tax: number;
   chefTip: number;
   total: number;
@@ -148,7 +148,7 @@ interface RawChefOrderDetailResponse {
   subtotal?: number;
   deliveryFee?: number;
   deliveryFeeFinal?: number | null;
-  serviceFee?: number;
+  platformFee?: number;
   tax?: number;
   chefTip?: number;
   total?: number;
@@ -199,7 +199,7 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
       subtotal: raw.subtotal ?? 0,
       deliveryFee: raw.deliveryFee ?? 0,
       deliveryFeeFinal: raw.deliveryFeeFinal ?? null,
-      serviceFee: raw.serviceFee ?? 0,
+      platformFee: raw.platformFee ?? 0,
       tax: raw.tax ?? 0,
       chefTip: raw.chefTip ?? 0,
       total: raw.total ?? 0,

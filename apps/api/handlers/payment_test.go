@@ -640,7 +640,7 @@ func TestConservationExcludesGSTOnCommission(t *testing.T) {
 		DeliveryFee:          70,
 		ChefTip:              20,
 		DriverTip:            0,
-		ServiceFee:           0,
+		PlatformFee:          0,
 		ChefFundedDiscount:   0,
 		DeliveryAddressState: "Maharashtra",
 		CommissionRate:       0.06,
@@ -658,8 +658,8 @@ func TestConservationExcludesGSTOnCommission(t *testing.T) {
 		CommissionRate:     order.CommissionRate,
 	}, order.Chef.State)
 
-	// Platform retains commission + TDS + serviceFee — NOT the GST on commission.
-	platformRetained := e.PlatformCommission + e.TDS + order.ServiceFee
+	// Platform retains commission + TDS + platformFee — NOT the GST on commission.
+	platformRetained := e.PlatformCommission + e.TDS + order.PlatformFee
 	driver := order.DeliveryFee + order.DriverTip
 	const refunds = 0.0
 

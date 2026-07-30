@@ -86,7 +86,21 @@ type MealPlan struct {
 
 	// Money snapshot for the full REQUESTED set (the advance). The accepted
 	// subset's totals are derived from the days; the declined remainder is refunded.
+	//
+	// Total = Subtotal + PlatformFee + Tax + delivery. Delivery is NOT stored — it is
+	// derived as Total − Subtotal − PlatformFee − Tax (planDeliveryTotal), so anything
+	// added to Total must also be subtracted there or the delivery share silently
+	// absorbs it.
 	Subtotal float64 `gorm:"default:0" json:"subtotal"`
+	// PlatformFee is the platform's own charge on the food subtotal, snapshotted at
+	// booking from PlatformFeePercent. Shown to the customer as "Platform fee" on the
+	// receipt. Non-refundable on a customer-initiated skip (it IS returned by the
+	// make-whole perDayGross refund when the platform or chef is at fault).
+	PlatformFee float64 `gorm:"default:0" json:"platformFee"`
+	// TaxRate freezes the GST percent applied at booking so the spawned per-day orders
+	// can report a rate alongside the amount. Without it a receipt renders the tax
+	// line as "IGST (0%)" against a non-zero figure.
+	TaxRate  float64 `gorm:"default:0" json:"taxRate"`
 	Tax      float64 `gorm:"default:0" json:"tax"`
 	Total    float64 `gorm:"not null" json:"total"`
 	Currency string  `gorm:"type:varchar(3);default:'INR'" json:"currency"`

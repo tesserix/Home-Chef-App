@@ -333,17 +333,22 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		return
 	}
 
-	// Escrow (paid) plans charge the full amount upfront: food + GST + per-day
-	// delivery. The chef is paid only the food price; the platform keeps GST +
-	// delivery. Snapshot Tax/Total onto the plan so per-day refunds stay stable
-	// even if platform policy changes after booking. Escrow off = unpaid handshake,
-	// so Total stays the food subtotal (nothing is charged).
+	// Escrow (paid) plans charge the full amount upfront: food + platform fee + GST +
+	// per-day delivery. The chef is paid only the food price; the platform keeps its
+	// fee + GST + delivery. Snapshot PlatformFee/TaxRate/Tax/Total onto the plan so
+	// per-day refunds stay stable even if platform policy changes after booking.
+	// Escrow off = unpaid handshake, so Total stays the food subtotal (nothing is
+	// charged).
+	planFee := 0.0
 	planTax := 0.0
+	planTaxRate := 0.0
 	planTotal := subtotal
 	if services.MealPlanEscrowActive() {
-		tax, delivery := services.MealPlanFeeTotals(subtotal, len(days))
+		fee, tax, taxRate, delivery := services.MealPlanFeeTotals(subtotal, len(days))
+		planFee = fee
 		planTax = tax
-		planTotal = services.Round2(subtotal + tax + delivery)
+		planTaxRate = taxRate
+		planTotal = services.Round2(subtotal + fee + tax + delivery)
 	}
 
 	respondBy := time.Now().Add(chefRespondWindow)
@@ -356,6 +361,8 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		StartDate:      minDate,
 		EndDate:        maxDate,
 		Subtotal:       subtotal,
+		PlatformFee:    planFee,
+		TaxRate:        planTaxRate,
 		Tax:            planTax,
 		Total:          planTotal,
 		Currency:       "INR",
@@ -461,8 +468,8 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 	// directly, and reject cancels — both handled by the tx below.)
 	if approve && services.MealPlanEscrowActive() {
 		accSub := plan.AcceptedTotal()
-		tax, delivery := services.MealPlanFeeTotals(accSub, plan.AcceptedDayCount())
-		total := services.Round2(accSub + tax + delivery)
+		fee, tax, taxRate, delivery := services.MealPlanFeeTotals(accSub, plan.AcceptedDayCount())
+		total := services.Round2(accSub + fee + tax + delivery)
 
 		// Snapshot the accepted-days charge, guarded so only one approval mints an
 		// order and only while still awaiting_customer with none minted yet
@@ -470,7 +477,13 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 		res := database.DB.Model(&models.MealPlan{}).
 			Where("id = ? AND status = ? AND (razorpay_order_id IS NULL OR razorpay_order_id = '')",
 				plan.ID, models.MealPlanAwaitingCustomer).
-			Updates(map[string]any{"subtotal": accSub, "tax": tax, "total": total})
+			Updates(map[string]any{
+				"subtotal":     accSub,
+				"platform_fee": fee,
+				"tax_rate":     taxRate,
+				"tax":          tax,
+				"total":        total,
+			})
 		if res.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})
 			return

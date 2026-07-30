@@ -90,7 +90,7 @@ export default function OrderReceiptScreen() {
 
   const subtotal = (order?.items ?? []).reduce((s, it) => s + it.price * it.quantity, 0);
   const deliveryFee = order?.deliveryFee ?? 0;
-  const serviceFee = order?.serviceFee ?? 0;
+  const platformFee = order?.platformFee ?? 0;
   const tax = order?.tax ?? 0;
   // GST-compliant split (#invoice): an Indian supply shows CGST+SGST (intra-state:
   // chef state == delivery state) or IGST (inter-state); no chef state → single
@@ -101,16 +101,22 @@ export default function OrderReceiptScreen() {
   const isIndiaTax = !!chefState; // chef state present ⇒ IN supplier
   const taxIntra = !chefState || !dropState || chefState === dropState;
   const trimPct = (n: number) => n.toFixed(2).replace(/\.?0+$/, '');
+  // Only claim a percentage when we actually froze one. Orders written before the
+  // meal-plan path snapshotted TaxRate carry a non-zero Tax with taxRate 0, which
+  // rendered as a flatly false "IGST (0%) ₹11.20". With no rate, name the tax but
+  // state no rate — never print a 0% that the amount contradicts.
+  const hasRate = taxRate > 0;
+  const pct = (r: number) => (hasRate ? ` (${trimPct(r)}%)` : '');
   const taxLines: Array<{ label: string; amt: number }> =
     tax <= 0
       ? []
       : isIndiaTax
         ? taxIntra
           ? [
-              { label: `CGST (${trimPct(taxRate / 2)}%)`, amt: tax / 2 },
-              { label: `SGST (${trimPct(taxRate / 2)}%)`, amt: tax - tax / 2 },
+              { label: `CGST${pct(taxRate / 2)}`, amt: tax / 2 },
+              { label: `SGST${pct(taxRate / 2)}`, amt: tax - tax / 2 },
             ]
-          : [{ label: `IGST (${trimPct(taxRate)}%)`, amt: tax }]
+          : [{ label: `IGST${pct(taxRate)}`, amt: tax }]
         : [{ label: 'Tax', amt: tax }];
   const discount = order?.discount ?? 0;
   const refund = order?.refundAmount ?? 0;
@@ -140,7 +146,7 @@ export default function OrderReceiptScreen() {
       '',
       `Subtotal: ${money(subtotal)}`,
       deliveryFee > 0 ? `Delivery: ${money(deliveryFee)}` : '',
-      serviceFee > 0 ? `Service fee: ${money(serviceFee)}` : '',
+      platformFee > 0 ? `Platform fee: ${money(platformFee)}` : '',
       tax > 0 ? `Tax: ${money(tax)}` : '',
       discount > 0 ? `Discount: -${money(discount)}` : '',
       `Total: ${money(order.totalAmount)}`,
@@ -262,7 +268,7 @@ export default function OrderReceiptScreen() {
             {/* Totals */}
             <Line label="Subtotal" value={money(subtotal)} />
             {deliveryFee > 0 ? <Line label="Delivery" value={money(deliveryFee)} /> : null}
-            {serviceFee > 0 ? <Line label="Service fee" value={money(serviceFee)} /> : null}
+            {platformFee > 0 ? <Line label="Platform fee" value={money(platformFee)} /> : null}
             {taxLines.map((t) => (
               <Line key={t.label} label={t.label} value={money(t.amt)} />
             ))}

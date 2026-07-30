@@ -632,10 +632,10 @@ function OrderSummary({
               <Text style={styles.sumValue}>{money(g.deliveryFee)}</Text>
             </View>
           ) : null}
-          {g.serviceFee > 0 ? (
+          {g.platformFee > 0 ? (
             <View style={styles.sumRow}>
               <Text style={styles.sumLabel}>Platform fee</Text>
-              <Text style={styles.sumValue}>{money(g.serviceFee)}</Text>
+              <Text style={styles.sumValue}>{money(g.platformFee)}</Text>
             </View>
           ) : null}
           {g.tax > 0 ? (

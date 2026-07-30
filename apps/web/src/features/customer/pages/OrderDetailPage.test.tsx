@@ -49,7 +49,7 @@ function baseOrder(): Order {
     },
     subtotal: 250,
     deliveryFee: 30,
-    serviceFee: 10,
+    platformFee: 10,
     tax: 15,
     discount: 0,
     tip: 0,

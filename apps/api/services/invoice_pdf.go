@@ -222,8 +222,8 @@ func addInvoiceTotals(m core.Maroto, order *models.Order) {
 	if order.DeliveryFee > 0 {
 		rows = append(rows, totalRow("Delivery", order.DeliveryFee, false))
 	}
-	if order.ServiceFee > 0 {
-		rows = append(rows, totalRow("Platform fee", order.ServiceFee, false))
+	if order.PlatformFee > 0 {
+		rows = append(rows, totalRow("Platform fee", order.PlatformFee, false))
 	}
 	if order.Tax > 0 {
 		// GST-compliant split (#invoice): an Indian tax invoice must show CGST+SGST
@@ -231,11 +231,21 @@ func addInvoiceTotals(m core.Maroto, order *models.Order) {
 		// Non-IN keeps the configured tax name.
 		if strings.EqualFold(order.DeliveryAddressCountry, "IN") {
 			b := SplitIndiaGST(order.Tax, order.TaxRate, order.Chef.State, order.DeliveryAddressState)
+			// Only print a rate when one was actually frozen on the order. Rows written
+			// before the meal-plan path snapshotted TaxRate carry a non-zero Tax with rate
+			// 0, which rendered as a flatly false "IGST @ 0%" next to a real amount. Mirrors
+			// the in-app receipt so the two documents never disagree.
+			rate := func(r float64) string {
+				if order.TaxRate <= 0 {
+					return ""
+				}
+				return fmt.Sprintf(" @ %.2g%%", r)
+			}
 			if b.Intra {
-				rows = append(rows, totalRow(fmt.Sprintf("CGST @ %.2g%%", b.CGSTRate), b.CGST, false))
-				rows = append(rows, totalRow(fmt.Sprintf("SGST @ %.2g%%", b.SGSTRate), b.SGST, false))
+				rows = append(rows, totalRow("CGST"+rate(b.CGSTRate), b.CGST, false))
+				rows = append(rows, totalRow("SGST"+rate(b.SGSTRate), b.SGST, false))
 			} else {
-				rows = append(rows, totalRow(fmt.Sprintf("IGST @ %.2g%%", b.IGSTRate), b.IGST, false))
+				rows = append(rows, totalRow("IGST"+rate(b.IGSTRate), b.IGST, false))
 			}
 		} else {
 			taxLabel := order.TaxName

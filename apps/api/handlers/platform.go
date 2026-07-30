@@ -18,15 +18,15 @@ func NewPlatformHandler() *PlatformHandler { return &PlatformHandler{} }
 // publicPlatformConfig is the shape we expose publicly — a safe subset of
 // the PlatformPolicy, omitting internal payout percentages.
 type publicPlatformConfig struct {
-	ServiceFeePercent float64 `json:"serviceFeePercent"`
-	TaxPercent        float64 `json:"taxPercent"`
-	BaseDeliveryFee   float64 `json:"baseDeliveryFee"`
-	Timezone          string  `json:"timezone"`
-	OpeningTime       string  `json:"openingTime"`
-	ClosingTime       string  `json:"closingTime"`
-	OperatingDays     []int   `json:"operatingDays"`
-	IsOpen            bool    `json:"isOpen"`
-	ClosedMessage     string  `json:"closedMessage,omitempty"`
+	PlatformFeePercent float64 `json:"platformFeePercent"`
+	TaxPercent         float64 `json:"taxPercent"`
+	BaseDeliveryFee    float64 `json:"baseDeliveryFee"`
+	Timezone           string  `json:"timezone"`
+	OpeningTime        string  `json:"openingTime"`
+	ClosingTime        string  `json:"closingTime"`
+	OperatingDays      []int   `json:"operatingDays"`
+	IsOpen             bool    `json:"isOpen"`
+	ClosedMessage      string  `json:"closedMessage,omitempty"`
 }
 
 // CheckZoneCoverage lets a checkout preflight whether an address is in a
@@ -62,14 +62,14 @@ func (h *PlatformHandler) GetPublicConfig(c *gin.Context) {
 	p := services.GetPlatformPolicy()
 	open, msg := services.IsPlatformOpen()
 	resp := publicPlatformConfig{
-		ServiceFeePercent: p.ServiceFeePercent,
-		TaxPercent:        p.TaxPercent,
-		BaseDeliveryFee:   p.BaseDeliveryFee,
-		Timezone:          p.Timezone,
-		OpeningTime:       p.OpeningTime,
-		ClosingTime:       p.ClosingTime,
-		OperatingDays:     p.OperatingDays,
-		IsOpen:            open,
+		PlatformFeePercent: p.PlatformFeePercent,
+		TaxPercent:         p.TaxPercent,
+		BaseDeliveryFee:    p.BaseDeliveryFee,
+		Timezone:           p.Timezone,
+		OpeningTime:        p.OpeningTime,
+		ClosingTime:        p.ClosingTime,
+		OperatingDays:      p.OperatingDays,
+		IsOpen:             open,
 	}
 	if !open {
 		resp.ClosedMessage = msg
@@ -98,8 +98,8 @@ func (h *PlatformHandler) AdminUpdatePolicy(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if v, ok := req["serviceFeePercent"].(float64); ok {
-		current.ServiceFeePercent = v
+	if v, ok := req["platformFeePercent"].(float64); ok {
+		current.PlatformFeePercent = v
 	}
 	if v, ok := req["taxPercent"].(float64); ok {
 		current.TaxPercent = v

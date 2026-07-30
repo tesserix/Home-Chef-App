@@ -1566,8 +1566,8 @@ export default function OrderDetailScreen() {
           {pricing.deliveryFee > 0 ? (
             <TotalRow label="Delivery fee" value={pricing.deliveryFee} />
           ) : null}
-          {pricing.serviceFee > 0 ? (
-            <TotalRow label="Service fee" value={pricing.serviceFee} />
+          {pricing.platformFee > 0 ? (
+            <TotalRow label="Platform fee" value={pricing.platformFee} />
           ) : null}
           {pricing.tax > 0 ? (
             <TotalRow label="Tax" value={pricing.tax} />

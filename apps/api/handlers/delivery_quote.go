@@ -98,18 +98,18 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 	reach := services.DeliveryReach(chef, req.Latitude, req.Longitude)
 	deliverable := reach.Deliverable || services.ThirdPartyDeliveryEnabled()
 
-	// Service fee (platform fee) + tax rule — computed exactly as CreateOrder does
-	// so the checkout total matches what's charged (#fee-transparency). serviceFee
+	// Platform fee + tax rule — computed exactly as CreateOrder does
+	// so the checkout total matches what's charged (#fee-transparency). platformFee
 	// is a % of subtotal; tax is left for the client to apply on the discounted
 	// base (it knows the promo), using taxRatePercent + taxInclusive.
 	policy := services.GetPlatformPolicy()
-	serviceFee := req.Subtotal * (policy.ServiceFeePercent / 100.0)
+	platformFee := req.Subtotal * (policy.PlatformFeePercent / 100.0)
 	taxRule := services.ResolveTaxRate(country, req.State)
 
 	resp := gin.H{
 		"deliveryFee": models.RoundAmount(deliveryFee),
 		"pickupFee":   pickupFee,
-		"serviceFee":  models.RoundAmount(serviceFee),
+		"platformFee": models.RoundAmount(platformFee),
 		// The client computes tax = taxRatePercent% of (subtotal+delivery+service−discount),
 		// backing it out when inclusive — the same math as CreateOrder.
 		"taxRatePercent": taxRule.Rate,
@@ -153,7 +153,7 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		if req.Fulfillment == string(models.FulfillmentPickup) {
 			effectiveDelivery = pickupFee
 		}
-		taxBase := req.Subtotal + effectiveDelivery + serviceFee - req.Discount
+		taxBase := req.Subtotal + effectiveDelivery + platformFee - req.Discount
 		if taxBase < 0 {
 			taxBase = 0
 		}
@@ -169,17 +169,17 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		var tax, total float64
 		if taxRule.Inclusive {
 			tax = taxBase - (taxBase / (1 + taxRule.Rate/100.0))
-			total = req.Subtotal + effectiveDelivery + serviceFee + tip - req.Discount
+			total = req.Subtotal + effectiveDelivery + platformFee + tip - req.Discount
 		} else {
 			tax = taxBase * (taxRule.Rate / 100.0)
-			total = req.Subtotal + effectiveDelivery + serviceFee + tax + tip - req.Discount
+			total = req.Subtotal + effectiveDelivery + platformFee + tax + tip - req.Discount
 		}
 
 		preview := &models.Order{
 			CustomerID: userID, Currency: services.CurrencyForCountry(chef.PayoutCountry),
 			PaymentProvider: chef.PaymentProvider,
 			Subtotal:        req.Subtotal, Discount: req.Discount, DeliveryFee: effectiveDelivery,
-			ServiceFee: serviceFee, Tax: tax, Total: total,
+			PlatformFee: platformFee, Tax: tax, Total: total,
 		}
 		if q, err := services.BuildCreditQuote(database.DB, preview, userID, req.CreditRequest, creditFlags()); err == nil {
 			resp["credit"] = creditQuoteResponse(q)

@@ -48,7 +48,7 @@ export interface GroupOrder {
   currency: string;
   subtotal: number;
   deliveryFee: number;
-  serviceFee: number;
+  platformFee: number;
   tax: number;
   taxRate?: number;
   taxName?: string;

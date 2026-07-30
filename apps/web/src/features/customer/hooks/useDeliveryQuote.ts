@@ -6,7 +6,7 @@ import { apiClient } from '@/shared/services/api-client';
 // POST /chefs/:id/delivery-quote endpoint.
 //
 // The web checkout used to price itself: `deliveryFee = chef.deliveryFee`, a
-// hardcoded `serviceFee = subtotal * 0.05`, and a separate /tax-rates/lookup.
+// hardcoded `platformFee = subtotal * 0.05`, and a separate /tax-rates/lookup.
 // None of those are what CreateOrder charges — the delivery fee is quoted from
 // the drop distance and the service fee comes from the platform policy — so the
 // customer agreed to one total and was billed another. Worse, the wallet and
@@ -74,7 +74,7 @@ export interface DeliveryQuote {
   /** false when coords were missing so the distance couldn't be measured. */
   rangeKnown: boolean;
   /** Platform (service) fee for the sent subtotal, and the tax rule to apply. */
-  serviceFee: number;
+  platformFee: number;
   taxRatePercent: number;
   taxName: string;
   taxInclusive: boolean;

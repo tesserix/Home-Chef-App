@@ -299,10 +299,10 @@ export default function LiveOrdersPage() {
                       <span>Subtotal</span>
                       <span>{formatCurrency(order.subtotal ?? 0)}</span>
                     </div>
-                    {order.serviceFee > 0 && (
+                    {order.platformFee > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
-                        <span>Service fee</span>
-                        <span>{formatCurrency(order.serviceFee)}</span>
+                        <span>Platform fee</span>
+                        <span>{formatCurrency(order.platformFee)}</span>
                       </div>
                     )}
                     {order.deliveryFee > 0 && (

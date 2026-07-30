@@ -58,7 +58,7 @@ interface ApiOrder {
   fulfillmentType?: Order['fulfillmentType'];
   deliveryFee?: number;
   deliveryFeeFinal?: number;
-  serviceFee?: number;
+  platformFee?: number;
   tax?: number;
   taxRate?: number;
   discount?: number;
@@ -142,7 +142,7 @@ function mapOrder(raw: ApiOrder): Order {
     fulfillmentTimeStatus: raw.fulfillmentTimeStatus,
     deliveryFee: raw.deliveryFee,
     deliveryFeeFinal: raw.deliveryFeeFinal,
-    serviceFee: raw.serviceFee,
+    platformFee: raw.platformFee,
     tax: raw.tax,
     taxRate: raw.taxRate,
     discount: raw.discount,

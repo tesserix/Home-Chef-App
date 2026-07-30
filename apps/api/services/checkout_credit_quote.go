@@ -50,7 +50,7 @@ func BuildCreditQuote(db *gorm.DB, order *models.Order, userID uuid.UUID, req Cr
 		// fee at accept (#703) the difference was already refunded, so the higher
 		// figure is not part of what this order can still redeem against.
 		DeliveryFeePaise: ToPaise(order.EffectiveDeliveryFee()),
-		ServiceFeePaise:  ToPaise(order.ServiceFee),
+		PlatformFeePaise: ToPaise(order.PlatformFee),
 		TaxPaise:         ToPaise(order.Tax),
 		TotalPaise:       ToPaise(order.Total),
 		Cfg:              GetLoyaltyConfig(db),

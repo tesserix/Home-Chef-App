@@ -169,7 +169,7 @@ func TestQuoteEndpoint_TipRaisesPayableByExactlyTheTip(t *testing.T) {
 		"the tip is added to what the customer pays, in full")
 	require.Equal(t, baseCredit["redeemableCap"], tippedCredit["redeemableCap"],
 		"a tip is never redeemable against wallet or points")
-	require.Equal(t, base["serviceFee"], tipped["serviceFee"], "a tip is not fee-bearing")
+	require.Equal(t, base["platformFee"], tipped["platformFee"], "a tip is not fee-bearing")
 }
 
 // A negative tip is a client bug, not a discount — it must never shrink the bill.

@@ -491,10 +491,10 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 			deliveryFee = quote
 		}
 	}
-	serviceFee := subtotal * policy.ServiceFeePercent / 100
+	platformFee := subtotal * policy.PlatformFeePercent / 100
 
 	taxRule := services.ResolveTaxRate(addr.Country, addr.State)
-	taxBase := subtotal + deliveryFee + serviceFee
+	taxBase := subtotal + deliveryFee + platformFee
 	var tax, total float64
 	if taxRule != nil && taxRule.Inclusive {
 		// Prices already include tax: derive the embedded portion.
@@ -506,7 +506,7 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 	} else {
 		total = taxBase
 	}
-	extras := deliveryFee + serviceFee + tax
+	extras := deliveryFee + platformFee + tax
 
 	now := time.Now()
 	// Compute shares.
@@ -552,7 +552,7 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 				"locked_at":                    now,
 				"subtotal":                     round2(subtotal),
 				"delivery_fee":                 round2(deliveryFee),
-				"service_fee":                  round2(serviceFee),
+				"service_fee":                  round2(platformFee),
 				"tax":                          round2(tax),
 				"tax_rate":                     taxRate(taxRule),
 				"tax_name":                     taxName(taxRule),
@@ -787,7 +787,7 @@ func (h *GroupOrderHandler) maybeConsolidate(groupID uuid.UUID) (bool, error) {
 			Currency:                  g.Currency,
 			Subtotal:                  g.Subtotal,
 			DeliveryFee:               g.DeliveryFee,
-			ServiceFee:                g.ServiceFee,
+			PlatformFee:               g.PlatformFee,
 			Tax:                       g.Tax,
 			TaxRate:                   g.TaxRate,
 			TaxName:                   g.TaxName,

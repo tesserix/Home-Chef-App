@@ -202,12 +202,12 @@ func GenerateOrderInvoice(order *models.Order) (*models.OrderInvoice, error) {
 	foodTax := models.RoundAmount(subtotal * taxCfg.FoodPercent / 100)
 	deliveryFee := order.DeliveryFee
 	deliveryTax := models.RoundAmount(deliveryFee * taxCfg.DeliveryPercent / 100)
-	serviceFee := order.ServiceFee
-	serviceTax := models.RoundAmount(serviceFee * taxCfg.ServicePercent / 100)
+	platformFee := order.PlatformFee
+	serviceTax := models.RoundAmount(platformFee * taxCfg.ServicePercent / 100)
 	tip := order.Tip
 	discount := order.Discount
 
-	totalAmount := models.RoundAmount(subtotal + foodTax + deliveryFee + deliveryTax + serviceFee + serviceTax + tip - discount)
+	totalAmount := models.RoundAmount(subtotal + foodTax + deliveryFee + deliveryTax + platformFee + serviceTax + tip - discount)
 
 	// Serialize line items to JSON
 	lineItemsJSON, err := json.Marshal(lineItems)
@@ -268,7 +268,7 @@ func GenerateOrderInvoice(order *models.Order) (*models.OrderInvoice, error) {
 		FoodTax:     foodTax,
 		DeliveryFee: deliveryFee,
 		DeliveryTax: deliveryTax,
-		ServiceFee:  serviceFee,
+		PlatformFee: platformFee,
 		ServiceTax:  serviceTax,
 		Tip:         tip,
 		Discount:    discount,

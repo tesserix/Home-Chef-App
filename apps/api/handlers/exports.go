@@ -143,7 +143,7 @@ func (h *ExportsHandler) ExportOrders(c *gin.Context) {
 			string(o.PaymentStatus),
 			strconv.FormatFloat(o.Subtotal, 'f', 2, 64),
 			strconv.FormatFloat(o.DeliveryFee, 'f', 2, 64),
-			strconv.FormatFloat(o.ServiceFee, 'f', 2, 64),
+			strconv.FormatFloat(o.PlatformFee, 'f', 2, 64),
 			strconv.FormatFloat(o.Tax, 'f', 2, 64),
 			strconv.FormatFloat(o.Tip, 'f', 2, 64),
 			strconv.FormatFloat(o.Discount, 'f', 2, 64),
@@ -163,7 +163,7 @@ func (h *ExportsHandler) ExportRevenue(c *gin.Context) {
 		Date         time.Time
 		Orders       int64
 		Gross        float64
-		ServiceFees  float64
+		PlatformFees float64
 		DeliveryFees float64
 		Tax          float64
 	}
@@ -198,7 +198,7 @@ func (h *ExportsHandler) ExportRevenue(c *gin.Context) {
 			r.Date.UTC().Format("2006-01-02"),
 			strconv.FormatInt(r.Orders, 10),
 			strconv.FormatFloat(r.Gross, 'f', 2, 64),
-			strconv.FormatFloat(r.ServiceFees, 'f', 2, 64),
+			strconv.FormatFloat(r.PlatformFees, 'f', 2, 64),
 			strconv.FormatFloat(r.DeliveryFees, 'f', 2, 64),
 			strconv.FormatFloat(r.Tax, 'f', 2, 64),
 		})

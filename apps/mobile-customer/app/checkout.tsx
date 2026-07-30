@@ -550,19 +550,19 @@ export default function CheckoutScreen() {
   // actually costs something. Drives the incentive nudge; 0 shows nothing.
   const pickupSaving = quote?.pickupSaving ?? 0;
   // Platform (service) fee + tax — shown so the total is honest, computed the SAME
-  // way CreateOrder does (#fee-transparency). serviceFee is a % of subtotal; tax is
+  // way CreateOrder does (#fee-transparency). platformFee is a % of subtotal; tax is
   // the rate on (subtotal+delivery+service−discount), backed out when inclusive.
-  const serviceFee = quote?.serviceFee ?? 0;
+  const platformFee = quote?.platformFee ?? 0;
   const taxRate = quote?.taxRatePercent ?? 0;
   const taxInclusive = quote?.taxInclusive ?? false;
   const taxName = quote?.taxName || 'Tax';
-  const taxBase = Math.max(0, subtotal + deliveryFee + serviceFee - discount);
+  const taxBase = Math.max(0, subtotal + deliveryFee + platformFee - discount);
   const tax = taxInclusive ? taxBase - taxBase / (1 + taxRate / 100) : taxBase * (taxRate / 100);
   // Tip is added AFTER tax, mirroring CreateOrder — it is a pass-through to the
   // chef, so it is neither taxed nor fee-bearing.
   const total = taxInclusive
-    ? Math.max(0, subtotal + deliveryFee + serviceFee - discount) + tip
-    : Math.max(0, subtotal + deliveryFee + serviceFee + tax - discount) + tip;
+    ? Math.max(0, subtotal + deliveryFee + platformFee - discount) + tip
+    : Math.max(0, subtotal + deliveryFee + platformFee + tax - discount) + tip;
   // The Place Order button is live only when the order is placeable AND not an
   // out-of-range delivery (which the server would reject anyway).
   const placeEnabled = canPlaceOrder && !deliveryOutOfRange && !deliveryNeedsLocation;
@@ -1225,14 +1225,14 @@ export default function CheckoutScreen() {
             </View>
 
             {/* Platform (service) fee — shown so the total is honest (#fee-transparency). */}
-            {serviceFee > 0 ? (
+            {platformFee > 0 ? (
               <View className="flex-row justify-between">
                 <Text className="text-sm text-charcoal-soft">Platform fee</Text>
                 <Text
                   className="text-sm text-charcoal font-medium"
                   style={{ fontVariant: ['tabular-nums'] }}
                 >
-                  ₹{serviceFee.toFixed(2)}
+                  ₹{platformFee.toFixed(2)}
                 </Text>
               </View>
             ) : null}

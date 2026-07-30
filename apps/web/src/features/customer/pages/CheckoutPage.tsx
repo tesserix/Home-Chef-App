@@ -243,16 +243,16 @@ export default function CheckoutPage() {
   // What switching to pickup would save. Only real when delivery actually costs
   // something; 0 means show no incentive rather than a fake one.
   const pickupSaving = quote?.pickupSaving ?? 0;
-  const serviceFee = quote?.serviceFee ?? 0;
+  const platformFee = quote?.platformFee ?? 0;
   const rate = quote?.taxRatePercent ?? 0;
   const isInclusive = quote?.taxInclusive ?? false;
-  const taxBase = Math.max(0, subtotal + deliveryFee + serviceFee - discount);
+  const taxBase = Math.max(0, subtotal + deliveryFee + platformFee - discount);
   const tax = isInclusive ? taxBase - taxBase / (1 + rate / 100) : taxBase * (rate / 100);
   // Tip is added after tax, mirroring CreateOrder — it is a pass-through to the
   // chef, so it is neither taxed nor fee-bearing.
   const total = isInclusive
-    ? Math.max(0, subtotal + deliveryFee + serviceFee - discount) + tip
-    : Math.max(0, subtotal + deliveryFee + serviceFee + tax - discount) + tip;
+    ? Math.max(0, subtotal + deliveryFee + platformFee - discount) + tip
+    : Math.max(0, subtotal + deliveryFee + platformFee + tax - discount) + tip;
 
   // Wallet + loyalty credit. Every figure comes from the server quote; the page
   // does no money arithmetic of its own here. `payable` is what the gateway will
@@ -1294,8 +1294,8 @@ export default function CheckoutPage() {
                   )}
                 </div>
                 <div className="flex justify-between text-ink-soft">
-                  <span>Service fee</span>
-                  <span>{fp(serviceFee, { currency: orderCurrency })}</span>
+                  <span>Platform fee</span>
+                  <span>{fp(platformFee, { currency: orderCurrency })}</span>
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between text-herb">
