@@ -35,6 +35,7 @@ import (
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 // setupDPDPDB builds an in-memory SQLite DB with the tables the DPDP handler
@@ -92,6 +93,15 @@ func setupDPDPDB(t *testing.T) *gorm.DB {
 			updated_at    DATETIME,
 			deleted_at    DATETIME
 		)
+	`).Error)
+
+	// outbox_events: RequestDeletion enqueues the deletion-confirmation event in
+	// the same transaction as the soft delete (transactional outbox), so the
+	// fixture must carry the table or every delete 500s.
+	require.NoError(t, db.Exec(`
+		CREATE TABLE outbox_events (id text PRIMARY KEY, subject text, msg_id text, aggregate_type text,
+			aggregate_id text, payload text, status text, attempts int, last_error text, next_retry_at datetime,
+			created_at datetime, updated_at datetime, published_at datetime)
 	`).Error)
 
 	// audit_logs: id has no NOT NULL / autoincrement — GORM omits it on insert
@@ -299,7 +309,7 @@ func TestDeleteMyAccount_WrongConfirmEmail_400(t *testing.T) {
 
 // ── Delete: soft-delete + retention ───────────────────────────────────────────
 
-func TestDeleteMyAccount_SoftDeletesUserWith180DayRestoreWindow(t *testing.T) {
+func TestDeleteMyAccount_SoftDeletesUserWithRestoreWindow(t *testing.T) {
 	db := setupDPDPDB(t)
 	uid := seedUser(t, db, "chef@example.com", "chef")
 
@@ -314,11 +324,12 @@ func TestDeleteMyAccount_SoftDeletesUserWith180DayRestoreWindow(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, "deleted", resp.Status)
 
-	// Restore window ≈ 180 days after deletion — the account can be brought
-	// back until then, and is erased by the purge sweeper afterwards.
+	// Restore window ≈ RestoreWindow after deletion — the account can be brought
+	// back until then, and is erased by the purge sweeper afterwards. Derived from
+	// the constant so a policy change cannot silently diverge from this contract.
 	gap := resp.PurgeAfter.Sub(resp.DeletedAt)
-	assert.InDelta(t, (180 * 24 * time.Hour).Seconds(), gap.Seconds(), 60,
-		"purgeAfter should be ~180 days after deletedAt")
+	assert.InDelta(t, services.RestoreWindow.Seconds(), gap.Seconds(), 60,
+		"purgeAfter should be ~RestoreWindow after deletedAt")
 
 	// Default-scoped lookup hides the row (soft delete in effect)...
 	var live int64

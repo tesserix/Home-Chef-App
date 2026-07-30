@@ -5,7 +5,7 @@ package services
 // This is the half of the deletion contract the original DPDP work left
 // unbuilt: rows were soft-deleted and a retention window was promised, but
 // nothing ever purged, so "deleted" accounts accumulated indefinitely. Without
-// this cron the 180-day promise is only half true — data is hidden, never
+// this cron the restore-window promise is only half true — data is hidden, never
 // erased — which is exactly what a DPDP audit or a store review would fault.
 //
 // Personal data is erased outright. Only PII-stripped financial records are

@@ -20,8 +20,8 @@ import (
 // set of related tables differs per handler.
 //
 // The erasure half used to live here too. It has been superseded by
-// services/account_lifecycle.go, which adds the deletion blockers, the 180-day
-// restore window and GIP credential teardown — none of which the old
+// services/account_lifecycle.go, which adds the deletion blockers, the restore
+// window (services.RestoreWindow) and GIP credential teardown — none of which the old
 // soft-delete-and-hope path had.
 
 // newExportEnvelope builds the common top of every export document: the

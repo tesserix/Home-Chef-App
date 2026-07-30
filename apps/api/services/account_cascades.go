@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -67,7 +68,183 @@ func (customerCascade) OnRestore(tx *gorm.DB, _ uuid.UUID) error {
 }
 
 func (customerCascade) Purge(tx *gorm.DB, userID uuid.UUID) error {
-	return tx.Exec(`DELETE FROM addresses WHERE user_id = ?`, userID).Error
+	return purgeUserPersonalData(tx, userID)
+}
+
+// customerPurgeUserTables are the personal tables keyed by user_id that the
+// purge erases outright. Every row here belongs to the user alone — no
+// counterparty needs it and no statute requires it — so at the end of the
+// restore window it simply goes.
+//
+// This list replaced a single `DELETE FROM addresses`: testing a real purge
+// end-to-end left rows in ten tables, including customer_profiles — which
+// holds date_of_birth and food_allergies, the most sensitive data the platform
+// collects — still keyed to a "deleted" account.
+//
+// Deliberately NOT here:
+//   - orders, order_invoices — the counterparty's financial record; PII is
+//     scrubbed in place instead (scrubOrderPII / scrubInvoicePII).
+//   - meal_plans, credit_notes, ledger/earnings/transactions rows — statutory
+//     money records (CGST §36); carry amounts, not personal data.
+//   - reviews, tips, dish_ratings — the chef's rating and earnings record; the
+//     author becomes anonymous once the users row is gone.
+//   - audit_logs — its own retention cron (audit_retention_cron.go) expires
+//     them on the legal audit clock.
+var customerPurgeUserTables = []string{
+	"addresses",
+	"campaign_deliveries",
+	"customer_profiles",
+	"email_verification_tokens",
+	"favorite_chefs",
+	"favorite_dishes",
+	"group_order_participants",
+	"loyalty_accounts",
+	"loyalty_earn_batches",
+	"loyalty_transactions",
+	"mfa_backup_codes",
+	"notification_preferences",
+	"notifications",
+	"password_reset_tokens",
+	"payment_methods",
+	"post_comments",
+	"post_likes",
+	"promo_code_usages",
+	"referral_codes",
+	"refresh_tokens",
+	"subscriptions",
+	"trusted_devices",
+	"user_mfa_settings",
+	"wallet_txns",
+	"wallets",
+	"winback_offers",
+}
+
+// purgeUserPersonalData erases the customer-side footprint every account owns
+// regardless of role — chefs and drivers place orders and hold wallets too, so
+// all three cascades run this. Tables are guarded with HasTable (mirroring
+// PurgeTestSession) so unit-test fixtures that create only a few tables still
+// work; in production every table exists and nothing is skipped.
+func purgeUserPersonalData(tx *gorm.DB, userID uuid.UUID) error {
+	// The avatar object first, while the row still tells us where it is.
+	var u models.User
+	if err := tx.Unscoped().Select("avatar").First(&u, "id = ?", userID).Error; err == nil {
+		removeStoredObjectURL(u.Avatar)
+	}
+
+	for _, table := range customerPurgeUserTables {
+		if !tx.Migrator().HasTable(table) {
+			continue
+		}
+		if err := tx.Exec(`DELETE FROM `+table+` WHERE user_id = ?`, userID).Error; err != nil {
+			return fmt.Errorf("account: purge %s: %w", table, err)
+		}
+	}
+
+	// customer_id-keyed personal rows.
+	for _, table := range []string{"catering_requests", "meal_trials"} {
+		if !tx.Migrator().HasTable(table) {
+			continue
+		}
+		if err := tx.Exec(`DELETE FROM `+table+` WHERE customer_id = ?`, userID).Error; err != nil {
+			return fmt.Errorf("account: purge %s: %w", table, err)
+		}
+	}
+
+	// Blocks in either direction — a block row names both parties.
+	if tx.Migrator().HasTable("user_blocks") {
+		if err := tx.Exec(`DELETE FROM user_blocks WHERE blocker_id = ? OR blocked_id = ?`,
+			userID, userID).Error; err != nil {
+			return fmt.Errorf("account: purge user_blocks: %w", err)
+		}
+	}
+
+	// Conversations: children first (messages key on the room, not the user).
+	if tx.Migrator().HasTable("chat_rooms") {
+		if tx.Migrator().HasTable("chat_messages") {
+			if err := tx.Exec(`DELETE FROM chat_messages WHERE chat_room_id IN
+				(SELECT id FROM chat_rooms WHERE customer_id = ?)`, userID).Error; err != nil {
+				return fmt.Errorf("account: purge chat_messages: %w", err)
+			}
+		}
+		if err := tx.Exec(`DELETE FROM chat_rooms WHERE customer_id = ?`, userID).Error; err != nil {
+			return fmt.Errorf("account: purge chat_rooms: %w", err)
+		}
+	}
+
+	// Carts: items key on the cart.
+	if tx.Migrator().HasTable("carts") {
+		if tx.Migrator().HasTable("cart_items") {
+			if err := tx.Exec(`DELETE FROM cart_items WHERE cart_id IN
+				(SELECT id FROM carts WHERE user_id = ?)`, userID).Error; err != nil {
+				return fmt.Errorf("account: purge cart_items: %w", err)
+			}
+		}
+		if err := tx.Exec(`DELETE FROM carts WHERE user_id = ?`, userID).Error; err != nil {
+			return fmt.Errorf("account: purge carts: %w", err)
+		}
+	}
+
+	if err := scrubOrderPII(tx, userID); err != nil {
+		return err
+	}
+	return scrubInvoicePII(tx, userID)
+}
+
+// scrubOrderPII de-identifies the retained order rows. The rows themselves stay:
+// they are the chef's financial record too (earnings, statements, TDS), and the
+// PII-free archive (ArchiveAccountFinancials) plus these de-identified rows is
+// what "financial records retained, personal data erased" actually means. The
+// street address, coordinates and free-text instructions are the identifying
+// parts; city/state stay for regional reporting.
+func scrubOrderPII(tx *gorm.DB, userID uuid.UUID) error {
+	// Column-level guard, not just table-level: test fixtures create a minimal
+	// orders table without the address columns.
+	if !tx.Migrator().HasTable("orders") ||
+		!tx.Migrator().HasColumn(&models.Order{}, "delivery_address_line1") {
+		return nil
+	}
+	if err := tx.Exec(`UPDATE orders SET
+			delivery_address_line1 = '', delivery_address_line2 = '',
+			delivery_address_postal_code = '',
+			delivery_latitude = 0, delivery_longitude = 0,
+			delivery_instructions = '', special_instructions = ''
+		WHERE customer_id = ?`, userID).Error; err != nil {
+		return fmt.Errorf("account: scrub order PII: %w", err)
+	}
+	// Encrypted companions exist only where PII crypto migrated them (#710);
+	// SQLite fixtures and pre-migration schemas don't have the columns.
+	if tx.Migrator().HasColumn(&models.Order{}, "delivery_address_line1_enc") {
+		if err := tx.Exec(`UPDATE orders SET
+				delivery_address_line1_enc = '', delivery_address_line2_enc = ''
+			WHERE customer_id = ?`, userID).Error; err != nil {
+			return fmt.Errorf("account: scrub order PII (enc): %w", err)
+		}
+	}
+	return nil
+}
+
+// scrubInvoicePII does the same for the frozen invoice copies, which duplicate
+// the customer's name, email, phone and address at invoice time (#710 P1).
+func scrubInvoicePII(tx *gorm.DB, userID uuid.UUID) error {
+	if !tx.Migrator().HasTable("order_invoices") ||
+		!tx.Migrator().HasColumn(&models.OrderInvoice{}, "customer_name") {
+		return nil
+	}
+	if err := tx.Exec(`UPDATE order_invoices SET
+			customer_name = '', customer_email = '', customer_phone = '',
+			customer_address = ''
+		WHERE customer_id = ?`, userID).Error; err != nil {
+		return fmt.Errorf("account: scrub invoice PII: %w", err)
+	}
+	if tx.Migrator().HasColumn(&models.OrderInvoice{}, "customer_name_enc") {
+		if err := tx.Exec(`UPDATE order_invoices SET
+				customer_name_enc = '', customer_email_enc = '', customer_email_bidx = '',
+				customer_phone_enc = '', customer_phone_bidx = '', customer_address_enc = ''
+			WHERE customer_id = ?`, userID).Error; err != nil {
+			return fmt.Errorf("account: scrub invoice PII (enc): %w", err)
+		}
+	}
+	return nil
 }
 
 // ------------------------------------------------------------------- chef
@@ -165,27 +342,103 @@ func (chefCascade) OnRestore(tx *gorm.DB, userID uuid.UUID) error {
 	return queueReapproval(tx, models.ApprovalKitchenOnboarding, "chef_profile", chefID, userID)
 }
 
+// chefPurgeTables are the chef_id-keyed tables the purge erases outright: the
+// kitchen's configuration, menu, content and compliance records. Orders, meal
+// plans, group orders and weekly_statements are deliberately NOT here — they
+// are the counterparty's financial record too, and the deletion blockers
+// already guaranteed none are live. Reviews, ratings and favorites pointing at
+// the kitchen DO go: content about a kitchen that no longer exists serves
+// nobody, and leaving it keyed to a purged chef is retention without purpose.
+var chefPurgeTables = []string{
+	"catering_quotes",
+	"chef_capacity_settings",
+	"chef_documents",
+	"chef_mode_stats",
+	"chef_notification_preferences",
+	"chef_penalties",
+	"chef_promotions",
+	"chef_schedules",
+	"chef_settings",
+	"chef_slot_daily_bookings",
+	"chef_subscription_configs",
+	"chef_test_sessions",
+	"daily_menu_items",
+	"daily_menus",
+	"dish_ratings",
+	"favorite_chefs",
+	"menu_categories",
+	"menu_item_daily_sales",
+	"posts",
+	"promo_codes",
+	"reviews",
+	"weekly_menu_items",
+	"weekly_menus",
+	// menu_items last of the menu family — menu_item_images is deleted via a
+	// subselect on it first, below.
+	"menu_items",
+}
+
 func (chefCascade) Purge(tx *gorm.DB, userID uuid.UUID) error {
 	chefID, ok := chefProfileID(tx, userID)
 	if !ok {
-		return nil
+		// No profile — still erase the customer-side footprint this user owns.
+		return purgeUserPersonalData(tx, userID)
 	}
-	// Children before parent. Orders and meal plans are deliberately NOT deleted
-	// here: they are the counterparty's financial record too, and the deletion
-	// blockers already guaranteed none are live.
-	//
+
+	// Stored objects first, while the rows still say where they are. ALL
+	// document types, not just the identity subset the restore path drops: the
+	// old purge deleted chef_documents rows and left every uploaded
+	// PAN/FSSAI/bank object in the bucket forever.
+	var docs []models.ChefDocument
+	if err := tx.Where("chef_id = ?", chefID).Find(&docs).Error; err != nil {
+		return fmt.Errorf("account: load chef documents for purge: %w", err)
+	}
+	for _, d := range docs {
+		removeStoredObject(d.Bucket, d.FilePath)
+	}
+	var chef models.ChefProfile
+	if err := tx.Select("profile_image").First(&chef, "id = ?", chefID).Error; err == nil {
+		removeStoredObjectURL(chef.ProfileImage)
+	}
+
+	// Payout bank details live in Secret Manager, not the database — the most
+	// sensitive thing a chef gives us, and the old purge left them behind.
+	// Best-effort: a missing secret or an unconfigured client must not stall
+	// the erasure, and DeleteVendorSecret treats not-found as success.
+	for _, field := range []string{"bank-account-number", "bank-account-name", "bank-ifsc", "upi-id"} {
+		if err := DeleteVendorSecret(context.Background(), chefID.String(), field); err != nil {
+			log.Printf("account: could not delete vendor secret %s for chef=%s: %v", field, chefID, err)
+		}
+	}
+
+	// menu_item_images keys on the menu item, not the chef — delete via
+	// subselect while menu_items still exists.
+	if tx.Migrator().HasTable("menu_item_images") {
+		if err := tx.Exec(`DELETE FROM menu_item_images WHERE menu_item_id IN
+			(SELECT id FROM menu_items WHERE chef_id = ?)`, chefID).Error; err != nil {
+			return fmt.Errorf("account: purge menu_item_images: %w", err)
+		}
+	}
+
 	// Raw DELETEs rather than GORM model deletes: several of these models carry
 	// composite unique indexes and soft-delete columns, and a model-scoped
 	// Delete quietly becomes an UPDATE that leaves rows behind. The purge must
-	// actually remove them.
-	for _, table := range []string{
-		"chef_documents", "chef_schedules", "chef_settings", "menu_items",
-	} {
+	// actually remove them. HasTable-guarded for test fixtures, as elsewhere.
+	for _, table := range chefPurgeTables {
+		if !tx.Migrator().HasTable(table) {
+			continue
+		}
 		if err := tx.Exec(`DELETE FROM `+table+` WHERE chef_id = ?`, chefID).Error; err != nil {
 			return fmt.Errorf("account: purge %s: %w", table, err)
 		}
 	}
-	return tx.Exec(`DELETE FROM chef_profiles WHERE id = ?`, chefID).Error
+
+	if err := tx.Exec(`DELETE FROM chef_profiles WHERE id = ?`, chefID).Error; err != nil {
+		return fmt.Errorf("account: purge chef_profiles: %w", err)
+	}
+	// The chef is also a customer: wallet, addresses, notifications and the
+	// rest of the personal footprint go the same way as for any other user.
+	return purgeUserPersonalData(tx, userID)
 }
 
 // ----------------------------------------------------------------- driver
@@ -239,17 +492,24 @@ func (driverCascade) OnRestore(tx *gorm.DB, userID uuid.UUID) error {
 func (driverCascade) Purge(tx *gorm.DB, userID uuid.UUID) error {
 	partnerID, ok := driverPartnerID(tx, userID)
 	if !ok {
-		return nil
+		// No partner row — still erase the customer-side footprint.
+		return purgeUserPersonalData(tx, userID)
 	}
-	if err := tx.Exec(`DELETE FROM delivery_partner_documents WHERE partner_id = ?`,
-		partnerID).Error; err != nil {
-		return fmt.Errorf("account: purge driver documents: %w", err)
+	// purgeDriverDocuments (not a raw DELETE): it removes the stored licence and
+	// identity objects before dropping the rows. The old purge deleted the rows
+	// directly and left every uploaded document in the bucket forever.
+	if err := purgeDriverDocuments(tx, partnerID); err != nil {
+		return err
 	}
 	if err := tx.Exec(`DELETE FROM driver_referrals WHERE referrer_id = ?`,
 		userID).Error; err != nil {
 		return fmt.Errorf("account: purge driver referrals: %w", err)
 	}
-	return tx.Exec(`DELETE FROM delivery_partners WHERE id = ?`, partnerID).Error
+	if err := tx.Exec(`DELETE FROM delivery_partners WHERE id = ?`, partnerID).Error; err != nil {
+		return fmt.Errorf("account: purge delivery_partners: %w", err)
+	}
+	// The driver is also a customer — same personal footprint as everyone else.
+	return purgeUserPersonalData(tx, userID)
 }
 
 // --------------------------------------------------------------- helpers
@@ -297,6 +557,23 @@ func removeStoredObject(bucket, path string) {
 	if err := DeleteFile(context.Background(), bucket, path); err != nil {
 		log.Printf("account: could not remove object %s/%s: %v", bucket, path, err)
 	}
+}
+
+// removeStoredObjectURL deletes an object addressed by its public URL — the
+// form UploadPublicFile returns and profile images / avatars store
+// (https://storage.googleapis.com/{bucket}/{path}). Anything that isn't a URL
+// in that shape (an external avatar from a social login, an empty string) is
+// simply not ours to delete and is skipped.
+func removeStoredObjectURL(rawURL string) {
+	const prefix = "https://storage.googleapis.com/"
+	if !strings.HasPrefix(rawURL, prefix) {
+		return
+	}
+	bucket, objectPath, found := strings.Cut(strings.TrimPrefix(rawURL, prefix), "/")
+	if !found {
+		return
+	}
+	removeStoredObject(bucket, objectPath)
 }
 
 // queueReapproval raises a pending approval request for a restored account,

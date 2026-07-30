@@ -46,7 +46,9 @@ export default function AccountLifecycleScreen() {
   const email = profile?.email ?? '';
   const blockers = eligibility.data?.blockers ?? [];
   const blocked = blockers.length > 0;
-  const retentionDays = eligibility.data?.retentionDays ?? 180;
+  // Fallback mirrors services.RestoreWindow — the API's retentionDays is the
+  // source of truth; this only covers the moment before eligibility loads.
+  const retentionDays = eligibility.data?.retentionDays ?? 360;
   const canDelete =
     !blocked &&
     email.length > 0 &&

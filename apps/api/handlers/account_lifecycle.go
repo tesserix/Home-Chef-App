@@ -10,6 +10,7 @@ package handlers
 // drift apart.
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -193,8 +194,9 @@ func (h *AccountLifecycleHandler) DeleteAccount(c *gin.Context) {
 		"status":     "deleted",
 		"deletedAt":  user.DeletedAt.Time,
 		"purgeAfter": user.PurgeAfter,
-		"notice": "Your account has been deleted. If you sign up again with this email " +
-			"within 180 days you can restore your history — after that it is erased permanently.",
+		"notice": fmt.Sprintf("Your account has been deleted. If you sign up again with this email "+
+			"within %d days you can restore your history — after that it is erased permanently.",
+			int(services.RestoreWindow.Hours()/24)),
 	})
 }
 

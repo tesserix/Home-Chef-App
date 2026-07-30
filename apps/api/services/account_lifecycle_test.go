@@ -67,6 +67,11 @@ func setupAccountDB(t *testing.T) *gorm.DB {
 		partner_id TEXT, type TEXT, file_name TEXT, file_path TEXT, bucket TEXT, status TEXT,
 		created_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE driver_referrals (id TEXT PRIMARY KEY, referrer_id TEXT)`).Error)
+	// outbox_events: deletion/restore/purge each enqueue their lifecycle event in
+	// the same transaction as the state change (transactional outbox).
+	require.NoError(t, db.Exec(`CREATE TABLE outbox_events (id text PRIMARY KEY, subject text, msg_id text,
+		aggregate_type text, aggregate_id text, payload text, status text, attempts int, last_error text,
+		next_retry_at datetime, created_at datetime, updated_at datetime, published_at datetime)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE approval_requests (approved_mode text DEFAULT 'live', id TEXT PRIMARY KEY, type TEXT,
 		status TEXT, priority TEXT, chef_id TEXT, partner_id TEXT, submitted_by_id TEXT,
 		reviewed_by_id TEXT, entity_type TEXT, entity_id TEXT, title TEXT, description TEXT,

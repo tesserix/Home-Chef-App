@@ -12,7 +12,7 @@ import (
 //   - GET  /me/export  → machine-readable dump of the customer's personal data
 //
 // Deletion is NOT here: it lives in account_lifecycle.go, which adds blocker
-// checks, the 180-day restore window and GIP credential teardown.
+// checks, the restore window (services.RestoreWindow) and GIP credential teardown.
 type CustomerDPDPHandler struct{}
 
 func NewCustomerDPDPHandler() *CustomerDPDPHandler { return &CustomerDPDPHandler{} }
