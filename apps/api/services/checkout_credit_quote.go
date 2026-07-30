@@ -35,13 +35,16 @@ type CreditFlags struct {
 
 // BuildCreditQuote assembles CreditInputs from live state and allocates.
 //
-// Wallet and loyalty are rupee instruments settled through Razorpay Route, so a
-// Stripe order — a chef settling in their own currency — takes no credit at all,
-// and both rails report disabled rather than silently applying zero.
+// Wallet and loyalty are rupee instruments, so a Stripe order — a chef settling in
+// their own currency — takes no credit at all, and both rails report disabled
+// rather than silently applying zero.
+//
+// The test is "is this provider denominated in INR paise", NOT "is this Razorpay".
+// Cashfree is an INR gateway and takes credit exactly as Razorpay does; it simply
+// captures the post-credit remainder rather than splitting it.
 func BuildCreditQuote(db *gorm.DB, order *models.Order, userID uuid.UUID, req CreditRequest, flags CreditFlags) (CreditQuote, error) {
 	inr := order.Currency == "" || strings.EqualFold(order.Currency, "INR")
-	razorpay := !strings.EqualFold(order.PaymentProvider, "stripe")
-	rupeeRail := inr && razorpay
+	rupeeRail := inr && models.UsesINRPaise(order.PaymentProvider)
 
 	in := CreditInputs{
 		SubtotalPaise: ToPaise(order.Subtotal),

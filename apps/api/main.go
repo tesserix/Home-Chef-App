@@ -161,8 +161,13 @@ func main() {
 	// this is just a best-effort pre-fetch to log any config gap at startup.
 	services.InitRazorpay()
 
-	// Same for Stripe — second payment provider for markets where Razorpay
-	// isn't available. Both clients coexist; per-chef PaymentProvider
+	// Same for Cashfree — the second India gateway. Probes BOTH credential
+	// slots (live + test) so a missing sandbox key is visible at startup rather
+	// than at a test kitchen's first checkout.
+	services.InitCashfree()
+
+	// Same for Stripe — payment provider for markets where Razorpay
+	// isn't available. All clients coexist; per-chef PaymentProvider
 	// decides which one handles a given order.
 	services.InitStripe()
 

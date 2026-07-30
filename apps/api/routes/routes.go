@@ -135,7 +135,7 @@ func SetupRouter() *gin.Engine {
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = allowedOrigins()
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Auth-Token", "X-Request-ID", "X-Razorpay-Signature", "Stripe-Signature", "x-jwt-claim-sub", "x-jwt-claim-tenant-id", "x-jwt-claim-tenant-slug", "x-jwt-claim-email", "x-jwt-claim-name", "x-jwt-claim-given-name", "x-jwt-claim-family-name"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Auth-Token", "X-Request-ID", "X-Razorpay-Signature", "Stripe-Signature", "x-webhook-signature", "x-webhook-timestamp", "x-jwt-claim-sub", "x-jwt-claim-tenant-id", "x-jwt-claim-tenant-slug", "x-jwt-claim-email", "x-jwt-claim-name", "x-jwt-claim-given-name", "x-jwt-claim-family-name"}
 	corsConfig.ExposeHeaders = []string{"X-Request-ID", "Retry-After"}
 	corsConfig.AllowCredentials = true
 	corsConfig.MaxAge = 600
@@ -220,6 +220,7 @@ func SetupRouter() *gin.Engine {
 	// Webhook endpoints — HMAC verified, but cap inbound rate as a DoS guard.
 	webhookLimit := middleware.RateLimit(20, 40) // 20 rps sustained, 40 burst per IP
 	r.POST("/webhooks/razorpay", webhookLimit, paymentHandler.RazorpayWebhook)
+	r.POST("/webhooks/cashfree", webhookLimit, paymentHandler.CashfreeWebhook)
 	r.POST("/webhooks/stripe", webhookLimit, paymentHandler.StripeWebhook)
 	r.POST("/webhooks/delivery/:provider", webhookLimit, providerHandler.HandleWebhook)
 
@@ -229,6 +230,9 @@ func SetupRouter() *gin.Engine {
 	// externally-registered webhook URLs use the /api form
 	// (e.g. https://fe3dr.com/api/webhooks/razorpay).
 	r.POST("/api/webhooks/razorpay", webhookLimit, paymentHandler.RazorpayWebhook)
+	// This is the URL to register in the Cashfree dashboard (both environments) —
+	// the /api form, since only /api and /ws are publicly routed to this service.
+	r.POST("/api/webhooks/cashfree", webhookLimit, paymentHandler.CashfreeWebhook)
 	r.POST("/api/webhooks/stripe", webhookLimit, paymentHandler.StripeWebhook)
 	r.POST("/api/webhooks/delivery/:provider", webhookLimit, providerHandler.HandleWebhook)
 
@@ -1200,6 +1204,12 @@ func SetupRouter() *gin.Engine {
 			// Payment gateway — Razorpay (India)
 			admin.GET("/payment-gateway/status", adminHandler.GetPaymentGatewayStatus)
 			admin.PUT("/payment-gateway/keys", adminHandler.UpdatePaymentGatewayKeys)
+
+			// Payment gateway — Cashfree (India, second gateway). Per-mode
+			// credential slots like Razorpay: ?mode=live|test on the status read,
+			// "mode" in the body on the write.
+			admin.GET("/payment-gateway/cashfree/status", adminHandler.GetCashfreeGatewayStatus)
+			admin.PUT("/payment-gateway/cashfree/keys", adminHandler.UpdateCashfreeGatewayKeys)
 
 			// Payment gateway — Stripe (international)
 			admin.GET("/payment-gateway/stripe/status", adminHandler.GetStripeGatewayStatus)

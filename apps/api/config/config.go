@@ -86,6 +86,15 @@ type Config struct {
 	RazorpayKeySecret     string
 	RazorpayWebhookSecret string
 
+	// Cashfree — second India gateway. Local-dev fallback only: production
+	// reads these from GCP Secret Manager (see services.CashfreeSecretNames).
+	// LIVE slot only, mirroring the Razorpay env vars — one set of env vars
+	// cannot describe two environments, and serving them to the test slot would
+	// point sandbox orders at live credentials.
+	CashfreeAppID         string
+	CashfreeSecretKey     string
+	CashfreeWebhookSecret string
+
 	// Shadowfax 3PL (from Secret Manager; empty leaves the provider disabled)
 	ShadowfaxAPIToken      string
 	ShadowfaxWebhookSecret string
@@ -437,6 +446,11 @@ func Load() {
 		RazorpayKeyID:         getEnv("RAZORPAY_KEY_ID", ""),
 		RazorpayKeySecret:     getEnv("RAZORPAY_KEY_SECRET", ""),
 		RazorpayWebhookSecret: getEnv("RAZORPAY_WEBHOOK_SECRET", ""),
+
+		// Cashfree
+		CashfreeAppID:         getEnv("CASHFREE_APP_ID", ""),
+		CashfreeSecretKey:     getEnv("CASHFREE_SECRET_KEY", ""),
+		CashfreeWebhookSecret: getEnv("CASHFREE_WEBHOOK_SECRET", ""),
 
 		ShadowfaxAPIToken:      getEnv("SHADOWFAX_API_TOKEN", ""),
 		ShadowfaxWebhookSecret: getEnv("SHADOWFAX_WEBHOOK_SECRET", ""),

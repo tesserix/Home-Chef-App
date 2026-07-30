@@ -9,7 +9,6 @@ package handlers
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -105,7 +104,10 @@ func validVendorReason(r string) bool {
 // end-to-end, reintroducing the choice is a deliberate product decision — not
 // a default.
 func resolveRefundDestination(order *models.Order) string {
-	if strings.EqualFold(order.PaymentProvider, "razorpay") && order.RazorpayPaymentID != "" {
+	// GatewayRefundable, not a provider name: an INR order on Cashfree is just as
+	// refundable to its original method as one on Razorpay, and naming Razorpay
+	// here would have quietly diverted those customers to store credit.
+	if order.GatewayRefundable() {
 		return "original"
 	}
 	return "wallet"

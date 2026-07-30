@@ -27,12 +27,13 @@ var errOrderRefundInProgress = errors.New("order-level refund in progress")
 var errLineAlreadyRefunded = errors.New("line or order already refunded")
 
 // ChefOrderCancelHandler holds the chef-side cancellation routes.
-// Whole-order and per-line cancel both refund through Razorpay; per-
-// line additionally recomputes the order totals so subsequent
-// statements + invoices reflect the smaller scope.
+// Whole-order and per-line cancel both refund through the order's own gateway
+// (services.IssueOrderGatewayRefund); per-line additionally recomputes the order
+// totals so subsequent statements + invoices reflect the smaller scope.
 //
-// Razorpay-only for now — orders paid via Stripe Connect return 422
-// with a hint to use the Stripe-specific flow (TODO once that ships).
+// Gateway-agnostic: every route gates on order.GatewayRefundable() rather than
+// naming a provider, so a Razorpay or Cashfree order behaves identically and an
+// order with nothing refundable at a gateway returns 422.
 type ChefOrderCancelHandler struct{}
 
 func NewChefOrderCancelHandler() *ChefOrderCancelHandler {
@@ -99,9 +100,12 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		return
 	}
 
-	if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
+	// Any order with a refundable gateway payment (Razorpay or Cashfree) can be
+	// cancelled here. Naming Razorpay would 422 a Cashfree order that is perfectly
+	// refundable — the chef would simply be unable to cancel it.
+	if !order.GatewayRefundable() {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"error": "only Razorpay-paid orders can be cancelled from the chef app today; reach out to support for Stripe orders",
+			"error": "this order has no refundable payment to cancel against; reach out to support",
 		})
 		return
 	}
@@ -178,32 +182,27 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	refundID := sentinel
 	deferred := false
 	if cardPaise > 0 {
-		rzp := services.GetRazorpayFor(order.Mode)
-		if rzp == nil {
+		if !services.GatewayRefundAvailable(&order) {
 			deferred = true
-			log.Printf("chef cancel: razorpay client unavailable for order %s; deferring refund of %d paise to the retry cron", order.ID, cardPaise)
+			log.Printf("chef cancel: %s client unavailable for order %s; deferring refund of %d paise to the retry cron",
+				models.NormalizeProvider(order.PaymentProvider), order.ID, cardPaise)
 		} else {
-			refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
-				Amount: cardPaise,
-				Speed:  "normal",
-				Notes: map[string]string{
-					"order_id":  order.ID.String(),
-					"order_no":  order.OrderNumber,
-					"chef_id":   chef.ID.String(),
-					"reason":    string(reason),
-					"initiator": "chef",
-				},
+			refundResp, err := services.IssueOrderGatewayRefund(&order, cardPaise, map[string]string{
+				"order_id":  order.ID.String(),
+				"order_no":  order.OrderNumber,
+				"chef_id":   chef.ID.String(),
+				"reason":    string(reason),
+				"initiator": "chef",
 				// Full-order cancel refund is issued once (order goes terminal-cancelled);
 				// the reservation above serializes concurrent attempts, and the retry cron
 				// re-sends this SAME key on a deferral — so a lost-response success dedups
 				// at the gateway instead of double-refunding. #574.
-				IdempotencyKey: services.RefundFullIdempotencyKey(order.ID),
-			})
+			}, services.RefundFullIdempotencyKey(order.ID))
 			if err != nil {
 				deferred = true
 				log.Printf("chef cancel: gateway refund failed for order %s (%d paise); deferring to the retry cron: %v", order.ID, cardPaise, err)
 			} else {
-				refundID = refundResp.ID
+				refundID = refundResp.RefundID
 				// Guarded replace: swap the sentinel for the real gateway id ONLY if it's
 				// still there — a concurrent cron/Temporal completion that already replaced
 				// it first is a harmless no-op (mirrors retryOneDeferredCancelRefund's
@@ -425,9 +424,9 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 		return
 	}
 
-	if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
+	if !order.GatewayRefundable() {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"error": "per-line refunds only supported on Razorpay orders today",
+			"error": "this order has no refundable payment to issue a per-line refund against",
 		})
 		return
 	}
@@ -442,9 +441,8 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 		return
 	}
 
-	rzp := services.GetRazorpayFor(order.Mode)
-	if rzp == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "razorpay client unavailable; refund deferred"})
+	if !services.GatewayRefundAvailable(&order) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "payment gateway unavailable; refund deferred"})
 		return
 	}
 
@@ -490,20 +488,15 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 	// effective rate; the reserved value is authoritative).
 	amountPaise = int(roundPaise(reservedRefund))
 
-	refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
-		Amount: amountPaise,
-		Speed:  "normal",
-		Notes: map[string]string{
-			"order_id":      order.ID.String(),
-			"order_item_id": target.ID.String(),
-			"chef_id":       chef.ID.String(),
-			"reason":        string(reason),
-			"initiator":     "chef",
-			"scope":         "line",
-		},
+	refundResp, err := services.IssueOrderGatewayRefund(&order, amountPaise, map[string]string{
+		"order_id":      order.ID.String(),
+		"order_item_id": target.ID.String(),
+		"chef_id":       chef.ID.String(),
+		"reason":        string(reason),
+		"initiator":     "chef",
+		"scope":         "line",
 		// #574: keyed by the immutable line id — a lost-response retry dedups to one refund.
-		IdempotencyKey: services.RefundLineIdempotencyKey(order.ID, target.ID),
-	})
+	}, services.RefundLineIdempotencyKey(order.ID, target.ID))
 	if err != nil {
 		// The gateway refused — no money moved, so RELEASE the reservation (un-cancel the line +
 		// restore the order totals) so a retry can cancel this line cleanly.
@@ -521,7 +514,7 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 	// only the refund_id reference + capacity release are lost, which is money-safe.
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&models.OrderItem{}).Where("id = ?", target.ID).
-			Update("refund_id", refundResp.ID).Error; err != nil {
+			Update("refund_id", refundResp.RefundID).Error; err != nil {
 			return err
 		}
 		return services.ReleaseCapacity(tx, target.MenuItemID, target.Quantity, services.CapacityDay(order.CreatedAt))
@@ -594,9 +587,9 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		return
 	}
 
-	if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
+	if !order.GatewayRefundable() {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"error": "only Razorpay-paid orders support refunds from the chef app today",
+			"error": "this order has no refundable payment to refund against",
 		})
 		return
 	}
@@ -619,9 +612,8 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		return
 	}
 
-	rzp := services.GetRazorpayFor(order.Mode)
-	if rzp == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "razorpay client unavailable; refund deferred"})
+	if !services.GatewayRefundAvailable(&order) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "payment gateway unavailable; refund deferred"})
 		return
 	}
 
@@ -674,22 +666,17 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		return
 	}
 
-	refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
-		Amount: amountPaise,
-		Speed:  "normal",
-		Notes: map[string]string{
-			"order_id":  order.ID.String(),
-			"order_no":  order.OrderNumber,
-			"chef_id":   chef.ID.String(),
-			"reason":    req.Reason,
-			"initiator": "chef",
-			"scope":     "post_delivery_goodwill",
-		},
+	refundResp, err := services.IssueOrderGatewayRefund(&order, amountPaise, map[string]string{
+		"order_id":  order.ID.String(),
+		"order_no":  order.OrderNumber,
+		"chef_id":   chef.ID.String(),
+		"reason":    req.Reason,
+		"initiator": "chef",
+		"scope":     "post_delivery_goodwill",
 		// #574/#576/#611: keyed by prior cumulative refunded paise (stable on retry, distinct
 		// across sequential partials) — safe because the reservation above serializes a
 		// same-order double-submit under a row lock so the ledger can't double-count.
-		IdempotencyKey: services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(priorRefunded)),
-	})
+	}, services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(priorRefunded)))
 	if err != nil {
 		revertReservation()
 		services.CaptureSentryError(c, err)
@@ -706,7 +693,7 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 	// releasable + sequential partials re-claim; a FULL refund keeps refunded + stamps
 	// refunded_at (terminal).
 	refundUpdates := map[string]interface{}{
-		"refund_id":           refundResp.ID,
+		"refund_id":           refundResp.RefundID,
 		"refund_reason":       req.Reason,
 		"refund_initiated_by": "chef",
 	}
@@ -748,7 +735,7 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
 
 	services.LogAudit(c, "chef.order.refund", "order", order.ID.String(),
-		nil, gin.H{"amount": reserved, "reason": req.Reason, "refundId": refundResp.ID})
+		nil, gin.H{"amount": reserved, "reason": req.Reason, "refundId": refundResp.RefundID})
 
 	publishOrderUpdated(order)
 

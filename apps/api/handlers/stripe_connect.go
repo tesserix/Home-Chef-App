@@ -446,7 +446,7 @@ func (h *StripeConnectHandler) SetDriverPaymentProvider(c *gin.Context) {
 // non-empty) before switching to it.
 //
 // PUT /chef/payment-provider
-// Body: { "provider": "stripe" | "razorpay" }
+// Body: { "provider": "stripe" | "razorpay" | "cashfree" }
 func (h *StripeConnectHandler) SetPaymentProvider(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
@@ -458,8 +458,12 @@ func (h *StripeConnectHandler) SetPaymentProvider(c *gin.Context) {
 		return
 	}
 	req.Provider = strings.ToLower(req.Provider)
-	if req.Provider != "razorpay" && req.Provider != "stripe" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "provider must be 'razorpay' or 'stripe'"})
+	// Validated strictly (no coercion): silently folding a typo to razorpay would
+	// hide a misconfiguration the operator needs to see.
+	if !models.IsSelectableChefProvider(req.Provider) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "provider must be one of 'razorpay', 'cashfree' or 'stripe'",
+		})
 		return
 	}
 
@@ -469,13 +473,31 @@ func (h *StripeConnectHandler) SetPaymentProvider(c *gin.Context) {
 		return
 	}
 
-	if req.Provider == "stripe" && chef.StripeAccountID == "" {
+	if req.Provider == models.PaymentProviderStripe && chef.StripeAccountID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Complete Stripe onboarding before switching to Stripe"})
 		return
 	}
-	if req.Provider == "razorpay" && chef.RazorpayAccountID == "" {
+	if req.Provider == models.PaymentProviderRazorpay && chef.RazorpayAccountID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Complete Razorpay payout setup before switching to Razorpay"})
 		return
+	}
+	// Cashfree deliberately has NO account-onboarding precondition. It captures to
+	// the platform merchant account and splits nothing at the gateway, so there is
+	// no per-chef payee to register first — the chef's money is settled through the
+	// statement/payout path. Requiring a linked account here would block the
+	// provider from ever being selectable.
+	//
+	// The trade-off is real and worth stating: switching a chef to Cashfree takes
+	// their orders OUT of the Route escrow/hold machinery (see
+	// models.ProviderSupportsGatewaySplit), so their payouts become
+	// statement-driven. That is an operational decision, not a silent side effect.
+	if req.Provider == models.PaymentProviderCashfree {
+		if services.GetCashfreeFor(chef.Mode) == nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Cashfree is not configured for this mode yet — ask an admin to add the keys in Admin → Settings → Payment Gateway",
+			})
+			return
+		}
 	}
 
 	database.DB.Model(&chef).Update("payment_provider", req.Provider)

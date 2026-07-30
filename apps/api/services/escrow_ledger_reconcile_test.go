@@ -28,6 +28,7 @@ func setupLedgerDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '',
 		status TEXT, payout_hold_status TEXT DEFAULT '', razorpay_order_id TEXT DEFAULT '',
+			payment_provider TEXT DEFAULT 'razorpay',
 		refunded_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
 	// Hand-DDL payment_drifts (AutoMigrate emits the Postgres gen_random_uuid() default, which
 	// sqlite rejects). Production uses AutoMigrate on Postgres where the default is valid.
