@@ -30,12 +30,15 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import {
   Bell,
+  ChefHat,
   CookingPot,
   Drumstick,
   Map,
+  MapPin,
   Pizza,
   Salad,
   Sandwich,
@@ -621,10 +624,70 @@ export default function HomeScreen() {
                 <View style={styles.skeletonCol}><SkeletonCard /></View>
                 <View style={styles.skeletonCol}><SkeletonCard /></View>
               </View>
-            ) : (
+            ) : selectedCuisine !== 'All' || isOpenOnly || activeFilterCount > 0 ? (
+              // Filters narrowed the list to nothing — say so, and offer the
+              // one-tap way back rather than a dead end.
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No chefs found</Text>
+                <Text style={styles.emptyTitle}>No chefs match</Text>
                 <Text style={styles.emptyBody}>Try adjusting your filters</Text>
+                <Pressable
+                  onPress={() => {
+                    setSelectedCuisine('All');
+                    setIsOpenOnly(false);
+                    setSelectedDiet('');
+                    setMaxPrice(undefined);
+                    setSort('rating');
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear all filters"
+                  hitSlop={8}
+                >
+                  <Text style={styles.emptyClear}>Clear filters</Text>
+                </Pressable>
+              </View>
+            ) : (
+              // Nothing to show at all (fresh guest, or no kitchens serve this
+              // area yet). An appetizing hero instead of a flat "not found":
+              // food and faces carry the brand, so even the empty screen should
+              // look like dinner is close — a kitchen badge ringed by dishes,
+              // and the address affordance front and centre, since where you
+              // are is what decides who can cook for you.
+              <View style={styles.emptyHero}>
+                {/* Photo-forward, chrome-light: a real home-cooked plate does the
+                    selling. Bundled Unsplash photo (Unsplash License — free for
+                    commercial use, no attribution required), local asset so the
+                    hero renders offline and on first paint. */}
+                <View style={styles.emptyHeroCard}>
+                  <Image
+                    source={require('../../assets/images/empty-home-hero.jpg')}
+                    style={styles.emptyHeroImage}
+                    contentFit="cover"
+                    transition={200}
+                    accessibilityLabel="A fresh home-cooked bowl of food"
+                  />
+                  <View style={styles.emptyHeroChip}>
+                    <ChefHat size={16} color={customerColors.coral.DEFAULT} />
+                    <Text style={styles.emptyHeroChipText}>Cooked at home, near you</Text>
+                  </View>
+                </View>
+                <Text style={styles.emptyHeroTitle}>Real kitchens, real cooks</Text>
+                <Text style={styles.emptyHeroBody}>
+                  Home chefs near you cook fresh, homestyle food and deliver it to
+                  your door. Set your delivery address to see who&apos;s cooking
+                  in your area.
+                </Text>
+                <Pressable
+                  onPress={() => addressSheetRef.current?.present()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Set your delivery address"
+                >
+                  {({ pressed }) => (
+                    <View style={[styles.emptyHeroCta, pressed && styles.emptyHeroCtaPressed]}>
+                      <MapPin size={18} color={customerColors.canvas} />
+                      <Text style={styles.emptyHeroCtaText}>Set delivery address</Text>
+                    </View>
+                  )}
+                </Pressable>
               </View>
             )
           }
@@ -1032,6 +1095,84 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 14,
     color: customerColors.charcoal.soft,
+  },
+  emptyClear: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.coral.DEFAULT,
+    marginTop: 12,
+    paddingVertical: 8, // 44px total touch target with hitSlop
+  },
+
+  // ── Empty hero (no kitchens yet / fresh guest) ────────────────────────────
+  // Photo-forward: the plate sells dinner; the copy and CTA just point at it.
+  emptyHero: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 48,
+  },
+  emptyHeroCard: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: customerColors.surface.soft,
+  },
+  emptyHeroImage: {
+    width: '100%',
+    aspectRatio: 16 / 10,
+  },
+  emptyHeroChip: {
+    position: 'absolute',
+    left: 12,
+    bottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: customerColors.canvas,
+    borderRadius: 9999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  emptyHeroChipText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: customerColors.charcoal.DEFAULT,
+  },
+  emptyHeroTitle: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 22,
+    color: customerColors.charcoal.DEFAULT,
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  emptyHeroBody: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    lineHeight: 21,
+    color: customerColors.charcoal.soft,
+    textAlign: 'center',
+    marginTop: 8,
+    maxWidth: 320,
+  },
+  emptyHeroCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 48,
+    paddingHorizontal: 24,
+    marginTop: 20,
+    borderRadius: 12,
+    backgroundColor: customerColors.coral.DEFAULT,
+  },
+  emptyHeroCtaPressed: {
+    backgroundColor: customerColors.coral.pressed,
+  },
+  emptyHeroCtaText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: customerColors.canvas,
   },
 
   // ── Skeleton grid ─────────────────────────────────────────────────────────
