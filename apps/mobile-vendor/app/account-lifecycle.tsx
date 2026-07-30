@@ -59,8 +59,17 @@ export default function AccountLifecycleScreen() {
     confirmEmail.trim().toLowerCase() === email.trim().toLowerCase();
 
   function signOutToLogin() {
-    useAuthStore.getState().logout();
+    // Navigate FIRST, flip auth state a tick later. Logging out while the tabs
+    // are still mounted re-rendered DashboardScreen mid-teardown with a
+    // different hook count — "Rendered fewer hooks than expected", reproduced
+    // on the emulator immediately after a successful deletion. The vendor app
+    // has no anonymous surface (a kitchen dashboard cannot render without an
+    // account), so unlike the customer app its post-delete home is the login
+    // screen.
     router.replace('/(auth)/login' as never);
+    setTimeout(() => {
+      void useAuthStore.getState().logout();
+    }, 0);
   }
 
   function handleExport() {

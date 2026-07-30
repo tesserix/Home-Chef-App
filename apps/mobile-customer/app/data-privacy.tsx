@@ -120,8 +120,17 @@ export default function DataPrivacyScreen() {
                     {
                       text: 'OK',
                       onPress: () => {
-                        useAuthStore.getState().logout();
-                        router.replace('/(auth)/login');
+                        // Land on Home as a signed-out browser, not the login
+                        // wall — the app is guest-first (see _layout.tsx: being
+                        // signed out IS the browse condition). Navigate FIRST,
+                        // flip auth state a tick later: logging out while this
+                        // screen is still mounted re-renders it mid-teardown
+                        // with a different hook count ("Rendered fewer hooks"
+                        // crash, seen on the vendor flow's identical ordering).
+                        router.replace('/(tabs)');
+                        setTimeout(() => {
+                          void useAuthStore.getState().logout();
+                        }, 0);
                       },
                     },
                   ],
