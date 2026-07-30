@@ -12,6 +12,28 @@ import {
   type CancellationRequest,
 } from '../../hooks/useCancellation';
 import { useAlert } from '@homechef/mobile-shared/ui';
+import { useRouter } from 'expo-router';
+import { friendlyErrorMessage } from '../../lib/errors';
+import type { Order } from '../../types/customer';
+
+// Which orders the GENERIC cancellation endpoint refuses, and where they are
+// actually cancelled. Keys mirror OrderResponse.source; a missing entry means the
+// generic flow owns the order and the request action is offered normally.
+const OWNING_FLOW: Partial<
+  Record<NonNullable<Order['source']>, { title: string; body: string; cta: string; href?: string }>
+> = {
+  meal_plan: {
+    title: 'Cancel this from your meal plan',
+    body: "This meal is part of a meal plan, so it's cancelled from the plan itself — that's what releases the right refund for the day. Skipping or cancelling a single day is done there too.",
+    cta: 'Go to my meal plans',
+    href: '/meal-plans',
+  },
+  group: {
+    title: 'Cancel this from the group order',
+    body: 'This is part of a group order. The organiser cancels it from the group order, which refunds everyone who paid in.',
+    cta: 'Go to the group order',
+  },
+};
 
 // Customer cancellation on the order detail (#478). If a request exists it shows
 // the vendor's decision + refund (and a dispute action); otherwise, for a still-
@@ -29,8 +51,17 @@ import { useAlert } from '@homechef/mobile-shared/ui';
 // no longer sends one.
 const money = (paise: number) => `₹${(paise / 100).toFixed(0)}`;
 
-export function CancellationSection({ orderId, status }: { orderId: string; status: string }) {
+export function CancellationSection({
+  orderId,
+  status,
+  source,
+}: {
+  orderId: string;
+  status: string;
+  source?: Order['source'];
+}) {
   const { showAlert } = useAlert();
+  const router = useRouter();
   const { data: request, isLoading } = useCancellationRequest(orderId);
   const req = useRequestCancellation();
   const dispute = useDisputeCancellation();
@@ -51,6 +82,30 @@ export function CancellationSection({ orderId, status }: { orderId: string; stat
 
   if (!orderCancellable(status)) return null;
 
+  // A meal-plan day / group order is refund-managed by THAT flow on a separate
+  // idempotency keyspace, so handlers/cancellation.go refuses a generic request
+  // with 422 no matter how many times it's retried. Offering the button here was a
+  // dead end: the request always failed and the screen said "Please try again".
+  // Say why, and hand the customer the flow that CAN cancel it.
+  const owningFlow = OWNING_FLOW[source ?? 'alacarte'];
+  if (owningFlow) {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.label}>{owningFlow.title}</Text>
+        <Text style={styles.hint}>{owningFlow.body}</Text>
+        {owningFlow.href ? (
+          <Pressable
+            onPress={() => router.push(owningFlow.href as never)}
+            accessibilityRole="button"
+            accessibilityLabel={owningFlow.cta}
+          >
+            <Text style={styles.link}>{owningFlow.cta}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
+
   function onRequest() {
     req.mutate(
       { orderId },
@@ -62,7 +117,14 @@ export function CancellationSection({ orderId, status }: { orderId: string; stat
             "We've asked the chef to confirm. You'll be notified of the outcome and any refund.",
           );
         },
-        onError: () => showAlert('Could not request', 'Please try again.'),
+        // Surface the server's own reason (friendlyErrorMessage strips transport
+        // noise). "Please try again" hid explanations the customer needed and
+        // invited a retry that could never work.
+        onError: (err) =>
+          showAlert(
+            "Couldn't request cancellation",
+            friendlyErrorMessage(err, 'Please try again in a moment.'),
+          ),
       },
     );
   }

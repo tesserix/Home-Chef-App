@@ -209,6 +209,11 @@ export interface Order {
   // How the order reaches the customer (backend OrderResponse.fulfillmentType).
   // 'pickup' → no delivery address/fee; collect from the chef.
   fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
+  // Where the order came from (backend OrderResponse.source). A 'meal_plan' or
+  // 'group' order is refund-managed by THAT flow, so the generic cancellation
+  // endpoint refuses it with 422 — the detail screen must not offer that action
+  // and must point at the owning flow instead.
+  source?: 'alacarte' | 'meal_plan' | 'subscription' | 'group';
   // Home-tiffin scheduling handshake (#709): the customer's requested time, the
   // chef's confirmed/proposed time (ISO), and the status the detail screen shows.
   requestedFulfillmentAt?: string;
