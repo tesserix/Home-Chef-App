@@ -3,13 +3,19 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -72,7 +78,22 @@ const (
 	SecretCashfreePayoutTestClientID      = "prod-homechef-cashfree-payout-test-client-id"
 	SecretCashfreePayoutTestClientSecret  = "prod-homechef-cashfree-payout-test-client-secret"
 	SecretCashfreePayoutTestWebhookSecret = "prod-homechef-cashfree-payout-test-webhook-secret"
+
+	// The RSA PUBLIC KEY Cashfree issues on request (care@cashfree.com), used to
+	// authenticate from a dynamic IP. See the signature note on signRequest —
+	// this is what makes the integration survive a NAT IP change. Optional: an
+	// empty slot falls back to IP whitelisting.
+	SecretCashfreePayoutPublicKey     = "prod-homechef-cashfree-payout-public-key"
+	SecretCashfreePayoutTestPublicKey = "prod-homechef-cashfree-payout-test-public-key"
 )
+
+// CashfreePayoutPublicKeySecretName returns the public-key slot for a mode.
+func CashfreePayoutPublicKeySecretName(mode string) string {
+	if models.IsTestMode(mode) {
+		return SecretCashfreePayoutTestPublicKey
+	}
+	return SecretCashfreePayoutPublicKey
+}
 
 // CashfreePayoutClient talks to the Cashfree Payouts API for one credential slot.
 type CashfreePayoutClient struct {
@@ -81,7 +102,10 @@ type CashfreePayoutClient struct {
 	webhookSecret string
 	mode          string
 	baseURL       string // test seam; empty in production
-	fetchedAt     time.Time
+	// publicKey is Cashfree's RSA public key, parsed once at construction. nil
+	// when no key is configured, in which case requests rely on IP whitelisting.
+	publicKey *rsa.PublicKey
+	fetchedAt time.Time
 }
 
 var (
@@ -112,6 +136,13 @@ func fetchCashfreePayoutFromSM(ctx context.Context, mode string) (*CashfreePayou
 	clientID, idErr := GetPlatformSecret(ctx, idName)
 	clientSecret, secErr := GetPlatformSecret(ctx, secretName)
 	webhookSecret, _ := GetPlatformSecret(ctx, webhookName)
+	// Optional: absent means authenticate by whitelisted IP instead.
+	publicKeyPEM, _ := GetPlatformSecret(ctx, CashfreePayoutPublicKeySecretName(mode))
+	publicKey, pkErr := parseCashfreePublicKey(publicKeyPEM)
+	if pkErr != nil {
+		// Refuse rather than silently dropping to IP auth — see the note in do().
+		return nil, fmt.Errorf("cashfree-payouts[%s]: %w", mode, pkErr)
+	}
 
 	if idErr != nil || secErr != nil || isPlaceholderValue(clientID) || isPlaceholderValue(clientSecret) {
 		// Dev fallback, LIVE-ONLY for the same reason every other slot is: one
@@ -141,6 +172,7 @@ func fetchCashfreePayoutFromSM(ctx context.Context, mode string) (*CashfreePayou
 		clientSecret:  clientSecret,
 		webhookSecret: webhookSecret,
 		mode:          mode,
+		publicKey:     publicKey,
 		fetchedAt:     time.Now(),
 	}, nil
 }
@@ -607,6 +639,78 @@ func sanitizeRemarks(s string) string {
 	return out
 }
 
+// --- Request signing (the alternative to IP whitelisting) ---
+
+// cashfreeSignatureTTL bounds how long one signature stays usable. Cashfree
+// accepts a short window around the encrypted timestamp; regenerating per request
+// is cheap (one RSA op) and avoids any question of drift, so no caching.
+const cashfreeSignatureTTL = 5 * time.Minute
+
+// parseCashfreePublicKey decodes the PEM Cashfree issues.
+//
+// Accepts both PKIX ("BEGIN PUBLIC KEY") and PKCS#1 ("BEGIN RSA PUBLIC KEY"),
+// because which one arrives depends on how the key was exported and getting the
+// wrong parser produces a baffling "structure error" rather than a clear
+// message.
+func parseCashfreePublicKey(pemData string) (*rsa.PublicKey, error) {
+	pemData = strings.TrimSpace(pemData)
+	if pemData == "" {
+		return nil, nil
+	}
+	block, _ := pem.Decode([]byte(pemData))
+	if block == nil {
+		return nil, errors.New("cashfree-payouts: public key is not valid PEM")
+	}
+	if pub, err := x509.ParsePKIXPublicKey(block.Bytes); err == nil {
+		rsaPub, ok := pub.(*rsa.PublicKey)
+		if !ok {
+			return nil, errors.New("cashfree-payouts: public key is not RSA")
+		}
+		return rsaPub, nil
+	}
+	rsaPub, err := x509.ParsePKCS1PublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("cashfree-payouts: parse public key: %w", err)
+	}
+	return rsaPub, nil
+}
+
+// signRequest builds the x-cf-signature header, or "" when no key is configured.
+//
+// The scheme is Cashfree's: RSA-encrypt "<clientId>.<unixSeconds>" with THEIR
+// public key and base64 the ciphertext. Note this is encryption, not a digital
+// signature — only Cashfree holds the private key, so only Cashfree can recover
+// the timestamp and check it is fresh. That is what proves the caller holds the
+// key material rather than merely knowing the client id.
+//
+// This exists because Cashfree Payouts otherwise authenticates by source IP, and
+// this platform's egress is a Cloud NAT address allocated AUTO_ONLY — it can
+// change without warning. An IP whitelist would work until GCP reallocated it and
+// then stop paying anyone, silently. Signing removes that failure mode entirely.
+func (c *CashfreePayoutClient) signRequest() (string, error) {
+	if c.publicKey == nil {
+		return "", nil
+	}
+	payload := c.clientID + "." + strconv.FormatInt(time.Now().Unix(), 10)
+	// PKCS#1 v1.5 is REQUIRED by Cashfree's scheme, not chosen. Go marks it
+	// deprecated in favour of OAEP and that advice is correct in general — but
+	// Cashfree's server decrypts with v1.5, so switching to OAEP produces a
+	// signature it cannot read and every payout call 403s. Do not "fix" this.
+	// The padding-oracle risk v1.5 carries does not apply here: we encrypt, we
+	// never decrypt attacker-supplied ciphertext, and the plaintext is a client
+	// id and a timestamp rather than a secret.
+	cipher, err := rsa.EncryptPKCS1v15(rand.Reader, c.publicKey, []byte(payload))
+	if err != nil {
+		return "", fmt.Errorf("cashfree-payouts: sign request: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(cipher), nil
+}
+
+// SignatureConfigured reports whether this client can authenticate without IP
+// whitelisting. Surfaced on the admin screen, because "which auth mode am I in"
+// is the first question when a payout starts returning 403.
+func (c *CashfreePayoutClient) SignatureConfigured() bool { return c.publicKey != nil }
+
 // --- HTTP ---
 
 func (c *CashfreePayoutClient) resolvedBaseURL() string {
@@ -635,6 +739,18 @@ func (c *CashfreePayoutClient) do(ctx context.Context, method, path string, body
 	req.Header.Set("x-api-version", cashfreePayoutAPIVersion)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+
+	// Sign when a public key is configured. Without it the call authenticates by
+	// source IP alone, which Cashfree Payouts requires to be whitelisted.
+	if sig, err := c.signRequest(); err != nil {
+		// A configured-but-unusable key is a hard failure, not a silent fallback
+		// to IP auth: falling back would work in whichever environment happens
+		// to be whitelisted and fail in the other, which is the least debuggable
+		// outcome available.
+		return nil, 0, err
+	} else if sig != "" {
+		req.Header.Set("x-cf-signature", sig)
+	}
 
 	client := &http.Client{Timeout: cashfreePayoutRequestTimeout}
 	resp, err := client.Do(req)
