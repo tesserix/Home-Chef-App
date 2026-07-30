@@ -846,7 +846,18 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, order.ToResponse())
+	resp := order.ToResponse()
+	// Tell the customer app where this order came from. Without it the app cannot
+	// distinguish a meal-plan day from an à-la-carte order, so it offered a generic
+	// "Request cancellation" on orders the cancellation endpoint always refuses with
+	// 422 (a meal-plan day is refund-managed by the meal-plan flow — see
+	// handlers/cancellation.go). The vendor feed already derives this the same way
+	// (chefs.go ClassifyOrderSources); this exposes it on the customer detail so the
+	// app can route to the right flow instead of offering a dead end.
+	if sources := services.ClassifyOrderSources(database.DB, []uuid.UUID{order.ID}); len(sources) > 0 {
+		resp.Source = sources[order.ID]
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // CancelOrder cancels an order

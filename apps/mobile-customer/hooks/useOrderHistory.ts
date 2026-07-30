@@ -56,6 +56,7 @@ interface ApiOrder {
   paymentStatus?: Order['paymentStatus'];
   total?: number;
   fulfillmentType?: Order['fulfillmentType'];
+  source?: Order['source'];
   deliveryFee?: number;
   deliveryFeeFinal?: number;
   platformFee?: number;
@@ -137,6 +138,7 @@ function mapOrder(raw: ApiOrder): Order {
     items: (raw.items ?? []).map(mapOrderItem),
     totalAmount: raw.total ?? 0,
     fulfillmentType: raw.fulfillmentType,
+    source: raw.source,
     requestedFulfillmentAt: raw.requestedFulfillmentAt,
     confirmedFulfillmentAt: raw.confirmedFulfillmentAt,
     fulfillmentTimeStatus: raw.fulfillmentTimeStatus,
