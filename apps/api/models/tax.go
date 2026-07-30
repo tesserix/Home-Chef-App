@@ -23,7 +23,7 @@ type TaxRate struct {
 	// used as the fallback label when a jurisdiction has no better label.
 	TaxName string `gorm:"type:varchar(40);not null" json:"taxName"`
 	// Rate expressed as a percent (5.0 for 5%). Applied to (subtotal +
-	// deliveryFee + serviceFee) unless more granular rules are added later.
+	// deliveryFee + platformFee) unless more granular rules are added later.
 	Rate float64 `gorm:"not null" json:"rate"`
 	// Inclusive=true means prices already contain the tax (common in
 	// Europe); inclusive=false means tax is added on top (US sales tax,

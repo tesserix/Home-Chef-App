@@ -214,10 +214,13 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 	}
 	scheduled := d.Date
 
-	// Per-day breakdown mirrors the advance: food + GST + delivery (chef is paid
-	// food only; platform keeps GST + delivery). Informational on the order record
-	// — escrow money conservation is handled by the plan total + per-day refunds.
+	// Per-day breakdown mirrors the advance: food + platform fee + GST + delivery (chef
+	// is paid food only; platform keeps its fee + GST + delivery). Informational on the
+	// order record — escrow money conservation is handled by the plan total + per-day
+	// refunds.
+	dayPlatformFee := 0.0
 	dayTax := 0.0
+	dayTaxRate := 0.0
 	dayDelivery := 0.0
 	dayTotal := d.Price
 	if MealPlanEscrowActive() {
@@ -226,8 +229,14 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 		// (perDayFoodGST), not a live-policy-rate recompute — so orders-based reporting
 		// (statement / earnings / Form-16A) matches withheld-TDS exactly, no sub-rupee drift.
 		dayTax = Round2(perDayFoodGST(p, d))
+		// Apportioned from the plan's SNAPSHOT (not a live-policy recompute) for the same
+		// reason, so the day orders sum back to the advance the customer actually paid.
+		dayPlatformFee = Round2(perDayPlatformFee(p, d))
+		// Carry the plan's frozen GST rate onto the order. Without this the order stores a
+		// non-zero Tax with TaxRate 0 and the receipt renders "IGST (0%)".
+		dayTaxRate = p.TaxRate
 		dayDelivery = Round2(policy.BaseDeliveryFee)
-		dayTotal = Round2(d.Price + dayTax + dayDelivery)
+		dayTotal = Round2(d.Price + dayPlatformFee + dayTax + dayDelivery)
 	}
 
 	return database.DB.Transaction(func(tx *gorm.DB) error {
@@ -239,7 +248,9 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 			PaymentStatus:             paymentStatus,
 			Currency:                  p.Currency,
 			Subtotal:                  d.Price,
+			PlatformFee:               dayPlatformFee,
 			Tax:                       dayTax,
+			TaxRate:                   dayTaxRate,
 			DeliveryFee:               dayDelivery,
 			Total:                     dayTotal,
 			DeliveryAddressLine1:      addr.Line1,

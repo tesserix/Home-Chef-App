@@ -26,7 +26,7 @@ func TestOrderLifecycle_RefundRecomputeAndEarnings(t *testing.T) {
 		origSubtotal = 1000.0
 		origTax      = 50.0
 		deliveryFee  = 40.0
-		serviceFee   = 0.0
+		platformFee  = 0.0
 		tip          = 20.0
 		discount     = 0.0
 		lineA        = 600.0
@@ -48,7 +48,7 @@ func TestOrderLifecycle_RefundRecomputeAndEarnings(t *testing.T) {
 
 	// Line B is now cancelled; the order recomputes around the survivor (A).
 	items[1].IsCancelled = true
-	sub1, tax1, total1 := recomputeOrderTotals(items, origSubtotal, origTax, deliveryFee, serviceFee, tip, discount)
+	sub1, tax1, total1 := recomputeOrderTotals(items, origSubtotal, origTax, deliveryFee, platformFee, tip, discount)
 	if sub1 != 600.0 {
 		t.Fatalf("subtotal after line B: got %.2f, want 600.00", sub1)
 	}
@@ -79,7 +79,7 @@ func TestOrderLifecycle_RefundRecomputeAndEarnings(t *testing.T) {
 	// With every line cancelled the item money is zero; fees + tip still remain
 	// on the order (they aren't line-scoped).
 	items[0].IsCancelled = true
-	sub2, tax2, total2 := recomputeOrderTotals(items, sub1, tax1, deliveryFee, serviceFee, tip, discount)
+	sub2, tax2, total2 := recomputeOrderTotals(items, sub1, tax1, deliveryFee, platformFee, tip, discount)
 	if sub2 != 0 || tax2 != 0 {
 		t.Fatalf("all-cancelled subtotal/tax: got %.2f/%.2f, want 0/0", sub2, tax2)
 	}

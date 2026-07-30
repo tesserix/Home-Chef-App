@@ -38,7 +38,7 @@ function baseOrder(overrides: Partial<Order> = {}): Order {
     },
     subtotal: 250,
     deliveryFee: 30,
-    serviceFee: 10,
+    platformFee: 10,
     tax: 15,
     discount: 0,
     tip: 0,

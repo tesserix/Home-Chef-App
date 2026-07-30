@@ -22,8 +22,8 @@ const platformPolicyKey = "platform_policy"
 // flows read on every request. Admins edit this from Settings → Platform.
 type PlatformPolicy struct {
 	// Fees applied at order creation. Values are plain floats (percent is 0-100,
-	// fee is absolute). Chef payout = subtotal + chefTip + (subtotal * chefPayoutPercent / 100 - serviceFee).
-	ServiceFeePercent   float64 `json:"serviceFeePercent"`
+	// fee is absolute). Chef payout = subtotal + chefTip + (subtotal * chefPayoutPercent / 100 - platformFee).
+	PlatformFeePercent  float64 `json:"platformFeePercent"`
 	TaxPercent          float64 `json:"taxPercent"`
 	BaseDeliveryFee     float64 `json:"baseDeliveryFee"`
 	PerKmDeliveryFee    float64 `json:"perKmDeliveryFee"`
@@ -81,7 +81,7 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		// Customer-facing platform fee: a nominal 4.99% of subtotal — enough to
 		// cover the payment gateway (~2%) + a small margin, without over-charging
 		// customers. Runtime-tunable via the admin (SavePlatformPolicy).
-		ServiceFeePercent:   4.99,
+		PlatformFeePercent:  4.99,
 		TaxPercent:          8.0,
 		BaseDeliveryFee:     2.99,
 		PerKmDeliveryFee:    0.0,
@@ -284,22 +284,28 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 	}
 
 	// Decode presence-aware: an admin who legitimately sets
-	// serviceFeePercent=0 (promo) or taxPercent=0 (tax-exempt) must not
+	// platformFeePercent=0 (promo) or taxPercent=0 (tax-exempt) must not
 	// have the value silently replaced by the default. We use a pointer
 	// struct to distinguish "missing" from "zero", then merge onto defaults.
 	type partial struct {
-		ServiceFeePercent   *float64 `json:"serviceFeePercent"`
-		TaxPercent          *float64 `json:"taxPercent"`
-		BaseDeliveryFee     *float64 `json:"baseDeliveryFee"`
-		PerKmDeliveryFee    *float64 `json:"perKmDeliveryFee"`
-		ChefPayoutPercent   *float64 `json:"chefPayoutPercent"`
-		DriverPayoutPercent *float64 `json:"driverPayoutPercent"`
-		Timezone            *string  `json:"timezone"`
-		OpeningTime         *string  `json:"openingTime"`
-		ClosingTime         *string  `json:"closingTime"`
-		OperatingDays       *[]int   `json:"operatingDays"`
-		ClosedMessage       *string  `json:"closedMessage"`
-		GroupOrdersEnabled  *bool    `json:"groupOrdersEnabled"`
+		PlatformFeePercent *float64 `json:"platformFeePercent"`
+		// LegacyServiceFeePercent reads blobs written before the platform fee was
+		// renamed from "service fee". Without it, an admin-configured value would be
+		// seen as absent and silently reset to the 4.99 default on first read after
+		// deploy. Preferred only when the new key is missing; the next
+		// SavePlatformPolicy rewrites the blob with the new key.
+		LegacyServiceFeePercent *float64 `json:"serviceFeePercent"`
+		TaxPercent              *float64 `json:"taxPercent"`
+		BaseDeliveryFee         *float64 `json:"baseDeliveryFee"`
+		PerKmDeliveryFee        *float64 `json:"perKmDeliveryFee"`
+		ChefPayoutPercent       *float64 `json:"chefPayoutPercent"`
+		DriverPayoutPercent     *float64 `json:"driverPayoutPercent"`
+		Timezone                *string  `json:"timezone"`
+		OpeningTime             *string  `json:"openingTime"`
+		ClosingTime             *string  `json:"closingTime"`
+		OperatingDays           *[]int   `json:"operatingDays"`
+		ClosedMessage           *string  `json:"closedMessage"`
+		GroupOrdersEnabled      *bool    `json:"groupOrdersEnabled"`
 		// Pointer so an explicit admin `false` turns the default-on flow OFF
 		// (a plain bool couldn't distinguish "unset" from "disabled").
 		ConfirmReceiptFlowEnabled *bool `json:"confirmReceiptFlowEnabled"`
@@ -320,8 +326,10 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 		return def
 	}
 	out := def
-	if p.ServiceFeePercent != nil {
-		out.ServiceFeePercent = *p.ServiceFeePercent
+	if p.PlatformFeePercent != nil {
+		out.PlatformFeePercent = *p.PlatformFeePercent
+	} else if p.LegacyServiceFeePercent != nil {
+		out.PlatformFeePercent = *p.LegacyServiceFeePercent
 	}
 	if p.TaxPercent != nil {
 		out.TaxPercent = *p.TaxPercent

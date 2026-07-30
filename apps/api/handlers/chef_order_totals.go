@@ -27,7 +27,7 @@ func lineRefundAmount(lineSubtotal, orderSubtotal, orderTax float64) float64 {
 // by the ratio of the surviving subtotal to the current subtotal, preserving
 // the effective tax rate. Delivery/service fees, tip, and discount pass
 // through unchanged. A zero/negative current subtotal yields zero tax.
-func recomputeOrderTotals(items []models.OrderItem, curSubtotal, curTax, deliveryFee, serviceFee, tip, discount float64) (subtotal, tax, total float64) {
+func recomputeOrderTotals(items []models.OrderItem, curSubtotal, curTax, deliveryFee, platformFee, tip, discount float64) (subtotal, tax, total float64) {
 	for _, it := range items {
 		if !it.IsCancelled {
 			subtotal += it.Subtotal
@@ -36,6 +36,6 @@ func recomputeOrderTotals(items []models.OrderItem, curSubtotal, curTax, deliver
 	if curSubtotal > 0 {
 		tax = curTax * (subtotal / curSubtotal)
 	}
-	total = subtotal + deliveryFee + serviceFee + tax + tip - discount
+	total = subtotal + deliveryFee + platformFee + tax + tip - discount
 	return subtotal, tax, total
 }

@@ -219,7 +219,7 @@ export interface Order {
   deliveryFee?: number;
   /** Chef's chosen delivery fee at accept (#703); the difference was refunded. */
   deliveryFeeFinal?: number;
-  serviceFee?: number;
+  platformFee?: number;
   tax?: number;
   /** Frozen tax rate % — for the receipt CGST/SGST/IGST rate labels (#invoice). */
   taxRate?: number;

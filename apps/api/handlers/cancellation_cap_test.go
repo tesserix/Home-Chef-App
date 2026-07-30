@@ -20,7 +20,7 @@ func TestSnapshotFor_CapsAgainstPriorRefund(t *testing.T) {
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, total, refund_amount, status) VALUES (?, 1100, 600, 'accepted')`,
 		oid.String()).Error)
 	order := &models.Order{
-		ID: oid, Subtotal: 800, DeliveryFee: 100, ServiceFee: 100, Tax: 100, Total: 1100,
+		ID: oid, Subtotal: 800, DeliveryFee: 100, PlatformFee: 100, Tax: 100, Total: 1100,
 		RefundAmount: 600, Status: models.OrderStatusAccepted,
 	}
 

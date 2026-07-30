@@ -29,7 +29,9 @@ type OrderInvoice struct {
 	FoodTax     float64 `gorm:"default:0" json:"foodTax"`
 	DeliveryFee float64 `gorm:"default:0" json:"deliveryFee"`
 	DeliveryTax float64 `gorm:"default:0" json:"deliveryTax"`
-	ServiceFee  float64 `gorm:"default:0" json:"serviceFee"`
+	// DB column stays `service_fee` (see models.Order.PlatformFee) — renamed in Go/API
+	// only, so no schema migration is required.
+	PlatformFee float64 `gorm:"column:service_fee;default:0" json:"platformFee"`
 	ServiceTax  float64 `gorm:"default:0" json:"serviceTax"`
 	Tip         float64 `gorm:"default:0" json:"tip"`
 	Discount    float64 `gorm:"default:0" json:"discount"`
@@ -92,7 +94,7 @@ type OrderInvoiceResponse struct {
 	FoodTax     float64 `json:"foodTax"`
 	DeliveryFee float64 `json:"deliveryFee"`
 	DeliveryTax float64 `json:"deliveryTax"`
-	ServiceFee  float64 `json:"serviceFee"`
+	PlatformFee float64 `json:"platformFee"`
 	ServiceTax  float64 `json:"serviceTax"`
 	Tip         float64 `json:"tip"`
 	Discount    float64 `json:"discount"`
@@ -147,7 +149,7 @@ func (inv *OrderInvoice) ToResponse() OrderInvoiceResponse {
 		FoodTax:            inv.FoodTax,
 		DeliveryFee:        inv.DeliveryFee,
 		DeliveryTax:        inv.DeliveryTax,
-		ServiceFee:         inv.ServiceFee,
+		PlatformFee:        inv.PlatformFee,
 		ServiceTax:         inv.ServiceTax,
 		Tip:                inv.Tip,
 		Discount:           inv.Discount,

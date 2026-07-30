@@ -55,7 +55,7 @@ export interface DeliveryQuote {
   rangeKnown: boolean;
   /** Platform (service) fee for the sent subtotal, and the tax rule to apply —
    *  so checkout shows the same total the order is charged (#fee-transparency). */
-  serviceFee: number;
+  platformFee: number;
   taxRatePercent: number;
   taxName: string;
   taxInclusive: boolean;

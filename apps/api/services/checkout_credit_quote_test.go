@@ -44,7 +44,7 @@ func TestBuildCreditQuote_OptedOutRailContributesNothing(t *testing.T) {
 	require.NoError(t, err)
 
 	order := &models.Order{ID: uuid.New(), CustomerID: uid, Currency: "INR",
-		PaymentProvider: "razorpay", Subtotal: 1000, ServiceFee: 50, Tax: 50, Total: 1100}
+		PaymentProvider: "razorpay", Subtotal: 1000, PlatformFee: 50, Tax: 50, Total: 1100}
 	q, err := BuildCreditQuote(db, order, uid, CreditRequest{UseWallet: false, UseLoyalty: false}, bothRails)
 	require.NoError(t, err)
 	require.Equal(t, 0, q.WalletAppliedPaise)
@@ -60,7 +60,7 @@ func TestBuildCreditQuote_AppliesLiveWalletBalanceCappedAtFood(t *testing.T) {
 
 	order := &models.Order{ID: uuid.New(), CustomerID: uid, Currency: "INR",
 		PaymentProvider: "razorpay", Subtotal: 1000, DeliveryFee: 100,
-		ServiceFee: 50, Tax: 50, Total: 1200}
+		PlatformFee: 50, Tax: 50, Total: 1200}
 	q, err := BuildCreditQuote(db, order, uid, CreditRequest{UseWallet: true}, bothRails)
 	require.NoError(t, err)
 	require.Equal(t, ToPaise(1100), q.WalletAppliedPaise, "food + delivery only")
@@ -75,7 +75,7 @@ func TestBuildCreditQuote_ServerFlagOffDisablesTheRail(t *testing.T) {
 	require.NoError(t, err)
 
 	order := &models.Order{ID: uuid.New(), CustomerID: uid, Currency: "INR",
-		PaymentProvider: "razorpay", Subtotal: 1000, ServiceFee: 50, Tax: 50, Total: 1100}
+		PaymentProvider: "razorpay", Subtotal: 1000, PlatformFee: 50, Tax: 50, Total: 1100}
 	q, err := BuildCreditQuote(db, order, uid, CreditRequest{UseWallet: true},
 		CreditFlags{WalletCheckoutEnabled: false, LoyaltyCheckoutEnabled: true})
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestBuildCreditQuote_UsesEffectiveDeliveryFee(t *testing.T) {
 	final := 40.0
 	order := &models.Order{ID: uuid.New(), CustomerID: uid, Currency: "INR",
 		PaymentProvider: "razorpay", Subtotal: 1000, DeliveryFee: 100,
-		DeliveryFeeFinal: &final, ServiceFee: 50, Tax: 50, Total: 1140}
+		DeliveryFeeFinal: &final, PlatformFee: 50, Tax: 50, Total: 1140}
 	q, err := BuildCreditQuote(db, order, uid, CreditRequest{UseWallet: true}, bothRails)
 	require.NoError(t, err)
 	require.Equal(t, ToPaise(1040), q.WalletAppliedPaise, "food + the fee actually charged")
@@ -110,7 +110,7 @@ func TestBuildCreditQuote_SpendsPointsWhenWalletIsEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	order := &models.Order{ID: uuid.New(), CustomerID: uid, Currency: "INR",
-		PaymentProvider: "razorpay", Subtotal: 1000, ServiceFee: 50, Tax: 50, Total: 1100}
+		PaymentProvider: "razorpay", Subtotal: 1000, PlatformFee: 50, Tax: 50, Total: 1100}
 	q, err := BuildCreditQuote(db, order, uid, CreditRequest{UseWallet: true, UseLoyalty: true}, bothRails)
 	require.NoError(t, err)
 	require.Equal(t, 0, q.WalletAppliedPaise)

@@ -406,7 +406,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// live 3PL quote once the delivery address (and its coords) is resolved.
 	policy := services.GetPlatformPolicy()
 	deliveryFee := policy.BaseDeliveryFee
-	serviceFee := subtotal * (policy.ServiceFeePercent / 100.0)
+	platformFee := subtotal * (policy.PlatformFeePercent / 100.0)
 
 	// Tax is resolved per customer country (and state/region when known)
 	// from the tax_rates table rather than the single global TaxPercent.
@@ -479,9 +479,9 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	deliveryFee = services.QuoteOrderDeliveryFee(chef, fulfillment, deliveryAddr.Latitude, deliveryAddr.Longitude, deliveryAddr.City, deliveryCountry)
 
 	taxRule := services.ResolveTaxRate(deliveryCountry, deliveryAddr.State)
-	// Tax base: subtotal + deliveryFee + serviceFee, after promo discount.
+	// Tax base: subtotal + deliveryFee + platformFee, after promo discount.
 	// Tip is excluded (direct pass-through to chef/driver).
-	taxBase := subtotal + deliveryFee + serviceFee - discount
+	taxBase := subtotal + deliveryFee + platformFee - discount
 	if taxBase < 0 {
 		taxBase = 0
 	}
@@ -499,9 +499,9 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// add it again or the customer would be charged twice.
 	var total float64
 	if taxRule.Inclusive {
-		total = subtotal + deliveryFee + serviceFee + tip - discount
+		total = subtotal + deliveryFee + platformFee + tip - discount
 	} else {
-		total = subtotal + deliveryFee + serviceFee + tax + tip - discount
+		total = subtotal + deliveryFee + platformFee + tax + tip - discount
 	}
 
 	// If the admin has configured delivery zones, enforce coverage. When no
@@ -587,7 +587,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		PaymentStatus:             models.PaymentPending,
 		Subtotal:                  subtotal,
 		DeliveryFee:               deliveryFee,
-		ServiceFee:                serviceFee,
+		PlatformFee:               platformFee,
 		Tax:                       tax,
 		TaxRate:                   taxRule.Rate,
 		TaxName:                   taxRule.TaxName,

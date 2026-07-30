@@ -119,7 +119,9 @@ type GroupOrder struct {
 	Currency    string  `gorm:"type:varchar(3);default:'INR'" json:"currency"`
 	Subtotal    float64 `gorm:"default:0" json:"subtotal"`
 	DeliveryFee float64 `gorm:"default:0" json:"deliveryFee"`
-	ServiceFee  float64 `gorm:"default:0" json:"serviceFee"`
+	// DB column stays `service_fee` (see models.Order.PlatformFee) — renamed in Go/API
+	// only, so no schema migration is required.
+	PlatformFee float64 `gorm:"column:service_fee;default:0" json:"platformFee"`
 	Tax         float64 `gorm:"default:0" json:"tax"`
 	TaxRate     float64 `gorm:"default:0" json:"taxRate"`
 	TaxName     string  `gorm:"" json:"taxName,omitempty"`

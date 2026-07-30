@@ -20,7 +20,7 @@ func creditTestCfg() LoyaltyConfig {
 // The owner's rule, on the exact order from the reported screenshot.
 func TestPlanCheckoutCredit_NeverFundsFeesOrTax(t *testing.T) {
 	q := PlanCheckoutCredit(CreditInputs{
-		SubtotalPaise: 258000, DeliveryFeePaise: 20000, ServiceFeePaise: 12874,
+		SubtotalPaise: 258000, DeliveryFeePaise: 20000, PlatformFeePaise: 12874,
 		TaxPaise: 14544, TotalPaise: 305418,
 		WalletBalancePaise: 1000000, PointsBalance: 100000, Cfg: creditTestCfg(),
 	})
@@ -53,10 +53,10 @@ func TestPlanCheckoutCredit_TipIsNotRedeemable(t *testing.T) {
 }
 
 // Inclusive-tax regime: Tax lives INSIDE Subtotal and is not added to Total, so the
-// food branch would over-count. The Total−ServiceFee−Tax branch must win.
+// food branch would over-count. The Total−PlatformFee−Tax branch must win.
 func TestPlanCheckoutCredit_InclusiveTaxStillPaidInCash(t *testing.T) {
 	q := PlanCheckoutCredit(CreditInputs{
-		SubtotalPaise: 100000, ServiceFeePaise: 5000,
+		SubtotalPaise: 100000, PlatformFeePaise: 5000,
 		TaxPaise: 4762, TotalPaise: 105000,
 		WalletBalancePaise: 500000, Cfg: creditTestCfg(),
 	})
@@ -162,7 +162,7 @@ func TestPlanCheckoutCredit_InvariantsHoldUnderFuzz(t *testing.T) {
 		}
 		q := PlanCheckoutCredit(CreditInputs{
 			SubtotalPaise: sub, DiscountPaise: disc, DeliveryFeePaise: del,
-			ServiceFeePaise: svc, TaxPaise: tax, TotalPaise: total,
+			PlatformFeePaise: svc, TaxPaise: tax, TotalPaise: total,
 			WalletBalancePaise:   r.Intn(1000000),
 			PointsBalance:        float64(r.Intn(200000)),
 			MonthlyRedeemedPaise: r.Intn(40000),

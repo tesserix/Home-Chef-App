@@ -77,7 +77,7 @@ export interface Order {
   // surfaces them in the totals block.
   subtotal?: number;
   deliveryFee?: number;
-  serviceFee?: number;
+  platformFee?: number;
   tax?: number;
   taxName?: string;
   tip?: number;

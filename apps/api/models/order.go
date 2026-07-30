@@ -129,8 +129,12 @@ type Order struct {
 	// customer (tracked in RefundAmount) and the chef is settled on this figure.
 	// Nil = the chef confirmed the charged fee as-is.
 	DeliveryFeeFinal *float64 `gorm:"" json:"deliveryFeeFinal,omitempty"`
-	ServiceFee       float64  `gorm:"default:0" json:"serviceFee"`
-	Tax              float64  `gorm:"default:0" json:"tax"`
+	// PlatformFee is the platform's own charge on the order (subtotal ×
+	// PlatformFeePercent), shown to the customer as "Platform fee". The DB column is
+	// still `service_fee` — the Go/API name was corrected but the column is pinned here
+	// so no migration is needed (schemas live in tesserix-k8s).
+	PlatformFee float64 `gorm:"column:service_fee;default:0" json:"platformFee"`
+	Tax         float64 `gorm:"default:0" json:"tax"`
 	// TaxRate / TaxName freeze the rule applied when the order was placed so
 	// that later edits to TaxRate rows don't retroactively change historical
 	// invoices. TaxName is the label shown on the invoice ("GST", "VAT", ...).
@@ -405,7 +409,7 @@ type OrderResponse struct {
 	// DeliveryFeeFinal is the chef's chosen fee at accept (#703) when they reduced
 	// it; the difference vs DeliveryFee was refunded. Nil = charged as-is.
 	DeliveryFeeFinal *float64            `json:"deliveryFeeFinal,omitempty"`
-	ServiceFee       float64             `json:"serviceFee"`
+	PlatformFee      float64             `json:"platformFee"`
 	Tax              float64             `json:"tax"`
 	TaxRate          float64             `json:"taxRate"`
 	TaxName          string              `json:"taxName,omitempty"`
@@ -604,7 +608,7 @@ func (o *Order) ToResponse() OrderResponse {
 		Subtotal:         o.Subtotal,
 		DeliveryFee:      o.DeliveryFee,
 		DeliveryFeeFinal: o.DeliveryFeeFinal,
-		ServiceFee:       o.ServiceFee,
+		PlatformFee:      o.PlatformFee,
 		Tax:              o.Tax,
 		TaxRate:          o.TaxRate,
 		TaxName:          o.TaxName,

@@ -19,7 +19,7 @@ type CreditInputs struct {
 	SubtotalPaise    int
 	DiscountPaise    int
 	DeliveryFeePaise int
-	ServiceFeePaise  int
+	PlatformFeePaise int
 	TaxPaise         int
 	TotalPaise       int
 
@@ -96,7 +96,7 @@ func clampInt(v, lo, hi int) int {
 // branch is the smaller one.
 func PlanCheckoutCredit(in CreditInputs) CreditQuote {
 	foodBranch := in.SubtotalPaise - in.DiscountPaise + in.DeliveryFeePaise
-	feeBranch := in.TotalPaise - in.ServiceFeePaise - in.TaxPaise
+	feeBranch := in.TotalPaise - in.PlatformFeePaise - in.TaxPaise
 	redeemable := foodBranch
 	if feeBranch < redeemable {
 		redeemable = feeBranch

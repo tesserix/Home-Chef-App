@@ -554,8 +554,8 @@ export default function OrderDetailPage() {
               <span>{fp(order.deliveryFee)}</span>
             </div>
             <div className="flex justify-between text-ink-soft">
-              <span>Service fee</span>
-              <span>{fp(order.serviceFee)}</span>
+              <span>Platform fee</span>
+              <span>{fp(order.platformFee)}</span>
             </div>
             <div className="flex justify-between text-ink-soft">
               <span>Tax</span>
