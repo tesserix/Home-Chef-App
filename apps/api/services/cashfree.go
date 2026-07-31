@@ -40,11 +40,14 @@ import (
 //     internally and renders the decimal by integer arithmetic — never by
 //     formatting a float64, which is how 140.25 becomes 140.25000000000001.
 //
-//  2. ENVIRONMENT IS THE HOSTNAME, not just the key. Razorpay serves live and
-//     test from one host and tells them apart by key prefix; Cashfree has
-//     sandbox.cashfree.com vs api.cashfree.com. That is strictly safer — a
-//     test-slot client physically cannot reach production — and it means the
-//     mode must be baked into the client at construction.
+//  2. ENVIRONMENT IS THE HOSTNAME. Razorpay serves live and test from one host
+//     and tells them apart by key prefix; Cashfree has sandbox.cashfree.com vs
+//     api.cashfree.com. The host is therefore resolved from the CREDENTIALS
+//     (see cashfreeBaseURLFor) rather than from the platform's live/test
+//     partition, so a slot holding sandbox keys reaches the sandbox and works —
+//     exactly as the equivalent Razorpay slot already does. The test slot is
+//     pinned to sandbox regardless, so a sandbox order can never move real
+//     money.
 //
 //  3. THERE IS NO CLIENT-SIDE PAYMENT SIGNATURE. Razorpay Checkout hands the
 //     client an HMAC of order_id|payment_id that the server re-computes. The
@@ -105,8 +108,9 @@ type CashfreeClient struct {
 	appID         string
 	secretKey     string
 	webhookSecret string
-	// mode is baked in at construction because it selects the HOST, not just the
-	// credentials. A client built for test can only ever talk to the sandbox.
+	// mode is the credential slot this client was built for. It pins the test
+	// slot to the sandbox host; for the live slot the host follows the
+	// credentials themselves (cashfreeBaseURLFor).
 	mode string
 	// baseURL overrides the resolved host. Empty in every production path;
 	// tests point it at an httptest.Server so the order/payment/refund seams can
@@ -135,13 +139,43 @@ func cashfreeSecretNames(mode string) (appID, secretKey, webhookSecret string) {
 	return SecretCashfreeAppID, SecretCashfreeSecretKey, SecretCashfreeWebhookSecret
 }
 
-// cashfreeBaseURLFor resolves the API host for a mode. Not a map lookup with a
-// default — an unrecognised mode has already been coerced by NormalizeMode, and
-// live is the safe landing spot for the same reason it is there: a typo must
-// never silently route a real payment into the sandbox, which would appear to
-// succeed while capturing nothing.
-func cashfreeBaseURLFor(mode string) string {
+// cashfreeCredentialsAreSandbox reports whether a credential pair belongs to
+// Cashfree's sandbox.
+//
+// Cashfree marks both halves: sandbox App IDs are prefixed "TEST", and sandbox
+// secret keys carry "_test_" (cfsk_ma_test_…). Either signal is enough, and
+// checking both means a rotation that changes one format does not silently flip
+// an environment.
+func cashfreeCredentialsAreSandbox(appID, secretKey string) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(appID)), "TEST") ||
+		strings.Contains(strings.ToLower(secretKey), "_test_")
+}
+
+// cashfreeBaseURLFor resolves the API host for a slot.
+//
+// The environment follows the CREDENTIALS, not the platform's live/test
+// partition — which is how Razorpay already behaves, since its key prefix
+// decides and its live slot therefore runs test keys perfectly happily.
+// Binding the host to the slot instead made Cashfree the odd one out: sandbox
+// credentials in the live slot produced a valid client that 401'd against
+// api.cashfree.com, so every live checkout fell back to Razorpay and Cashfree
+// could not be exercised at all before real live keys existed.
+//
+// The two directions are deliberately NOT symmetric:
+//
+//   - LIVE slot with sandbox credentials → sandbox. Harmless: no real money can
+//     move, and it is the normal state while a merchant account is in review.
+//   - TEST slot → sandbox, ALWAYS, whatever the credentials say. Honouring a
+//     production credential there would let a sandbox order move real money,
+//     which is the one outcome worth hard-coding against.
+//
+// So the failure direction is always "test money does not move", never "real
+// money moves unexpectedly".
+func cashfreeBaseURLFor(mode, appID, secretKey string) string {
 	if models.IsTestMode(mode) {
+		return cashfreeTestBaseURL
+	}
+	if cashfreeCredentialsAreSandbox(appID, secretKey) {
 		return cashfreeTestBaseURL
 	}
 	return cashfreeLiveBaseURL
@@ -900,7 +934,7 @@ func (c *CashfreeClient) resolvedBaseURL() string {
 	if c.baseURL != "" {
 		return c.baseURL
 	}
-	return cashfreeBaseURLFor(c.mode)
+	return cashfreeBaseURLFor(c.mode, c.appID, c.secretKey)
 }
 
 // do performs one authenticated round-trip and returns the body and status.

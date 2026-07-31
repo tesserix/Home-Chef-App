@@ -1308,7 +1308,10 @@ func cashfreeSlotWarning(slot, environment, appID string) string {
 	testAppID := strings.HasPrefix(strings.ToUpper(appID), "TEST")
 	switch {
 	case !models.IsTestMode(slot) && testAppID:
-		return "The Live slot is holding a TEST App ID — Cashfree separates environments by host, so live payments will fail with 401 until real live credentials are entered. Live checkout falls back to Razorpay meanwhile."
+		// Accurate as of the credential-derived host: these keys WORK, against
+		// the sandbox. That is the useful warning — not that payments fail, but
+		// that they succeed while capturing nothing real.
+		return "The Live slot is holding a TEST App ID — payments are routed to the Cashfree SANDBOX and no real money is captured. Enter live credentials before taking real orders."
 	case models.IsTestMode(slot) && appID != "" && !testAppID:
 		return "The Test slot is holding what looks like a LIVE App ID — sandbox orders could charge real cards. Replace it before using test mode."
 	case !models.IsTestMode(slot) && environment == "sandbox":

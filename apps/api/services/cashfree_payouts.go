@@ -123,8 +123,19 @@ func CashfreePayoutSecretNames(mode string) (clientID, clientSecret, webhookSecr
 	return SecretCashfreePayoutClientID, SecretCashfreePayoutClientSecret, SecretCashfreePayoutWebhookSecret
 }
 
-func cashfreePayoutBaseURLFor(mode string) string {
+// cashfreePayoutBaseURLFor resolves the Payouts host for a slot.
+//
+// Same rule as the PG adapter (see cashfreeBaseURLFor): the environment follows
+// the CREDENTIALS, so a live slot holding sandbox keys reaches the sandbox and
+// works rather than 401-ing against production. The asymmetry is the same and
+// matters more here, because this rail sends money OUT: the test slot is pinned
+// to sandbox whatever its credentials say, so a sandbox disbursement can never
+// reach a real bank account.
+func cashfreePayoutBaseURLFor(mode, clientID, clientSecret string) string {
 	if models.IsTestMode(mode) {
+		return cashfreePayoutTestBaseURL
+	}
+	if cashfreeCredentialsAreSandbox(clientID, clientSecret) {
 		return cashfreePayoutTestBaseURL
 	}
 	return cashfreePayoutLiveBaseURL
@@ -719,7 +730,7 @@ func (c *CashfreePayoutClient) resolvedBaseURL() string {
 	if c.baseURL != "" {
 		return c.baseURL
 	}
-	return cashfreePayoutBaseURLFor(c.mode)
+	return cashfreePayoutBaseURLFor(c.mode, c.clientID, c.clientSecret)
 }
 
 func (c *CashfreePayoutClient) do(ctx context.Context, method, path string, body []byte) ([]byte, int, error) {
