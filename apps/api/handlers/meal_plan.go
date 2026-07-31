@@ -339,7 +339,9 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		for _, d := range days {
 			for _, t := range taken {
 				if t.Date.Equal(d.Date) && t.Slot == d.Slot {
-					clash[fmt.Sprintf("%s %s", t.Date.Format("2 Jan"), t.Slot)] = true
+					// In IST: a day is stored as its IST midnight, so formatting the raw
+					// UTC instant names the day before the one the customer booked.
+					clash[fmt.Sprintf("%s %s", t.Date.In(istLoc).Format("2 Jan"), t.Slot)] = true
 				}
 			}
 		}
@@ -777,6 +779,11 @@ func (h *MealPlanHandler) CancelMealPlan(c *gin.Context) {
 				Updates(map[string]any{"cancelled_at": now, "cancel_reason": "cancelled by customer before start"}).Error; err != nil {
 				return err
 			}
+			// Mirror onto the struct we serialize, or the response hands the client
+			// back the pre-cancel status for the plan it just cancelled.
+			plan.Status = models.MealPlanCancelled
+			plan.CancelledAt = &now
+			plan.CancelReason = "cancelled by customer before start"
 			for i := range plan.Days {
 				d := &plan.Days[i]
 				if v2DayTerminal(d.Status) || d.RefundStage == models.MPRefundPendingAdmin {
