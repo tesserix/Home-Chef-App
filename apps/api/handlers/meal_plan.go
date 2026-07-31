@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -658,6 +659,10 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 			c.JSON(http.StatusConflict, gin.H{"error": "This plan is no longer awaiting your approval"})
 			return
 		}
+		// Log before answering: the customer-facing string is deliberately generic,
+		// so without this a failed finalize is a bare 500 in the access log with no
+		// way to tell which step of the transaction gave up.
+		log.Printf("meal plan finalize failed (plan=%s approve=%t): %v", plan.ID, approve, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})
 		return
 	}
