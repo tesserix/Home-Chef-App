@@ -33,6 +33,10 @@ func cronJobs() []cronJob {
 		{"kitchen-schedule", kitchenScheduleInterval, runKitchenScheduleScan, StartKitchenScheduleCron},
 		{"audit-retention", auditRetentionInterval, runAuditRetentionScan, StartAuditRetentionCron},
 		{"meal-plan-sweep", mealPlanSweepInterval, runMealPlanSweep, StartMealPlanCron},
+		// The chef's refund clock: a cancellation the kitchen never priced resolves at 100%
+		// rather than holding the customer's money indefinitely. Money path — registered
+		// here so it runs under Schedules and as a ticker alike.
+		{"meal-plan-refund-deadline", refundDeadlineSweepInterval, runMealPlanRefundDeadlineSweep, StartMealPlanRefundDeadlineCron},
 		{"meal-plan-fulfillment", mealPlanFulfillmentInterval, runMealPlanFulfillment, StartMealPlanFulfillmentCron},
 		{"group-order-sweep", groupOrderSweepInterval, runGroupOrderSweep, StartGroupOrderCron},
 		{"winback-scan", winbackScanInterval, runWinbackScan, StartWinbackCron},

@@ -61,6 +61,11 @@ type PlatformPolicy struct {
 	// rather than through a deploy — including flipping the >12h band from
 	// auto-100% to a chef-decided 75% floor. Empty ⇒ DefaultMealPlanRefundTiers.
 	MealPlanRefundTiers []MealPlanRefundTier `json:"mealPlanRefundTiers"`
+	// MealPlanChefRefundDecisionMinutes is how long a chef has to price a refund before it
+	// resolves at 100% (of the base, which already excludes the platform's commission).
+	// The floor protects the chef's minimum; this protects the customer's maximum wait.
+	// 0 ⇒ the default below. Negative disables the sweep, leaving days pending indefinitely.
+	MealPlanChefRefundDecisionMinutes int `json:"mealPlanChefRefundDecisionMinutes"`
 
 	// ChefCancelPenalty* levies a percentage of the cancelled order's value on a
 	// chef who cancels close to service, deducted from their next weekly
@@ -104,6 +109,9 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		// Refund policy v3 (#834). The tier table ships with the recommended
 		// shape; see DefaultMealPlanRefundTiers for why >12h stays automatic.
 		MealPlanRefundTiers: DefaultMealPlanRefundTiers(),
+		// One hour to price a refund. Long enough for a chef mid-service to answer,
+		// short enough that a cancelled customer is not waiting on a silent kitchen.
+		MealPlanChefRefundDecisionMinutes: 60,
 		// 6% of the cancelled order's value, on cancellations inside 4h of
 		// service, with the first cancellation in a rolling 30 days exempt.
 		ChefCancelPenaltyEnabled:    true,

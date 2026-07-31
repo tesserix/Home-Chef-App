@@ -22,6 +22,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -99,10 +100,30 @@ func RouteMealPlanDayToChef(tx *gorm.DB, day *models.MealPlanDay, floorPercent i
 	floorPercent = ClampRefundPercent(floorPercent)
 	day.RefundFloorPercent = &floorPercent
 	day.RefundStage = models.MPRefundPendingChef
-	return tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).Updates(map[string]any{
+	update := map[string]any{
 		"refund_stage":         models.MPRefundPendingChef,
 		"refund_floor_percent": floorPercent,
-	}).Error
+	}
+	// Start the chef's clock. Without a deadline the day sits pending_chef forever and the
+	// customer's money with it; the sweep resolves it at 100% once this passes.
+	if by, ok := ChefRefundDecisionDeadline(time.Now()); ok {
+		day.RefundDecisionBy = &by
+		update["refund_decision_by"] = by
+	}
+	return tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).Updates(update).Error
+}
+
+// ChefRefundDecisionDeadline is when a refund raised now stops being the chef's to price.
+// Reports false when policy disables the sweep (a negative window).
+func ChefRefundDecisionDeadline(now time.Time) (time.Time, bool) {
+	mins := GetPlatformPolicy().MealPlanChefRefundDecisionMinutes
+	if mins < 0 {
+		return time.Time{}, false
+	}
+	if mins == 0 {
+		mins = DefaultPlatformPolicy().MealPlanChefRefundDecisionMinutes
+	}
+	return now.Add(time.Duration(mins) * time.Minute), true
 }
 
 // ChefDecideMealPlanRefund applies the chef's decision to a day awaiting them (pending_chef).
