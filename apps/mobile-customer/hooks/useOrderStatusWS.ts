@@ -23,9 +23,9 @@ interface NotificationWSMessage {
 }
 
 /**
- * Subscribes to the user's real-time notification stream and flips cached order
- * status the moment the chef accepts / advances a stage — so the customer sees
- * "Confirmed" / "Preparing" / "Ready" instantly instead of waiting for the poll.
+ * Subscribes to the user's real-time stream and flips cached state the moment the
+ * chef acts — so the customer sees "Confirmed" / "Preparing" / "Ready", and a plan
+ * their chef just answered, instantly instead of waiting for the poll.
  * The polls (`useOrder` on the detail screen, `useActiveOrder` on Home) remain
  * the fallback if the socket can't connect or drops.
  *
@@ -74,8 +74,20 @@ export function useOrderStatusWS(
       try {
         const msg = JSON.parse(event.data as string) as NotificationWSMessage;
         if (msg.type !== 'new_notification' || !msg.data) return;
-        const payload = JSON.parse(msg.data) as { order_id?: string; status?: Order['status'] };
-        // Non-order notifications carry no order_id — ignore them in both modes.
+        const payload = JSON.parse(msg.data) as {
+          order_id?: string;
+          meal_plan_id?: string;
+          status?: Order['status'];
+        };
+
+        // Meal-plan traffic rides the same user-scoped stream (the chef answering a
+        // request, an advance confirming, a plan cancelling). Dropping it for want of
+        // an order_id is why a customer had to leave the screen and come back to see
+        // that their chef had replied.
+        if (payload.meal_plan_id) {
+          void queryClient.invalidateQueries({ queryKey: ['meal-plans'] });
+          return;
+        }
         if (!payload.order_id) return;
         // Single-order mode: ignore other orders. Any-order mode (no orderId)
         // takes every one, which is how the Home stack stays live.
