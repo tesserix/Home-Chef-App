@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -304,35 +305,59 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		}
 	}
 
-	// ONE LIVE PLAN PER (CUSTOMER, CHEF) — the same rule meal subscriptions already use.
+	// ONE LIVE BOOKING PER (CUSTOMER, CHEF, DATE, SLOT). A second plan with the same
+	// kitchen is fine — customers extend a plan by booking further weeks — so only a
+	// day the customer has ALREADY booked from this chef is refused, not the plan.
 	//
-	// This used to be scoped to overlapping DATES, so a customer could stack
-	// several concurrent plans with one kitchen simply by picking different days.
-	// Each one carries its own escrow, its own per-day orders and its own refund
-	// surface, which is confusing for the customer and genuinely hard for the chef
-	// to reason about. A plan is now blocked while ANY earlier plan with that chef
-	// is still in the pending→active lifecycle, regardless of dates.
-	//
-	// Re-allowed the moment the prior plan reaches a terminal state — rejected,
-	// expired, cancelled or completed — so this restricts concurrency, never the
-	// customer's ability to book that kitchen again.
+	// Days on a terminal plan (rejected, expired, cancelled, completed) or a declined
+	// day free that slot up again.
 	liveStatuses := []models.MealPlanStatus{
 		models.MealPlanPendingChef, models.MealPlanChefAcceptedFull, models.MealPlanChefModified,
 		models.MealPlanAwaitingCustomer, models.MealPlanConfirmed, models.MealPlanActive,
 	}
-	var existing models.MealPlan
-	if err := database.DB.
-		Where("customer_id = ? AND chef_id = ? AND status IN ?", customerID, chefID, liveStatuses).
-		Order("created_at DESC").
-		First(&existing).Error; err == nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"error": fmt.Sprintf(
-				"You already have a plan with this chef (%s). Cancel or finish it before booking another.",
-				existing.MealPlanNumber),
-			"code":           "duplicate_plan",
-			"existingPlanId": existing.ID,
-		})
-		return
+	deadDayStatuses := []models.MealPlanDayStatus{
+		models.MealPlanDayDeclined, models.MealPlanDayCancelled,
+		models.MealPlanDayRefunded, models.MealPlanDayFailed, models.MealPlanDaySkipped,
+	}
+	// Fetch the window and match exactly in Go: the stored column is timestamptz, so
+	// an IN over parsed dates is at the mercy of the session zone.
+	var taken []struct {
+		Date time.Time
+		Slot models.MealSlot
+	}
+	if err := database.DB.Model(&models.MealPlanDay{}).
+		Select("meal_plan_days.date, meal_plan_days.slot").
+		Joins("JOIN meal_plans ON meal_plans.id = meal_plan_days.meal_plan_id").
+		Where("meal_plans.customer_id = ? AND meal_plans.chef_id = ? AND meal_plans.status IN ?",
+			customerID, chefID, liveStatuses).
+		// A day's margin either side so the SQL window never has to be exact about
+		// zones or storage format — the day+slot match below is what decides.
+		Where("meal_plan_days.date BETWEEN ? AND ? AND meal_plan_days.status NOT IN ?",
+			minDate.AddDate(0, 0, -1), maxDate.AddDate(0, 0, 1), deadDayStatuses).
+		Scan(&taken).Error; err == nil && len(taken) > 0 {
+		clash := map[string]bool{}
+		for _, d := range days {
+			for _, t := range taken {
+				if t.Date.Equal(d.Date) && t.Slot == d.Slot {
+					clash[fmt.Sprintf("%s %s", t.Date.Format("2 Jan"), t.Slot)] = true
+				}
+			}
+		}
+		if len(clash) > 0 {
+			labels := make([]string, 0, len(clash))
+			for k := range clash {
+				labels = append(labels, k)
+			}
+			sort.Strings(labels)
+			c.JSON(http.StatusConflict, gin.H{
+				"error": fmt.Sprintf(
+					"You've already booked %s with this chef. Pick other days, or cancel that booking first.",
+					strings.Join(labels, ", ")),
+				"code":  "duplicate_day",
+				"days":  labels,
+			})
+			return
+		}
 	}
 
 	// Escrow (paid) plans charge the full amount upfront: food + platform fee + GST +

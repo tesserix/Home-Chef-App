@@ -159,7 +159,14 @@ export default function MealPlanDetailPage() {
   };
 
   const cancel = async () => {
-    if (!window.confirm('Cancel this plan? Undelivered days are refunded.')) return;
+    // Not "are refunded": the amount is priced by lead time and days close to
+    // cooking need the chef to agree it first.
+    if (
+      !window.confirm(
+        'Cancel this plan? Undelivered days are refunded — days close to cooking need your chef to agree the amount.',
+      )
+    )
+      return;
     try {
       await action.mutateAsync({ id, action: 'cancel' });
       toast.success('Plan cancelled.');

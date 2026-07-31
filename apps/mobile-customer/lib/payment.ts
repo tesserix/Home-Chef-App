@@ -11,6 +11,22 @@ import { api } from './api';
 import { RAZORPAY_DISPLAY_CONFIG } from './razorpay-config';
 import { useCartStore } from '../store/cart-store';
 
+/** Caches a settled non-order charge invalidates. Both gateway screens replace()
+ *  back onto a screen that is already mounted, so without this it re-renders its
+ *  pre-payment snapshot. */
+export function chargeRefreshKeys(kind: string, chargeId: string): string[][] {
+  switch (kind) {
+    case 'mealplan':
+      return [['meal-plans']];
+    case 'group':
+      return [['group-order', chargeId]];
+    case 'catering':
+      return [['catering-request', chargeId], ['catering-requests']];
+    default:
+      return [];
+  }
+}
+
 export interface RazorpayPaymentData {
   // "wallet" + paid:true when credit covers the full total — no gateway sheet.
   provider?: string;

@@ -29,7 +29,12 @@ import {
   useConfirmMealPlanDayReceived,
   useConfirmTodaysTiffin,
 } from '../../hooks/useConfirmReceived';
-import { mealPlanStatusMeta, isDeclinedDayStatus, toLocalDateKey } from '../../lib/meal-plan';
+import {
+  cancelRefundMessage,
+  mealPlanStatusMeta,
+  isDeclinedDayStatus,
+  toLocalDateKey,
+} from '../../lib/meal-plan';
 import { canConfirmReceipt } from '../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { MealPlanDayList } from '../../components/meal-plan/MealPlanDayList';
@@ -54,8 +59,10 @@ export default function MealPlanDetailScreen() {
     if (!id) return;
     dialog.confirm({
       title: 'Cancel this plan?',
+      // No fixed percentage here: the refund is priced by how close each day is to
+      // being cooked, and the tier table is platform policy, not a client constant.
       message:
-        "You haven't been served yet, so you'll be fully refunded. This can't be undone.",
+        "You haven't been served yet, so your advance comes back to you. Days close to cooking need your chef to agree the amount first. This can't be undone.",
       accentColor: customerColors.coral.DEFAULT,
       actions: [
         { label: 'Keep plan', cancel: true },
@@ -64,10 +71,10 @@ export default function MealPlanDetailScreen() {
           destructive: true,
           onPress: () =>
             cancel.mutate(id, {
-              onSuccess: () =>
+              onSuccess: (res) =>
                 dialog.confirm({
                   title: 'Plan cancelled',
-                  message: 'Your plan was cancelled and any advance refunded.',
+                  message: cancelRefundMessage(res?.mealPlan?.days ?? []),
                   accentColor: customerColors.coral.DEFAULT,
                   actions: [{ label: 'OK', onPress: () => router.back() }],
                 }),
