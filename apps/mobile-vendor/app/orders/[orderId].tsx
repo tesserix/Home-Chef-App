@@ -12,6 +12,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as SecureStore from 'expo-secure-store';
 import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as Device from 'expo-device';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -1667,14 +1668,27 @@ async function pickReadyPhoto(): Promise<
       quality: 0.6,
     });
     if (shot.canceled) return undefined;
-    return shot.assets[0];
+    return toJpeg(shot.assets[0]);
   }
   const lib = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     quality: 0.6,
   });
   if (lib.canceled) return undefined;
-  return lib.assets[0];
+  return toJpeg(lib.assets[0]);
+}
+
+// iPhones shoot HEIC by default and the picker hands back that original file,
+// which the API rejects (JPEG/PNG/WebP only) — so Mark Ready failed on every
+// modern iPhone. Re-encode to JPEG before the upload sees it.
+async function toJpeg(
+  asset: ImagePicker.ImagePickerAsset,
+): Promise<ImagePicker.ImagePickerAsset> {
+  const out = await manipulateAsync(asset.uri, [], {
+    compress: 0.6,
+    format: SaveFormat.JPEG,
+  });
+  return { ...asset, uri: out.uri, width: out.width, height: out.height };
 }
 
 // downloadInvoice fetches the chef-side PDF invoice with the chef's

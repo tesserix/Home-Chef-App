@@ -21,9 +21,17 @@ export function useUploadOrderPhoto() {
     }) => {
       const formData = new FormData();
       const filename = vars.uri.split('/').pop() ?? `${vars.kind}.jpg`;
-      const type = filename.toLowerCase().endsWith('.png')
-        ? 'image/png'
-        : 'image/jpeg';
+      // Label by the real extension. Defaulting everything non-PNG to JPEG sent
+      // HEIC bytes as image/jpeg, which the API rejects outright (#photo-upload).
+      const ext = filename.toLowerCase().split('.').pop() ?? '';
+      const type =
+        ext === 'png'
+          ? 'image/png'
+          : ext === 'webp'
+            ? 'image/webp'
+            : ext === 'heic' || ext === 'heif'
+              ? `image/${ext}`
+              : 'image/jpeg';
       formData.append('file', {
         uri: vars.uri,
         name: filename,
