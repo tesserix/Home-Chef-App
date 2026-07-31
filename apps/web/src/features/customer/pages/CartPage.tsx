@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Minus,
   Plus,
@@ -10,29 +10,33 @@ import {
   AlertCircle,
   ArrowRight,
   ChevronRight,
-} from 'lucide-react';
-import { useCartStore } from '@/app/store/cart-store';
-import { useAuth } from '@/app/providers/AuthProvider';
-import { useFormatPrice } from '@/shared/utils/format-price';
-import { Button } from '@/shared/components/ui';
-import { apiClient } from '@/shared/services/api-client';
+} from "lucide-react";
+import { toast } from "sonner";
+import { useCartStore } from "@/app/store/cart-store";
+import { useAuth } from "@/app/providers/AuthProvider";
+import { useFormatPrice } from "@/shared/utils/format-price";
+import { Button, SimpleDialog } from "@/shared/components/ui";
+import { apiClient } from "@/shared/services/api-client";
 
 // Pull the API's promo error out of either the string or {message,...} form (#39).
 function promoErrorMessage(e: unknown): string {
   const err = (e as { error?: unknown })?.error;
-  if (typeof err === 'string') return err;
-  if (err && typeof err === 'object' && 'message' in err) {
-    return String((err as { message?: unknown }).message ?? 'Invalid promo code');
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object" && "message" in err) {
+    return String(
+      (err as { message?: unknown }).message ?? "Invalid promo code",
+    );
   }
-  return e instanceof Error ? e.message : 'Invalid promo code';
+  return e instanceof Error ? e.message : "Invalid promo code";
 }
 
 export default function CartPage() {
+  const [confirmClear, setConfirmClear] = useState(false);
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const cart = useCartStore();
   const fp = useFormatPrice();
-  const [promoInput, setPromoInput] = useState('');
+  const [promoInput, setPromoInput] = useState("");
   const [promoError, setPromoError] = useState<string | null>(null);
   const [applyingPromo, setApplyingPromo] = useState(false);
 
@@ -52,13 +56,16 @@ export default function CartPage() {
     setApplyingPromo(true);
     setPromoError(null);
     try {
-      const res = await apiClient.post<{ code: string; discount: number }>('/promo/validate', {
-        code,
-        orderTotal: subtotal,
-        chefId: cart.chefId,
-      });
+      const res = await apiClient.post<{ code: string; discount: number }>(
+        "/promo/validate",
+        {
+          code,
+          orderTotal: subtotal,
+          chefId: cart.chefId,
+        },
+      );
       cart.setPromo(res.code, res.discount);
-      setPromoInput('');
+      setPromoInput("");
     } catch (e: unknown) {
       cart.clearPromo();
       setPromoError(promoErrorMessage(e));
@@ -74,10 +81,10 @@ export default function CartPage() {
 
   const handleCheckout = () => {
     if (!isAuthenticated) {
-      navigate('/login', { state: { from: '/checkout' } });
+      navigate("/login", { state: { from: "/checkout" } });
       return;
     }
-    navigate('/checkout');
+    navigate("/checkout");
   };
 
   if (cart.items.length === 0) {
@@ -86,7 +93,10 @@ export default function CartPage() {
         <div className="container-app max-w-2xl text-center">
           <div className="rounded-xl bg-bone p-12 shadow-1">
             <div className="mx-auto h-24 w-24 rounded-full bg-mist flex items-center justify-center">
-              <ShoppingCart className="h-12 w-12 text-ink-muted"  aria-hidden="true" />
+              <ShoppingCart
+                className="h-12 w-12 text-ink-muted"
+                aria-hidden="true"
+              />
             </div>
             <h2 className="mt-6 font-display text-2xl font-semibold text-ink">
               Your cart is empty
@@ -107,7 +117,23 @@ export default function CartPage() {
   return (
     <div className="min-h-screen bg-paper py-8">
       <div className="container-app">
-        <h1 className="font-display text-2xl font-semibold text-ink md:text-3xl">Your Cart</h1>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="font-display text-2xl font-semibold text-ink md:text-3xl">
+            Your Cart
+          </h1>
+          {/* Start over. Per-item removal already exists, but emptying a full
+              cart one dish at a time is a chore — and it is the action a
+              customer wants precisely when they have changed their mind about
+              the whole order. Confirmed, because it is not undoable. */}
+          <Button
+            variant="ghost"
+            onClick={() => setConfirmClear(true)}
+            className="text-ink-muted hover:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+            Clear cart
+          </Button>
+        </div>
 
         <div className="mt-8 flex flex-col gap-8 lg:flex-row">
           {/* Cart Items */}
@@ -127,7 +153,9 @@ export default function CartPage() {
                     loading="lazy"
                     decoding="async"
                     className="h-14 w-14 rounded-xl object-cover shrink-0"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                 )}
                 <div className="flex-1 min-w-0">
@@ -136,7 +164,10 @@ export default function CartPage() {
                     {cart.chef.businessName}
                   </h3>
                 </div>
-                <ChevronRight className="h-5 w-5 text-ink-muted"  aria-hidden="true" />
+                <ChevronRight
+                  className="h-5 w-5 text-ink-muted"
+                  aria-hidden="true"
+                />
               </Link>
             )}
 
@@ -153,7 +184,9 @@ export default function CartPage() {
                       loading="lazy"
                       decoding="async"
                       className="h-20 w-20 rounded-lg object-cover shrink-0"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
                     />
                   )}
                   <div className="flex-1 min-w-0">
@@ -164,11 +197,12 @@ export default function CartPage() {
                           {item.description}
                         </p>
                       </div>
-                      <button type="button"
+                      <button
+                        type="button"
                         onClick={() => cart.removeItem(item.id)}
                         className="p-1 text-ink-muted hover:text-paprika"
                       >
-                        <Trash2 className="h-5 w-5"  aria-hidden="true" />
+                        <Trash2 className="h-5 w-5" aria-hidden="true" />
                       </button>
                     </div>
 
@@ -180,18 +214,24 @@ export default function CartPage() {
 
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex items-center rounded-lg border">
-                        <button type="button"
-                          onClick={() => cart.updateQuantity(item.id, item.quantity - 1)}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            cart.updateQuantity(item.id, item.quantity - 1)
+                          }
                           className="p-2 hover:bg-mist"
                         >
-                          <Minus className="h-4 w-4"  aria-hidden="true" />
+                          <Minus className="h-4 w-4" aria-hidden="true" />
                         </button>
                         <span className="w-8 text-center">{item.quantity}</span>
-                        <button type="button"
-                          onClick={() => cart.updateQuantity(item.id, item.quantity + 1)}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            cart.updateQuantity(item.id, item.quantity + 1)
+                          }
                           className="p-2 hover:bg-mist"
                         >
-                          <Plus className="h-4 w-4"  aria-hidden="true" />
+                          <Plus className="h-4 w-4" aria-hidden="true" />
                         </button>
                       </div>
                       <span className="font-semibold text-ink">
@@ -208,7 +248,7 @@ export default function CartPage() {
               to={`/chefs/${cart.chefId}`}
               className="mt-4 flex items-center justify-center gap-2 text-herb hover:text-herb"
             >
-              <Plus className="h-4 w-4"  aria-hidden="true" />
+              <Plus className="h-4 w-4" aria-hidden="true" />
               Add more items
             </Link>
           </div>
@@ -226,7 +266,9 @@ export default function CartPage() {
                       <span className="rounded bg-herb/15 px-2 py-0.5 text-xs font-semibold text-herb">
                         {cart.promoCode}
                       </span>
-                      <span className="text-sm text-herb">−{fp(discount)} applied</span>
+                      <span className="text-sm text-herb">
+                        −{fp(discount)} applied
+                      </span>
                     </div>
                     <button
                       type="button"
@@ -242,7 +284,9 @@ export default function CartPage() {
                       <input
                         type="text"
                         value={promoInput}
-                        onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                        onChange={(e) =>
+                          setPromoInput(e.target.value.toUpperCase())
+                        }
                         placeholder="Promo code"
                         className="input-base flex-1 uppercase"
                         autoCapitalize="characters"
@@ -256,7 +300,9 @@ export default function CartPage() {
                         Apply
                       </Button>
                     </div>
-                    {promoError && <p className="mt-2 text-sm text-paprika">{promoError}</p>}
+                    {promoError && (
+                      <p className="mt-2 text-sm text-paprika">{promoError}</p>
+                    )}
                   </>
                 )}
               </div>
@@ -291,7 +337,10 @@ export default function CartPage() {
               {/* Minimum Order Warning */}
               {belowMinimum && (
                 <div className="mt-4 flex items-start gap-2 rounded-lg bg-amber-tint p-3 text-sm text-amber">
-                  <AlertCircle className="h-5 w-5 flex-shrink-0"  aria-hidden="true" />
+                  <AlertCircle
+                    className="h-5 w-5 flex-shrink-0"
+                    aria-hidden="true"
+                  />
                   <div>
                     <p className="font-medium">Minimum order not met</p>
                     <p>Add {fp(minimumOrder - subtotal)} more to proceed</p>
@@ -306,20 +355,32 @@ export default function CartPage() {
                 fullWidth
                 onClick={handleCheckout}
                 disabled={belowMinimum}
-                rightIcon={<ArrowRight aria-hidden="true" className="h-5 w-5" />}
+                rightIcon={
+                  <ArrowRight aria-hidden="true" className="h-5 w-5" />
+                }
                 className="mt-6"
               >
-                {!isAuthenticated ? 'Sign in to Checkout' : 'Proceed to Checkout'}
+                {!isAuthenticated
+                  ? "Sign in to Checkout"
+                  : "Proceed to Checkout"}
               </Button>
 
               {/* Delivery Info */}
               <div className="mt-6 space-y-3 border-t pt-6">
                 <div className="flex items-center gap-3 text-sm text-ink-soft">
-                  <MapPin className="h-5 w-5 text-ink-muted"  aria-hidden="true" />
-                  <span>Delivery within {cart.chef?.minimumOrder} km radius</span>
+                  <MapPin
+                    className="h-5 w-5 text-ink-muted"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    Delivery within {cart.chef?.minimumOrder} km radius
+                  </span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-ink-soft">
-                  <Clock className="h-5 w-5 text-ink-muted"  aria-hidden="true" />
+                  <Clock
+                    className="h-5 w-5 text-ink-muted"
+                    aria-hidden="true"
+                  />
                   <span>Estimated prep time: 30-45 mins</span>
                 </div>
               </div>
@@ -327,6 +388,34 @@ export default function CartPage() {
           </div>
         </div>
       </div>
+
+      <SimpleDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        size="sm"
+        title="Clear your cart?"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-ink-soft">
+            This removes everything from{" "}
+            {cart.chef?.businessName ?? "this kitchen"}. You can&apos;t undo it.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirmClear(false)}>
+              Keep my cart
+            </Button>
+            <Button
+              onClick={() => {
+                cart.clearCart();
+                setConfirmClear(false);
+                toast.success("Cart cleared");
+              }}
+            >
+              Clear cart
+            </Button>
+          </div>
+        </div>
+      </SimpleDialog>
     </div>
   );
 }
