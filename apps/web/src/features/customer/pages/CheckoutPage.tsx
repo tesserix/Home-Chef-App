@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   MapPin,
   Clock,
@@ -13,35 +13,39 @@ import {
   Shield,
   AlertTriangle,
   Store,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { useCartStore } from '@/app/store/cart-store';
-import { useAuth } from '@/app/providers/AuthProvider';
-import { apiClient } from '@/shared/services/api-client';
-import { useFormatPrice } from '@/shared/utils/format-price';
-import { loadStripeJs } from '@/shared/utils/load-stripe';
-import { openCashfreeCheckout } from '@/shared/utils/cashfree';
-import { resolveCssVarColor } from '@/shared/utils/css-color';
-import { Button } from '@/shared/components/ui';
-import type { Order, Address } from '@/shared/types';
-import { useDeliveryQuote, type CreditIntent } from '../hooks/useDeliveryQuote';
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
+import { useCartStore } from "@/app/store/cart-store";
+import { useAuth } from "@/app/providers/AuthProvider";
+import { apiClient } from "@/shared/services/api-client";
+import { useFormatPrice } from "@/shared/utils/format-price";
+import { loadStripeJs } from "@/shared/utils/load-stripe";
+import { openCashfreeCheckout } from "@/shared/utils/cashfree";
+import { resolveCssVarColor } from "@/shared/utils/css-color";
+import { Button } from "@/shared/components/ui";
+import type { Order, Address } from "@/shared/types";
+import { useDeliveryQuote, type CreditIntent } from "../hooks/useDeliveryQuote";
 import {
   useFulfillmentTimes,
   groupFulfillmentTimes,
   type FulfillmentTime,
-} from '../hooks/useFulfillmentTimes';
-import { getFeeRowLabel } from '../lib/orderSteps';
-import { CheckoutCredits } from '../components/CheckoutCredits';
-import { AddressSearch } from '../components/AddressSearch';
-import { suggestionCoords, type AddressSuggestion } from '../hooks/useAddressAutocomplete';
+} from "../hooks/useFulfillmentTimes";
+import { getFeeRowLabel } from "../lib/orderSteps";
+import { CheckoutCredits } from "../components/CheckoutCredits";
+import { AddressSearch } from "../components/AddressSearch";
+import {
+  suggestionCoords,
+  type AddressSuggestion,
+} from "../hooks/useAddressAutocomplete";
 
 const addressSchema = z.object({
-  label: z.string().min(1, 'Label is required'),
-  line1: z.string().min(5, 'Address is required'),
+  label: z.string().min(1, "Label is required"),
+  line1: z.string().min(5, "Address is required"),
   line2: z.string().optional(),
-  city: z.string().min(2, 'City is required'),
-  state: z.string().min(2, 'State is required'),
-  postalCode: z.string().min(5, 'Postal code is required'),
+  city: z.string().min(2, "City is required"),
+  state: z.string().min(2, "State is required"),
+  postalCode: z.string().min(5, "Postal code is required"),
   deliveryInstructions: z.string().optional(),
 });
 
@@ -60,7 +64,7 @@ const MAX_TIP = 5000;
 // response (services.SlotAvailability).
 interface DeliverySlot {
   date: string; // "YYYY-MM-DD" IST
-  slot: 'lunch' | 'dinner';
+  slot: "lunch" | "dinner";
   label: string;
   window: string; // "12:00–14:00"
   remaining: number | null; // null = unlimited
@@ -89,9 +93,13 @@ function slotDayLabel(dateStr: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
-  if (diff <= 0) return 'Today';
-  if (diff === 1) return 'Tomorrow';
-  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  if (diff <= 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
 }
 
 // Saved addresses come from /api/v1/addresses (see useQuery below). The old
@@ -107,75 +115,93 @@ export default function CheckoutPage() {
   const fp = useFormatPrice();
   const queryClient = useQueryClient();
   const { data: savedAddresses = [] } = useQuery({
-    queryKey: ['addresses'],
-    queryFn: () => apiClient.get<Address[]>('/addresses'),
+    queryKey: ["addresses"],
+    queryFn: () => apiClient.get<Address[]>("/addresses"),
   });
 
   // Fulfilment mode. The customer chooses delivery vs pickup and nothing else —
   // WHO carries a delivery order (the chef themselves vs a 3PL rider) is the
   // chef's call at Mark Ready, resolved server-side, so `chef_delivery` is never
   // sent from here. Mirrors apps/mobile-customer/app/checkout.tsx.
-  const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery');
-  const isPickup = fulfillment === 'pickup';
+  const [fulfillment, setFulfillment] = useState<"delivery" | "pickup">(
+    "delivery",
+  );
+  const isPickup = fulfillment === "pickup";
 
-  const [selectedAddress, setSelectedAddress] = useState<string>('');
+  const [selectedAddress, setSelectedAddress] = useState<string>("");
   // Default to the user's default address (or the first one) as soon as
   // the list loads. Resets if the previously-selected id disappears.
   useEffect(() => {
     if (!savedAddresses.length) {
-      if (selectedAddress) setSelectedAddress('');
+      if (selectedAddress) setSelectedAddress("");
       return;
     }
     const exists = savedAddresses.some((a) => a.id === selectedAddress);
     if (!exists) {
-      const preferred = savedAddresses.find((a) => a.isDefault) ?? savedAddresses[0];
+      const preferred =
+        savedAddresses.find((a) => a.isDefault) ?? savedAddresses[0];
       if (preferred) setSelectedAddress(preferred.id);
     }
   }, [savedAddresses, selectedAddress]);
   const [showNewAddress, setShowNewAddress] = useState(false);
   // Scheduled delivery slot (#51) — null = ASAP. The picker below only offers
   // slots when the chef has enabled them.
-  const [selectedSlot, setSelectedSlot] = useState<{ slot: string; date: string } | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{
+    slot: string;
+    date: string;
+  } | null>(null);
   const { data: slotsData } = useQuery({
-    queryKey: ['delivery-slots', cart.chefId],
+    queryKey: ["delivery-slots", cart.chefId],
     queryFn: () =>
-      apiClient.get<DeliverySlotsResponse>(`/chefs/${cart.chefId}/delivery-slots`),
+      apiClient.get<DeliverySlotsResponse>(
+        `/chefs/${cart.chefId}/delivery-slots`,
+      ),
     enabled: Boolean(cart.chefId),
     staleTime: 60_000,
   });
   const availableSlots = (slotsData?.slots ?? []).filter((s) => s.available);
   // Windowed (restaurant-style) chefs keep the #51 slot picker; everyone else —
   // the home-tiffin default — gets the suggested-time handshake (#709) below.
-  const useSlotPicker = Boolean(slotsData?.slotsEnabled) && availableSlots.length > 0;
+  const useSlotPicker =
+    Boolean(slotsData?.slotsEnabled) && availableSlots.length > 0;
 
   // Home-tiffin suggested time (#709): the customer PROPOSES a preferred time and
   // the chef confirms or counters at accept. null = "as soon as ready", which
   // stays the default.
-  const [requestedTime, setRequestedTime] = useState<FulfillmentTime | null>(null);
-  const { data: fulfillmentTimesData } = useFulfillmentTimes(cart.chefId ?? undefined);
+  const [requestedTime, setRequestedTime] = useState<FulfillmentTime | null>(
+    null,
+  );
+  const { data: fulfillmentTimesData } = useFulfillmentTimes(
+    cart.chefId ?? undefined,
+  );
   const fulfillmentTimeGroups = useMemo(
     () => groupFulfillmentTimes(fulfillmentTimesData?.times ?? []),
-    [fulfillmentTimesData]
+    [fulfillmentTimesData],
   );
   // Dietary & allergen conflict warning (#41) — server-checks the cart's items
   // against the customer's saved profile. Non-blocking.
   const cartItemIds = cart.items.map((i) => i.menuItemId);
   const { data: dietaryCheck } = useQuery({
-    queryKey: ['dietary-check', cartItemIds],
+    queryKey: ["dietary-check", cartItemIds],
     queryFn: () =>
-      apiClient.post<DietaryCheckResult>('/dietary/check', { menuItemIds: cartItemIds }),
+      apiClient.post<DietaryCheckResult>("/dietary/check", {
+        menuItemIds: cartItemIds,
+      }),
     enabled: cartItemIds.length > 0,
     staleTime: 60_000,
   });
   const dietaryWarnings = dietaryCheck?.warnings ?? [];
 
   const [tip, setTip] = useState<number>(0);
-  const [customTip, setCustomTip] = useState('');
+  const [customTip, setCustomTip] = useState("");
   // Credit intent. Both rails default ON so the customer always spends the credit
   // they hold; undefined amounts mean "auto" — the server applies as much as its
   // ceilings allow. Touching either control pins both.
-  const [credit, setCredit] = useState<CreditIntent>({ useWallet: true, useLoyalty: true });
-  const [specialInstructions, setSpecialInstructions] = useState('');
+  const [credit, setCredit] = useState<CreditIntent>({
+    useWallet: true,
+    useLoyalty: true,
+  });
+  const [specialInstructions, setSpecialInstructions] = useState("");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   // CW-01d: explicit T&C + Refund Policy consent is required per order
   // (not just at signup) for RBI PA disclosure compliance. The Place Order
@@ -185,10 +211,13 @@ export default function CheckoutPage() {
   // The currency of the amounts on this page is the chef's settlement
   // currency — that's what the backend will charge the customer in. Falls
   // back to INR so pre-multi-gateway chef profiles keep rendering.
-  const orderCurrency = (cart.chef as { currency?: string } | null)?.currency || 'INR';
+  const orderCurrency =
+    (cart.chef as { currency?: string } | null)?.currency || "INR";
 
-  const selectedAddressObj = savedAddresses.find((a) => a.id === selectedAddress);
-  const taxCountry = selectedAddressObj?.country || 'IN';
+  const selectedAddressObj = savedAddresses.find(
+    (a) => a.id === selectedAddress,
+  );
+  const taxCountry = selectedAddressObj?.country || "IN";
 
   const subtotal = cart.getSubtotal();
   // Applied promo discount (#39), clamped to the subtotal. Mirrors the server,
@@ -215,19 +244,18 @@ export default function CheckoutPage() {
     credit,
   });
 
-
   // The aggregator named in the RBI PA disclosure below. Driven by the
   // SERVER-resolved gateway, never by a hardcoded name — the platform can route
   // an order to a different gateway than the chef's stored one, and this block
   // is a regulatory disclosure that has to say who actually processes the money.
   // Unknown resolves to neutral wording rather than guessing.
   const gatewayName =
-    quote?.paymentProvider === 'cashfree'
-      ? 'Cashfree'
-      : quote?.paymentProvider === 'razorpay'
-        ? 'Razorpay'
-        : quote?.paymentProvider === 'stripe'
-          ? 'Stripe'
+    quote?.paymentProvider === "cashfree"
+      ? "Cashfree"
+      : quote?.paymentProvider === "razorpay"
+        ? "Razorpay"
+        : quote?.paymentProvider === "stripe"
+          ? "Stripe"
           : null;
   // What the chef actually offers. Both come from the quote the page already
   // fetches, so there is no second round-trip. offersDelivery is the computed
@@ -235,9 +263,9 @@ export default function CheckoutPage() {
   // live) — defaulting it to true keeps an older API working.
   const offersPickup = quote?.offersPickup ?? false;
   const offersDelivery = quote?.offersDelivery ?? true;
-  const fulfillmentModes: Array<'delivery' | 'pickup'> = [
-    ...(offersDelivery ? (['delivery'] as const) : []),
-    ...(offersPickup ? (['pickup'] as const) : []),
+  const fulfillmentModes: Array<"delivery" | "pickup"> = [
+    ...(offersDelivery ? (["delivery"] as const) : []),
+    ...(offersPickup ? (["pickup"] as const) : []),
   ];
 
   // Snap the selection to something the chef actually offers. This is the guard
@@ -247,14 +275,14 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (fulfillmentModes.length === 0) return;
     if (!fulfillmentModes.includes(fulfillment)) {
-      setFulfillment(fulfillmentModes[0] as 'delivery' | 'pickup');
+      setFulfillment(fulfillmentModes[0] as "delivery" | "pickup");
     }
     // fulfillmentModes is rebuilt every render; depend on its inputs instead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offersDelivery, offersPickup, fulfillment]);
 
   // Pickup is always free — the customer carries it. Delivery is the quoted fee.
-  const deliveryFee = isPickup ? 0 : quote?.deliveryFee ?? 0;
+  const deliveryFee = isPickup ? 0 : (quote?.deliveryFee ?? 0);
   // What switching to pickup would save. Only real when delivery actually costs
   // something; 0 means show no incentive rather than a fake one.
   const pickupSaving = quote?.pickupSaving ?? 0;
@@ -262,7 +290,9 @@ export default function CheckoutPage() {
   const rate = quote?.taxRatePercent ?? 0;
   const isInclusive = quote?.taxInclusive ?? false;
   const taxBase = Math.max(0, subtotal + deliveryFee + platformFee - discount);
-  const tax = isInclusive ? taxBase - taxBase / (1 + rate / 100) : taxBase * (rate / 100);
+  const tax = isInclusive
+    ? taxBase - taxBase / (1 + rate / 100)
+    : taxBase * (rate / 100);
   // Tip is added after tax, mirroring CreateOrder — it is a pass-through to the
   // chef, so it is neither taxed nor fee-bearing.
   const total = isInclusive
@@ -273,8 +303,10 @@ export default function CheckoutPage() {
   // does no money arithmetic of its own here. `payable` is what the gateway will
   // be asked for, and it is what the CTA must say.
   const creditQuote = quote?.credit;
-  const walletApplied = creditQuote && credit.useWallet ? creditQuote.walletApplied : 0;
-  const loyaltyApplied = creditQuote && credit.useLoyalty ? creditQuote.pointsValue : 0;
+  const walletApplied =
+    creditQuote && credit.useWallet ? creditQuote.walletApplied : 0;
+  const loyaltyApplied =
+    creditQuote && credit.useLoyalty ? creditQuote.pointsValue : 0;
   const creditApplied = walletApplied + loyaltyApplied;
   const payable = creditQuote ? creditQuote.payable : total;
 
@@ -307,18 +339,19 @@ export default function CheckoutPage() {
 
   // Coordinates of the picked suggestion, persisted with the new address. Without
   // them the address is unorderable — see addressNeedsLocation above.
-  const [newAddressCoords, setNewAddressCoords] = useState<{ lat: number; lon: number } | null>(
-    null
-  );
+  const [newAddressCoords, setNewAddressCoords] = useState<{
+    lat: number;
+    lon: number;
+  } | null>(null);
 
   // Fill the form from a geocoder suggestion. The fields stay editable — the
   // suggestion supplies the coordinates and a sane starting point, not the last
   // word on the flat number.
   const applySuggestion = (s: AddressSuggestion) => {
-    setValue('line1', s.line1 || s.description, { shouldValidate: true });
-    if (s.city) setValue('city', s.city, { shouldValidate: true });
-    if (s.region) setValue('state', s.region, { shouldValidate: true });
-    if (s.postal) setValue('postalCode', s.postal, { shouldValidate: true });
+    setValue("line1", s.line1 || s.description, { shouldValidate: true });
+    if (s.city) setValue("city", s.city, { shouldValidate: true });
+    if (s.region) setValue("state", s.region, { shouldValidate: true });
+    if (s.postal) setValue("postalCode", s.postal, { shouldValidate: true });
     setNewAddressCoords(suggestionCoords(s));
   };
 
@@ -329,7 +362,9 @@ export default function CheckoutPage() {
   const pinExistingAddress = async (s: AddressSuggestion) => {
     const coords = suggestionCoords(s);
     if (!coords || !selectedAddressObj) {
-      toast.error("That suggestion has no location — try a nearby landmark or the area name.");
+      toast.error(
+        "That suggestion has no location — try a nearby landmark or the area name.",
+      );
       return;
     }
     setIsPinning(true);
@@ -343,15 +378,15 @@ export default function CheckoutPage() {
         city: selectedAddressObj.city,
         state: selectedAddressObj.state,
         postalCode: selectedAddressObj.postalCode,
-        country: selectedAddressObj.country || 'IN',
+        country: selectedAddressObj.country || "IN",
         latitude: coords.lat,
         longitude: coords.lon,
         isDefault: selectedAddressObj.isDefault,
       });
-      await queryClient.invalidateQueries({ queryKey: ['addresses'] });
-      toast.success('Delivery location saved');
+      await queryClient.invalidateQueries({ queryKey: ["addresses"] });
+      toast.success("Delivery location saved");
     } catch {
-      toast.error('Could not save that location. Please try again.');
+      toast.error("Could not save that location. Please try again.");
     } finally {
       setIsPinning(false);
     }
@@ -359,17 +394,17 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (!cart.chefId) {
-      toast.error('Your cart is empty');
+      toast.error("Your cart is empty");
       return;
     }
     // A pickup order has no drop address — the customer collects from the kitchen.
     if (!isPickup && !selectedAddress) {
-      toast.error('Please select a delivery address');
+      toast.error("Please select a delivery address");
       return;
     }
     if (addressNeedsLocation) {
       toast.error(
-        "Set this address's delivery location so we can confirm it's within the kitchen's range."
+        "Set this address's delivery location so we can confirm it's within the kitchen's range.",
       );
       return;
     }
@@ -377,12 +412,14 @@ export default function CheckoutPage() {
       toast.error(
         `This address is ${(quote?.distanceKm ?? 0).toFixed(1)} km from the kitchen — beyond its ${(
           quote?.maxRadiusKm ?? 10
-        ).toFixed(0)} km delivery range.`
+        ).toFixed(0)} km delivery range.`,
       );
       return;
     }
     if (!acceptedTerms) {
-      toast.error('Please accept the Terms of Service and Refund Policy to continue');
+      toast.error(
+        "Please accept the Terms of Service and Refund Policy to continue",
+      );
       return;
     }
 
@@ -391,7 +428,7 @@ export default function CheckoutPage() {
     try {
       // Step 1: Create order. The backend decides which gateway to use
       // based on the chef's PaymentProvider setting.
-      const order = await apiClient.post<Order>('/orders', {
+      const order = await apiClient.post<Order>("/orders", {
         // Map cart lines to the API item shape, including selected add-ons (#232).
         items: cart.items.map((i) => ({
           menuItemId: i.menuItemId,
@@ -420,7 +457,7 @@ export default function CheckoutPage() {
       // order id + key id; `provider: "stripe"` returns a PaymentIntent
       // clientSecret + publishable key.
       type RazorpayPayment = {
-        provider: 'razorpay';
+        provider: "razorpay";
         paid?: boolean;
         razorpayOrderId: string;
         razorpayKeyId: string;
@@ -428,7 +465,7 @@ export default function CheckoutPage() {
         currency: string;
       };
       type StripePayment = {
-        provider: 'stripe';
+        provider: "stripe";
         paid?: boolean;
         stripePaymentIntentId: string;
         clientSecret: string;
@@ -440,7 +477,7 @@ export default function CheckoutPage() {
       // the environment — there is no publishable key, and no client-side
       // signature comes back, so the server's verify call is the only authority.
       type CashfreePayment = {
-        provider: 'cashfree';
+        provider: "cashfree";
         paid?: boolean;
         cashfreePaymentSessionId: string;
         cashfreeOrderId: string;
@@ -450,7 +487,7 @@ export default function CheckoutPage() {
       };
       // Credit covered the whole total — the server has already marked the order
       // paid and there is nothing for a gateway to collect.
-      type WalletPayment = { provider: 'wallet'; paid?: boolean };
+      type WalletPayment = { provider: "wallet"; paid?: boolean };
 
       // The client sends INTENT, never a computed payable: the server re-runs the
       // whole allocation from the live balance and the real order, and its answer
@@ -460,16 +497,16 @@ export default function CheckoutPage() {
         RazorpayPayment | CashfreePayment | StripePayment | WalletPayment
       >(`/payments/order/${order.id}/create`, credit);
 
-      if (paymentData.provider === 'wallet' || paymentData.paid) {
+      if (paymentData.provider === "wallet" || paymentData.paid) {
         cart.clearCart();
-        toast.success('Paid with your credits!');
+        toast.success("Paid with your credits!");
         navigate(`/orders/${order.id}`);
         return;
       }
 
-      if (paymentData.provider === 'stripe') {
+      if (paymentData.provider === "stripe") {
         await confirmStripePayment(order.id, paymentData);
-      } else if (paymentData.provider === 'cashfree') {
+      } else if (paymentData.provider === "cashfree") {
         await confirmCashfreePayment(order, paymentData);
       } else {
         await confirmRazorpayPayment(order, paymentData);
@@ -479,23 +516,25 @@ export default function CheckoutPage() {
       // applying it and checkout) and drop it so the retry isn't blocked (#39).
       const raw = (e as { error?: unknown })?.error;
       const msg =
-        typeof raw === 'string'
+        typeof raw === "string"
           ? raw
-          : raw && typeof raw === 'object' && 'message' in raw
-            ? String((raw as { message?: unknown }).message ?? '')
+          : raw && typeof raw === "object" && "message" in raw
+            ? String((raw as { message?: unknown }).message ?? "")
             : e instanceof Error
               ? e.message
-              : '';
+              : "";
       if (/promo/i.test(msg)) {
         cart.clearPromo();
-        toast.error(msg || 'That promo code is no longer available. Please try again.');
+        toast.error(
+          msg || "That promo code is no longer available. Please try again.",
+        );
       } else {
         // This block also catches order CREATION failures, which have real,
         // actionable reasons — an out-of-range address, a kitchen that stopped
         // accepting orders, an item that sold out. Flattening all of them to
         // "Failed to initiate payment" told the customer to retry the one thing
         // that would fail identically. Show what the server actually said.
-        toast.error(msg || 'Failed to initiate payment. Please try again.');
+        toast.error(msg || "Failed to initiate payment. Please try again.");
       }
     } finally {
       setIsProcessing(false);
@@ -509,27 +548,27 @@ export default function CheckoutPage() {
       razorpayKeyId: string;
       amount: number;
       currency: string;
-    }
+    },
   ) => {
     if (!window.Razorpay) {
-      toast.error('Payment gateway is loading. Please try again.');
+      toast.error("Payment gateway is loading. Please try again.");
       return;
     }
     const options: RazorpayOptions = {
       key: paymentData.razorpayKeyId,
       amount: paymentData.amount,
       currency: paymentData.currency,
-      name: 'Fe3dr',
-      description: `Order from ${cart.chef?.businessName || 'Home Chef'}`,
+      name: "Fe3dr",
+      description: `Order from ${cart.chef?.businessName || "Home Chef"}`,
       order_id: paymentData.razorpayOrderId,
       prefill: {
-        name: user?.name || '',
-        email: user?.email || '',
+        name: user?.name || "",
+        email: user?.email || "",
       },
       // Resolve --herb at runtime so a theme change ripples to Razorpay's
       // hosted checkout. Falls back to a static herb-equivalent hex if the
       // CSS var is unavailable (SSR / older browsers without oklch).
-      theme: { color: resolveCssVarColor('--herb', '#3e6b3c') },
+      theme: { color: resolveCssVarColor("--herb", "#3e6b3c") },
       handler: async (response) => {
         try {
           await apiClient.post(`/payments/order/${order.id}/verify`, {
@@ -538,14 +577,14 @@ export default function CheckoutPage() {
             razorpaySignature: response.razorpay_signature,
           });
           cart.clearCart();
-          toast.success('Payment successful!');
+          toast.success("Payment successful!");
           navigate(`/orders/${order.id}`);
         } catch {
-          toast.error('Payment verification failed. Please contact support.');
+          toast.error("Payment verification failed. Please contact support.");
         }
       },
       modal: {
-        ondismiss: () => toast.error('Payment cancelled'),
+        ondismiss: () => toast.error("Payment cancelled"),
       },
     };
     new window.Razorpay(options).open();
@@ -571,7 +610,7 @@ export default function CheckoutPage() {
       cashfreeEnv?: string;
       amount: number;
       currency: string;
-    }
+    },
   ) => {
     await openCashfreeCheckout({
       data: paymentData,
@@ -581,15 +620,15 @@ export default function CheckoutPage() {
             cashfreeOrderId: paymentData.cashfreeOrderId,
           });
           cart.clearCart();
-          toast.success('Payment successful!');
+          toast.success("Payment successful!");
         } catch {
           // Not "verification failed" — the payment may still be settling, and
           // the webhook completes it server-side either way.
-          toast.message('Confirming your payment…');
+          toast.message("Confirming your payment…");
         }
         navigate(`/orders/${order.id}`);
       },
-      onDismiss: () => toast.error('Payment cancelled'),
+      onDismiss: () => toast.error("Payment cancelled"),
     });
   };
 
@@ -604,11 +643,11 @@ export default function CheckoutPage() {
       publishableKey: string;
       amount: number;
       currency: string;
-    }
+    },
   ) => {
     const stripe = await loadStripeJs(paymentData.publishableKey);
     if (!stripe) {
-      toast.error('Stripe failed to load');
+      toast.error("Stripe failed to load");
       return;
     }
     // Customer confirms via Stripe-hosted form. `return_url` is where
@@ -620,7 +659,7 @@ export default function CheckoutPage() {
       confirmParams: { return_url: returnUrl },
     });
     if (error) {
-      toast.error(error.message || 'Payment failed');
+      toast.error(error.message || "Payment failed");
       return;
     }
     // If confirmPayment doesn't redirect (rare — happens for sync
@@ -630,18 +669,18 @@ export default function CheckoutPage() {
         stripePaymentIntentId: paymentData.stripePaymentIntentId,
       });
       cart.clearCart();
-      toast.success('Payment successful!');
+      toast.success("Payment successful!");
       navigate(`/orders/${orderId}`);
     } catch {
-      toast.error('Payment verification failed. Please contact support.');
+      toast.error("Payment verification failed. Please contact support.");
     }
   };
 
   const onAddressSubmit = async (data: AddressFormData) => {
     try {
-      const created = await apiClient.post<Address>('/addresses', {
+      const created = await apiClient.post<Address>("/addresses", {
         ...data,
-        country: 'IN',
+        country: "IN",
         // The coordinates are the point of the search box above: an address
         // without them can never be range-checked, so it can never be ordered to.
         latitude: newAddressCoords?.lat,
@@ -649,26 +688,28 @@ export default function CheckoutPage() {
         isDefault: false,
       });
       // Refresh the list + select the brand-new one.
-      await queryClient.invalidateQueries({ queryKey: ['addresses'] });
+      await queryClient.invalidateQueries({ queryKey: ["addresses"] });
       setSelectedAddress(created.id);
       setShowNewAddress(false);
       reset();
       setNewAddressCoords(null);
-      toast.success('Address saved');
+      toast.success("Address saved");
     } catch {
-      toast.error('Failed to save address');
+      toast.error("Failed to save address");
     }
   };
 
   if (cart.items.length === 0) {
-    navigate('/cart');
+    navigate("/cart");
     return null;
   }
 
   return (
     <div className="min-h-screen bg-paper py-8">
       <div className="container-app max-w-4xl">
-        <h1 className="font-display text-2xl font-semibold text-ink md:text-3xl">Checkout</h1>
+        <h1 className="font-display text-2xl font-semibold text-ink md:text-3xl">
+          Checkout
+        </h1>
 
         <div className="mt-8 flex flex-col gap-8 lg:flex-row">
           {/* Main Form */}
@@ -677,7 +718,9 @@ export default function CheckoutPage() {
                 mode. A single-mode chef gets no pointless toggle. */}
             {fulfillmentModes.length > 1 && (
               <section className="rounded-xl bg-bone p-6 shadow-1">
-                <h2 className="text-lg font-semibold text-ink">How would you like it?</h2>
+                <h2 className="text-lg font-semibold text-ink">
+                  How would you like it?
+                </h2>
                 <div
                   role="radiogroup"
                   aria-label="Fulfilment method"
@@ -685,7 +728,7 @@ export default function CheckoutPage() {
                 >
                   {fulfillmentModes.map((mode) => {
                     const selected = fulfillment === mode;
-                    const isPickupMode = mode === 'pickup';
+                    const isPickupMode = mode === "pickup";
                     return (
                       <button
                         type="button"
@@ -694,28 +737,30 @@ export default function CheckoutPage() {
                         aria-checked={selected}
                         onClick={() => setFulfillment(mode)}
                         className={`flex min-h-11 items-center gap-3 rounded-lg border p-4 text-left transition-colors ${
-                          selected ? 'border-herb bg-herb-tint' : 'border-mist hover:bg-paper'
+                          selected
+                            ? "border-herb bg-herb-tint"
+                            : "border-mist hover:bg-paper"
                         }`}
                       >
                         {isPickupMode ? (
                           <Store
-                            className={`h-5 w-5 flex-shrink-0 ${selected ? 'text-herb' : 'text-ink-muted'}`}
+                            className={`h-5 w-5 flex-shrink-0 ${selected ? "text-herb" : "text-ink-muted"}`}
                             aria-hidden="true"
                           />
                         ) : (
                           <MapPin
-                            className={`h-5 w-5 flex-shrink-0 ${selected ? 'text-herb' : 'text-ink-muted'}`}
+                            className={`h-5 w-5 flex-shrink-0 ${selected ? "text-herb" : "text-ink-muted"}`}
                             aria-hidden="true"
                           />
                         )}
                         <span>
                           <span className="block font-medium text-ink">
-                            {isPickupMode ? 'Pickup' : 'Delivery'}
+                            {isPickupMode ? "Pickup" : "Delivery"}
                           </span>
                           <span className="block text-xs text-ink-muted">
                             {isPickupMode
-                              ? 'Collect from the kitchen — no delivery fee'
-                              : 'Brought to your address'}
+                              ? "Collect from the kitchen — no delivery fee"
+                              : "Brought to your address"}
                           </span>
                         </span>
                       </button>
@@ -728,16 +773,18 @@ export default function CheckoutPage() {
                     it is only knowable once the drop address has coordinates. */}
                 {!isPickup && quote?.rangeKnown && (
                   <p className="mt-3 text-sm text-ink-soft tabular-nums">
-                    {quote.distanceKm.toFixed(1)} km from {cart.chef?.businessName ?? 'the kitchen'}
+                    {quote.distanceKm.toFixed(1)} km from{" "}
+                    {cart.chef?.businessName ?? "the kitchen"}
                     {quote.maxRadiusKm > 0
                       ? ` · delivers up to ${quote.maxRadiusKm.toFixed(0)} km`
-                      : ''}
+                      : ""}
                   </p>
                 )}
                 {isPickup && quote?.rangeKnown && quote.distanceKm > 0 && (
                   <p className="mt-3 text-sm text-ink-soft tabular-nums">
-                    The kitchen is {quote.distanceKm.toFixed(1)} km from your saved address. You
-                    will get the exact address and map pin once the chef accepts.
+                    The kitchen is {quote.distanceKm.toFixed(1)} km from your
+                    saved address. You will get the exact address and map pin
+                    once the chef accepts.
                   </p>
                 )}
               </section>
@@ -748,242 +795,322 @@ export default function CheckoutPage() {
             {!isPickup && offersPickup && pickupSaving > 0 && (
               <button
                 type="button"
-                onClick={() => setFulfillment('pickup')}
+                onClick={() => setFulfillment("pickup")}
                 className="flex w-full items-center justify-between gap-3 rounded-xl bg-herb-tint p-4 text-left transition-colors hover:bg-herb-tint/70"
               >
                 <span>
                   <span className="block text-sm font-semibold text-herb tabular-nums">
-                    Pick up &amp; save {fp(pickupSaving, { currency: orderCurrency })}
+                    Pick up &amp; save{" "}
+                    {fp(pickupSaving, { currency: orderCurrency })}
                   </span>
                   <span className="block text-xs text-ink-soft">
                     Collect from the kitchen — no delivery fee.
                   </span>
                 </span>
-                <span className="text-sm font-semibold text-herb">Switch →</span>
+                <span className="text-sm font-semibold text-herb">
+                  Switch →
+                </span>
               </button>
             )}
 
             {/* Delivery Address — a pickup order has no drop address. */}
             {!isPickup && (
-            <section className="rounded-xl bg-bone p-6 shadow-1">
-              <div className="flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-                  <MapPin className="h-5 w-5 text-herb"  aria-hidden="true" />
-                  Delivery Address
-                </h2>
-                <button type="button"
-                  onClick={() => setShowNewAddress(!showNewAddress)}
-                  className="text-sm text-herb hover:text-herb"
-                >
-                  {showNewAddress ? 'Cancel' : 'Add New'}
-                </button>
-              </div>
+              <section className="rounded-xl bg-bone p-6 shadow-1">
+                <div className="flex items-center justify-between">
+                  <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
+                    <MapPin className="h-5 w-5 text-herb" aria-hidden="true" />
+                    Delivery Address
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewAddress(!showNewAddress)}
+                    className="text-sm text-herb hover:text-herb"
+                  >
+                    {showNewAddress ? "Cancel" : "Add New"}
+                  </button>
+                </div>
 
-              {showNewAddress ? (
-                <form onSubmit={handleSubmit(onAddressSubmit)} className="mt-4 space-y-4">
-                  {/* Search first, then refine. This is what supplies the
+                {showNewAddress ? (
+                  <form
+                    onSubmit={handleSubmit(onAddressSubmit)}
+                    className="mt-4 space-y-4"
+                  >
+                    {/* Search first, then refine. This is what supplies the
                       coordinates the order is range-checked against. */}
-                  <AddressSearch
-                    label="Find your address"
-                    hint="Pick your area from the list, then add your flat or house number below."
-                    onPick={applySuggestion}
-                  />
-                  {!newAddressCoords && (
-                    <p className="flex items-start gap-2 text-xs text-ink-muted">
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-                      Choose a suggestion above so we can check the kitchen delivers to you.
-                    </p>
-                  )}
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label htmlFor="addr-label" className="block text-sm font-medium text-ink-soft">
-                        Label
-                      </label>
-                      <input
-                        id="addr-label"
-                        {...register('label')}
-                        aria-invalid={!!errors.label || undefined}
-                        aria-describedby={errors.label ? 'addr-label-err' : undefined}
-                        placeholder="Home, Work, etc."
-                        className="input-base mt-1"
-                      />
-                      {errors.label && (
-                        <p id="addr-label-err" role="alert" className="mt-1 text-xs text-paprika">
-                          {errors.label.message}
-                        </p>
-                      )}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label htmlFor="addr-line1" className="block text-sm font-medium text-ink-soft">
-                        Street Address
-                      </label>
-                      <input
-                        id="addr-line1"
-                        {...register('line1')}
-                        aria-invalid={!!errors.line1 || undefined}
-                        aria-describedby={errors.line1 ? 'addr-line1-err' : undefined}
-                        placeholder="123 Main Street"
-                        className="input-base mt-1"
-                      />
-                      {errors.line1 && (
-                        <p id="addr-line1-err" role="alert" className="mt-1 text-xs text-paprika">
-                          {errors.line1.message}
-                        </p>
-                      )}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label htmlFor="addr-line2" className="block text-sm font-medium text-ink-soft">
-                        Apartment, suite, etc. (optional)
-                      </label>
-                      <input
-                        id="addr-line2"
-                        {...register('line2')}
-                        placeholder="Apt 4B"
-                        className="input-base mt-1"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="addr-city" className="block text-sm font-medium text-ink-soft">City</label>
-                      <input
-                        id="addr-city"
-                        {...register('city')}
-                        aria-invalid={!!errors.city || undefined}
-                        aria-describedby={errors.city ? 'addr-city-err' : undefined}
-                        className="input-base mt-1"
-                      />
-                      {errors.city && (
-                        <p id="addr-city-err" role="alert" className="mt-1 text-xs text-paprika">
-                          {errors.city.message}
-                        </p>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="addr-state" className="block text-sm font-medium text-ink-soft">State</label>
-                        <input
-                          id="addr-state"
-                          {...register('state')}
-                          aria-invalid={!!errors.state || undefined}
-                          aria-describedby={errors.state ? 'addr-state-err' : undefined}
-                          className="input-base mt-1"
+                    <AddressSearch
+                      label="Find your address"
+                      hint="Pick your area from the list, then add your flat or house number below."
+                      onPick={applySuggestion}
+                    />
+                    {!newAddressCoords && (
+                      <p className="flex items-start gap-2 text-xs text-ink-muted">
+                        <AlertTriangle
+                          className="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
+                          aria-hidden="true"
                         />
-                        {errors.state && (
-                          <p id="addr-state-err" role="alert" className="mt-1 text-xs text-paprika">
-                            {errors.state.message}
-                          </p>
-                        )}
-                      </div>
+                        Choose a suggestion above so we can check the kitchen
+                        delivers to you.
+                      </p>
+                    )}
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <label htmlFor="addr-postal" className="block text-sm font-medium text-ink-soft">
-                          Postal Code
+                        <label
+                          htmlFor="addr-label"
+                          className="block text-sm font-medium text-ink-soft"
+                        >
+                          Label
                         </label>
                         <input
-                          id="addr-postal"
-                          {...register('postalCode')}
-                          aria-invalid={!!errors.postalCode || undefined}
-                          aria-describedby={errors.postalCode ? 'addr-postal-err' : undefined}
+                          id="addr-label"
+                          {...register("label")}
+                          aria-invalid={!!errors.label || undefined}
+                          aria-describedby={
+                            errors.label ? "addr-label-err" : undefined
+                          }
+                          placeholder="Home, Work, etc."
                           className="input-base mt-1"
                         />
-                        {errors.postalCode && (
-                          <p id="addr-postal-err" role="alert" className="mt-1 text-xs text-paprika">
-                            {errors.postalCode.message}
+                        {errors.label && (
+                          <p
+                            id="addr-label-err"
+                            role="alert"
+                            className="mt-1 text-xs text-paprika"
+                          >
+                            {errors.label.message}
                           </p>
                         )}
                       </div>
-                    </div>
-                  </div>
-                  <Button type="submit" variant="primary">
-                    Save Address
-                  </Button>
-                </form>
-              ) : savedAddresses.length === 0 ? (
-                <div className="mt-4 rounded-lg border border-dashed border-mist-strong p-6 text-center text-sm text-ink-soft">
-                  You don't have any saved addresses yet. Add one to continue.
-                </div>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {savedAddresses.map((address) => (
-                    <label
-                      key={address.id}
-                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
-                        selectedAddress === address.id
-                          ? 'border-herb bg-herb-tint'
-                          : 'border-mist hover:bg-paper'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="address"
-                        value={address.id}
-                        checked={selectedAddress === address.id}
-                        onChange={(e) => setSelectedAddress(e.target.value)}
-                        className="mt-1 h-4 w-4 text-herb focus-visible:ring-herb"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-ink">{address.label}</span>
-                          {address.isDefault && (
-                            <span className="rounded bg-mist px-2 py-0.5 text-xs text-ink-soft">
-                              Default
-                            </span>
+                      <div className="sm:col-span-2">
+                        <label
+                          htmlFor="addr-line1"
+                          className="block text-sm font-medium text-ink-soft"
+                        >
+                          Street Address
+                        </label>
+                        <input
+                          id="addr-line1"
+                          {...register("line1")}
+                          aria-invalid={!!errors.line1 || undefined}
+                          aria-describedby={
+                            errors.line1 ? "addr-line1-err" : undefined
+                          }
+                          placeholder="123 Main Street"
+                          className="input-base mt-1"
+                        />
+                        {errors.line1 && (
+                          <p
+                            id="addr-line1-err"
+                            role="alert"
+                            className="mt-1 text-xs text-paprika"
+                          >
+                            {errors.line1.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label
+                          htmlFor="addr-line2"
+                          className="block text-sm font-medium text-ink-soft"
+                        >
+                          Apartment, suite, etc. (optional)
+                        </label>
+                        <input
+                          id="addr-line2"
+                          {...register("line2")}
+                          placeholder="Apt 4B"
+                          className="input-base mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="addr-city"
+                          className="block text-sm font-medium text-ink-soft"
+                        >
+                          City
+                        </label>
+                        <input
+                          id="addr-city"
+                          {...register("city")}
+                          aria-invalid={!!errors.city || undefined}
+                          aria-describedby={
+                            errors.city ? "addr-city-err" : undefined
+                          }
+                          className="input-base mt-1"
+                        />
+                        {errors.city && (
+                          <p
+                            id="addr-city-err"
+                            role="alert"
+                            className="mt-1 text-xs text-paprika"
+                          >
+                            {errors.city.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label
+                            htmlFor="addr-state"
+                            className="block text-sm font-medium text-ink-soft"
+                          >
+                            State
+                          </label>
+                          <input
+                            id="addr-state"
+                            {...register("state")}
+                            aria-invalid={!!errors.state || undefined}
+                            aria-describedby={
+                              errors.state ? "addr-state-err" : undefined
+                            }
+                            className="input-base mt-1"
+                          />
+                          {errors.state && (
+                            <p
+                              id="addr-state-err"
+                              role="alert"
+                              className="mt-1 text-xs text-paprika"
+                            >
+                              {errors.state.message}
+                            </p>
                           )}
                         </div>
-                        <p className="mt-1 text-sm text-ink-soft">
-                          {address.line1}
-                          {address.line2 && `, ${address.line2}`}
-                        </p>
-                        <p className="text-sm text-ink-soft">
-                          {address.city}, {address.state} {address.postalCode}
-                        </p>
+                        <div>
+                          <label
+                            htmlFor="addr-postal"
+                            className="block text-sm font-medium text-ink-soft"
+                          >
+                            Postal Code
+                          </label>
+                          <input
+                            id="addr-postal"
+                            {...register("postalCode")}
+                            aria-invalid={!!errors.postalCode || undefined}
+                            aria-describedby={
+                              errors.postalCode ? "addr-postal-err" : undefined
+                            }
+                            className="input-base mt-1"
+                          />
+                          {errors.postalCode && (
+                            <p
+                              id="addr-postal-err"
+                              role="alert"
+                              className="mt-1 text-xs text-paprika"
+                            >
+                              {errors.postalCode.message}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      {selectedAddress === address.id && (
-                        <Check className="h-5 w-5 text-herb"  aria-hidden="true" />
-                      )}
-                    </label>
-                  ))}
-                </div>
-              )}
+                    </div>
+                    <Button type="submit" variant="primary">
+                      Save Address
+                    </Button>
+                  </form>
+                ) : savedAddresses.length === 0 ? (
+                  <div className="mt-4 rounded-lg border border-dashed border-mist-strong p-6 text-center text-sm text-ink-soft">
+                    You don't have any saved addresses yet. Add one to continue.
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {savedAddresses.map((address) => (
+                      <label
+                        key={address.id}
+                        className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
+                          selectedAddress === address.id
+                            ? "border-herb bg-herb-tint"
+                            : "border-mist hover:bg-paper"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="address"
+                          value={address.id}
+                          checked={selectedAddress === address.id}
+                          onChange={(e) => setSelectedAddress(e.target.value)}
+                          className="mt-1 h-4 w-4 text-herb focus-visible:ring-herb"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-ink">
+                              {address.label}
+                            </span>
+                            {address.isDefault && (
+                              <span className="rounded bg-mist px-2 py-0.5 text-xs text-ink-soft">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-sm text-ink-soft">
+                            {address.line1}
+                            {address.line2 && `, ${address.line2}`}
+                          </p>
+                          <p className="text-sm text-ink-soft">
+                            {address.city}, {address.state} {address.postalCode}
+                          </p>
+                        </div>
+                        {selectedAddress === address.id && (
+                          <Check
+                            className="h-5 w-5 text-herb"
+                            aria-hidden="true"
+                          />
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                )}
 
-              {/* Repair path for addresses saved before the web had a geocoder.
+                {/* Repair path for addresses saved before the web had a geocoder.
                   Every one of them has no coordinates, so without this the
                   customer would have to re-add an address they already have. */}
-              {!showNewAddress && addressNeedsLocation && (
-                <div className="mt-4 rounded-lg border border-amber/40 bg-amber-tint p-4">
-                  <p className="flex items-start gap-2 text-sm font-medium text-ink">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                    This address has no delivery location saved
-                  </p>
-                  <p className="mt-1 text-sm text-ink-soft">
-                    We need it to confirm the kitchen delivers to you. Search for your area below —
-                    the address itself stays exactly as it is.
-                  </p>
-                  <div className="mt-3">
-                    <AddressSearch
-                      label="Set delivery location"
-                      placeholder="Search your street, area or a nearby landmark"
-                      onPick={pinExistingAddress}
-                    />
+                {!showNewAddress && addressNeedsLocation && (
+                  <div className="mt-4 rounded-lg border border-amber/40 bg-amber-tint p-4">
+                    <p className="flex items-start gap-2 text-sm font-medium text-ink">
+                      <AlertTriangle
+                        className="mt-0.5 h-4 w-4 flex-shrink-0"
+                        aria-hidden="true"
+                      />
+                      This address has no delivery location saved
+                    </p>
+                    <p className="mt-1 text-sm text-ink-soft">
+                      We need it to confirm the kitchen delivers to you. Search
+                      for your area below — the address itself stays exactly as
+                      it is.
+                    </p>
+                    <div className="mt-3">
+                      <AddressSearch
+                        label="Set delivery location"
+                        placeholder="Search your street, area or a nearby landmark"
+                        onPick={pinExistingAddress}
+                      />
+                    </div>
+                    {isPinning && (
+                      <p className="mt-2 text-xs text-ink-muted">
+                        Saving location…
+                      </p>
+                    )}
                   </div>
-                  {isPinning && <p className="mt-2 text-xs text-ink-muted">Saving location…</p>}
-                </div>
-              )}
+                )}
 
-              {/* Out of range: the server would reject this order anyway, so say
+                {/* Out of range: the server would reject this order anyway, so say
                   so here rather than letting the customer discover it at payment. */}
-              {!addressNeedsLocation && deliveryOutOfRange && (
-                <div className="mt-4 rounded-lg border border-paprika/30 bg-paprika-tint p-4">
-                  <p className="flex items-start gap-2 text-sm font-medium text-paprika">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                    Outside this kitchen&apos;s delivery range
-                  </p>
-                  <p className="mt-1 text-sm text-paprika tabular-nums">
-                    This address is {(quote?.distanceKm ?? 0).toFixed(1)} km away — beyond the{' '}
-                    {(quote?.maxRadiusKm ?? 10).toFixed(0)} km this kitchen delivers. Pick an address
-                    closer to the kitchen.
-                  </p>
-                </div>
-              )}
-            </section>
+                {!addressNeedsLocation && deliveryOutOfRange && (
+                  <div className="mt-4 rounded-lg border border-paprika/30 bg-paprika-tint p-4">
+                    <p className="flex items-start gap-2 text-sm font-medium text-paprika">
+                      <AlertTriangle
+                        className="mt-0.5 h-4 w-4 flex-shrink-0"
+                        aria-hidden="true"
+                      />
+                      Outside this kitchen&apos;s delivery range
+                    </p>
+                    <p className="mt-1 text-sm text-paprika tabular-nums">
+                      This address is {(quote?.distanceKm ?? 0).toFixed(1)} km
+                      away — beyond the {(quote?.maxRadiusKm ?? 10).toFixed(0)}{" "}
+                      km this kitchen delivers. Pick an address closer to the
+                      kitchen.
+                    </p>
+                  </div>
+                )}
+              </section>
             )}
 
             {/* Pickup: where the food is collected from. The exact street address
@@ -999,11 +1126,12 @@ export default function CheckoutPage() {
                   Collect from
                 </h2>
                 <p className="mt-2 text-sm text-ink">
-                  {cart.chef?.businessName ?? 'The kitchen'}
+                  {cart.chef?.businessName ?? "The kitchen"}
                 </p>
                 <p className="mt-1 text-sm text-ink-soft">
-                  You&apos;ll get the full address and a map pin on your order page as soon as the
-                  chef accepts. No delivery fee — you&apos;re collecting this yourself.
+                  You&apos;ll get the full address and a map pin on your order
+                  page as soon as the chef accepts. No delivery fee —
+                  you&apos;re collecting this yourself.
                 </p>
               </section>
             )}
@@ -1021,13 +1149,14 @@ export default function CheckoutPage() {
                 <ul className="mt-2 space-y-1">
                   {dietaryWarnings.map((w) => (
                     <li key={w.menuItemId} className="text-sm text-paprika">
-                      • {w.name} — {w.conflicts.map((cf) => cf.detail).join(', ')}
+                      • {w.name} —{" "}
+                      {w.conflicts.map((cf) => cf.detail).join(", ")}
                     </li>
                   ))}
                 </ul>
                 <p className="mt-2 text-xs text-ink-muted">
-                  You can still place this order. Review your items or update your dietary profile in
-                  your account.
+                  You can still place this order. Review your items or update
+                  your dietary profile in your account.
                 </p>
               </section>
             )}
@@ -1044,7 +1173,7 @@ export default function CheckoutPage() {
             <section className="rounded-xl bg-bone p-6 shadow-1">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
                 <Clock className="h-5 w-5 text-herb" aria-hidden="true" />
-                {isPickup ? 'Pickup time' : 'Delivery time'}
+                {isPickup ? "Pickup time" : "Delivery time"}
               </h2>
 
               {useSlotPicker ? (
@@ -1053,8 +1182,8 @@ export default function CheckoutPage() {
                   <label
                     className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
                       selectedSlot === null
-                        ? 'border-herb bg-herb-tint'
-                        : 'border-mist hover:bg-paper'
+                        ? "border-herb bg-herb-tint"
+                        : "border-mist hover:bg-paper"
                     }`}
                   >
                     <input
@@ -1065,30 +1194,38 @@ export default function CheckoutPage() {
                       className="h-4 w-4 text-herb focus-visible:ring-herb"
                     />
                     <div>
-                      <span className="font-medium text-ink">As soon as possible</span>
+                      <span className="font-medium text-ink">
+                        As soon as possible
+                      </span>
                       <p className="text-sm text-ink-muted">
                         {isPickup
-                          ? 'Estimated 30-45 minutes after the chef accepts. We’ll tell you the moment it’s ready to collect.'
-                          : 'Estimated 30-45 minutes after the chef accepts your order. Actual time depends on chef preparation and the route.'}
+                          ? "Estimated 30-45 minutes after the chef accepts. We’ll tell you the moment it’s ready to collect."
+                          : "Estimated 30-45 minutes after the chef accepts your order. Actual time depends on chef preparation and the route."}
                       </p>
                     </div>
                   </label>
 
                   {/* Scheduled slots (#51) */}
                   {availableSlots.map((s) => {
-                    const sel = selectedSlot?.slot === s.slot && selectedSlot?.date === s.date;
+                    const sel =
+                      selectedSlot?.slot === s.slot &&
+                      selectedSlot?.date === s.date;
                     return (
                       <label
                         key={`${s.date}-${s.slot}`}
                         className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
-                          sel ? 'border-herb bg-herb-tint' : 'border-mist hover:bg-paper'
+                          sel
+                            ? "border-herb bg-herb-tint"
+                            : "border-mist hover:bg-paper"
                         }`}
                       >
                         <input
                           type="radio"
                           name="time"
                           checked={sel}
-                          onChange={() => setSelectedSlot({ slot: s.slot, date: s.date })}
+                          onChange={() =>
+                            setSelectedSlot({ slot: s.slot, date: s.date })
+                          }
                           className="h-4 w-4 text-herb focus-visible:ring-herb"
                         />
                         <div className="flex-1">
@@ -1097,7 +1234,9 @@ export default function CheckoutPage() {
                           </span>
                           <p className="text-sm text-ink-muted tabular-nums">
                             {s.window}
-                            {s.remaining != null ? ` · ${s.remaining} left` : ''}
+                            {s.remaining != null
+                              ? ` · ${s.remaining} left`
+                              : ""}
                           </p>
                         </div>
                       </label>
@@ -1108,8 +1247,8 @@ export default function CheckoutPage() {
                 <>
                   <p className="mt-1 text-sm text-ink-muted">
                     {isPickup
-                      ? 'When will you come to collect? It’s a home kitchen — the chef confirms once they accept.'
-                      : 'Suggest when you’d like it. It’s a home kitchen, not a restaurant — the chef confirms or proposes a time when they accept.'}
+                      ? "When will you come to collect? It’s a home kitchen — the chef confirms once they accept."
+                      : "Suggest when you’d like it. It’s a home kitchen, not a restaurant — the chef confirms or proposes a time when they accept."}
                   </p>
 
                   <div className="mt-4 space-y-3">
@@ -1118,8 +1257,8 @@ export default function CheckoutPage() {
                     <label
                       className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
                         requestedTime === null
-                          ? 'border-herb bg-herb-tint'
-                          : 'border-mist hover:bg-paper'
+                          ? "border-herb bg-herb-tint"
+                          : "border-mist hover:bg-paper"
                       }`}
                     >
                       <input
@@ -1130,8 +1269,12 @@ export default function CheckoutPage() {
                         className="h-4 w-4 text-herb focus-visible:ring-herb"
                       />
                       <div>
-                        <span className="font-medium text-ink">As soon as ready</span>
-                        <p className="text-sm text-ink-muted">Chef decides when to start</p>
+                        <span className="font-medium text-ink">
+                          As soon as ready
+                        </span>
+                        <p className="text-sm text-ink-muted">
+                          Chef decides when to start
+                        </p>
                       </div>
                     </label>
 
@@ -1149,11 +1292,11 @@ export default function CheckoutPage() {
                                 key={t.at}
                                 onClick={() => setRequestedTime(t)}
                                 aria-pressed={sel}
-                                aria-label={`${isPickup ? 'Pickup' : 'Delivery'} around ${t.label}, ${t.day} ${t.meal}`}
+                                aria-label={`${isPickup ? "Pickup" : "Delivery"} around ${t.label}, ${t.day} ${t.meal}`}
                                 className={`min-h-11 rounded-lg border px-4 py-2 text-sm tabular-nums transition-colors ${
                                   sel
-                                    ? 'border-herb bg-herb-tint font-medium text-herb'
-                                    : 'border-mist text-ink-soft hover:bg-paper'
+                                    ? "border-herb bg-herb-tint font-medium text-herb"
+                                    : "border-mist text-ink-soft hover:bg-paper"
                                 }`}
                               >
                                 {t.label}
@@ -1167,8 +1310,8 @@ export default function CheckoutPage() {
                     {fulfillmentTimeGroups.length === 0 && (
                       <p className="text-sm text-ink-muted">
                         {isPickup
-                          ? 'No specific pickup times to suggest right now — your order will be ready to collect as soon as the chef finishes.'
-                          : 'No specific times to suggest right now — your order will be sent as soon as it’s ready.'}
+                          ? "No specific pickup times to suggest right now — your order will be ready to collect as soon as the chef finishes."
+                          : "No specific times to suggest right now — your order will be sent as soon as it’s ready."}
                       </p>
                     )}
                   </div>
@@ -1179,7 +1322,7 @@ export default function CheckoutPage() {
             {/* Payment */}
             <section className="rounded-xl bg-bone p-6 shadow-1">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-                <Shield className="h-5 w-5 text-herb"  aria-hidden="true" />
+                <Shield className="h-5 w-5 text-herb" aria-hidden="true" />
                 Payment
               </h2>
               <div className="mt-4 flex items-center gap-3 rounded-lg border border-mist bg-paper p-4">
@@ -1194,7 +1337,9 @@ export default function CheckoutPage() {
                 />
                 <div>
                   <p className="text-sm font-medium text-ink">
-                    {gatewayName ? `Powered by ${gatewayName}` : 'Secure payment'}
+                    {gatewayName
+                      ? `Powered by ${gatewayName}`
+                      : "Secure payment"}
                   </p>
                   <p className="text-xs text-ink-muted">
                     Pay securely via UPI, cards, net banking, or wallets
@@ -1207,30 +1352,41 @@ export default function CheckoutPage() {
                   must be disclosed at the point of payment. */}
               <div className="mt-4 space-y-3 rounded-md border border-mist bg-paper p-4 text-sm text-ink-soft">
                 <div>
-                  <div className="mb-1 font-medium text-ink">Payment &amp; refund summary</div>
+                  <div className="mb-1 font-medium text-ink">
+                    Payment &amp; refund summary
+                  </div>
                   <p>
-                    Payments are processed by{' '}
-                    {gatewayName ? `${gatewayName} (RBI-licensed payment aggregator)` :
-                      'an RBI-licensed payment aggregator'}
-                    . Tesserix Pty Ltd (operator of Fe3dr) facilitates the transaction;
-                    order proceeds go to your chef minus the platform commission.
+                    Payments are processed by{" "}
+                    {gatewayName
+                      ? `${gatewayName} (RBI-licensed payment aggregator)`
+                      : "an RBI-licensed payment aggregator"}
+                    . Tesserix Pty Ltd (operator of Fe3dr) facilitates the
+                    transaction; order proceeds go to your chef minus the
+                    platform commission.
                   </p>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
-                    <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-herb" aria-hidden="true" />
+                    <Clock
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 text-herb"
+                      aria-hidden="true"
+                    />
                     <p>
-                      Refunds return to your original payment method within{' '}
-                      <strong>7 working days</strong> per RBI Payment Aggregator Master Direction §8.
+                      Refunds return to your original payment method within{" "}
+                      <strong>7 working days</strong> per RBI Payment Aggregator
+                      Master Direction §8.
                     </p>
                   </div>
                   <div className="flex items-start gap-2">
-                    <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-herb" aria-hidden="true" />
+                    <FileText
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 text-herb"
+                      aria-hidden="true"
+                    />
                     <p>
-                      See our{' '}
+                      See our{" "}
                       <Link to="/refund" className="text-herb hover:underline">
                         Refund Policy
-                      </Link>{' '}
+                      </Link>{" "}
                       for cancellation rules by order stage.
                     </p>
                   </div>
@@ -1253,15 +1409,19 @@ export default function CheckoutPage() {
                       type="button"
                       key={amount}
                       onClick={() => {
-                        setCustomTip('');
+                        setCustomTip("");
                         setTip(amount);
                       }}
                       aria-pressed={selected}
                       className={`rounded-lg px-4 py-2 tabular-nums transition-colors ${
-                        selected ? 'bg-herb text-paper' : 'bg-mist text-ink-soft hover:bg-mist-strong'
+                        selected
+                          ? "bg-herb text-paper"
+                          : "bg-mist text-ink-soft hover:bg-mist-strong"
                       }`}
                     >
-                      {amount === 0 ? 'No tip' : fp(amount, { currency: orderCurrency })}
+                      {amount === 0
+                        ? "No tip"
+                        : fp(amount, { currency: orderCurrency })}
                     </button>
                   );
                 })}
@@ -1273,14 +1433,14 @@ export default function CheckoutPage() {
                   onChange={(e) => {
                     // Digits only — a tip is whole rupees, and the server floors
                     // a negative one anyway.
-                    const digits = e.target.value.replace(/[^0-9]/g, '');
+                    const digits = e.target.value.replace(/[^0-9]/g, "");
                     setCustomTip(digits);
                     setTip(Math.min(MAX_TIP, Number(digits) || 0));
                   }}
                   maxLength={5}
                   aria-label="Custom tip amount"
                   className={`w-24 rounded-lg border px-3 py-2 text-center tabular-nums ${
-                    customTip ? 'border-herb bg-herb-tint' : 'border-mist'
+                    customTip ? "border-herb bg-herb-tint" : "border-mist"
                   }`}
                 />
               </div>
@@ -1302,7 +1462,9 @@ export default function CheckoutPage() {
 
             {/* Special Instructions */}
             <section className="rounded-xl bg-bone p-6 shadow-1">
-              <h2 className="text-lg font-semibold text-ink">Special Instructions</h2>
+              <h2 className="text-lg font-semibold text-ink">
+                Special Instructions
+              </h2>
               <textarea
                 value={specialInstructions}
                 onChange={(e) => setSpecialInstructions(e.target.value)}
@@ -1330,21 +1492,62 @@ export default function CheckoutPage() {
                       loading="lazy"
                       decoding="async"
                       className="h-10 w-10 rounded-lg object-cover shrink-0"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
                     />
                   )}
-                  <span className="font-medium text-ink">{cart.chef.businessName}</span>
+                  <span className="font-medium text-ink">
+                    {cart.chef.businessName}
+                  </span>
                 </div>
               )}
 
-              {/* Items */}
+              {/* Items. Each line carries a remove control, and the block a way
+                  back to the cart.
+                  
+                  Checkout used to be a one-way door: the summary listed what you
+                  were about to pay for but offered no way to change it, and the
+                  header cart link is hidden on this route — so a customer who
+                  changed their mind had nowhere to go but the browser's back
+                  button. Removing the last line empties the cart, which sends
+                  them back to it rather than leaving a checkout for nothing. */}
               <div className="mt-4 space-y-2 border-b pb-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                    Items
+                  </span>
+                  <Link
+                    to="/cart"
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Edit cart
+                  </Link>
+                </div>
                 {cart.items.map((item) => (
-                  <div key={item.id} className="flex justify-between text-sm">
-                    <span className="text-ink-soft">
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="min-w-0 flex-1 text-ink-soft">
                       {item.quantity}x {item.name}
                     </span>
-                    <span className="text-ink">{fp(item.price * item.quantity, { currency: orderCurrency })}</span>
+                    <span className="text-ink">
+                      {fp(item.price * item.quantity, {
+                        currency: orderCurrency,
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        cart.removeItem(item.id);
+                        toast.success(`Removed ${item.name}`);
+                      }}
+                      aria-label={`Remove ${item.name}`}
+                      className="shrink-0 rounded p-1 text-ink-muted hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1373,7 +1576,9 @@ export default function CheckoutPage() {
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between text-herb">
-                    <span>Promo{cart.promoCode ? ` (${cart.promoCode})` : ''}</span>
+                    <span>
+                      Promo{cart.promoCode ? ` (${cart.promoCode})` : ""}
+                    </span>
                     <span>−{fp(discount, { currency: orderCurrency })}</span>
                   </div>
                 )}
@@ -1384,7 +1589,7 @@ export default function CheckoutPage() {
                     TODO(CW-01e): backend to attach the HSN/SAC code per CGST
                     Act 2017 §31. */}
                 {tax > 0 &&
-                  (quote?.taxCountry === 'IN'
+                  (quote?.taxCountry === "IN"
                     ? quote?.taxIntraState
                       ? [
                           { label: `CGST (${rate / 2}%)`, amt: tax / 2 },
@@ -1393,22 +1598,31 @@ export default function CheckoutPage() {
                       : [{ label: `IGST (${rate}%)`, amt: tax }]
                     : [
                         {
-                          label: `${quote?.taxName || 'Tax'}${
-                            rate > 0 ? ` (${rate}%${isInclusive ? ' incl.' : ''})` : ''
+                          label: `${quote?.taxName || "Tax"}${
+                            rate > 0
+                              ? ` (${rate}%${isInclusive ? " incl." : ""})`
+                              : ""
                           }`,
                           amt: tax,
                         },
                       ]
                   ).map((row) => (
-                    <div key={row.label} className="flex justify-between text-ink-soft">
+                    <div
+                      key={row.label}
+                      className="flex justify-between text-ink-soft"
+                    >
                       <span>{row.label}</span>
-                      <span className="tabular-nums">{fp(row.amt, { currency: orderCurrency })}</span>
+                      <span className="tabular-nums">
+                        {fp(row.amt, { currency: orderCurrency })}
+                      </span>
                     </div>
                   ))}
                 {tip > 0 && (
                   <div className="flex justify-between text-ink-soft">
                     <span>Tip for the chef</span>
-                    <span className="tabular-nums">{fp(tip, { currency: orderCurrency })}</span>
+                    <span className="tabular-nums">
+                      {fp(tip, { currency: orderCurrency })}
+                    </span>
                   </div>
                 )}
                 {walletApplied > 0 && (
@@ -1430,8 +1644,10 @@ export default function CheckoutPage() {
               </div>
 
               <div className="mt-4 flex justify-between border-t pt-4 text-lg font-semibold">
-                <span>{creditApplied > 0 ? 'To pay' : 'Total'}</span>
-                <span className="tabular-nums">{fp(payable, { currency: orderCurrency })}</span>
+                <span>{creditApplied > 0 ? "To pay" : "Total"}</span>
+                <span className="tabular-nums">
+                  {fp(payable, { currency: orderCurrency })}
+                </span>
               </div>
 
               {/* CW-01d: explicit per-order T&C + Refund Policy consent.
@@ -1450,14 +1666,14 @@ export default function CheckoutPage() {
                   className="mt-0.5 h-4 w-4 flex-shrink-0 text-herb focus-visible:ring-herb"
                 />
                 <span id="checkout-accept-terms-help">
-                  I agree to the{' '}
+                  I agree to the{" "}
                   <Link to="/terms" className="text-herb hover:underline">
                     Terms of Service
-                  </Link>{' '}
-                  and{' '}
+                  </Link>{" "}
+                  and{" "}
                   <Link to="/refund" className="text-herb hover:underline">
                     Refund Policy
-                  </Link>{' '}
+                  </Link>{" "}
                   for this order.
                 </span>
               </label>
@@ -1477,11 +1693,15 @@ export default function CheckoutPage() {
                   addressNeedsLocation ||
                   deliveryOutOfRange
                 }
-                rightIcon={!isProcessing ? <ChevronRight aria-hidden="true" className="h-5 w-5" /> : undefined}
+                rightIcon={
+                  !isProcessing ? (
+                    <ChevronRight aria-hidden="true" className="h-5 w-5" />
+                  ) : undefined
+                }
                 className="mt-4"
               >
                 {isProcessing
-                  ? 'Placing Order...'
+                  ? "Placing Order..."
                   : `Place Order - ${fp(payable, { currency: orderCurrency })}`}
               </Button>
             </div>
