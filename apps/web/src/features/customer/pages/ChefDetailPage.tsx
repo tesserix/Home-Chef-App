@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Star,
   Clock,
@@ -18,17 +18,26 @@ import {
   ShieldCheck,
   Users,
   AlertTriangle,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { apiClient } from '@/shared/services/api-client';
-import { useCartStore } from '@/app/store/cart-store';
-import { useFavoritesStore } from '@/app/store/favorites-store';
-import { useAuth } from '@/app/providers/AuthProvider';
-import { useFormatPrice } from '@/shared/utils/format-price';
-import { findItemConflicts, type DietaryProfile } from '@/shared/utils/dietary';
-import { formatDate } from '@/shared/utils/format-date';
-import { Button, SimpleDialog } from '@/shared/components/ui';
-import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse, SelectedModifier, WeeklyMenu, WeeklyMenuItem } from '@/shared/types';
+} from "lucide-react";
+import { toast } from "sonner";
+import { apiClient } from "@/shared/services/api-client";
+import { useCartStore } from "@/app/store/cart-store";
+import { useFavoritesStore } from "@/app/store/favorites-store";
+import { useAuth } from "@/app/providers/AuthProvider";
+import { useFormatPrice } from "@/shared/utils/format-price";
+import { findItemConflicts, type DietaryProfile } from "@/shared/utils/dietary";
+import { formatDate } from "@/shared/utils/format-date";
+import { Button, SimpleDialog } from "@/shared/components/ui";
+import type {
+  Chef,
+  MenuItem,
+  MenuCategory,
+  Review,
+  PaginatedResponse,
+  SelectedModifier,
+  WeeklyMenu,
+  WeeklyMenuItem,
+} from "@/shared/types";
 
 export default function ChefDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -36,32 +45,37 @@ export default function ChefDetailPage() {
   const [showReviews, setShowReviews] = useState(false);
 
   const { data: chef, isLoading: chefLoading } = useQuery({
-    queryKey: ['chef', id],
+    queryKey: ["chef", id],
     queryFn: () => apiClient.get<Chef>(`/chefs/${id}`),
     enabled: !!id,
   });
 
   const { data: menu, isLoading: menuLoading } = useQuery({
-    queryKey: ['chef', id, 'menu'],
-    queryFn: () => apiClient.get<{ categories: MenuCategory[]; items: MenuItem[] }>(`/chefs/${id}/menu`),
+    queryKey: ["chef", id, "menu"],
+    queryFn: () =>
+      apiClient.get<{ categories: MenuCategory[]; items: MenuItem[] }>(
+        `/chefs/${id}/menu`,
+      ),
     enabled: !!id,
   });
 
   const { data: reviews } = useQuery({
-    queryKey: ['chef', id, 'reviews'],
-    queryFn: () => apiClient.get<PaginatedResponse<Review>>(`/chefs/${id}/reviews`),
+    queryKey: ["chef", id, "reviews"],
+    queryFn: () =>
+      apiClient.get<PaginatedResponse<Review>>(`/chefs/${id}/reviews`),
     enabled: !!id && showReviews,
   });
 
   // Chef's published fixed weekly menu (#1) — read-only preview.
   const { data: weeklyMenu } = useQuery({
-    queryKey: ['chef', id, 'weekly-menu'],
+    queryKey: ["chef", id, "weekly-menu"],
     queryFn: () => apiClient.get<WeeklyMenu>(`/chefs/${id}/weekly-menu`),
   });
   // Daily tiffin subscription offer (#283) — entry shown only when offered.
   const { data: mealOffer } = useQuery({
-    queryKey: ['chef', id, 'meal-offer'],
-    queryFn: () => apiClient.get<{ available: boolean }>(`/chefs/${id}/subscription`),
+    queryKey: ["chef", id, "meal-offer"],
+    queryFn: () =>
+      apiClient.get<{ available: boolean }>(`/chefs/${id}/subscription`),
     enabled: !!id,
   });
 
@@ -75,8 +89,8 @@ export default function ChefDetailPage() {
   // Dietary profile (#41) — used to flag menu items that clash with the
   // customer's saved diet / allergens. Only fetched when signed in.
   const { data: dietaryProfile } = useQuery({
-    queryKey: ['customer-profile', 'dietary'],
-    queryFn: () => apiClient.get<DietaryProfile>('/customer/profile'),
+    queryKey: ["customer-profile", "dietary"],
+    queryFn: () => apiClient.get<DietaryProfile>("/customer/profile"),
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });
@@ -85,23 +99,24 @@ export default function ChefDetailPage() {
   // Group / office orders (#46) — start a shared cart from this chef, then
   // invite others to add their own items and split the bill.
   const startGroup = useMutation({
-    mutationFn: (type: 'office' | 'personal') =>
-      apiClient.post<{ groupOrder: { id: string } }>('/group-orders', {
+    mutationFn: (type: "office" | "personal") =>
+      apiClient.post<{ groupOrder: { id: string } }>("/group-orders", {
         chefId: id,
         type,
-        splitMode: 'split',
+        splitMode: "split",
       }),
     onSuccess: (resp) => {
       setGroupOpen(false);
       navigate(`/group-orders/${resp.groupOrder.id}`);
     },
-    onError: () => toast.error('Could not start a group order. Please try again.'),
+    onError: () =>
+      toast.error("Could not start a group order. Please try again."),
   });
 
   const openGroup = () => {
     if (!isAuthenticated) {
-      toast.error('Please log in to start a group order');
-      navigate('/login');
+      toast.error("Please log in to start a group order");
+      navigate("/login");
       return;
     }
     setGroupOpen(true);
@@ -109,26 +124,29 @@ export default function ChefDetailPage() {
 
   const handleFavorite = async () => {
     if (!isAuthenticated) {
-      toast.error('Please log in to save favorites');
-      navigate('/login');
+      toast.error("Please log in to save favorites");
+      navigate("/login");
       return;
     }
     if (!id) return;
     const result = await toggle(id);
-    if (result === 'max_limit') {
-      toast.error('You can save up to 7 favorite chefs. Remove one first.');
-    } else if (result === 'unauthorized') {
-      toast.error('Please log in to save favorites');
-      navigate('/login');
-    } else if (result === 'error') {
-      toast.error('Something went wrong. Please try again.');
+    if (result === "max_limit") {
+      toast.error("You can save up to 7 favorite chefs. Remove one first.");
+    } else if (result === "unauthorized") {
+      toast.error("Please log in to save favorites");
+      navigate("/login");
+    } else if (result === "error") {
+      toast.error("Something went wrong. Please try again.");
     }
   };
 
   if (chefLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
+        <Loader2
+          className="h-8 w-8 animate-spin text-herb"
+          aria-hidden="true"
+        />
       </div>
     );
   }
@@ -136,7 +154,7 @@ export default function ChefDetailPage() {
   if (!chef) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center">
-        <AlertCircle className="h-16 w-16 text-ink-muted"  aria-hidden="true" />
+        <AlertCircle className="h-16 w-16 text-ink-muted" aria-hidden="true" />
         <h2 className="mt-4 text-xl font-semibold text-ink">Chef not found</h2>
         <Button asChild variant="primary" className="mt-4">
           <Link to="/chefs">Browse Chefs</Link>
@@ -180,7 +198,9 @@ export default function ChefDetailPage() {
               loading="lazy"
               decoding="async"
               className="h-24 w-24 rounded-xl border-4 border-bone object-cover shadow-3 md:h-32 md:w-32 shrink-0"
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
             />
 
             {/* Info */}
@@ -193,20 +213,27 @@ export default function ChefDetailPage() {
                     </h1>
                     {chef.verified && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-herb-tint px-2 py-0.5 text-xs font-medium text-herb">
-                        <Check className="h-3 w-3"  aria-hidden="true" />
+                        <Check className="h-3 w-3" aria-hidden="true" />
                         Verified
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-ink-soft">{chef.cuisines.join(' • ')}</p>
+                  <p className="mt-1 text-ink-soft">
+                    {chef.cuisines.join(" • ")}
+                  </p>
                   {/* FSSAI licence — surfaces statutory compliance (FSS Act §31) to customers. */}
                   {/* TODO(CW-01c): Backend must expose `fssaiLicenseNumber` on /chefs/:id. */}
                   {chef.fssaiLicenseNumber ? (
                     <div className="mt-2 flex items-center gap-2 text-xs text-ink-soft">
-                      <ShieldCheck className="h-4 w-4 text-herb" aria-hidden="true" />
+                      <ShieldCheck
+                        className="h-4 w-4 text-herb"
+                        aria-hidden="true"
+                      />
                       <span>
-                        FSSAI licence:{' '}
-                        <span className="font-mono">{chef.fssaiLicenseNumber}</span>
+                        FSSAI licence:{" "}
+                        <span className="font-mono">
+                          {chef.fssaiLicenseNumber}
+                        </span>
                       </span>
                     </div>
                   ) : null}
@@ -225,10 +252,17 @@ export default function ChefDetailPage() {
                     variant="outline"
                     size="icon"
                     onClick={handleFavorite}
-                    aria-label={favorited ? `Remove ${chef.businessName} from favorites` : `Save ${chef.businessName} to favorites`}
+                    aria-label={
+                      favorited
+                        ? `Remove ${chef.businessName} from favorites`
+                        : `Save ${chef.businessName} to favorites`
+                    }
                     aria-pressed={favorited}
                   >
-                    <Heart aria-hidden="true" className={`h-5 w-5 transition-colors ${favorited ? 'fill-paprika text-paprika' : ''}`} />
+                    <Heart
+                      aria-hidden="true"
+                      className={`h-5 w-5 transition-colors ${favorited ? "fill-paprika text-paprika" : ""}`}
+                    />
                   </Button>
                   <Button variant="outline" size="icon" aria-label="Share chef">
                     <Share2 aria-hidden="true" className="h-5 w-5" />
@@ -242,8 +276,13 @@ export default function ChefDetailPage() {
               <div className="mt-6 flex flex-wrap gap-6">
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 rounded-lg bg-herb-tint px-2 py-1">
-                    <Star className="h-4 w-4 fill-herb text-herb"  aria-hidden="true" />
-                    <span className="font-semibold text-herb">{chef.rating}</span>
+                    <Star
+                      className="h-4 w-4 fill-herb text-herb"
+                      aria-hidden="true"
+                    />
+                    <span className="font-semibold text-herb">
+                      {chef.rating}
+                    </span>
                   </div>
                   <span className="text-sm text-ink-muted">
                     ({chef.totalReviews} reviews)
@@ -251,17 +290,17 @@ export default function ChefDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-ink-soft">
-                  <Clock className="h-4 w-4"  aria-hidden="true" />
+                  <Clock className="h-4 w-4" aria-hidden="true" />
                   {chef.prepTime} prep time
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-ink-soft">
-                  <MapPin className="h-4 w-4"  aria-hidden="true" />
+                  <MapPin className="h-4 w-4" aria-hidden="true" />
                   {chef.serviceRadius} km delivery radius
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-ink-soft">
-                  <ChefHat className="h-4 w-4"  aria-hidden="true" />
+                  <ChefHat className="h-4 w-4" aria-hidden="true" />
                   {chef.totalOrders}+ orders
                 </div>
               </div>
@@ -282,13 +321,16 @@ export default function ChefDetailPage() {
                   )}
                 </div>
                 <div className="text-sm text-ink-soft">
-                  Min. order: <span className="font-medium">{fp(chef.minimumOrder)}</span>
+                  Min. order:{" "}
+                  <span className="font-medium">{fp(chef.minimumOrder)}</span>
                 </div>
                 <div className="text-sm text-ink-soft">
-                  Delivery: <span className="font-medium">{fp(chef.deliveryFee)}</span>
+                  Delivery:{" "}
+                  <span className="font-medium">{fp(chef.deliveryFee)}</span>
                 </div>
                 <div className="text-sm text-ink-soft">
-                  Price range: <span className="font-medium">{chef.priceRange}</span>
+                  Price range:{" "}
+                  <span className="font-medium">{chef.priceRange}</span>
                 </div>
               </div>
             </div>
@@ -309,7 +351,8 @@ export default function ChefDetailPage() {
             Plan a week of meals — pre-book tiffin from this chef
             <span aria-hidden="true">›</span>
           </Link>
-          {(mealOffer as unknown as { available?: boolean } | undefined)?.available && (
+          {(mealOffer as unknown as { available?: boolean } | undefined)
+            ?.available && (
             <Link
               to={`/chefs/${id}/subscribe`}
               className="mt-4 flex items-center justify-between rounded-xl border border-herb/30 bg-herb-tint px-4 py-3 text-sm font-medium text-herb hover:bg-herb-tint/80"
@@ -329,26 +372,30 @@ export default function ChefDetailPage() {
             <div className="rounded-xl bg-bone p-4 shadow-1 lg:sticky lg:top-24">
               <h3 className="font-semibold text-ink mb-3">Categories</h3>
               <div className="flex flex-wrap gap-2 lg:flex-col lg:gap-1">
-                <button type="button"
+                <button
+                  type="button"
                   onClick={() => setSelectedCategory(null)}
                   className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                     selectedCategory === null
-                      ? 'bg-herb-tint text-herb font-medium'
-                      : 'text-ink-soft hover:bg-mist'
+                      ? "bg-herb-tint text-herb font-medium"
+                      : "text-ink-soft hover:bg-mist"
                   }`}
                 >
                   All Items ({menuItems.length})
                 </button>
                 {categories.map((category) => {
-                  const count = menuItems.filter((i) => i.categoryId === category.id).length;
+                  const count = menuItems.filter(
+                    (i) => i.categoryId === category.id,
+                  ).length;
                   return (
-                    <button type="button"
+                    <button
+                      type="button"
                       key={category.id}
                       onClick={() => setSelectedCategory(category.id)}
                       className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                         selectedCategory === category.id
-                          ? 'bg-herb-tint text-herb font-medium'
-                          : 'text-ink-soft hover:bg-mist'
+                          ? "bg-herb-tint text-herb font-medium"
+                          : "text-ink-soft hover:bg-mist"
                       }`}
                     >
                       {category.name} ({count})
@@ -359,12 +406,16 @@ export default function ChefDetailPage() {
 
               {/* Reviews Link */}
               <div className="mt-6 pt-4 border-t">
-                <button type="button"
+                <button
+                  type="button"
                   onClick={() => setShowReviews(!showReviews)}
                   className="flex items-center justify-between w-full text-left text-sm text-ink-soft hover:text-ink"
                 >
                   <span>Reviews ({chef.totalReviews})</span>
-                  <ChevronRight className={`h-4 w-4 transition-transform ${showReviews ? 'rotate-90' : ''}`}  aria-hidden="true" />
+                  <ChevronRight
+                    className={`h-4 w-4 transition-transform ${showReviews ? "rotate-90" : ""}`}
+                    aria-hidden="true"
+                  />
                 </button>
               </div>
             </div>
@@ -374,7 +425,10 @@ export default function ChefDetailPage() {
           <div className="flex-1">
             {menuLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
+                <Loader2
+                  className="h-8 w-8 animate-spin text-herb"
+                  aria-hidden="true"
+                />
               </div>
             ) : showReviews ? (
               <ReviewsList reviews={reviews?.data || []} />
@@ -410,8 +464,16 @@ export default function ChefDetailPage() {
       {/* Floating Cart Button */}
       {cartItemCount > 0 && (
         <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-auto z-40">
-          <Button asChild variant="primary" size="lg" className="w-full justify-between gap-4 shadow-3 md:justify-center">
-            <Link to="/cart" aria-label={`View cart, ${cartItemCount} items, ${fp(cart.getSubtotal())}`}>
+          <Button
+            asChild
+            variant="primary"
+            size="lg"
+            className="w-full justify-between gap-4 shadow-3 md:justify-center"
+          >
+            <Link
+              to="/cart"
+              aria-label={`View cart, ${cartItemCount} items, ${fp(cart.getSubtotal())}`}
+            >
               <div className="flex items-center gap-3">
                 <ShoppingCart aria-hidden="true" className="h-5 w-5" />
                 <span>View Cart</span>
@@ -439,20 +501,24 @@ export default function ChefDetailPage() {
           <button
             type="button"
             disabled={startGroup.isPending}
-            onClick={() => startGroup.mutate('personal')}
+            onClick={() => startGroup.mutate("personal")}
             className="rounded-xl border border-mist bg-paper p-4 text-left transition-colors hover:border-herb disabled:opacity-50"
           >
             <p className="font-medium text-ink">Personal group</p>
-            <p className="mt-0.5 text-sm text-ink-soft">Friends, family, or a casual meet-up.</p>
+            <p className="mt-0.5 text-sm text-ink-soft">
+              Friends, family, or a casual meet-up.
+            </p>
           </button>
           <button
             type="button"
             disabled={startGroup.isPending}
-            onClick={() => startGroup.mutate('office')}
+            onClick={() => startGroup.mutate("office")}
             className="rounded-xl border border-mist bg-paper p-4 text-left transition-colors hover:border-herb disabled:opacity-50"
           >
             <p className="font-medium text-ink">Office order</p>
-            <p className="mt-0.5 text-sm text-ink-soft">A team lunch or corporate event.</p>
+            <p className="mt-0.5 text-sm text-ink-soft">
+              A team lunch or corporate event.
+            </p>
           </button>
         </div>
       </SimpleDialog>
@@ -486,9 +552,10 @@ function MenuItemCard({
   const dishSaved = isFavoriteDish(item.id);
   const handleToggleDish = async () => {
     const r = await toggleDish(item.id);
-    if (r === 'unauthorized') toast.error('Please sign in to save dishes');
-    else if (r === 'max_limit') toast.error("You've reached the maximum number of saved dishes");
-    else if (r === 'error') toast.error('Could not update your saved dishes');
+    if (r === "unauthorized") toast.error("Please sign in to save dishes");
+    else if (r === "max_limit")
+      toast.error("You've reached the maximum number of saved dishes");
+    else if (r === "error") toast.error("Could not update your saved dishes");
   };
 
   const cartItem = cart.items.find((i) => i.menuItemId === item.id);
@@ -497,6 +564,13 @@ function MenuItemCard({
   const hasModifiers = (item.modifierGroups?.length ?? 0) > 0;
   const [modOpen, setModOpen] = useState(false);
   const [picks, setPicks] = useState<Record<string, string[]>>({});
+  // A cart already holding another kitchen's food blocks this add. Rather than
+  // telling the customer to go and fix it themselves, hold the attempted line
+  // here and offer to replace the cart — the same choice the mobile app gives.
+  const [pendingLine, setPendingLine] = useState<{
+    quantity: number;
+    modifiers?: SelectedModifier[];
+  } | null>(null);
 
   const addLine = (modifiers?: SelectedModifier[]) => {
     try {
@@ -505,10 +579,26 @@ function MenuItemCard({
       toast.success(`Added ${item.name} to cart`);
       setQuantity(1);
     } catch (error) {
-      if (error instanceof Error && error.message === 'DIFFERENT_CHEF') {
-        toast.error('Your cart has items from another chef. Clear cart first.');
+      if (error instanceof Error && error.message === "DIFFERENT_CHEF") {
+        // Offer the way out instead of naming the obstacle. The previous copy
+        // ("Clear cart first") described a task the customer had no control to
+        // perform from this screen, so the only way forward was to guess.
+        setPendingLine({ quantity, modifiers });
       }
     }
+  };
+
+  // Replace the cart with this kitchen's line. Ordering matters: clear first so
+  // addItem no longer sees a foreign chefId, then set the chef, then add — the
+  // store derives chefId from the cart being empty.
+  const replaceCartWithLine = () => {
+    if (!pendingLine) return;
+    cart.clearCart();
+    cart.setChef(chefInfo);
+    cart.addItem(item, pendingLine.quantity, undefined, pendingLine.modifiers);
+    toast.success(`Cart replaced with ${item.name}`);
+    setQuantity(1);
+    setPendingLine(null);
   };
 
   const handleAddToCart = () => {
@@ -530,14 +620,27 @@ function MenuItemCard({
     if (g.maxSelect > 0 && chosen.length > g.maxSelect) modValid = false;
     for (const oid of chosen) {
       const o = g.options.find((x) => x.id === oid);
-      if (o) selectedModifiers.push({ groupId: g.id, groupName: g.name, optionId: o.id, optionName: o.name, priceDelta: o.priceDelta });
+      if (o)
+        selectedModifiers.push({
+          groupId: g.id,
+          groupName: g.name,
+          optionId: o.id,
+          optionName: o.name,
+          priceDelta: o.priceDelta,
+        });
     }
   }
   const toggleOption = (groupId: string, optionId: string, single: boolean) =>
     setPicks((prev) => {
       const cur = prev[groupId] ?? [];
-      if (single) return { ...prev, [groupId]: cur.includes(optionId) ? [] : [optionId] };
-      return { ...prev, [groupId]: cur.includes(optionId) ? cur.filter((id) => id !== optionId) : [...cur, optionId] };
+      if (single)
+        return { ...prev, [groupId]: cur.includes(optionId) ? [] : [optionId] };
+      return {
+        ...prev,
+        [groupId]: cur.includes(optionId)
+          ? cur.filter((id) => id !== optionId)
+          : [...cur, optionId],
+      };
     });
 
   return (
@@ -554,7 +657,9 @@ function MenuItemCard({
               loading="lazy"
               decoding="async"
               className="h-full w-full object-cover"
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
             />
             {item.isFeatured && (
               <div className="absolute top-1 left-1 rounded bg-herb px-1.5 py-0.5 text-xs font-medium text-paper">
@@ -572,10 +677,17 @@ function MenuItemCard({
               {/* Per-dish rating rolled up from reviews (#145) */}
               {item.rating != null && item.rating > 0 && (
                 <div className="mt-0.5 flex items-center gap-1 text-sm">
-                  <Star className="h-3.5 w-3.5 fill-herb text-herb" aria-hidden="true" />
-                  <span className="font-medium text-ink">{item.rating.toFixed(1)}</span>
+                  <Star
+                    className="h-3.5 w-3.5 fill-herb text-herb"
+                    aria-hidden="true"
+                  />
+                  <span className="font-medium text-ink">
+                    {item.rating.toFixed(1)}
+                  </span>
                   {item.totalReviews ? (
-                    <span className="text-ink-muted">({item.totalReviews})</span>
+                    <span className="text-ink-muted">
+                      ({item.totalReviews})
+                    </span>
                   ) : null}
                 </div>
               )}
@@ -583,11 +695,18 @@ function MenuItemCard({
                 {item.description}
               </p>
               {/* Combo includes (#233) */}
-              {item.isCombo && item.comboItems && item.comboItems.length > 0 && (
-                <p className="mt-1 text-xs font-medium text-herb">
-                  Includes: {item.comboItems.map((c) => (c.quantity > 1 ? `${c.quantity}× ${c.name}` : c.name)).join(', ')}
-                </p>
-              )}
+              {item.isCombo &&
+                item.comboItems &&
+                item.comboItems.length > 0 && (
+                  <p className="mt-1 text-xs font-medium text-herb">
+                    Includes:{" "}
+                    {item.comboItems
+                      .map((c) =>
+                        c.quantity > 1 ? `${c.quantity}× ${c.name}` : c.name,
+                      )
+                      .join(", ")}
+                  </p>
+                )}
             </div>
 
             {/* Save/favorite heart (#237) */}
@@ -595,10 +714,17 @@ function MenuItemCard({
               type="button"
               onClick={handleToggleDish}
               aria-pressed={dishSaved}
-              aria-label={dishSaved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
+              aria-label={
+                dishSaved
+                  ? `Remove ${item.name} from saved`
+                  : `Save ${item.name}`
+              }
               className="-mr-1 -mt-1 shrink-0 rounded-full p-1.5 text-ink-muted transition-colors hover:bg-mist"
             >
-              <Heart className={`h-5 w-5 ${dishSaved ? 'fill-paprika text-paprika' : ''}`} aria-hidden="true" />
+              <Heart
+                className={`h-5 w-5 ${dishSaved ? "fill-paprika text-paprika" : ""}`}
+                aria-hidden="true"
+              />
             </button>
           </div>
 
@@ -633,8 +759,11 @@ function MenuItemCard({
           {/* Dietary conflict warning (#41) */}
           {conflicts.length > 0 && (
             <p className="mt-2 flex items-start gap-1 text-xs font-medium text-paprika">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-              <span>{conflicts.map((cf) => cf.detail).join(' · ')}</span>
+              <AlertTriangle
+                className="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
+                aria-hidden="true"
+              />
+              <span>{conflicts.map((cf) => cf.detail).join(" · ")}</span>
             </p>
           )}
 
@@ -652,33 +781,41 @@ function MenuItemCard({
             </div>
 
             {/* Capacity (#48): low-stock hint when capped and not sold out. */}
-            {item.remainingToday != null && item.remainingToday > 0 && !item.soldOut ? (
-              <p className="mb-1 text-xs text-ink-muted tabular-nums">{item.remainingToday} left today</p>
+            {item.remainingToday != null &&
+            item.remainingToday > 0 &&
+            !item.soldOut ? (
+              <p className="mb-1 text-xs text-ink-muted tabular-nums">
+                {item.remainingToday} left today
+              </p>
             ) : null}
 
             {item.soldOut ? (
-              <span className="text-sm font-semibold text-paprika">Sold out today</span>
+              <span className="text-sm font-semibold text-paprika">
+                Sold out today
+              </span>
             ) : item.isAvailable ? (
               <div className="flex items-center gap-2">
                 {/* Quantity selector */}
                 <div className="flex items-center rounded-lg border">
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
                     className="p-2 hover:bg-mist"
                   >
-                    <Minus className="h-4 w-4"  aria-hidden="true" />
+                    <Minus className="h-4 w-4" aria-hidden="true" />
                   </button>
                   <span className="w-8 text-center">{quantity}</span>
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={() => setQuantity(quantity + 1)}
                     className="p-2 hover:bg-mist"
                   >
-                    <Plus className="h-4 w-4"  aria-hidden="true" />
+                    <Plus className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
 
                 <Button variant="primary" size="sm" onClick={handleAddToCart}>
-                  {cartItem ? 'Add More' : 'Add'}
+                  {cartItem ? "Add More" : "Add"}
                 </Button>
               </div>
             ) : (
@@ -690,7 +827,12 @@ function MenuItemCard({
 
       {/* Add-on picker (#232) */}
       {hasModifiers && (
-        <SimpleDialog open={modOpen} onOpenChange={setModOpen} size="md" title={item.name}>
+        <SimpleDialog
+          open={modOpen}
+          onOpenChange={setModOpen}
+          size="md"
+          title={item.name}
+        >
           <div className="space-y-4">
             {groups.map((g) => {
               const single = g.maxSelect === 1;
@@ -700,8 +842,8 @@ function MenuItemCard({
                   <div className="mb-1 flex items-center justify-between">
                     <span className="font-medium text-ink">{g.name}</span>
                     <span className="text-xs text-ink-muted">
-                      {g.required ? 'Required' : 'Optional'}
-                      {g.maxSelect > 1 ? ` · up to ${g.maxSelect}` : ''}
+                      {g.required ? "Required" : "Optional"}
+                      {g.maxSelect > 1 ? ` · up to ${g.maxSelect}` : ""}
                     </span>
                   </div>
                   <div className="space-y-1.5">
@@ -714,12 +856,14 @@ function MenuItemCard({
                           disabled={!o.isAvailable}
                           onClick={() => toggleOption(g.id, o.id, single)}
                           className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm ${
-                            on ? 'border-herb bg-herb-tint' : 'border-mist'
-                          } ${!o.isAvailable ? 'opacity-40' : ''}`}
+                            on ? "border-herb bg-herb-tint" : "border-mist"
+                          } ${!o.isAvailable ? "opacity-40" : ""}`}
                         >
                           <span className="text-ink">{o.name}</span>
                           <span className="text-ink-muted tabular-nums">
-                            {o.priceDelta !== 0 ? `${o.priceDelta > 0 ? '+' : ''}${fp(o.priceDelta)}` : 'Free'}
+                            {o.priceDelta !== 0
+                              ? `${o.priceDelta > 0 ? "+" : ""}${fp(o.priceDelta)}`
+                              : "Free"}
                           </span>
                         </button>
                       );
@@ -738,12 +882,48 @@ function MenuItemCard({
                 setPicks({});
               }}
             >
-              Add · {fp(item.price + selectedModifiers.reduce((s, m) => s + m.priceDelta, 0))}
+              Add ·{" "}
+              {fp(
+                item.price +
+                  selectedModifiers.reduce((s, m) => s + m.priceDelta, 0),
+              )}
             </Button>
-            {!modValid && <p className="text-center text-xs text-ink-muted">Choose the required options to continue</p>}
+            {!modValid && (
+              <p className="text-center text-xs text-ink-muted">
+                Choose the required options to continue
+              </p>
+            )}
           </div>
         </SimpleDialog>
       )}
+      {/* Cross-kitchen replace. A cart holds one kitchen's food at a time —
+            each order goes to one chef — so adding from a second kitchen is a
+            choice between the two, not an error. Offer it as such. */}
+      <SimpleDialog
+        open={pendingLine !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingLine(null);
+        }}
+        size="sm"
+        title="Start a new cart?"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-ink-soft">
+            Your cart has food from{" "}
+            <span className="font-medium text-ink">
+              {cart.chef?.businessName ?? "another kitchen"}
+            </span>
+            . Each order goes to one kitchen, so adding {item.name} will empty
+            your current cart and start a new one.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPendingLine(null)}>
+              Keep my cart
+            </Button>
+            <Button onClick={replaceCartWithLine}>Replace cart</Button>
+          </div>
+        </div>
+      </SimpleDialog>
     </div>
   );
 }
@@ -771,10 +951,11 @@ function ReviewsList({ reviews }: { reviews: Review[] }) {
                       key={i}
                       className={`h-4 w-4 ${
                         i < review.overallRating
-                          ? 'fill-amber text-amber'
-                          : 'text-ink-muted'
+                          ? "fill-amber text-amber"
+                          : "text-ink-muted"
                       }`}
-                     aria-hidden="true" />
+                      aria-hidden="true"
+                    />
                   ))}
                 </div>
                 <span className="text-sm text-ink-muted">
@@ -789,8 +970,12 @@ function ReviewsList({ reviews }: { reviews: Review[] }) {
               )}
               {review.chefResponse && (
                 <div className="mt-3 rounded-lg bg-paper p-3">
-                  <p className="text-sm font-medium text-ink-soft">Chef's Response:</p>
-                  <p className="mt-1 text-sm text-ink-soft">{review.chefResponse}</p>
+                  <p className="text-sm font-medium text-ink-soft">
+                    Chef's Response:
+                  </p>
+                  <p className="mt-1 text-sm text-ink-soft">
+                    {review.chefResponse}
+                  </p>
                 </div>
               )}
             </div>
@@ -804,9 +989,9 @@ function ReviewsList({ reviews }: { reviews: Review[] }) {
 // Read-only fixed weekly menu on chef detail (#1). Grouped by day (Mon-first),
 // each cell shows a veg/non-veg dot, slot, dish, price. Presentational.
 const WM_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
-const WM_SLOT_ORDER: WeeklyMenuItem['slot'][] = ['lunch', 'dinner'];
+const WM_SLOT_ORDER: WeeklyMenuItem["slot"][] = ["lunch", "dinner"];
 
-const WM_DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WM_DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /**
  * The weekly tiffin menu, as day tabs rather than the full 7-day grid.
@@ -818,7 +1003,13 @@ const WM_DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  * discoverable (every day is one click away, and the tabs prove the week is
  * covered) while giving the à la carte list back its place near the top.
  */
-function WeeklyMenuSection({ items, fp }: { items: WeeklyMenuItem[]; fp: (amount: number) => string }) {
+function WeeklyMenuSection({
+  items,
+  fp,
+}: {
+  items: WeeklyMenuItem[];
+  fp: (amount: number) => string;
+}) {
   const byDay = new Map<number, WeeklyMenuItem[]>();
   for (const it of items) {
     const arr = byDay.get(it.dayOfWeek) ?? [];
@@ -830,7 +1021,7 @@ function WeeklyMenuSection({ items, fp }: { items: WeeklyMenuItem[]; fp: (amount
   // Default to today when the chef cooks today, else the first day they do.
   const todayIdx = new Date().getDay();
   const [activeDay, setActiveDay] = useState<number>(
-    days.includes(todayIdx) ? todayIdx : (days[0] ?? 1)
+    days.includes(todayIdx) ? todayIdx : (days[0] ?? 1),
   );
   const selected = days.includes(activeDay) ? activeDay : (days[0] ?? 1);
 
@@ -841,12 +1032,18 @@ function WeeklyMenuSection({ items, fp }: { items: WeeklyMenuItem[]; fp: (amount
 
   return (
     <section aria-label="This week's menu">
-      <h2 className="font-display text-display-xs text-ink">This week&apos;s menu</h2>
+      <h2 className="font-display text-display-xs text-ink">
+        This week&apos;s menu
+      </h2>
       <p className="mt-1 text-sm text-ink-soft">
         A fixed menu — every subscriber gets the same dish each day.
       </p>
 
-      <div className="mt-4 flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Day of the week">
+      <div
+        className="mt-4 flex gap-1.5 overflow-x-auto pb-1"
+        role="tablist"
+        aria-label="Day of the week"
+      >
         {days.map((day) => {
           const isActive = day === selected;
           return (
@@ -858,31 +1055,47 @@ function WeeklyMenuSection({ items, fp }: { items: WeeklyMenuItem[]; fp: (amount
               onClick={() => setActiveDay(day)}
               className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-ink text-paper'
-                  : 'border border-mist bg-paper text-ink-soft hover:text-ink'
+                  ? "bg-ink text-paper"
+                  : "border border-mist bg-paper text-ink-soft hover:text-ink"
               }`}
             >
               {WM_DAY_SHORT[day]}
-              {day === todayIdx ? <span className="ml-1 text-xs opacity-70">Today</span> : null}
+              {day === todayIdx ? (
+                <span className="ml-1 text-xs opacity-70">Today</span>
+              ) : null}
             </button>
           );
         })}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" role="tabpanel">
+      <div
+        className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+        role="tabpanel"
+      >
         {cells.map((c, i) => {
-          const isVeg = c.variant === 'veg';
+          const isVeg = c.variant === "veg";
           return (
-            <div key={c.id ?? `${selected}-${c.slot}-${c.variant}-${i}`} className="rounded-lg border border-mist bg-paper p-3">
+            <div
+              key={c.id ?? `${selected}-${c.slot}-${c.variant}-${i}`}
+              className="rounded-lg border border-mist bg-paper p-3"
+            >
               <div className="flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-sm ${isVeg ? 'bg-herb' : 'bg-paprika'}`} aria-hidden="true" />
+                <span
+                  className={`h-2 w-2 rounded-sm ${isVeg ? "bg-herb" : "bg-paprika"}`}
+                  aria-hidden="true"
+                />
                 <span className="text-xs font-medium text-ink-soft">
-                  {c.slot === 'lunch' ? 'Lunch' : 'Dinner'} · {isVeg ? 'Veg' : 'Non-veg'}
+                  {c.slot === "lunch" ? "Lunch" : "Dinner"} ·{" "}
+                  {isVeg ? "Veg" : "Non-veg"}
                 </span>
               </div>
-              <p className="mt-1 line-clamp-2 text-sm font-semibold text-ink">{c.name}</p>
+              <p className="mt-1 line-clamp-2 text-sm font-semibold text-ink">
+                {c.name}
+              </p>
               {c.price > 0 ? (
-                <p className="mt-0.5 text-sm font-semibold tabular-nums text-ink">{fp(c.price)}</p>
+                <p className="mt-0.5 text-sm font-semibold tabular-nums text-ink">
+                  {fp(c.price)}
+                </p>
               ) : null}
             </div>
           );
