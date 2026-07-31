@@ -26,7 +26,7 @@ func setupV2RefundDB(t *testing.T) *gorm.DB {
 			commission_rate REAL, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			refund_txn_id TEXT, refund_stage TEXT DEFAULT '', chef_refund_choice TEXT DEFAULT '',
 			refund_percent INTEGER, refund_floor_percent INTEGER,
-			refund_destination TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
+			refund_destination TEXT DEFAULT '', refund_decision_by DATETIME, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, meal_plan_number TEXT,
 			escrow_payment_id TEXT DEFAULT '', subtotal REAL, tax REAL, total REAL, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT UNIQUE, balance REAL DEFAULT 0,

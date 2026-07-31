@@ -26,6 +26,10 @@ const (
 	// SubjectOrderAcceptReminder — an unaccepted order is inside the final two
 	// hours before the kitchen closes (#694).
 	SubjectOrderAcceptReminder = "orders.accept_reminder"
+	// SubjectOrderStale — an order the chef ACCEPTED and then never finished. Separate
+	// from accept_reminder, which chases an order nobody took: this one has an owner who
+	// stopped, so it goes to BOTH sides and ends in a refund rather than a void.
+	SubjectOrderStale = "orders.stale_reminder"
 	SubjectOrderDelivered      = "orders.delivered"
 	// SubjectOrderReadyForPickup — a PICKUP order is cooked and waiting to be
 	// collected. Distinct from orders.updated on purpose: for a delivery order

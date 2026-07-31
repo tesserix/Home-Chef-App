@@ -237,6 +237,10 @@ type MealPlanDay struct {
 	// lead time drops into a lower band. The server rejects any decision below it.
 	RefundFloorPercent *int              `gorm:"" json:"refundFloorPercent,omitempty"`
 	RefundDestination  RefundDestination `gorm:"type:varchar(8);default:''" json:"refundDestination,omitempty"`
+	// RefundDecisionBy is when the chef's window to price this refund runs out. Past it the
+	// deadline sweep agrees 100% on the customer's behalf, so an unresponsive kitchen cannot
+	// sit on someone's money. Set only while pending_chef.
+	RefundDecisionBy *time.Time `gorm:"index" json:"refundDecisionBy,omitempty"`
 
 	// Payout hold (#387). Same semantics as Order: on delivery the day's hold
 	// becomes awaiting_customer_confirmation (no release); the customer confirming
