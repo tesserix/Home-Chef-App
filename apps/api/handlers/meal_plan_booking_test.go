@@ -139,6 +139,9 @@ func TestCreateMealPlan_BlocksAlreadyBookedDay(t *testing.T) {
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
 	require.Equal(t, "duplicate_day", out["code"])
+	// The day is named in IST — the stored instant is the IST midnight, so a UTC
+	// format would tell the customer they booked the day before.
+	require.Equal(t, []any{"16 Mar lunch"}, out["days"])
 }
 
 // #409: a different slot on a day the customer already booked is still bookable.
