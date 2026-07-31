@@ -220,6 +220,11 @@ type Order struct {
 	// cannot double-send within one 30-minute slot.
 	AcceptReminderCount  int        `gorm:"not null;default:0" json:"acceptReminderCount"`
 	LastAcceptReminderAt *time.Time `gorm:"" json:"lastAcceptReminderAt,omitempty"`
+	// StaleReminderCount / LastStaleReminderAt track the nudges for an order the chef
+	// ACCEPTED and then never finished. Separate from the accept nudges above: those
+	// chase an order nobody has taken, these chase one somebody took and dropped.
+	StaleReminderCount  int        `gorm:"not null;default:0" json:"staleReminderCount"`
+	LastStaleReminderAt *time.Time `gorm:"" json:"lastStaleReminderAt,omitempty"`
 	PreparedAt           *time.Time `gorm:"" json:"preparedAt,omitempty"`
 	PickedUpAt           *time.Time `gorm:"" json:"pickedUpAt,omitempty"`
 	DeliveredAt          *time.Time `gorm:"" json:"deliveredAt,omitempty"`

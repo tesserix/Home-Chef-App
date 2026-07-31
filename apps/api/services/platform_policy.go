@@ -61,6 +61,17 @@ type PlatformPolicy struct {
 	// rather than through a deploy — including flipping the >12h band from
 	// auto-100% to a chef-decided 75% floor. Empty ⇒ DefaultMealPlanRefundTiers.
 	MealPlanRefundTiers []MealPlanRefundTier `json:"mealPlanRefundTiers"`
+	// ── Stranded fulfilment (an order the chef accepted and never finished) ──────
+	// StuckOrderReminderDays is how long an in-flight order sits before both sides are
+	// nudged, and how long between repeats. StuckOrderRefundDays is when the platform
+	// stops asking and refunds the customer in full. 0 ⇒ the defaults below; a negative
+	// StuckOrderRefundDays disables the auto-refund, leaving the nudges only.
+	StuckOrderReminderDays int `json:"stuckOrderReminderDays"`
+	StuckOrderRefundDays   int `json:"stuckOrderRefundDays"`
+	// StuckOrderMaxReminders caps the nudges so a dead order stops pestering both sides
+	// while it waits out the refund deadline.
+	StuckOrderMaxReminders int `json:"stuckOrderMaxReminders"`
+
 	// MealPlanChefRefundDecisionMinutes is how long a chef has to price a refund before it
 	// resolves at 100% (of the base, which already excludes the platform's commission).
 	// The floor protects the chef's minimum; this protects the customer's maximum wait.
@@ -112,6 +123,12 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		// One hour to price a refund. Long enough for a chef mid-service to answer,
 		// short enough that a cancelled customer is not waiting on a silent kitchen.
 		MealPlanChefRefundDecisionMinutes: 60,
+		// Nudge from day 3, repeat every 3 days up to 5 times, refund at 30. Nothing was
+		// delivered, so at the deadline the customer is made whole rather than left to
+		// chase an order both sides have plainly abandoned.
+		StuckOrderReminderDays: 3,
+		StuckOrderRefundDays:   30,
+		StuckOrderMaxReminders: 5,
 		// 6% of the cancelled order's value, on cancellations inside 4h of
 		// service, with the first cancellation in a rolling 30 days exempt.
 		ChefCancelPenaltyEnabled:    true,

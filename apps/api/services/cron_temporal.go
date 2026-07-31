@@ -51,6 +51,9 @@ func cronJobs() []cronJob {
 		// #694 — the pre-close nudge: remind a chef of an order they have not
 		// accepted, before the void sweep cancels it. Same durable/ticker duality.
 		{"accept-reminder", acceptReminderInterval, runAcceptReminderScan, StartAcceptReminderCron},
+		// The other half of #694: an order the chef ACCEPTED and abandoned. Nudges both
+		// sides, then refunds the customer in full — also a money path, so same duality.
+		{"stuck-order", stuckOrderSweepInterval, runStuckOrderSweep, StartStuckOrderCron},
 		{"payout-auto-confirm", payoutAutoConfirmInterval, runPayoutAutoConfirmScan, StartPayoutAutoConfirmCron},
 		{"payout-reconcile", payoutReconcileInterval, runPayoutReconcileScan, StartPayoutReconcileCron},
 		// Cashfree Payouts disbursement status. NOT a backstop — webhooks are not
