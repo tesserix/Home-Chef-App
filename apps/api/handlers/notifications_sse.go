@@ -50,6 +50,14 @@ func (h *NotificationHandler) StreamNotificationsSSE(c *gin.Context) {
 		return
 	}
 
+	// Flush an opening comment BEFORE anything can block. Go sends no headers until the
+	// first write, so without this the client sees nothing at all — not even a status —
+	// until the first real event, which on a quiet account is never. Every layer in
+	// between (Cloudflare, Istio, the client's own connect timeout) reads that silence as
+	// a dead connection and drops it.
+	fmt.Fprint(c.Writer, ": connected\n\n")
+	flusher.Flush()
+
 	// Buffered so a slow reader cannot block the NATS callback, which is shared.
 	frames := make(chan []byte, 32)
 
