@@ -115,45 +115,51 @@ export function useLiveUpdates(enabled: boolean = true): void {
 }
 
 /**
- * Minimal SSE reader over fetch's streaming body. React Native has no EventSource, and the
- * frames we care about are single-line `data:` payloads, so a full parser would be dead
- * weight — this handles the one shape the server sends and ignores comments/heartbeats.
+ * Minimal SSE reader over XMLHttpRequest.
+ *
+ * NOT fetch: React Native's fetch is the whatwg-fetch XHR polyfill, so `response.body` is
+ * undefined and a `getReader()` stream reader silently reads nothing — the fallback would
+ * look wired up and deliver no events. XHR exposes the partial `responseText` as it
+ * arrives, which is all an SSE reader needs.
+ *
+ * There is no EventSource in RN either, and the server sends one shape (single-line
+ * `data:` frames plus `:` heartbeats), so a full spec parser would be dead weight.
  */
 function openEventStream(
   url: string,
   token: string,
   onFrame: (raw: string) => void,
 ): { close: () => void } {
-  const controller = new AbortController();
+  const xhr = new XMLHttpRequest();
+  // How much of responseText has already been turned into frames. XHR keeps the whole
+  // response in memory and grows it, so we parse only the tail each time.
+  let consumed = 0;
 
-  void (async () => {
-    try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
-        signal: controller.signal,
-      });
-      const body = res.body as ReadableStream<Uint8Array> | null;
-      if (!body) return;
-      const reader = body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        // Frames are separated by a blank line; keep the trailing partial in the buffer.
-        const frames = buffer.split('\n\n');
-        buffer = frames.pop() ?? '';
-        for (const frame of frames) {
-          for (const line of frame.split('\n')) {
-            if (line.startsWith('data:')) onFrame(line.slice(5).trim());
-          }
-        }
+  const drain = () => {
+    const text = xhr.responseText ?? '';
+    // Only complete frames (terminated by a blank line) are safe to parse — the tail may
+    // be half a frame still in flight.
+    const lastBreak = text.lastIndexOf('\n\n');
+    if (lastBreak < consumed) return;
+    const chunk = text.slice(consumed, lastBreak);
+    consumed = lastBreak + 2;
+    for (const frame of chunk.split('\n\n')) {
+      for (const line of frame.split('\n')) {
+        // `:` lines are comments (our heartbeat) — ignore them.
+        if (line.startsWith('data:')) onFrame(line.slice(5).trim());
       }
-    } catch {
-      // Aborted on unmount, or the stream dropped — the caller's remount reconnects.
     }
-  })();
+  };
 
-  return { close: () => controller.abort() };
+  xhr.open('GET', url);
+  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+  xhr.setRequestHeader('Accept', 'text/event-stream');
+  xhr.onreadystatechange = () => {
+    // 3 = LOADING: body is arriving. Parsing here rather than on completion is the whole
+    // point — this response never completes.
+    if (xhr.readyState >= 3) drain();
+  };
+  xhr.send();
+
+  return { close: () => xhr.abort() };
 }
