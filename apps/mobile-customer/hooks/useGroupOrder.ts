@@ -182,6 +182,12 @@ export interface GroupPayResponse {
   razorpayKeyId: string;
   amount: number;
   currency: string;
+  /** Which gateway minted this charge. Absent on older servers → razorpay. */
+  provider?: string;
+  cashfreeOrderId?: string;
+  cashfreePaymentSessionId?: string;
+  /** SANDBOX | PRODUCTION — different hosts, the client cannot infer it. */
+  cashfreeEnv?: string;
 }
 
 export function usePayGroupShare() {

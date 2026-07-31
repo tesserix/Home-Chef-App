@@ -57,6 +57,24 @@ export function useMealPlanApproval(
                     showAlert('Payment unavailable', res.paymentError);
                     return;
                   }
+                  // Cashfree opens its own sheet (a WebView, not the Razorpay
+                  // native one) and has no key id or client signature, so it gets
+                  // its own screen. The provider comes from the server — never
+                  // guessed here, since only the server knows which rail it minted.
+                  if (approve && res?.provider === 'cashfree') {
+                    router.push({
+                      pathname: '/payment/cashfree',
+                      params: {
+                        kind: 'mealplan',
+                        mealPlanId: plan.id,
+                        orderId: plan.id,
+                        paymentSessionId: res.cashfreePaymentSessionId ?? '',
+                        cashfreeOrderId: res.cashfreeOrderId ?? '',
+                        env: res.cashfreeEnv ?? '',
+                      },
+                    });
+                    return;
+                  }
                   if (approve && res?.razorpayOrderId) {
                     const b = mealPlanAdvanceBreakdown(res.mealPlan);
                     router.push({

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -419,6 +420,40 @@ func (h *MealPlanHandler) GetMealPlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
+// mealPlanGatewayHandshake fills in whatever the client needs to open checkout for
+// this plan's advance. The two gateways hand back different things: Cashfree a
+// payment_session_id plus the environment (sandbox and production are different
+// hosts, and nothing in the session lets the client infer which), Razorpay its key
+// id alongside the order id. Keyed off the provider stored on the plan so a resumed
+// approval always offers the rail that actually minted the order.
+func mealPlanGatewayHandshake(resp gin.H, plan *models.MealPlan, sessionID string) {
+	provider := plan.PaymentProvider
+	if provider == "" {
+		provider = models.PaymentProviderRazorpay
+	}
+	resp["provider"] = provider
+	// Kept for every provider: this column is the generic gateway order id, and the
+	// existing customer apps read razorpayOrderId to decide the plan has an advance.
+	resp["razorpayOrderId"] = plan.RazorpayOrderID
+
+	if provider == models.PaymentProviderCashfree {
+		resp["cashfreeOrderId"] = plan.RazorpayOrderID
+		resp["cashfreePaymentSessionId"] = sessionID
+		if cf := services.GetCashfreeFor(plan.Mode); cf != nil {
+			resp["cashfreeAppId"] = cf.GetAppID()
+			env := "PRODUCTION"
+			if cf.IsSandbox() {
+				env = "SANDBOX"
+			}
+			resp["cashfreeEnv"] = env
+		}
+		return
+	}
+	if rz := services.GetRazorpayFor(plan.Mode); rz != nil {
+		resp["razorpayKeyId"] = rz.GetKeyID()
+	}
+}
+
 // ApproveMealPlan — PUT /meal-plans/:id/approve. Customer accepts the chef's
 // trimmed set; declined days are refunded (escrow), the rest is confirmed.
 func (h *MealPlanHandler) ApproveMealPlan(c *gin.Context) {
@@ -501,10 +536,18 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 				return
 			}
 			if cur.Status == models.MealPlanAwaitingCustomer && cur.RazorpayOrderID != "" && cur.EscrowPaymentID == "" {
-				resp := gin.H{"razorpayOrderId": cur.RazorpayOrderID}
-				if rz := services.GetRazorpayFor(cur.Mode); rz != nil {
-					resp["razorpayKeyId"] = rz.GetKeyID()
+				resp := gin.H{}
+				// A Cashfree payment_session_id is short-lived, so a resumed approval
+				// cannot replay the one minted earlier — re-read the order for a live one.
+				var sessionID string
+				if cur.PaymentProvider == models.PaymentProviderCashfree {
+					if cf := services.GetCashfreeFor(cur.Mode); cf != nil {
+						if cfOrder, ferr := cf.FetchOrder(cur.RazorpayOrderID); ferr == nil {
+							sessionID = cfOrder.PaymentSessionID
+						}
+					}
 				}
+				mealPlanGatewayHandshake(resp, &cur, sessionID)
 				cur.ProjectForCustomer()
 				resp["mealPlan"] = cur
 				c.JSON(http.StatusOK, resp)
@@ -515,19 +558,21 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 		}
 		plan.Subtotal, plan.Tax, plan.Total = accSub, tax, total
 
-		// Mint the advance order OUTSIDE a tx (external Razorpay call), then stamp it.
+		// Mint the advance order OUTSIDE a tx (external gateway call), then stamp it.
 		resp := gin.H{}
-		orderID, oerr := services.CreateMealPlanAdvanceOrder(&plan)
+		orderID, sessionID, oerr := services.CreateMealPlanAdvanceOrder(&plan)
 		if oerr != nil {
 			resp["paymentError"] = "Could not start the advance payment; please retry."
 		} else if orderID != "" {
+			// payment_provider is stamped with the order id, never after: a row that
+			// records a Cashfree order against 'razorpay' would refund on the wrong rail.
 			database.DB.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
-				Update("razorpay_order_id", orderID)
+				Updates(map[string]any{
+					"razorpay_order_id": orderID,
+					"payment_provider":  plan.PaymentProvider,
+				})
 			plan.RazorpayOrderID = orderID
-			resp["razorpayOrderId"] = orderID
-			if rz := services.GetRazorpayFor(plan.Mode); rz != nil {
-				resp["razorpayKeyId"] = rz.GetKeyID()
-			}
+			mealPlanGatewayHandshake(resp, &plan, sessionID)
 		}
 		plan.ProjectForCustomer()
 		resp["mealPlan"] = plan
@@ -997,8 +1042,12 @@ func (h *MealPlanHandler) VerifyMealPlanPayment(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
 		return
 	}
+	// Body is optional: Cashfree gives the client no payment id or signature to send,
+	// so the server verifies from the gateway instead. Both fields stay required in
+	// substance for Razorpay — VerifyMealPlanAdvance rejects a capture that does not
+	// bind to this plan's order and amount either way.
 	var req verifyMealPlanPaymentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

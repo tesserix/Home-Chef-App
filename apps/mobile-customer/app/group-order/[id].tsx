@@ -112,6 +112,22 @@ export default function GroupOrderHubScreen() {
     if (!id) return;
     payShare.mutate(id, {
       onSuccess: (d) => {
+        // Cashfree opens its own sheet (a WebView) and has no key id, so it gets
+        // its own screen. The provider is the server's answer, never guessed here.
+        if (d.provider === 'cashfree') {
+          router.push({
+            pathname: '/payment/cashfree',
+            params: {
+              kind: 'group',
+              groupId: id,
+              orderId: id,
+              paymentSessionId: d.cashfreePaymentSessionId ?? '',
+              cashfreeOrderId: d.cashfreeOrderId ?? '',
+              env: d.cashfreeEnv ?? '',
+            },
+          });
+          return;
+        }
         router.push({
           pathname: '/payment/checkout',
           params: {

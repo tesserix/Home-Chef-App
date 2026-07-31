@@ -146,6 +146,13 @@ export interface ApproveMealPlanResult {
   razorpayKeyId?: string;
   paymentError?: string;
   mealPlan: MealPlan;
+  /** Which gateway minted the advance. Absent on older servers → razorpay. */
+  provider?: string;
+  /** Cashfree handshake. The session id is short-lived and re-minted per approval. */
+  cashfreeOrderId?: string;
+  cashfreePaymentSessionId?: string;
+  /** SANDBOX | PRODUCTION — different hosts, and the client cannot infer which. */
+  cashfreeEnv?: string;
 }
 
 export function useApproveMealPlan() {
@@ -158,7 +165,11 @@ export function useApproveMealPlan() {
   });
 }
 
-/** Confirms the advance after Razorpay returns. Flips the plan to `confirmed`. */
+/**
+ * Confirms the advance after the gateway returns. Flips the plan to `confirmed`.
+ * The Razorpay fields are omitted for Cashfree, which gives the client no payment
+ * id or signature — the server re-fetches the capture from the gateway instead.
+ */
 export function useVerifyMealPlanPayment() {
   const qc = useQueryClient();
   return useMutation<
@@ -166,9 +177,9 @@ export function useVerifyMealPlanPayment() {
     unknown,
     {
       id: string;
-      razorpayOrderId: string;
-      razorpayPaymentId: string;
-      razorpaySignature: string;
+      razorpayOrderId?: string;
+      razorpayPaymentId?: string;
+      razorpaySignature?: string;
     }
   >({
     mutationFn: ({ id, ...body }) => apiClient.post(`/meal-plans/${id}/verify-payment`, body),

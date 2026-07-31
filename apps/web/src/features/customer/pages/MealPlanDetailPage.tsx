@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { Button } from '@/shared/components/ui';
 import { openRazorpayCheckout } from '@/shared/utils/razorpay';
+import { openCashfreeCheckout } from '@/shared/utils/cashfree';
 import {
   apiErrorMessage,
   useApproveMealPlan,
@@ -87,13 +88,33 @@ export default function MealPlanDetailPage() {
   const needsApproval = plan.status === 'awaiting_customer';
   const canCancel = ['confirmed', 'active'].includes(plan.status);
 
-  /** Approve → mint the advance → open Razorpay → verify. One click for the customer. */
+  /** Approve → mint the advance → open the gateway sheet → verify. One click. */
   const approveAndPay = async () => {
     setPaying(true);
     try {
       const res = await approve.mutateAsync(id);
       if (res.paymentError) {
         toast.error(res.paymentError);
+        return;
+      }
+      // Cashfree has no key id and hands back no signature, so it settles by a
+      // server-side re-fetch: any non-error close calls verify with an empty body.
+      // The provider comes from the server — only it knows which rail it minted.
+      if (res.provider === 'cashfree' && res.cashfreePaymentSessionId) {
+        await openCashfreeCheckout({
+          data: {
+            cashfreePaymentSessionId: res.cashfreePaymentSessionId,
+            cashfreeOrderId: res.cashfreeOrderId ?? '',
+            cashfreeEnv: res.cashfreeEnv,
+            amount: Math.round((res.mealPlan?.total ?? plan.total) * 100),
+            currency: plan.currency ?? 'INR',
+          },
+          onSettled: async () => {
+            await verify.mutateAsync({ id });
+            toast.success('Paid — your plan is confirmed.');
+          },
+          onDismiss: () => setPaying(false),
+        });
         return;
       }
       if (!res.razorpayOrderId || !res.razorpayKeyId) {

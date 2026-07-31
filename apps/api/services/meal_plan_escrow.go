@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/homechef/api/config"
+	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
 
@@ -174,16 +175,37 @@ func perDayNetPayout(plan *models.MealPlan, day *models.MealPlanDay, rate float6
 	return Round2(gross - commission - tds)
 }
 
-// CreateMealPlanAdvanceOrder creates the Razorpay order for the full plan total
-// at booking time and stamps RazorpayOrderID. Returns the order id for the
-// client checkout. No-op (empty id) when escrow is off.
-func CreateMealPlanAdvanceOrder(plan *models.MealPlan) (string, error) {
+// mealPlanAdvanceProvider resolves which gateway should take this plan's advance.
+// The chef's stored provider is only an input — SelectCheckoutGateway is what makes
+// Cashfree the platform default, and it is the same seam à la carte checkout uses,
+// so a plan and an order from one kitchen can never land on different rails.
+func mealPlanAdvanceProvider(plan *models.MealPlan) string {
+	configured := ""
+	if plan.Chef != nil {
+		configured = plan.Chef.PaymentProvider
+	} else {
+		// ApproveMealPlan does not preload Chef; read just the column.
+		_ = database.DB.Model(&models.ChefProfile{}).
+			Where("id = ?", plan.ChefID).Pluck("payment_provider", &configured).Error
+	}
+	return SelectCheckoutGateway(configured, plan.Mode)
+}
+
+// CreateMealPlanAdvanceOrder creates the gateway order for the full plan total at
+// booking time. Returns the gateway order id plus, on Cashfree, the payment session
+// id the client opens checkout with (Razorpay has no analogue and returns ""), and
+// stamps plan.PaymentProvider so refunds later reach the rail that took the money.
+// No-op (empty ids) when escrow is off.
+func CreateMealPlanAdvanceOrder(plan *models.MealPlan) (string, string, error) {
 	if !MealPlanEscrowActive() {
-		return "", nil
+		return "", "", nil
+	}
+	if mealPlanAdvanceProvider(plan) == models.PaymentProviderCashfree {
+		return createMealPlanCashfreeAdvance(plan)
 	}
 	rz := GetRazorpayFor(plan.Mode)
 	if rz == nil {
-		return "", fmt.Errorf("razorpay not configured")
+		return "", "", fmt.Errorf("razorpay not configured")
 	}
 	order, err := rz.CreateOrder(&OrderRequest{
 		Amount:   ToPaise(plan.Total),
@@ -192,9 +214,51 @@ func CreateMealPlanAdvanceOrder(plan *models.MealPlan) (string, error) {
 		Notes:    map[string]string{"meal_plan_id": plan.ID.String(), "kind": "tiffin_advance"},
 	})
 	if err != nil {
-		return "", fmt.Errorf("create advance order: %w", err)
+		return "", "", fmt.Errorf("create advance order: %w", err)
 	}
-	return order.ID, nil
+	plan.PaymentProvider = models.PaymentProviderRazorpay
+	return order.ID, "", nil
+}
+
+// createMealPlanCashfreeAdvance mints the Cashfree advance order. The Cashfree
+// order id IS the plan's own UUID, exactly as an à la carte order uses its own —
+// derivable, so nothing new has to be stored to find the capture again later.
+func createMealPlanCashfreeAdvance(plan *models.MealPlan) (string, string, error) {
+	cf := GetCashfreeFor(plan.Mode)
+	if cf == nil {
+		return "", "", fmt.Errorf("cashfree not configured")
+	}
+	cust := plan.Customer
+	if cust == nil {
+		cust = &models.User{}
+		_ = database.DB.First(cust, "id = ?", plan.CustomerID).Error
+	}
+	order, err := cf.CreateOrder(&CashfreeOrderRequest{
+		OrderID:     plan.ID.String(),
+		AmountPaise: cashfreeAmount(ToPaise(plan.Total)),
+		Currency:    plan.Currency,
+		Customer: CashfreeCustomerDetails{
+			// Alphanumeric only, matching the order path's UUID-without-hyphens.
+			CustomerID:    strings.ReplaceAll(plan.CustomerID.String(), "-", ""),
+			CustomerPhone: cust.Phone,
+			CustomerName:  strings.TrimSpace(cust.FirstName + " " + cust.LastName),
+			CustomerEmail: cust.Email,
+		},
+		Tags: map[string]string{
+			"meal_plan_id":     plan.ID.String(),
+			"meal_plan_number": plan.MealPlanNumber,
+			"kind":             "tiffin_advance",
+		},
+		OrderNote: fmt.Sprintf("Fe3dr meal plan %s", plan.MealPlanNumber),
+		// Per (plan, amount): a retry re-derives the same key so Cashfree dedups it,
+		// while a re-priced plan gets a distinct one.
+		IdempotencyKey: fmt.Sprintf("cf-mealplan:%s:%d", plan.ID, ToPaise(plan.Total)),
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("create cashfree advance order: %w", err)
+	}
+	plan.PaymentProvider = models.PaymentProviderCashfree
+	return order.OrderID, order.PaymentSessionID, nil
 }
 
 // VerifyMealPlanAdvance confirms the customer's advance payment was captured and
@@ -208,12 +272,15 @@ func VerifyMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan, paymentID, signat
 	if !MealPlanEscrowActive() {
 		return nil
 	}
+	if plan.RazorpayOrderID == "" {
+		return fmt.Errorf("no advance order on this plan")
+	}
+	if plan.PaymentProvider == models.PaymentProviderCashfree {
+		return verifyMealPlanCashfreeAdvance(tx, plan)
+	}
 	rz := GetRazorpayFor(plan.Mode)
 	if rz == nil {
 		return fmt.Errorf("razorpay not configured")
-	}
-	if plan.RazorpayOrderID == "" {
-		return fmt.Errorf("no advance order on this plan")
 	}
 	pay, err := rz.FetchPayment(paymentID)
 	if err != nil {
@@ -238,11 +305,48 @@ func VerifyMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan, paymentID, signat
 		Update("escrow_payment_id", paymentID).Error
 }
 
+// verifyMealPlanCashfreeAdvance binds the plan to a capture Cashfree itself reports.
+//
+// There is no client signature to check — Cashfree hands the client nothing it could
+// sign — so the gateway fetch IS the verification. The binding is the order id: it is
+// this plan's own UUID, so a capture fetched under it cannot belong to another plan,
+// which is the same guarantee the Razorpay path gets from (order id + amount).
+func verifyMealPlanCashfreeAdvance(tx *gorm.DB, plan *models.MealPlan) error {
+	cf := GetCashfreeFor(plan.Mode)
+	if cf == nil {
+		return fmt.Errorf("cashfree not configured")
+	}
+	pay, err := cf.SuccessfulPayment(plan.RazorpayOrderID)
+	if err != nil {
+		return fmt.Errorf("fetch cashfree advance payment: %w", err)
+	}
+	if pay == nil || !pay.IsCaptured() {
+		return fmt.Errorf("advance payment not captured")
+	}
+	if pay.AmountPaise.Paise() < ToPaise(plan.Total) {
+		return fmt.Errorf("advance payment amount does not match the plan total")
+	}
+	paymentID := pay.CFPaymentID.String()
+	plan.EscrowPaymentID = paymentID
+	return tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
+		Update("escrow_payment_id", paymentID).Error
+}
+
 // HoldChefPayouts creates one on-hold Route transfer per accepted day to the
 // chef's linked account and stamps PayoutTransferID on each day. Called inside
 // the confirm transaction. No-op when escrow is off.
 func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) error {
 	if !MealPlanEscrowActive() {
+		return nil
+	}
+	// Route on-hold transfers are a Razorpay mechanism and there is no Cashfree
+	// analogue — Cashfree Payouts pushes money, it cannot park it at the gateway.
+	// A Cashfree-funded plan therefore holds nothing: its days spawn shell orders
+	// like any other, and the chef is paid for the delivered ones through the
+	// weekly statement → payout batch → rail path, which already runs on Cashfree.
+	// Calling Razorpay here would fail outright, since no Razorpay payment exists
+	// to transfer from.
+	if plan.PaymentProvider == models.PaymentProviderCashfree {
 		return nil
 	}
 	rz := GetRazorpayFor(plan.Mode)
@@ -457,9 +561,15 @@ func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay
 		day.RefundTxnID = locked.RefundTxnID // reconcile the caller's struct to the DB truth
 		return nil                           // already refunded by a prior/concurrent writer
 	}
-	rz := GetRazorpayFor(day.Mode)
-	if rz == nil {
-		return fmt.Errorf("razorpay not configured")
+	// Only a Razorpay-funded plan has a Route transfer to claw back; a Cashfree one
+	// never held anything (see HoldChefPayouts), so requiring the client here would
+	// fail a refund that has nothing to reverse. The customer credit below is the
+	// same either way — it is a wallet credit, not a gateway call.
+	var rz *RazorpayClient
+	if day.PayoutTransferID != "" {
+		if rz = GetRazorpayFor(day.Mode); rz == nil {
+			return fmt.Errorf("razorpay not configured")
+		}
 	}
 	// Attempt the gateway claw-back of the held transfer. The customer refund below
 	// MUST proceed even if this fails, so we DON'T abort — but we record whether it
