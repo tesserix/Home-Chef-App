@@ -73,6 +73,14 @@ function destinationFor(n: AppNotification): string | null {
   if (planId) return `/meal-plans/${planId}`;
   const chefId = d.chef_id ?? d.chefId;
   if (chefId) return `/chef/${chefId}`;
+
+  // Not everything worth opening names a row. Loyalty, wallet and referral notices carry
+  // no entity id at all, so id-only routing left them dead on tap — the customer read
+  // "you earned 32 points", pressed it, and nothing happened.
+  const t = (n.type ?? '').toLowerCase();
+  if (t.includes('loyalty')) return '/loyalty';
+  if (t.includes('wallet') || t.includes('refund')) return '/wallet';
+  if (t.includes('referral')) return '/referral';
   return null;
 }
 
