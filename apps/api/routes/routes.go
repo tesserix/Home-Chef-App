@@ -1128,6 +1128,11 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/payouts/settings", payoutPerm, payoutRailHandler.GetPayoutSettings)
 			admin.PUT("/payouts/settings", payoutPerm, payoutRailHandler.UpdatePayoutSettings)
 			admin.PUT("/chefs/:id/payout-automation", payoutPerm, adminPayoutHandler.SetPayoutAutomation)
+			// Per-chef payout surface: destination + the rail's verdict on it,
+			// a status re-read, and the sandbox-only test bank account seeder.
+			admin.GET("/chefs/:id/payout-profile", payoutPerm, payoutRailHandler.GetChefPayoutProfile)
+			admin.POST("/chefs/:id/payout-methods/refresh", payoutPerm, payoutRailHandler.RefreshChefPayoutMethod)
+			admin.POST("/chefs/:id/payout-methods/test-bank", payoutPerm, payoutRailHandler.SeedChefTestBankAccount)
 
 			// Review moderation (#35) — list, hide, unhide (audited; recomputes rating)
 			admin.GET("/reviews", adminHandler.AdminListReviews)

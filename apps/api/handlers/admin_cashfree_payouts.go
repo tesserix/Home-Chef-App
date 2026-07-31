@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -201,11 +202,19 @@ type payoutBatchRow struct {
 
 // ListPayoutBatches returns the queue, newest first.
 //
-// GET /admin/payouts/batches?state=pending_approval
+// GET /admin/payouts/batches?state=pending_approval&payeeId=<uuid>
 func (h *AdminPayoutRailHandler) ListPayoutBatches(c *gin.Context) {
 	q := database.DB.Model(&payouts.Batch{})
 	if state := strings.TrimSpace(c.Query("state")); state != "" {
 		q = q.Where("state = ?", state)
+	}
+	if payee := strings.TrimSpace(c.Query("payeeId")); payee != "" {
+		payeeID, err := uuid.Parse(payee)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payeeId"})
+			return
+		}
+		q = q.Where("payee_id = ?", payeeID)
 	}
 	var batches []payouts.Batch
 	if err := q.Order("created_at DESC").Limit(200).Find(&batches).Error; err != nil {
@@ -394,6 +403,265 @@ func (h *AdminPayoutRailHandler) PrepareStatementPayout(c *gin.Context) {
 		"batchId": batch.ID, "state": batch.State,
 		"amount": services.FromPaise(int(batch.AmountMinor)),
 	})
+}
+
+// --- Per-chef payout profile ---
+
+// Cashfree's documented sandbox test bank accounts that simulate SUCCESSFUL
+// transfers (docs → Payouts → Test Data). Registering one against the sandbox
+// rail yields a VERIFIED beneficiary, which is what lets the whole
+// prepare → approve → execute flow run end to end with no real chef data.
+//
+// A table rather than one account because the sandbox enforces one beneficiary
+// per account/IFSC across the whole merchant account — seeding every chef with
+// the same account would 409 from the second chef on. Rotating by chef id keeps
+// collisions away until the accounts are exhausted, and the 409 handler turns
+// the eventual collision into a readable rejection rather than a mystery.
+var cashfreeSandboxTestAccounts = []struct{ account, ifsc string }{
+	{"00011020001772", "HDFC0000001"},
+	{"026291800001191", "YESB0000262"},
+	{"1233943142", "ICIC0000009"},
+	{"388108022658", "ICIC0000009"},
+	{"000890289871772", "SCBL0036078"},
+	{"000100289877623", "SBIN0008752"},
+}
+
+func sandboxTestAccountFor(chefID uuid.UUID) (account, ifsc string) {
+	sum := 0
+	for _, b := range chefID[:] {
+		sum += int(b)
+	}
+	pick := cashfreeSandboxTestAccounts[sum%len(cashfreeSandboxTestAccounts)]
+	return pick.account, pick.ifsc
+}
+
+type chefPayoutMethodRow struct {
+	ID                uuid.UUID  `json:"id"`
+	Kind              string     `json:"kind"`
+	Status            string     `json:"status"`
+	Primary           bool       `json:"primary"`
+	DisplayHint       string     `json:"displayHint"`
+	BeneficiaryName   string     `json:"beneficiaryName"`
+	Rail              string     `json:"rail"`
+	RailBeneficiaryID string     `json:"railBeneficiaryId,omitempty"`
+	RailStatusDetail  string     `json:"railStatusDetail,omitempty"`
+	VerifiedAt        *time.Time `json:"verifiedAt,omitempty"`
+	Payable           bool       `json:"payable"`
+}
+
+func chefPayoutMethodRows(chefID uuid.UUID) ([]chefPayoutMethodRow, error) {
+	var methods []payouts.PayoutMethod
+	if err := database.DB.
+		Where("payee_type = ? AND payee_id = ?", payouts.PayeeChef, chefID).
+		Order("created_at ASC").Find(&methods).Error; err != nil {
+		return nil, err
+	}
+	rows := make([]chefPayoutMethodRow, 0, len(methods))
+	for i := range methods {
+		m := &methods[i]
+		rows = append(rows, chefPayoutMethodRow{
+			ID: m.ID, Kind: string(m.Kind), Status: string(m.Status),
+			Primary: m.Primary, DisplayHint: m.DisplayHint,
+			BeneficiaryName: m.BeneficiaryName, Rail: m.Rail,
+			RailBeneficiaryID: m.RailBeneficiaryID, RailStatusDetail: m.RailStatusDetail,
+			VerifiedAt: m.VerifiedAt, Payable: m.Payable(),
+		})
+	}
+	return rows, nil
+}
+
+// GetChefPayoutProfile is everything the admin needs to judge "can this chef be
+// paid, and where does the money go" — masked destination, the rail's opinion of
+// the beneficiary, and whether the slot behind it is sandbox or live.
+//
+// GET /admin/chefs/:id/payout-profile
+func (h *AdminPayoutRailHandler) GetChefPayoutProfile(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	vendorID := chef.ID.String()
+	// Same masking rules as the chef's own settings screen: the account number
+	// and VPA never render whole anywhere, including here.
+	accountName, _ := services.GetVendorSecret(ctx, vendorID, "bank-account-name")
+	accountNumber, _ := services.GetVendorSecret(ctx, vendorID, "bank-account-number")
+	ifsc, _ := services.GetVendorSecret(ctx, vendorID, "bank-ifsc")
+	upiID, _ := services.GetVendorSecret(ctx, vendorID, "upi-id")
+
+	methods, mErr := chefPayoutMethodRows(chef.ID)
+	if mErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load payout methods"})
+		return
+	}
+
+	railConfigured, railSandbox := false, false
+	if client := services.GetCashfreePayoutFor(chef.Mode); client != nil {
+		railConfigured = true
+		railSandbox = client.IsSandbox()
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"chef": gin.H{
+			"id": chef.ID, "businessName": chef.BusinessName, "mode": chef.Mode,
+		},
+		"payoutMethod":             chef.PayoutMethod,
+		"bankAccountName":          accountName,
+		"bankAccountNumber":        maskBankAccount(accountNumber),
+		"bankIFSC":                 ifsc,
+		"upiId":                    maskEmail(upiID),
+		"razorpaySettlementStatus": chef.RazorpaySettlementStatus,
+		"methods":                  methods,
+		"rail": gin.H{
+			"configured": railConfigured, "sandbox": railSandbox, "mode": chef.Mode,
+		},
+	})
+}
+
+// RefreshChefPayoutMethod re-registers the chef's destination with the rail and
+// re-reads its verdict — the answer to "it says pending/invalid, is that still
+// true?". Idempotent: the deterministic beneficiary id makes re-registration
+// resolve to the existing beneficiary, never a second one.
+//
+// POST /admin/chefs/:id/payout-methods/refresh
+func (h *AdminPayoutRailHandler) RefreshChefPayoutMethod(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	if services.GetCashfreePayoutFor(chef.Mode) == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf(
+			"Cashfree Payouts is not configured for the chef's %q mode — set it up on the payout rail panel first.", chef.Mode)})
+		return
+	}
+
+	method, mErr := services.EnsurePayoutMethod(c.Request.Context(), database.DB,
+		payouts.PayeeRef{Type: payouts.PayeeChef, ID: chef.ID}, chef.Mode)
+	if mErr != nil && method == nil {
+		// No destination on file, or the rail was unreachable. Nothing was
+		// recorded, so this is the admin's answer rather than an internal error.
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": mErr.Error()})
+		return
+	}
+
+	services.LogAudit(c, "payout.method.refresh", "chef", chefID.String(), nil, map[string]any{
+		"status": string(method.Status), "rail": method.Rail,
+	})
+
+	resp := gin.H{"method": chefPayoutMethodRow{
+		ID: method.ID, Kind: string(method.Kind), Status: string(method.Status),
+		Primary: method.Primary, DisplayHint: method.DisplayHint,
+		BeneficiaryName: method.BeneficiaryName, Rail: method.Rail,
+		RailBeneficiaryID: method.RailBeneficiaryID, RailStatusDetail: method.RailStatusDetail,
+		VerifiedAt: method.VerifiedAt, Payable: method.Payable(),
+	}}
+	if mErr != nil {
+		// Rejected by the rail — recorded as invalid, and the detail is on the row.
+		resp["warning"] = mErr.Error()
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// SeedChefTestBankAccount puts Cashfree's documented sandbox test account on
+// file for a chef — secrets, payout method selector and rail beneficiary — so
+// the payout flow can be exercised without inventing bank details by hand.
+//
+// Hard-refused unless the rail the chef's mode resolves to is the SANDBOX: on a
+// live slot this would register a fake destination real money could be sent to.
+//
+// POST /admin/chefs/:id/payout-methods/test-bank
+func (h *AdminPayoutRailHandler) SeedChefTestBankAccount(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+
+	client := services.GetCashfreePayoutFor(chef.Mode)
+	if client == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf(
+			"Cashfree Payouts is not configured for the chef's %q mode.", chef.Mode)})
+		return
+	}
+	if !client.IsSandbox() {
+		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf(
+			"Refusing: the chef's %q mode resolves to the LIVE Cashfree rail — a test bank account may only be registered against the sandbox.", chef.Mode)})
+		return
+	}
+
+	accountName := strings.TrimSpace(chef.BusinessName)
+	if accountName == "" {
+		accountName = "Test Chef"
+	}
+
+	testAccount, testIFSC := sandboxTestAccountFor(chef.ID)
+
+	// Synchronous, unlike the chef's own save: the entire point of this action is
+	// that a prepare can immediately resolve the instrument from Secret Manager,
+	// so a failed write must fail the request.
+	ctx := c.Request.Context()
+	for field, value := range map[string]string{
+		"bank-account-name":   accountName,
+		"bank-account-number": testAccount,
+		"bank-ifsc":           testIFSC,
+	} {
+		if sErr := services.StoreVendorSecret(ctx, chef.ID.String(), field, value); sErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to store %s: %v", field, sErr)})
+			return
+		}
+	}
+	if uErr := database.DB.Model(&models.ChefProfile{}).Where("id = ?", chef.ID).
+		Update("payout_method", "bank_transfer").Error; uErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update chef payout method"})
+		return
+	}
+
+	method, mErr := services.EnsurePayoutMethodWith(ctx, database.DB,
+		payouts.PayeeRef{Type: payouts.PayeeChef, ID: chef.ID}, chef.Mode,
+		payouts.Instrument{Kind: payouts.MethodBankAccount,
+			AccountNumber: testAccount, IFSC: testIFSC},
+		accountName)
+	if mErr != nil && method == nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": mErr.Error()})
+		return
+	}
+
+	services.LogAudit(c, "payout.method.seed_test", "chef", chefID.String(), nil, map[string]any{
+		"status": string(method.Status), "displayHint": method.DisplayHint,
+	})
+
+	resp := gin.H{
+		"message": "Sandbox test bank account registered",
+		"method": chefPayoutMethodRow{
+			ID: method.ID, Kind: string(method.Kind), Status: string(method.Status),
+			Primary: method.Primary, DisplayHint: method.DisplayHint,
+			BeneficiaryName: method.BeneficiaryName, Rail: method.Rail,
+			RailBeneficiaryID: method.RailBeneficiaryID, RailStatusDetail: method.RailStatusDetail,
+			VerifiedAt: method.VerifiedAt, Payable: method.Payable(),
+		},
+	}
+	if mErr != nil {
+		resp["warning"] = mErr.Error()
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // GetPayoutSettings / UpdatePayoutSettings expose the auto-disburse flag.
