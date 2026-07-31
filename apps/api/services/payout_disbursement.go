@@ -122,7 +122,10 @@ func EnsurePayoutMethodWith(
 	}
 
 	rail := NewCashfreeRail(mode)
-	beneficiaryID := payouts.BeneficiaryIDFor(ref)
+	// Instrument-scoped: changed bank details register a fresh beneficiary
+	// instead of silently resolving to the old destination (Cashfree has no
+	// beneficiary update). Same details still yield the same id on retry.
+	beneficiaryID := payouts.BeneficiaryIDForInstrument(ref, instrument)
 
 	res, regErr := rail.EnsureBeneficiary(ctx, payouts.BeneficiaryRequest{
 		BeneficiaryID: beneficiaryID,

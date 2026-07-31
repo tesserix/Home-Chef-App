@@ -373,8 +373,22 @@ func (c *CashfreePayoutClient) CreateBeneficiary(ctx context.Context, req payout
 		return payouts.BeneficiaryResult{}, err
 	}
 	if status == http.StatusConflict {
-		log.Printf("cashfree-payouts[%s]: beneficiary %s already exists — reading it back", c.mode, req.BeneficiaryID)
-		return c.FetchBeneficiary(ctx, req.BeneficiaryID)
+		// Cashfree 409s for two different conflicts: OUR beneficiary id already
+		// exists (idempotent success — read it back), or the ACCOUNT/IFSC is
+		// already registered under some other beneficiary. The read-back is what
+		// distinguishes them: a 404 on our own id proves the conflict was on the
+		// instrument, and that is a rejection the payee has to resolve, not a
+		// registration to resolve to.
+		log.Printf("cashfree-payouts[%s]: beneficiary %s conflicted — reading it back", c.mode, req.BeneficiaryID)
+		got, fErr := c.FetchBeneficiary(ctx, req.BeneficiaryID)
+		if errors.Is(fErr, payouts.ErrRailNotFound) {
+			detail := cashfreePayoutErrorDetail(resp)
+			return payouts.BeneficiaryResult{
+				Status: payouts.MethodInvalid,
+				Detail: detail,
+			}, fmt.Errorf("%w: %s", payouts.ErrBeneficiaryRejected, detail)
+		}
+		return got, fErr
 	}
 	if status >= 400 {
 		// A 4xx on a beneficiary is the rail refusing the DESTINATION (bad IFSC,
