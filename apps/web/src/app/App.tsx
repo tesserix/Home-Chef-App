@@ -30,8 +30,12 @@ export function App() {
                 <SkipLink />
                 <AppRoutes />
                 <OttoChat />
+                {/* Clears the Otto launcher (44px tall, 24px up) — it sits at
+                    z-index 2147483000, so toasts can only dodge it, not stack
+                    over it. */}
                 <ThemedToaster
                   position="bottom-right"
+                  offset="80px"
                   expand={false}
                   closeButton
                   toastOptions={{
