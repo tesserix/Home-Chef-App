@@ -1,0 +1,61 @@
+import { describe, expect, it } from '@jest/globals';
+
+import { invalidationsFor, parseLiveFrame } from './live-updates';
+
+describe('invalidationsFor', () => {
+  it('refreshes the order lists for an order event', () => {
+    expect(invalidationsFor({ order_id: 'o1' })).toEqual([
+      ['chef', 'orders'],
+      ['chef', 'dashboard'],
+      ['chef', 'upcoming'],
+    ]);
+  });
+
+  it('refreshes the plan lists for a meal-plan event', () => {
+    const keys = invalidationsFor({ meal_plan_id: 'p1' });
+    expect(keys).toContainEqual(['chef', 'meal-plans']);
+    expect(keys).toContainEqual(['chef', 'prep']);
+  });
+
+  // A day-level event is a refund decision arriving in the chef's queue — the whole point
+  // of the queue is that they act on it, so it must not wait for a poll.
+  it('refreshes the refund queue for a day event', () => {
+    const keys = invalidationsFor({ meal_plan_day_id: 'd1' });
+    expect(keys).toContainEqual(['chef', 'refund-decisions']);
+    expect(keys).toContainEqual(['chef', 'refunds']);
+  });
+
+  it('accepts day_id as well as meal_plan_day_id', () => {
+    // Producers disagree on the field name; both mean the same thing to the chef.
+    expect(invalidationsFor({ day_id: 'd1' })).toContainEqual(['chef', 'refund-decisions']);
+  });
+
+  // An event we have no view for must be ignored, not refetch the world.
+  it('ignores an event with nothing we render', () => {
+    expect(invalidationsFor({})).toEqual([]);
+  });
+
+  it('combines keys when one event touches a plan and its day', () => {
+    const keys = invalidationsFor({ meal_plan_id: 'p1', meal_plan_day_id: 'd1' });
+    expect(keys).toContainEqual(['chef', 'meal-plans']);
+    expect(keys).toContainEqual(['chef', 'refund-decisions']);
+  });
+});
+
+describe('parseLiveFrame', () => {
+  it('reads the payload out of a notification frame', () => {
+    const raw = JSON.stringify({ type: 'new_notification', data: JSON.stringify({ order_id: 'o1' }) });
+    expect(parseLiveFrame(raw)).toEqual({ order_id: 'o1' });
+  });
+
+  // The bell's badge frame is not an update; acting on it would refetch on every unread tick.
+  it('ignores the unread-count frame', () => {
+    expect(parseLiveFrame(JSON.stringify({ type: 'unread_count', unreadCount: 3 }))).toBeNull();
+  });
+
+  it('survives malformed frames rather than throwing into the socket handler', () => {
+    expect(parseLiveFrame('not json')).toBeNull();
+    expect(parseLiveFrame(JSON.stringify({ type: 'new_notification' }))).toBeNull();
+    expect(parseLiveFrame(JSON.stringify({ type: 'new_notification', data: '{oops' }))).toBeNull();
+  });
+});

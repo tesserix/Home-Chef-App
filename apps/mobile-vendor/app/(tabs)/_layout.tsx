@@ -6,12 +6,18 @@ import {
   MoreHorizontal,
 } from 'lucide-react-native';
 import { Dock } from '../../components/navigation/Dock';
+import { useLiveUpdates } from '../../hooks/useLiveUpdates';
 
 // The floating dock (components/navigation/Dock) is the app's tab bar. It
 // renders its own icons from the route name, so the `tabBarIcon` options
 // below are unused by the custom `tabBar` — they're kept for screen
 // registration parity and cost nothing (Dock ignores them).
 export default function VendorTabsLayout() {
+  // One user-scoped stream for the whole tab stack: a new order, a customer approving a
+  // plan, a refund landing in the queue all arrive pushed. Mounted here rather than per
+  // screen so it survives tab switches and only ever opens one connection.
+  useLiveUpdates();
+
   return (
     <Tabs
       tabBar={(props) => <Dock {...props} />}
