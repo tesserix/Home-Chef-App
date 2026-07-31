@@ -1,6 +1,8 @@
 package payouts
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -138,6 +140,32 @@ func BeneficiaryIDFor(ref PayeeRef) string {
 	return fmt.Sprintf("hc_%s_%s",
 		strings.ReplaceAll(string(ref.Type), "-", "_"),
 		strings.ReplaceAll(ref.ID.String(), "-", ""))
+}
+
+// BeneficiaryIDForInstrument scopes the beneficiary id to the payee AND the
+// instrument, via a short digest suffix.
+//
+// The payee-only id (above) has a failure mode with real money attached:
+// Cashfree V2 has no beneficiary update, so when a payee CHANGES their bank
+// account a re-registration under the same id 409s and resolves to the OLD
+// registration — the platform's method row would show the new masked hint while
+// the rail keeps paying the old account. Folding the instrument into the id
+// makes a changed destination a NEW beneficiary (registered and verified from
+// scratch) while a retry of the same details still resolves to the same id.
+//
+// The digest sees the normalised instrument only — never a name — and its 8 hex
+// chars keep the id at 40 + 1 + 8 = 49, inside Cashfree's 50-char cap. The
+// superseded beneficiary simply lingers unused at the rail; nothing references
+// it once the method row's RailBeneficiaryID is updated.
+func BeneficiaryIDForInstrument(ref PayeeRef, in Instrument) string {
+	fingerprint := strings.Join([]string{
+		string(in.Kind),
+		strings.ToUpper(strings.TrimSpace(in.AccountNumber)),
+		strings.ToUpper(strings.TrimSpace(in.IFSC)),
+		strings.ToLower(strings.TrimSpace(in.VPA)),
+	}, "|")
+	sum := sha256.Sum256([]byte(fingerprint))
+	return BeneficiaryIDFor(ref) + "." + hex.EncodeToString(sum[:4])
 }
 
 // MaskAccountNumber renders the DisplayHint fragment for a bank account.
