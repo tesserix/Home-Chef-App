@@ -154,10 +154,15 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 
 	// Notify the chef of the new review (#422). Best-effort: the review is
 	// already committed, so a staging failure must never fail the request.
-	var chefUserID uuid.UUID
-	if err := database.DB.Model(&models.ChefProfile{}).
+	// Pluck into a SLICE: GORM does not scan a single column into a scalar
+	// uuid.UUID — it leaves it zero, so the guard below rejected every chef and
+	// no review notification was ever sent. Same trap as meal_plan_cron.go.
+	var chefUserIDs []uuid.UUID
+	plErr := database.DB.Model(&models.ChefProfile{}).
 		Where("id = ?", order.ChefID).
-		Select("user_id").Scan(&chefUserID).Error; err == nil && chefUserID != uuid.Nil {
+		Pluck("user_id", &chefUserIDs).Error
+	if plErr == nil && len(chefUserIDs) > 0 && chefUserIDs[0] != uuid.Nil {
+		chefUserID := chefUserIDs[0]
 		if err := services.EnqueueEvent(database.DB, services.SubjectReviewPosted, "review_posted", chefUserID, map[string]any{
 			"review_id": review.ID.String(),
 			"order_id":  order.ID.String(),
