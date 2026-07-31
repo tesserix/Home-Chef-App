@@ -27,6 +27,10 @@ import (
 const bookDate = "2027-03-15"
 const bookDate2 = "2027-03-16"
 
+// The same two days as stored: a plan day is IST midnight, kept as UTC.
+const bookDateUTC = "2027-03-14 18:30:00+00:00"
+const bookDate2UTC = "2027-03-15 18:30:00+00:00"
+
 func setupBookingDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -52,6 +56,9 @@ func setupBookingDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) {
 			total real DEFAULT 0, currency text, escrow_payment_id text, razorpay_order_id text,
 			chef_respond_by datetime, customer_approve_by datetime, confirmed_at datetime, cancelled_at datetime,
 			cancel_reason text, created_at datetime, updated_at datetime)`,
+		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY,
+			meal_plan_id text, date datetime, slot text, variant text, status text, weekly_menu_item_id text,
+			dish_name text, price real DEFAULT 0, order_id text, created_at datetime, updated_at datetime)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
@@ -113,15 +120,17 @@ func TestCreateMealPlan_RejectsDraftDailyItem(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code, "a draft daily item is not bookable")
 }
 
-// #409: a new plan overlapping an existing live plan for the same chef is blocked.
-func TestCreateMealPlan_BlocksDuplicateOverlappingPlan(t *testing.T) {
+// #409: re-booking a day+slot the customer already holds with this chef is blocked.
+func TestCreateMealPlan_BlocksAlreadyBookedDay(t *testing.T) {
 	db, userID, chefID := setupBookingDB(t)
-	// An existing pending plan spanning all of March 2027 (brackets bookDate2).
+	planID := uuid.NewString()
 	require.NoError(t, db.Exec(`INSERT INTO meal_plans (id, meal_plan_number, customer_id, chef_id, status, start_date, end_date, total)
 		VALUES (?,?,?,?,?,?,?,?)`,
-		uuid.NewString(), "MP-existing", userID.String(), chefID.String(), "pending_chef", "2027-03-01", "2027-03-31", 200.0).Error)
+		planID, "MP-existing", userID.String(), chefID.String(), "pending_chef", bookDate2, bookDate2, 200.0).Error)
+	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days (id, meal_plan_id, date, slot, variant, status, price)
+		VALUES (?,?,?,?,?,?,?)`,
+		uuid.NewString(), planID, bookDate2UTC, "lunch", "veg", "requested", 200.0).Error)
 
-	// A new request inside that range (bookDate2 = 2027-03-16) → 409 duplicate_plan.
 	w := mealPlanReq(t, userID, map[string]any{
 		"chefId": chefID.String(),
 		"days":   []map[string]any{{"date": bookDate2, "slot": "lunch", "variant": "veg"}},
@@ -129,26 +138,62 @@ func TestCreateMealPlan_BlocksDuplicateOverlappingPlan(t *testing.T) {
 	require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
-	require.Equal(t, "duplicate_plan", out["code"])
+	require.Equal(t, "duplicate_day", out["code"])
 }
 
-// #409: a NON-overlapping request (a later week) is NOT blocked by an existing plan.
-func TestCreateMealPlan_BlocksSecondPlanWithSameChefEvenOnDifferentDates(t *testing.T) {
+// #409: a different slot on a day the customer already booked is still bookable.
+func TestCreateMealPlan_AllowsDifferentSlotOnABookedDay(t *testing.T) {
 	db, userID, chefID := setupBookingDB(t)
+	planID := uuid.NewString()
 	require.NoError(t, db.Exec(`INSERT INTO meal_plans (id, meal_plan_number, customer_id, chef_id, status, start_date, end_date, total)
 		VALUES (?,?,?,?,?,?,?,?)`,
-		uuid.NewString(), "MP-existing", userID.String(), chefID.String(), "pending_chef", "2027-01-01", "2027-01-05", 200.0).Error)
+		planID, "MP-existing", userID.String(), chefID.String(), "confirmed", bookDate, bookDate, 200.0).Error)
+	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days (id, meal_plan_id, date, slot, variant, status, price)
+		VALUES (?,?,?,?,?,?,?)`,
+		uuid.NewString(), planID, bookDateUTC, "lunch", "veg", "accepted", 200.0).Error)
 
-	// bookDate (March) does NOT overlap the existing January plan, and used to be
-	// allowed. The rule is now one LIVE plan per (customer, chef) regardless of
-	// dates — stacking concurrent plans against one kitchen gave each its own
-	// escrow, orders and refund surface, which neither side could reason about.
+	w := mealPlanReq(t, userID, map[string]any{
+		"chefId": chefID.String(),
+		"days":   []map[string]any{{"date": bookDate, "slot": "dinner", "variant": "veg"}},
+	})
+	require.NotEqual(t, http.StatusConflict, w.Code, "only the booked slot is taken, not the whole day")
+}
+
+// #409: a live plan with this chef on OTHER dates must not block a new booking —
+// customers extend by booking further weeks from the same kitchen.
+func TestCreateMealPlan_AllowsSecondPlanWithSameChefOnFreeDates(t *testing.T) {
+	db, userID, chefID := setupBookingDB(t)
+	planID := uuid.NewString()
+	require.NoError(t, db.Exec(`INSERT INTO meal_plans (id, meal_plan_number, customer_id, chef_id, status, start_date, end_date, total)
+		VALUES (?,?,?,?,?,?,?,?)`,
+		planID, "MP-existing", userID.String(), chefID.String(), "confirmed", "2027-01-01", "2027-01-05", 200.0).Error)
+	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days (id, meal_plan_id, date, slot, variant, status, price)
+		VALUES (?,?,?,?,?,?,?)`,
+		uuid.NewString(), planID, "2027-01-01", "lunch", "veg", "accepted", 200.0).Error)
+
 	w := mealPlanReq(t, userID, map[string]any{
 		"chefId": chefID.String(),
 		"days":   []map[string]any{{"date": bookDate, "slot": "lunch", "variant": "veg"}},
 	})
-	require.Equal(t, http.StatusConflict, w.Code, "a second live plan with the same chef must be refused")
-	require.Contains(t, w.Body.String(), "duplicate_plan")
+	require.NotEqual(t, http.StatusConflict, w.Code, "a free date with the same chef stays bookable")
+}
+
+// #409: a day freed by a cancelled/declined day becomes bookable again.
+func TestCreateMealPlan_AllowsRebookingACancelledDay(t *testing.T) {
+	db, userID, chefID := setupBookingDB(t)
+	planID := uuid.NewString()
+	require.NoError(t, db.Exec(`INSERT INTO meal_plans (id, meal_plan_number, customer_id, chef_id, status, start_date, end_date, total)
+		VALUES (?,?,?,?,?,?,?,?)`,
+		planID, "MP-existing", userID.String(), chefID.String(), "active", bookDate, bookDate, 200.0).Error)
+	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days (id, meal_plan_id, date, slot, variant, status, price)
+		VALUES (?,?,?,?,?,?,?)`,
+		uuid.NewString(), planID, bookDateUTC, "lunch", "veg", "cancelled", 200.0).Error)
+
+	w := mealPlanReq(t, userID, map[string]any{
+		"chefId": chefID.String(),
+		"days":   []map[string]any{{"date": bookDate, "slot": "lunch", "variant": "veg"}},
+	})
+	require.NotEqual(t, http.StatusConflict, w.Code, "a cancelled day frees its slot")
 }
 
 func TestCreateMealPlan_AllowsNewPlanOnceThePriorOneIsTerminal(t *testing.T) {

@@ -26,6 +26,7 @@ import {
   type WeeklyMenuItem,
 } from '../hooks/useMealPlans';
 import { bookingEmptyState } from '../lib/booking-empty-state';
+import { friendlyErrorMessage } from '../lib/errors';
 import {
   WeeklyMenuDayHeader,
   istTodayIso,
@@ -246,10 +247,16 @@ export default function BookMealPlanScreen() {
             [{ text: 'OK', onPress: () => router.replace('/meal-plans' as never) }],
           );
         },
-        onError: () =>
+        onError: (err) =>
+          // The server names the real blocker (a live plan with this chef, an
+          // unpublished menu, a day past its cutoff); the old fixed line sent
+          // customers off adjusting days that were never the problem.
           showAlert(
             'Could not send',
-            'Some days may be too soon or unavailable. Please adjust and try again.',
+            friendlyErrorMessage(
+              err,
+              'Some days may be too soon or unavailable. Please adjust and try again.',
+            ),
           ),
       },
     );

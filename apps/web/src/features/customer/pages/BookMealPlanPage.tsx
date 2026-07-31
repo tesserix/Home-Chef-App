@@ -104,9 +104,9 @@ export default function BookMealPlanPage() {
       navigate('/meal-plans');
     } catch (err) {
       // Show the server's reason verbatim. The common failure here is a 409
-      // duplicate_plan ("you already have a plan with this chef for these
-      // dates") — a generic "try again" tells the customer to repeat something
-      // that cannot succeed, and hides which dates actually clash.
+      // duplicate_day ("you've already booked 5 Aug lunch with this chef") — a
+      // generic "try again" tells the customer to repeat something that cannot
+      // succeed, and hides which days actually clash.
       toast.error(apiErrorMessage(err) || 'Could not send your request. Please try again.');
     }
   };
