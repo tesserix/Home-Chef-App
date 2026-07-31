@@ -739,6 +739,48 @@ func (h *CateringHandler) CreateDeposit(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No deposit is due for this booking"})
 		return
 	}
+	// Same gateway seam as checkout: a kitchen's deposit must not land on a
+	// different rail from its orders.
+	// The chef is reached through the accepted quote; an unresolved one just falls
+	// through to the platform default rather than blocking the deposit.
+	var chefProvider string
+	if request.AcceptedQuoteID != nil {
+		_ = database.DB.Model(&models.ChefProfile{}).
+			Joins("JOIN catering_quotes q ON q.chef_id = chef_profiles.id").
+			Where("q.id = ?", *request.AcceptedQuoteID).
+			Limit(1).Pluck("chef_profiles.payment_provider", &chefProvider).Error
+	}
+	provider := services.ChargeGatewayFor(chefProvider, request.Mode)
+
+	if provider == models.PaymentProviderCashfree {
+		var payer models.User
+		_ = database.DB.First(&payer, "id = ?", request.CustomerID).Error
+		cfOrder, cerr := services.CreateCashfreeCharge(
+			request.Mode, request.ID, request.DepositAmount, "INR",
+			services.CashfreeCustomerFor(&payer),
+			map[string]string{"purpose": "catering_deposit", "catering_request_id": request.ID.String()},
+			"Fe3dr catering deposit", "catering",
+		)
+		if cerr != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Could not start payment"})
+			return
+		}
+		database.DB.Model(&request).Updates(map[string]any{
+			"razorpay_order_id": cfOrder.OrderID,
+			"payment_provider":  models.PaymentProviderCashfree,
+		})
+		c.JSON(http.StatusCreated, gin.H{
+			"provider":                 models.PaymentProviderCashfree,
+			"razorpayOrderId":          cfOrder.OrderID,
+			"cashfreeOrderId":          cfOrder.OrderID,
+			"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
+			"cashfreeEnv":              services.CashfreeEnvLabel(request.Mode),
+			"amount":                   services.ToPaise(request.DepositAmount),
+			"currency":                 "INR",
+		})
+		return
+	}
+
 	rz := services.GetRazorpayFor(request.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
@@ -754,8 +796,12 @@ func (h *CateringHandler) CreateDeposit(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Could not start payment"})
 		return
 	}
-	database.DB.Model(&request).Update("razorpay_order_id", rzOrder.ID)
+	database.DB.Model(&request).Updates(map[string]any{
+		"razorpay_order_id": rzOrder.ID,
+		"payment_provider":  models.PaymentProviderRazorpay,
+	})
 	c.JSON(http.StatusCreated, gin.H{
+		"provider":        models.PaymentProviderRazorpay,
 		"razorpayOrderId": rzOrder.ID,
 		"razorpayKeyId":   rz.GetKeyID(),
 		"amount":          rzOrder.Amount,
@@ -800,33 +846,46 @@ func (h *CateringHandler) VerifyDeposit(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "Deposit already confirmed", "data": request.ToResponse()})
 		return
 	}
-	rz := services.GetRazorpayFor(request.Mode)
-	if rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-		return
-	}
-	payment, err := rz.FetchPayment(req.RazorpayPaymentID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
-		return
-	}
-	// SECURITY: the deposit order must have been created first (CreateDeposit
-	// stamps razorpay_order_id), and the fetched payment must be captured, bind to
-	// THAT order, and cover the deposit amount. Without this, calling verify
-	// without create — or reusing any captured payment on the merchant account
-	// (a ₹1 charge) — would confirm the booking for free.
-	if ok, msg := services.ValidateCapturedPayment(
-		payment.Status, payment.OrderID, request.RazorpayOrderID,
-		payment.Amount, services.ToPaise(request.DepositAmount)); !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
-		return
-	}
-	// Verify the Checkout signature when the client sends it (the binding + amount
-	// checks above are the hard gate and don't depend on the client).
-	if req.RazorpaySignature != "" &&
-		!services.VerifyPaymentSignature(request.RazorpayOrderID, req.RazorpayPaymentID, req.RazorpaySignature) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
-		return
+	// Cashfree hands the client no payment id or signature, so the capture is read
+	// back from the gateway and bound by the order id — the request's own UUID.
+	if request.PaymentProvider == models.PaymentProviderCashfree {
+		pay, cerr := services.VerifyCashfreeCharge(request.Mode, request.RazorpayOrderID, request.DepositAmount)
+		if cerr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Deposit payment not captured"})
+			return
+		}
+		// Both rails converge on the same confirmation below; the gateway fetch has
+		// already done for Cashfree what the checks in the else-branch do for Razorpay.
+		req.RazorpayPaymentID = pay.CFPaymentID.String()
+	} else {
+		rz := services.GetRazorpayFor(request.Mode)
+		if rz == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
+			return
+		}
+		payment, err := rz.FetchPayment(req.RazorpayPaymentID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
+			return
+		}
+		// SECURITY: the deposit order must have been created first (CreateDeposit
+		// stamps razorpay_order_id), and the fetched payment must be captured, bind to
+		// THAT order, and cover the deposit amount. Without this, calling verify
+		// without create — or reusing any captured payment on the merchant account
+		// (a ₹1 charge) — would confirm the booking for free.
+		if ok, msg := services.ValidateCapturedPayment(
+			payment.Status, payment.OrderID, request.RazorpayOrderID,
+			payment.Amount, services.ToPaise(request.DepositAmount)); !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
+		// Verify the Checkout signature when the client sends it (the binding + amount
+		// checks above are the hard gate and don't depend on the client).
+		if req.RazorpaySignature != "" &&
+			!services.VerifyPaymentSignature(request.RazorpayOrderID, req.RazorpayPaymentID, req.RazorpaySignature) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
+			return
+		}
 	}
 	now := time.Now()
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {

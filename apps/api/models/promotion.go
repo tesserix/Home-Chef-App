@@ -29,9 +29,12 @@ type ChefPromotion struct {
 	StartsAt  time.Time       `gorm:"not null" json:"startsAt"`
 	ExpiresAt time.Time       `gorm:"not null" json:"expiresAt"`
 
-	// Payment
+	// Payment. RazorpayOrderID holds the gateway order id whichever rail took the
+	// money — Cashfree stamps its own id here, as orders do — so read it alongside
+	// PaymentProvider rather than assuming Razorpay.
 	RazorpayOrderID   string `gorm:"" json:"-"`
 	RazorpayPaymentID string `gorm:"" json:"-"`
+	PaymentProvider   string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider,omitempty"`
 	PaymentMethod     string `gorm:"" json:"paymentMethod,omitempty"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`

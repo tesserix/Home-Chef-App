@@ -17,7 +17,7 @@
 //     screen, which polls the server's real paymentStatus. The client's own view
 //     of "paid" is never trusted.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -35,6 +35,11 @@ interface CashfreeCheckoutParams {
   cashfreeOrderId: string;
   /** "SANDBOX" | "PRODUCTION", resolved server-side. */
   env?: string;
+  /** 'mealplan' settles a plan advance instead of an order. Absent = order. */
+  kind?: string;
+  mealPlanId?: string;
+  groupId?: string;
+  cateringId?: string;
 }
 
 type BridgeMessage =
@@ -75,9 +80,12 @@ function buildCashfreeHtml(opts: { paymentSessionId: string; mode: 'sandbox' | '
   }
   try {
     var cashfree = Cashfree({ mode: ${JSON.stringify(opts.mode)} });
+    // _modal, not _self: _self navigates this document away to Cashfree, which
+    // settles the promise immediately, so RN leaves the WebView before the
+    // customer can pay. _modal keeps the sheet in-page and resolves on close.
     cashfree.checkout({
       paymentSessionId: ${JSON.stringify(opts.paymentSessionId)},
-      redirectTarget: '_self'
+      redirectTarget: '_modal'
     }).then(function (result) {
       if (result && result.error) {
         post({ type: 'error', message: result.error.message });
@@ -113,20 +121,77 @@ export default function CashfreeCheckoutScreen() {
   // money, while a wrong "production" fails loudly against a sandbox session.
   const mode = String(params.env ?? '').toUpperCase() === 'SANDBOX' ? 'sandbox' : 'production';
 
+  // Non-order charges (a plan advance, a group share, a catering deposit) settle
+  // against their own row: different verify endpoint, and they land back on that
+  // row rather than the order result screen. Every one of them takes an EMPTY body
+  // — Cashfree gives the client no payment id or signature, so the server reads the
+  // capture from the gateway and binds it by the order id, which is the row's uuid.
+  const kind = String(params.kind ?? '');
+  const chargeId = String(params.mealPlanId ?? params.groupId ?? params.cateringId ?? '');
+  const isCharge = kind === 'mealplan' || kind === 'group' || kind === 'catering';
+  const { verifyPath, doneRoute } =
+    kind === 'mealplan'
+      ? {
+          verifyPath: `/v1/meal-plans/${chargeId}/verify-payment`,
+          doneRoute: `/meal-plans/${chargeId}`,
+        }
+      : kind === 'group'
+        ? {
+            verifyPath: `/v1/group-orders/${chargeId}/pay/verify`,
+            doneRoute: `/group-order/${chargeId}`,
+          }
+        : kind === 'catering'
+          ? {
+              verifyPath: `/v1/catering/requests/${chargeId}/deposit/verify`,
+              doneRoute: `/catering/${chargeId}`,
+            }
+          : {
+              verifyPath: `/v1/payments/order/${orderId}/verify`,
+              doneRoute: `/payment/result?order_id=${orderId}`,
+            };
+
   const finish = useCallback(async () => {
     // Fast-path verify. The result screen polls server status as the backstop
     // (the webhook completes it regardless), so a failure here is swallowed
     // rather than shown as a payment failure.
     try {
-      await api.post(`/v1/payments/order/${orderId}/verify`, {
-        cashfreeOrderId,
-      });
+      await api.post(verifyPath, isCharge ? {} : { cashfreeOrderId });
       clearCart();
     } catch {
       // ignore — the result screen confirms via polling
     }
-    router.replace(`/payment/result?order_id=${orderId}`);
-  }, [orderId, cashfreeOrderId, clearCart]);
+    router.replace(doneRoute as never);
+  }, [verifyPath, isCharge, cashfreeOrderId, doneRoute, clearCart]);
+
+  // The bridge is not a reliable completion signal: the 3DS step navigates this
+  // document away (popup fallback, bank redirect) and kills the script before it
+  // can post, so the screen would otherwise hang on a paid order.
+  //
+  // Poll verify, not the order: paymentStatus only flips once verify or the
+  // webhook runs, and the missing verify call is precisely the failure — reading
+  // it back would wait on something nothing is going to do. verify re-fetches the
+  // payment from Cashfree server-side and is idempotent, so it is safe to repeat.
+  useEffect(() => {
+    if (!orderId && !chargeId) return;
+    const timer = setInterval(async () => {
+      try {
+        const r = await api.post<{ status?: string }>(
+          verifyPath,
+          isCharge ? {} : { cashfreeOrderId },
+        );
+        // The plan endpoint answers 200 only once the advance is confirmed, so
+        // reaching here at all is the signal; the order endpoint reports a status.
+        if (isCharge || (r.data?.status && r.data.status !== 'pending')) {
+          clearInterval(timer);
+          clearCart();
+          router.replace(doneRoute as never);
+        }
+      } catch {
+        // Not captured yet, or transient — keep polling.
+      }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [orderId, chargeId, verifyPath, isCharge, cashfreeOrderId, doneRoute, clearCart]);
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {

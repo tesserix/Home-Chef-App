@@ -652,6 +652,45 @@ func (h *GroupOrderHandler) PayGroupShare(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "You have nothing to pay"})
 		return
 	}
+	// Same gateway seam as checkout, so every share on a group order rides the rail
+	// the kitchen's own orders do.
+	var shareChefProvider string
+	_ = database.DB.Model(&models.ChefProfile{}).
+		Where("id = ?", g.ChefID).Limit(1).Pluck("payment_provider", &shareChefProvider).Error
+	provider := services.ChargeGatewayFor(shareChefProvider, g.Mode)
+
+	if provider == models.PaymentProviderCashfree {
+		var payer models.User
+		_ = database.DB.First(&payer, "id = ?", userID).Error
+		// The Cashfree order id is the PARTICIPANT's uuid, not the group's — each
+		// share is its own capture, and they must not collide on one order id.
+		cfOrder, cerr := services.CreateCashfreeCharge(
+			g.Mode, me.ID, me.ShareAmount, g.Currency,
+			services.CashfreeCustomerFor(&payer),
+			map[string]string{"purpose": "group_order", "group_order_id": g.ID.String(), "participant_id": me.ID.String()},
+			"Fe3dr group order share", "groupshare",
+		)
+		if cerr != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Could not start payment"})
+			return
+		}
+		database.DB.Model(&models.GroupOrderParticipant{}).Where("id = ?", me.ID).
+			Updates(map[string]any{
+				"razorpay_order_id": cfOrder.OrderID,
+				"payment_provider":  models.PaymentProviderCashfree,
+			})
+		c.JSON(http.StatusCreated, gin.H{
+			"provider":                 models.PaymentProviderCashfree,
+			"razorpayOrderId":          cfOrder.OrderID,
+			"cashfreeOrderId":          cfOrder.OrderID,
+			"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
+			"cashfreeEnv":              services.CashfreeEnvLabel(g.Mode),
+			"amount":                   services.ToPaise(me.ShareAmount),
+			"currency":                 g.Currency,
+		})
+		return
+	}
+
 	rz := services.GetRazorpayFor(g.Mode)
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
@@ -668,9 +707,13 @@ func (h *GroupOrderHandler) PayGroupShare(c *gin.Context) {
 		return
 	}
 	database.DB.Model(&models.GroupOrderParticipant{}).Where("id = ?", me.ID).
-		Update("razorpay_order_id", rzOrder.ID)
+		Updates(map[string]any{
+			"razorpay_order_id": rzOrder.ID,
+			"payment_provider":  models.PaymentProviderRazorpay,
+		})
 
 	c.JSON(http.StatusCreated, gin.H{
+		"provider":        models.PaymentProviderRazorpay,
 		"razorpayOrderId": rzOrder.ID,
 		"razorpayKeyId":   rz.GetKeyID(),
 		"amount":          rzOrder.Amount,
@@ -703,12 +746,24 @@ func (h *GroupOrderHandler) VerifyGroupShare(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group order not found"})
 		return
 	}
-	rz := services.GetRazorpayFor(g.Mode)
-	if rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-		return
-	}
-	if me.PaymentStatus != models.GroupPayCompleted {
+	// Cashfree gives the client no payment id or signature, so the capture is read
+	// back from the gateway and bound by the order id — this participant's own UUID.
+	if me.PaymentStatus != models.GroupPayCompleted &&
+		me.PaymentProvider == models.PaymentProviderCashfree {
+		pay, cerr := services.VerifyCashfreeCharge(g.Mode, me.RazorpayOrderID, me.ShareAmount)
+		if cerr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
+			return
+		}
+		req.RazorpayPaymentID = pay.CFPaymentID.String()
+		req.RazorpaySignature = ""
+		me.PaymentProvider = models.PaymentProviderCashfree
+	} else if me.PaymentStatus != models.GroupPayCompleted {
+		rz := services.GetRazorpayFor(g.Mode)
+		if rz == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
+			return
+		}
 		payment, err := rz.FetchPayment(req.RazorpayPaymentID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})

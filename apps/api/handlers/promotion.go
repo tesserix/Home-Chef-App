@@ -79,8 +79,11 @@ func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 		}
 	}
 
+	// Resolve the rail through the same seam checkout uses, so a kitchen's promo
+	// purchase cannot land on a different gateway from its orders.
+	provider := services.ChargeGatewayFor(chef.PaymentProvider, chef.Mode)
 	rz := services.GetRazorpayFor(chef.Mode)
-	if rz == nil {
+	if provider != models.PaymentProviderCashfree && rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return
 	}
@@ -107,6 +110,39 @@ func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 	}
 
 	// Create Razorpay order (no Route transfers — this goes to Fe3dr's account)
+	if provider == models.PaymentProviderCashfree {
+		var payer models.User
+		_ = database.DB.First(&payer, "id = ?", chef.UserID).Error
+		cfOrder, cerr := services.CreateCashfreeCharge(
+			chef.Mode, promo.ID, pricing.MonthlyPrice, pricing.Currency,
+			services.CashfreeCustomerFor(&payer),
+			map[string]string{"type": "featured_ad", "promotion_id": promo.ID.String(), "chef_id": chef.ID.String()},
+			"Fe3dr featured listing", "promo",
+		)
+		if cerr != nil {
+			log.Printf("Failed to create Cashfree order for promotion: %v", cerr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
+			return
+		}
+		// Stamped together: a row recording a Cashfree order against 'razorpay'
+		// would be verified against the wrong gateway.
+		database.DB.Model(&promo).Updates(map[string]any{
+			"razorpay_order_id": cfOrder.OrderID,
+			"payment_provider":  models.PaymentProviderCashfree,
+		})
+		c.JSON(http.StatusOK, gin.H{
+			"promotionId":              promo.ID,
+			"provider":                 models.PaymentProviderCashfree,
+			"razorpayOrderId":          cfOrder.OrderID,
+			"cashfreeOrderId":          cfOrder.OrderID,
+			"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
+			"cashfreeEnv":              services.CashfreeEnvLabel(chef.Mode),
+			"amount":                   services.ToPaise(pricing.MonthlyPrice),
+			"currency":                 pricing.Currency,
+		})
+		return
+	}
+
 	rzOrder, err := rz.CreateOrder(&services.OrderRequest{
 		Amount:   services.ToPaise(pricing.MonthlyPrice),
 		Currency: pricing.Currency,
@@ -123,11 +159,14 @@ func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 		return
 	}
 
-	// Save Razorpay order ID
-	database.DB.Model(&promo).Update("razorpay_order_id", rzOrder.ID)
+	database.DB.Model(&promo).Updates(map[string]any{
+		"razorpay_order_id": rzOrder.ID,
+		"payment_provider":  models.PaymentProviderRazorpay,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"promotionId":     promo.ID,
+		"provider":        models.PaymentProviderRazorpay,
 		"razorpayOrderId": rzOrder.ID,
 		"razorpayKeyId":   rz.GetKeyID(),
 		"amount":          services.ToPaise(pricing.MonthlyPrice),
@@ -173,22 +212,34 @@ func (h *PromotionHandler) ConfirmFeaturedAd(c *gin.Context) {
 	// order + amount, and FAIL CLOSED when the gateway is unconfigured. The prior
 	// `if rz != nil` with no order/amount binding let a chef activate a paid
 	// featured listing for free by passing any captured payment id (a ₹1 charge).
-	// Mirrors VerifyPayment (payment.go).
-	rz := services.GetRazorpayFor(chef.Mode)
-	if rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-		return
-	}
-	payment, err := rz.FetchPayment(req.RazorpayPaymentID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
-		return
-	}
-	if ok, msg := services.ValidateCapturedPayment(
-		payment.Status, payment.OrderID, promo.RazorpayOrderID,
-		payment.Amount, services.ToPaise(promo.Amount)); !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
-		return
+	// Cashfree gives the client no payment id or signature, so the capture is read
+	// back from the gateway and bound by the order id, which is the promo's own UUID.
+	paymentID := req.RazorpayPaymentID
+	if promo.PaymentProvider == models.PaymentProviderCashfree {
+		pay, cerr := services.VerifyCashfreeCharge(chef.Mode, promo.RazorpayOrderID, promo.Amount)
+		if cerr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
+			return
+		}
+		paymentID = pay.CFPaymentID.String()
+	} else {
+		// Mirrors VerifyPayment (payment.go).
+		rz := services.GetRazorpayFor(chef.Mode)
+		if rz == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
+			return
+		}
+		payment, err := rz.FetchPayment(req.RazorpayPaymentID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
+			return
+		}
+		if ok, msg := services.ValidateCapturedPayment(
+			payment.Status, payment.OrderID, promo.RazorpayOrderID,
+			payment.Amount, services.ToPaise(promo.Amount)); !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
 	}
 
 	now := time.Now()
@@ -197,7 +248,7 @@ func (h *PromotionHandler) ConfirmFeaturedAd(c *gin.Context) {
 	// Activate promotion
 	database.DB.Model(&promo).Updates(map[string]interface{}{
 		"status":              models.PromotionActive,
-		"razorpay_payment_id": req.RazorpayPaymentID,
+		"razorpay_payment_id": paymentID,
 		"starts_at":           now,
 		"expires_at":          expiresAt,
 	})

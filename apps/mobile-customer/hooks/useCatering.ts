@@ -88,6 +88,12 @@ export interface DepositCharge {
   razorpayKeyId: string;
   amount: number; // paise
   currency: string;
+  /** Which gateway minted this charge. Absent on older servers → razorpay. */
+  provider?: string;
+  cashfreeOrderId?: string;
+  cashfreePaymentSessionId?: string;
+  /** SANDBOX | PRODUCTION — different hosts, the client cannot infer it. */
+  cashfreeEnv?: string;
 }
 
 export interface CateringListResponse {

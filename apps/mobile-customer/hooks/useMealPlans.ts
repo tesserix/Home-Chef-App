@@ -184,6 +184,13 @@ export interface CreateMealPlanResponse {
   razorpayOrderId?: string;
   razorpayKeyId?: string;
   paymentError?: string;
+  /** Which gateway minted the advance. Absent on older servers → treat as razorpay. */
+  provider?: string;
+  /** Cashfree handshake. The session id is short-lived and re-minted per approval. */
+  cashfreeOrderId?: string;
+  cashfreePaymentSessionId?: string;
+  /** SANDBOX | PRODUCTION — different hosts, and the client cannot infer which. */
+  cashfreeEnv?: string;
 }
 
 export interface MealPlanAdvanceBreakdown {
