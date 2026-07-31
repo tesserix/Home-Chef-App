@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 
 import { invalidationsFor, parseLiveFrame } from './live-updates';
+import { streamBase } from '../hooks/useLiveUpdates';
 
 describe('invalidationsFor', () => {
   it('refreshes the order lists for an order event', () => {
@@ -57,5 +58,28 @@ describe('parseLiveFrame', () => {
     expect(parseLiveFrame('not json')).toBeNull();
     expect(parseLiveFrame(JSON.stringify({ type: 'new_notification' }))).toBeNull();
     expect(parseLiveFrame(JSON.stringify({ type: 'new_notification', data: '{oops' }))).toBeNull();
+  });
+});
+
+// The apps disagree about where /v1 lives: the vendor base ends in /api/v1, the customer's
+// in /api. Appending it blindly produced /api/v1/v1/... — a 404 whose only symptom was
+// stale data, because the socket fails silently and falls back.
+describe('streamBase', () => {
+  it('does not double a /v1 the base already carries', () => {
+    const { http, ws } = streamBase('https://vendors.fe3dr.com/api/v1');
+    expect(http).toBe('https://vendors.fe3dr.com/api/v1');
+    expect(ws).toBe('wss://vendors.fe3dr.com/api/v1');
+  });
+
+  it('adds /v1 when the base stops at /api', () => {
+    expect(streamBase('https://fe3dr.com/api').http).toBe('https://fe3dr.com/api/v1');
+  });
+
+  it('tolerates a trailing slash', () => {
+    expect(streamBase('https://fe3dr.com/api/v1/').http).toBe('https://fe3dr.com/api/v1');
+  });
+
+  it('uses ws:// for a plaintext base (local dev)', () => {
+    expect(streamBase('http://localhost:8090/api/v1').ws).toBe('ws://localhost:8090/api/v1');
   });
 });
