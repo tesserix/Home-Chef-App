@@ -797,8 +797,12 @@ func TerminalizeCancelledPlanDays(tx *gorm.DB, planID uuid.UUID) error {
 		models.MealPlanDayRefunded, models.MealPlanDayCancelled, models.MealPlanDayFailed,
 	}
 	// Days that carry a refund txn → refunded (money was returned).
+	//
+	// IS NOT NULL is the whole test: refund_txn_id is a uuid, so comparing it to ''
+	// made Postgres cast '' to uuid and fail the statement (22P02), which aborted
+	// the transaction and made every plan reject/cancel a 500.
 	if err := tx.Model(&models.MealPlanDay{}).
-		Where("meal_plan_id = ? AND refund_txn_id IS NOT NULL AND refund_txn_id <> '' AND status NOT IN ?", planID, terminal).
+		Where("meal_plan_id = ? AND refund_txn_id IS NOT NULL AND status NOT IN ?", planID, terminal).
 		Update("status", models.MealPlanDayRefunded).Error; err != nil {
 		return err
 	}
