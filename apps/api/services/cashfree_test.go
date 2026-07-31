@@ -213,15 +213,58 @@ func TestVerifyCashfreeWebhook_RejectsMissingHeaders(t *testing.T) {
 
 // --- Environment selection ---
 
-// The sandbox/production split is by HOST. A test-slot client must not be able to
-// reach production, and the mapping must not depend on a key prefix.
-func TestCashfreeBaseURL_IsSelectedByMode(t *testing.T) {
-	require.Equal(t, cashfreeTestBaseURL, cashfreeBaseURLFor(models.ChefModeTest))
-	require.Equal(t, cashfreeLiveBaseURL, cashfreeBaseURLFor(models.ChefModeLive))
-	// An unrecognised mode must resolve to LIVE, never sandbox — a typo that
-	// silently captured no real money is the failure this asymmetry prevents.
-	require.Equal(t, cashfreeLiveBaseURL, cashfreeBaseURLFor("nonsense"))
+// The host follows the CREDENTIALS, not the slot — the same way Razorpay's key
+// prefix decides its environment.
+//
+// This is what lets the live slot run sandbox keys and actually work, instead of
+// producing a valid client that 401s against production and silently sends every
+// checkout to the fallback gateway.
+func TestCashfreeBaseURL_FollowsCredentials(t *testing.T) {
+	const testApp, testSecret = "TEST1234567890", "cfsk_ma_test_abc"
+	const liveApp, liveSecret = "1234567890abcd", "cfsk_ma_prod_abc"
+
+	// Live slot + sandbox credentials → sandbox. Harmless, and the normal state
+	// while a merchant account is still in review.
+	require.Equal(t, cashfreeTestBaseURL,
+		cashfreeBaseURLFor(models.ChefModeLive, testApp, testSecret))
+
+	// Live slot + real credentials → production.
+	require.Equal(t, cashfreeLiveBaseURL,
+		cashfreeBaseURLFor(models.ChefModeLive, liveApp, liveSecret))
+
+	// THE SAFETY DIRECTION. The test slot is pinned to sandbox even when handed
+	// production credentials — honouring them would let a sandbox order move real
+	// money, which is the one outcome worth hard-coding against.
+	require.Equal(t, cashfreeTestBaseURL,
+		cashfreeBaseURLFor(models.ChefModeTest, liveApp, liveSecret))
+
+	// An unrecognised mode is coerced to live by NormalizeMode, so real
+	// credentials there still reach production.
+	require.Equal(t, cashfreeLiveBaseURL,
+		cashfreeBaseURLFor("nonsense", liveApp, liveSecret))
+
 	require.Contains(t, cashfreeTestBaseURL, "sandbox.cashfree.com")
+}
+
+// Either half of a Cashfree credential pair identifies the sandbox, so a
+// rotation that changes one format cannot silently flip an environment.
+func TestCashfreeCredentialsAreSandbox_DetectsEitherHalf(t *testing.T) {
+	require.True(t, cashfreeCredentialsAreSandbox("TEST1234", "cfsk_ma_prod_x"))
+	require.True(t, cashfreeCredentialsAreSandbox("1234", "cfsk_ma_test_x"))
+	require.True(t, cashfreeCredentialsAreSandbox("test1234", "")) // case-insensitive
+	require.False(t, cashfreeCredentialsAreSandbox("1234abcd", "cfsk_ma_prod_x"))
+	require.False(t, cashfreeCredentialsAreSandbox("", ""))
+}
+
+// Payouts follows the identical rule, including the pinned test slot.
+func TestCashfreePayoutBaseURL_FollowsCredentials(t *testing.T) {
+	require.Equal(t, cashfreePayoutTestBaseURL,
+		cashfreePayoutBaseURLFor(models.ChefModeLive, "CF123", "cfsk_ma_test_x"))
+	require.Equal(t, cashfreePayoutLiveBaseURL,
+		cashfreePayoutBaseURLFor(models.ChefModeLive, "CF123", "cfsk_ma_prod_x"))
+	require.Equal(t, cashfreePayoutTestBaseURL,
+		cashfreePayoutBaseURLFor(models.ChefModeTest, "CF123", "cfsk_ma_prod_x"),
+		"a sandbox disbursement must never be able to reach a real bank account")
 }
 
 // --- Refunds ---

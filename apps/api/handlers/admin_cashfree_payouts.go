@@ -86,7 +86,9 @@ func (h *AdminPayoutRailHandler) GetCashfreePayoutStatus(c *gin.Context) {
 func cashfreePayoutSlotWarning(slot, environment, clientID string, signing bool) string {
 	switch {
 	case !models.IsTestMode(slot) && environment == "sandbox":
-		return "The Live slot is resolving to the Cashfree SANDBOX — no real money will be disbursed."
+		// Now the expected state when the slot holds sandbox credentials: the
+		// host follows the keys, so this works and disburses nothing real.
+		return "The Live slot is holding sandbox credentials — payouts are routed to the Cashfree SANDBOX and no real money is disbursed. Enter live credentials before paying chefs for real."
 	case models.IsTestMode(slot) && environment == "production":
 		return "The Test slot is resolving to Cashfree PRODUCTION — a test payout would send real money. Fix this before using test mode."
 	case !signing:
