@@ -22,9 +22,11 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
+import { chargeRefreshKeys } from '../../lib/payment';
 import { useCartStore } from '../../store/cart-store';
 
 const BACK_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -113,6 +115,7 @@ export default function CashfreeCheckoutScreen() {
   const params = useLocalSearchParams() as unknown as CashfreeCheckoutParams;
   const [loading, setLoading] = useState(true);
   const clearCart = useCartStore((s) => s.clearCart);
+  const qc = useQueryClient();
 
   const orderId = String(params.orderId ?? '');
   const cashfreeOrderId = String(params.cashfreeOrderId ?? '');
@@ -150,18 +153,28 @@ export default function CashfreeCheckoutScreen() {
               doneRoute: `/payment/result?order_id=${orderId}`,
             };
 
+  // The row we land back on is already mounted (we pushed from it), so replace()
+  // reuses that screen and it keeps rendering its pre-payment snapshot unless the
+  // cache is invalidated. The order result screen polls, so it needs nothing.
+  const settle = useCallback(() => {
+    for (const key of chargeRefreshKeys(kind, chargeId)) {
+      void qc.invalidateQueries({ queryKey: key });
+    }
+    clearCart();
+    router.replace(doneRoute as never);
+  }, [qc, kind, chargeId, clearCart, doneRoute]);
+
   const finish = useCallback(async () => {
     // Fast-path verify. The result screen polls server status as the backstop
     // (the webhook completes it regardless), so a failure here is swallowed
     // rather than shown as a payment failure.
     try {
       await api.post(verifyPath, isCharge ? {} : { cashfreeOrderId });
-      clearCart();
     } catch {
       // ignore — the result screen confirms via polling
     }
-    router.replace(doneRoute as never);
-  }, [verifyPath, isCharge, cashfreeOrderId, doneRoute, clearCart]);
+    settle();
+  }, [verifyPath, isCharge, cashfreeOrderId, settle]);
 
   // The bridge is not a reliable completion signal: the 3DS step navigates this
   // document away (popup fallback, bank redirect) and kills the script before it
@@ -183,15 +196,14 @@ export default function CashfreeCheckoutScreen() {
         // reaching here at all is the signal; the order endpoint reports a status.
         if (isCharge || (r.data?.status && r.data.status !== 'pending')) {
           clearInterval(timer);
-          clearCart();
-          router.replace(doneRoute as never);
+          settle();
         }
       } catch {
         // Not captured yet, or transient — keep polling.
       }
     }, 4000);
     return () => clearInterval(timer);
-  }, [orderId, chargeId, verifyPath, isCharge, cashfreeOrderId, doneRoute, clearCart]);
+  }, [orderId, chargeId, verifyPath, isCharge, cashfreeOrderId, settle]);
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {

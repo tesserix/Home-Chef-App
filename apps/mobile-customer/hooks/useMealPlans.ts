@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { isLiveMealPlanStatus } from '../lib/meal-plan';
 import type { PayoutHoldStatus } from '../lib/payout-hold';
 
 // useMealPlans — customer-side tiffin meal-plan data (#196). Consumes the APIs
@@ -75,6 +76,11 @@ export interface MealPlanDay {
   // meal-plan read serializes these straight through (no re-mapper).
   payoutHoldStatus?: PayoutHoldStatus;
   customerConfirmedAt?: string;
+  // Refund v3 (#834). `pending_chef` means the amount is not settled yet — the chef
+  // has to agree it — so the customer must not be told the money is already back.
+  refundStage?: string;
+  refundPercent?: number;
+  refundFloorPercent?: number;
 }
 
 export interface MealPlan {
@@ -150,12 +156,14 @@ export function useMyMealPlans() {
     queryKey: ['meal-plans'],
     queryFn: () =>
       api.get<{ data: MealPlan[] }>('/v1/meal-plans').then((r) => r.data),
+    // Poll every live status, not just confirmed/active: a plan the chef has just
+    // answered flips to awaiting_customer, and the list badge otherwise kept
+    // telling the customer to wait for a chef who had already replied.
     refetchInterval: (query) => {
       const plans = query.state.data?.data ?? [];
-      return plans.some((p) => p.status === 'confirmed' || p.status === 'active')
-        ? 20000
-        : false;
+      return plans.some((p) => isLiveMealPlanStatus(p.status)) ? 20000 : false;
     },
+    refetchOnMount: 'always',
   });
 }
 
@@ -169,8 +177,9 @@ export function useMealPlan(id: string | undefined) {
     enabled: Boolean(id),
     refetchInterval: (query) => {
       const s = query.state.data?.mealPlan?.status;
-      return s === 'confirmed' || s === 'active' ? 20000 : false;
+      return s && isLiveMealPlanStatus(s) ? 20000 : false;
     },
+    refetchOnMount: 'always',
   });
 }
 

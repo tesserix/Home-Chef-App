@@ -11,9 +11,11 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
+import { chargeRefreshKeys } from '../../lib/payment';
 import { RAZORPAY_DISPLAY_CONFIG } from '../../lib/razorpay-config';
 import { useCartStore } from '../../store/cart-store';
 import { friendlyErrorMessage } from '../../lib/errors';
@@ -126,6 +128,18 @@ export default function PaymentCheckout() {
   // string record, so read untyped and cast (same as app/payment/result.tsx).
   const params = useLocalSearchParams() as unknown as PaymentCheckoutParams;
   const [verifying, setVerifying] = useState(false);
+  const qc = useQueryClient();
+
+  // replace() returns to a screen that is still mounted, so its cached row has to
+  // be invalidated or it renders the pre-payment state.
+  const refresh = useCallback(
+    (kind: string, chargeId: string) => {
+      for (const key of chargeRefreshKeys(kind, chargeId)) {
+        void qc.invalidateQueries({ queryKey: key });
+      }
+    },
+    [qc],
+  );
 
   const html = buildCheckoutHtml({
     keyId: params.razorpayKeyId ?? '',
@@ -181,6 +195,7 @@ export default function PaymentCheckout() {
             razorpayPaymentId: msg.razorpay_payment_id,
             razorpayOrderId: msg.razorpay_order_id,
           });
+          refresh('group', String(params.groupId ?? ''));
           router.replace(`/group-order/${params.groupId}` as never);
           return;
         }
@@ -190,6 +205,7 @@ export default function PaymentCheckout() {
             razorpayPaymentId: msg.razorpay_payment_id,
             razorpayOrderId: msg.razorpay_order_id,
           });
+          refresh('catering', String(params.cateringId ?? ''));
           router.replace(`/catering/${params.cateringId}` as never);
           return;
         }
@@ -200,6 +216,7 @@ export default function PaymentCheckout() {
             razorpayPaymentId: msg.razorpay_payment_id,
             razorpaySignature: msg.razorpay_signature,
           });
+          refresh('mealplan', String(params.mealPlanId ?? ''));
           router.replace(`/meal-plans/${params.mealPlanId}` as never);
           return;
         }
@@ -226,7 +243,7 @@ export default function PaymentCheckout() {
         });
       }
     },
-    [params.orderId, params.kind, params.tipId, params.groupId, params.cateringId, params.mealPlanId],
+    [params.orderId, params.kind, params.tipId, params.groupId, params.cateringId, params.mealPlanId, refresh],
   );
 
   return (

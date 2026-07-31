@@ -190,3 +190,19 @@ export function formatDateRange(start?: string, end?: string): string {
     });
   return `${fmt(start)} – ${fmt(end)}`;
 }
+
+// What a customer may honestly be told after cancelling. The refund is priced by
+// lead time (docs/refund-policy-v3-spec.md) and only the top tier settles on its
+// own, so a flat "you've been refunded" was wrong whenever policy routed a day to
+// the chef — which is every day under the currently configured tiers.
+export function cancelRefundMessage(
+  days: { status: string; refundStage?: string }[] = [],
+): string {
+  const awaitingChef = days.filter((d) => d.refundStage === 'pending_chef').length;
+  if (awaitingChef > 0) {
+    return `Your plan was cancelled. Your chef confirms the refund amount for ${
+      awaitingChef === 1 ? 'the booked day' : `${awaitingChef} booked days`
+    } — we'll let you know as soon as they do.`;
+  }
+  return 'Your plan was cancelled and any advance refunded.';
+}
