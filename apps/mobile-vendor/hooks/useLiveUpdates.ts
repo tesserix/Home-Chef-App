@@ -17,10 +17,18 @@ type WSCtor = {
   ): WebSocket;
 };
 
-/** ws(s):// base for the API. EXPO_PUBLIC_API_URL already ends in `/api`, so callers add
- *  `/v1/...` — a `/api/v1/...` here doubles the prefix and every connect fails silently. */
-function streamBase(): { ws: string; http: string } {
-  const http = process.env.EXPO_PUBLIC_API_URL ?? 'https://fe3dr.com/api';
+/**
+ * The `/v1` base, over http and ws.
+ *
+ * The apps disagree about where `/v1` lives: this one's EXPO_PUBLIC_API_URL ends in
+ * `/api/v1`, the customer's in `/api`. Appending `/v1` blindly produced `/api/v1/v1/...`,
+ * which 404s — and because the socket fails silently and falls back, the only symptom was
+ * stale data. Normalise instead of assuming either convention.
+ */
+export function streamBase(base?: string): { ws: string; http: string } {
+  const raw = (base ?? process.env.EXPO_PUBLIC_API_URL ?? 'https://vendors.fe3dr.com/api/v1')
+    .replace(/\/+$/, '');
+  const http = /\/v1$/.test(raw) ? raw : `${raw}/v1`;
   return {
     http,
     ws: http.replace(/^https?:\/\//, (m: string) => (m.startsWith('https') ? 'wss://' : 'ws://')),
@@ -68,14 +76,14 @@ export function useLiveUpdates(enabled: boolean = true): void {
     // the chef on stale data.
     if (failureCount.current >= MAX_WS_FAILURES) {
       sseRef.current = openEventStream(
-        `${base.http}/v1/notifications/sse`,
+        `${base.http}/notifications/sse`,
         token,
         applyFrame,
       );
       return;
     }
 
-    const ws = new (WebSocket as unknown as WSCtor)(`${base.ws}/v1/notifications/ws`, undefined, {
+    const ws = new (WebSocket as unknown as WSCtor)(`${base.ws}/notifications/ws`, undefined, {
       headers: { Authorization: `Bearer ${token}` },
     });
     wsRef.current = ws;
