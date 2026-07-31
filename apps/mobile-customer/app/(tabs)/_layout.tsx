@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Dock } from '../../components/navigation/Dock';
+import { useOrderStatusWS } from '../../hooks/useOrderStatusWS';
 
 // Tab navigation renders through the floating Dock (components/navigation/
 // Dock.tsx) — a detached rounded bar above the home indicator, not an
@@ -9,6 +10,11 @@ import { Dock } from '../../components/navigation/Dock';
 // old full-width CartBar is gone from the tab layer.
 
 export default function TabsLayout() {
+  // One user-scoped socket for the whole tab stack, so a chef accepting a plan or
+  // advancing an order lands on whichever tab is open. Screens that need their own
+  // per-order optimistic patch still mount their own.
+  useOrderStatusWS();
+
   return (
     <Tabs
       tabBar={(props) => <Dock {...props} />}

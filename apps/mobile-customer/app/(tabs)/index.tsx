@@ -62,7 +62,6 @@ import { CATERING_ENABLED, SOCIAL_ENABLED, WALLET_ENABLED } from '../../lib/feat
 import { useIsGuest } from '../../hooks/useRequireAccount';
 import { type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
-import { useOrderStatusWS } from '../../hooks/useOrderStatusWS';
 import {
   useUnreadCount,
   useNotificationSocket,
@@ -158,7 +157,8 @@ export default function HomeScreen() {
   // is user-scoped, so one socket covers every card in the stack — no orderId.
   // Only while an order is actually in flight, so we don't hold a socket open
   // on an idle Home screen; useActiveOrder's poll stays as the fallback.
-  useOrderStatusWS(undefined, activeOrders.length > 0);
+  // The socket now lives in the tab layout (one per user, all tabs) — mounting it
+  // here as well just opened a second connection for the same events.
 
   // Notification bell — unread count + live socket so the badge lights the
   // moment a chef advances an order or a meal-plan day updates.
