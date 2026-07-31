@@ -1450,6 +1450,8 @@ func SetupRouter() *gin.Engine {
 			notifications.GET("", notificationHandler.GetNotifications)
 			notifications.GET("/unread-count", notificationHandler.GetUnreadCount)
 			notifications.GET("/ws", notificationHandler.StreamNotificationsWS)
+			// Same stream over SSE, for clients whose network drops the WS upgrade.
+			notifications.GET("/sse", notificationHandler.StreamNotificationsSSE)
 			notifications.PUT("/:id/read", notificationHandler.MarkAsRead)
 			notifications.PUT("/read-all", notificationHandler.MarkAllAsRead)
 			// Per-user opt-in/out by category — dispatch checks these
