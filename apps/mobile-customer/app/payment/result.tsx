@@ -102,8 +102,24 @@ export default function PaymentResult() {
     }
   }
 
+  // Post-purchase the checkout stack has to go (#874). `replace` swaps only
+  // THIS screen, leaving checkout → chef → cart intact underneath — so back
+  // from the order detail drops the customer into a cart for an order they
+  // have already paid for, which reads as "the payment didn't go through".
+  // Pop to the tabs root first, then push, so the stack is Home → Order.
+  function resetToHome() {
+    if (router.canDismiss()) router.dismissAll();
+  }
+
   function handleViewOrder() {
-    router.replace(orderId ? `/order/${orderId}` : '/(tabs)/orders');
+    resetToHome();
+    if (orderId) router.push(`/order/${orderId}`);
+    else router.push('/(tabs)/orders');
+  }
+
+  function handleGoToOrders() {
+    resetToHome();
+    router.push('/(tabs)/orders');
   }
 
   // ── Tip success (#45) ─────────────────────────────────────────────────────
@@ -188,7 +204,7 @@ export default function PaymentResult() {
             )}
           </Pressable>
           <Pressable
-            onPress={() => router.replace('/(tabs)/orders')}
+            onPress={handleGoToOrders}
             accessibilityRole="button"
             accessibilityLabel="Go to My Orders"
             android_ripple={{ color: GHOST_RIPPLE, borderless: false }}

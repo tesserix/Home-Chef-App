@@ -33,6 +33,7 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   Clock,
   MapPin,
   Plus,
@@ -247,6 +248,9 @@ export default function CheckoutScreen() {
   // the chef confirms/proposes at accept. null = "as soon as ready" (stays the
   // default hero option — R14).
   const [requestedTime, setRequestedTime] = useState<Date | null>(null);
+  // Slot chips stay collapsed while "As soon as ready" is selected (#871) —
+  // most customers keep the default, and the grid pushed the pay CTA off screen.
+  const [showTimeGrid, setShowTimeGrid] = useState(false);
   // Realistic proposable times come from the server, derived from the CHEF's meal
   // windows + open hours + prep headroom — NOT "now + 1h" (which proposed 9am for a
   // 6am order). Same list for delivery and pickup.
@@ -1577,7 +1581,12 @@ export default function CheckoutScreen() {
                   as the primary choice above the specific-time clusters (R14: the
                   default hero option). */}
               <Pressable
-                onPress={() => setRequestedTime(null)}
+                onPress={() => {
+                  // Re-selecting ASAP collapses the grid and clears any picked
+                  // time, so the payload goes back to "chef decides" (#871).
+                  setRequestedTime(null);
+                  setShowTimeGrid(false);
+                }}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: requestedTime === null }}
                 accessibilityLabel="As soon as ready"
@@ -1606,9 +1615,38 @@ export default function CheckoutScreen() {
                 )}
               </Pressable>
 
+              {/* Most people keep ASAP, so the ~2 screens of chips below are
+                  noise that pushes the estimate and the pay CTA below the fold
+                  (#871). Collapse them behind a one-tap affordance; scheduling
+                  stays one tap away, and the grid re-appears automatically once
+                  a specific time is picked. */}
+              {!showTimeGrid && requestedTime === null ? (
+                <Pressable
+                  onPress={() => setShowTimeGrid(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose a specific time"
+                  android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
+                >
+                  {({ pressed }) => (
+                    <View
+                      className={`flex-row items-center justify-between px-3.5 py-3 rounded-xl border border-hairline ${
+                        pressed && Platform.OS === 'ios' ? 'bg-hairline' : 'bg-surface-soft'
+                      }`}
+                      style={{ minHeight: 44 }}
+                    >
+                      <Text className="text-sm font-medium text-charcoal">
+                        Choose a specific time
+                      </Text>
+                      <ChevronRight size={18} color={customerColors.charcoal.soft} />
+                    </View>
+                  )}
+                </Pressable>
+              ) : null}
+
               {/* Specific times, grouped into scannable day·meal clusters. Chips
                   show just the clock label — the cluster header carries day+meal. */}
-              {fulfillmentTimeGroups.map((group) => (
+              {(showTimeGrid || requestedTime !== null) &&
+                fulfillmentTimeGroups.map((group) => (
                 <View key={group.key} className="gap-2">
                   <Text className="text-xs font-semibold text-charcoal-soft">{group.key}</Text>
                   <View className="flex-row flex-wrap gap-2">
@@ -1641,9 +1679,9 @@ export default function CheckoutScreen() {
                         </Pressable>
                       );
                     })}
+                    </View>
                   </View>
-                </View>
-              ))}
+                ))}
             </View>
           </View>
         )}
@@ -1679,7 +1717,9 @@ export default function CheckoutScreen() {
           onLayout={(e) => {
             termsSectionY.current = e.nativeEvent.layout.y;
           }}
-          className="mx-4 mt-4"
+          // mb-4 matches mt-4: without it the card sat flush against the next
+          // section's top hairline, reading as one crowded block.
+          className="mx-4 mb-4 mt-4"
         >
           {/* iOS Pressable inner-View pattern — visual styles on the inner View.
               44pt row (R5), visual checkbox, label preserved verbatim. */}

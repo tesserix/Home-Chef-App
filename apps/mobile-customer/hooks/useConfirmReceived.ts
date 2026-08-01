@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
 import type { PayoutHoldStatus } from '../lib/payout-hold';
+import type { Order } from '../types/customer';
 
 // Customer fulfilment confirmation for the escrow dual-approval (#617/#387). The
 // customer confirms they received a delivered order / meal-plan day, advancing its
@@ -17,16 +18,38 @@ export interface ConfirmReceiptResult {
   message: string;
 }
 
-/** Confirm receipt of a delivered order. Refreshes the order detail + list caches
- *  (the detail query stops polling once delivered, so it must be invalidated). */
+/** Confirm receipt of a delivered order.
+ *
+ *  Writes the server's result straight into the `['order', id]` cache rather
+ *  than relying on invalidation alone (#868). A delivered order has already
+ *  stopped polling (`useOrder`'s refetchInterval returns false once the status
+ *  is terminal), so an invalidate is only as good as the refetch it triggers —
+ *  and when that refetch doesn't run, the screen keeps rendering the
+ *  pre-confirmation snapshot until the user manually pulls to refresh. The
+ *  response carries exactly the two fields the UI reads, so applying it
+ *  directly makes the update unconditional. The refetch below then reconciles
+ *  anything else the confirmation changed server-side. */
 export function useConfirmOrderReceived() {
   const qc = useQueryClient();
   return useMutation<ConfirmReceiptResult, Error, string>({
     mutationFn: (orderId) =>
       api.post<ConfirmReceiptResult>(`/v1/orders/${orderId}/confirm-received`).then((r) => r.data),
-    onSuccess: (_d, orderId) => {
-      qc.invalidateQueries({ queryKey: ['order', orderId] });
-      qc.invalidateQueries({ queryKey: ['orders'] });
+    onSuccess: (result, orderId) => {
+      qc.setQueryData<{ data: Order }>(['order', orderId], (prev) =>
+        prev
+          ? {
+              data: {
+                ...prev.data,
+                payoutHoldStatus: result.payoutHoldStatus,
+                customerConfirmedAt: result.customerConfirmedAt,
+              },
+            }
+          : prev,
+      );
+      // `refetchQueries`, not `invalidateQueries`: the detail query is no
+      // longer polling, and refetch forces it regardless of staleness.
+      void qc.refetchQueries({ queryKey: ['order', orderId] });
+      void qc.invalidateQueries({ queryKey: ['orders'] });
     },
   });
 }
