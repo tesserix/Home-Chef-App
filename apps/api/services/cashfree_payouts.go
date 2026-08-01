@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -737,6 +738,20 @@ func (c *CashfreePayoutClient) signRequest() (string, error) {
 // whitelisting. Surfaced on the admin screen, because "which auth mode am I in"
 // is the first question when a payout starts returning 403.
 func (c *CashfreePayoutClient) SignatureConfigured() bool { return c.publicKey != nil }
+
+// SigningKeyFingerprint identifies the configured public key without exposing
+// it — enough for an operator to tell WHICH key is on file.
+func (c *CashfreePayoutClient) SigningKeyFingerprint() string {
+	if c.publicKey == nil {
+		return ""
+	}
+	der, err := x509.MarshalPKIXPublicKey(c.publicKey)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(der)
+	return "SHA256:" + strings.ToLower(base64.RawStdEncoding.EncodeToString(sum[:])[:16])
+}
 
 // --- HTTP ---
 

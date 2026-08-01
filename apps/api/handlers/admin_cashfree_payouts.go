@@ -78,9 +78,13 @@ func (h *AdminPayoutRailHandler) GetCashfreePayoutStatus(c *gin.Context) {
 		// might change?" is the first thing an operator needs to know when
 		// payouts start returning 403.
 		"signatureConfigured": client.SignatureConfigured(),
-		"webhookSecretSet":    client.HasWebhookSecret(),
-		"slotWarning":         cashfreePayoutSlotWarning(slot, environment, clientID, client.SignatureConfigured()),
-		"error":               healthErr,
+		// Enough for an operator to recognise WHICH key is on file, without
+		// ever rendering the key itself.
+		"signingKeyFingerprint": client.SigningKeyFingerprint(),
+		"clientSecretSet":       true,
+		"webhookSecretSet":      client.HasWebhookSecret(),
+		"slotWarning":           cashfreePayoutSlotWarning(slot, environment, clientID, client.SignatureConfigured()),
+		"error":                 healthErr,
 	})
 }
 
