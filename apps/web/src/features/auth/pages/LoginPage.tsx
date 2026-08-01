@@ -80,6 +80,9 @@ export default function LoginPage() {
             </div>
             <span className="font-display text-2xl font-semibold text-ink">Fe3dr</span>
           </Link>
+          <p className="mt-3 text-sm text-ink-soft">
+            For those who love to eat — and those who love to cook.
+          </p>
 
           <motion.div
             initial={{ opacity: 0, y: 10 }}

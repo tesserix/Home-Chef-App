@@ -150,7 +150,7 @@ export default function LoginPage() {
               Welcome back
             </h2>
             <p className="mt-2 text-muted-foreground">
-              Sign in to manage your menu, orders, and earnings
+              For those who love to eat — and those who love to cook.
             </p>
           </motion.div>
 

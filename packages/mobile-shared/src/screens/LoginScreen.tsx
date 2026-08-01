@@ -35,7 +35,8 @@ interface LoginScreenProps {
   /** Greeting copy override. Defaults to "Welcome back". */
   title?: string;
   /** One-line supporting copy under the title. Pass app-specific wording —
-   *  e.g. vendor: "Sign in to keep your kitchen running". */
+   *  e.g. the brand tagline "For those who love to eat — and those who love
+   *  to cook." */
   subtitle?: string;
   /** Optional brand wordmark. When provided, renders above the title — the
    *  only persimmon-coloured element above the fold. */

@@ -118,6 +118,7 @@ export default function LoginPage() {
   return (
     <LoginScreen
       title="Welcome back"
+      subtitle="For those who love to eat — and those who love to cook."
       accent={customerColors.coral.DEFAULT}
       // THE SPEC §2 AA micro-adjustment: link text uses coral-pressed
       // (#E00B41), not the coral fill (#FF385C), which fails AA at link/body
