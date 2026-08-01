@@ -66,6 +66,26 @@ call sites and **both already pass `cancelLabel`** — `order/[id]/index.tsx:103
 ("Not yet", a real choice, kept) and `MealPlanSheet` ("Close", removed). No
 consumer relied on the default.
 
+## The bug the Android emulator caught (`1545bbfc`)
+
+**Drag-to-dismiss did not work at all** in the first two commits. A 500px swipe
+on the grabber did nothing.
+
+Cause: `onStartShouldSetPanResponder` returned `false` — a deliberate choice to
+avoid swallowing taps. But the grab strip is nested inside a `Pressable` (the
+panel, which stops backdrop propagation). On touch-down the child declined, the
+ancestor `Pressable` claimed the responder, and **once a responder exists RN
+never consults a bubbled `onMoveShouldSetPanResponder`.** The pan could never
+activate.
+
+Fix: claim on touch-down (`onStartShouldSetPanResponder: () => enabledRef.current`).
+Safe because the strip contains only the decorative pill — there is no tap to
+swallow, and a tap reads as dy≈0 → settle-back, a no-op.
+
+**This is exactly the class of bug that survives typecheck and a screenshot.**
+The iOS sim couldn't catch it: simctl can't inject gestures. `adb shell input
+swipe` can.
+
 ## Verification
 
 - **tsc, all three apps, against a stashed baseline:** customer 1→1,
@@ -75,12 +95,25 @@ consumer relied on the default.
   tap; route deleted after): Close button gone, grabber renders, active-category
   coral accent intact, clear bottom padding below the last row, 80% cap still
   holding.
+- **Behavioural, Android emulator (Pixel_8_Pro), real user path** — signed in,
+  chef screen → Menu FAB → sheet, all three dismissal paths exercised with
+  `adb shell input`:
+  - 60px drag (below the 96px threshold) → **springs back, stays open** ✓
+  - 500px drag → **dismisses** ✓
+  - backdrop tap → **dismisses** ✓
+
+  Note: one intermediate "retest" was invalid — the reopen tap didn't land, so
+  the sheet was never open. Re-run with an explicit open-state screenshot
+  between each step before trusting the result.
 
 ## Not verified / known gaps
 
-- **The drag gesture itself was not exercised.** simctl cannot inject pan
-  gestures. Thresholds (96px / 0.5 velocity) are reasoned, not tuned on-device.
-  Someone should drag these sheets by hand before merge.
+- **Thresholds are still untuned by human feel.** 96px / 0.5 velocity now
+  provably work under synthetic input, but nobody has dragged these with a
+  thumb to judge whether they feel right.
+- **iOS drag is unverified.** The fix is platform-neutral RN responder
+  behaviour and iOS has the same negotiation rules, but it was only exercised
+  on Android.
 - **`MenuCategorySheet` doesn't honor reduce-motion** for the settle-back. It
   already ignored it for the Modal's `animationType="slide"`, so this is not a
   new violation, but `.impeccable.md` wants it honored everywhere.
