@@ -391,7 +391,7 @@ func (h *PaymentHandler) settleCashfreeOrder(order *models.Order, cfOrderID stri
 	// is already captured at the gateway, so a DB hiccup must not fail the client —
 	// it is logged, sent to Sentry, and the reconcile cron catches the drift.
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		_, err := completeCashfreeOrderTx(tx, order, payment.MethodLabel(), cfPaymentID, payment.AmountPaise.Paise())
+		_, err := services.CompleteCashfreeOrderTx(tx, order, payment.MethodLabel(), cfPaymentID, payment.AmountPaise.Paise())
 		return err
 	}); err != nil {
 		log.Printf("Failed to persist cashfree payment completion for order %s: %v", order.ID, err)
@@ -408,26 +408,6 @@ func (h *PaymentHandler) settleCashfreeOrder(order *models.Order, cfOrderID stri
 	// (see its provider guard).
 	settleOrderWallet(order)
 	return true, ""
-}
-
-// completeCashfreeOrderTx is the Cashfree wrapper over the provider-generic
-// completeOrderPaymentTx, mirroring completeRazorpayOrderTx. The guarded UPDATE
-// inside completeOrderPaymentTx is what makes exactly one of a racing
-// verify/webhook pair perform the pending→completed transition, so the chef push
-// and order.paid event fire once.
-func completeCashfreeOrderTx(tx *gorm.DB, order *models.Order, method, cfPaymentID string, amountPaise int) (bool, error) {
-	return completeOrderPaymentTx(tx, order,
-		map[string]interface{}{
-			"payment_method":              method,
-			models.GatewayPaymentIDColumn: cfPaymentID,
-		},
-		map[string]interface{}{
-			"order_id":     order.ID.String(),
-			"order_number": order.OrderNumber,
-			"amount":       services.FromPaise(amountPaise),
-			"method":       method,
-			"provider":     models.PaymentProviderCashfree,
-		})
 }
 
 // --- Cashfree order id derivation ---
@@ -607,7 +587,7 @@ func (h *PaymentHandler) handleCashfreePaymentSuccess(payload json.RawMessage, s
 	// only ever settle a Cashfree order.
 	res := database.DB.Model(&models.Order{}).
 		Where(models.GatewayOrderIDColumn+" = ? AND mode = ? AND payment_provider = ? AND payment_status NOT IN ?",
-			cfOrderID, mode, models.PaymentProviderCashfree, completionBlockedStatuses).
+			cfOrderID, mode, models.PaymentProviderCashfree, services.CompletionBlockedStatuses).
 		Updates(map[string]interface{}{
 			"payment_status":              models.PaymentCompleted,
 			"payment_method":              data.Payment.MethodLabel(),
@@ -641,7 +621,7 @@ func (h *PaymentHandler) handleCashfreePaymentSuccess(payload json.RawMessage, s
 			services.StartOrderSaga(ord.ID)
 			// The guarded update above makes this the single pending→completed
 			// transition, so the client verify path won't also push. Best-effort.
-			if err := notifyChefNewOrderTx(database.DB, &ord); err != nil {
+			if err := services.NotifyChefNewOrderTx(database.DB, &ord); err != nil {
 				log.Printf("Failed to enqueue chef new-order push for order %s: %v", ord.ID, err)
 				services.CaptureBackgroundError(err)
 			}
@@ -673,7 +653,7 @@ func (h *PaymentHandler) handleCashfreePaymentSuccess(payload json.RawMessage, s
 // terminal state so an out-of-order delivery can't undo a completed or refunded
 // payment. A user-dropped payment is deliberately treated as failed rather than
 // left pending: the order is retryable from `failed` (see
-// completionBlockedStatuses, which excludes it), so this loses nothing and stops
+// services.CompletionBlockedStatuses, which excludes it), so this loses nothing and stops
 // abandoned checkouts sitting in `pending` forever.
 func (h *PaymentHandler) handleCashfreePaymentUnsuccessful(payload json.RawMessage, signedMode, eventType string) error {
 	var data cashfreePaymentEvent

@@ -148,6 +148,26 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	return db
 }
 
+// countOutbox and paymentStatusOf are shared query helpers used across this
+// package's payment test files (payment_cashfree_test.go,
+// payment_webhook_guard_test.go). Kept here — rather than in the now-deleted
+// payment_complete_race_test.go — so those still-unmoved handler tests keep
+// compiling after #872 step 2 moved the completion-transaction core to
+// services/order_payment_settle_test.go.
+func countOutbox(t *testing.T, db *gorm.DB, subject string) int64 {
+	t.Helper()
+	var n int64
+	require.NoError(t, db.Raw(`SELECT COUNT(*) FROM outbox_events WHERE subject = ?`, subject).Scan(&n).Error)
+	return n
+}
+
+func paymentStatusOf(t *testing.T, db *gorm.DB, id uuid.UUID) string {
+	t.Helper()
+	var s string
+	require.NoError(t, db.Raw(`SELECT payment_status FROM orders WHERE id = ?`, id.String()).Scan(&s).Error)
+	return s
+}
+
 func payUser(t *testing.T, db *gorm.DB, role string) uuid.UUID {
 	t.Helper()
 	id := uuid.New()

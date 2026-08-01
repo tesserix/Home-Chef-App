@@ -480,7 +480,7 @@ func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Ord
 	// #555: guarded completion — emit order.paid + chef push ONLY on the single
 	// pending→completed transition (a retried full-wallet settle no longer double-emits).
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		_, err := completeOrderPaymentTx(tx, order,
+		_, err := services.CompleteOrderPaymentTx(tx, order,
 			map[string]interface{}{
 				"payment_method":   "wallet",
 				"payment_provider": "wallet",
@@ -598,84 +598,6 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 			"phone": order.Customer.Phone,
 		},
 	})
-}
-
-// notifyChefNewOrderTx stages the actionable "new order" push to the chef
-// within a payment-completion transaction. Orders are created pre-payment, so
-// the chef is only notified once money is captured (previously this fired in
-// CreateOrder, pushing unpaid/abandoned orders to the kitchen — see
-// handlers/orders.go). Callers MUST guard the call on the pending→completed
-// transition so a webhook arriving after the client verify (or vice-versa)
-// doesn't double-notify; the OrderEvent mirrors the one CreateOrder used.
-func notifyChefNewOrderTx(tx *gorm.DB, order *models.Order) error {
-	return services.EnqueueOrderEvent(tx, services.SubjectChefNewOrder, services.OrderEvent{
-		OrderID:     order.ID,
-		OrderNumber: order.OrderNumber,
-		CustomerID:  order.CustomerID,
-		ChefID:      order.ChefID,
-		Status:      string(order.Status),
-		Total:       order.Total,
-	})
-}
-
-// completionBlockedStatuses are the payment states a success/capture/verify must NOT
-// re-complete from: already `completed` (idempotent — no duplicate side effects) and
-// `refunded` (a refund is terminal; re-stamping it `completed` would silently re-enable
-// the chef payout on money already returned to the customer — #563). `failed` is
-// deliberately NOT here, so a retry-after-decline can still complete the order.
-var completionBlockedStatuses = []models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded}
-
-// completeOrderPaymentTx flips an order pending→completed exactly ONCE and, only on
-// that single transition, notifies the chef and emits order.paid — the provider-generic
-// core shared by the Razorpay / Stripe / wallet verify+settle paths (#395 item 2, #555).
-// Every one of them used to read `wasUnpaid` from the in-memory order and then update
-// unconditionally + emit order.paid unconditionally, so a webhook or re-verify that
-// completed the order underneath left a duplicate chef "new order" push AND a duplicate
-// order.paid event. The guarded UPDATE (WHERE payment_status <> 'completed') makes
-// exactly one racing path perform the transition; the chef notify + event fire only on
-// RowsAffected>0. `updates` are the provider-specific columns to stamp alongside
-// payment_status=completed; `event` is the order.paid payload. Returns whether THIS call
-// performed the transition.
-func completeOrderPaymentTx(tx *gorm.DB, order *models.Order, updates, event map[string]interface{}) (bool, error) {
-	cols := map[string]interface{}{"payment_status": models.PaymentCompleted}
-	for k, v := range updates {
-		cols[k] = v
-	}
-	res := tx.Model(&models.Order{}).
-		Where("id = ? AND payment_status NOT IN ?", order.ID, completionBlockedStatuses).
-		Updates(cols)
-	if res.Error != nil {
-		return false, res.Error
-	}
-	if res.RowsAffected == 0 {
-		return false, nil // a concurrent webhook/verify already completed it — no re-fire
-	}
-	// Keep the in-memory order consistent for any post-tx idempotent steps.
-	order.PaymentStatus = models.PaymentCompleted
-	if err := notifyChefNewOrderTx(tx, order); err != nil {
-		return false, err
-	}
-	if err := services.EnqueueEvent(tx, "orders.paid", "order.paid", order.CustomerID, event); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-// completeRazorpayOrderTx is the Razorpay-specific wrapper over completeOrderPaymentTx
-// (#395). The caller's post-tx steps (referral reward, saga, wallet DEBIT) are
-// idempotently keyed; the wallet TOP-UP transfer is NOT (see #395 follow-up) — but this
-// helper does not invoke it, and on a raced (RowsAffected==0) verify the top-up
-// recomputes the same deterministic split, so this does not add a double-transfer path.
-func completeRazorpayOrderTx(tx *gorm.DB, order *models.Order, method, paymentID string, amountPaise int) (bool, error) {
-	return completeOrderPaymentTx(tx, order,
-		map[string]interface{}{"payment_method": method, "razorpay_payment_id": paymentID},
-		map[string]interface{}{
-			"order_id":     order.ID.String(),
-			"order_number": order.OrderNumber,
-			"amount":       services.FromPaise(amountPaise),
-			"method":       method,
-			"provider":     "razorpay",
-		})
 }
 
 // VerifyPayment verifies a payment after checkout on the client. The request
@@ -796,7 +718,7 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 	// must not 500 the client — it's logged + sent to Sentry and the reconciliation
 	// cron catches any drift.
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		_, err := completeRazorpayOrderTx(tx, order, payment.Method, paymentID, payment.Amount)
+		_, err := services.CompleteRazorpayOrderTx(tx, order, payment.Method, paymentID, payment.Amount)
 		return err
 	}); err != nil {
 		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
@@ -853,11 +775,11 @@ func (h *PaymentHandler) verifyStripePayment(c *gin.Context, order *models.Order
 	}
 
 	// Mark paid + stage the chef push + order.paid event atomically (transactional
-	// outbox). #555: the guarded completeOrderPaymentTx emits order.paid ONLY on the
+	// outbox). #555: the guarded services.CompleteOrderPaymentTx emits order.paid ONLY on the
 	// single pending→completed transition — a re-verify or a verify/webhook race no
 	// longer double-emits (the old path here updated + emitted unconditionally).
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		_, err := completeOrderPaymentTx(tx, order,
+		_, err := services.CompleteOrderPaymentTx(tx, order,
 			map[string]interface{}{"payment_method": "card"},
 			map[string]interface{}{
 				"order_id":     order.ID.String(),
@@ -1568,7 +1490,7 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage, signedMo
 	// re-emit downstream effects, and without the `refunded` guard a late/duplicate
 	// capture could re-stamp a refunded order back to completed (#563).
 	res := database.DB.Model(&models.Order{}).
-		Where("razorpay_order_id = ? AND mode = ? AND payment_status NOT IN ?", payment.OrderID, models.NormalizeMode(signedMode), completionBlockedStatuses).
+		Where("razorpay_order_id = ? AND mode = ? AND payment_status NOT IN ?", payment.OrderID, models.NormalizeMode(signedMode), services.CompletionBlockedStatuses).
 		Updates(map[string]interface{}{
 			"payment_status":      models.PaymentCompleted,
 			"payment_method":      payment.Method,
@@ -1605,7 +1527,7 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage, signedMo
 			// above (RowsAffected > 0) guarantees this is the single
 			// pending→completed transition, so the client verify path won't also
 			// fire it. Best-effort — a notify failure must not affect the payment.
-			if err := notifyChefNewOrderTx(database.DB, &ord); err != nil {
+			if err := services.NotifyChefNewOrderTx(database.DB, &ord); err != nil {
 				log.Printf("Failed to enqueue chef new-order push for order %s: %v", ord.ID, err)
 				services.CaptureBackgroundError(err)
 			}
@@ -1868,7 +1790,7 @@ func (h *PaymentHandler) handleStripePaymentSucceeded(obj json.RawMessage) {
 	// chef notify + reward + saga fire on the single transition (RowsAffected > 0), so the
 	// client verify path (verifyStripePayment) and this webhook can't both re-fire them.
 	res := database.DB.Model(&models.Order{}).
-		Where("stripe_payment_intent_id = ? AND payment_status NOT IN ?", pi.ID, completionBlockedStatuses).
+		Where("stripe_payment_intent_id = ? AND payment_status NOT IN ?", pi.ID, services.CompletionBlockedStatuses).
 		Updates(map[string]interface{}{
 			"payment_status": models.PaymentCompleted,
 			"payment_method": "card",
@@ -1890,7 +1812,7 @@ func (h *PaymentHandler) handleStripePaymentSucceeded(obj json.RawMessage) {
 	}
 	services.MaybeGrantReward(database.DB, ord.ID)
 	services.StartOrderSaga(ord.ID)
-	if err := notifyChefNewOrderTx(database.DB, &ord); err != nil {
+	if err := services.NotifyChefNewOrderTx(database.DB, &ord); err != nil {
 		log.Printf("Failed to enqueue chef new-order push for order %s: %v", ord.ID, err)
 		services.CaptureBackgroundError(err)
 	}
