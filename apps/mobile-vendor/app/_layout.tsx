@@ -26,7 +26,7 @@ import { MFAGateProvider } from '@homechef/mobile-shared/mfa';
 import { api as apiClient } from '../lib/api';
 import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
-import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
+import { getRawFCMToken, registerDeviceTokenSafe } from '@homechef/mobile-shared/hooks';
 import { api } from '../lib/api';
 import { hydratePersistedLocale } from '../lib/i18n';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -147,6 +147,9 @@ function AppNavigator() {
 
   // Cleanup ref for push subscription teardown.
   const pushCleanupRef = useRef<(() => void) | null>(null);
+  // Whether a token is already registered for this session — guards the
+  // AppState reattempt below so it doesn't re-register on every foreground.
+  const tokenRegisteredRef = useRef(false);
 
   useEffect(() => {
     // Fresh-install guard MUST finish before hydrateFromStorage reads the
@@ -168,6 +171,24 @@ function AppNavigator() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
       focusManager.setFocused(status === 'active');
+
+      // Push reattempt: a chef who denied the permission prompt and later
+      // granted it in Settings gets registered on the next foreground,
+      // without a second prompt (getRawFCMToken only prompts when the
+      // status isn't already decided) and without re-registering once
+      // already registered this session.
+      if (
+        status === 'active' &&
+        !tokenRegisteredRef.current &&
+        useAuthStore.getState().isAuthenticated
+      ) {
+        void getRawFCMToken().then((token) => {
+          if (!token) return;
+          void registerDeviceTokenSafe(api, token).then((ok) => {
+            tokenRegisteredRef.current = ok;
+          });
+        });
+      }
     });
     return () => sub.remove();
   }, []);
@@ -265,13 +286,13 @@ function AppNavigator() {
       // Register FCM token with the API.
       const token = await getRawFCMToken();
       if (token) {
-        await registerDeviceToken(api, token);
+        tokenRegisteredRef.current = await registerDeviceTokenSafe(api, token);
       }
 
       // Handle FCM token rotation.
       const tokenSub = Notifications.addPushTokenListener((event) => {
-        registerDeviceToken(api, event.data).catch((err: unknown) => {
-          console.warn('[push] Token rotation registration failed', err);
+        void registerDeviceTokenSafe(api, event.data).then((ok) => {
+          tokenRegisteredRef.current = ok;
         });
       });
 
@@ -371,6 +392,7 @@ function AppNavigator() {
         pushCleanupRef.current();
         pushCleanupRef.current = null;
       }
+      tokenRegisteredRef.current = false;
     };
   }, [isAuthenticated, isLoading]);
 
