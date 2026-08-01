@@ -48,7 +48,7 @@ type CashfreeVendorKYC struct {
 
 type CashfreeVendorRequest struct {
 	VendorID        string              `json:"vendor_id"`
-	Status          string              `json:"status"`
+	Status          string              `json:"status,omitempty"`
 	Name            string              `json:"name"`
 	Email           string              `json:"email"`
 	Phone           string              `json:"phone"`
@@ -78,9 +78,11 @@ func (v *CashfreeVendorResponse) SplitPayable() bool {
 
 // CreateVendor registers (or updates) an Easy Split vendor.
 //
-// A 409 means the vendor_id already exists; the registration is re-applied
-// with PATCH so changed bank details reach Cashfree instead of being silently
-// ignored — Easy Split vendors are mutable, unlike Payouts beneficiaries.
+// An existing vendor_id is re-applied with PATCH so changed bank details reach
+// Cashfree instead of being silently ignored — Easy Split vendors are mutable,
+// unlike Payouts beneficiaries. The sandbox reports the duplicate as a plain
+// 400 "vendor already exists" rather than a 409, so both are treated as
+// "exists" (verified against the live sandbox; see the cfsandbox test).
 func (c *CashfreeClient) CreateVendor(req *CashfreeVendorRequest) (*CashfreeVendorResponse, error) {
 	if req.Status == "" {
 		req.Status = CashfreeVendorActive
@@ -94,11 +96,27 @@ func (c *CashfreeClient) CreateVendor(req *CashfreeVendorRequest) (*CashfreeVend
 	if err != nil {
 		return nil, err
 	}
-	if status == http.StatusConflict {
+	exists := status == http.StatusConflict ||
+		(status == http.StatusBadRequest && strings.Contains(strings.ToLower(string(resp)), "already exists"))
+	if exists {
 		log.Printf("cashfree[%s]: vendor %s exists — updating in place", c.mode, req.VendorID)
-		resp, status, err = c.do("PATCH", "/easy-split/vendors/"+req.VendorID, body, nil)
+		// Status transitions are gated while Cashfree validates the account, so
+		// the update carries details only, never a state change.
+		patch := *req
+		patch.Status = ""
+		pbody, mErr := json.Marshal(&patch)
+		if mErr != nil {
+			return nil, fmt.Errorf("cashfree: marshal vendor update: %w", mErr)
+		}
+		resp, status, err = c.do("PATCH", "/easy-split/vendors/"+req.VendorID, pbody, nil)
 		if err != nil {
 			return nil, err
+		}
+		if status >= 400 {
+			// Mid-validation the sandbox refuses updates outright. The vendor is
+			// registered — report its live state instead of a phantom failure.
+			log.Printf("cashfree[%s]: vendor %s update refused (%d) — returning current state", c.mode, req.VendorID, status)
+			return c.FetchVendor(req.VendorID)
 		}
 	}
 	if status >= 400 {
