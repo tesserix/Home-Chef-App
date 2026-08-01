@@ -217,6 +217,7 @@ export function useNotificationSocket(opts: {
 
     ws.onopen = () => {
       failures.current = 0;
+      console.info(`[notif-ws] connected ${url}`);
     };
     ws.onmessage = () => {
       failures.current = 0;
@@ -228,11 +229,19 @@ export function useNotificationSocket(opts: {
     };
     ws.onerror = () => {
       failures.current += 1;
+      console.warn(`[notif-ws] error (${failures.current}/${MAX_WS_FAILURES} failures)`);
     };
     ws.onclose = () => {
       wsRef.current = null;
       if (!enabled) return;
-      if (failures.current >= MAX_WS_FAILURES) return; // give up; REST polling covers it
+      if (failures.current >= MAX_WS_FAILURES) {
+        // Give up; REST polling (useUnreadCount/useNotificationList) remains the fallback.
+        console.error(
+          `[notif-ws] giving up after ${failures.current} consecutive failures — no further reconnects, REST polling remains the fallback`,
+        );
+        return;
+      }
+      console.warn(`[notif-ws] closed, reconnecting in ${RECONNECT_DELAY_MS}ms`);
       reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
     };
   }, [apiBaseUrl, getToken, enabled, qc]);
