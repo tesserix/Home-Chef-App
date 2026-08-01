@@ -4,9 +4,9 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "start": "expo start --port 8085",
+    "android": "expo run:android --port 8085",
+    "ios": "expo run:ios --port 8085",
     "build:ios": "eas build --platform ios",
     "build:android": "eas build --platform android",
     "build:local": "eas build --local",

@@ -5,9 +5,9 @@
   "main": "expo-router/entry",
   "scripts": {
     "eas-build-pre-install": "if [ -n \"$NODE_AUTH_TOKEN\" ]; then echo \"//npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN\" >> \"$HOME/.npmrc\"; fi",
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "start": "expo start --port 8081",
+    "android": "expo run:android --port 8081",
+    "ios": "expo run:ios --port 8081",
     "build:ios": "eas build --platform ios",
     "build:android": "eas build --platform android",
     "build:local": "eas build --local",
