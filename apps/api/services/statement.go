@@ -152,6 +152,9 @@ func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, 
 		AND    o.delivered_at >= ?
 		AND    o.delivered_at  < ?
 		AND    o.deleted_at    IS NULL
+		-- Easy Split orders settled the chef's share at the gateway; putting
+		-- them on the weekly statement would pay that share a second time.
+		AND    COALESCE(o.gateway_split_paise, 0) = 0
 		ORDER  BY o.chef_id, o.delivered_at ASC
 	`, weekStart, weekEnd).Scan(&rows).Error
 	return rows, err

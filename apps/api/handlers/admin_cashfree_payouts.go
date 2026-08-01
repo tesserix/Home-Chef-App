@@ -537,6 +537,119 @@ func (h *AdminPayoutRailHandler) GetChefPayoutProfile(c *gin.Context) {
 			"autoCapMinor":       capMinor,
 			"autoCapUnreadable":  capUnreadable,
 		},
+		"easySplit": gin.H{
+			"enabled":  services.EasySplitEnabled(database.DB),
+			"vendorId": chef.CashfreeVendorID,
+			"status":   chef.CashfreeVendorStatus,
+		},
+	})
+}
+
+// RegisterChefEasySplitVendor registers the chef's bank details as an Easy
+// Split vendor — the destination split-at-capture settles to.
+//
+// POST /admin/chefs/:id/easy-split/register
+func (h *AdminPayoutRailHandler) RegisterChefEasySplitVendor(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	vendor, esErr := services.EnsureEasySplitVendor(c.Request.Context(), database.DB, &chef)
+	if esErr != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": esErr.Error()})
+		return
+	}
+	services.LogAudit(c, "chef.easysplit.register", "chef", chefID.String(), nil, map[string]any{
+		"vendorId": vendor.VendorID, "status": vendor.Status,
+	})
+	c.JSON(http.StatusOK, gin.H{"vendorId": vendor.VendorID, "status": vendor.Status})
+}
+
+// RefreshChefEasySplitVendor re-reads the vendor's verification state.
+//
+// POST /admin/chefs/:id/easy-split/refresh
+func (h *AdminPayoutRailHandler) RefreshChefEasySplitVendor(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	vendor, esErr := services.RefreshEasySplitVendor(c.Request.Context(), database.DB, &chef)
+	if esErr != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": esErr.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"vendorId": vendor.VendorID, "status": vendor.Status})
+}
+
+// Platform settlement account — where Cashfree pays the COMPANY's share.
+//
+// Stored in Secret Manager only, never the DB, and always rendered masked.
+// Cashfree settles the merchant share to the bank account verified in the
+// merchant dashboard KYC; this record is the platform's own copy for
+// operators to check the two match. The reserved id keeps it in the same
+// vault namespace as chef bank details without colliding with a chef UUID.
+const platformSettlementSecretID = "platform-settlement"
+
+// GetPlatformSettlementAccount returns the masked company account.
+//
+// GET /admin/platform/settlement-account
+func (h *AdminPayoutRailHandler) GetPlatformSettlementAccount(c *gin.Context) {
+	ctx := c.Request.Context()
+	name, _ := services.GetVendorSecret(ctx, platformSettlementSecretID, "bank-account-name")
+	account, _ := services.GetVendorSecret(ctx, platformSettlementSecretID, "bank-account-number")
+	ifsc, _ := services.GetVendorSecret(ctx, platformSettlementSecretID, "bank-ifsc")
+	c.JSON(http.StatusOK, gin.H{
+		"bankAccountName":   name,
+		"bankAccountNumber": maskBankAccount(account),
+		"bankIFSC":          ifsc,
+		"configured":        account != "",
+	})
+}
+
+// SetPlatformSettlementAccount stores the company current account.
+//
+// PUT /admin/platform/settlement-account
+func (h *AdminPayoutRailHandler) SetPlatformSettlementAccount(c *gin.Context) {
+	var req struct {
+		BankAccountName   string `json:"bankAccountName" binding:"required"`
+		BankAccountNumber string `json:"bankAccountNumber" binding:"required"`
+		BankIFSC          string `json:"bankIFSC" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bankAccountName, bankAccountNumber and bankIFSC are required"})
+		return
+	}
+	ctx := c.Request.Context()
+	fields := map[string]string{
+		"bank-account-name":   strings.TrimSpace(req.BankAccountName),
+		"bank-account-number": strings.TrimSpace(req.BankAccountNumber),
+		"bank-ifsc":           strings.ToUpper(strings.TrimSpace(req.BankIFSC)),
+	}
+	for field, value := range fields {
+		if err := services.StoreVendorSecret(ctx, platformSettlementSecretID, field, value); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to store settlement account"})
+			return
+		}
+	}
+	services.LogAudit(c, "platform.settlement_account.update", "platform", platformSettlementSecretID,
+		nil, map[string]any{"bankAccountNumber": maskBankAccount(req.BankAccountNumber)})
+	c.JSON(http.StatusOK, gin.H{
+		"bankAccountName":   fields["bank-account-name"],
+		"bankAccountNumber": maskBankAccount(fields["bank-account-number"]),
+		"bankIFSC":          fields["bank-ifsc"],
+		"configured":        true,
 	})
 }
 
@@ -728,10 +841,14 @@ func (h *AdminPayoutRailHandler) SeedChefTestBankAccount(c *gin.Context) {
 // GET/PUT /admin/payouts/settings
 func (h *AdminPayoutRailHandler) GetPayoutSettings(c *gin.Context) {
 	capMinor, capUnreadable := services.PayoutAutoDisburseCap(database.DB)
+	feeMinor, feeOK := services.PlatformFeeFlatMinor(database.DB)
 	c.JSON(http.StatusOK, gin.H{
-		"autoDisburseEnabled": services.PayoutAutoDisburseEnabled(database.DB),
-		"autoCapMinor":        capMinor,
-		"autoCapUnreadable":   capUnreadable,
+		"autoDisburseEnabled":  services.PayoutAutoDisburseEnabled(database.DB),
+		"autoCapMinor":         capMinor,
+		"autoCapUnreadable":    capUnreadable,
+		"easySplitEnabled":     services.EasySplitEnabled(database.DB),
+		"platformFeeFlatMinor": feeMinor,
+		"platformFeeUnreadable": !feeOK,
 	})
 }
 
@@ -752,15 +869,23 @@ func upsertPayoutSetting(key, value, kind string, actorID uuid.UUID) error {
 
 func (h *AdminPayoutRailHandler) UpdatePayoutSettings(c *gin.Context) {
 	var req struct {
-		AutoDisburseEnabled *bool  `json:"autoDisburseEnabled"`
-		AutoCapMinor        *int64 `json:"autoCapMinor"`
+		AutoDisburseEnabled  *bool  `json:"autoDisburseEnabled"`
+		AutoCapMinor         *int64 `json:"autoCapMinor"`
+		EasySplitEnabled     *bool  `json:"easySplitEnabled"`
+		PlatformFeeFlatMinor *int64 `json:"platformFeeFlatMinor"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil || (req.AutoDisburseEnabled == nil && req.AutoCapMinor == nil) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "autoDisburseEnabled or autoCapMinor is required"})
+	if err := c.ShouldBindJSON(&req); err != nil ||
+		(req.AutoDisburseEnabled == nil && req.AutoCapMinor == nil &&
+			req.EasySplitEnabled == nil && req.PlatformFeeFlatMinor == nil) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one setting is required"})
 		return
 	}
 	if req.AutoCapMinor != nil && *req.AutoCapMinor < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "autoCapMinor must be >= 0"})
+		return
+	}
+	if req.PlatformFeeFlatMinor != nil && *req.PlatformFeeFlatMinor < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "platformFeeFlatMinor must be >= 0"})
 		return
 	}
 
@@ -794,10 +919,40 @@ func (h *AdminPayoutRailHandler) UpdatePayoutSettings(c *gin.Context) {
 			nil, map[string]any{"autoCapMinor": *req.AutoCapMinor})
 	}
 
+	if req.EasySplitEnabled != nil {
+		value := "false"
+		if *req.EasySplitEnabled {
+			value = "true"
+		}
+		if err := upsertPayoutSetting(services.SettingEasySplitEnabled, value, "bool", actorID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update setting"})
+			return
+		}
+		// Split-at-capture reroutes real money at the gateway — audited like
+		// the auto-disburse flag, with both sides of the flip.
+		services.LogAudit(c, "payout.settings.update", "payout_settings", services.SettingEasySplitEnabled,
+			map[string]any{"easySplitEnabled": !*req.EasySplitEnabled},
+			map[string]any{"easySplitEnabled": *req.EasySplitEnabled})
+	}
+
+	if req.PlatformFeeFlatMinor != nil {
+		if err := upsertPayoutSetting(services.SettingPlatformFeeFlatMinor,
+			strconv.FormatInt(*req.PlatformFeeFlatMinor, 10), "number", actorID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update setting"})
+			return
+		}
+		services.LogAudit(c, "payout.settings.update", "payout_settings", services.SettingPlatformFeeFlatMinor,
+			nil, map[string]any{"platformFeeFlatMinor": *req.PlatformFeeFlatMinor})
+	}
+
 	capMinor, capUnreadable := services.PayoutAutoDisburseCap(database.DB)
+	feeMinor, feeOK := services.PlatformFeeFlatMinor(database.DB)
 	c.JSON(http.StatusOK, gin.H{
-		"autoDisburseEnabled": services.PayoutAutoDisburseEnabled(database.DB),
-		"autoCapMinor":        capMinor,
-		"autoCapUnreadable":   capUnreadable,
+		"autoDisburseEnabled":   services.PayoutAutoDisburseEnabled(database.DB),
+		"autoCapMinor":          capMinor,
+		"autoCapUnreadable":     capUnreadable,
+		"easySplitEnabled":      services.EasySplitEnabled(database.DB),
+		"platformFeeFlatMinor":  feeMinor,
+		"platformFeeUnreadable": !feeOK,
 	})
 }

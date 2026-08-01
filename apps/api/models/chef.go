@@ -166,6 +166,13 @@ type ChefProfile struct {
 	// "" follows the global payout_auto_disburse_enabled flag.
 	PayoutAutoDisburse string `gorm:"type:varchar(8);default:''" json:"payoutAutoDisburse"`
 
+	// CashfreeVendorID / CashfreeVendorStatus — the chef's Easy Split vendor
+	// registration, the destination split-at-capture settles to. Distinct from
+	// the Payouts-rail beneficiary: splits prevent the platform holding vendor
+	// money; the payout rail moves money it already holds.
+	CashfreeVendorID     string `gorm:"default:''" json:"-"`
+	CashfreeVendorStatus string `gorm:"default:''" json:"cashfreeVendorStatus,omitempty"`
+
 	// Payout details
 	PayoutMethod      string `gorm:"default:''" json:"-"`
 	BankAccountNumber string `gorm:"default:''" json:"-"`

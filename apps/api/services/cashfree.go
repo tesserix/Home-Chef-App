@@ -405,7 +405,18 @@ type CashfreeOrderRequest struct {
 	Tags           map[string]string       `json:"order_tags,omitempty"`
 	ExpiryTime     string                  `json:"order_expiry_time,omitempty"`
 	OrderNote      string                  `json:"order_note,omitempty"`
-	IdempotencyKey string                  `json:"-"` // → x-idempotency-key header
+	// Splits is the Easy Split allocation at capture: each vendor's share is
+	// settled by Cashfree directly; order_amount minus the splits stays with
+	// the platform merchant account. Empty means no split — full capture.
+	Splits         []CashfreeOrderSplit `json:"order_splits,omitempty"`
+	IdempotencyKey string               `json:"-"` // → x-idempotency-key header
+}
+
+// CashfreeOrderSplit is one vendor's share of an order, in paise (marshalled
+// as Cashfree's rupee-decimal wire format like every other amount).
+type CashfreeOrderSplit struct {
+	VendorID    string         `json:"vendor_id"`
+	AmountPaise cashfreeAmount `json:"amount"`
 }
 
 // CashfreeOrderResponse is the created (or fetched) order. PaymentSessionID is

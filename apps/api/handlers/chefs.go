@@ -2538,6 +2538,22 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		}
 	}
 
+	// Register the destination as an Easy Split vendor too, so split-at-capture
+	// can pay the chef straight from the gateway once Cashfree verifies it.
+	// Best-effort: split falls back to full capture until the vendor is ACTIVE.
+	if services.EasySplitEnabled(database.DB) && services.GetCashfreeFor(chef.Mode) != nil {
+		bank := services.CashfreeVendorBank{
+			AccountNumber: req.BankAccountNumber, AccountHolder: req.BankAccountName, IFSC: req.BankIFSC,
+		}
+		chefCopy := chef
+		go func() {
+			if _, esErr := services.EnsureEasySplitVendorWith(context.Background(), database.DB,
+				&chefCopy, bank, chefCopy.User.Email, chefCopy.User.Phone); esErr != nil {
+				log.Printf("easy-split: vendor registration failed for chef %s: %v", chefCopy.ID, esErr)
+			}
+		}()
+	}
+
 	// Audit the payout change. NEVER store raw bank details in the audit row —
 	// only the method + masked account so the trail is useful without leaking PII.
 	services.LogAudit(c, "chef.payout.update", "chef", vendorID, nil, gin.H{

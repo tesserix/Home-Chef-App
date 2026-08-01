@@ -1134,6 +1134,14 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/chefs/:id/payout-profile", payoutPerm, payoutRailHandler.GetChefPayoutProfile)
 			admin.POST("/chefs/:id/payout-methods/refresh", payoutPerm, payoutRailHandler.RefreshChefPayoutMethod)
 			admin.POST("/chefs/:id/payout-methods/test-bank", payoutPerm, payoutRailHandler.SeedChefTestBankAccount)
+			// Easy Split: register the chef's destination as a split vendor and
+			// re-read Cashfree's verification verdict on it.
+			admin.POST("/chefs/:id/easy-split/register", payoutPerm, payoutRailHandler.RegisterChefEasySplitVendor)
+			admin.POST("/chefs/:id/easy-split/refresh", payoutPerm, payoutRailHandler.RefreshChefEasySplitVendor)
+			// The company's own settlement account — stored in Secret Manager,
+			// always rendered masked.
+			admin.GET("/platform/settlement-account", payoutPerm, payoutRailHandler.GetPlatformSettlementAccount)
+			admin.PUT("/platform/settlement-account", payoutPerm, payoutRailHandler.SetPlatformSettlementAccount)
 
 			// Review moderation (#35) — list, hide, unhide (audited; recomputes rating)
 			admin.GET("/reviews", adminHandler.AdminListReviews)

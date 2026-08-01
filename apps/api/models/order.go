@@ -160,6 +160,10 @@ type Order struct {
 	// still settled in full (the wallet-covered slice is topped up from the platform
 	// balance). Recorded at payment-create, debited from the wallet on capture.
 	WalletApplied float64 `gorm:"default:0" json:"walletApplied"`
+	// GatewaySplitPaise is the chef share attached as a Cashfree Easy Split at
+	// capture — settled by the gateway directly to the chef, so the weekly
+	// statement must NOT pay it again. 0 means full platform capture.
+	GatewaySplitPaise int `gorm:"default:0" json:"-"`
 	// LoyaltyApplied is the rupee value of loyalty points spent on this order at
 	// checkout, and LoyaltyPointsSpent the points debited to fund it. Like
 	// WalletApplied these shrink the gateway capture but never the chef or driver
