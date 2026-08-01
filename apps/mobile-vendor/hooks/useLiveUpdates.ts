@@ -1,11 +1,12 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
+import { socketReconnectDelayMs } from '@homechef/mobile-shared/utils';
 
 import { useAuthStore } from '../store/auth-store';
 import { invalidationsFor, parseLiveFrame } from '../lib/live-updates';
 
 const MAX_WS_FAILURES = 4;
-const RECONNECT_DELAY_MS = 3000;
 
 // React Native's WebSocket takes a headers option as a 3rd argument that the DOM type
 // omits. The stream is user-scoped and authenticates with the Bearer token.
@@ -43,6 +44,10 @@ export function streamBase(base?: string): { ws: string; http: string } {
  * fallback is a transport swap and nothing else — the invalidation routing (lib/live-updates)
  * is shared, and cannot drift between them.
  *
+ * WS keeps retrying with capped backoff even while SSE is active, so a connectivity blip
+ * can recover to real-time WS instead of being stuck on SSE for the rest of the session
+ * (#892).
+ *
  * Mount ONCE, high in the tree. The stream is user-scoped, so a second mount is a second
  * connection for the same events.
  */
@@ -71,21 +76,6 @@ export function useLiveUpdates(enabled: boolean = true): void {
 
     const base = streamBase();
 
-    // Past the WS failure budget, hold the door open with SSE instead. A blocked upgrade
-    // is a property of the network, not the request, so retrying WS forever just leaves
-    // the chef on stale data.
-    if (failureCount.current >= MAX_WS_FAILURES) {
-      console.warn(
-        `[live-ws] falling back to SSE after ${failureCount.current} WS failures`,
-      );
-      sseRef.current = openEventStream(
-        `${base.http}/notifications/sse`,
-        token,
-        applyFrame,
-      );
-      return;
-    }
-
     const ws = new (WebSocket as unknown as WSCtor)(`${base.ws}/notifications/ws`, undefined, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -93,7 +83,15 @@ export function useLiveUpdates(enabled: boolean = true): void {
 
     ws.onopen = () => {
       failureCount.current = 0;
-      console.info('[live-ws] connected');
+      // Real-time recovered — drop the SSE fallback if it was active, so we
+      // don't keep two live transports open (#892).
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
+        console.info('[live-ws] reconnected — dropping SSE fallback');
+      } else {
+        console.info('[live-ws] connected');
+      }
     };
     ws.onmessage = (event: WebSocketMessageEvent) => {
       failureCount.current = 0;
@@ -104,14 +102,28 @@ export function useLiveUpdates(enabled: boolean = true): void {
       console.warn(
         `[live-ws] error (${failureCount.current}/${MAX_WS_FAILURES} failures)`,
       );
+      // Past the WS failure budget, hold the door open with SSE instead. A blocked
+      // upgrade is a property of the network, not the request, so parking on SSE is
+      // correct — but the WS itself keeps retrying below so it can take back over.
+      if (failureCount.current >= MAX_WS_FAILURES && !sseRef.current) {
+        console.warn(
+          `[live-ws] falling back to SSE after ${failureCount.current} WS failures — still retrying WS in the background`,
+        );
+        sseRef.current = openEventStream(
+          `${base.http}/notifications/sse`,
+          token,
+          applyFrame,
+        );
+      }
     };
     ws.onclose = () => {
-      // Always reschedule: at the budget the next attempt is SSE, so the chef ends up on
-      // a working transport rather than simply giving up.
-      if (enabled) {
-        console.warn(`[live-ws] closed, reconnecting in ${RECONNECT_DELAY_MS}ms`);
-        reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
-      }
+      // Always reschedule while enabled: SSE (activated above once the budget is hit)
+      // covers the gap, but WS must never permanently give up or it can never recover
+      // real-time updates (#892).
+      if (!enabled) return;
+      const delay = socketReconnectDelayMs(failureCount.current);
+      console.warn(`[live-ws] closed, reconnecting in ${delay}ms`);
+      reconnectTimer.current = setTimeout(connect, delay);
     };
   }, [enabled, applyFrame]);
 
@@ -128,6 +140,24 @@ export function useLiveUpdates(enabled: boolean = true): void {
       }
     };
   }, [connect]);
+
+  // Foreground reconnect: don't leave the chef waiting out a stale backoff
+  // after the app was backgrounded for a while — retry right away (#892).
+  useEffect(() => {
+    if (!enabled) return;
+    const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
+      if (status !== 'active') return;
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
+      failureCount.current = 0;
+      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+        connect();
+      }
+    });
+    return () => sub.remove();
+  }, [enabled, connect]);
 }
 
 /**
