@@ -3,7 +3,7 @@ import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { useSheetDrag } from '@homechef/mobile-shared/ui';
+import { useReducedMotion, useSheetDrag } from '@homechef/mobile-shared/ui';
 
 // MenuCategorySheet — the whole menu at a glance, with a jump.
 //
@@ -37,7 +37,8 @@ export function MenuCategorySheet({
 }: MenuCategorySheetProps) {
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(0)).current;
-  const { panHandlers } = useSheetDrag({ translateY, onDismiss: onClose });
+  const reduceMotion = useReducedMotion();
+  const { panHandlers } = useSheetDrag({ translateY, onDismiss: onClose, reduceMotion });
 
   // Reset on OPEN, not on close: resetting while the Modal plays its slide-out
   // would snap the panel back up mid-exit. Opening from 0 every time gives the
@@ -47,7 +48,14 @@ export function MenuCategorySheet({
   }, [visible, translateY]);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    // Modal's own native open/close chrome (independent of the translateY
+    // drag transform above) — skip it entirely when Reduce Motion is on.
+    <Modal
+      visible={visible}
+      transparent
+      animationType={reduceMotion ? 'none' : 'slide'}
+      onRequestClose={onClose}
+    >
       <Pressable
         className="flex-1 justify-end"
         style={{ backgroundColor: '#00000066' }}
