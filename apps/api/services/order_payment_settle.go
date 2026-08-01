@@ -333,3 +333,150 @@ func SettleOrderWallet(order *models.Order) {
 	plan := PlanWalletFunding(ToPaise(order.Total), appliedPaise, appliedPaise, OrderSettlements(database.DB, order))
 	SettleWalletTopUps(order, plan.DirectTopUps)
 }
+
+// SettleCashfreeOrder is the shared "the gateway says this is paid, so make the
+// order paid" core (#872 step 2, Task 3), used by the Cashfree HTTP verify leg,
+// the already-PAID recovery in the create leg, AND the order-payment reconcile
+// cron — all three ask Cashfree the identical question against
+// order.RazorpayOrderID (the redundant caller-supplied order id parameter this
+// had in `handlers` is gone: both existing callers already guaranteed it equalled
+// order.RazorpayOrderID by the time they called it). Returns (false, reason) on
+// any gate failure.
+//
+// Every hard gate the Razorpay verify applies is applied here, through the same
+// ValidateCapturedPayment: the payment must be captured, belong to THIS gateway
+// order, and cover the expected amount. Without that binding any successful
+// payment on the merchant account could be replayed to settle a different order
+// for free.
+func SettleCashfreeOrder(order *models.Order) (bool, string) {
+	cf := GetCashfreeFor(order.Mode)
+	if cf == nil {
+		return false, "Payment gateway not configured"
+	}
+
+	payment, err := cf.SuccessfulPayment(order.RazorpayOrderID)
+	if err != nil {
+		log.Printf("Failed to fetch Cashfree payments for order %s: %v", order.RazorpayOrderID, err)
+		return false, "Failed to verify payment"
+	}
+	if payment == nil {
+		return false, "Payment not completed"
+	}
+
+	// Expected capture = Total − wallet − loyalty, identical to the Razorpay leg.
+	// Both credit rails shrink the capture at checkout, so omitting either term
+	// rejects every credit-funded order with a false "amount does not match".
+	expectedPaise := ToPaise(order.Total) - ToPaise(order.WalletApplied) - ToPaise(order.LoyaltyApplied)
+	if expectedPaise < 0 {
+		expectedPaise = 0
+	}
+
+	// ValidateCapturedPayment speaks Razorpay's "captured"; Cashfree's captured
+	// state is "SUCCESS". Normalising here — rather than loosening the shared gate
+	// or writing a second one — keeps ONE implementation of the binding checks
+	// that every settle path in the codebase is required to apply.
+	status := payment.PaymentStatus
+	if payment.IsCaptured() {
+		status = "captured"
+	}
+	if valid, reason := ValidateCapturedPayment(
+		status, payment.OrderID, order.RazorpayOrderID,
+		payment.AmountPaise.Paise(), expectedPaise,
+	); !valid {
+		log.Printf("cashfree settle rejected order=%s: %s (paymentOrder=%s expected=%s amount=%d expectedPaise=%d)",
+			order.OrderNumber, reason, payment.OrderID, order.RazorpayOrderID,
+			payment.AmountPaise.Paise(), expectedPaise)
+		return false, reason
+	}
+
+	cfPaymentID := payment.CFPaymentID.String()
+
+	// Mark paid + stage the chef push and order.paid event atomically. The payment
+	// is already captured at the gateway, so a DB hiccup must not fail the caller —
+	// it is logged, sent to Sentry, and the reconcile cron catches the drift.
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		_, err := CompleteCashfreeOrderTx(tx, order, payment.MethodLabel(), cfPaymentID, payment.AmountPaise.Paise())
+		return err
+	}); err != nil {
+		log.Printf("Failed to persist cashfree payment completion for order %s: %v", order.ID, err)
+		CaptureBackgroundError(err)
+	} else {
+		MaybeGrantReward(database.DB, order.ID)
+		StartOrderSaga(order.ID)
+	}
+
+	// Debit the applied store credit and burn the loyalty points now that the
+	// capture is confirmed. Idempotent, and a no-op without credit. There are no
+	// chef/driver top-ups to issue — Cashfree captures the whole amount to the
+	// platform, so SettleOrderWallet's transfer leg is skipped for this provider
+	// (see its provider guard).
+	SettleOrderWallet(order)
+	return true, ""
+}
+
+// SettleRazorpayOrderFromPayment is Razorpay's counterpart to SettleCashfreeOrder
+// (#872 step 2, Task 3): the same binding-gate-then-complete-then-settle shape,
+// but it takes an ALREADY-FETCHED PaymentResponse rather than fetching it itself,
+// because HOW it is fetched differs by caller — the HTTP verify leg fetches by the
+// client-supplied payment id (rz.FetchPayment, unchanged, same Razorpay endpoint
+// hit as before this extraction); the reconcile cron has no client-supplied id, so
+// it discovers the captured payment via rz.FetchOrderPayments(order.RazorpayOrderID)
+// and passes in whichever entry is captured and bound to this order. Unifying on
+// FetchOrderPayments for both callers was considered and rejected: it would change
+// which Razorpay endpoint the HTTP verify leg calls and could match a DIFFERENT
+// captured payment than the one the client is claiming when an order has multiple
+// attempts — a real behavior change on the money-critical path.
+//
+// Message-text note: this routes the underpayment/binding-mismatch rejections
+// through ValidateCapturedPayment, so they now return the SAME generic strings
+// Cashfree already does ("Payment not captured", "Payment does not belong to this
+// order", "Payment amount does not match the expected amount") instead of the
+// bespoke ones the old inline handler check built. No test asserts on the old
+// exact text, only on HTTP status code and resulting payment_status — this
+// unifies the codebase onto ONE binding-gate implementation, and additionally
+// means a Razorpay rejection now gets ValidateCapturedPayment's log line for
+// free (a strict improvement for the cron's loud-underpayment requirement, not a
+// regression).
+func SettleRazorpayOrderFromPayment(order *models.Order, payment *PaymentResponse) (bool, string) {
+	// The gateway only captured (Total − WalletApplied − LoyaltyApplied): both
+	// store credit AND loyalty points are applied at checkout and shrink the
+	// capture identically (see CreateOrderPayment: creditPaise = wallet + points →
+	// plan.CapturePaise).
+	expectedPaise := ToPaise(order.Total) - ToPaise(order.WalletApplied) - ToPaise(order.LoyaltyApplied)
+	if expectedPaise < 0 {
+		expectedPaise = 0
+	}
+	if valid, reason := ValidateCapturedPayment(
+		payment.Status, payment.OrderID, order.RazorpayOrderID,
+		payment.Amount, expectedPaise,
+	); !valid {
+		log.Printf("razorpay settle rejected order=%s: %s (paymentOrder=%s expected=%s amount=%d expectedPaise=%d)",
+			order.OrderNumber, reason, payment.OrderID, order.RazorpayOrderID, payment.Amount, expectedPaise)
+		return false, reason
+	}
+
+	// Mark the order paid and stage the chef push + order.paid event atomically
+	// (transactional outbox). Payment already captured at the gateway, so a DB
+	// hiccup must not fail the caller — it's logged + sent to Sentry and the
+	// reconciliation cron catches any drift.
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		_, err := CompleteRazorpayOrderTx(tx, order, payment.Method, payment.ID, payment.Amount)
+		return err
+	}); err != nil {
+		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
+		CaptureBackgroundError(err)
+	} else {
+		// Referral reward (#38) on the referee's first paid order — idempotent,
+		// so a later webhook/cron for the same order won't double-pay.
+		MaybeGrantReward(database.DB, order.ID)
+		// Start the durable order saga (#122) — gated, idempotent, no-op when off.
+		StartOrderSaga(order.ID)
+	}
+
+	// Wallet-at-checkout settlement (#141): now that the gateway capture is
+	// confirmed, debit the applied store credit and top up the chef/driver portion
+	// the capture couldn't cover, from the platform balance. Idempotent; a no-op
+	// without credit.
+	SettleOrderWallet(order)
+	return true, ""
+}

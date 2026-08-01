@@ -436,6 +436,17 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 	}
 }
 
+// verifyRazorpayPayment does the two client-verifiable checks itself — required
+// fields, the order-id binding, and (once the payment is fetched) the Checkout
+// signature — then hands the fetched, gateway-confirmed payment to
+// services.SettleRazorpayOrderFromPayment for the binding gate, completion
+// transaction, and wallet settlement (#872 step 2, Task 3: that core is now
+// shared with the Cashfree verify leg and the order-payment reconcile cron).
+//
+// The signature check runs AFTER the fetch now (previously it ran after the
+// captured/binding/amount checks) — a deliberate, harmless reordering: the
+// client-verifiable check no longer needs to wait on the gateway-authoritative
+// one that moved into the shared core.
 func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Order, paymentID, rzOrderID, signature string) {
 	if paymentID == "" || rzOrderID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "razorpayPaymentId and razorpayOrderId are required"})
@@ -459,67 +470,21 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 		return
 	}
 
-	if payment.Status != "captured" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Payment not captured, status: %s", payment.Status)})
-		return
-	}
-
-	// SECURITY: bind the fetched payment to THIS order and its amount. Without
-	// these checks any captured payment on the merchant account (e.g. a ₹1
-	// payment reused across orders) would settle this order. payment.OrderID and
-	// payment.Amount come from Razorpay (via FetchPayment), so they can't be
-	// forged by the client.
-	if payment.OrderID != order.RazorpayOrderID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment does not belong to this order"})
-		return
-	}
-	// The gateway only captured (Total − WalletApplied − LoyaltyApplied): both
-	// store credit AND loyalty points are applied at checkout and shrink the
-	// capture identically (see CreateOrderPayment: creditPaise = wallet + points →
-	// plan.CapturePaise). Omitting the loyalty term here rejected every
-	// loyalty-funded order with a false "amount does not match" 400, so the client
-	// never got a synchronous confirmation and hung on "Confirming your payment…".
-	expectedPaise := services.ToPaise(order.Total) - services.ToPaise(order.WalletApplied) - services.ToPaise(order.LoyaltyApplied)
-	if expectedPaise < 0 {
-		expectedPaise = 0
-	}
-	if payment.Amount < expectedPaise {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount does not match the order total"})
-		return
-	}
 	// Verify the Checkout signature (order_id|payment_id) the client received
 	// from Razorpay. Enforced when present (the customer app always sends it);
-	// tolerated-if-absent since the binding + amount checks above are the hard
-	// gate and don't rely on the client.
+	// tolerated-if-absent since the binding + amount checks inside
+	// SettleRazorpayOrderFromPayment are the hard gate and don't rely on the
+	// client.
 	if signature != "" && !services.VerifyPaymentSignatureFor(order.Mode, rzOrderID, paymentID, signature) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
 		return
 	}
 
-	// Mark the order paid and stage the chef push + order.paid event atomically
-	// (transactional outbox). Payment already captured at the gateway, so a DB hiccup
-	// must not 500 the client — it's logged + sent to Sentry and the reconciliation
-	// cron catches any drift.
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		_, err := services.CompleteRazorpayOrderTx(tx, order, payment.Method, paymentID, payment.Amount)
-		return err
-	}); err != nil {
-		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
-		services.CaptureBackgroundError(err)
-	} else {
-		// Referral reward (#38) on the referee's first paid order — idempotent,
-		// so a later webhook for the same order won't double-pay.
-		services.MaybeGrantReward(database.DB, order.ID)
-		// Start the durable order saga (#122) — gated, idempotent, no-op when off.
-		services.StartOrderSaga(order.ID)
+	ok, msg := services.SettleRazorpayOrderFromPayment(order, payment)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
 	}
-
-	// Wallet-at-checkout settlement (#141): now that the gateway capture is confirmed,
-	// debit the applied store credit and top up the chef/driver portion the capture
-	// couldn't cover, from the platform balance. orderSettlements recomputes the
-	// IDENTICAL split (the order was reloaded with its persisted commission_rate; the
-	// webhook path shares the same seam — #395·3). Idempotent; a no-op without credit.
-	services.SettleOrderWallet(order)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
 }

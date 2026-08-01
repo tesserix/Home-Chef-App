@@ -12,7 +12,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/homechef/api/database"
@@ -291,7 +290,7 @@ func (h *PaymentHandler) respondCashfreeSession(
 func (h *PaymentHandler) finishCashfreeFromGateway(c *gin.Context, order *models.Order, cfOrder *services.CashfreeOrderResponse) {
 	log.Printf("cashfree: order %s already PAID at gateway (%s) — settling from gateway state",
 		order.OrderNumber, cfOrder.OrderID)
-	if ok, msg := h.settleCashfreeOrder(order, cfOrder.OrderID); !ok {
+	if ok, msg := services.SettleCashfreeOrder(order); !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
@@ -327,87 +326,12 @@ func (h *PaymentHandler) verifyCashfreePayment(c *gin.Context, order *models.Ord
 		return
 	}
 
-	ok, msg := h.settleCashfreeOrder(order, cfOrderID)
+	ok, msg := services.SettleCashfreeOrder(order)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
-}
-
-// settleCashfreeOrder is the shared "the gateway says this is paid, so make the
-// order paid" core, used by the verify leg AND by the already-PAID recovery in
-// the create leg. Returns (false, reason) on any gate failure.
-//
-// Every hard gate the Razorpay verify applies is applied here, through the same
-// services.ValidateCapturedPayment: the payment must be captured, belong to THIS
-// gateway order, and cover the expected amount. Without that binding any
-// successful payment on the merchant account could be replayed to settle a
-// different order for free.
-func (h *PaymentHandler) settleCashfreeOrder(order *models.Order, cfOrderID string) (bool, string) {
-	cf := services.GetCashfreeFor(order.Mode)
-	if cf == nil {
-		return false, "Payment gateway not configured"
-	}
-
-	payment, err := cf.SuccessfulPayment(cfOrderID)
-	if err != nil {
-		log.Printf("Failed to fetch Cashfree payments for order %s: %v", cfOrderID, err)
-		return false, "Failed to verify payment"
-	}
-	if payment == nil {
-		return false, "Payment not completed"
-	}
-
-	// Expected capture = Total − wallet − loyalty, identical to the Razorpay leg.
-	// Both credit rails shrink the capture at checkout, so omitting either term
-	// rejects every credit-funded order with a false "amount does not match".
-	expectedPaise := services.ToPaise(order.Total) - services.ToPaise(order.WalletApplied) - services.ToPaise(order.LoyaltyApplied)
-	if expectedPaise < 0 {
-		expectedPaise = 0
-	}
-
-	// ValidateCapturedPayment speaks Razorpay's "captured"; Cashfree's captured
-	// state is "SUCCESS". Normalising here — rather than loosening the shared gate
-	// or writing a second one — keeps ONE implementation of the binding checks
-	// that every verify leg in the codebase is required to apply.
-	status := payment.PaymentStatus
-	if payment.IsCaptured() {
-		status = "captured"
-	}
-	if valid, reason := services.ValidateCapturedPayment(
-		status, payment.OrderID, order.RazorpayOrderID,
-		payment.AmountPaise.Paise(), expectedPaise,
-	); !valid {
-		log.Printf("cashfree verify rejected order=%s: %s (paymentOrder=%s expected=%s amount=%d expectedPaise=%d)",
-			order.OrderNumber, reason, payment.OrderID, order.RazorpayOrderID,
-			payment.AmountPaise.Paise(), expectedPaise)
-		return false, reason
-	}
-
-	cfPaymentID := payment.CFPaymentID.String()
-
-	// Mark paid + stage the chef push and order.paid event atomically. The payment
-	// is already captured at the gateway, so a DB hiccup must not fail the client —
-	// it is logged, sent to Sentry, and the reconcile cron catches the drift.
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		_, err := services.CompleteCashfreeOrderTx(tx, order, payment.MethodLabel(), cfPaymentID, payment.AmountPaise.Paise())
-		return err
-	}); err != nil {
-		log.Printf("Failed to persist cashfree payment completion for order %s: %v", order.ID, err)
-		services.CaptureBackgroundError(err)
-	} else {
-		services.MaybeGrantReward(database.DB, order.ID)
-		services.StartOrderSaga(order.ID)
-	}
-
-	// Debit the applied store credit and burn the loyalty points now that the
-	// capture is confirmed. Idempotent, and a no-op without credit. There are no
-	// chef/driver top-ups to issue — Cashfree captures the whole amount to the
-	// platform, so settleOrderWallet's transfer leg is skipped for this provider
-	// (see its provider guard).
-	services.SettleOrderWallet(order)
-	return true, ""
 }
 
 // --- Cashfree order id derivation ---
