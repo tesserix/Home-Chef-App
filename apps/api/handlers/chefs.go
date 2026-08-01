@@ -2279,6 +2279,19 @@ func (h *ChefHandler) GetPayoutDetails(c *gin.Context) {
 	bankIFSC, _ := services.GetVendorSecret(ctx, vendorID, "bank-ifsc")
 	upiID, _ := services.GetVendorSecret(ctx, vendorID, "upi-id")
 
+	// Lazy status advance: while Cashfree is still validating the vendor's
+	// bank account, each view of this screen nudges the stored verdict
+	// current, so "verification in progress" flips to verified without an
+	// admin touch. Fire-and-forget — the next fetch shows the fresh value.
+	if chef.CashfreeVendorID != "" && !strings.EqualFold(chef.CashfreeVendorStatus, services.CashfreeVendorActive) {
+		chefCopy := chef
+		go func() {
+			if _, err := services.RefreshEasySplitVendor(context.Background(), database.DB, &chefCopy); err != nil {
+				log.Printf("easy-split: lazy status refresh failed for chef %s: %v", chefCopy.ID, err)
+			}
+		}()
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"payoutMethod":      chef.PayoutMethod,
 		"bankAccountName":   bankAccountName,
