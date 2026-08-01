@@ -161,8 +161,13 @@ export default function HomeScreen() {
   // here as well just opened a second connection for the same events.
 
   // Notification bell — unread count + live socket so the badge lights the
-  // moment a chef advances an order or a meal-plan day updates.
-  const { data: unreadCount = 0 } = useUnreadCount(api);
+  // moment a chef advances an order or a meal-plan day updates. Gated on auth:
+  // Home is reachable while signed out (guest browsing), and the query was
+  // previously unconditionally mounted, 401-storming for every guest (#869).
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { data: unreadCount = 0 } = useUnreadCount(api, {
+    enabled: isAuthenticated,
+  });
   useNotificationSocket({
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL,
     getToken: () => useAuthStore.getState().accessToken,
