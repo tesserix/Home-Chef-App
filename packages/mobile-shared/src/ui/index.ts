@@ -15,6 +15,7 @@ export {
   type AlertButton,
 } from './DialogProvider';
 export { SheetBase, type SheetBaseProps } from './SheetBase';
+export { useSheetDrag, type UseSheetDragOptions } from './useSheetDrag';
 export { UndoSnackbarProvider, useUndoSnackbar } from './UndoSnackbar';
 export { OnboardingScaffold } from './OnboardingScaffold';
 export { DietIcon } from './DietIcon';
