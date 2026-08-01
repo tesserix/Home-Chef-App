@@ -131,7 +131,7 @@ func reconcileOrderPayments(db *gorm.DB, now time.Time) int {
 		var reason string
 		switch models.NormalizeProvider(order.PaymentProvider) {
 		case models.PaymentProviderCashfree:
-			ok, reason = SettleCashfreeOrder(order)
+			ok, reason, _ = SettleCashfreeOrder(order)
 		case models.PaymentProviderRazorpay:
 			ok, reason = settleRazorpayFromDiscovery(order)
 		default:
