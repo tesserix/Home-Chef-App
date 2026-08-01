@@ -1,9 +1,15 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart3, TrendingUp, Clock, PieChart } from 'lucide-react';
+import { BarChart3, TrendingUp, Clock, PieChart, Wallet } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
+import {
+  currentFyStartYear,
+  expenseCategoryLabel,
+  useFYStatement,
+} from '@/features/earnings/hooks/useExpenses';
 
 interface AnalyticsData {
   summary?: { orders: number; revenue: number; aov: number; repeatRate: number; prevRevenue: number };
@@ -294,6 +300,98 @@ export default function AnalyticsPage() {
           ))}
         </div>
       </motion.div>
+
+      {/* Expenses vs earnings (current FY) — the chef's own books. */}
+      <ExpensesSection />
+    </motion.div>
+  );
+}
+
+/** FY expense picture: monthly spend bars, category split, and net income. */
+function ExpensesSection() {
+  const fy = currentFyStartYear();
+  const { data: stmt } = useFYStatement(fy);
+
+  if (!stmt) return null;
+
+  const months = stmt.expenses.byMonth;
+  const maxMonth = months.length > 0 ? Math.max(...months.map((m) => m.amount), 1) : 1;
+
+  return (
+    <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Wallet className="h-5 w-5 text-herb" />
+          <h2 className="text-lg font-semibold text-ink">Expenses · {stmt.fyLabel}</h2>
+        </div>
+        <Link
+          to="/earnings/expenses"
+          className="text-sm font-medium text-herb hover:underline"
+        >
+          Manage expenses & FY statement
+        </Link>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard label="Net earnings (FY)" value={inr(stmt.netEarnings)} sub={`${stmt.ordersCount} delivered orders`} />
+        <StatCard label="Expenses (FY)" value={inr(stmt.totalExpenses)} sub={`${stmt.expenses.count} entries`} />
+        <StatCard label="Net income (pre-tax)" value={inr(stmt.netIncome)} sub="earnings − expenses" />
+      </div>
+
+      {months.length === 0 ? (
+        <p className="text-sm text-ink-soft">
+          No expenses recorded this financial year. Track gas, ingredients and utensils under{' '}
+          <Link to="/earnings/expenses" className="text-herb hover:underline">
+            Expenses & Tax
+          </Link>{' '}
+          to see your real margin here.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+              Monthly spend
+            </p>
+            <div className="flex items-end gap-2" style={{ height: 140 }}>
+              {months.map((m) => (
+                <div key={m.month} className="flex min-w-[40px] flex-1 flex-col items-center gap-1">
+                  <span className="text-[10px] font-medium text-ink-soft tabular-nums">
+                    {inr(m.amount)}
+                  </span>
+                  <div
+                    className="w-full rounded-t-md bg-herb"
+                    style={{ height: `${(m.amount / maxMonth) * 100}px`, minHeight: 4 }}
+                  />
+                  <span className="text-[10px] text-ink-muted">{m.month.slice(5)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+              By category
+            </p>
+            <div className="space-y-3">
+              {stmt.expenses.byCategory.map((c) => (
+                <div key={c.category}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-ink">{expenseCategoryLabel(c.category)}</span>
+                    <span className="text-ink-muted tabular-nums">{inr(c.amount)}</span>
+                  </div>
+                  <div className="mt-1 h-2 rounded-full bg-mist">
+                    <div
+                      className="h-2 rounded-full bg-herb"
+                      style={{
+                        width: `${stmt.totalExpenses > 0 ? (c.amount / stmt.totalExpenses) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

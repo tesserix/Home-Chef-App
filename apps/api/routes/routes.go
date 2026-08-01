@@ -154,6 +154,7 @@ func SetupRouter() *gin.Engine {
 	chefEarningsHandler := handlers.NewChefEarningsHandler()
 	chefStatementsHandler := handlers.NewChefStatementsHandler()
 	chefTaxHandler := handlers.NewChefTaxHandler()
+	chefExpensesHandler := handlers.NewChefExpensesHandler()
 	chefRefundsHandler := handlers.NewChefRefundsHandler()
 	chefAvailabilityHandler := handlers.NewChefAvailabilityHandler()
 	orderHandler := handlers.NewOrderHandler()
@@ -617,6 +618,16 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/statements/:id/statement.pdf", chefStatementsHandler.GetWeeklyStatementPDF)
 			// Annual TDS summary (Form 16A style) — ?year=FY-start.
 			chefDashboard.GET("/tax/certificate", chefTaxHandler.GetTDSCertificate)
+			// FY income & expense statement — JSON for analytics, PDF for filing.
+			chefDashboard.GET("/tax/fy-statement", chefTaxHandler.GetFYStatement)
+			chefDashboard.GET("/tax/fy-statement.pdf", chefTaxHandler.GetFYStatementPDF)
+			// Self-declared business expenses (gas, ingredients, utensils …) —
+			// the chef's own books; feeds analytics + the FY statement.
+			chefDashboard.GET("/expenses", chefExpensesHandler.ListExpenses)
+			chefDashboard.POST("/expenses", chefExpensesHandler.CreateExpense)
+			chefDashboard.GET("/expenses/summary", chefExpensesHandler.GetExpenseSummary)
+			chefDashboard.PUT("/expenses/:id", chefExpensesHandler.UpdateExpense)
+			chefDashboard.DELETE("/expenses/:id", chefExpensesHandler.DeleteExpense)
 			// Refund history — one entry per refunded order, item breakdown.
 			chefDashboard.GET("/refunds", chefRefundsHandler.GetRefunds)
 			// Timed pause ("Back in {15,30,60} min") + manual resume.

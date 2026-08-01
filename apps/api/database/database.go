@@ -303,6 +303,7 @@ func Migrate() error {
 
 		// Weekly settlement statements
 		&models.WeeklyStatement{},
+		&models.ChefExpense{},
 		// Chef cancellation levies, netted off the next settlement (#834).
 		&models.ChefPenalty{},
 		// Chef-refers-chef program: redemptions + settlement credits.

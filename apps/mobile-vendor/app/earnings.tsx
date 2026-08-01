@@ -584,6 +584,75 @@ function TaxDocumentRow({ fyLabel, onPress }: TaxDocumentRowProps) {
   );
 }
 
+// FY income & expense statement (GST/ITR working papers) + the expense book
+// that feeds it. Same card as the TDS certificate — all "tax time" artefacts
+// live in one place.
+function FYStatementRow({ fyLabel, onPress }: TaxDocumentRowProps) {
+  const { t } = useTranslation();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Download FY statement for ${fyLabel}`}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            accountRowStyles.root,
+            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
+          ]}
+        >
+          <View style={accountRowStyles.textBlock}>
+            <Text style={accountRowStyles.value} numberOfLines={1}>
+              {t('earnings.fyStatementFy', { fy: fyLabel })}
+            </Text>
+            <Text style={accountRowStyles.sub} numberOfLines={1}>
+              {t('earnings.fyStatementSub')}
+            </Text>
+          </View>
+          <Text style={statementRowStyles.download}>{t('earnings.downloadShort')}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function ExpensesLinkRow({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={t('earnings.expensesRowLabel')}
+      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            accountRowStyles.root,
+            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
+          ]}
+        >
+          <View style={accountRowStyles.textBlock}>
+            <Text style={accountRowStyles.value} numberOfLines={1}>
+              {t('earnings.expensesRowLabel')}
+            </Text>
+            <Text style={accountRowStyles.sub} numberOfLines={1}>
+              {t('earnings.expensesRowSub')}
+            </Text>
+          </View>
+          <ChevronLeft
+            size={14}
+            color={theme.colors.ink.muted}
+            style={{ transform: [{ rotate: '180deg' }] }}
+          />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 // ---- Refund row (tappable → opens the order) ---------------------------------
 
 interface RefundRowProps {
@@ -1056,6 +1125,16 @@ export default function EarningsScreen() {
                     )
                   }
                 />
+                <FYStatementRow
+                  fyLabel={currentFyLabel()}
+                  onPress={() =>
+                    downloadAndSharePdf(
+                      '/chef/tax/fy-statement.pdf',
+                      `fy-statement-${currentFyLabel().replace(/\s/g, '')}.pdf`,
+                    )
+                  }
+                />
+                <ExpensesLinkRow onPress={() => router.push('/expenses')} />
               </View>
             </View>
           </View>

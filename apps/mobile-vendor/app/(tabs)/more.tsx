@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Star,
   User,
+  Wallet,
   XCircle,
   BookOpen,
 } from 'lucide-react-native';
@@ -70,6 +71,7 @@ const ALL_SECTIONS: NavSection[] = [
       // somewhere findable.
       { labelKey: 'payout', caption: 'Bank account for your earnings', route: '/payout', Icon: Landmark },
       { labelKey: 'rewards', caption: 'Points, cashback, refer a chef', route: '/rewards', Icon: Gift },
+      { labelKey: 'expenses', caption: 'Gas, ingredients, FY tax statement', route: '/expenses', Icon: Wallet },
       { labelKey: 'analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
     ],
   },

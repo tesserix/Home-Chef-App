@@ -573,19 +573,23 @@ function StatementsCard() {
   );
 }
 
-/** The annual TDS certificate (Section 194-O). */
+/** Annual tax documents: TDS certificate + FY income & expense statement. */
 function TaxDocumentsCard() {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'tds' | 'fy' | null>(null);
   const fy = currentFyLabel();
 
-  async function download() {
-    setBusy(true);
+  async function download(kind: 'tds' | 'fy') {
+    setBusy(kind);
     try {
-      await downloadPdf('/chef/tax/certificate', `tds-certificate-${fy.replace(/\s/g, '')}.pdf`);
+      if (kind === 'tds') {
+        await downloadPdf('/chef/tax/certificate', `tds-certificate-${fy.replace(/\s/g, '')}.pdf`);
+      } else {
+        await downloadPdf('/chef/tax/fy-statement.pdf', `fy-statement-${fy.replace(/\s/g, '')}.pdf`);
+      }
     } catch {
-      toast.error('Could not download the certificate. Please try again.');
+      toast.error('Could not download the document. Please try again.');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -594,14 +598,30 @@ function TaxDocumentsCard() {
       <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
         Tax documents
       </h2>
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-ink">TDS certificate · {fy}</p>
-          <p className="text-xs text-ink-muted">Annual summary (Section 194-O)</p>
+      <div className="mt-3 divide-y divide-mist">
+        <div className="flex items-center justify-between gap-3 pb-3">
+          <div>
+            <p className="text-sm font-medium text-ink">TDS certificate · {fy}</p>
+            <p className="text-xs text-ink-muted">Annual summary (Section 194-O)</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => void download('tds')} disabled={busy !== null}>
+            {busy === 'tds' ? 'Downloading…' : 'Download'}
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => void download()} disabled={busy}>
-          {busy ? 'Downloading…' : 'Download'}
-        </Button>
+        <div className="flex items-center justify-between gap-3 pt-3">
+          <div>
+            <p className="text-sm font-medium text-ink">FY statement · {fy}</p>
+            <p className="text-xs text-ink-muted">
+              Income & expenses for GST / ITR filing —{' '}
+              <Link to="/earnings/expenses" className="text-herb hover:underline">
+                record expenses
+              </Link>
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => void download('fy')} disabled={busy !== null}>
+            {busy === 'fy' ? 'Downloading…' : 'Download'}
+          </Button>
+        </div>
       </div>
     </Card>
   );

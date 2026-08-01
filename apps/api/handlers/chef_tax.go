@@ -1,7 +1,9 @@
 package handlers
 
 // chef_tax.go — chef tax documents.
-//   GET /chef/tax/certificate?year=YYYY → annual TDS summary PDF (Form 16A style)
+//   GET /chef/tax/certificate?year=YYYY       → annual TDS summary PDF (Form 16A style)
+//   GET /chef/tax/fy-statement?year=YYYY      → FY income & expense summary (JSON)
+//   GET /chef/tax/fy-statement.pdf?year=YYYY  → same, as a downloadable PDF
 //
 // `year` is the FINANCIAL-year start year (Indian FY runs 1 Apr – 31 Mar):
 // year=2025 → FY 2025-26. Defaults to the current financial year.
@@ -62,6 +64,57 @@ func (h *ChefTaxHandler) GetTDSCertificate(c *gin.Context) {
 		return
 	}
 	services.LogAudit(c, "chef.tax_certificate.download", "tds_certificate",
+		strconv.Itoa(fyStartYear), nil, gin.H{"fyStartYear": fyStartYear})
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+// GetFYStatement returns the FY income & expense summary as JSON (analytics).
+func (h *ChefTaxHandler) GetFYStatement(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	chef, err := loadChefForUser(userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+
+	fyStartYear, msg := parseFYStartYear(c.Query("year"))
+	if msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+
+	stmt, genErr := services.ComputeFYStatement(chef.ID, fyStartYear)
+	if genErr != nil {
+		services.CaptureSentryError(c, genErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compute FY statement"})
+		return
+	}
+	c.JSON(http.StatusOK, stmt)
+}
+
+// GetFYStatementPDF streams the downloadable FY statement.
+func (h *ChefTaxHandler) GetFYStatementPDF(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	chef, err := loadChefForUser(userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+
+	fyStartYear, msg := parseFYStartYear(c.Query("year"))
+	if msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+
+	pdfBytes, filename, genErr := services.GenerateFYStatementPDF(chef.ID, fyStartYear)
+	if genErr != nil {
+		services.CaptureSentryError(c, genErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate FY statement"})
+		return
+	}
+	services.LogAudit(c, "chef.fy_statement.download", "fy_statement",
 		strconv.Itoa(fyStartYear), nil, gin.H{"fyStartYear": fyStartYear})
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
