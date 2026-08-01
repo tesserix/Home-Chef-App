@@ -43,6 +43,11 @@ func cronJobs() []cronJob {
 		{"meal-sub-orders", mealSubOrderScanInterval, runMealSubscriptionDailyOrders, StartMealSubscriptionOrderCron},
 		{"campaign-dispatch", campaignDispatchInterval, runCampaignDispatch, StartCampaignCron},
 		{"stale-order", staleOrderInterval, runStaleOrderScan, StartStaleOrderCron},
+		// #872 step 2 — settles the captured-but-unconfirmed orders step 1's
+		// stale-order gateway gate now finds and leaves pending forever (the
+		// settle core lives in this package, which step 1's cron already runs
+		// in, so this is registered right after it).
+		{"order-payment-reconcile", orderPaymentReconcileInterval, runOrderPaymentReconcileScan, StartOrderPaymentReconcileCron},
 		// #694 — void + refund paid orders the chef never accepted before their
 		// kitchen closed. Registered here so it runs under Temporal Schedules where
 		// they drive the crons, and as an in-process ticker where they do not: the
