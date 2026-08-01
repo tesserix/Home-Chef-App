@@ -2,7 +2,7 @@ import '../global.css';
 
 import '../lib/background-location'; // registers background task at module load
 import { useEffect, useRef } from 'react';
-import { Platform, View } from 'react-native';
+import { AppState, type AppStateStatus, Platform, View } from 'react-native';
 import { OfflineBanner } from '@homechef/mobile-shared';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
@@ -17,7 +17,7 @@ import { DialogProvider } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
-import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
+import { getRawFCMToken, registerDeviceTokenSafe } from '@homechef/mobile-shared/hooks';
 import { api } from '../lib/api';
 import { useQuery } from '@tanstack/react-query';
 
@@ -70,6 +70,9 @@ function AppNavigator() {
 
   // Cleanup ref for push subscription teardown.
   const pushCleanupRef = useRef<(() => void) | null>(null);
+  // Whether a token is already registered for this session — guards the
+  // AppState reattempt below so it doesn't re-register on every foreground.
+  const tokenRegisteredRef = useRef(false);
 
   useEffect(() => {
     // Fresh-install guard MUST finish before hydrateFromStorage reads the
@@ -135,13 +138,13 @@ function AppNavigator() {
       // Register FCM token with the API.
       const token = await getRawFCMToken();
       if (token) {
-        await registerDeviceToken(api, token);
+        tokenRegisteredRef.current = await registerDeviceTokenSafe(api, token);
       }
 
       // Handle FCM token rotation.
       const tokenSub = Notifications.addPushTokenListener((event) => {
-        registerDeviceToken(api, event.data).catch((err: unknown) => {
-          console.warn('[push] Token rotation registration failed', err);
+        void registerDeviceTokenSafe(api, event.data).then((ok) => {
+          tokenRegisteredRef.current = ok;
         });
       });
 
@@ -180,8 +183,36 @@ function AppNavigator() {
         pushCleanupRef.current();
         pushCleanupRef.current = null;
       }
+      tokenRegisteredRef.current = false;
     };
   }, [isAuthenticated, isLoading]);
+
+  // Push reattempt on foreground. Unlike customer/vendor, this app has no
+  // existing AppState/focusManager effect to extend — this listener exists
+  // SOLELY for the push reattempt below; it does not wire React Query's
+  // focus manager (that would be a separate, larger change not asked for
+  // here). A driver who denied the permission prompt and later granted it
+  // in Settings gets registered on the next foreground, without a second
+  // prompt (getRawFCMToken only prompts when the status isn't already
+  // decided) and without re-registering once already registered this
+  // session.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
+      if (
+        status === 'active' &&
+        !tokenRegisteredRef.current &&
+        useAuthStore.getState().isAuthenticated
+      ) {
+        void getRawFCMToken().then((token) => {
+          if (!token) return;
+          void registerDeviceTokenSafe(api, token).then((ok) => {
+            tokenRegisteredRef.current = ok;
+          });
+        });
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (isLoading || onboardingLoading) return;
