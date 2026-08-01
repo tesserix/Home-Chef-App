@@ -54,9 +54,17 @@ Not introduced here, not fixed here.
 - No routes, hooks, or API calls deleted. This is a visibility gate.
 - The pre-existing `payment.ts` route-typing error was left alone — unrelated
   to this issue and fixing it would widen a one-line PR.
-- Not visually verified on the simulator yet. The change is a boolean read by
-  an existing, already-wired conditional, so the risk is low, but the chef menu
-  bottom spacing with the row gone has not been eyeballed.
+## Device verification (added 2026-08-01, Android emulator)
+
+Verified on a Pixel_8_Pro emulator via the real user path — signed in as
+`customer01@fe3dr.com`, home → chef → scroll to the bottom of the menu:
+
+- With the flag ON (other branch): the "Start a group / office order" row is
+  present below Tandoori Chicken.
+- With the flag OFF (this branch): **the row is gone**, and the menu ends
+  cleanly on the last item's hairline. No orphaned gap where it sat.
+
+That closes the one open item below.
 
 ## Follow-ups
 
