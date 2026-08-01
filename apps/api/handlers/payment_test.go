@@ -311,6 +311,32 @@ func TestVerifyPayment_OrderIDMismatch_400(t *testing.T) {
 	}
 }
 
+// A genuine Razorpay upstream failure on the mandatory rz.FetchPayment fetch
+// must answer 502 — retryable, not a false "not paid" (#872 final item). This
+// is the one existing status code this task CHANGES (was 500; grep-confirmed
+// no test asserted http.StatusInternalServerError for this specific branch,
+// so this is a new test, not an edit to an existing assertion).
+func TestVerifyRazorpayPayment_UpstreamFetchFailure502(t *testing.T) {
+	db := setupPayDB(t)
+	cust := payUser(t, db, "customer")
+	chef := payChef(t, db, payUser(t, db, "chef"))
+	orderID := payOrder(t, db, cust, chef, "pending", 500, "rzp_order_up", "")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"description":"internal error"}}`))
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { services.SetRazorpayClient(nil) })
+	services.SetRazorpayClient(services.NewRazorpayTestClient(srv.URL, "key_test", "secret_test", "whsec_test"))
+
+	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/verify", regVerify,
+		map[string]string{"razorpayPaymentId": "pay_up_1", "razorpayOrderId": "rzp_order_up", "razorpaySignature": ""})
+
+	require.Equal(t, http.StatusBadGateway, w.Code, w.Body.String())
+	require.Equal(t, "pending", paymentStatusOf(t, db, orderID))
+}
+
 // ── InitiateRefund ───────────────────────────────────────────────────────────
 
 func TestInitiateRefund_Unauthorized_403(t *testing.T) {
