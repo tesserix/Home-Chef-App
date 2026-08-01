@@ -46,9 +46,12 @@ describe('pickSubscriptionMealDay', () => {
   });
 
   it('tie-breaks same-day entries so lunch sorts before dinner', () => {
+    // Both slots share the identical `date` value (IST midnight of the calendar
+    // day) -- this is the real shape from the API, where slot differs but date
+    // does not -- so the slot tie-break, not date ordering, must decide.
     const now = new Date('2026-08-02T10:00:00.000Z');
     const lunch = { date: '2026-08-02T06:30:00Z', slot: 'lunch', status: 'scheduled' };
-    const dinner = { date: '2026-08-02T12:30:00Z', slot: 'dinner', status: 'scheduled' };
+    const dinner = { date: '2026-08-02T06:30:00Z', slot: 'dinner', status: 'scheduled' };
     const days = [dinner, lunch];
 
     const picked = pickSubscriptionMealDay(days, now);
