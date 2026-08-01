@@ -24,14 +24,14 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '3. Orders and pricing',
     paragraphs: [
-      'When you place an order you make an offer to purchase the selected items from the chef. The order is confirmed once the chef accepts it. Prices shown include the item price; applicable taxes, delivery fees, and platform service fees are shown before you pay. A minimum order value may apply per chef.',
+      'When you place an order you make an offer to purchase the selected items from the chef. The order is confirmed once the chef accepts it. Prices shown include the item price; applicable taxes, delivery fees, and the platform fee (which covers payment-processing charges) are shown before you pay. A minimum order value may apply per chef.',
       'Chefs may decline orders — for example when they are at capacity or an item is unavailable. If a chef declines, you are not charged, or any amount taken is refunded.',
     ],
   },
   {
     heading: '4. Payments',
     paragraphs: [
-      'Payments are processed by Razorpay, an RBI-licensed payment aggregator. Order proceeds are settled to your chef, less the platform service fee and applicable taxes. We do not store your full card details — they are handled by the payment gateway.',
+      'Payments are processed by RBI-licensed payment aggregators (Cashfree Payments or Razorpay). Order proceeds are settled to your chef, less the platform fee and applicable taxes. We do not store your full card details — they are handled by the payment gateway.',
       'Your payment is collected and held by Zivana Innovations LLP, the Fe3dr operating entity in India, which is part of Tesserix Pty Ltd. Zivana is the name that may appear on your bank or card statement. Zivana also pays chefs their share.',
     ],
   },

@@ -260,10 +260,16 @@ export default function ChefBookScreen() {
             <Button
               variant="secondary"
               label="Save draft"
+              fullWidth={false}
               onPress={() => submit('draft')}
               disabled={save.isPending}
             />
-            <Button label="Publish" onPress={() => submit('published')} loading={save.isPending} />
+            <Button
+              label="Publish"
+              fullWidth={false}
+              onPress={() => submit('published')}
+              loading={save.isPending}
+            />
           </View>
         </KeyboardAwareScrollView>
       ) : (

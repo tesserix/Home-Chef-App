@@ -146,9 +146,10 @@ func ListPublishedArticles(ctx context.Context, q ArticleFeedQuery) ([]models.Ch
 		SetSort(bson.D{{Key: "publishedAt", Value: -1}}).
 		SetLimit(int64(q.Limit)).
 		SetSkip(int64(q.Skip)).
-		// The feed renders excerpts, so the body and the full reaction and
-		// comment arrays are dead weight over the wire and in memory.
-		SetProjection(bson.M{"blocks": 0, "comments": 0})
+		// The feed renders excerpts, so comment bodies and article blocks are
+		// dead weight — but the comments' hidden flags must survive, or
+		// VisibleComments() counts zero on every listing.
+		SetProjection(feedProjection)
 	cur, err := col.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, 0, err
@@ -160,6 +161,17 @@ func ListPublishedArticles(ctx context.Context, q ArticleFeedQuery) ([]models.Ch
 		return nil, 0, err
 	}
 	return out, total, nil
+}
+
+// feedProjection strips article bodies and comment payloads from listings
+// while keeping each comment's hidden flag, so comment counts stay correct.
+var feedProjection = bson.M{
+	"blocks":              0,
+	"comments.body":       0,
+	"comments.userId":     0,
+	"comments.userName":   0,
+	"comments.userAvatar": 0,
+	"comments.createdAt":  0,
 }
 
 // ListChefArticles returns one chef's articles including drafts.
@@ -177,7 +189,7 @@ func ListChefArticles(ctx context.Context, chefID string, limit, skip int) ([]mo
 		SetSort(bson.D{{Key: "updatedAt", Value: -1}}).
 		SetLimit(int64(limit)).
 		SetSkip(int64(skip)).
-		SetProjection(bson.M{"blocks": 0, "comments": 0})
+		SetProjection(feedProjection)
 	cur, err := col.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, 0, err

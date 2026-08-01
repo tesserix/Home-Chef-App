@@ -3,7 +3,9 @@ import { api } from '../lib/api';
 import type { Address } from '../types/customer';
 
 export interface CustomerProfile {
+  /** CustomerProfile row id — NOT the user's id; that's `userId`. */
   id: string;
+  userId: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -39,12 +41,13 @@ export type UpdateProfilePayload = Partial<
   >
 >;
 
-export function useProfile() {
+export function useProfile(options?: { enabled?: boolean }) {
   return useQuery<CustomerProfile>({
     queryKey: ['profile'],
     queryFn: () =>
       api.get('/v1/customer/profile').then((r) => r.data as CustomerProfile),
     staleTime: 1000 * 60 * 5, // 5 minutes
+    enabled: options?.enabled ?? true,
   });
 }
 

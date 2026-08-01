@@ -520,6 +520,24 @@ export default function HomeScreen() {
         {/* Right side: Social Feed + Catering — navigation, not filter controls.
             Moved from their own row to the same slim bar, saving one full row. */}
         <View style={styles.navLinks}>
+          <Pressable
+            onPress={() => router.push('/chefbook')}
+            accessibilityRole="button"
+            accessibilityLabel="Go to ChefBook"
+            hitSlop={5}
+            android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.navLinkPill,
+                  pressed && Platform.OS === 'ios' && styles.pressedIOS,
+                ]}
+              >
+                <Text style={styles.navLinkLabel}>ChefBook</Text>
+              </View>
+            )}
+          </Pressable>
           {/* Social Feed — DEFERRED for v1 (stub, no real feed yet). */}
           {SOCIAL_ENABLED ? (
             <Pressable
