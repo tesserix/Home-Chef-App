@@ -64,7 +64,7 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 	// at the gateway — but the chef's payout still has to be withheld downstream,
 	// and the audit entry is what the payout path and the regulator both read.
 	if services.IsChefFSSAIExpired(&order.Chef) {
-		chefAmount := chefNetPayout(order)
+		chefAmount := services.ChefNetPayoutFor(order)
 		middleware.RecordFSSAILockout("payout_withheld")
 		log.Printf("fssai-lockout: withholding chef payout order=%s chef=%s amount=%.2f (cashfree)",
 			order.OrderNumber, order.Chef.ID, chefAmount)
@@ -406,7 +406,7 @@ func (h *PaymentHandler) settleCashfreeOrder(order *models.Order, cfOrderID stri
 	// chef/driver top-ups to issue — Cashfree captures the whole amount to the
 	// platform, so settleOrderWallet's transfer leg is skipped for this provider
 	// (see its provider guard).
-	settleOrderWallet(order)
+	services.SettleOrderWallet(order)
 	return true, ""
 }
 
@@ -637,7 +637,7 @@ func (h *PaymentHandler) handleCashfreePaymentSuccess(payload json.RawMessage, s
 	if err := database.DB.Preload("Chef").Preload("Delivery.DeliveryPartner").
 		Where(models.GatewayOrderIDColumn+" = ? AND mode = ? AND payment_status = ? AND (wallet_applied > 0 OR loyalty_applied > 0)",
 			cfOrderID, mode, models.PaymentCompleted).First(&walletOrd).Error; err == nil {
-		settleOrderWallet(&walletOrd)
+		services.SettleOrderWallet(&walletOrd)
 	}
 
 	// A post-delivery tip is its own gateway order (#45); confirm it here too.

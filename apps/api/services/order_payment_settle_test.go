@@ -1,9 +1,11 @@
 package services
 
-// order_payment_settle_test.go — #872 step 2, Task 1. Relocated from
-// handlers/payment_complete_race_test.go (#395 item 2) and
-// handlers/payment_complete_generic_test.go (#555), unchanged assertions, now
-// exercising the moved CompleteOrderPaymentTx / CompleteRazorpayOrderTx
+// order_payment_settle_test.go — #872 step 2. Relocated from
+// handlers/payment_complete_race_test.go (#395 item 2),
+// handlers/payment_complete_generic_test.go (#555), and (Task 2) the
+// TestOrderSettlements_* cases in handlers/payment_test.go (#741), unchanged
+// assertions, now exercising the moved CompleteOrderPaymentTx /
+// CompleteRazorpayOrderTx / OrderSettlements / ApplyChefRecoveryDeduction
 // directly in `services` (their new, single home).
 //
 // #395 item 2 background: the Razorpay verify path computed `wasUnpaid` from
@@ -25,6 +27,7 @@ package services
 // Stripe and wallet payloads — no live gateway needed.
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -34,6 +37,7 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
+	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
 
@@ -257,4 +261,208 @@ func paymentStatusOfTx(t *testing.T, db *gorm.DB, id uuid.UUID) string {
 	var s string
 	require.NoError(t, db.Raw(`SELECT payment_status FROM orders WHERE id = ?`, id.String()).Scan(&s).Error)
 	return s
+}
+
+// ── OrderSettlements / ApplyChefRecoveryDeduction (#872 step 2, Task 2) ─────
+//
+// Relocated from handlers/payment_test.go's TestOrderSettlements_* (#741).
+// These build a bare *models.Order{} in memory and never touch an `orders`
+// SQL table — they only need payout_ledger_entries (the recovery-debt ledger
+// ApplyRecoveryDeduction reads) and audit_logs (the deduction audit write).
+// setupOrderSettlementsDB extends newRecoveryTestDB (payout_recovery_test.go,
+// same package) with audit_logs; seedPenalty (also payout_recovery_test.go)
+// seeds the outstanding debt — both reused rather than duplicated.
+
+// setupOrderSettlementsDB is newRecoveryTestDB (hand-DDL'd payout_ledger_entries;
+// payouts.LedgerEntry's Postgres-only gen_random_uuid() default breaks sqlite
+// AutoMigrate) plus audit_logs, which ApplyChefRecoveryDeduction writes to via
+// LogSystemAudit — which reads the package-global database.DB, not the `db`
+// parameter, so this also swaps it for the duration of the test (restored via
+// t.Cleanup).
+func setupOrderSettlementsDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db := newRecoveryTestDB(t)
+	require.NoError(t, db.Exec(`CREATE TABLE audit_logs (
+		id TEXT PRIMARY KEY DEFAULT '00000000-0000-0000-0000-000000000000',
+		user_id TEXT, action TEXT, entity_type TEXT, entity_id TEXT,
+		old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT,
+		correlation_id TEXT, created_at DATETIME)`).Error)
+	prev := database.DB
+	database.DB = db
+	t.Cleanup(func() { database.DB = prev })
+	return db
+}
+
+func TestOrderSettlements_ChefNetTransfer(t *testing.T) {
+	db := setupOrderSettlementsDB(t)
+	order := &models.Order{
+		OrderNumber:        "HC-1",
+		ChefID:             uuid.New(),
+		Subtotal:           1000,
+		Tax:                50,
+		ChefTip:            20,
+		DeliveryFee:        40,
+		ChefFundedDiscount: 100,
+		CommissionRate:     0.06,
+	}
+	order.Chef.RazorpayAccountID = "acc_chef"
+	settlements := OrderSettlements(db, order)
+	// Chef settlement = NET: itemRevenue 900, gross 970, commission 54, tds 9.70,
+	// net = 906.30 → 90630 paise. No recovery debt seeded, so nothing is deducted.
+	if settlements[0].Amount != ToPaise(906.3) {
+		t.Fatalf("chef settlement = %d paise, want %d (net)", settlements[0].Amount, ToPaise(906.3))
+	}
+	// Driver settlement (deliveryFee + driverTip) is UNCHANGED — the driver's money.
+	if settlements[1].Amount != ToPaise(40) {
+		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, ToPaise(40))
+	}
+}
+
+// TestOrderSettlements_RecoveryDeductionReducesChefTransfer (#741) proves the
+// wiring gap this task closes: ApplyRecoveryDeduction on its own never touches
+// a Route transfer. Unless OrderSettlements actually applies its result, a
+// chef's outstanding debt is computed but never collected.
+func TestOrderSettlements_RecoveryDeductionReducesChefTransfer(t *testing.T) {
+	db := setupOrderSettlementsDB(t)
+	chefID := uuid.New()
+	seedPenalty(t, db, chefID, 20_000) // ₹200.00 owed to the platform
+
+	order := &models.Order{
+		OrderNumber:        "HC-2",
+		ChefID:             chefID,
+		Subtotal:           1000,
+		Tax:                50,
+		ChefTip:            20,
+		DeliveryFee:        40,
+		ChefFundedDiscount: 100,
+		CommissionRate:     0.06,
+	}
+	order.Chef.RazorpayAccountID = "acc_chef"
+
+	settlements := OrderSettlements(db, order)
+	// Gross net payout is 90630 paise (see TestOrderSettlements_ChefNetTransfer);
+	// a 20000 paise debt must come off THIS transfer before it is created.
+	wantChef := ToPaise(906.3) - 20_000
+	if settlements[0].Amount != wantChef {
+		t.Fatalf("chef settlement = %d paise, want %d (gross net of the 20000 paise debt)",
+			settlements[0].Amount, wantChef)
+	}
+	// The driver's slice is untouched by the chef's debt.
+	if settlements[1].Amount != ToPaise(40) {
+		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, ToPaise(40))
+	}
+}
+
+// TestOrderSettlements_RecoveryDeductionWritesAuditRow pins the final-review
+// finding: recovery is currently inert (nothing discharges the ledger debt) and
+// invisible everywhere except the reduced transfer amount itself — a chef's
+// payout can be silently cut with no record of why. When a deduction actually
+// reduces the gross (deducted > 0), an audit row must be written recording the
+// order, chef, gross, and deducted figures, so a reduced payout is never
+// silent.
+func TestOrderSettlements_RecoveryDeductionWritesAuditRow(t *testing.T) {
+	db := setupOrderSettlementsDB(t)
+	chefID := uuid.New()
+	seedPenalty(t, db, chefID, 20_000) // ₹200.00 owed to the platform
+
+	order := &models.Order{
+		ID:                 uuid.New(),
+		OrderNumber:        "HC-2",
+		ChefID:             chefID,
+		Subtotal:           1000,
+		Tax:                50,
+		ChefTip:            20,
+		DeliveryFee:        40,
+		ChefFundedDiscount: 100,
+		CommissionRate:     0.06,
+	}
+	order.Chef.RazorpayAccountID = "acc_chef"
+
+	OrderSettlements(db, order)
+
+	var row struct {
+		UserID     *string
+		Action     string
+		EntityType string
+		EntityID   string
+		NewValue   string
+	}
+	require.NoError(t, db.Raw(`SELECT user_id, action, entity_type, entity_id, new_value FROM audit_logs`).Scan(&row).Error)
+	require.Nil(t, row.UserID, "a recovery deduction has no human actor — system audit row")
+	require.NotEmpty(t, row.Action, "a reduced payout must be recorded, not silent")
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(row.NewValue), &payload))
+	require.EqualValues(t, 20_000, payload["deductedPaise"], "the audit row must record the deducted amount")
+	require.EqualValues(t, ToPaise(906.3), payload["grossPaise"], "the audit row must record the undeducted gross")
+	require.Equal(t, order.ID.String(), payload["orderId"], "the audit row must identify the order")
+	require.Equal(t, chefID.String(), payload["chefId"], "the audit row must identify the chef")
+}
+
+// TestOrderSettlements_NoRecoveryDebt_NoAuditRow ensures the audit write is
+// conditional on an actual deduction — a chef with a clear balance produces no
+// audit noise.
+func TestOrderSettlements_NoRecoveryDebt_NoAuditRow(t *testing.T) {
+	db := setupOrderSettlementsDB(t)
+	order := &models.Order{
+		ID:                 uuid.New(),
+		OrderNumber:        "HC-2b",
+		ChefID:             uuid.New(),
+		Subtotal:           1000,
+		Tax:                50,
+		ChefTip:            20,
+		DeliveryFee:        40,
+		ChefFundedDiscount: 100,
+		CommissionRate:     0.06,
+	}
+	order.Chef.RazorpayAccountID = "acc_chef"
+
+	OrderSettlements(db, order)
+
+	var count int64
+	require.NoError(t, db.Raw(`SELECT COUNT(*) FROM audit_logs`).Scan(&count).Error)
+	require.Zero(t, count, "no debt was deducted, so no audit row should be written")
+}
+
+// TestOrderSettlements_LedgerReadFailure_PaysGross (#741) locks in the fail-OPEN
+// behavior on a ledger-read error: ApplyChefRecoveryDeduction must pay the
+// chef's undeducted gross rather than zero. Nothing in this codebase ever
+// writes a resolving ledger entry, so a real debt is re-derived and
+// re-deducted from the chef's NEXT order regardless of whether this read
+// succeeds — failing closed protects nothing and only turns a transient read
+// error into a permanent, silent loss of this order's whole chef payout.
+//
+// The failure is induced realistically: a DB whose payout_ledger_entries
+// table does not exist at all (unlike setupOrderSettlementsDB, which creates
+// it), so the query inside ApplyRecoveryDeduction errors exactly as it would
+// against a real, unmigrated/unreachable table.
+func TestOrderSettlements_LedgerReadFailure_PaysGross(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
+	require.NoError(t, err)
+	// Deliberately no payout_ledger_entries table — the ledger read must fail.
+
+	order := &models.Order{
+		OrderNumber:        "HC-3",
+		ChefID:             uuid.New(),
+		Subtotal:           1000,
+		Tax:                50,
+		ChefTip:            20,
+		DeliveryFee:        40,
+		ChefFundedDiscount: 100,
+		CommissionRate:     0.06,
+	}
+	order.Chef.RazorpayAccountID = "acc_chef"
+
+	settlements := OrderSettlements(db, order)
+	// The full undeducted gross (906.30 → 90630 paise, see
+	// TestOrderSettlements_ChefNetTransfer) — NOT zero.
+	wantChef := ToPaise(906.3)
+	if settlements[0].Amount != wantChef {
+		t.Fatalf("chef settlement on ledger-read failure = %d paise, want %d (full gross, fail-open)",
+			settlements[0].Amount, wantChef)
+	}
+	// The driver's slice is unaffected by a chef-ledger read failure.
+	if settlements[1].Amount != ToPaise(40) {
+		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, ToPaise(40))
+	}
 }

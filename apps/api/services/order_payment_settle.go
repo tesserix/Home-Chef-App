@@ -17,8 +17,16 @@ package services
 // (SettleCashfreeOrder, SettleRazorpayOrderFromPayment).
 
 import (
-	"github.com/homechef/api/models"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/homechef/api/database"
+	"github.com/homechef/api/models"
+	"github.com/homechef/api/payouts"
 )
 
 // NotifyChefNewOrderTx stages the actionable "new order" push to the chef
@@ -117,4 +125,211 @@ func CompleteCashfreeOrderTx(tx *gorm.DB, order *models.Order, method, cfPayment
 			"method":       method,
 			"provider":     models.PaymentProviderCashfree,
 		})
+}
+
+// OrderSettlements derives the chef + driver payouts for an order, chef first so
+// its (larger) food payout stays a single payment-linked transfer when the capture
+// allows (#141). The chef slice is NET (ChefNetPayoutFor, reading the frozen
+// order.CommissionRate), further reduced by any outstanding recovery balance the
+// chef owes the platform (#741, ApplyChefRecoveryDeduction) before the transfer is
+// created — Route transfers are per-payment, so a penalty cannot be netted across
+// orders after the fact the way a daily batch would. The chef account is cleared
+// when its FSSAI licence has lapsed, so that slice is withheld and never
+// transferred. Requires Chef and Delivery.DeliveryPartner preloaded. Deterministic —
+// because the rate is frozen on the row, create and verify produce the identical
+// split for a given order (recovery is re-derived from the ledger identically both
+// times, since nothing here mutates it).
+//
+// LANDMINE: this is one of TWO uncoordinated places that act on the same
+// non-discharging recovery debt — see ApplyChefRecoveryDeduction's doc comment
+// below, and services/payout_release_cron.go's BuildReleaseInput (the
+// RecoveryBalance sweep block), for the full explanation before touching either.
+func OrderSettlements(db *gorm.DB, order *models.Order) []Settlement {
+	chefAccount := order.Chef.RazorpayAccountID
+	if IsChefFSSAIExpired(&order.Chef) {
+		chefAccount = ""
+	}
+	chefAmount := ToPaise(ChefNetPayoutFor(order))
+	if chefAccount != "" {
+		chefAmount = ApplyChefRecoveryDeduction(db, order, chefAmount)
+	}
+
+	driverAccount := ""
+	if order.Delivery != nil {
+		driverAccount = order.Delivery.DeliveryPartner.RazorpayAccountID
+	}
+	return []Settlement{
+		{Account: chefAccount, Amount: chefAmount, Hold: true,
+			Notes: map[string]string{"purpose": "food_payment", "order_number": order.OrderNumber}},
+		{Account: driverAccount, Amount: ToPaise(order.DeliveryFee + order.DriverTip), Hold: true,
+			Notes: map[string]string{"purpose": "delivery_payment", "order_number": order.OrderNumber}},
+	}
+}
+
+// ApplyChefRecoveryDeduction reduces a chef's gross transfer (in paise) by
+// whatever recovery balance they still owe the platform (#741) — a penalty
+// raised against them (e.g. an order-issue clawback) that could not be netted
+// against a Route transfer already sent, so it comes off the next one instead.
+//
+// Fails OPEN on a ledger read error: pays the unadjusted gross. A comparison
+// we cannot make must not silently confiscate a chef's whole payout for this
+// order — that would turn a transient DB error into a permanent, unrecorded
+// loss with no reconcile path revisiting it. The debt is not lost by paying
+// gross here: ApplyRecoveryDeduction only reads the ledger and never
+// discharges it, so the same outstanding balance is re-derived and correctly
+// deducted from this chef's next order regardless of whether this read
+// succeeded.
+//
+// LANDMINE (final money-safety review): this checkout-time reduction and the
+// sweep's release-time block (BuildReleaseInput's RecoveryBalance in
+// services/payout_release_cron.go) are two UNCOORDINATED places handling the
+// SAME debt — one reduces the transfer here, the other blocks release there,
+// and neither knows the other exists. Recovery is non-discharging (see
+// services/payout_recovery.go): nothing anywhere writes a resolving ledger
+// entry, so the same full debt is re-derived and can be re-applied by BOTH
+// sites against the SAME outstanding balance. No penalty/ledger writer may
+// ship until exactly one of these two mechanisms actually collects-and-
+// discharges the debt and the other is changed to defer to it — do not add a
+// third site, and do not wire a discharging writer to only one of the two
+// without also fixing the other.
+//
+// On the success path, a deduction that actually reduces the transfer
+// (deducted > 0) writes a system audit row — order, chef, gross, and deducted
+// paise only, nothing else — so a reduced payout is never silent.
+func ApplyChefRecoveryDeduction(db *gorm.DB, order *models.Order, grossPaise int) int {
+	gross := payouts.Money{Minor: int64(grossPaise), Currency: payouts.CurrencyINR}
+	net, deducted, err := ApplyRecoveryDeduction(db, order.ChefID, gross, time.Now())
+	if err != nil {
+		log.Printf("recovery-deduction: ledger read failed, paying gross order=%s chef=%s gross_paise=%d: %v",
+			order.OrderNumber, order.ChefID, grossPaise, err)
+		CaptureBackgroundError(fmt.Errorf(
+			"recovery-deduction: order=%s chef=%s: %w", order.OrderNumber, order.ChefID, err))
+		return grossPaise
+	}
+	if deducted.Minor > 0 {
+		LogSystemAudit(nil, "chef.payout.recovery_deducted", "chef", order.ChefID.String(), nil, map[string]any{
+			"orderId":       order.ID.String(),
+			"orderNumber":   order.OrderNumber,
+			"chefId":        order.ChefID.String(),
+			"grossPaise":    grossPaise,
+			"deductedPaise": deducted.Minor,
+			"netPaise":      net.Minor,
+		})
+	}
+	return int(net.Minor)
+}
+
+// DebitOrderWallet debits the customer's store credit for the wallet applied to an
+// order, idempotent on the order so a retry never double-debits (#141).
+func DebitOrderWallet(order *models.Order) error {
+	if order.WalletApplied <= 0 {
+		return nil
+	}
+	_, err := DebitWallet(database.DB, order.CustomerID, order.WalletApplied,
+		models.WalletSourceOrderPayment, &order.ID, "checkout", "wallet-debit:"+order.ID.String(), nil)
+	return err
+}
+
+// SettleWalletTopUps funds the chef/driver portion that the gateway capture could
+// not cover, via direct transfers from the platform balance (#141). Failures are
+// logged but not fatal — the money is already captured and the reconciliation job
+// retries; failing here would wrongly tell the client the order is unpaid.
+func SettleWalletTopUps(order *models.Order, topUps []TransferSpec) {
+	rz := GetRazorpayFor(order.Mode)
+	if rz == nil {
+		return
+	}
+	settleWalletTopUpsWith(order.ID, order.OrderNumber, topUps, func(leg int, t TransferSpec) error {
+		_, err := rz.CreateTransfer(&DirectTransferRequest{
+			Account: t.Account, Amount: t.Amount, Currency: t.Currency, OnHold: t.OnHold, Notes: t.Notes,
+			// Per (order, leg-index, account) — the same identity as the processed_events claim
+			// (#554/#558); a retried settlement re-derives the same key so Razorpay dedups each
+			// chef/driver top-up, and two legs sharing one account stay independently keyed. #574.
+			IdempotencyKey: TopupIdempotencyKey(order.ID, leg, t.Account),
+		})
+		return err
+	})
+}
+
+// settleWalletTopUpsWith issues each platform-funded top-up transfer AT MOST ONCE per
+// (order, account), idempotently (#554). A retried VerifyPayment used to re-issue the
+// same real money transfer because CreateTransfer had no dedup. Now each (order,
+// account) is claimed in the processed_events ledger before the transfer; a repeat
+// settlement finds the claim and skips. On a transfer failure the claim is released so
+// the NEXT settlement re-attempts it — so a gateway blip retries without ever
+// double-paying. doTransfer is the gateway seam (real in prod, a fake in tests). A
+// crash between claim and a successful transfer strands that one top-up (recoverable
+// by the settlement reconcile — #398/#3), which is the safe side of the trade-off:
+// never a double transfer.
+func settleWalletTopUpsWith(orderID uuid.UUID, orderNumber string, topUps []TransferSpec, doTransfer func(leg int, t TransferSpec) error) {
+	// #558: key each leg by its index in the deterministic DirectTopUps list (stable across
+	// retries), so two legs sharing one Razorpay payout account stay independently idempotent.
+	for leg, t := range topUps {
+		firstTime, err := ClaimWalletTopUp(database.DB, orderID, leg, t.Account)
+		if err != nil {
+			log.Printf("wallet-topup: claim failed order=%s leg=%d account=%s: %v", orderNumber, leg, t.Account, err)
+			continue
+		}
+		if !firstTime {
+			continue // already transferred for this (order, leg, account) — no double
+		}
+		if err := doTransfer(leg, t); err != nil {
+			ReleaseWalletTopUp(database.DB, orderID, leg, t.Account) // let a retry re-attempt
+			log.Printf("wallet-topup: direct transfer failed order=%s leg=%d account=%s amount=%d: %v",
+				orderNumber, leg, t.Account, t.Amount, err)
+		}
+	}
+}
+
+// SettleOrderWallet settles the wallet-at-checkout slice once a gateway capture is
+// confirmed: debit the applied store credit and issue the platform-funded chef/driver
+// top-ups the capture couldn't cover (#141). Both are idempotent (DebitWallet keyed
+// per order; each top-up claimed per (order, account) — #554), so it runs safely from
+// BOTH the client verify path AND the payment.captured webhook (#395·3): whichever
+// confirms the capture first settles, a duplicate is a no-op, and a retried webhook
+// re-attempts a settlement whose first delivery crashed mid-way. No-op when there is no
+// applied credit. REQUIRES order.Chef + order.Delivery.DeliveryPartner preloaded — the
+// top-up split reads their Route accounts (an un-preloaded order would top up "").
+func SettleOrderWallet(order *models.Order) {
+	// Loyalty points are burned on the SAME seam as the wallet debit — after the
+	// capture is confirmed, keyed to the order — so an abandoned or failed checkout
+	// never costs the customer their points. Idempotent per order.
+	if order.LoyaltyPointsSpent > 0 {
+		if err := RedeemLoyaltyToOrder(database.DB, order.CustomerID, order.ID, order.LoyaltyPointsSpent); err != nil {
+			log.Printf("loyalty-debit failed order=%s: %v", order.OrderNumber, err)
+			CaptureBackgroundError(err)
+		}
+	}
+	if order.WalletApplied <= 0 && order.LoyaltyApplied <= 0 {
+		return
+	}
+	if err := DebitOrderWallet(order); err != nil {
+		// A GENUINE debit failure (e.g. ErrInsufficientWalletBalance if the balance
+		// was drained between checkout and this now-delayed settlement) must NOT go on
+		// to fund the chef/driver top-up — that would pay them the wallet-covered slice
+		// off store credit the platform never collected. Leave the slice unsettled for
+		// the reconcile/ops path. DebitOrderWallet returns nil on the idempotent
+		// already-debited case, so this only bites a true first-time failure and never
+		// blocks a legitimate re-settlement.
+		log.Printf("wallet-debit failed order=%s: %v", order.OrderNumber, err)
+		CaptureBackgroundError(err)
+		return
+	}
+	// The chef/driver top-ups only exist to make up what a GATEWAY SPLIT could not
+	// cover: Route funds each settlement from the capture as far as it reaches, and
+	// the platform balance pays the rest. A provider that doesn't split at the
+	// gateway has no shortfall to top up — the whole amount was captured to the
+	// platform, and the chef/rider are paid through the statement/payout path. Running
+	// the top-ups anyway would pay them a second time out of the platform balance.
+	//
+	// The debit above still had to happen: the customer's credit was applied and
+	// spent regardless of which gateway took the remainder.
+	if !models.ProviderSupportsGatewaySplit(order.PaymentProvider) {
+		return
+	}
+	// The top-up plan must reconstruct the FULL credit applied — wallet plus the
+	// loyalty slice — or the chef/driver would be short-paid by the points portion.
+	appliedPaise := ToPaise(order.WalletApplied) + ToPaise(order.LoyaltyApplied)
+	plan := PlanWalletFunding(ToPaise(order.Total), appliedPaise, appliedPaise, OrderSettlements(database.DB, order))
+	SettleWalletTopUps(order, plan.DirectTopUps)
 }
