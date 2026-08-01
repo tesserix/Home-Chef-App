@@ -1128,6 +1128,7 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/payouts/settings", payoutPerm, payoutRailHandler.GetPayoutSettings)
 			admin.PUT("/payouts/settings", payoutPerm, payoutRailHandler.UpdatePayoutSettings)
 			admin.PUT("/chefs/:id/payout-automation", payoutPerm, adminPayoutHandler.SetPayoutAutomation)
+			admin.PUT("/chefs/:id/disburse-automation", payoutPerm, payoutRailHandler.SetChefDisburseAutomation)
 			// Per-chef payout surface: destination + the rail's verdict on it,
 			// a status re-read, and the sandbox-only test bank account seeder.
 			admin.GET("/chefs/:id/payout-profile", payoutPerm, payoutRailHandler.GetChefPayoutProfile)

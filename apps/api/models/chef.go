@@ -161,6 +161,11 @@ type ChefProfile struct {
 	// opt-out, and a boolean would need live money config migrated to swap.
 	PayoutAutoRelease string `gorm:"type:varchar(8);default:''" json:"payoutAutoRelease"`
 
+	// PayoutAutoDisburse is the same tri-state for the disbursement stage:
+	// whether this chef's prepared Cashfree batches may land pre-approved.
+	// "" follows the global payout_auto_disburse_enabled flag.
+	PayoutAutoDisburse string `gorm:"type:varchar(8);default:''" json:"payoutAutoDisburse"`
+
 	// Payout details
 	PayoutMethod      string `gorm:"default:''" json:"-"`
 	BankAccountNumber string `gorm:"default:''" json:"-"`

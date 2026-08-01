@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -394,14 +395,19 @@ func (h *AdminPayoutRailHandler) PrepareStatementPayout(c *gin.Context) {
 	}
 
 	mode := services.PaymentModeForChef(stmt.ChefID)
-	batch, pErr := services.PrepareStatementBatch(c.Request.Context(), database.DB, &stmt, mode)
+	batch, decision, pErr := services.PrepareStatementBatch(c.Request.Context(), database.DB, &stmt, mode)
 	if pErr != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": pErr.Error()})
 		return
 	}
+	services.LogAudit(c, "payout.batch.prepare", "payout_batch", batch.ID.String(), nil, map[string]any{
+		"statementId": stmt.ID, "state": string(batch.State),
+		"amount": services.FromPaise(int(batch.AmountMinor)), "holdReasons": decision.Reasons,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"batchId": batch.ID, "state": batch.State,
-		"amount": services.FromPaise(int(batch.AmountMinor)),
+		"amount":      services.FromPaise(int(batch.AmountMinor)),
+		"holdReasons": decision.Reasons,
 	})
 }
 
@@ -508,6 +514,8 @@ func (h *AdminPayoutRailHandler) GetChefPayoutProfile(c *gin.Context) {
 		railSandbox = client.IsSandbox()
 	}
 
+	capMinor, capUnreadable := services.PayoutAutoDisburseCap(database.DB)
+
 	c.JSON(http.StatusOK, gin.H{
 		"chef": gin.H{
 			"id": chef.ID, "businessName": chef.BusinessName, "mode": chef.Mode,
@@ -522,6 +530,57 @@ func (h *AdminPayoutRailHandler) GetChefPayoutProfile(c *gin.Context) {
 		"rail": gin.H{
 			"configured": railConfigured, "sandbox": railSandbox, "mode": chef.Mode,
 		},
+		"automation": gin.H{
+			"disburse":           chef.PayoutAutoDisburse,
+			"globalAutoDisburse": services.PayoutAutoDisburseEnabled(database.DB),
+			"effective":          services.ChefAutoDisburseEnabled(database.DB, &chef),
+			"autoCapMinor":       capMinor,
+			"autoCapUnreadable":  capUnreadable,
+		},
+	})
+}
+
+// SetChefDisburseAutomation flips the chef's disbursement auto-approval
+// tri-state. Same closed value set as SetPayoutAutomation (#747): an
+// unrecognised string must never read back as "follow the default".
+//
+// PUT /admin/chefs/:id/disburse-automation
+func (h *AdminPayoutRailHandler) SetChefDisburseAutomation(c *gin.Context) {
+	var req struct {
+		Value string `json:"value"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	switch req.Value {
+	case services.PayoutAutoOn, services.PayoutAutoOff, "":
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "value must be on, off or empty"})
+		return
+	}
+
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	old := chef.PayoutAutoDisburse
+	if err := database.DB.Model(&chef).Update("payout_auto_disburse", req.Value).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
+		return
+	}
+
+	services.LogAudit(c, "chef.payout.disburse_automation", "chef", chefID.String(),
+		gin.H{"payoutAutoDisburse": old}, gin.H{"payoutAutoDisburse": req.Value})
+	c.JSON(http.StatusOK, gin.H{
+		"payoutAutoDisburse": req.Value,
+		"effective":          services.ChefAutoDisburseEnabled(database.DB, &chef),
 	})
 }
 
@@ -668,49 +727,77 @@ func (h *AdminPayoutRailHandler) SeedChefTestBankAccount(c *gin.Context) {
 //
 // GET/PUT /admin/payouts/settings
 func (h *AdminPayoutRailHandler) GetPayoutSettings(c *gin.Context) {
+	capMinor, capUnreadable := services.PayoutAutoDisburseCap(database.DB)
 	c.JSON(http.StatusOK, gin.H{
 		"autoDisburseEnabled": services.PayoutAutoDisburseEnabled(database.DB),
+		"autoCapMinor":        capMinor,
+		"autoCapUnreadable":   capUnreadable,
 	})
+}
+
+func upsertPayoutSetting(key, value, kind string, actorID uuid.UUID) error {
+	res := database.DB.Model(&models.PlatformSettings{}).
+		Where("key = ?", key).
+		Updates(map[string]any{"value": value, "updated_by": actorID})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return database.DB.Create(&models.PlatformSettings{
+			Key: key, Value: value, Type: kind, UpdatedBy: &actorID,
+		}).Error
+	}
+	return nil
 }
 
 func (h *AdminPayoutRailHandler) UpdatePayoutSettings(c *gin.Context) {
 	var req struct {
-		AutoDisburseEnabled *bool `json:"autoDisburseEnabled"`
+		AutoDisburseEnabled *bool  `json:"autoDisburseEnabled"`
+		AutoCapMinor        *int64 `json:"autoCapMinor"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil || req.AutoDisburseEnabled == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "autoDisburseEnabled is required"})
+	if err := c.ShouldBindJSON(&req); err != nil || (req.AutoDisburseEnabled == nil && req.AutoCapMinor == nil) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "autoDisburseEnabled or autoCapMinor is required"})
+		return
+	}
+	if req.AutoCapMinor != nil && *req.AutoCapMinor < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "autoCapMinor must be >= 0"})
 		return
 	}
 
-	value := "false"
-	if *req.AutoDisburseEnabled {
-		value = "true"
-	}
 	actor, _ := c.Get("userID")
 	actorID, _ := actor.(uuid.UUID)
 
-	res := database.DB.Model(&models.PlatformSettings{}).
-		Where("key = ?", services.SettingPayoutAutoDisburse).
-		Updates(map[string]any{"value": value, "updated_by": actorID})
-	if res.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update setting"})
-		return
-	}
-	if res.RowsAffected == 0 {
-		if err := database.DB.Create(&models.PlatformSettings{
-			Key: services.SettingPayoutAutoDisburse, Value: value, Type: "bool", UpdatedBy: &actorID,
-		}).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create setting"})
+	if req.AutoDisburseEnabled != nil {
+		value := "false"
+		if *req.AutoDisburseEnabled {
+			value = "true"
+		}
+		if err := upsertPayoutSetting(services.SettingPayoutAutoDisburse, value, "bool", actorID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update setting"})
 			return
 		}
+		// Turning this ON means money can leave with no human in the loop. It is
+		// the single most consequential toggle on the payouts screen, so it is
+		// audited with the old value alongside the new.
+		services.LogAudit(c, "payout.settings.update", "payout_settings", services.SettingPayoutAutoDisburse,
+			map[string]any{"autoDisburseEnabled": !*req.AutoDisburseEnabled},
+			map[string]any{"autoDisburseEnabled": *req.AutoDisburseEnabled})
 	}
 
-	// Turning this ON means money can leave with no human in the loop. It is the
-	// single most consequential toggle on the payouts screen, so it is audited
-	// with the old value alongside the new.
-	services.LogAudit(c, "payout.settings.update", "payout_settings", services.SettingPayoutAutoDisburse,
-		map[string]any{"autoDisburseEnabled": !*req.AutoDisburseEnabled},
-		map[string]any{"autoDisburseEnabled": *req.AutoDisburseEnabled})
+	if req.AutoCapMinor != nil {
+		if err := upsertPayoutSetting(services.SettingPayoutAutoDisburseMax,
+			strconv.FormatInt(*req.AutoCapMinor, 10), "number", actorID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update setting"})
+			return
+		}
+		services.LogAudit(c, "payout.settings.update", "payout_settings", services.SettingPayoutAutoDisburseMax,
+			nil, map[string]any{"autoCapMinor": *req.AutoCapMinor})
+	}
 
-	c.JSON(http.StatusOK, gin.H{"autoDisburseEnabled": *req.AutoDisburseEnabled})
+	capMinor, capUnreadable := services.PayoutAutoDisburseCap(database.DB)
+	c.JSON(http.StatusOK, gin.H{
+		"autoDisburseEnabled": services.PayoutAutoDisburseEnabled(database.DB),
+		"autoCapMinor":        capMinor,
+		"autoCapUnreadable":   capUnreadable,
+	})
 }

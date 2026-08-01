@@ -61,7 +61,7 @@ const chefProfilesGuardDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'liv
 	stripe_charges_enabled integer DEFAULT 0, stripe_payouts_enabled integer DEFAULT 0,
 	razorpay_product_id text DEFAULT '', razorpay_settlement_status text DEFAULT '',
 	razorpay_settlement_requirements text DEFAULT '', razorpay_stakeholder_created integer DEFAULT 0,
-	payout_auto_release text DEFAULT '',
+	payout_auto_release text DEFAULT '', payout_auto_disburse text DEFAULT '',
 	payout_method text DEFAULT '', bank_account_number text DEFAULT '',
 	bank_ifsc text DEFAULT '', bank_account_name text DEFAULT '', upi_id text DEFAULT '',
 	pan_number text DEFAULT '', fssai_license_number text DEFAULT '', gstin text DEFAULT '',
