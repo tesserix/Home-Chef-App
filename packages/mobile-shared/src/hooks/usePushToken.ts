@@ -5,18 +5,24 @@
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import { Platform } from 'react-native';
 import { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 /**
  * Get the raw FCM device token for this device.
- * Returns null on simulators (cannot receive push) or when permission is denied.
+ * Returns null on iOS simulators (cannot receive push) or when permission is denied.
  *
  * IMPORTANT: If the returned token starts with "ExponentPushToken", throw immediately —
  * that means getExpoPushTokenAsync() was called by mistake.
  */
 export async function getRawFCMToken(): Promise<string | null> {
-  if (!Device.isDevice) {
-    // Simulators cannot receive push notifications
+  // iOS-only: iOS simulators cannot receive push notifications at all. Android
+  // emulators WITH Google Play Services CAN receive FCM pushes, so gating this
+  // on `!Device.isDevice` alone (as before) unconditionally blocked every
+  // Android emulator from ever registering a token (#870) — do not re-broaden
+  // this back to blocking non-iOS emulators.
+  if (Platform.OS === 'ios' && !Device.isDevice) {
+    console.warn('[push] Skipped: iOS simulator cannot receive push notifications');
     return null;
   }
 
@@ -29,6 +35,7 @@ export async function getRawFCMToken(): Promise<string | null> {
   }
 
   if (finalStatus !== 'granted') {
+    console.warn(`[push] Skipped: notification permission not granted (status=${finalStatus})`);
     return null;
   }
 
@@ -83,4 +90,28 @@ export async function registerDeviceToken(
     skipAuthFailure: true,
   };
   await client.put(deviceTokenPath(client), { token }, config);
+}
+
+/**
+ * Register the raw FCM token with the Go API without ever throwing.
+ *
+ * Wraps registerDeviceToken so every call site (the initial registration in
+ * _layout.tsx's push-setup effect and the token-rotation listener) can await
+ * this instead of running its own try/catch. A failed or thrown registration
+ * here must never prevent the rotation/badge/deep-link-tap listeners a few
+ * lines below it from attaching — that was the core defect in #870, where one
+ * failed PUT turned into total notification silence for the session.
+ */
+export async function registerDeviceTokenSafe(
+  client: AxiosInstance,
+  token: string
+): Promise<boolean> {
+  try {
+    await registerDeviceToken(client, token);
+    console.log('[push] Device token registered:', token.slice(0, 12) + '...');
+    return true;
+  } catch (err: unknown) {
+    console.warn('[push] Device token registration failed', err);
+    return false;
+  }
 }
