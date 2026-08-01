@@ -107,6 +107,19 @@ func TestCashfreeAmount_UnmarshalsStringsAndRounds(t *testing.T) {
 	require.Equal(t, ToPaise(0.29), a.Paise())
 }
 
+// The refund's own reported processing charge (#885, observability only) parses from the
+// documented refund_charge field, and a body omitting it entirely still unmarshals cleanly as
+// zero — Cashfree does not always charge/report a fee.
+func TestCashfreeRefund_ParsesRefundCharge(t *testing.T) {
+	var withCharge CashfreeRefund
+	require.NoError(t, json.Unmarshal([]byte(`{"refund_amount": 100.00, "refund_charge": 5.90}`), &withCharge))
+	require.Equal(t, 590, withCharge.RefundChargePaise.Paise())
+
+	var withoutCharge CashfreeRefund
+	require.NoError(t, json.Unmarshal([]byte(`{"refund_amount": 100.00}`), &withoutCharge))
+	require.Equal(t, 0, withoutCharge.RefundChargePaise.Paise())
+}
+
 // --- Webhook signature ---
 
 func cashfreeSign(secret, timestamp string, body []byte) string {

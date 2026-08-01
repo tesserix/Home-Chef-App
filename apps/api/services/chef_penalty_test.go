@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"gorm.io/driver/sqlite"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
@@ -298,4 +298,207 @@ func TestApplyChefPenaltiesToStatement_NoPenalties(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0.0, deducted)
 	require.Equal(t, 1000.0, stmt.NetPayout)
+}
+
+// ── Gateway-fee levy (#885) ─────────────────────────────────────────────────────────────────
+
+// gatewayFeePolicy installs the gateway-fee levy config: `percent`%, grace/stack as given.
+func gatewayFeePolicy(t *testing.T, enabled bool, percent float64, stack bool) {
+	t.Helper()
+	p := DefaultPlatformPolicy()
+	p.GatewayFeeLevyEnabled = enabled
+	p.GatewayFeeLevyPercent = percent
+	p.GatewayFeeLevyGraceEnabled = false
+	p.GatewayFeeLevyGraceCount = 0
+	p.GatewayFeeLevyGraceDays = 0
+	p.GatewayFeeLevyStackWithCancelLevy = stack
+	withPlatformPolicy(t, p)
+}
+
+// levyFee is the common gateway-fee call.
+func levyFee(t *testing.T, db *gorm.DB, chefID, userID, orderID uuid.UUID, provider string, refundedAmount float64, key string) *models.ChefPenalty {
+	t.Helper()
+	p, err := LevyGatewayFeePenalty(db, chefID, userID, orderID, "HC-TEST", provider, refundedAmount, key)
+	require.NoError(t, err)
+	return p
+}
+
+// 2% of the REFUNDED amount (not a hypothetical order total).
+func TestLevyGatewayFeePenalty_Arithmetic(t *testing.T) {
+	gatewayFeePolicy(t, true, 2, false)
+	db := setupPenaltyDB(t)
+	chefID, userID, orderID := uuid.New(), uuid.New(), uuid.New()
+
+	p := levyFee(t, db, chefID, userID, orderID, models.PaymentProviderCashfree, 250, "refund:order:full")
+	require.NotNil(t, p)
+	require.Equal(t, 5.0, p.Amount, "2% of ₹250")
+	require.Equal(t, 250.0, p.BasisAmount)
+	require.Equal(t, 2.0, p.RatePercent)
+	require.Equal(t, models.ChefPenaltyPending, p.Status)
+	require.Equal(t, models.ChefPenaltyGatewayFee, p.Kind)
+}
+
+// Cashfree only — a razorpay refund never levies, and creates zero rows.
+func TestLevyGatewayFeePenalty_CashfreeOnly(t *testing.T) {
+	gatewayFeePolicy(t, true, 2, false)
+	db := setupPenaltyDB(t)
+	chefID, userID := uuid.New(), uuid.New()
+
+	require.Nil(t, levyFee(t, db, chefID, userID, uuid.New(), "razorpay", 250, "refund:order-a:full"))
+	var count int64
+	require.NoError(t, db.Model(&models.ChefPenalty{}).Where("chef_id = ?", chefID).Count(&count).Error)
+	require.Equal(t, int64(0), count, "razorpay must not create a row")
+
+	require.NotNil(t, levyFee(t, db, chefID, userID, uuid.New(), models.PaymentProviderCashfree, 250, "refund:order-b:full"))
+}
+
+// Disabled means no levy at all, regardless of provider/amount.
+func TestLevyGatewayFeePenalty_Disabled(t *testing.T) {
+	gatewayFeePolicy(t, false, 2, false)
+	db := setupPenaltyDB(t)
+	require.Nil(t, levyFee(t, db, uuid.New(), uuid.New(), uuid.New(), models.PaymentProviderCashfree, 250, "refund:order:full"))
+}
+
+// A wallet/loyalty-only "refund" that never touched Cashfree must not levy.
+func TestLevyGatewayFeePenalty_ZeroRefundedAmount(t *testing.T) {
+	gatewayFeePolicy(t, true, 2, false)
+	db := setupPenaltyDB(t)
+	require.Nil(t, levyFee(t, db, uuid.New(), uuid.New(), uuid.New(), models.PaymentProviderCashfree, 0, "refund:order:full"))
+	require.Nil(t, levyFee(t, db, uuid.New(), uuid.New(), uuid.New(), models.PaymentProviderCashfree, -10, "refund:order:full"))
+}
+
+// One cancellation is one penalty event — an order that already carries a cancel_late levy does
+// not also raise a gateway_fee levy, unless the stack flag is explicitly on.
+func TestLevyGatewayFeePenalty_SkipsWhenCancelLevyExists(t *testing.T) {
+	gatewayFeePolicy(t, true, 2, false)
+	db := setupPenaltyDB(t)
+	chefID, userID, orderID := uuid.New(), uuid.New(), uuid.New()
+
+	require.NoError(t, db.Create(&models.ChefPenalty{
+		ChefID: chefID, UserID: userID, Kind: models.ChefPenaltyCancelLate,
+		Status: models.ChefPenaltyPending, SourceKey: "chefcancel:" + orderID.String(),
+		OrderID: &orderID, Amount: 30, OccurredAt: time.Now().UTC(),
+	}).Error)
+
+	require.Nil(t, levyFee(t, db, chefID, userID, orderID, models.PaymentProviderCashfree, 250, "refund:"+orderID.String()+":full"),
+		"a cancel_late levy already covers this cancellation")
+
+	gatewayFeePolicy(t, true, 2, true)
+	require.NotNil(t, levyFee(t, db, chefID, userID, orderID, models.PaymentProviderCashfree, 250, "refund:"+orderID.String()+":full"),
+		"stacking explicitly enabled")
+}
+
+// A retry with the identical logical key levies at most once.
+func TestLevyGatewayFeePenalty_Idempotent(t *testing.T) {
+	gatewayFeePolicy(t, true, 2, false)
+	db := setupPenaltyDB(t)
+	chefID, userID, orderID := uuid.New(), uuid.New(), uuid.New()
+	key := "refund:" + orderID.String() + ":full"
+
+	first := levyFee(t, db, chefID, userID, orderID, models.PaymentProviderCashfree, 250, key)
+	require.NotNil(t, first)
+
+	second := levyFee(t, db, chefID, userID, orderID, models.PaymentProviderCashfree, 250, key)
+	require.Nil(t, second, "the retry raises nothing new")
+
+	var count int64
+	require.NoError(t, db.Model(&models.ChefPenalty{}).Where("chef_id = ?", chefID).Count(&count).Error)
+	require.Equal(t, int64(1), count)
+}
+
+// Two genuinely different partial refunds on the same order each levy separately.
+func TestLevyGatewayFeePenalty_DistinctKeysLevySeparately(t *testing.T) {
+	gatewayFeePolicy(t, true, 2, false)
+	db := setupPenaltyDB(t)
+	chefID, userID, orderID := uuid.New(), uuid.New(), uuid.New()
+
+	first := levyFee(t, db, chefID, userID, orderID, models.PaymentProviderCashfree, 100, "refund:"+orderID.String()+":0")
+	require.NotNil(t, first)
+	require.Equal(t, 2.0, first.Amount)
+
+	second := levyFee(t, db, chefID, userID, orderID, models.PaymentProviderCashfree, 50, "refund:"+orderID.String()+":10000")
+	require.NotNil(t, second)
+	require.Equal(t, 1.0, second.Amount)
+
+	var count int64
+	require.NoError(t, db.Model(&models.ChefPenalty{}).Where("chef_id = ?", chefID).Count(&count).Error)
+	require.Equal(t, int64(2), count)
+}
+
+// GraceEnabled=false, even with a nonzero GraceCount configured, gives no exemption — the very
+// first gateway-fee event still levies in full (decision 4's "no grace by default").
+func TestLevyGatewayFeePenalty_GraceDefaultOff(t *testing.T) {
+	p := DefaultPlatformPolicy()
+	p.GatewayFeeLevyEnabled = true
+	p.GatewayFeeLevyPercent = 2
+	p.GatewayFeeLevyGraceEnabled = false
+	p.GatewayFeeLevyGraceCount = 1 // configured but inert while GraceEnabled is false
+	p.GatewayFeeLevyGraceDays = 30
+	withPlatformPolicy(t, p)
+	db := setupPenaltyDB(t)
+	chefID, userID := uuid.New(), uuid.New()
+
+	first := levyFee(t, db, chefID, userID, uuid.New(), models.PaymentProviderCashfree, 250, "refund:a:full")
+	require.NotNil(t, first, "no exemption even though a grace count happens to be configured")
+	require.Equal(t, models.ChefPenaltyPending, first.Status)
+	require.Equal(t, 5.0, first.Amount)
+}
+
+// With grace explicitly enabled, the first event is waived (still consuming the SourceKey) and
+// the second (distinct key) levies in full — mirrors TestLevyChefCancelPenalty_GraceAllowance.
+func TestLevyGatewayFeePenalty_GraceEnabled(t *testing.T) {
+	p := DefaultPlatformPolicy()
+	p.GatewayFeeLevyEnabled = true
+	p.GatewayFeeLevyPercent = 2
+	p.GatewayFeeLevyGraceEnabled = true
+	p.GatewayFeeLevyGraceCount = 1
+	p.GatewayFeeLevyGraceDays = 30
+	withPlatformPolicy(t, p)
+	db := setupPenaltyDB(t)
+	chefID, userID := uuid.New(), uuid.New()
+
+	first := levyFee(t, db, chefID, userID, uuid.New(), models.PaymentProviderCashfree, 250, "refund:a:full")
+	require.Nil(t, first, "the first gateway-fee event is forgiven")
+
+	var rows []models.ChefPenalty
+	require.NoError(t, db.Where("chef_id = ?", chefID).Find(&rows).Error)
+	require.Len(t, rows, 1, "the exemption is still recorded")
+	require.Equal(t, models.ChefPenaltyWaived, rows[0].Status)
+	require.Equal(t, 0.0, rows[0].Amount)
+
+	second := levyFee(t, db, chefID, userID, uuid.New(), models.PaymentProviderCashfree, 250, "refund:b:full")
+	require.NotNil(t, second, "the allowance is spent — the second event is charged")
+	require.Equal(t, 5.0, second.Amount)
+}
+
+// statement.go needs zero changes for the new kind: a mixed chef with one cancel_late levy (on
+// one order) and one gateway_fee levy (on a different order) has both summed into one deduction.
+func TestApplyChefPenaltiesToStatement_MixedKinds(t *testing.T) {
+	p := DefaultPlatformPolicy()
+	p.ChefCancelPenaltyEnabled = true
+	p.ChefCancelPenaltyPercent = 6
+	p.ChefCancelPenaltyLeadHours = 4
+	p.ChefCancelPenaltyGraceCount = 0
+	p.ChefCancelPenaltyGraceDays = 30
+	p.GatewayFeeLevyEnabled = true
+	p.GatewayFeeLevyPercent = 2
+	p.GatewayFeeLevyGraceEnabled = false
+	withPlatformPolicy(t, p)
+	db := setupPenaltyDB(t)
+	chefID, userID := uuid.New(), uuid.New()
+	orderA, orderB := uuid.New(), uuid.New()
+
+	cancelLevy, err := LevyChefCancelPenalty(db, chefID, userID, orderA, "HC-A", 500, 1)
+	require.NoError(t, err)
+	require.NotNil(t, cancelLevy)
+
+	feeLevy := levyFee(t, db, chefID, userID, orderB, models.PaymentProviderCashfree, 250, "refund:"+orderB.String()+":full")
+	require.NotNil(t, feeLevy)
+
+	stmt := &models.WeeklyStatement{ID: uuid.New(), ChefID: chefID, UserID: userID, NetPayout: 1000}
+	require.NoError(t, db.Create(stmt).Error)
+
+	deducted, err := ApplyChefPenaltiesToStatement(db, stmt)
+	require.NoError(t, err)
+	require.Equal(t, cancelLevy.Amount+feeLevy.Amount, deducted, "the sum of both kinds")
 }
