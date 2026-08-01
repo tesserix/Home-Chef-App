@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
-// Android ripple tint — translucent token, never a new literal colour.
+// Android ripple tints — translucent tokens, never new literals.
 const BTN_RIPPLE = `${customerColors.canvas}33`;
+const LINK_RIPPLE = `${customerColors.coral.DEFAULT}1F`;
 import {
   orderCancellable,
   useCancellationRequest,
@@ -11,10 +13,11 @@ import {
   useRequestCancellation,
   type CancellationRequest,
 } from '../../hooks/useCancellation';
-import { useAlert } from '@homechef/mobile-shared/ui';
+import { useAlert, type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useRouter } from 'expo-router';
 import { friendlyErrorMessage } from '../../lib/errors';
 import type { Order } from '../../types/customer';
+import { DisputeReasonSheet } from './DisputeReasonSheet';
 
 // Which orders the GENERIC cancellation endpoint refuses, and where they are
 // actually cancelled. Keys mirror OrderResponse.source; a missing entry means the
@@ -38,8 +41,14 @@ const OWNING_FLOW: Partial<
 // Customer cancellation on the order detail (#478). If a request exists it shows
 // the vendor's decision + refund (and a dispute action); otherwise, for a still-
 // cancellable order, it offers to request one.
-// Inline expansion — no bottom-sheet — deliberately, to avoid the modal-provider
-// class of crash.
+// The "request cancellation" step below still uses inline expansion, not a
+// sheet — unchanged from the original design. The dispute action (#876) does
+// use a bottom sheet (DisputeReasonSheet, built on SheetBase): the anti-modal
+// note this comment used to carry was about @gorhom/bottom-sheet silently
+// no-op'ing on this app's gorhom+reanimated pairing, not sheets in general —
+// SheetBase (a plain RN Modal + Animated implementation, zero gorhom/
+// reanimated) is the established pattern every other sheet in this app uses,
+// including on this exact screen (app/order/[id]/index.tsx).
 //
 // The refund destination is NOT a customer choice: refunds go back to the
 // original payment method. This screen used to offer a wallet-vs-card picker
@@ -62,20 +71,53 @@ export function CancellationSection({
 }) {
   const { showAlert } = useAlert();
   const router = useRouter();
+  const qc = useQueryClient();
   const { data: request, isLoading } = useCancellationRequest(orderId);
   const req = useRequestCancellation();
   const dispute = useDisputeCancellation();
   const [expanded, setExpanded] = useState(false);
+  const disputeSheetRef = useRef<SheetHandle>(null);
 
   if (isLoading) return null;
+
+  // A customer must not be able to open a second dispute on an order that
+  // already has one open. useDisputeCancellation's own onSuccess invalidates
+  // ['order', orderId, 'cancel-request'], but that refetch is async — between
+  // the success alert and the refetch landing, `request.status` is still
+  // 'approved' and the trigger stays tappable (indefinitely, if the refetch
+  // never lands: offline, dropped request). Write the disputed status into
+  // the cache immediately so the card flips to "Under review" right away;
+  // the invalidate above stays as reconciliation, same lesson as #868.
+  function onDisputeSubmit(reason: string) {
+    dispute.mutate(
+      { orderId, reason },
+      {
+        onSuccess: () => {
+          qc.setQueryData<CancellationRequest | null>(
+            ['order', orderId, 'cancel-request'],
+            (old) => (old ? { ...old, status: 'disputed' } : old),
+          );
+          showAlert('Dispute raised', 'Our team will review it and get back to you.');
+        },
+        onError: (err) =>
+          showAlert(
+            "Couldn't raise the dispute",
+            friendlyErrorMessage(err, 'Please try again in a moment.'),
+          ),
+      },
+    );
+  }
 
   if (request) {
     return (
       <View style={styles.card}>
-        <StatusView request={request} orderId={orderId} onDispute={() => dispute.mutate(
-          { orderId },
-          { onSuccess: () => showAlert('Dispute raised', 'Our team will review it and get back to you.') },
-        )} />
+        <StatusView
+          request={request}
+          orderId={orderId}
+          onDispute={() => disputeSheetRef.current?.present()}
+          disputePending={dispute.isPending}
+        />
+        <DisputeReasonSheet ref={disputeSheetRef} onSubmit={onDisputeSubmit} />
       </View>
     );
   }
@@ -175,10 +217,12 @@ export function CancellationSection({
 function StatusView({
   request,
   onDispute,
+  disputePending,
 }: {
   request: CancellationRequest;
   orderId: string;
   onDispute: () => void;
+  disputePending: boolean;
 }) {
   const dest = request.refundDestination === 'original' ? 'card' : 'wallet';
   switch (request.status) {
@@ -201,10 +245,18 @@ function StatusView({
           {request.status === 'approved' ? (
             <Pressable
               onPress={onDispute}
+              disabled={disputePending}
               accessibilityRole="button"
               accessibilityLabel="Dispute the refund amount"
+              android_ripple={disputePending ? undefined : { color: LINK_RIPPLE, borderless: false }}
             >
-              <Text style={styles.link}>Dispute the refund amount</Text>
+              <View style={styles.linkRow}>
+                {disputePending ? (
+                  <ActivityIndicator size="small" color={customerColors.coral.DEFAULT} />
+                ) : (
+                  <Text style={styles.link}>Dispute the refund amount</Text>
+                )}
+              </View>
             </Pressable>
           ) : null}
         </>
@@ -234,6 +286,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   link: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.coral.DEFAULT },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   label: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT },
   hint: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft, lineHeight: 16 },
   // Spec §3 primary button radius (8) — was 10.
