@@ -918,7 +918,7 @@ export default function OrderDetailScreen() {
           </View>
           {platformFee > 0 ? (
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Service Fee</Text>
+              <Text style={styles.priceLabel}>Platform fee</Text>
               <Text style={styles.priceValue}>₹{platformFee.toFixed(2)}</Text>
             </View>
           ) : null}
