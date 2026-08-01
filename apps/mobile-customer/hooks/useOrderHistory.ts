@@ -189,10 +189,15 @@ export function useOrders(
   });
 }
 
-// `pollUntilPaid` keeps refetching every 2s while paymentStatus is still
-// pending — used by the payment-result screen to pick up the server-side
-// confirmation (webhook or verify) even if the client-side verify failed.
-export function useOrder(id: string, opts: { pollUntilPaid?: boolean } = {}) {
+// `pollUntilPaid` keeps refetching while paymentStatus is still pending —
+// used by the payment-result screen to pick up the server-side confirmation
+// (webhook or verify) even if the client-side verify failed. `pollIntervalMs`
+// lets that caller back off the cadence (e.g. after its own grace window)
+// without affecting any other `useOrder` caller, which never passes it.
+export function useOrder(
+  id: string,
+  opts: { pollUntilPaid?: boolean; pollIntervalMs?: number } = {},
+) {
   return useQuery<{ data: Order }>({
     queryKey: ['order', id],
     queryFn: () =>
@@ -204,7 +209,7 @@ export function useOrder(id: string, opts: { pollUntilPaid?: boolean } = {}) {
     refetchInterval: (query) => {
       const o = query.state.data?.data;
       if (!o) return false;
-      if (opts.pollUntilPaid && o.paymentStatus === 'pending') return 2000;
+      if (opts.pollUntilPaid && o.paymentStatus === 'pending') return opts.pollIntervalMs ?? 2000;
       const active = ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'delivering'].includes(
         o.status,
       );
