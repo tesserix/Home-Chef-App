@@ -17,6 +17,7 @@ package services
 // (SettleCashfreeOrder, SettleRazorpayOrderFromPayment).
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -28,6 +29,18 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/payouts"
 )
+
+// ErrPaymentGatewayUnavailable means the gateway client for this order's mode
+// is not configured — a server-side misconfiguration, not something the
+// client caused or can retry into working (#872 final item).
+var ErrPaymentGatewayUnavailable = errors.New("payment gateway not configured")
+
+// ErrPaymentGatewayFetchFailed means the mandatory server-side fetch of the
+// gateway's own payment record failed — transport error, timeout, 5xx, or an
+// unparseable response. This is distinct from the fetch succeeding and
+// reporting no captured payment: that is a terminal "genuinely unpaid"
+// outcome, this is a retryable upstream failure (#872 final item).
+var ErrPaymentGatewayFetchFailed = errors.New("failed to fetch payment from gateway")
 
 // NotifyChefNewOrderTx stages the actionable "new order" push to the chef
 // within a payment-completion transaction. Orders are created pre-payment, so
@@ -348,19 +361,26 @@ func SettleOrderWallet(order *models.Order) {
 // order, and cover the expected amount. Without that binding any successful
 // payment on the merchant account could be replayed to settle a different order
 // for free.
-func SettleCashfreeOrder(order *models.Order) (bool, string) {
+//
+// The third return value carries the retryable/terminal distinction (#872
+// final item): nil on every terminal branch (payment==nil, a
+// ValidateCapturedPayment rejection, and the success path), and one of
+// ErrPaymentGatewayUnavailable / ErrPaymentGatewayFetchFailed (wrapped) on the
+// two branches a caller should treat as retryable rather than "not paid".
+func SettleCashfreeOrder(order *models.Order) (bool, string, error) {
 	cf := GetCashfreeFor(order.Mode)
 	if cf == nil {
-		return false, "Payment gateway not configured"
+		return false, "Payment gateway not configured", ErrPaymentGatewayUnavailable
 	}
 
 	payment, err := cf.SuccessfulPayment(order.RazorpayOrderID)
 	if err != nil {
 		log.Printf("Failed to fetch Cashfree payments for order %s: %v", order.RazorpayOrderID, err)
-		return false, "Failed to verify payment"
+		return false, "Could not verify payment with the gateway — please try again in a moment",
+			fmt.Errorf("%w: %v", ErrPaymentGatewayFetchFailed, err)
 	}
 	if payment == nil {
-		return false, "Payment not completed"
+		return false, "Payment not completed", nil
 	}
 
 	// Expected capture = Total − wallet − loyalty, identical to the Razorpay leg.
@@ -386,7 +406,7 @@ func SettleCashfreeOrder(order *models.Order) (bool, string) {
 		log.Printf("cashfree settle rejected order=%s: %s (paymentOrder=%s expected=%s amount=%d expectedPaise=%d)",
 			order.OrderNumber, reason, payment.OrderID, order.RazorpayOrderID,
 			payment.AmountPaise.Paise(), expectedPaise)
-		return false, reason
+		return false, reason, nil
 	}
 
 	cfPaymentID := payment.CFPaymentID.String()
@@ -411,7 +431,7 @@ func SettleCashfreeOrder(order *models.Order) (bool, string) {
 	// platform, so SettleOrderWallet's transfer leg is skipped for this provider
 	// (see its provider guard).
 	SettleOrderWallet(order)
-	return true, ""
+	return true, "", nil
 }
 
 // SettleRazorpayOrderFromPayment is Razorpay's counterpart to SettleCashfreeOrder

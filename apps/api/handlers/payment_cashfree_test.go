@@ -278,6 +278,100 @@ func TestVerifyCashfreePayment_ReVerifyDoesNotDoubleEmit(t *testing.T) {
 	require.Equal(t, int64(1), countOutbox(t, db, services.SubjectChefNewOrder), "still exactly one chef push")
 }
 
+// A genuine Cashfree upstream failure (transport error, timeout, 5xx,
+// unparseable response) must answer 502, not 400 — the fetch itself failed,
+// so this is retryable, not a false "not paid" (#872 final item). The order
+// must be left untouched so a retry finds it exactly as it was.
+func TestVerifyCashfreePayment_UpstreamFetchFailure502(t *testing.T) {
+	db := setupPayDB(t)
+	cust := payUser(t, db, "customer")
+	chef := payChef(t, db, payUser(t, db, "chef"))
+	orderID := cfPayOrder(t, db, cust, chef, "pending", 500, "cf-order-10")
+
+	// The /payments fetch 500s — a genuine gateway error, not a 404-means-
+	// nothing-yet response.
+	withCashfreeGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/payments") {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"internal error"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"order_id":"cf-order-10","order_status":"ACTIVE","order_amount":500.00}`))
+	})
+
+	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/verify",
+		func(r *gin.Engine, h *PaymentHandler) {
+			r.POST("/payments/order/:orderId/verify", h.VerifyPayment)
+		}, map[string]string{"cashfreeOrderId": "cf-order-10"})
+
+	require.Equal(t, http.StatusBadGateway, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), "try again")
+	require.Equal(t, "pending", paymentStatusOf(t, db, orderID))
+}
+
+// A Cashfree gateway that isn't configured answers 503, not 400 — a
+// server-side misconfiguration, not a payment outcome (#872 final item),
+// matching the sibling checks in createCashfreePayment / verifyRazorpayPayment.
+func TestVerifyCashfreePayment_GatewayNotConfigured503(t *testing.T) {
+	db := setupPayDB(t)
+	cust := payUser(t, db, "customer")
+	chef := payChef(t, db, payUser(t, db, "chef"))
+	orderID := cfPayOrder(t, db, cust, chef, "pending", 500, "cf-order-11")
+
+	t.Cleanup(func() { services.SetCashfreeClient(nil) })
+	services.SetCashfreeClient(nil) // live slot, matching cfPayOrder's default mode='live'
+
+	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/verify",
+		func(r *gin.Engine, h *PaymentHandler) {
+			r.POST("/payments/order/:orderId/verify", h.VerifyPayment)
+		}, map[string]string{"cashfreeOrderId": "cf-order-11"})
+
+	require.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
+	require.Equal(t, "pending", paymentStatusOf(t, db, orderID))
+}
+
+// finishCashfreeFromGateway (the create-leg already-PAID recovery) shares the
+// SAME upstream-failure treatment as verifyCashfreePayment — not just the
+// verify leg (#872 final item). Called directly (same package) with a
+// minimal in-memory order so the function is proven to return BEFORE it ever
+// reaches database.DB.Transaction, which this test does not set up — a bug
+// that reached it would panic rather than silently pass.
+func TestFinishCashfreeFromGateway_UpstreamFetchFailure502(t *testing.T) {
+	setupPayDB(t)
+
+	withCashfreeGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/payments") {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"internal error"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"order_id":"cf-order-recover-1","order_status":"PAID","order_amount":5.00}`))
+	})
+
+	order := &models.Order{
+		ModePartition:   models.ModePartition{Mode: models.ChefModeLive},
+		ID:              uuid.New(),
+		OrderNumber:     "HC-recover-1",
+		Total:           500,
+		RazorpayOrderID: "cf-order-recover-1",
+	}
+	cfOrder := &services.CashfreeOrderResponse{
+		OrderID:     "cf-order-recover-1",
+		OrderStatus: services.CashfreeOrderPaid,
+	}
+
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/payments/order/"+order.ID.String()+"/create", nil)
+
+	NewPaymentHandler().finishCashfreeFromGateway(c, order, cfOrder)
+
+	require.Equal(t, http.StatusBadGateway, rec.Code, rec.Body.String())
+	require.NotEqual(t, models.PaymentCompleted, order.PaymentStatus,
+		"the in-memory order must not have been mutated toward completed")
+}
+
 // A verify on somebody else's order must 404 (not 403) — the IDOR scope check,
 // which returns 404 so the existence of other orders isn't leaked.
 func TestVerifyCashfreePayment_ScopedToTheCustomer(t *testing.T) {
