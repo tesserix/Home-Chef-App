@@ -13,6 +13,15 @@ vi.mock('@/app/providers/AuthProvider', () => ({
   useAuth: () => ({ isAuthenticated: true, user: { id: 'u1' } }),
 }));
 
+// The page reads the live platform-fee percent; the real client drags in
+// Firebase auth, which rejects after teardown and fails the run.
+vi.mock('@/shared/services/api-client', () => ({
+  apiClient: {
+    get: vi.fn().mockResolvedValue({ platformFeePercent: 4.99 }),
+    post: vi.fn(),
+  },
+}));
+
 function renderCart() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
