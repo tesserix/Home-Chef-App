@@ -83,8 +83,18 @@ export function useSheetDrag({
   const responder = useMemo(
     () =>
       PanResponder.create({
-        // Don't claim the gesture on touch-down — that would swallow taps.
-        onStartShouldSetPanResponder: () => false,
+        // Claim on touch-DOWN, not on first move. The grab strip is nested
+        // inside a Pressable panel (MenuCategorySheet stops backdrop
+        // propagation with one). If this returns false, that ancestor
+        // Pressable wins the responder on touch-down — and once a responder
+        // exists, RN never consults a bubbled onMoveShouldSetPanResponder, so
+        // the drag silently never activates. Verified on an Android emulator:
+        // a 500px swipe did nothing until this returned true.
+        //
+        // Safe to claim here because the strip contains only the decorative
+        // pill — there is no tap to swallow. A tap registers as dy≈0 and
+        // settles back, which is a no-op.
+        onStartShouldSetPanResponder: () => enabledRef.current,
         onMoveShouldSetPanResponder: (_e, g) =>
           enabledRef.current &&
           g.dy > DRAG_ACTIVATION_SLOP &&
