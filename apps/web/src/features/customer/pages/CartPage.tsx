@@ -17,6 +17,7 @@ import { useAuth } from "@/app/providers/AuthProvider";
 import { useFormatPrice } from "@/shared/utils/format-price";
 import { Button, SimpleDialog } from "@/shared/components/ui";
 import { apiClient } from "@/shared/services/api-client";
+import { usePlatformFeePercent } from "../hooks/usePlatformConfig";
 
 // Pull the API's promo error out of either the string or {message,...} form (#39).
 function promoErrorMessage(e: unknown): string {
@@ -40,9 +41,11 @@ export default function CartPage() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [applyingPromo, setApplyingPromo] = useState(false);
 
+  const platformFeePercent = usePlatformFeePercent();
   const subtotal = cart.getSubtotal();
   const deliveryFee = cart.chef?.deliveryFee || 0;
-  const platformFee = subtotal * 0.05; // 5% service fee
+  // Live policy rate, not a hardcoded guess — checkout prices from the same policy.
+  const platformFee = subtotal * (platformFeePercent / 100);
   // Server-validated promo discount (#39), clamped to the subtotal. The server
   // re-validates + recomputes at order time, so this is a preview for display.
   const discount = cart.promoCode ? Math.min(cart.promoDiscount, subtotal) : 0;
