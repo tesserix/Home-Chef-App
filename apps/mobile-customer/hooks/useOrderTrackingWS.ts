@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
+import { socketReconnectDelayMs } from '@homechef/mobile-shared/utils';
 import { useOrderTracking } from './useOrderTracking';
 
 const MAX_WS_FAILURES = 3;
-const RECONNECT_DELAY_MS = 2000;
 
 interface DriverLocation {
   latitude: number;
@@ -19,7 +20,13 @@ interface WSLocationMessage {
 /**
  * WebSocket-based order tracking hook that subscribes to real-time driver
  * location updates. Falls back to polling via useOrderTracking after 3
- * consecutive WebSocket failures (T-04-10: no infinite reconnect loop).
+ * consecutive WebSocket failures (T-04-10: no unbounded-frequency retry —
+ * the polling fallback keeps location fresh while the socket is down).
+ *
+ * The socket keeps retrying with capped backoff even while the polling
+ * fallback is active, so a connectivity blip can recover to real-time
+ * updates instead of being stuck on REST polling for the rest of the
+ * session (#892).
  */
 export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
   const wsRef = useRef<WebSocket | null>(null);
@@ -32,7 +39,7 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
   const pollingResult = useOrderTracking(orderId, enabled && useFallback);
 
   const connect = useCallback(() => {
-    if (!orderId || !enabled || useFallback) return;
+    if (!orderId || !enabled) return;
 
     // Build WebSocket URL from API base URL (replace http(s) with ws(s)).
     // EXPO_PUBLIC_API_URL already ends in `/api` (e.g. https://fe3dr.com/api),
@@ -50,7 +57,16 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
 
     ws.onopen = () => {
       failureCount.current = 0; // Reset on successful connect
-      console.info(`[tracking-ws] connected (order ${orderId})`);
+      // Real-time recovered: drop the polling fallback if it was active
+      // (#892 — a socket that only fails once must be able to come back).
+      setUseFallback((wasFallback) => {
+        if (wasFallback) {
+          console.info(`[tracking-ws] reconnected on order ${orderId} — leaving polling fallback`);
+        } else {
+          console.info(`[tracking-ws] connected (order ${orderId})`);
+        }
+        return false;
+      });
     };
 
     ws.onmessage = (event: WebSocketMessageEvent) => {
@@ -74,22 +90,22 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
       );
       if (failureCount.current >= MAX_WS_FAILURES) {
         console.error(
-          `[tracking-ws] giving up on order ${orderId} after ${failureCount.current} consecutive failures — falling back to polling`,
+          `[tracking-ws] falling back to polling on order ${orderId} after ${failureCount.current} consecutive failures — still retrying the socket in the background`,
         );
-        setUseFallback(true); // Give up on WS — switch to polling
+        setUseFallback(true); // Fall back to polling, but keep retrying WS below.
       }
     };
 
+    // Always reschedule while enabled — the polling fallback (activated above
+    // once MAX_WS_FAILURES is hit) covers the gap, but the socket itself must
+    // never permanently give up or it can never recover to real-time (#892).
     ws.onclose = () => {
-      if (failureCount.current < MAX_WS_FAILURES) {
-        // Reconnect after delay unless failure cap reached
-        console.warn(
-          `[tracking-ws] closed on order ${orderId}, reconnecting in ${RECONNECT_DELAY_MS}ms`,
-        );
-        reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
-      }
+      if (!enabled) return;
+      const delay = socketReconnectDelayMs(failureCount.current);
+      console.warn(`[tracking-ws] closed on order ${orderId}, reconnecting in ${delay}ms`);
+      reconnectTimer.current = setTimeout(connect, delay);
     };
-  }, [orderId, enabled, useFallback]);
+  }, [orderId, enabled]);
 
   useEffect(() => {
     connect();
@@ -102,6 +118,24 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
       }
     };
   }, [connect]);
+
+  // Foreground reconnect: don't leave the user waiting out a stale backoff
+  // after the app was backgrounded for a while — retry right away (#892).
+  useEffect(() => {
+    if (!enabled) return;
+    const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
+      if (status !== 'active') return;
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
+      failureCount.current = 0;
+      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+        connect();
+      }
+    });
+    return () => sub.remove();
+  }, [enabled, connect]);
 
   return {
     /** Real-time driver location from WebSocket (null until first message) */

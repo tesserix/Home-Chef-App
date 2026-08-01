@@ -1,10 +1,9 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
+import { socketReconnectDelayMs } from '@homechef/mobile-shared/utils';
 import { useAuthStore } from '../store/auth-store';
 import type { Order } from '../types/customer';
-
-const MAX_WS_FAILURES = 4;
-const RECONNECT_DELAY_MS = 3000;
 
 // React Native's WebSocket accepts a headers option (a 3rd constructor arg) that
 // the DOM type omits — the notification stream is user-scoped and authenticates
@@ -115,20 +114,18 @@ export function useOrderStatusWS(
 
     ws.onerror = () => {
       failureCount.current += 1;
-      console.warn(
-        `[order-ws] error (${failureCount.current}/${MAX_WS_FAILURES} failures)`,
-      );
+      console.warn(`[order-ws] error (${failureCount.current} consecutive failures)`);
     };
 
+    // This stream has no fallback (unlike order-tracking's polling or the
+    // vendor app's SSE), so giving up permanently here is the worst case of
+    // #892 — a customer could go a whole session with no live updates.
+    // Retry indefinitely with backoff instead; there is no cap to hit.
     ws.onclose = () => {
-      if (enabled && failureCount.current < MAX_WS_FAILURES) {
-        console.warn(`[order-ws] closed, reconnecting in ${RECONNECT_DELAY_MS}ms`);
-        reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
-      } else if (enabled) {
-        console.error(
-          `[order-ws] giving up after ${failureCount.current} consecutive failures — no further reconnects`,
-        );
-      }
+      if (!enabled) return;
+      const delay = socketReconnectDelayMs(failureCount.current);
+      console.warn(`[order-ws] closed, reconnecting in ${delay}ms`);
+      reconnectTimer.current = setTimeout(connect, delay);
     };
   }, [orderId, enabled, queryClient]);
 
@@ -143,4 +140,22 @@ export function useOrderStatusWS(
       }
     };
   }, [connect]);
+
+  // Foreground reconnect: don't leave the user waiting out a stale backoff
+  // after the app was backgrounded for a while — retry right away (#892).
+  useEffect(() => {
+    if (!enabled) return;
+    const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
+      if (status !== 'active') return;
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
+      failureCount.current = 0;
+      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+        connect();
+      }
+    });
+    return () => sub.remove();
+  }, [enabled, connect]);
 }
