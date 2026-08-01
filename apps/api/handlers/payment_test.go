@@ -29,7 +29,6 @@ import (
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
-	"github.com/homechef/api/payouts"
 	"github.com/homechef/api/services"
 )
 
@@ -107,19 +106,20 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS processed_events (
 		consumer TEXT NOT NULL, msg_id TEXT NOT NULL, subject TEXT DEFAULT '', processed_at DATETIME,
 		PRIMARY KEY (consumer, msg_id))`).Error)
-	// payout_ledger_entries — orderSettlements reads this via
+	// payout_ledger_entries — services.OrderSettlements reads this via
 	// services.ApplyRecoveryDeduction (#741) to deduct a chef's outstanding
-	// recovery balance before their Route transfer is created. Hand-DDL'd:
-	// payouts.LedgerEntry carries a Postgres-only gen_random_uuid() default
+	// recovery balance before their Route transfer is created, still exercised
+	// here via CreateOrderPayment's production call. Hand-DDL'd: a
+	// payouts.LedgerEntry row carries a Postgres-only gen_random_uuid() default
 	// that sqlite's AutoMigrate rejects.
 	require.NoError(t, db.Exec(`CREATE TABLE payout_ledger_entries (
 		id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, payee_type TEXT NOT NULL, payee_id TEXT NOT NULL,
 		kind TEXT NOT NULL, amount_minor INTEGER NOT NULL, currency TEXT NOT NULL,
 		source_type TEXT NOT NULL, source_id TEXT NOT NULL, matures_at DATETIME,
 		batch_id TEXT, actor_id TEXT, reason TEXT, created_at DATETIME)`).Error)
-	// audit_logs — applyChefRecoveryDeduction (#741 final review) writes a
-	// system audit row when a recovery deduction actually reduces a chef's
-	// transfer, via services.LogSystemAudit.
+	// audit_logs — services.ApplyChefRecoveryDeduction (#741 final review)
+	// writes a system audit row when a recovery deduction actually reduces a
+	// chef's transfer, via services.LogSystemAudit.
 	require.NoError(t, db.Exec(`CREATE TABLE audit_logs (
 		id TEXT PRIMARY KEY DEFAULT '00000000-0000-0000-0000-000000000000',
 		user_id TEXT, action TEXT, entity_type TEXT, entity_id TEXT,
@@ -146,6 +146,26 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	database.DB = db
 	t.Cleanup(func() { database.DB = prev })
 	return db
+}
+
+// countOutbox and paymentStatusOf are shared query helpers used across this
+// package's payment test files (payment_cashfree_test.go,
+// payment_webhook_guard_test.go). Kept here — rather than in the now-deleted
+// payment_complete_race_test.go — so those still-unmoved handler tests keep
+// compiling after #872 step 2 moved the completion-transaction core to
+// services/order_payment_settle_test.go.
+func countOutbox(t *testing.T, db *gorm.DB, subject string) int64 {
+	t.Helper()
+	var n int64
+	require.NoError(t, db.Raw(`SELECT COUNT(*) FROM outbox_events WHERE subject = ?`, subject).Scan(&n).Error)
+	return n
+}
+
+func paymentStatusOf(t *testing.T, db *gorm.DB, id uuid.UUID) string {
+	t.Helper()
+	var s string
+	require.NoError(t, db.Raw(`SELECT payment_status FROM orders WHERE id = ?`, id.String()).Scan(&s).Error)
+	return s
 }
 
 func payUser(t *testing.T, db *gorm.DB, role string) uuid.UUID {
@@ -355,214 +375,33 @@ func TestInitiateRefund_AdminAllowed_NoRazorpayPayment_400(t *testing.T) {
 
 // Chef NET payout (#390): the chef's Route transfer is now net of commission and
 // TDS (gross = food + tax + chef tip, less any chef-funded promo they bear).
-// chefNetPayout reads the FROZEN order.CommissionRate — no rate argument — so the
-// transfer can never drift from the settlement statement computed on the same row.
+// services.ChefNetPayoutFor reads the FROZEN order.CommissionRate — no rate
+// argument — so the transfer can never drift from the settlement statement
+// computed on the same row.
+//
+// The TestOrderSettlements_* coverage that used to live here (chef Route
+// transfer, recovery-deduction reduction + audit row, ledger-read fail-open)
+// moved to services/order_payment_settle_test.go alongside OrderSettlements /
+// ApplyChefRecoveryDeduction (#872 step 2, Task 2) — the money logic under
+// test no longer lives in this package.
 func TestChefNetPayout(t *testing.T) {
 	// 1000 food + 50 tax + 20 tip @ 6%: gross 1070, commission 60, tds 10.70,
 	// net = 1070 - 60 - 10.70 = 999.30.
 	base := &models.Order{Subtotal: 1000, Tax: 50, ChefTip: 20, CommissionRate: 0.06}
-	if got := chefNetPayout(base); got != 999.3 {
+	if got := services.ChefNetPayoutFor(base); got != 999.3 {
 		t.Fatalf("chef net payout = %.2f, want 999.30", got)
 	}
 	// Chef-funded promo (#39): itemRevenue 900, gross 970, commission 54, tds 9.70,
 	// net = 970 - 54 - 9.70 = 906.30.
 	chefFunded := &models.Order{Subtotal: 1000, Tax: 50, ChefTip: 20, ChefFundedDiscount: 100, CommissionRate: 0.06}
-	if got := chefNetPayout(chefFunded); got != 906.3 {
+	if got := services.ChefNetPayoutFor(chefFunded); got != 906.3 {
 		t.Fatalf("chef-funded net payout = %.2f, want 906.30", got)
 	}
 	// Never negative even if a discount somehow exceeds the food revenue.
 	huge := &models.Order{Subtotal: 100, ChefFundedDiscount: 500, CommissionRate: 0.06}
-	if got := chefNetPayout(huge); got != 0 {
+	if got := services.ChefNetPayoutFor(huge); got != 0 {
 		t.Fatalf("over-discounted net payout = %.2f, want 0 (floored)", got)
 	}
-}
-
-func TestOrderSettlements_ChefNetTransfer(t *testing.T) {
-	db := setupPayDB(t)
-	order := &models.Order{
-		OrderNumber:        "HC-1",
-		ChefID:             uuid.New(),
-		Subtotal:           1000,
-		Tax:                50,
-		ChefTip:            20,
-		DeliveryFee:        40,
-		ChefFundedDiscount: 100,
-		CommissionRate:     0.06,
-	}
-	order.Chef.RazorpayAccountID = "acc_chef"
-	settlements := orderSettlements(db, order)
-	// Chef settlement = NET: itemRevenue 900, gross 970, commission 54, tds 9.70,
-	// net = 906.30 → 90630 paise. No recovery debt seeded, so nothing is deducted.
-	if settlements[0].Amount != services.ToPaise(906.3) {
-		t.Fatalf("chef settlement = %d paise, want %d (net)", settlements[0].Amount, services.ToPaise(906.3))
-	}
-	// Driver settlement (deliveryFee + driverTip) is UNCHANGED — the driver's money.
-	if settlements[1].Amount != services.ToPaise(40) {
-		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, services.ToPaise(40))
-	}
-}
-
-// TestOrderSettlements_RecoveryDeductionReducesChefTransfer (#741) proves the
-// wiring gap this task closes: ApplyRecoveryDeduction on its own never touches
-// a Route transfer. Unless orderSettlements actually applies its result, a
-// chef's outstanding debt is computed but never collected.
-func TestOrderSettlements_RecoveryDeductionReducesChefTransfer(t *testing.T) {
-	db := setupPayDB(t)
-	chefID := uuid.New()
-	seedChefPenalty(t, db, chefID, 20_000) // ₹200.00 owed to the platform
-
-	order := &models.Order{
-		OrderNumber:        "HC-2",
-		ChefID:             chefID,
-		Subtotal:           1000,
-		Tax:                50,
-		ChefTip:            20,
-		DeliveryFee:        40,
-		ChefFundedDiscount: 100,
-		CommissionRate:     0.06,
-	}
-	order.Chef.RazorpayAccountID = "acc_chef"
-
-	settlements := orderSettlements(db, order)
-	// Gross net payout is 90630 paise (see TestOrderSettlements_ChefNetTransfer);
-	// a 20000 paise debt must come off THIS transfer before it is created.
-	wantChef := services.ToPaise(906.3) - 20_000
-	if settlements[0].Amount != wantChef {
-		t.Fatalf("chef settlement = %d paise, want %d (gross net of the 20000 paise debt)",
-			settlements[0].Amount, wantChef)
-	}
-	// The driver's slice is untouched by the chef's debt.
-	if settlements[1].Amount != services.ToPaise(40) {
-		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, services.ToPaise(40))
-	}
-}
-
-// TestOrderSettlements_RecoveryDeductionWritesAuditRow pins the final-review
-// finding: recovery is currently inert (nothing discharges the ledger debt) and
-// invisible everywhere except the reduced transfer amount itself — a chef's
-// payout can be silently cut with no record of why. When a deduction actually
-// reduces the gross (deducted > 0), an audit row must be written recording the
-// order, chef, gross, and deducted figures, so a reduced payout is never
-// silent.
-func TestOrderSettlements_RecoveryDeductionWritesAuditRow(t *testing.T) {
-	db := setupPayDB(t)
-	chefID := uuid.New()
-	seedChefPenalty(t, db, chefID, 20_000) // ₹200.00 owed to the platform
-
-	order := &models.Order{
-		ID:                 uuid.New(),
-		OrderNumber:        "HC-2",
-		ChefID:             chefID,
-		Subtotal:           1000,
-		Tax:                50,
-		ChefTip:            20,
-		DeliveryFee:        40,
-		ChefFundedDiscount: 100,
-		CommissionRate:     0.06,
-	}
-	order.Chef.RazorpayAccountID = "acc_chef"
-
-	orderSettlements(db, order)
-
-	var row struct {
-		UserID     *string
-		Action     string
-		EntityType string
-		EntityID   string
-		NewValue   string
-	}
-	require.NoError(t, db.Raw(`SELECT user_id, action, entity_type, entity_id, new_value FROM audit_logs`).Scan(&row).Error)
-	require.Nil(t, row.UserID, "a recovery deduction has no human actor — system audit row")
-	require.NotEmpty(t, row.Action, "a reduced payout must be recorded, not silent")
-
-	var payload map[string]any
-	require.NoError(t, json.Unmarshal([]byte(row.NewValue), &payload))
-	require.EqualValues(t, 20_000, payload["deductedPaise"], "the audit row must record the deducted amount")
-	require.EqualValues(t, services.ToPaise(906.3), payload["grossPaise"], "the audit row must record the undeducted gross")
-	require.Equal(t, order.ID.String(), payload["orderId"], "the audit row must identify the order")
-	require.Equal(t, chefID.String(), payload["chefId"], "the audit row must identify the chef")
-}
-
-// TestOrderSettlements_NoRecoveryDebt_NoAuditRow ensures the audit write is
-// conditional on an actual deduction — a chef with a clear balance produces no
-// audit noise.
-func TestOrderSettlements_NoRecoveryDebt_NoAuditRow(t *testing.T) {
-	db := setupPayDB(t)
-	order := &models.Order{
-		ID:                 uuid.New(),
-		OrderNumber:        "HC-2b",
-		ChefID:             uuid.New(),
-		Subtotal:           1000,
-		Tax:                50,
-		ChefTip:            20,
-		DeliveryFee:        40,
-		ChefFundedDiscount: 100,
-		CommissionRate:     0.06,
-	}
-	order.Chef.RazorpayAccountID = "acc_chef"
-
-	orderSettlements(db, order)
-
-	var count int64
-	require.NoError(t, db.Raw(`SELECT COUNT(*) FROM audit_logs`).Scan(&count).Error)
-	require.Zero(t, count, "no debt was deducted, so no audit row should be written")
-}
-
-// TestOrderSettlements_LedgerReadFailure_PaysGross (#741) locks in the fail-OPEN
-// behavior on a ledger-read error: applyChefRecoveryDeduction must pay the
-// chef's undeducted gross rather than zero. Nothing in this codebase ever
-// writes a resolving ledger entry, so a real debt is re-derived and
-// re-deducted from the chef's NEXT order regardless of whether this read
-// succeeds — failing closed protects nothing and only turns a transient read
-// error into a permanent, silent loss of this order's whole chef payout.
-//
-// The failure is induced realistically: a DB whose payout_ledger_entries
-// table does not exist at all (unlike setupPayDB, which creates it), so the
-// query inside services.ApplyRecoveryDeduction errors exactly as it would
-// against a real, unmigrated/unreachable table.
-func TestOrderSettlements_LedgerReadFailure_PaysGross(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
-	require.NoError(t, err)
-	// Deliberately no payout_ledger_entries table — the ledger read must fail.
-
-	order := &models.Order{
-		OrderNumber:        "HC-3",
-		ChefID:             uuid.New(),
-		Subtotal:           1000,
-		Tax:                50,
-		ChefTip:            20,
-		DeliveryFee:        40,
-		ChefFundedDiscount: 100,
-		CommissionRate:     0.06,
-	}
-	order.Chef.RazorpayAccountID = "acc_chef"
-
-	settlements := orderSettlements(db, order)
-	// The full undeducted gross (906.30 → 90630 paise, see
-	// TestOrderSettlements_ChefNetTransfer) — NOT zero.
-	wantChef := services.ToPaise(906.3)
-	if settlements[0].Amount != wantChef {
-		t.Fatalf("chef settlement on ledger-read failure = %d paise, want %d (full gross, fail-open)",
-			settlements[0].Amount, wantChef)
-	}
-	// The driver's slice is unaffected by a chef-ledger read failure.
-	if settlements[1].Amount != services.ToPaise(40) {
-		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, services.ToPaise(40))
-	}
-}
-
-// seedChefPenalty inserts one outstanding payout_ledger_entries debit for a
-// chef, mirroring services/payout_recovery_test.go's seedPenalty.
-func seedChefPenalty(t *testing.T, db *gorm.DB, chefID uuid.UUID, minor int64) {
-	t.Helper()
-	entry := payouts.LedgerEntry{
-		ID: uuid.New(), TenantID: "t1",
-		PayeeType: payouts.PayeeChef, PayeeID: chefID,
-		Kind: payouts.EntryDebitPenalty, AmountMinor: minor,
-		Currency:   payouts.CurrencyINR,
-		SourceType: "order_issue", SourceID: uuid.NewString(),
-	}
-	require.NoError(t, db.Create(&entry).Error)
 }
 
 // TestChefTransferEqualsStatementNetPayout (#390, W3) is the non-tautological
@@ -617,7 +456,7 @@ func TestChefTransferEqualsStatementNetPayout(t *testing.T) {
 	if payoutNet != statementNet {
 		t.Fatalf("payout net %.2f != statement net %.2f — field mapping drifted", payoutNet, statementNet)
 	}
-	if got := chefNetPayout(order); got != payoutNet {
+	if got := services.ChefNetPayoutFor(order); got != payoutNet {
 		t.Fatalf("chefNetPayout %.2f != computed net %.2f", got, payoutNet)
 	}
 	if payoutNet != 999.3 {
@@ -670,7 +509,7 @@ func TestConservationExcludesGSTOnCommission(t *testing.T) {
 	}
 
 	// The chef's actual transfer equals the statement's NetPayout.
-	if got := chefNetPayout(order); got != e.NetPayout {
+	if got := services.ChefNetPayoutFor(order); got != e.NetPayout {
 		t.Fatalf("chefNetPayout %.2f != statement net %.2f", got, e.NetPayout)
 	}
 
@@ -700,7 +539,7 @@ func TestFrozenRateSurvivesRetune(t *testing.T) {
 
 	order := &models.Order{Subtotal: 1000, Tax: 50, ChefTip: 20, CommissionRate: 0.06}
 	// chefNetPayout must read the frozen 6%, not the live 12% → 999.30 (not 939.30).
-	if got := chefNetPayout(order); got != 999.3 {
+	if got := services.ChefNetPayoutFor(order); got != 999.3 {
 		t.Fatalf("net = %.2f, want 999.30 (frozen 6%%, not live 12%%)", got)
 	}
 }

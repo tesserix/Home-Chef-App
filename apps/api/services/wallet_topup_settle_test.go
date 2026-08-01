@@ -1,28 +1,45 @@
-package handlers
+package services
 
 // wallet_topup_settle_test.go — #554. The platform-funded wallet top-up transfer had
 // no idempotency guard, so a retried VerifyPayment re-issued the same real money
 // transfer. settleWalletTopUpsWith now claims each (order, account) once and only
 // transfers on the winning claim, releasing on failure so a retry re-attempts.
+//
+// Relocated from handlers/wallet_topup_settle_test.go (#872 step 2, Task 2) —
+// settleWalletTopUpsWith moved to services alongside the rest of the
+// wallet-settlement cluster. settleWalletTopUpsWith reads the package-global
+// database.DB (not a parameter, since ClaimWalletTopUp/ReleaseWalletTopUp are
+// hard-coded to it), so each test swaps it to the fresh in-memory db and
+// restores it on cleanup — setupTopUpDedupDB itself does not do this swap,
+// since its own tests (wallet_topup_dedup_test.go) pass db explicitly.
 
 import (
 	"errors"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/homechef/api/services"
 	"github.com/stretchr/testify/require"
+
+	"github.com/homechef/api/database"
 )
 
+func withTopUpDedupDB(t *testing.T) {
+	t.Helper()
+	db := setupTopUpDedupDB(t)
+	prev := database.DB
+	database.DB = db
+	t.Cleanup(func() { database.DB = prev })
+}
+
 func TestSettleWalletTopUps_TransfersOncePerAccountAcrossRetries(t *testing.T) {
-	addProcessedEventsTable(t, setupPayDB(t))
+	withTopUpDedupDB(t)
 	orderID := uuid.New()
-	topUps := []services.TransferSpec{
+	topUps := []TransferSpec{
 		{Account: "acc_chef", Amount: 1000, Currency: "INR"},
 		{Account: "acc_driver", Amount: 500, Currency: "INR"},
 	}
 	calls := map[string]int{}
-	doTransfer := func(_ int, ts services.TransferSpec) error { calls[ts.Account]++; return nil }
+	doTransfer := func(_ int, ts TransferSpec) error { calls[ts.Account]++; return nil }
 
 	settleWalletTopUpsWith(orderID, "ORD-1", topUps, doTransfer)
 	settleWalletTopUpsWith(orderID, "ORD-1", topUps, doTransfer) // retried verify
@@ -34,14 +51,14 @@ func TestSettleWalletTopUps_TransfersOncePerAccountAcrossRetries(t *testing.T) {
 // #558: two legs sharing ONE Razorpay payout account (same person as chef AND driver) must each
 // be paid — keying on account alone silently deduped the second leg into a no-op.
 func TestSettleWalletTopUps_SameAccountBothLegsPaid(t *testing.T) {
-	addProcessedEventsTable(t, setupPayDB(t))
+	withTopUpDedupDB(t)
 	orderID := uuid.New()
-	topUps := []services.TransferSpec{
+	topUps := []TransferSpec{
 		{Account: "acc_shared", Amount: 1000, Currency: "INR"}, // chef leg
 		{Account: "acc_shared", Amount: 500, Currency: "INR"},  // driver leg, same account
 	}
 	var total int
-	doTransfer := func(_ int, ts services.TransferSpec) error { total += ts.Amount; return nil }
+	doTransfer := func(_ int, ts TransferSpec) error { total += ts.Amount; return nil }
 
 	settleWalletTopUpsWith(orderID, "ORD-1", topUps, doTransfer)
 	settleWalletTopUpsWith(orderID, "ORD-1", topUps, doTransfer) // retried verify — still idempotent
@@ -50,13 +67,13 @@ func TestSettleWalletTopUps_SameAccountBothLegsPaid(t *testing.T) {
 }
 
 func TestSettleWalletTopUps_FailedTransferIsRetried(t *testing.T) {
-	addProcessedEventsTable(t, setupPayDB(t))
+	withTopUpDedupDB(t)
 	orderID := uuid.New()
-	topUps := []services.TransferSpec{{Account: "acc_chef", Amount: 1000, Currency: "INR"}}
+	topUps := []TransferSpec{{Account: "acc_chef", Amount: 1000, Currency: "INR"}}
 
 	attempts := 0
-	failing := func(int, services.TransferSpec) error { attempts++; return errors.New("gateway down") }
-	ok := func(int, services.TransferSpec) error { attempts++; return nil }
+	failing := func(int, TransferSpec) error { attempts++; return errors.New("gateway down") }
+	ok := func(int, TransferSpec) error { attempts++; return nil }
 
 	settleWalletTopUpsWith(orderID, "ORD-1", topUps, failing) // fails → claim released
 	settleWalletTopUpsWith(orderID, "ORD-1", topUps, ok)      // retries → succeeds
