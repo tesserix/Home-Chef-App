@@ -8,18 +8,10 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme/tokens';
+import { useReducedMotion } from './useReducedMotion';
 
 // See Button.tsx for the full rationale — an 8-digit hex alpha channel
 // appended to an existing token colour, never a new literal colour.
@@ -81,23 +73,8 @@ export function UndoSnackbarProvider({ children }: { children: ReactNode }) {
   const dismissedRef = useRef(false);
 
   // No Reanimated dependency here (this predates it), so Reduce Motion is
-  // read the same way Skeleton/SheetBase do — via AccessibilityInfo.
-  const [reduceMotion, setReduceMotion] = useState(false);
-  useEffect(() => {
-    let mounted = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (mounted) setReduceMotion(enabled);
-      })
-      .catch(() => {});
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      setReduceMotion(enabled);
-    });
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
-  }, []);
+  // read the same way Skeleton/SheetBase do — via the shared hook.
+  const reduceMotion = useReducedMotion();
 
   const hide = useCallback(() => {
     if (reduceMotion) {

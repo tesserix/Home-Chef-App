@@ -29,7 +29,6 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  AccessibilityInfo,
   Animated,
   Easing,
   KeyboardAvoidingView,
@@ -45,6 +44,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme/tokens';
+import { useReducedMotion } from './useReducedMotion';
 import { useSheetDrag } from './useSheetDrag';
 
 export interface SheetHandle {
@@ -88,7 +88,7 @@ export const SheetBase = forwardRef<SheetHandle, SheetBaseProps>(function SheetB
   const { height: windowHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const reduceMotion = useReducedMotion();
   // Starts off-screen (not 0/open) — the Modal's very first paint happens
   // before the mount effect below has a chance to run `runEnter()`, so an
   // initial value of 0 rendered one full-open frame (panel fully in place)
@@ -97,22 +97,6 @@ export const SheetBase = forwardRef<SheetHandle, SheetBaseProps>(function SheetB
   // needs no layout measurement round-trip.
   const translateY = useRef(new Animated.Value(windowHeight)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (alive) setReduceMotion(enabled);
-      })
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      setReduceMotion(enabled);
-    });
-    return () => {
-      alive = false;
-      sub.remove();
-    };
-  }, []);
 
   const runEnter = useCallback(() => {
     if (reduceMotion) {

@@ -1,6 +1,5 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import {
-  AccessibilityInfo,
   Animated,
   Easing,
   KeyboardAvoidingView,
@@ -14,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../theme/tokens';
 import { Button } from './Button';
+import { useReducedMotion } from './useReducedMotion';
 
 interface OnboardingScaffoldProps {
   /** Current step (1-indexed). */
@@ -88,16 +88,10 @@ export function OnboardingScaffold({
   const percent = Math.round(((step - 1) / Math.max(total - 1, 1)) * 100);
 
   const fill = useRef(new Animated.Value(percent)).current;
-  const reduceMotion = useRef(false);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((on) => { reduceMotion.current = on; })
-      .catch(() => { /* default: animate */ });
-  }, []);
-
-  useEffect(() => {
-    if (reduceMotion.current) {
+    if (reduceMotion) {
       fill.setValue(percent);
       return;
     }
@@ -109,7 +103,11 @@ export function OnboardingScaffold({
       easing: Easing.bezier(0.22, 1, 0.36, 1),
       useNativeDriver: false,
     }).start();
-  }, [percent, fill]);
+    // Deliberate behavior improvement over the old ref-based version: the
+    // fill animation now correctly reacts if Reduce Motion changes
+    // mid-session, which the ref (read once, never causing a re-render)
+    // silently ignored.
+  }, [percent, fill, reduceMotion]);
 
   const fillWidth = fill.interpolate({
     inputRange: [0, 100],
