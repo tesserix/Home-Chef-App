@@ -447,6 +447,11 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 // captured/binding/amount checks) — a deliberate, harmless reordering: the
 // client-verifiable check no longer needs to wait on the gateway-authoritative
 // one that moved into the shared core.
+//
+// The mandatory rz.FetchPayment fetch failing (transport error, timeout, 5xx,
+// unparseable response) now answers 502, matching Cashfree's same "mandatory
+// server fetch failing is retryable" contract (#872 final item) — this is the
+// one status code this task changes on the Razorpay leg (was 500).
 func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Order, paymentID, rzOrderID, signature string) {
 	if paymentID == "" || rzOrderID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "razorpayPaymentId and razorpayOrderId are required"})
@@ -466,7 +471,7 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 	payment, err := rz.FetchPayment(paymentID)
 	if err != nil {
 		log.Printf("Failed to fetch Razorpay payment %s: %v", paymentID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Could not verify payment with the gateway — please try again in a moment"})
 		return
 	}
 

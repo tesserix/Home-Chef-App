@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -290,8 +291,8 @@ func (h *PaymentHandler) respondCashfreeSession(
 func (h *PaymentHandler) finishCashfreeFromGateway(c *gin.Context, order *models.Order, cfOrder *services.CashfreeOrderResponse) {
 	log.Printf("cashfree: order %s already PAID at gateway (%s) — settling from gateway state",
 		order.OrderNumber, cfOrder.OrderID)
-	if ok, msg := services.SettleCashfreeOrder(order); !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+	if ok, msg, err := services.SettleCashfreeOrder(order); !ok {
+		c.JSON(cashfreeSettleStatus(err), gin.H{"error": msg})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -302,6 +303,23 @@ func (h *PaymentHandler) finishCashfreeFromGateway(c *gin.Context, order *models
 	})
 }
 
+// cashfreeSettleStatus maps a services.SettleCashfreeOrder failure to an HTTP
+// status: ErrPaymentGatewayUnavailable (gateway not configured — a
+// misconfiguration, not a payment outcome) is 503, ErrPaymentGatewayFetchFailed
+// (the mandatory gateway fetch itself failed — retryable) is 502, and anything
+// else (nil, or a terminal ValidateCapturedPayment rejection) is 400,
+// unchanged. Shared by both HTTP callers of SettleCashfreeOrder below.
+func cashfreeSettleStatus(err error) int {
+	switch {
+	case errors.Is(err, services.ErrPaymentGatewayUnavailable):
+		return http.StatusServiceUnavailable
+	case errors.Is(err, services.ErrPaymentGatewayFetchFailed):
+		return http.StatusBadGateway
+	default:
+		return http.StatusBadRequest
+	}
+}
+
 // verifyCashfreePayment confirms a payment after the client's checkout closes.
 //
 // Unlike the Razorpay leg there is NO client-supplied signature to check, and no
@@ -309,7 +327,11 @@ func (h *PaymentHandler) finishCashfreeFromGateway(c *gin.Context, order *models
 // order id (which must match what we stamped) and the gateway's own record. That
 // makes this strictly harder to spoof than a signature check — but it also means
 // the fetch is mandatory, so a gateway outage surfaces as a 502 rather than being
-// waved through.
+// waved through. finishCashfreeFromGateway (the create-leg already-PAID
+// recovery) shares this exact status mapping via cashfreeSettleStatus, and
+// "gateway not configured" answers 503 — a configuration problem, not a
+// payment outcome — matching the sibling checks in createCashfreePayment and
+// verifyRazorpayPayment.
 func (h *PaymentHandler) verifyCashfreePayment(c *gin.Context, order *models.Order, cfOrderID string) {
 	if cfOrderID == "" {
 		// Fall back to the stamped id: a client that closed checkout without
@@ -326,9 +348,9 @@ func (h *PaymentHandler) verifyCashfreePayment(c *gin.Context, order *models.Ord
 		return
 	}
 
-	ok, msg := services.SettleCashfreeOrder(order)
+	ok, msg, err := services.SettleCashfreeOrder(order)
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		c.JSON(cashfreeSettleStatus(err), gin.H{"error": msg})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
