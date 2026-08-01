@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '@homechef/mobile-shared/ui';
+import { isSkippableMealDay } from '@homechef/mobile-shared/utils';
 import { router } from 'expo-router';
 import { AlertCircle, ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -33,12 +34,6 @@ const CORAL_GHOST_RIPPLE = `${customerColors.coral.DEFAULT}14`;
 // How many upcoming days to surface per subscription. Enough to cover "I'm away
 // later this week" without turning the card into a calendar.
 const UPCOMING_LIMIT = 5;
-
-function startOfToday(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
 
 function fmtDay(iso: string): string {
   const d = new Date(iso);
@@ -189,11 +184,15 @@ function SubCard({ sub }: { sub: MealSubscription }) {
                 onError: (err) =>
                   showAlert(
                     "Couldn't skip this meal",
-                    // The server is authoritative on the cutoff; surfacing its
-                    // reason beats guessing at the customer ("it MAY be too
-                    // close" is what the meal-plan screen says, and it reads as
-                    // an app that doesn't know its own rules).
-                    friendlyErrorMessage(err, 'It may already be past the cutoff for that day.'),
+                    // The server is still authoritative — this fallback only
+                    // shows if its error body doesn't parse. The filter above
+                    // already excludes today, so the only realistic failure is
+                    // a race where IST midnight passed between screen load and
+                    // tap; describe that, not a cutoff this handler never checks.
+                    friendlyErrorMessage(
+                      err,
+                      'That day has already started, so it can no longer be skipped.',
+                    ),
                   ),
               },
             ),
@@ -202,11 +201,14 @@ function SubCard({ sub }: { sub: MealSubscription }) {
     );
   }
 
-  // Only future, still-scheduled days can be skipped. Past/placed/delivered days
-  // are shown for context but carry no action — offering a control that always
-  // fails is worse than offering none.
+  // Only future, still-scheduled days can be skipped. Eligibility is IST calendar
+  // day, not device-local — this mirrors the server's Skip handler exactly
+  // (apps/api/handlers/meal_subscription.go: d.After(todayIST)), so today never
+  // shows Skip regardless of the customer's device timezone (#696). Past/placed/
+  // delivered days are shown for context but carry no action — offering a
+  // control that always fails is worse than offering none.
   const upcoming = (fulfil?.data ?? [])
-    .filter((f) => f.status === 'scheduled' && new Date(f.date).getTime() >= startOfToday())
+    .filter((f) => f.status === 'scheduled' && isSkippableMealDay(f.date))
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, UPCOMING_LIMIT);
 
@@ -254,6 +256,7 @@ function SubCard({ sub }: { sub: MealSubscription }) {
       {!terminal && upcoming.length > 0 && (
         <View style={styles.upcoming}>
           <Text style={styles.upcomingLabel}>Upcoming</Text>
+          <Text style={styles.upcomingNote}>Skip by the end of the day before.</Text>
           {upcoming.map((f) => (
             <View key={f.id} style={styles.dayRow}>
               <View style={styles.dayInfo}>
@@ -414,6 +417,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: customerColors.charcoal.soft,
     marginBottom: 2,
+  },
+  upcomingNote: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    marginBottom: 4,
   },
   dayRow: {
     flexDirection: 'row',
