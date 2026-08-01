@@ -17,6 +17,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { useAuthStore } from '../../store/auth-store';
+import { useProfile } from '../../hooks/useProfile';
 import {
   useArticle,
   useReact,
@@ -78,7 +79,10 @@ export default function ArticleScreen() {
   const [comment, setComment] = useState('');
 
   const isAuthenticated = useAuthStore((s) => !!s.accessToken);
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  // The auth store only rehydrates the token after a cold start, never the user
+  // object, so "is this my comment" must come from the profile query instead.
+  const { data: profile } = useProfile({ enabled: isAuthenticated });
+  const currentUserId = profile?.userId;
   const article = data?.data;
 
   if (isLoading) {

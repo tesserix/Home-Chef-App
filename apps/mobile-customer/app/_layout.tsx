@@ -25,7 +25,7 @@ import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { DialogProvider } from '@homechef/mobile-shared/ui';
+import { DialogProvider, ToastProvider } from '@homechef/mobile-shared/ui';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -347,23 +347,25 @@ export default function RootLayout() {
         tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
       >
         <QueryClientProvider client={queryClient}>
-          {/* One branded Dialog for the whole app, replacing Alert.alert. */}
-          <DialogProvider accentColor={customerColors.coral.DEFAULT}>
-            {/* Two-factor: covers the app while a challenge is pending, since
-                every other request 403s until it is answered. */}
-            <MFAGateProvider
-              api={apiClient}
-              accentColor={customerColors.coral.DEFAULT}
-              onSignOut={() => {
-                void useAuthStore.getState().logout();
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <OfflineBanner />
-                <Stack screenOptions={{ headerShown: false }} />
-              </View>
-            </MFAGateProvider>
-          </DialogProvider>
+          <ToastProvider>
+            {/* One branded Dialog for the whole app, replacing Alert.alert. */}
+            <DialogProvider accentColor={customerColors.coral.DEFAULT}>
+              {/* Two-factor: covers the app while a challenge is pending, since
+                  every other request 403s until it is answered. */}
+              <MFAGateProvider
+                api={apiClient}
+                accentColor={customerColors.coral.DEFAULT}
+                onSignOut={() => {
+                  void useAuthStore.getState().logout();
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <OfflineBanner />
+                  <Stack screenOptions={{ headerShown: false }} />
+                </View>
+              </MFAGateProvider>
+            </DialogProvider>
+          </ToastProvider>
         </QueryClientProvider>
       </AuthProvider>
     </GestureHandlerRootView>
