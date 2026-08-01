@@ -36,7 +36,6 @@ export const MealPlanSheet = forwardRef<SheetHandle, MealPlanSheetProps>(functio
     <Sheet
       ref={ref}
       title={`My plan · ${formatDateRange(summary.startDate, summary.endDate)}`}
-      cancelLabel="Close"
       snapPoints={['70%']}
     >
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
