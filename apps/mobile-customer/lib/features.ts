@@ -14,8 +14,16 @@
 /** Tiffin meal-plans ("plan a week") + daily tiffin subscription (escrow, UPI Autopay). */
 export const TIFFIN_ENABLED: boolean = true;
 
-/** Group / office orders — shared cart, split payment. */
-export const GROUP_ORDERS_ENABLED: boolean = true;
+/**
+ * Group / office orders — shared cart, split payment. Off: the split-pay half
+ * isn't live, so the entry point stays hidden rather than leading customers
+ * into a checkout that can't complete (#875).
+ *
+ * This gates *starting* a group, not joining one — invite deep-links
+ * (`homechef-customer://group/<token>`) and the group hub stay reachable so
+ * groups created before this flip still work.
+ */
+export const GROUP_ORDERS_ENABLED: boolean = false;
 
 /** Catering deposit / advance-order flow. */
 export const CATERING_ENABLED: boolean = false;
