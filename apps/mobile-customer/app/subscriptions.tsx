@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '@homechef/mobile-shared/ui';
+import { isPastMealDay, isSkippableMealDay, istCalendarDate } from '@homechef/mobile-shared/utils';
 import { router } from 'expo-router';
 import { AlertCircle, ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -33,12 +34,6 @@ const CORAL_GHOST_RIPPLE = `${customerColors.coral.DEFAULT}14`;
 // How many upcoming days to surface per subscription. Enough to cover "I'm away
 // later this week" without turning the card into a calendar.
 const UPCOMING_LIMIT = 5;
-
-function startOfToday(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
 
 function fmtDay(iso: string): string {
   const d = new Date(iso);
@@ -184,16 +179,26 @@ function SubCard({ sub }: { sub: MealSubscription }) {
           text: 'Skip',
           onPress: () =>
             action.mutate(
-              { id: sub.id, action: 'skip', date: f.date },
+              // f.date arrives as an RFC3339 UTC instant (the API's default
+              // time.Time JSON encoding of the fulfillment's IST-midnight
+              // moment) -- the server's Skip handler only accepts a bare
+              // YYYY-MM-DD, so this must be converted, not forwarded as-is
+              // (see #696: this was the actual reason Skip never worked).
+              { id: sub.id, action: 'skip', date: istCalendarDate(new Date(f.date)) },
               {
                 onError: (err) =>
                   showAlert(
                     "Couldn't skip this meal",
-                    // The server is authoritative on the cutoff; surfacing its
-                    // reason beats guessing at the customer ("it MAY be too
-                    // close" is what the meal-plan screen says, and it reads as
-                    // an app that doesn't know its own rules).
-                    friendlyErrorMessage(err, 'It may already be past the cutoff for that day.'),
+                    // The server is still authoritative — this fallback only
+                    // shows if its error body doesn't parse. Skip only renders
+                    // for rows isSkippableMealDay already approved, so the only
+                    // realistic failure is a race where IST midnight passed
+                    // between screen load and tap; describe that, not a cutoff
+                    // this handler never checks.
+                    friendlyErrorMessage(
+                      err,
+                      'That day has already started, so it can no longer be skipped.',
+                    ),
                   ),
               },
             ),
@@ -202,11 +207,15 @@ function SubCard({ sub }: { sub: MealSubscription }) {
     );
   }
 
-  // Only future, still-scheduled days can be skipped. Past/placed/delivered days
-  // are shown for context but carry no action — offering a control that always
-  // fails is worse than offering none.
+  // Listing and Skip-eligibility are two different questions. Today's scheduled
+  // meal is still the most relevant row on the screen and must stay listed —
+  // only past days drop off. Whether Skip renders for a given row is decided
+  // separately per-row below, via isSkippableMealDay, which mirrors the
+  // server's Skip handler exactly (apps/api/handlers/meal_subscription.go:
+  // d.After(todayIST)) so today never offers a control the server would reject,
+  // regardless of the customer's device timezone (#696).
   const upcoming = (fulfil?.data ?? [])
-    .filter((f) => f.status === 'scheduled' && new Date(f.date).getTime() >= startOfToday())
+    .filter((f) => f.status === 'scheduled' && !isPastMealDay(f.date))
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, UPCOMING_LIMIT);
 
@@ -254,6 +263,7 @@ function SubCard({ sub }: { sub: MealSubscription }) {
       {!terminal && upcoming.length > 0 && (
         <View style={styles.upcoming}>
           <Text style={styles.upcomingLabel}>Upcoming</Text>
+          <Text style={styles.upcomingNote}>Skip by the end of the day before.</Text>
           {upcoming.map((f) => (
             <View key={f.id} style={styles.dayRow}>
               <View style={styles.dayInfo}>
@@ -263,12 +273,19 @@ function SubCard({ sub }: { sub: MealSubscription }) {
                   {f.dishName ? ` · ${f.dishName}` : ''}
                 </Text>
               </View>
-              <ActionBtn
-                label="Skip"
-                onPress={() => skipDay(f)}
-                pending={action.isPending}
-                accessibilityLabel={`Skip ${fmtDay(f.date)} ${f.slot === 'lunch' ? 'lunch' : 'dinner'}`}
-              />
+              {isSkippableMealDay(f.date) ? (
+                <ActionBtn
+                  label="Skip"
+                  onPress={() => skipDay(f)}
+                  pending={action.isPending}
+                  accessibilityLabel={`Skip ${fmtDay(f.date)} ${f.slot === 'lunch' ? 'lunch' : 'dinner'}`}
+                />
+              ) : (
+                // Today's meal is listed for visibility but its IST calendar
+                // day has already started, so it can't be skipped — a quiet
+                // label instead of dead space, matching the fallback error copy.
+                <Text style={styles.dayLocked}>Already started</Text>
+              )}
             </View>
           ))}
         </View>
@@ -415,6 +432,12 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.soft,
     marginBottom: 2,
   },
+  upcomingNote: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    marginBottom: 4,
+  },
   dayRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -425,6 +448,12 @@ const styles = StyleSheet.create({
   dayInfo: { flex: 1 },
   dayDate: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT },
   dayMeal: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft },
+  dayLocked: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    paddingHorizontal: 4,
+  },
   actionBtnDanger: { borderColor: customerColors.coral.DEFAULT },
   actionText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: customerColors.charcoal.DEFAULT },
   actionTextDanger: { color: customerColors.coral.pressed },
