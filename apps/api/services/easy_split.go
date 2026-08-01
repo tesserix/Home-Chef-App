@@ -148,7 +148,7 @@ func EnsureEasySplitVendorWith(
 		Bank:          &bank,
 		KYC: CashfreeVendorKYC{
 			AccountType:  "savings",
-			BusinessType: "Restaurant and Food",
+			BusinessType: "Food and Beverages",
 			PAN:          strings.ToUpper(strings.TrimSpace(chef.PanNumber)),
 		},
 	}
