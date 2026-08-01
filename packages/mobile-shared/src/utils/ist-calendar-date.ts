@@ -35,3 +35,15 @@ export function istCalendarDate(instant: Date): string {
 export function isSkippableMealDay(dateISO: string, now: Date = new Date()): boolean {
   return istCalendarDate(new Date(dateISO)) > istCalendarDate(now);
 }
+
+/**
+ * isPastMealDay is true only when a fulfillment's IST calendar day is
+ * strictly before the IST calendar day of `now`. Distinct from the inverse of
+ * isSkippableMealDay: today is neither skippable nor past -- it should still
+ * be listed (with no Skip control), which is exactly what this predicate lets
+ * callers express (`!isPastMealDay(...)` keeps today in a listing filter,
+ * while `isSkippableMealDay(...)` alone gates whether Skip renders).
+ */
+export function isPastMealDay(dateISO: string, now: Date = new Date()): boolean {
+  return istCalendarDate(new Date(dateISO)) < istCalendarDate(now);
+}
