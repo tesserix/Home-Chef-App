@@ -85,8 +85,9 @@ function destinationFor(n: AppNotification): string | null {
 }
 
 export default function NotificationsScreen() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { data: notifications = [], isLoading, refetch, isRefetching } =
-    useNotificationList(api);
+    useNotificationList(api, { enabled: isAuthenticated });
   const markRead = useMarkNotificationRead(api);
   const markAll = useMarkAllNotificationsRead(api);
 

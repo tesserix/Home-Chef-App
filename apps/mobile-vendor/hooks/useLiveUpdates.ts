@@ -75,6 +75,9 @@ export function useLiveUpdates(enabled: boolean = true): void {
     // is a property of the network, not the request, so retrying WS forever just leaves
     // the chef on stale data.
     if (failureCount.current >= MAX_WS_FAILURES) {
+      console.warn(
+        `[live-ws] falling back to SSE after ${failureCount.current} WS failures`,
+      );
       sseRef.current = openEventStream(
         `${base.http}/notifications/sse`,
         token,
@@ -90,6 +93,7 @@ export function useLiveUpdates(enabled: boolean = true): void {
 
     ws.onopen = () => {
       failureCount.current = 0;
+      console.info('[live-ws] connected');
     };
     ws.onmessage = (event: WebSocketMessageEvent) => {
       failureCount.current = 0;
@@ -97,11 +101,15 @@ export function useLiveUpdates(enabled: boolean = true): void {
     };
     ws.onerror = () => {
       failureCount.current += 1;
+      console.warn(
+        `[live-ws] error (${failureCount.current}/${MAX_WS_FAILURES} failures)`,
+      );
     };
     ws.onclose = () => {
       // Always reschedule: at the budget the next attempt is SSE, so the chef ends up on
       // a working transport rather than simply giving up.
       if (enabled) {
+        console.warn(`[live-ws] closed, reconnecting in ${RECONNECT_DELAY_MS}ms`);
         reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
       }
     };

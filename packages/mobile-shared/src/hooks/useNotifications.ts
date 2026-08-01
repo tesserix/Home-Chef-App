@@ -60,8 +60,42 @@ export function parseNotificationData(
   return n.data;
 }
 
+interface ErrorWithStatus {
+  response?: { status?: number };
+}
+
+function hasStatus(error: unknown): error is ErrorWithStatus {
+  return typeof error === 'object' && error !== null && 'response' in error;
+}
+
+/**
+ * React Query retry predicate for the notification REST queries. A 401 means
+ * the axios interceptor's own single refresh+retry already ran (or the user
+ * is genuinely signed out) — retrying it again here would just re-storm the
+ * endpoint, so 401s are never retried. Every other error (network, 5xx, 403)
+ * keeps the app's existing transient-retry cap of 2.
+ */
+export function shouldRetryNotificationQuery(
+  failureCount: number,
+  error: unknown,
+): boolean {
+  if (hasStatus(error) && error.response?.status === 401) return false;
+  return failureCount < 2;
+}
+
+/** Options shared by the notification REST queries. */
+export interface NotificationQueryOptions {
+  /** Gates the query on auth state — callers must pass their auth store's
+   * `isAuthenticated`. The query was previously unconditionally mounted,
+   * causing a 401 storm for guests (unauthenticated users on Home). */
+  enabled?: boolean;
+}
+
 /** The user's notification feed, newest first. */
-export function useNotificationList(api: AxiosInstance) {
+export function useNotificationList(
+  api: AxiosInstance,
+  options: NotificationQueryOptions = {},
+) {
   return useQuery({
     queryKey: NOTIFICATION_LIST_KEY,
     queryFn: () =>
@@ -69,11 +103,16 @@ export function useNotificationList(api: AxiosInstance) {
         .get<{ data: AppNotification[] }>(`${restPrefix(api)}/notifications`)
         .then((r) => r.data.data ?? []),
     staleTime: 30_000,
+    enabled: options.enabled,
+    retry: shouldRetryNotificationQuery,
   });
 }
 
 /** Unread count for the bell badge. */
-export function useUnreadCount(api: AxiosInstance) {
+export function useUnreadCount(
+  api: AxiosInstance,
+  options: NotificationQueryOptions = {},
+) {
   return useQuery({
     queryKey: NOTIFICATION_UNREAD_KEY,
     queryFn: () =>
@@ -81,6 +120,8 @@ export function useUnreadCount(api: AxiosInstance) {
         .get<{ unreadCount: number }>(`${restPrefix(api)}/notifications/unread-count`)
         .then((r) => r.data.unreadCount ?? 0),
     staleTime: 15_000,
+    enabled: options.enabled,
+    retry: shouldRetryNotificationQuery,
   });
 }
 
@@ -176,6 +217,7 @@ export function useNotificationSocket(opts: {
 
     ws.onopen = () => {
       failures.current = 0;
+      console.info(`[notif-ws] connected ${url}`);
     };
     ws.onmessage = () => {
       failures.current = 0;
@@ -187,11 +229,19 @@ export function useNotificationSocket(opts: {
     };
     ws.onerror = () => {
       failures.current += 1;
+      console.warn(`[notif-ws] error (${failures.current}/${MAX_WS_FAILURES} failures)`);
     };
     ws.onclose = () => {
       wsRef.current = null;
       if (!enabled) return;
-      if (failures.current >= MAX_WS_FAILURES) return; // give up; REST polling covers it
+      if (failures.current >= MAX_WS_FAILURES) {
+        // Give up; REST polling (useUnreadCount/useNotificationList) remains the fallback.
+        console.error(
+          `[notif-ws] giving up after ${failures.current} consecutive failures — no further reconnects, REST polling remains the fallback`,
+        );
+        return;
+      }
+      console.warn(`[notif-ws] closed, reconnecting in ${RECONNECT_DELAY_MS}ms`);
       reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
     };
   }, [apiBaseUrl, getToken, enabled, qc]);

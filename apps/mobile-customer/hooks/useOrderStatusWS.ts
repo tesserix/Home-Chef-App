@@ -67,6 +67,9 @@ export function useOrderStatusWS(
 
     ws.onopen = () => {
       failureCount.current = 0;
+      console.info(
+        `[order-ws] connected (${orderId ? 'single-order' : 'any-order'} mode)`,
+      );
     };
 
     ws.onmessage = (event: WebSocketMessageEvent) => {
@@ -112,11 +115,19 @@ export function useOrderStatusWS(
 
     ws.onerror = () => {
       failureCount.current += 1;
+      console.warn(
+        `[order-ws] error (${failureCount.current}/${MAX_WS_FAILURES} failures)`,
+      );
     };
 
     ws.onclose = () => {
       if (enabled && failureCount.current < MAX_WS_FAILURES) {
+        console.warn(`[order-ws] closed, reconnecting in ${RECONNECT_DELAY_MS}ms`);
         reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
+      } else if (enabled) {
+        console.error(
+          `[order-ws] giving up after ${failureCount.current} consecutive failures — no further reconnects`,
+        );
       }
     };
   }, [orderId, enabled, queryClient]);

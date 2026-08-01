@@ -131,6 +131,7 @@ export default function DashboardScreen() {
   const { showAlert } = useAlert();
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const dockClearance = useDockClearance();
   const {
     data: dashboard,
@@ -141,8 +142,11 @@ export default function DashboardScreen() {
   } = useVendorDashboard();
 
   // Notification bell — unread badge + live socket so a new order or meal-plan
-  // request lights the hero bell instantly.
-  const { data: unreadCount = 0 } = useUnreadCount(api);
+  // request lights the hero bell instantly. Gated on auth: previously mounted
+  // unconditionally, 401-storming before sign-in completed (#869).
+  const { data: unreadCount = 0 } = useUnreadCount(api, {
+    enabled: isAuthenticated,
+  });
   useNotificationSocket({
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL,
     getToken: () => useAuthStore.getState().accessToken,

@@ -50,6 +50,7 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
 
     ws.onopen = () => {
       failureCount.current = 0; // Reset on successful connect
+      console.info(`[tracking-ws] connected (order ${orderId})`);
     };
 
     ws.onmessage = (event: WebSocketMessageEvent) => {
@@ -68,7 +69,13 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
 
     ws.onerror = () => {
       failureCount.current += 1;
+      console.warn(
+        `[tracking-ws] error on order ${orderId} (${failureCount.current}/${MAX_WS_FAILURES} failures)`,
+      );
       if (failureCount.current >= MAX_WS_FAILURES) {
+        console.error(
+          `[tracking-ws] giving up on order ${orderId} after ${failureCount.current} consecutive failures — falling back to polling`,
+        );
         setUseFallback(true); // Give up on WS — switch to polling
       }
     };
@@ -76,6 +83,9 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
     ws.onclose = () => {
       if (failureCount.current < MAX_WS_FAILURES) {
         // Reconnect after delay unless failure cap reached
+        console.warn(
+          `[tracking-ws] closed on order ${orderId}, reconnecting in ${RECONNECT_DELAY_MS}ms`,
+        );
         reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
       }
     };
