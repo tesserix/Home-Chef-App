@@ -11,7 +11,7 @@ import { CurrencySelector } from '@/shared/components/CurrencySelector';
 import { Button } from '@/shared/components/ui';
 import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
 import { CookieBanner } from '../cookie-banner/CookieBanner';
-import { CATERING_ENABLED, SOCIAL_ENABLED } from '@/shared/config/features';
+import { CATERING_ENABLED } from '@/shared/config/features';
 import { AppSidebar } from './AppSidebar';
 import { AccountDrawer } from './AccountDrawer';
 
@@ -181,8 +181,8 @@ export function MainLayout() {
                         Browse Chefs
                       </Link>
                     </li>
-                    {/* Same v1 gates as the nav — the footer was still
-                        advertising both deferred surfaces. */}
+                    {/* Same v1 gate as the nav — the footer was still
+                        advertising the deferred surface. */}
                     {CATERING_ENABLED && (
                       <li>
                         <Link to="/catering" className="text-ink-muted hover:text-ink">
@@ -190,13 +190,11 @@ export function MainLayout() {
                         </Link>
                       </li>
                     )}
-                    {SOCIAL_ENABLED && (
-                      <li>
-                        <Link to="/feed" className="text-ink-muted hover:text-ink">
-                          Food Feed
-                        </Link>
-                      </li>
-                    )}
+                    <li>
+                      <Link to="/chefbook" className="text-ink-muted hover:text-ink">
+                        ChefBook
+                      </Link>
+                    </li>
                   </ul>
                 </div>
 

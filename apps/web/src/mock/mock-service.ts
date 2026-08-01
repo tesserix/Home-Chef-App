@@ -13,8 +13,8 @@ interface TokenRefreshResponse {
   refreshToken: string;
   expiresIn: number;
 }
-import type { Chef, MenuItem, Order, PaginatedResponse, SocialPost, CateringRequest, CateringQuote } from '@/shared/types';
-import { mockChefs, mockMenuItems, mockOrders, mockUsers, mockSocialPosts, mockCateringRequests, mockCateringQuotes } from './data';
+import type { Chef, MenuItem, Order, PaginatedResponse, CateringRequest, CateringQuote } from '@/shared/types';
+import { mockChefs, mockMenuItems, mockOrders, mockUsers, mockCateringRequests, mockCateringQuotes } from './data';
 
 // Simulated network delay
 const MOCK_DELAY = 300;
@@ -54,11 +54,6 @@ class MockService {
       'POST /orders': () => this.createOrder(body),
       'GET /orders': () => this.getOrders(params),
       'GET /orders/:id': () => this.getOrderById(endpoint.split('/')[2]!),
-
-      // Social Feed
-      'GET /feed': () => this.getFeed(params),
-      'POST /feed': () => this.createPost(body),
-      'POST /feed/:id/like': () => this.likePost(endpoint.split('/')[2]!),
 
       // Catering
       'GET /catering/requests': () => this.getCateringRequests(params),
@@ -276,41 +271,6 @@ class MockService {
       throw { success: false, error: { code: 'ORDER_NOT_FOUND', message: 'Order not found' } };
     }
     return order;
-  }
-
-  // Social Feed handlers
-  private getFeed(params?: Record<string, unknown>): PaginatedResponse<SocialPost> {
-    const page = Number(params?.page) || 1;
-    const limit = Number(params?.limit) || 20;
-    const start = (page - 1) * limit;
-
-    return {
-      data: mockSocialPosts.slice(start, start + limit),
-      pagination: {
-        page,
-        limit,
-        total: mockSocialPosts.length,
-        totalPages: Math.ceil(mockSocialPosts.length / limit),
-        hasNext: start + limit < mockSocialPosts.length,
-        hasPrev: page > 1,
-      },
-    };
-  }
-
-  private createPost(body: unknown): SocialPost {
-    const newPost: SocialPost = {
-      id: `post-${Date.now()}`,
-      ...(body as Partial<SocialPost>),
-      likesCount: 0,
-      commentsCount: 0,
-      savesCount: 0,
-      createdAt: new Date().toISOString(),
-    } as SocialPost;
-    return newPost;
-  }
-
-  private likePost(_id: string): { liked: boolean } {
-    return { liked: true };
   }
 
   // Catering handlers

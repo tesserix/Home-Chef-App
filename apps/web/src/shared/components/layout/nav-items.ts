@@ -3,7 +3,6 @@ import {
   ChefHat,
   Heart,
   Utensils,
-  Newspaper,
   CalendarDays,
   Repeat,
   Award,
@@ -18,7 +17,6 @@ import {
 } from 'lucide-react';
 import {
   CATERING_ENABLED,
-  SOCIAL_ENABLED,
   TIFFIN_ENABLED,
   WALLET_ENABLED,
   REWARDS_ENABLED,
@@ -55,16 +53,15 @@ export interface NavItem {
 /**
  * The fixed rail — browse and discovery only.
  *
- * Catering and the Social Feed are gated: the mobile app hides both for v1, and
- * advertising them on web meant leading customers into flows the product has
- * deferred. They reappear the moment the flags flip.
+ * Catering is gated: the mobile app hides it for v1, and advertising it on web
+ * meant leading customers into a flow the product has deferred. It reappears
+ * the moment the flag flips.
  */
 export const RAIL_NAV: NavItem[] = [
   { name: 'Home', href: '/', icon: Home },
   { name: 'Browse Chefs', href: '/chefs', icon: ChefHat },
   ...(CATERING_ENABLED ? [{ name: 'Catering', href: '/catering', icon: Utensils }] : []),
-  ...(SOCIAL_ENABLED ? [{ name: 'Social Feed', href: '/feed', icon: Newspaper }] : []),
-  ...(SOCIAL_ENABLED ? [{ name: 'ChefBook', href: '/chefbook', icon: BookOpen }] : []),
+  { name: 'ChefBook', href: '/chefbook', icon: BookOpen },
 ];
 
 /** Account drawer — mirrors the quick tiles and list rows on mobile Profile. */

@@ -29,13 +29,11 @@ import (
 type ReportableType string
 
 const (
-	ReportableReview      ReportableType = "review"
-	ReportableSocialPost  ReportableType = "social_post"
-	ReportablePostComment ReportableType = "post_comment"
-	ReportableMessage     ReportableType = "message"
-	ReportableUser        ReportableType = "user"
-	ReportableChef        ReportableType = "chef"
-	ReportableMenuItem    ReportableType = "menu_item"
+	ReportableReview   ReportableType = "review"
+	ReportableMessage  ReportableType = "message"
+	ReportableUser     ReportableType = "user"
+	ReportableChef     ReportableType = "chef"
+	ReportableMenuItem ReportableType = "menu_item"
 )
 
 // ValidReportableType reports whether t is a type this API accepts. Callers
@@ -43,8 +41,8 @@ const (
 // where it would be untriageable.
 func ValidReportableType(t ReportableType) bool {
 	switch t {
-	case ReportableReview, ReportableSocialPost, ReportablePostComment,
-		ReportableMessage, ReportableUser, ReportableChef, ReportableMenuItem:
+	case ReportableReview, ReportableMessage, ReportableUser,
+		ReportableChef, ReportableMenuItem:
 		return true
 	}
 	return false

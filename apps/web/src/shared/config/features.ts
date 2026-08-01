@@ -3,8 +3,8 @@
  *
  * This is the web mirror of `apps/mobile-customer/lib/features.ts`. The two
  * files MUST be kept in lockstep: the web had no flags at all, so it happily
- * advertised Catering and the Social Feed in its navigation while the mobile
- * app deliberately hid both — customers on web were being led into flows the
+ * advertised deferred surfaces in its navigation while the mobile app
+ * deliberately hid them — customers on web were being led into flows the
  * product has deferred.
  *
  * Each flag mirrors a backend flag / feature that isn't live for v1. Hiding the
@@ -35,13 +35,6 @@ export const REWARDS_ENABLED: boolean = true;
 
 /** Referral / refer-&-earn program. */
 export const REFERRAL_ENABLED: boolean = true;
-
-/**
- * Social feed / community — ChefBook. Verified live before switching on:
- * GET /api/v1/social/feed returns 200 and the posts/post_likes/post_comments
- * tables exist in prod.
- */
-export const SOCIAL_ENABLED: boolean = true;
 
 /**
  * In-app messaging. Still off, but NOT for the reason previously recorded

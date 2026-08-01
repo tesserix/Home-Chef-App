@@ -1,5 +1,5 @@
 import type { User } from '@/shared/types/auth';
-import type { Chef, MenuItem, Order, SocialPost, CateringRequest, CateringQuote } from '@/shared/types';
+import type { Chef, MenuItem, Order, CateringRequest, CateringQuote } from '@/shared/types';
 
 // Mock Users
 export const mockUsers: User[] = [
@@ -411,71 +411,6 @@ export const mockOrders: Order[] = [
     paymentStatus: 'completed',
     paymentMethod: 'card',
     createdAt: '2024-12-16T12:15:00Z',
-  },
-];
-
-// Mock Social Posts
-export const mockSocialPosts: SocialPost[] = [
-  {
-    id: 'post-1',
-    chefId: 'chef-1',
-    chef: {
-      id: 'chef-1',
-      businessName: "Meena's Kitchen",
-      profileImage: 'https://images.unsplash.com/photo-1594744803329-e58b31de8bf5?w=150&h=150&fit=crop',
-    },
-    content: 'Fresh batch of masala dosa ready! The secret is in the fermentation - 48 hours minimum for that perfect crispy texture. Who wants some? 🥞',
-    images: [
-      'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=800&h=600&fit=crop',
-    ],
-    hashtags: ['southindian', 'dosa', 'homemade', 'authentic'],
-    likesCount: 234,
-    commentsCount: 45,
-    savesCount: 89,
-    isLiked: false,
-    isSaved: false,
-    createdAt: '2024-12-15T10:30:00Z',
-  },
-  {
-    id: 'post-2',
-    chefId: 'chef-2',
-    chef: {
-      id: 'chef-2',
-      businessName: 'Nonna Rosa Italian',
-      profileImage: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop',
-    },
-    content: 'Making fresh pasta from scratch today! Nothing beats the taste of homemade tagliatelle with a slow-cooked ragu. Order now for dinner! 🍝',
-    images: [
-      'https://images.unsplash.com/photo-1556761223-4c4282c73f77?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1612874742237-6526221588e3?w=800&h=600&fit=crop',
-    ],
-    hashtags: ['italian', 'pasta', 'freshpasta', 'homemade'],
-    likesCount: 456,
-    commentsCount: 78,
-    savesCount: 156,
-    isLiked: true,
-    isSaved: true,
-    createdAt: '2024-12-14T15:00:00Z',
-  },
-  {
-    id: 'post-3',
-    chefId: 'chef-3',
-    chef: {
-      id: 'chef-3',
-      businessName: 'Tokyo Home Kitchen',
-      profileImage: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop',
-    },
-    content: 'Today\'s special: Tonkotsu Ramen with 12-hour pork bone broth! Limited quantities available. The broth is everything! 🍜',
-    images: [
-      'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=800&h=600&fit=crop',
-    ],
-    hashtags: ['japanese', 'ramen', 'tonkotsu', 'comfortfood'],
-    likesCount: 312,
-    commentsCount: 56,
-    savesCount: 124,
-    isLiked: false,
-    isSaved: false,
-    createdAt: '2024-12-13T11:00:00Z',
   },
 ];
 

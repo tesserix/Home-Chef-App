@@ -9,10 +9,8 @@ import (
 
 // chefbook.go — ChefBook articles, stored in MongoDB.
 //
-// A ChefBook article is a whole entity in Mongo rather than a row in
-// `posts`: the body is a block document, and reactions and comments are
-// embedded on it. `posts` stays what it always was — short chef updates — and
-// is untouched by this file.
+// A ChefBook article is a whole entity in Mongo: the body is a block document,
+// and reactions and comments are embedded on it.
 //
 // The cost of that split is deliberate and worth stating: chef identity is
 // DENORMALISED onto every article (ChefName/ChefImage), because there is no
@@ -24,8 +22,20 @@ import (
 // need them moved to their own collection. That is fine at the volumes this
 // launches into and is called out at CommentSoftCap below.
 
-// ArticleStatus mirrors the lifecycle PostStatus uses for short posts, so the
-// two surfaces read the same way in admin tooling.
+// EstimateReadingMinutes returns a whole-minute estimate at 200 wpm, floored at
+// 1 for any non-empty body — "0 min read" reads like an error.
+func EstimateReadingMinutes(body string) int {
+	words := len(strings.Fields(body))
+	if words == 0 {
+		return 0
+	}
+	if m := words / 200; m > 0 {
+		return m
+	}
+	return 1
+}
+
+// ArticleStatus — draft/published/archived/flagged lifecycle.
 type ArticleStatus string
 
 const (

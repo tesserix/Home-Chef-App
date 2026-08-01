@@ -6,7 +6,6 @@ import {
   CalendarDays,
   RefreshCw,
   ChevronRight,
-  MessageSquare,
   UtensilsCrossed,
   ScrollText,
   Wallet,
@@ -29,7 +28,6 @@ import {
   WALLET_ENABLED,
   REWARDS_ENABLED,
   REFERRAL_ENABLED,
-  SOCIAL_ENABLED,
 } from '../../lib/features';
 import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -299,7 +297,7 @@ function ProfileScreenBody() {
             Section — More (iOS grouped nav rows)
         ═══════════════════════════════════════════════════════════════════ */}
         {/* MORE nav rows are each gated by a feature flag — everything deferred for
-            v1 (wallet/rewards/referral/social/catering/tiffin) is hidden, and the
+            v1 (wallet/rewards/referral/catering/tiffin) is hidden, and the
             whole section drops out when no row is enabled. Flip the flag in
             lib/features.ts (+ any backend flag) to bring a row back. */}
         {(() => {
@@ -318,12 +316,7 @@ function ProfileScreenBody() {
               label: 'Rewards',
               route: '/loyalty',
             },
-            SOCIAL_ENABLED && {
-              icon: <MessageSquare size={18} color={customerColors.charcoal.soft} />,
-              label: 'Social Feed',
-              route: '/social',
-            },
-            SOCIAL_ENABLED && {
+            {
               icon: <BookOpen size={18} color={customerColors.charcoal.soft} />,
               label: 'ChefBook',
               route: '/chefbook',

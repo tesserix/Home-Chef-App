@@ -5,8 +5,8 @@ package services
 // sees.
 //
 // Required by App Review guideline 1.2 for any app with user-generated content.
-// Home Chef's UGC surfaces are chef social posts, comments on those posts,
-// customer reviews of chefs, and order-scoped messaging.
+// Home Chef's UGC surfaces are customer reviews of chefs and order-scoped
+// messaging.
 //
 // Admin-side tooling (hide a review, block a message) already existed, but a
 // user could neither report nor block, which is what 1.2 actually asks for and
@@ -54,22 +54,6 @@ func ResolveTargetOwner(db *gorm.DB, t models.ReportableType, id uuid.UUID) (uui
 			return uuid.Nil, wrapLookup(err)
 		}
 		ownerID = row.CustomerID
-
-	case models.ReportableSocialPost:
-		// Posts are owned by a chef profile; reports are about people, so this
-		// resolves through to the underlying user.
-		var row models.Post
-		if err := db.Select("chef_id").First(&row, "id = ?", id).Error; err != nil {
-			return uuid.Nil, wrapLookup(err)
-		}
-		return chefOwnerUserID(db, row.ChefID)
-
-	case models.ReportablePostComment:
-		var row models.PostComment
-		if err := db.Select("user_id").First(&row, "id = ?", id).Error; err != nil {
-			return uuid.Nil, wrapLookup(err)
-		}
-		ownerID = row.UserID
 
 	case models.ReportableMessage:
 		var row models.ChatMessage
@@ -262,12 +246,6 @@ func ApplyAutoHide(db *gorm.DB, t models.ReportableType, id uuid.UUID) (bool, er
 	case models.ReportableReview:
 		err = db.Model(&models.Review{}).Where("id = ?", id).
 			Updates(map[string]any{"is_hidden": true, "hidden_reason": note}).Error
-	case models.ReportableSocialPost:
-		err = db.Model(&models.Post{}).Where("id = ?", id).
-			Updates(map[string]any{"is_moderated": true, "moderator_note": note}).Error
-	case models.ReportablePostComment:
-		err = db.Model(&models.PostComment{}).Where("id = ?", id).
-			Update("is_hidden", true).Error
 	default:
 		// Users, chefs and messages are not auto-hidden: suppressing a whole
 		// account or a delivery conversation on report volume alone is a denial

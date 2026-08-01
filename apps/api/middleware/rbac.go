@@ -25,7 +25,6 @@ const (
 	PermViewOwnOrders  Permission = "view_own_orders"
 	PermWriteReview    Permission = "write_review"
 	PermManageCart     Permission = "manage_cart"
-	PermViewSocialFeed Permission = "view_social_feed"
 	PermLikeComment    Permission = "like_comment"
 	PermCreateCatering Permission = "create_catering_request"
 
@@ -34,7 +33,6 @@ const (
 	PermManageChefOrders    Permission = "manage_chef_orders"
 	PermViewChefEarnings    Permission = "view_chef_earnings"
 	PermManageChefProfile   Permission = "manage_chef_profile"
-	PermCreatePost          Permission = "create_post"
 	PermRespondToReviews    Permission = "respond_to_reviews"
 	PermSubmitCateringQuote Permission = "submit_catering_quote"
 
@@ -63,7 +61,6 @@ var RolePermissions = map[models.UserRole][]Permission{
 		PermViewOwnOrders,
 		PermWriteReview,
 		PermManageCart,
-		PermViewSocialFeed,
 		PermLikeComment,
 		PermCreateCatering,
 	},
@@ -71,13 +68,11 @@ var RolePermissions = map[models.UserRole][]Permission{
 		// Inherit customer permissions
 		PermBrowseChefs,
 		PermViewMenu,
-		PermViewSocialFeed,
 		// Chef-specific permissions
 		PermManageMenu,
 		PermManageChefOrders,
 		PermViewChefEarnings,
 		PermManageChefProfile,
-		PermCreatePost,
 		PermRespondToReviews,
 		PermSubmitCateringQuote,
 	},
@@ -103,14 +98,12 @@ var RolePermissions = map[models.UserRole][]Permission{
 		PermViewOwnOrders,
 		PermWriteReview,
 		PermManageCart,
-		PermViewSocialFeed,
 		PermLikeComment,
 		PermCreateCatering,
 		PermManageMenu,
 		PermManageChefOrders,
 		PermViewChefEarnings,
 		PermManageChefProfile,
-		PermCreatePost,
 		PermRespondToReviews,
 		PermSubmitCateringQuote,
 		PermViewDeliveries,

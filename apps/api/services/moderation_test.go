@@ -32,8 +32,6 @@ func setupModerationDB(t *testing.T) *gorm.DB {
 		`DROP TABLE IF EXISTS content_reports`,
 		`DROP TABLE IF EXISTS user_blocks`,
 		`DROP TABLE IF EXISTS reviews`,
-		`DROP TABLE IF EXISTS posts`,
-		`DROP TABLE IF EXISTS post_comments`,
 		`DROP TABLE IF EXISTS chef_profiles`,
 		`CREATE TABLE content_reports (
 			id text PRIMARY KEY, reporter_id text, target_type text, target_id text,
@@ -51,13 +49,6 @@ func setupModerationDB(t *testing.T) *gorm.DB {
 			id text PRIMARY KEY, customer_id text, chef_id text,
 			is_hidden numeric DEFAULT 0, hidden_reason text,
 			mode text DEFAULT 'live', test_session_id text, cloned_from_id text,
-			created_at datetime, updated_at datetime, deleted_at datetime)`,
-		`CREATE TABLE posts (
-			id text PRIMARY KEY, chef_id text,
-			is_moderated numeric DEFAULT 0, moderator_note text,
-			created_at datetime, updated_at datetime, deleted_at datetime)`,
-		`CREATE TABLE post_comments (
-			id text PRIMARY KEY, post_id text, user_id text, is_hidden numeric DEFAULT 0,
 			created_at datetime, updated_at datetime, deleted_at datetime)`,
 		`CREATE TABLE chef_profiles (id text PRIMARY KEY, user_id text)`,
 	} {
@@ -87,22 +78,6 @@ func TestResolveTargetOwnerReview(t *testing.T) {
 	got, err := ResolveTargetOwner(db, models.ReportableReview, reviewID)
 	require.NoError(t, err)
 	require.Equal(t, author, got)
-}
-
-// A post is owned by a chef PROFILE, but reports are about people — the
-// resolver must walk through to the underlying user, or the triage queue counts
-// reports against an id that is not a user.
-func TestResolveTargetOwnerSocialPostWalksToUser(t *testing.T) {
-	db := setupModerationDB(t)
-	chefUser, chefProfile, postID := newID(), newID(), newID()
-	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id) VALUES (?,?)`,
-		chefProfile.String(), chefUser.String()).Error)
-	require.NoError(t, db.Exec(`INSERT INTO posts (id, chef_id) VALUES (?,?)`,
-		postID.String(), chefProfile.String()).Error)
-
-	got, err := ResolveTargetOwner(db, models.ReportableSocialPost, postID)
-	require.NoError(t, err)
-	require.Equal(t, chefUser, got, "should resolve to the chef's user id, not the profile id")
 }
 
 func TestResolveTargetOwnerMissingContent(t *testing.T) {
@@ -271,29 +246,6 @@ func TestApplyAutoHideAtThresholdHidesReview(t *testing.T) {
 	require.NoError(t, db.Raw(`SELECT is_hidden FROM reviews WHERE id = ?`, reviewID.String()).
 		Scan(&isHidden).Error)
 	require.True(t, isHidden)
-}
-
-func TestApplyAutoHideHidesSocialPost(t *testing.T) {
-	db := setupModerationDB(t)
-	chefProfile, postID := newID(), newID()
-	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id) VALUES (?,?)`,
-		chefProfile.String(), newID().String()).Error)
-	require.NoError(t, db.Exec(`INSERT INTO posts (id, chef_id) VALUES (?,?)`,
-		postID.String(), chefProfile.String()).Error)
-
-	for i := 0; i < AutoHideThreshold; i++ {
-		_, err := CreateReport(db, newID(), models.ReportableSocialPost, postID, models.ReasonSexualContent, "")
-		require.NoError(t, err)
-	}
-
-	hidden, err := ApplyAutoHide(db, models.ReportableSocialPost, postID)
-	require.NoError(t, err)
-	require.True(t, hidden)
-
-	var isModerated bool
-	require.NoError(t, db.Raw(`SELECT is_moderated FROM posts WHERE id = ?`, postID.String()).
-		Scan(&isModerated).Error)
-	require.True(t, isModerated)
 }
 
 // Suppressing a whole account or a delivery conversation on report volume alone

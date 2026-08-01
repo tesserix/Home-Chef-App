@@ -30,7 +30,7 @@ func bffAuth(key []byte, window time.Duration) gin.HandlerFunc {
 
 // bffAuthOptional is the optional-auth counterpart to bffAuth — used for
 // surfaces that render publicly but enrich the response when a signed
-// identity is attached (chef listings, social feed).
+// identity is attached (chef listings, ChefBook).
 func bffAuthOptional(key []byte, window time.Duration) gin.HandlerFunc {
 	return middleware.BFFAuthOptional(middleware.BFFAuthConfig{
 		HMACKey:       key,
@@ -191,7 +191,6 @@ func SetupRouter() *gin.Engine {
 	groupOrderHandler := handlers.NewGroupOrderHandler()
 	promotionHandler := handlers.NewPromotionHandler()
 	providerHandler := handlers.NewDeliveryProviderHandler()
-	socialHandler := handlers.NewSocialHandler()
 	chefBookHandler := handlers.NewChefBookHandler()
 	cateringHandler := handlers.NewCateringHandler()
 	mealPlanHandler := handlers.NewMealPlanHandler()
@@ -793,17 +792,6 @@ func SetupRouter() *gin.Engine {
 			// cart.DELETE("", cartHandler.ClearCart)
 		}
 
-		// Social feed routes — anonymous-friendly; like/comment are gated
-		// inside the handlers by checking for a userID on the context.
-		social := v1.Group("/social")
-		social.Use(bffAuthOptional(bffKey, bffWindow))
-		{
-			social.GET("/feed", socialHandler.GetFeed)
-			social.GET("/posts/:id", socialHandler.GetPost)
-			social.POST("/posts/:id/like", socialHandler.LikePost)
-			social.POST("/posts/:id/comments", socialHandler.AddComment)
-		}
-
 		// Content reports and user blocks (App Review 1.2).
 		//
 		// Rate limited per user: reporting is a trust primitive, and an
@@ -821,9 +809,9 @@ func SetupRouter() *gin.Engine {
 
 		// ChefBook — chef-authored culinary articles, stored in MongoDB.
 		//
-		// Reading is anonymous-friendly for the same reason the feed is: an
-		// article is meant to be shareable to someone who has never opened the
-		// app. Reacting and commenting check for a userID inside the handler.
+		// Reading is anonymous-friendly: an article is meant to be shareable to
+		// someone who has never opened the app. Reacting and commenting check
+		// for a userID inside the handler.
 		chefbook := v1.Group("/chefbook")
 		chefbook.Use(bffAuthOptional(bffKey, bffWindow))
 		{
@@ -850,16 +838,6 @@ func SetupRouter() *gin.Engine {
 			chefBookAuthor.POST("", chefBookHandler.CreateArticle)
 			chefBookAuthor.PUT("/:id", chefBookHandler.UpdateArticle)
 			chefBookAuthor.DELETE("/:id", chefBookHandler.DeleteArticle)
-		}
-
-		// Chef social posts (chef only)
-		chefSocial := v1.Group("/chef/posts")
-		chefSocial.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
-		{
-			chefSocial.GET("", socialHandler.GetChefPosts)
-			chefSocial.POST("", socialHandler.CreatePost)
-			chefSocial.PUT("/:id", socialHandler.UpdatePost)
-			chefSocial.DELETE("/:id", socialHandler.DeletePost)
 		}
 
 		// Catering routes

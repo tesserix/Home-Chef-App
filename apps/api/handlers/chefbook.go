@@ -19,8 +19,7 @@ import (
 
 // chefbook.go — ChefBook: chef-authored culinary articles.
 //
-// Articles live in MongoDB as whole documents (see services/chefbook.go);
-// `posts` and its handlers are untouched and continue to serve short updates.
+// Articles live in MongoDB as whole documents (see services/chefbook.go).
 //
 // Reading is public — an article is meant to be shareable to someone who has
 // never opened the app. Writing requires a chef; reacting and commenting

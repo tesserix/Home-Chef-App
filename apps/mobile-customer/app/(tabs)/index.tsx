@@ -4,7 +4,7 @@
 //   1. Search pill  + "Search dishes →" / "Map view →" quick links
 //   2. Cuisine category scroller (the primary browse axis — always visible)
 //   3. Slim filter bar — Open Now pill (most-used quick toggle) + "Filters"
-//      pill with an active-count badge + Social Feed & Catering nav entries
+//      pill with an active-count badge + ChefBook & Catering nav entries
 //
 // Secondary filters (diet, price, sort) live in FilterSheet — a bottom sheet
 // that opens on the "Filters" tap and drives the SAME state variables/setters
@@ -58,7 +58,7 @@ import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { FilterSheet } from '../../components/home/FilterSheet';
-import { CATERING_ENABLED, SOCIAL_ENABLED, WALLET_ENABLED } from '../../lib/features';
+import { CATERING_ENABLED, WALLET_ENABLED } from '../../lib/features';
 import { useIsGuest } from '../../hooks/useRequireAccount';
 import { type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
@@ -434,7 +434,7 @@ export default function HomeScreen() {
       {/* ── Row 3: Slim filter/sort bar ── */}
       {/* Open Now quick-toggle (most frequently used, warrants top-level placement)
           + Filters pill (opens FilterSheet) with an active-count badge
-          + Social Feed / Catering navigation entries (discovery, not filters) */}
+          + ChefBook / Catering navigation entries (discovery, not filters) */}
       <View style={styles.filterBar}>
         {/* Open Now quick-toggle */}
         <Pressable
@@ -517,7 +517,7 @@ export default function HomeScreen() {
           )}
         </Pressable>
 
-        {/* Right side: Social Feed + Catering — navigation, not filter controls.
+        {/* Right side: ChefBook + Catering — navigation, not filter controls.
             Moved from their own row to the same slim bar, saving one full row. */}
         <View style={styles.navLinks}>
           <Pressable
@@ -538,27 +538,6 @@ export default function HomeScreen() {
               </View>
             )}
           </Pressable>
-          {/* Social Feed — DEFERRED for v1 (stub, no real feed yet). */}
-          {SOCIAL_ENABLED ? (
-            <Pressable
-              onPress={() => router.push('/social')}
-              accessibilityRole="button"
-              accessibilityLabel="Go to Social Feed"
-              hitSlop={5}
-              android_ripple={{ color: ROW_RIPPLE, borderless: false }}
-            >
-              {({ pressed }) => (
-                <View
-                  style={[
-                    styles.navLinkPill,
-                    pressed && Platform.OS === 'ios' && styles.pressedIOS,
-                  ]}
-                >
-                  <Text style={styles.navLinkLabel}>Social Feed</Text>
-                </View>
-              )}
-            </Pressable>
-          ) : null}
           {/* Catering — DEFERRED for v1 (CATERING_DEPOSIT_ENABLED off). */}
           {CATERING_ENABLED ? (
             <Pressable
@@ -1062,7 +1041,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
 
-  // Social Feed + Catering nav links — pushed to the right end of the filter bar
+  // ChefBook + Catering nav links — pushed to the right end of the filter bar
   navLinks: {
     flex: 1,
     flexDirection: 'row',

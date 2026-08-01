@@ -396,33 +396,6 @@ export interface CateringMenuItem {
   pricePerUnit: number;
 }
 
-// Social feed types
-export interface SocialPost {
-  id: string;
-  chefId: string;
-  chef?: Pick<Chef, 'id' | 'businessName' | 'profileImage'>;
-  content: string;
-  images: string[];
-  taggedMenuItems?: string[];
-  hashtags: string[];
-  likesCount: number;
-  commentsCount: number;
-  savesCount: number;
-  isLiked?: boolean;
-  isSaved?: boolean;
-  createdAt: string;
-}
-
-export interface SocialComment {
-  id: string;
-  postId: string;
-  userId: string;
-  userName: string;
-  userAvatar?: string;
-  content: string;
-  createdAt: string;
-}
-
 // Delivery types
 export interface DeliveryPartner {
   id: string;

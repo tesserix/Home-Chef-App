@@ -44,13 +44,6 @@ export const REWARDS_ENABLED: boolean = true;
 export const REFERRAL_ENABLED: boolean = true;
 
 /**
- * Social feed / community — ChefBook. Wired to /api/v1/social; verified
- * returning 200 against prod before switching on. Keep in lockstep with
- * apps/web/src/shared/config/features.ts.
- */
-export const SOCIAL_ENABLED: boolean = true;
-
-/**
  * In-app messaging / "Message support about this order" (#53). Still off, but
  * the old note here ("MongoDB is NOT provisioned") is out of date: the
  * homechef-mongodb replica set is healthy and the API has MONGODB_URI set.

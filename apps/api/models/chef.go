@@ -220,7 +220,6 @@ type ChefProfile struct {
 	Schedules []ChefSchedule `gorm:"foreignKey:ChefID" json:"schedules,omitempty"`
 	Orders    []Order        `gorm:"foreignKey:ChefID" json:"orders,omitempty"`
 	Reviews   []Review       `gorm:"foreignKey:ChefID" json:"reviews,omitempty"`
-	Posts     []Post         `gorm:"foreignKey:ChefID" json:"posts,omitempty"`
 }
 
 type ChefSchedule struct {

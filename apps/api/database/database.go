@@ -213,11 +213,6 @@ func Migrate() error {
 		&models.Campaign{},
 		&models.CampaignDelivery{},
 
-		// Social
-		&models.Post{},
-		&models.PostLike{},
-		&models.PostComment{},
-
 		// Catering
 		&models.CateringRequest{},
 		&models.CateringQuote{},
