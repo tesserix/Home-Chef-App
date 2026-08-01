@@ -45,6 +45,9 @@ interface PayoutDetailsResponse {
   stripeConnected: boolean;
   paymentProvider: string;
   payoutCountry: string;
+  panNumber?: string; // already masked
+  panOnFile?: boolean;
+  cashfreeVendorStatus?: string;
 }
 
 interface SavePayoutPayload {
@@ -52,6 +55,7 @@ interface SavePayoutPayload {
   bankAccountNumber?: string;
   bankIFSC?: string;
   bankAccountName?: string;
+  panNumber?: string;
 }
 
 function usePayoutDetails() {
@@ -74,7 +78,23 @@ interface SettlementChip {
   fg: string;
 }
 
-function settlementChipMeta(connected: boolean): SettlementChip {
+function settlementChipMeta(connected: boolean, cashfreeStatus?: string): SettlementChip {
+  // The Cashfree vendor verdict wins when present: ACTIVE means order money
+  // settles straight to the chef's bank from capture.
+  if (cashfreeStatus === 'ACTIVE') {
+    return {
+      label: 'Bank verified · direct settlement',
+      bg: theme.colors.success.tint,
+      fg: theme.colors.success.soft,
+    };
+  }
+  if (cashfreeStatus) {
+    return {
+      label: 'Bank verification in progress',
+      bg: theme.colors.amber.tint,
+      fg: theme.colors.ink.DEFAULT,
+    };
+  }
   return connected
     ? {
         label: 'Connected · ready for payouts',
@@ -155,6 +175,7 @@ export default function PayoutScreen() {
   const [bankAccountName, setBankAccountName] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [bankIFSC, setBankIFSC] = useState('');
+  const [panNumber, setPanNumber] = useState('');
 
   // Track whether a successful save has already cleared the dirty state so
   // the back handler doesn't re-prompt after the toast confirms success.
@@ -179,7 +200,7 @@ export default function PayoutScreen() {
   // Dirty against the un-pre-filled sensitive fields (the chef typed them
   // in this session) plus a possible method change. If anything is in
   // flight, back prompts to save or discard.
-  const hasUnsavedSensitive = bankAccountNumber.trim() !== '';
+  const hasUnsavedSensitive = bankAccountNumber.trim() !== '' || panNumber.trim() !== '';
   const methodChanged = data && data.payoutMethod !== method;
   const isDirty = !savedRef.current && (hasUnsavedSensitive || Boolean(methodChanged));
 
@@ -213,11 +234,18 @@ export default function PayoutScreen() {
       return;
     }
 
+    const pan = panNumber.trim().toUpperCase();
+    if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+      showAlert('Invalid PAN', 'PAN must look like ABCDE1234F.');
+      return;
+    }
+
     const payload: SavePayoutPayload = {
       payoutMethod: 'bank_transfer',
       bankAccountName: bankAccountName.trim(),
       bankAccountNumber: bankAccountNumber.trim(),
       bankIFSC: bankIFSC.trim().toUpperCase(),
+      ...(pan ? { panNumber: pan } : {}),
     };
 
     saveMutation.mutate(payload, {
@@ -299,7 +327,10 @@ export default function PayoutScreen() {
               <View style={styles.currentBannerHeader}>
                 <Text style={styles.currentBannerLabel}>Currently using Bank transfer</Text>
                 {(() => {
-                  const chip = settlementChipMeta(Boolean(data.razorpayConnected));
+                  const chip = settlementChipMeta(
+                    Boolean(data.razorpayConnected),
+                    data.cashfreeVendorStatus,
+                  );
                   return (
                     <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
                       <Text style={[styles.statusChipLabel, { color: chip.fg }]}>
@@ -355,6 +386,14 @@ export default function PayoutScreen() {
               placeholder="HDFC0001234"
               autoCapitalize="characters"
               caption="11 characters · uppercase letters and numbers"
+            />
+            <Field
+              label="PAN"
+              value={panNumber}
+              onChangeText={(t) => setPanNumber(t.toUpperCase())}
+              placeholder={data?.panOnFile ? `On file (${data.panNumber})` : 'ABCDE1234F'}
+              autoCapitalize="characters"
+              caption="Needed once for bank verification so order money can settle directly to your account"
               hasBorderBottom={false}
             />
           </View>

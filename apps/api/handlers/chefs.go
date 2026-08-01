@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -2290,8 +2291,16 @@ func (h *ChefHandler) GetPayoutDetails(c *gin.Context) {
 		"stripeAccountId":   maskID(chef.StripeAccountID),
 		"paymentProvider":   chef.PaymentProvider,
 		"payoutCountry":     chef.PayoutCountry,
+		"panNumber":         maskPAN(chef.PanNumber),
+		"panOnFile":         chef.PanNumber != "",
+		// The chef-visible verdict on their Cashfree split registration:
+		// ACTIVE means order money reaches their bank straight from capture.
+		"cashfreeVendorStatus": chef.CashfreeVendorStatus,
 	})
 }
+
+// panPattern is the Income Tax PAN format: five letters, four digits, one letter.
+var panPattern = regexp.MustCompile(`^[A-Z]{5}[0-9]{4}[A-Z]$`)
 
 // SavePayoutDetails saves the chef's payout information.
 // Sensitive fields (account number, UPI ID) are stored in GCP Secret Manager.
@@ -2306,9 +2315,17 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		BankIFSC          string `json:"bankIFSC"`
 		BankAccountName   string `json:"bankAccountName"`
 		UpiID             string `json:"upiId"`
+		// PanNumber feeds the Cashfree Easy Split vendor KYC. Optional so a
+		// chef can save bank details first, but splits need it on file.
+		PanNumber string `json:"panNumber"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.PanNumber = strings.ToUpper(strings.TrimSpace(req.PanNumber))
+	if req.PanNumber != "" && !panPattern.MatchString(req.PanNumber) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "panNumber must be a valid PAN (e.g. ABCDE1234F)"})
 		return
 	}
 
@@ -2379,6 +2396,10 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 			"bank_ifsc":           chef.BankIFSC,
 			"bank_account_name":   chef.BankAccountName,
 			"upi_id":              chef.UpiID,
+		}
+		if req.PanNumber != "" {
+			chef.PanNumber = req.PanNumber
+			payoutFieldUpdates["pan_number"] = req.PanNumber
 		}
 		if err := tx.Model(&models.ChefProfile{}).Where("id = ?", chef.ID).Updates(payoutFieldUpdates).Error; err != nil {
 			return err
@@ -2540,8 +2561,10 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 
 	// Register the destination as an Easy Split vendor too, so split-at-capture
 	// can pay the chef straight from the gateway once Cashfree verifies it.
+	// Deliberately NOT gated on easy_split_enabled: registration moves no money,
+	// and pre-staging vendors means flipping the flag later needs no re-saves.
 	// Best-effort: split falls back to full capture until the vendor is ACTIVE.
-	if services.EasySplitEnabled(database.DB) && services.GetCashfreeFor(chef.Mode) != nil {
+	if services.GetCashfreeFor(chef.Mode) != nil {
 		bank := services.CashfreeVendorBank{
 			AccountNumber: req.BankAccountNumber, AccountHolder: req.BankAccountName, IFSC: req.BankIFSC,
 		}
@@ -2572,6 +2595,8 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		"razorpayConnected":        chef.RazorpayAccountID != "",
 		"razorpayAccountId":        maskID(chef.RazorpayAccountID),
 		"razorpaySettlementStatus": chef.RazorpaySettlementStatus,
+		"panOnFile":                chef.PanNumber != "",
+		"cashfreeVendorStatus":     chef.CashfreeVendorStatus,
 	}
 	if settlementErrorCode != "" {
 		// Present even for the UPI case: the response must not read as an

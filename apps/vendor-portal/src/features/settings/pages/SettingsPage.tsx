@@ -34,8 +34,11 @@ interface PayoutData {
   razorpayAccountId: string;
   stripeConnected?: boolean;
   stripeAccountId?: string;
-  paymentProvider?: 'razorpay' | 'stripe';
+  paymentProvider?: 'razorpay' | 'stripe' | 'cashfree';
   payoutCountry?: string;
+  panNumber?: string;
+  panOnFile?: boolean;
+  cashfreeVendorStatus?: string;
 }
 
 export default function SettingsPage() {
@@ -61,6 +64,7 @@ export default function SettingsPage() {
     bankAccountNumber: '',
     bankIFSC: '',
     upiId: '',
+    panNumber: '',
   });
   const [payoutEditing, setPayoutEditing] = useState(false);
 
@@ -79,6 +83,7 @@ export default function SettingsPage() {
         bankAccountNumber: '',  // Don't populate masked value
         bankIFSC: payoutData.bankIFSC || '',
         upiId: '',
+        panNumber: '', // Don't populate masked value
       });
     }
   }, [payoutData]);
@@ -282,6 +287,17 @@ export default function SettingsPage() {
               Razorpay Pending
             </span>
           ) : null}
+          {payoutData?.cashfreeVendorStatus === 'ACTIVE' ? (
+            <span className="flex items-center gap-1.5 rounded-full bg-herb-tint px-3 py-1 text-xs font-medium text-herb">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Bank verified — direct settlement
+            </span>
+          ) : payoutData?.cashfreeVendorStatus ? (
+            <span className="flex items-center gap-1.5 rounded-full bg-amber-tint px-3 py-1 text-xs font-medium text-amber">
+              <XCircle className="h-3.5 w-3.5" />
+              Bank verification in progress
+            </span>
+          ) : null}
         </div>
         {payoutData?.razorpayConnected && payoutData.razorpayAccountId && (
           <p className="mt-2 text-xs text-ink-muted">
@@ -313,6 +329,18 @@ export default function SettingsPage() {
                   <span className="text-ink-muted">IFSC Code</span>
                   <span className="font-medium text-ink">{payoutData.bankIFSC}</span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-ink-muted">PAN</span>
+                  <span className="font-medium text-ink">
+                    {payoutData.panOnFile ? payoutData.panNumber : 'Not provided'}
+                  </span>
+                </div>
+                {!payoutData.panOnFile ? (
+                  <div className="rounded-lg border border-amber/40 bg-amber-tint p-3 text-sm text-ink-soft">
+                    Add your PAN to complete bank verification — it&apos;s needed
+                    before order money can settle directly to your account.
+                  </div>
+                ) : null}
               </>
             ) : (
               // Legacy UPI row (#767): UPI can no longer be paid on Route. Nudge
@@ -384,6 +412,22 @@ export default function SettingsPage() {
                     className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
                   />
                 </div>
+                <div>
+                  <label htmlFor="payout-pan" className="block text-sm font-medium text-ink-soft">PAN</label>
+                  <input
+                    id="payout-pan"
+                    type="text"
+                    maxLength={10}
+                    value={payoutForm.panNumber}
+                    onChange={(e) => setPayoutForm({ ...payoutForm, panNumber: e.target.value.toUpperCase() })}
+                    placeholder={payoutData?.panOnFile ? `On file (${payoutData.panNumber})` : 'e.g. ABCDE1234F'}
+                    className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
+                  />
+                  <p className="mt-1 text-xs text-ink-muted">
+                    Needed once for bank verification (KYC) so order money can
+                    settle directly to your account.
+                  </p>
+                </div>
               </div>
 
             <div className="flex gap-2">
@@ -406,6 +450,7 @@ export default function SettingsPage() {
                       bankAccountNumber: '',
                       bankIFSC: payoutData.bankIFSC || '',
                       upiId: '',
+                      panNumber: '',
                     });
                   }
                 }}
