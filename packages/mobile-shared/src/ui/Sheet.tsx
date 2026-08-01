@@ -15,7 +15,11 @@ interface SheetProps {
   primaryLabel?: string;
   primaryDestructive?: boolean;
   onPrimaryPress?: () => void;
-  /** Cancel / dismiss label. Defaults to "Cancel". */
+  /** Label for the secondary action. Omit it and no button renders — the sheet
+   *  is then dismissed by dragging the grabber or tapping the backdrop. Pass it
+   *  only when declining is a real choice the user is making ("Not yet", "Keep
+   *  it"), not merely a way out: a button labelled "Close" duplicates two
+   *  gestures that already work (#877). */
   cancelLabel?: string;
   /** Accepted for call-site compatibility with the previous gorhom-backed
    *  implementation, which sized the sheet to fixed snap-point percentages.
@@ -58,7 +62,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     primaryLabel,
     primaryDestructive = false,
     onPrimaryPress,
-    cancelLabel = 'Cancel',
+    cancelLabel,
     scrollable,
   }: SheetProps,
   ref,
@@ -87,7 +91,9 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
               }}
             />
           ) : null}
-          <Button label={cancelLabel} variant="ghost" onPress={dismiss} />
+          {cancelLabel ? (
+            <Button label={cancelLabel} variant="ghost" onPress={dismiss} />
+          ) : null}
         </View>
       </View>
     </SheetBase>

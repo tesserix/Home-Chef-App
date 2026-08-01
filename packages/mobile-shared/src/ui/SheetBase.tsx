@@ -45,6 +45,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme/tokens';
+import { useSheetDrag } from './useSheetDrag';
 
 export interface SheetHandle {
   present: () => void;
@@ -64,8 +65,10 @@ export interface SheetBaseProps {
    *  caller already renders its own scroll container, to avoid nesting two
    *  vertical ScrollViews. */
   scrollable?: boolean;
-  /** Shows the small drag-affordance pill at the top of the panel. Default
-   *  true — matches the handle indicator every sheet had under gorhom. */
+  /** Shows the grabber pill at the top of the panel, and with it the
+   *  drag-down-to-dismiss gesture. Default true — matches the handle indicator
+   *  every sheet had under gorhom. Turning it off removes the gesture too: a
+   *  drag region with nothing drawn above it is a gesture users can't see. */
   showHandle?: boolean;
 }
 
@@ -175,6 +178,15 @@ export const SheetBase = forwardRef<SheetHandle, SheetBaseProps>(function SheetB
 
   useImperativeHandle(ref, () => ({ present, dismiss }), [present, dismiss]);
 
+  // Makes the grabber pill an actual drag handle. Gated on `showHandle` — a
+  // drag region with nothing drawn above it is a gesture users can't see.
+  const { panHandlers } = useSheetDrag({
+    translateY,
+    onDismiss: dismiss,
+    reduceMotion,
+    enabled: showHandle,
+  });
+
   // Kick the entrance animation once the Modal has actually mounted+visible.
   useEffect(() => {
     if (visible) runEnter();
@@ -231,7 +243,14 @@ export const SheetBase = forwardRef<SheetHandle, SheetBaseProps>(function SheetB
               clip view, where background/radius belong. */}
           <Animated.View style={[styles.panelShadow, { transform: [{ translateY }] }]}>
             <View style={[styles.panelClip, panelStyle]}>
-              {showHandle ? <View style={styles.handle} /> : null}
+              {/* The pill itself is 40×4 — far too small to grab. The padded
+                  wrapper is what receives the pan, giving a ~24pt drag strip
+                  across the full panel width. */}
+              {showHandle ? (
+                <View style={styles.handleGrip} {...panHandlers}>
+                  <View style={styles.handle} />
+                </View>
+              ) : null}
               {content}
             </View>
           </Animated.View>
@@ -257,13 +276,15 @@ const styles = StyleSheet.create({
     borderTopRightRadius: theme.radius.lg,
     overflow: 'hidden',
   },
+  handleGrip: {
+    alignItems: 'center',
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[1],
+  },
   handle: {
-    alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: theme.colors.mist.strong,
-    marginTop: theme.spacing[2],
-    marginBottom: theme.spacing[1],
   },
 });
