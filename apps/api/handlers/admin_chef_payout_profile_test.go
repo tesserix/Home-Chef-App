@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,7 +29,11 @@ import (
 
 const profileChefDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text,
 	address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY,
-	business_name TEXT DEFAULT '', payout_method TEXT DEFAULT '', razorpay_settlement_status TEXT DEFAULT '')`
+	business_name TEXT DEFAULT '', payout_method TEXT DEFAULT '', razorpay_settlement_status TEXT DEFAULT '',
+	payout_auto_release TEXT DEFAULT '', payout_auto_disburse TEXT DEFAULT '', updated_at DATETIME)`
+
+const profileSettingsDDL = `CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT UNIQUE, value TEXT,
+	type TEXT DEFAULT 'string', updated_by TEXT, updated_at DATETIME)`
 
 const profileMethodsDDL = `CREATE TABLE payout_methods (id TEXT PRIMARY KEY, tenant_id TEXT, payee_type TEXT, payee_id TEXT,
 	kind TEXT, status TEXT, "primary" INTEGER DEFAULT 0, display_hint TEXT DEFAULT '', beneficiary_name TEXT DEFAULT '',
@@ -43,6 +48,7 @@ func setupChefPayoutProfileDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(profileChefDDL).Error)
 	require.NoError(t, db.Exec(profileMethodsDDL).Error)
+	require.NoError(t, db.Exec(profileSettingsDDL).Error)
 
 	orig := database.DB
 	database.DB = db
@@ -63,6 +69,9 @@ func profileRouter() *gin.Engine {
 	r.GET("/admin/chefs/:id/payout-profile", h.GetChefPayoutProfile)
 	r.POST("/admin/chefs/:id/payout-methods/refresh", h.RefreshChefPayoutMethod)
 	r.POST("/admin/chefs/:id/payout-methods/test-bank", h.SeedChefTestBankAccount)
+	r.PUT("/admin/chefs/:id/disburse-automation", h.SetChefDisburseAutomation)
+	r.GET("/admin/payouts/settings", h.GetPayoutSettings)
+	r.PUT("/admin/payouts/settings", h.UpdatePayoutSettings)
 	return r
 }
 
@@ -150,6 +159,133 @@ func TestSeedChefTestBankAccount_RefusesLiveRail(t *testing.T) {
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/admin/chefs/"+chefID.String()+"/payout-methods/test-bank", nil))
 	require.Equal(t, http.StatusConflict, w.Code)
 	require.Contains(t, w.Body.String(), "LIVE")
+}
+
+func TestSetChefDisburseAutomation(t *testing.T) {
+	db := setupChefPayoutProfileDB(t)
+	r := profileRouter()
+	chefID := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, mode) VALUES (?, 'test')`, chefID.String()).Error)
+
+	put := func(body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut,
+			"/admin/chefs/"+chefID.String()+"/disburse-automation", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+		return w
+	}
+
+	w := put(`{"value":"on"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		PayoutAutoDisburse string `json:"payoutAutoDisburse"`
+		Effective          bool   `json:"effective"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, "on", resp.PayoutAutoDisburse)
+	require.True(t, resp.Effective)
+
+	var stored string
+	require.NoError(t, db.Raw(`SELECT payout_auto_disburse FROM chef_profiles WHERE id = ?`, chefID.String()).Scan(&stored).Error)
+	require.Equal(t, "on", stored)
+
+	// "off" wins over any global default; "" follows it (global unset → false).
+	require.Equal(t, http.StatusOK, put(`{"value":"off"}`).Code)
+	require.Equal(t, http.StatusOK, put(`{"value":""}`).Code)
+
+	// An unrecognised value must never be stored — it would read back as
+	// "follow the default" and silently re-enable automation.
+	require.Equal(t, http.StatusBadRequest, put(`{"value":"maybe"}`).Code)
+	require.NoError(t, db.Raw(`SELECT payout_auto_disburse FROM chef_profiles WHERE id = ?`, chefID.String()).Scan(&stored).Error)
+	require.Equal(t, "", stored)
+}
+
+func TestSetChefDisburseAutomation_UnknownChef(t *testing.T) {
+	setupChefPayoutProfileDB(t)
+	r := profileRouter()
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut,
+		"/admin/chefs/"+uuid.NewString()+"/disburse-automation", strings.NewReader(`{"value":"on"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestGetChefPayoutProfile_AutomationBlock(t *testing.T) {
+	db := setupChefPayoutProfileDB(t)
+	r := profileRouter()
+	chefID := uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO chef_profiles (id, mode, payout_auto_disburse) VALUES (?, 'test', 'off')`,
+		chefID.String()).Error)
+	require.NoError(t, db.Exec(
+		`INSERT INTO platform_settings (id, key, value) VALUES (?, 'payout_auto_disburse_enabled', 'true'), (?, 'payout_auto_disburse_max_minor', '2500000')`,
+		uuid.NewString(), uuid.NewString()).Error)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/admin/chefs/"+chefID.String()+"/payout-profile", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Automation struct {
+			Disburse           string `json:"disburse"`
+			GlobalAutoDisburse bool   `json:"globalAutoDisburse"`
+			Effective          bool   `json:"effective"`
+			AutoCapMinor       int64  `json:"autoCapMinor"`
+			AutoCapUnreadable  bool   `json:"autoCapUnreadable"`
+		} `json:"automation"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, "off", resp.Automation.Disburse)
+	require.True(t, resp.Automation.GlobalAutoDisburse)
+	// The per-chef "off" beats the global "on" — that asymmetry is the point.
+	require.False(t, resp.Automation.Effective)
+	require.EqualValues(t, 2500000, resp.Automation.AutoCapMinor)
+	require.False(t, resp.Automation.AutoCapUnreadable)
+}
+
+func TestPayoutSettings_CapRoundTrip(t *testing.T) {
+	setupChefPayoutProfileDB(t)
+	r := profileRouter()
+
+	put := func(body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/admin/payouts/settings", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+		return w
+	}
+
+	w := put(`{"autoDisburseEnabled":true,"autoCapMinor":2500000}`)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		AutoDisburseEnabled bool  `json:"autoDisburseEnabled"`
+		AutoCapMinor        int64 `json:"autoCapMinor"`
+		AutoCapUnreadable   bool  `json:"autoCapUnreadable"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.True(t, resp.AutoDisburseEnabled)
+	require.EqualValues(t, 2500000, resp.AutoCapMinor)
+	require.False(t, resp.AutoCapUnreadable)
+
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/admin/payouts/settings", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.True(t, resp.AutoDisburseEnabled)
+	require.EqualValues(t, 2500000, resp.AutoCapMinor)
+
+	require.Equal(t, http.StatusBadRequest, put(`{"autoCapMinor":-1}`).Code)
+	require.Equal(t, http.StatusBadRequest, put(`{}`).Code)
+
+	// Zero clears the cap — "no amount limit", not "block everything".
+	w = put(`{"autoCapMinor":0}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.EqualValues(t, 0, resp.AutoCapMinor)
+	require.False(t, resp.AutoCapUnreadable)
 }
 
 func TestSeedChefTestBankAccount_RailUnconfigured(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -68,6 +69,50 @@ func PayoutAutoDisburseEnabled(db *gorm.DB) bool {
 		return false
 	}
 	return strings.EqualFold(strings.TrimSpace(value), "true")
+}
+
+// SettingPayoutAutoDisburseMax caps auto-approval, in minor units (paise).
+// Absent or zero disables the cap; a present-but-unparseable value fails
+// closed — every batch then queues for manual approval.
+const SettingPayoutAutoDisburseMax = "payout_auto_disburse_max_minor"
+
+// PayoutAutoDisburseCap reads the cap, reporting unreadable separately so the
+// decision can fail closed instead of treating a typo as "no cap".
+func PayoutAutoDisburseCap(db *gorm.DB) (capMinor int64, unreadable bool) {
+	var value string
+	if err := db.Model(&models.PlatformSettings{}).
+		Where("key = ?", SettingPayoutAutoDisburseMax).
+		Select("value").Scan(&value).Error; err != nil {
+		log.Printf("payout-disburse: auto cap unreadable (%v) — requiring approval", err)
+		return 0, true
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || n < 0 {
+		log.Printf("payout-disburse: auto cap %q unparseable — requiring approval", value)
+		return 0, true
+	}
+	return n, false
+}
+
+// ChefAutoDisburseEnabled resolves whether this chef's batches are candidates
+// for auto-approval: the chef's tri-state wins, "" follows the global flag.
+// The guardrails in payouts.DecideAutoApprove still run on candidates.
+func ChefAutoDisburseEnabled(db *gorm.DB, chef *models.ChefProfile) bool {
+	if chef == nil {
+		return false
+	}
+	switch chef.PayoutAutoDisburse {
+	case PayoutAutoOn:
+		return true
+	case PayoutAutoOff:
+		return false
+	default:
+		return PayoutAutoDisburseEnabled(db)
+	}
 }
 
 // statementBusinessDate is the batch's business date for a weekly statement.
@@ -192,17 +237,22 @@ func EnsurePayoutMethodWith(
 // PrepareStatementBatch creates (or returns) the batch for a statement, without
 // moving any money.
 //
-// The batch lands in pending_approval or approved depending on the auto-disburse
-// flag. Splitting preparation from execution is what lets an admin see, and
-// withhold, a payout before it goes — and what makes the approved → executing
-// transition a single reviewable step.
-func PrepareStatementBatch(ctx context.Context, db *gorm.DB, stmt *models.WeeklyStatement, mode string) (*payouts.Batch, error) {
+// The batch lands in pending_approval or approved per payouts.DecideAutoApprove:
+// the chef's tri-state (falling back to the global auto-disburse flag) grants
+// candidacy, then the guardrails run — first disbursement to a destination is
+// always manual, and amounts above the cap setting queue for review. The
+// returned decision carries the hold reasons for the caller's audit trail; it
+// is zero-valued when an existing batch was reused. Splitting preparation from
+// execution is what lets an admin see, and withhold, a payout before it goes —
+// and what makes the approved → executing transition a single reviewable step.
+func PrepareStatementBatch(ctx context.Context, db *gorm.DB, stmt *models.WeeklyStatement, mode string) (*payouts.Batch, payouts.AutoApproveDecision, error) {
+	var none payouts.AutoApproveDecision
 	if stmt.Status != models.PayoutPending {
-		return nil, fmt.Errorf("payouts: statement %s is %s, not pending", stmt.ID, stmt.Status)
+		return nil, none, fmt.Errorf("payouts: statement %s is %s, not pending", stmt.ID, stmt.Status)
 	}
 	amount := payouts.FromMinor(int64(ToPaise(stmt.NetPayout)), payouts.CurrencyINR)
 	if !amount.IsPositive() {
-		return nil, fmt.Errorf("payouts: statement %s has nothing to pay (%s)", stmt.ID, amount)
+		return nil, none, fmt.Errorf("payouts: statement %s has nothing to pay (%s)", stmt.ID, amount)
 	}
 
 	ref := payouts.PayeeRef{Type: payouts.PayeeChef, ID: stmt.ChefID}
@@ -215,23 +265,53 @@ func PrepareStatementBatch(ctx context.Context, db *gorm.DB, stmt *models.Weekly
 	var existing payouts.Batch
 	err := db.Where("idempotency_key = ?", key).First(&existing).Error
 	if err == nil {
-		return &existing, nil
+		return &existing, none, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("payouts: load batch for statement %s: %w", stmt.ID, err)
+		return nil, none, fmt.Errorf("payouts: load batch for statement %s: %w", stmt.ID, err)
 	}
 
 	method, mErr := EnsurePayoutMethod(ctx, db, ref, mode)
 	if mErr != nil {
-		return nil, mErr
+		return nil, none, mErr
 	}
 	if !method.Payable() {
-		return nil, fmt.Errorf("payouts: chef %s has no verified payout destination (%s)",
+		return nil, none, fmt.Errorf("payouts: chef %s has no verified payout destination (%s)",
 			stmt.ChefID, method.Status)
 	}
 
+	// Candidacy: the chef's tri-state over the global flag. A missing chef row
+	// fails closed to manual, like every other read on this path.
+	autoEnabled := false
+	var chef models.ChefProfile
+	if cErr := db.First(&chef, "id = ?", stmt.ChefID).Error; cErr == nil {
+		autoEnabled = ChefAutoDisburseEnabled(db, &chef)
+	}
+
+	// First disbursement to a destination always gets human eyes: only a batch
+	// already PAID against this exact method counts as precedent. A count error
+	// reads as "no precedent" — closed, not open.
+	var paidBefore int64
+	if autoEnabled {
+		if cErr := db.Model(&payouts.Batch{}).
+			Where("tenant_id = ? AND payee_type = ? AND payee_id = ? AND method_id = ? AND state = ?",
+				PayoutTenantID, ref.Type, ref.ID, method.ID, payouts.BatchPaid).
+			Count(&paidBefore).Error; cErr != nil {
+			log.Printf("payout-disburse: precedent lookup failed (%v) — requiring approval", cErr)
+			paidBefore = 0
+		}
+	}
+
+	capMinor, capUnreadable := PayoutAutoDisburseCap(db)
+	decision := payouts.DecideAutoApprove(payouts.AutoApproveInput{
+		AutomationEnabled:     autoEnabled,
+		DestinationPaidBefore: paidBefore > 0,
+		AmountMinor:           amount.Minor,
+		AutoCapMinor:          capMinor,
+		CapUnreadable:         capUnreadable,
+	})
 	state := payouts.BatchPendingApproval
-	if PayoutAutoDisburseEnabled(db) {
+	if decision.Approve {
 		state = payouts.BatchApproved
 	}
 
@@ -251,11 +331,11 @@ func PrepareStatementBatch(ctx context.Context, db *gorm.DB, stmt *models.Weekly
 		// A concurrent prepare won the unique index — load and return theirs.
 		var raced payouts.Batch
 		if db.Where("idempotency_key = ?", key).First(&raced).Error == nil {
-			return &raced, nil
+			return &raced, none, nil
 		}
-		return nil, fmt.Errorf("payouts: create batch for statement %s: %w", stmt.ID, err)
+		return nil, none, fmt.Errorf("payouts: create batch for statement %s: %w", stmt.ID, err)
 	}
-	return &batch, nil
+	return &batch, decision, nil
 }
 
 // ExecuteBatch sends an approved batch to the rail.
