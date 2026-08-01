@@ -14,6 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Camera, X } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
+import { CalendarDatePicker } from './CalendarDatePicker';
 import {
   EXPENSE_CATEGORIES,
   useExpenseMutations,
@@ -183,15 +184,7 @@ export function ExpenseQuickAdd({ orderId, showDatePicker = true, onSaved }: Exp
         </View>
       ) : null}
       {showDatePicker && dateChoice === 'custom' ? (
-        <TextInput
-          style={styles.input}
-          placeholder="Date (YYYY-MM-DD)"
-          placeholderTextColor={theme.colors.ink.muted}
-          autoCapitalize="none"
-          value={customDate}
-          onChangeText={setCustomDate}
-          accessibilityLabel="Expense date"
-        />
+        <CalendarDatePicker value={customDate} onChange={setCustomDate} maxDate={new Date()} />
       ) : null}
 
       <TextInput
