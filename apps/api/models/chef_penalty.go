@@ -19,12 +19,18 @@ const (
 	ChefPenaltyWaived ChefPenaltyStatus = "waived"
 )
 
-// ChefPenaltyKind identifies why a levy was raised. One value today; typed so a second
-// accountability rule doesn't have to reinterpret a free-text reason.
+// ChefPenaltyKind identifies why a levy was raised. Two values today, both fed through the
+// SAME mechanism (raise → grace → waiver → statement deduction) — typed so each accountability
+// rule carries its own frozen arithmetic instead of a free-text reason having to say which one
+// it was.
 type ChefPenaltyKind string
 
 // ChefPenaltyCancelLate — the chef cancelled a confirmed order close to service (#834).
 const ChefPenaltyCancelLate ChefPenaltyKind = "cancel_late"
+
+// ChefPenaltyGatewayFee — the payment gateway's transaction-fee loss on a chef-fault refund
+// (#885), recovered as a flat runtime rate of the refunded amount — Cashfree only.
+const ChefPenaltyGatewayFee ChefPenaltyKind = "gateway_fee"
 
 // ChefPenalty is a charge raised against a chef and netted off their next settlement
 // (#834 item 6). Nothing of the kind existed before v3 — services/payout_recovery.go recovers

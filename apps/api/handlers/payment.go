@@ -1099,6 +1099,24 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		log.Printf("payout cross-guard failed for refunded order %s: %v", order.ID, hErr)
 		services.CaptureBackgroundError(hErr)
 	}
+	// #885: the payment gateway's transaction-fee loss on a CHEF-INITIATED Cashfree refund,
+	// recovered from the chef through the same best-effort mechanism the chef_order_cancel.go
+	// paths use. Admin-initiated refunds never levy (decision 1 — ambiguous fault, and a wrong
+	// levy takes real money from a chef); non-Cashfree providers never levy (decision-locked
+	// Cashfree-only scope). refundAmount here is READ AFTER the wallet-at-checkout capping
+	// logic above has already possibly lowered it — that final, capped value is exactly the
+	// amount sent to Cashfree, which is the correct basis (not the raw requested amount).
+	if provider == models.PaymentProviderCashfree && initiatedBy == "chef" {
+		if fp, fErr := services.LevyGatewayFeePenalty(database.DB, order.ChefID, userID, order.ID,
+			order.OrderNumber, models.PaymentProviderCashfree, refundAmount,
+			services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(priorRefunded))); fErr != nil {
+			log.Printf("initiate refund: gateway-fee levy failed for order %s: %v", order.OrderNumber, fErr)
+			services.CaptureBackgroundError(fErr)
+		} else if fp != nil {
+			services.LogAudit(c, "chef.penalty.levy", "chef_penalty", fp.ID.String(), nil,
+				gin.H{"orderId": order.ID.String(), "amount": fp.Amount, "kind": "gateway_fee"})
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "Refund initiated",

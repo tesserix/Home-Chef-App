@@ -397,14 +397,14 @@ type CashfreeOrderMeta struct {
 // reasoning. If Easy Split is adopted later, the split array is added here and
 // that predicate flips; nothing else in the money paths should need to change.
 type CashfreeOrderRequest struct {
-	OrderID        string                  `json:"order_id,omitempty"`
-	AmountPaise    cashfreeAmount          `json:"order_amount"`
-	Currency       string                  `json:"order_currency"`
-	Customer       CashfreeCustomerDetails `json:"customer_details"`
-	Meta           *CashfreeOrderMeta      `json:"order_meta,omitempty"`
-	Tags           map[string]string       `json:"order_tags,omitempty"`
-	ExpiryTime     string                  `json:"order_expiry_time,omitempty"`
-	OrderNote      string                  `json:"order_note,omitempty"`
+	OrderID     string                  `json:"order_id,omitempty"`
+	AmountPaise cashfreeAmount          `json:"order_amount"`
+	Currency    string                  `json:"order_currency"`
+	Customer    CashfreeCustomerDetails `json:"customer_details"`
+	Meta        *CashfreeOrderMeta      `json:"order_meta,omitempty"`
+	Tags        map[string]string       `json:"order_tags,omitempty"`
+	ExpiryTime  string                  `json:"order_expiry_time,omitempty"`
+	OrderNote   string                  `json:"order_note,omitempty"`
 	// Splits is the Easy Split allocation at capture: each vendor's share is
 	// settled by Cashfree directly; order_amount minus the splits stays with
 	// the platform merchant account. Empty means no split — full capture.
@@ -659,10 +659,19 @@ type CashfreeRefund struct {
 	OrderID      string         `json:"order_id"`
 	RefundStatus string         `json:"refund_status"`
 	AmountPaise  cashfreeAmount `json:"refund_amount"`
-	Currency     string         `json:"refund_currency,omitempty"`
-	RefundType   string         `json:"refund_type,omitempty"`
-	RefundNote   string         `json:"refund_note,omitempty"`
-	ProcessedAt  string         `json:"processed_at,omitempty"`
+	// RefundChargePaise is Cashfree's own reported processing charge for this refund, in
+	// paise via the same cashfreeAmount rupee-decimal wire encoding as every other money
+	// field on this struct — observability only per #885 decision 2 (the levy itself stays
+	// a configured flat rate of the refunded amount, never this actual-fee field); useful
+	// later for comparing the configured rate against real Cashfree charges. Reuses
+	// cashfreeAmount's existing UnmarshalJSON, which already tolerates a missing/empty
+	// field as zero, so no special-casing is needed for orders where Cashfree reports no
+	// charge.
+	RefundChargePaise cashfreeAmount `json:"refund_charge"`
+	Currency          string         `json:"refund_currency,omitempty"`
+	RefundType        string         `json:"refund_type,omitempty"`
+	RefundNote        string         `json:"refund_note,omitempty"`
+	ProcessedAt       string         `json:"processed_at,omitempty"`
 }
 
 // Cashfree refund_status values.

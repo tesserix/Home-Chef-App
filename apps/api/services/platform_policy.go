@@ -88,6 +88,23 @@ type PlatformPolicy struct {
 	ChefCancelPenaltyLeadHours  float64 `json:"chefCancelPenaltyLeadHours"`  // cancels with LESS lead than this are levied
 	ChefCancelPenaltyGraceCount int     `json:"chefCancelPenaltyGraceCount"` // free cancellations per window
 	ChefCancelPenaltyGraceDays  int     `json:"chefCancelPenaltyGraceDays"`  // rolling window length
+
+	// GatewayFeeLevy* recovers the payment gateway's transaction-fee loss on a chef-fault
+	// Cashfree refund (#885), deducted from the chef's next weekly settlement through the
+	// SAME mechanism as ChefCancelPenalty above (raise → optional grace → admin waiver →
+	// statement deduction). Cashfree only — Razorpay/Stripe fee recovery is a noted follow-up.
+	GatewayFeeLevyEnabled bool `json:"gatewayFeeLevyEnabled"`
+	// GatewayFeeLevyPercent is a flat rate of the amount actually REFUNDED (never the order's
+	// original total) — a configured proxy for the gateway's real per-refund processing fee.
+	GatewayFeeLevyPercent float64 `json:"gatewayFeeLevyPercent"`
+	// GatewayFeeLevyGraceEnabled defaults false: a gateway fee is a pass-through cost actually
+	// incurred, not an accountability penalty that needs an emergency exemption.
+	GatewayFeeLevyGraceEnabled bool `json:"gatewayFeeLevyGraceEnabled"`
+	GatewayFeeLevyGraceCount   int  `json:"gatewayFeeLevyGraceCount"` // only consulted when GraceEnabled
+	GatewayFeeLevyGraceDays    int  `json:"gatewayFeeLevyGraceDays"`  // only consulted when GraceEnabled
+	// GatewayFeeLevyStackWithCancelLevy defaults false: one cancellation is one penalty event —
+	// an order that already raised a cancel_late levy does not also raise a gateway_fee levy.
+	GatewayFeeLevyStackWithCancelLevy bool `json:"gatewayFeeLevyStackWithCancelLevy"`
 }
 
 // DefaultPlatformPolicy matches what was hardcoded in handlers/orders.go
@@ -136,6 +153,17 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		ChefCancelPenaltyLeadHours:  4.0,
 		ChefCancelPenaltyGraceCount: 1,
 		ChefCancelPenaltyGraceDays:  30,
+		// GatewayFeeLevy (#885) defaults OFF — a brand-new money-charging mechanism must not
+		// start charging chefs the moment this deploys; ops opts in explicitly through the
+		// admin console, unlike ChefCancelPenaltyEnabled which defaulted true because it
+		// matched pre-existing hardcoded behaviour. Percent is Cashfree's typical
+		// processing-fee ballpark — retune freely. No grace, no stacking with cancel_late.
+		GatewayFeeLevyEnabled:             false,
+		GatewayFeeLevyPercent:             2.0,
+		GatewayFeeLevyGraceEnabled:        false,
+		GatewayFeeLevyGraceCount:          0,
+		GatewayFeeLevyGraceDays:           0,
+		GatewayFeeLevyStackWithCancelLevy: false,
 	}
 }
 
@@ -344,6 +372,14 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 		ChefCancelPenaltyLeadHours  *float64              `json:"chefCancelPenaltyLeadHours"`
 		ChefCancelPenaltyGraceCount *int                  `json:"chefCancelPenaltyGraceCount"`
 		ChefCancelPenaltyGraceDays  *int                  `json:"chefCancelPenaltyGraceDays"`
+		// GatewayFeeLevy (#885). Pointers for the same reason: an admin explicitly disabling
+		// the levy or setting the rate/grace to 0 must not be silently reset by the default.
+		GatewayFeeLevyEnabled             *bool    `json:"gatewayFeeLevyEnabled"`
+		GatewayFeeLevyPercent             *float64 `json:"gatewayFeeLevyPercent"`
+		GatewayFeeLevyGraceEnabled        *bool    `json:"gatewayFeeLevyGraceEnabled"`
+		GatewayFeeLevyGraceCount          *int     `json:"gatewayFeeLevyGraceCount"`
+		GatewayFeeLevyGraceDays           *int     `json:"gatewayFeeLevyGraceDays"`
+		GatewayFeeLevyStackWithCancelLevy *bool    `json:"gatewayFeeLevyStackWithCancelLevy"`
 	}
 	var p partial
 	if err := json.Unmarshal([]byte(setting.Value), &p); err != nil {
@@ -415,6 +451,24 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 	}
 	if p.ChefCancelPenaltyGraceDays != nil {
 		out.ChefCancelPenaltyGraceDays = *p.ChefCancelPenaltyGraceDays
+	}
+	if p.GatewayFeeLevyEnabled != nil {
+		out.GatewayFeeLevyEnabled = *p.GatewayFeeLevyEnabled
+	}
+	if p.GatewayFeeLevyPercent != nil {
+		out.GatewayFeeLevyPercent = *p.GatewayFeeLevyPercent
+	}
+	if p.GatewayFeeLevyGraceEnabled != nil {
+		out.GatewayFeeLevyGraceEnabled = *p.GatewayFeeLevyGraceEnabled
+	}
+	if p.GatewayFeeLevyGraceCount != nil {
+		out.GatewayFeeLevyGraceCount = *p.GatewayFeeLevyGraceCount
+	}
+	if p.GatewayFeeLevyGraceDays != nil {
+		out.GatewayFeeLevyGraceDays = *p.GatewayFeeLevyGraceDays
+	}
+	if p.GatewayFeeLevyStackWithCancelLevy != nil {
+		out.GatewayFeeLevyStackWithCancelLevy = *p.GatewayFeeLevyStackWithCancelLevy
 	}
 	return out
 }

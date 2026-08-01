@@ -253,6 +253,19 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		services.LogAudit(c, "chef.penalty.levy", "chef_penalty", p.ID.String(), nil,
 			gin.H{"orderId": order.ID.String(), "amount": p.Amount, "leadHours": p.LeadHours})
 	}
+	// #885: the payment gateway's transaction-fee loss on THIS Cashfree refund, recovered from
+	// the chef through the same best-effort mechanism as the cancel_late levy above. Cashfree
+	// only; the stacking/grace guards inside LevyGatewayFeePenalty already prevent double-
+	// charging an order that just raised a cancel_late levy.
+	if fp, fErr := services.LevyGatewayFeePenalty(database.DB, chef.ID, userID, order.ID,
+		order.OrderNumber, models.NormalizeProvider(order.PaymentProvider), services.FromPaise(cardPaise),
+		services.RefundFullIdempotencyKey(order.ID)); fErr != nil {
+		log.Printf("chef cancel: gateway-fee levy failed for order %s: %v", order.OrderNumber, fErr)
+		services.CaptureBackgroundError(fErr)
+	} else if fp != nil {
+		services.LogAudit(c, "chef.penalty.levy", "chef_penalty", fp.ID.String(), nil,
+			gin.H{"orderId": order.ID.String(), "amount": fp.Amount, "kind": "gateway_fee"})
+	}
 	// The customer is told what happened and that they are made whole — the notification the
 	// policy calls for. order.RefundAmount is post-refresh, so it is the full reserved amount.
 	services.NotifyCustomerOfChefCancelPenalty(order.CustomerID, order.OrderNumber, order.RefundAmount, levied)
@@ -526,6 +539,18 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 	}
 	lineRefund = reservedRefund // audit log uses the reserved (authoritative) amount
 
+	// #885: best-effort gateway-fee levy for this Cashfree line refund, keyed the same as the
+	// gateway call above so a retry can't double-charge the chef.
+	if fp, fErr := services.LevyGatewayFeePenalty(database.DB, chef.ID, userID, order.ID,
+		order.OrderNumber, models.NormalizeProvider(order.PaymentProvider), reservedRefund,
+		services.RefundLineIdempotencyKey(order.ID, target.ID)); fErr != nil {
+		log.Printf("chef cancel item: gateway-fee levy failed for order %s: %v", order.OrderNumber, fErr)
+		services.CaptureBackgroundError(fErr)
+	} else if fp != nil {
+		services.LogAudit(c, "chef.penalty.levy", "chef_penalty", fp.ID.String(), nil,
+			gin.H{"orderId": order.ID.String(), "amount": fp.Amount, "kind": "gateway_fee"})
+	}
+
 	// Refresh + emit. Skip status flip even if every line is now
 	// cancelled — chef may intend to re-add via the customer-support
 	// path; an explicit CancelOrder call is the right way to flip
@@ -724,6 +749,18 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 	// refund shrank the remaining under the lock, in which case reserved is what was refunded.
 	if hErr := crossGuardRefundHold(order.ID, reserved, req.Reason, fullRefund, persistErr == nil); hErr != nil {
 		log.Printf("payout cross-guard failed for goodwill-refunded order %s: %v", order.ID, hErr)
+	}
+	// #885: best-effort gateway-fee levy for this Cashfree goodwill refund. Fires regardless of
+	// whether OUR persist above succeeded, since the GATEWAY refund already happened by this
+	// point — the gateway's fee was incurred either way.
+	if fp, fErr := services.LevyGatewayFeePenalty(database.DB, chef.ID, userID, order.ID,
+		order.OrderNumber, models.NormalizeProvider(order.PaymentProvider), reserved,
+		services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(priorRefunded))); fErr != nil {
+		log.Printf("goodwill refund: gateway-fee levy failed for order %s: %v", order.ID, fErr)
+		services.CaptureBackgroundError(fErr)
+	} else if fp != nil {
+		services.LogAudit(c, "chef.penalty.levy", "chef_penalty", fp.ID.String(), nil,
+			gin.H{"orderId": order.ID.String(), "amount": fp.Amount, "kind": "gateway_fee"})
 	}
 	if persistErr != nil {
 		// Honest signal: the gateway refunded but the terminal write didn't save. The reserve

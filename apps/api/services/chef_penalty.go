@@ -158,6 +158,159 @@ func LevyChefCancelPenalty(db *gorm.DB, chefID, userID, orderID uuid.UUID, refer
 	return raised, nil
 }
 
+// GatewayFeeSourceKey is the natural key of a gateway-fee levy. It reuses the SAME identity
+// already guaranteed by gateway_idempotency.go's key builders (identical across a retry of the
+// same refund, distinct across different refunds) instead of inventing a new one, so idempotency
+// here is exactly as strong as the underlying gateway call's idempotency.
+func GatewayFeeSourceKey(logicalRefundKey string) string { return "gatewayfee:" + logicalRefundKey }
+
+// GatewayFeeLevyConfig is the resolved live policy for the gateway-fee levy (#885).
+type GatewayFeeLevyConfig struct {
+	Enabled         bool
+	Percent         float64
+	GraceEnabled    bool
+	GraceCount      int
+	GraceWindow     time.Duration
+	StackWithCancel bool
+}
+
+// GatewayFeeLevyPolicy resolves the gateway-fee levy config from platform policy, mirroring
+// ChefCancelPenaltyPolicy()'s shape.
+func GatewayFeeLevyPolicy() GatewayFeeLevyConfig {
+	p := GetPlatformPolicy()
+	days := p.GatewayFeeLevyGraceDays
+	if days < 0 {
+		days = 0
+	}
+	return GatewayFeeLevyConfig{
+		Enabled:         p.GatewayFeeLevyEnabled && p.GatewayFeeLevyPercent > 0,
+		Percent:         p.GatewayFeeLevyPercent,
+		GraceEnabled:    p.GatewayFeeLevyGraceEnabled,
+		GraceCount:      p.GatewayFeeLevyGraceCount,
+		GraceWindow:     time.Duration(days) * 24 * time.Hour,
+		StackWithCancel: p.GatewayFeeLevyStackWithCancelLevy,
+	}
+}
+
+// LevyGatewayFeePenalty raises the gateway-fee levy (#885) for a Cashfree refund the chef is at
+// fault for.
+//
+// Best-effort by contract (same as LevyChefCancelPenalty — callers must never fail or roll back
+// a refund because this could not be recorded). Called from handlers/chef_order_cancel.go
+// (CancelOrder, CancelOrderItem, RefundOrder) and handlers/payment.go (InitiateRefund's Cashfree
+// branch, chef-initiated only). NOT called for admin-initiated InitiateRefund, the #475
+// CancellationRequest arbitration flow, or non-Cashfree providers — decision 3: fault gating is
+// chef-fault-only; admin-initiated is ambiguous and defaults to NOT levying because a wrong levy
+// takes real money from a chef.
+//
+// provider is the order's payment provider (models.NormalizeProvider output); only Cashfree
+// levies. refundedAmount is the amount actually sent to the gateway for THIS refund — never the
+// order's original total. logicalRefundKey is the SAME key used for the underlying gateway
+// idempotency (RefundFullIdempotencyKey / RefundLineIdempotencyKey / RefundPartialIdempotencyKey),
+// so a retry of the same refund levies at most once.
+//
+// Returns the raised penalty, or nil when none was due — levy disabled, zero/negative refunded
+// amount, non-Cashfree provider, already levied for this logical refund, an order that already
+// carries a cancel_late levy (unless StackWithCancel is on), or inside the grace allowance. A nil
+// penalty is NOT an error: every skip reason is a normal outcome.
+func LevyGatewayFeePenalty(db *gorm.DB, chefID, userID, orderID uuid.UUID, reference, provider string, refundedAmount float64, logicalRefundKey string) (*models.ChefPenalty, error) {
+	cfg := GatewayFeeLevyPolicy()
+	if !cfg.Enabled || refundedAmount <= 0 {
+		return nil, nil
+	}
+	if provider != models.PaymentProviderCashfree {
+		// Cashfree-only per #885 scope. Razorpay/Stripe fee recovery is a noted follow-up,
+		// not this change.
+		return nil, nil
+	}
+	amount := Round2(refundedAmount * cfg.Percent / 100)
+	if amount <= 0 {
+		return nil, nil
+	}
+	sourceKey := GatewayFeeSourceKey(logicalRefundKey)
+
+	now := time.Now().UTC()
+	var raised *models.ChefPenalty
+	err := db.Transaction(func(tx *gorm.DB) error {
+		// Idempotency FIRST: a retry of the same logical refund short-circuits before the
+		// grace/stacking checks, so it can't consume a second grace slot or raise a second
+		// levy — mirrors LevyChefCancelPenalty's ordering.
+		var existing models.ChefPenalty
+		switch err := tx.Where("source_key = ?", sourceKey).First(&existing).Error; {
+		case err == nil:
+			return nil // already levied
+		case !errors.Is(err, gorm.ErrRecordNotFound):
+			return err
+		}
+
+		// STACKING GUARD: one cancellation is one penalty event (decision 6) — an order that
+		// already raised a cancel_late levy (any status; a waived grace row still counts)
+		// does not also raise a gateway_fee levy, unless explicitly configured to stack.
+		if !cfg.StackWithCancel {
+			var cancelLevy models.ChefPenalty
+			switch err := tx.Where("order_id = ? AND kind = ?", orderID, models.ChefPenaltyCancelLate).
+				First(&cancelLevy).Error; {
+			case err == nil:
+				return nil // already penalized via cancel_late — skip
+			case !errors.Is(err, gorm.ErrRecordNotFound):
+				return err
+			}
+		}
+
+		// GRACE: off by default (decision 4) — a gateway fee is a pass-through cost actually
+		// incurred, not an accountability penalty that needs an emergency exemption. Only
+		// consulted when explicitly enabled.
+		if cfg.GraceEnabled && cfg.GraceCount > 0 {
+			var used int64
+			q := tx.Model(&models.ChefPenalty{}).
+				Where("chef_id = ? AND kind = ?", chefID, models.ChefPenaltyGatewayFee)
+			if cfg.GraceWindow > 0 {
+				q = q.Where("occurred_at >= ?", now.Add(-cfg.GraceWindow))
+			}
+			if err := q.Count(&used).Error; err != nil {
+				return err
+			}
+			if used < int64(cfg.GraceCount) {
+				grace := models.ChefPenalty{
+					ChefID: chefID, UserID: userID, Kind: models.ChefPenaltyGatewayFee,
+					Status: models.ChefPenaltyWaived, SourceKey: sourceKey,
+					OrderID: &orderID, Reference: reference, Currency: EarningsCurrency,
+					BasisAmount: Round2(refundedAmount), RatePercent: cfg.Percent, Amount: 0,
+					OccurredAt: now, WaivedAt: &now,
+					Reason: "Payment gateway fee on a chef-fault refund",
+					WaiveReason: fmt.Sprintf("Within the allowance of %d gateway-fee event(s) per %d days",
+						cfg.GraceCount, int(cfg.GraceWindow.Hours()/24)),
+				}
+				if err := tx.Create(&grace).Error; err != nil {
+					return err
+				}
+				return nil
+			}
+		}
+
+		p := models.ChefPenalty{
+			ChefID: chefID, UserID: userID, Kind: models.ChefPenaltyGatewayFee,
+			Status: models.ChefPenaltyPending, SourceKey: sourceKey,
+			OrderID: &orderID, Reference: reference, Currency: EarningsCurrency,
+			BasisAmount: Round2(refundedAmount), RatePercent: cfg.Percent, Amount: amount,
+			OccurredAt: now,
+			Reason:     "Payment gateway fee on a chef-fault refund",
+		}
+		if err := tx.Create(&p).Error; err != nil {
+			if isDuplicateKeyErr(err) {
+				return nil // concurrent writer levied first
+			}
+			return err
+		}
+		raised = &p
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return raised, nil
+}
+
 // PendingChefPenaltyTotal sums a chef's outstanding levies — what the next settlement will
 // deduct.
 func PendingChefPenaltyTotal(db *gorm.DB, chefID uuid.UUID) (float64, error) {
