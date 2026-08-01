@@ -5,9 +5,18 @@
 // fail even though Razorpay captured the money. Instead of trusting the
 // callback params, this screen polls the order's real `paymentStatus` (which
 // the server sets via the synchronous verify OR the payment.captured webhook)
-// and shows the actual outcome:
-//   - completed            → success
-//   - failed / still pending after a grace window → failure + Retry payment
+// and shows the actual outcome. There are two genuinely different
+// non-success outcomes, and conflating them is how a customer gets charged
+// twice:
+//   - completed                              → success
+//   - server-declined (failed/refunded), or
+//     no order + gateway error, or
+//     no order past grace with no error       → failure + Retry payment
+//   - real order, still pending/unknown
+//     once past the grace window              → confirming (no Retry — a
+//                                                 captured-but-unconfirmed
+//                                                 payment must never be
+//                                                 retried)
 //
 // Visual: white canvas, centered layout, safe-area aware. Coral CTAs.
 
@@ -40,48 +49,73 @@ interface PaymentParams {
   tip?: string; // '1' when this is a post-delivery tip charge (#45)
 }
 
-// How long to keep polling for a 'pending' order before declaring failure.
-// The webhook / verify normally lands within a few seconds.
-const CONFIRM_TIMEOUT_MS = 25_000;
+// How long to hold the fast poll before backing off to the slow cadence.
+// The webhook / synchronous verify normally lands within a few seconds — this
+// window is not a "give up" deadline, it's just the fast/slow poll boundary.
+const CONFIRM_GRACE_MS = 30_000;
+// After the grace window, back off from the 2s fast poll: the reconcile cron
+// (apps/api/services/order_payment_reconcile_cron.go) can take up to ~10
+// minutes worst case to settle a captured-but-unconfirmed order, and holding
+// a 2s poll open that whole time is unnecessary battery/radio drain for a
+// screen the customer is just glancing at. 15s still surfaces a late settle
+// within 15s of it happening.
+const SLOW_POLL_MS = 15_000;
 
 export default function PaymentResult() {
   const router = useRouter();
   const params = useLocalSearchParams() as unknown as PaymentParams;
   const orderId = params.order_id ?? params.razorpay_order_id ?? '';
 
-  // Authoritative: poll the server's payment status until terminal.
-  const { data } = useOrder(orderId, { pollUntilPaid: true });
-  const paymentStatus = data?.data?.paymentStatus;
-
-  const [timedOut, setTimedOut] = useState(false);
+  const [pastGrace, setPastGrace] = useState(false);
   const [retrying, setRetrying] = useState(false);
+
+  // Authoritative: poll the server's payment status until terminal. Back off
+  // to the slow cadence once past grace (see SLOW_POLL_MS above) — undefined
+  // before that keeps the existing fast 2000ms default from useOrderHistory.
+  const { data } = useOrder(orderId, {
+    pollUntilPaid: true,
+    pollIntervalMs: pastGrace ? SLOW_POLL_MS : undefined,
+  });
+  const paymentStatus = data?.data?.paymentStatus;
 
   useEffect(() => {
     // Always arm the grace timer — even with no orderId. Without this, a result
     // screen reached without a resolvable order id (or holding a status the poll
     // never turns terminal) spins on "Confirming your payment…" forever.
-    const t = setTimeout(() => setTimedOut(true), CONFIRM_TIMEOUT_MS);
+    const t = setTimeout(() => setPastGrace(true), CONFIRM_GRACE_MS);
     return () => clearTimeout(t);
   }, []);
 
   // Derive the displayed state from the real payment status (+ grace window).
-  // After the grace window, ANYTHING that isn't a confirmed success is a failure
-  // the user can retry — never an endless spinner. A late webhook that flips the
-  // status to 'completed' still wins (success is checked first and the poll keeps
-  // running while pending), so a slow-but-successful payment recovers to success.
+  // Success always wins first, at any point — a late webhook/reconcile settle
+  // flips 'confirming' straight to 'success' since the poll keeps running.
   //
-  // The timeout arm needs no "and not completed" guard: the success branch above
-  // already claimed every 'completed' status, so by here it cannot be completed.
-  // Spelling it out again was not just redundant but a type error — tsc narrows
-  // paymentStatus to 'pending' | 'refunded' | undefined at this point.
-  const state: 'checking' | 'success' | 'failure' =
+  // Genuine, server-authoritative failure: the server says 'failed', OR the
+  // server says 'refunded' (a captured-then-reversed payment — terminal and
+  // known, not unknown, so it belongs with 'failure' and its safe-to-retry
+  // copy rather than 'confirming'; there is no outstanding charge left to
+  // double up on), OR the gateway errored before any order existed (nothing
+  // was ever charged). The last failure case, `!orderId && pastGrace` with no
+  // error, is the original grace timer's purpose: there's no order to poll or
+  // link to, so there's nothing left to "confirm" — it must still terminate.
+  //
+  // Everything else still not resolved once pastGrace is true (a real orderId
+  // whose paymentStatus is 'pending' or undefined) is 'confirming', not
+  // 'failure' — the outcome is genuinely unknown, not declined, so no "failed"
+  // language and no Retry (retrying a possibly-captured payment risks a
+  // double charge).
+  const state: 'checking' | 'confirming' | 'success' | 'failure' =
     paymentStatus === 'completed'
       ? 'success'
       : paymentStatus === 'failed' ||
-          (!orderId && Boolean(params.error)) ||
-          timedOut
+          paymentStatus === 'refunded' ||
+          (!orderId && Boolean(params.error))
         ? 'failure'
-        : 'checking';
+        : !orderId && pastGrace
+          ? 'failure'
+          : pastGrace
+            ? 'confirming'
+            : 'checking';
 
   // Clear the cart once payment is confirmed (the verify path may not have run).
   useEffect(() => {
@@ -169,6 +203,58 @@ export default function PaymentResult() {
             <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
           </View>
           <Text style={styles.pendingLabel}>Confirming your payment…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Confirming (past grace, outcome still unknown) ──────────────────────────
+  // Deliberately honest, not alarming: no "failed" language, no raw status or
+  // error string, and no Retry — retrying a possibly-captured payment is the
+  // double-charge trap this state exists to avoid. Primary path routes the
+  // customer forward to watch the order resolve, same CTAs as success since
+  // that's the most likely outcome.
+  if (state === 'confirming') {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right', 'bottom']}>
+        <View style={styles.centered}>
+          <View style={styles.pendingCircle}>
+            <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
+          </View>
+          <Text style={styles.confirmingTitle}>Still confirming your payment</Text>
+          <Text style={styles.confirmingBody}>
+            This can take a few minutes. We'll update your order automatically the moment it's
+            confirmed — there's no need to retry.
+          </Text>
+          <Pressable
+            onPress={handleViewOrder}
+            accessibilityRole="button"
+            accessibilityLabel="View order details"
+            style={styles.ctaWrapper}
+            android_ripple={{ color: PRIMARY_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[styles.ctaPrimary, pressed && Platform.OS === 'ios' && styles.ctaPressed]}
+              >
+                <Text style={styles.ctaPrimaryLabel}>View order</Text>
+              </View>
+            )}
+          </Pressable>
+          <Pressable
+            onPress={handleGoToOrders}
+            accessibilityRole="button"
+            accessibilityLabel="Go to My Orders"
+            android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[styles.ctaGhost, pressed && Platform.OS === 'ios' && styles.ctaGhostPressed]}
+              >
+                <Text style={styles.ctaGhostLabel}>My orders</Text>
+              </View>
+            )}
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -295,6 +381,10 @@ const styles = StyleSheet.create({
   },
   successTitle: { fontFamily: 'Geist-Bold', fontSize: 24, color: customerColors.charcoal.DEFAULT, textAlign: 'center', letterSpacing: -0.3 },
   successBody: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft, textAlign: 'center', lineHeight: 21, paddingHorizontal: 8 },
+  // Same title/body treatment as success — 'confirming' is not alarming, it's
+  // still "in progress" (same pendingCircle language as 'checking' above it).
+  confirmingTitle: { fontFamily: 'Geist-Bold', fontSize: 24, color: customerColors.charcoal.DEFAULT, textAlign: 'center', letterSpacing: -0.3 },
+  confirmingBody: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft, textAlign: 'center', lineHeight: 21, paddingHorizontal: 8 },
   // Destructive tint/colour — a functional error signal, never decorative.
   failureCircle: {
     width: 96, height: 96, borderRadius: 48, backgroundColor: customerColors.destructive.tint,
