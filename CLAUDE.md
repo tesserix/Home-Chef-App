@@ -31,13 +31,13 @@ Three native mobile apps (Customer, Vendor/Chef, Delivery Driver) for the Home C
 - Node.js 22.x (all frontend applications - Vite, React)
 - Docker (multi-stage containerization for all services)
 - Alpine Linux 3.19 (production container images)
-- npm (frontend apps: web, admin-portal, vendor-portal, delivery-portal)
+- npm (sunset web apps: web, vendor-portal, delivery-portal — see SUNSET.md in each)
 - Go modules (backend)
 ## Frameworks
 - Gin v1.10.0 (`apps/api/go.mod`) - HTTP framework for all Go services
 - GORM v1.25.12 + PostgreSQL driver - ORM for database operations
 - PostgreSQL 16 - Primary data store (via docker-compose)
-- Vite 6.0.3 - Build tool and dev server (web, admin-portal, vendor-portal, delivery-portal)
+- Vite 6.0.3 - Build tool and dev server (web, vendor-portal, delivery-portal — all sunset, see SUNSET.md in each)
 - React 19.0.0 - UI rendering for all frontend applications
 - React Router v7.1.0 - Client-side routing
 - Radix UI (comprehensive primitives: avatar, checkbox, dialog, dropdown, label, select, separator, slot, switch, tabs, toast, tooltip)
@@ -47,8 +47,8 @@ Three native mobile apps (Customer, Vendor/Chef, Delivery Driver) for the Home C
 - Lucide React v0.468.0 - Icon library
 - `class-variance-authority` v0.7.1 - Component variant management
 - `clsx` v2.1.1 - Conditional class names
-- Zustand v5.0.2 - Client state (web, admin-portal, vendor-portal, delivery-portal)
-- TanStack React Query v5.62.8 - Server state and caching (web, admin-portal, vendor-portal, delivery-portal)
+- Zustand v5.0.2 - Client state (web, vendor-portal, delivery-portal — all sunset, see SUNSET.md in each)
+- TanStack React Query v5.62.8 - Server state and caching (web, vendor-portal, delivery-portal — all sunset, see SUNSET.md in each)
 - React Context - Built-in context API usage
 - React Hook Form v7.54.1 - Form handling across all frontends
 - Zod v3.24.1 - TypeScript-first schema validation
@@ -266,9 +266,15 @@ Three native mobile apps (Customer, Vendor/Chef, Delivery Driver) for the Home C
 - Depends on: PostgreSQL, Redis (optional), NATS (optional), GCS, Razorpay, SendGrid, etc.
 - Used by: All four frontends via HTTP requests
 - Purpose: React SPA with client-side routing, forms, state management, UI rendering
-- Locations: 
+- Locations: `apps/web`, `apps/vendor-portal`, `apps/delivery-portal` — **all sunset** (see `SUNSET.md` in each, and issue #21). The live products are the Expo apps: `apps/mobile-customer`, `apps/mobile-vendor`, `apps/mobile-delivery`.
 - Depends on: HTTP API, local storage, Zustand stores
 - Used by: End users via browsers
+
+### Admin lives in a different repository
+
+There is **no admin app in this repo.** `apps/admin-portal` was retired and deleted; every operator surface now lives in the unified Tesserix admin at `../tesserix-home` (`apps/web/app/admin/apps/homechef/…`), which talks to this repo's `/admin/*` API.
+
+Grepping this repo for an admin UI therefore returns nothing and that is expected — it is not evidence the feature is missing. Check `tesserix-home` (and `apps/mobile-admin` here, which is a separate mobile admin client) before concluding an admin surface does not exist. This mistake has been made at least twice, including in issue #876.
 ## Data Flow
 - Server state: PostgreSQL (single shared database)
 - Session state: Encrypted JWT cookie (no Redis sessions)
