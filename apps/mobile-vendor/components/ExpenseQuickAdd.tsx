@@ -34,6 +34,14 @@ function isoDaysAgo(days: number): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
+function fmtChipDate(iso: string): string {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 interface ExpenseQuickAddProps {
   orderId?: string;
   showDatePicker?: boolean;
@@ -49,6 +57,7 @@ export function ExpenseQuickAdd({ orderId, showDatePicker = true, onSaved }: Exp
   const [note, setNote] = useState('');
   const [dateChoice, setDateChoice] = useState<DateChoice>('today');
   const [customDate, setCustomDate] = useState(isoDaysAgo(0));
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
 
   const busy = create.isPending || uploadReceipt.isPending;
@@ -167,11 +176,21 @@ export function ExpenseQuickAdd({ orderId, showDatePicker = true, onSaved }: Exp
         <View style={styles.chipWrap}>
           {(['today', 'yesterday', 'custom'] as const).map((d) => {
             const active = dateChoice === d;
-            const label = d === 'today' ? 'Today' : d === 'yesterday' ? 'Yesterday' : 'Other date';
+            const label =
+              d === 'today'
+                ? `Today · ${fmtChipDate(isoDaysAgo(0))}`
+                : d === 'yesterday'
+                  ? `Yesterday · ${fmtChipDate(isoDaysAgo(1))}`
+                  : active
+                    ? fmtChipDate(customDate)
+                    : 'Other date';
             return (
               <Pressable
                 key={d}
-                onPress={() => setDateChoice(d)}
+                onPress={() => {
+                  setDateChoice(d);
+                  setCalendarOpen(d === 'custom' ? dateChoice !== 'custom' || !calendarOpen : false);
+                }}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: active }}
               >
@@ -183,8 +202,15 @@ export function ExpenseQuickAdd({ orderId, showDatePicker = true, onSaved }: Exp
           })}
         </View>
       ) : null}
-      {showDatePicker && dateChoice === 'custom' ? (
-        <CalendarDatePicker value={customDate} onChange={setCustomDate} maxDate={new Date()} />
+      {showDatePicker && dateChoice === 'custom' && calendarOpen ? (
+        <CalendarDatePicker
+          value={customDate}
+          onChange={(iso) => {
+            setCustomDate(iso);
+            setCalendarOpen(false);
+          }}
+          maxDate={new Date()}
+        />
       ) : null}
 
       <TextInput
