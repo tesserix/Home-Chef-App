@@ -4,6 +4,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 
 import { ScreenTitle } from '../../components/shared/ScreenTitle';
 import { MealPlanList } from '../../components/meal-plan/MealPlanList';
+import { SubscriptionsSummary } from '../../components/meal-plan/SubscriptionsSummary';
 import { CalendarDays } from 'lucide-react-native';
 import { GuestGate } from '../../components/GuestGate';
 import { useIsGuest } from '../../hooks/useRequireAccount';
@@ -29,7 +30,12 @@ export default function PlansScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      <ScreenTitle title="Meal plans" />
+      {/* "Plans", not "Meal plans": this screen now holds two different things —
+          recurring tiffin subscriptions and one-off meal plans — and the tab it
+          sits under is called Plans. A subscriber reading "Meal plans" above
+          their tiffin row is being told they're in the wrong place (#900). */}
+      <ScreenTitle title="Plans" />
+      <SubscriptionsSummary />
       <MealPlanList />
     </SafeAreaView>
   );
