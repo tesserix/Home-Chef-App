@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { Pencil, Plus, Receipt, Trash2 } from 'lucide-react';
+import { Paperclip, Pencil, Plus, Receipt, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
@@ -25,6 +25,7 @@ import {
   useExpenseMutations,
   useExpenses,
   useFYStatement,
+  useUploadReceipt,
   type ChefExpense,
   type ExpenseCategory,
   type ExpenseInput,
@@ -60,24 +61,36 @@ function ExpenseForm({
   onCancel?: () => void;
 }) {
   const [form, setForm] = useState<FormState>(initial);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const uploadReceipt = useUploadReceipt();
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     const amount = Number(form.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       toast.error('Enter a valid amount');
       return;
     }
+    let receiptPath: string | undefined;
+    if (receiptFile) {
+      try {
+        receiptPath = await uploadReceipt.mutateAsync(receiptFile);
+      } catch {
+        toast.error('Receipt upload failed — saving the expense without it.');
+      }
+    }
     onSubmit({
       category: form.category,
       amount,
       note: form.note.trim() || undefined,
       expenseDate: form.expenseDate,
+      receiptPath,
     });
+    setReceiptFile(null);
   }
 
   return (
-    <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <form onSubmit={(e) => void submit(e)} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <Select
         value={form.category}
         onValueChange={(v) => setForm((f) => ({ ...f, category: v as ExpenseCategory }))}
@@ -121,8 +134,8 @@ function ExpenseForm({
         onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
       />
       <div className="flex gap-2">
-        <Button type="submit" disabled={busy} className="flex-1">
-          {busy ? 'Saving…' : onCancel ? 'Save' : 'Add expense'}
+        <Button type="submit" disabled={busy || uploadReceipt.isPending} className="flex-1">
+          {busy || uploadReceipt.isPending ? 'Saving…' : onCancel ? 'Save' : 'Add expense'}
         </Button>
         {onCancel && (
           <Button type="button" variant="ghost" onClick={onCancel}>
@@ -130,6 +143,29 @@ function ExpenseForm({
           </Button>
         )}
       </div>
+      <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-muted sm:col-span-2 lg:col-span-5">
+        <Paperclip className="h-3.5 w-3.5" />
+        {receiptFile ? (
+          <>
+            <span className="truncate text-ink">{receiptFile.name}</span>
+            <button
+              type="button"
+              className="text-paprika hover:underline"
+              onClick={() => setReceiptFile(null)}
+            >
+              remove
+            </button>
+          </>
+        ) : (
+          <span>Attach bill / receipt (recommended) — JPEG, PNG or WebP, max 5 MB</span>
+        )}
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+        />
+      </label>
     </form>
   );
 }
@@ -345,12 +381,28 @@ export default function ExpensesPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-ink">
                         {expenseCategoryLabel(e.category)}
+                        {e.orderNumber ? (
+                          <span className="ml-1 text-xs font-normal text-ink-muted">
+                            · #{e.orderNumber}
+                          </span>
+                        ) : null}
                       </p>
                       <p className="truncate text-xs text-ink-muted tabular-nums">
                         {format(new Date(e.expenseDate), 'dd MMM yyyy')}
                         {e.note ? ` · ${e.note}` : ''}
                       </p>
                     </div>
+                    {e.receiptUrl ? (
+                      <a
+                        href={e.receiptUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="View attached bill"
+                        className="shrink-0 text-ink-muted hover:text-ink"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </a>
+                    ) : null}
                     <p className="shrink-0 text-sm font-semibold text-ink tabular-nums">
                       {formatCurrency(e.amount)}
                     </p>

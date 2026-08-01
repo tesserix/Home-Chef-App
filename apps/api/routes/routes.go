@@ -155,6 +155,7 @@ func SetupRouter() *gin.Engine {
 	chefStatementsHandler := handlers.NewChefStatementsHandler()
 	chefTaxHandler := handlers.NewChefTaxHandler()
 	chefExpensesHandler := handlers.NewChefExpensesHandler()
+	adminChefExpensesHandler := handlers.NewAdminChefExpensesHandler()
 	chefRefundsHandler := handlers.NewChefRefundsHandler()
 	chefAvailabilityHandler := handlers.NewChefAvailabilityHandler()
 	orderHandler := handlers.NewOrderHandler()
@@ -626,6 +627,7 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/expenses", chefExpensesHandler.ListExpenses)
 			chefDashboard.POST("/expenses", chefExpensesHandler.CreateExpense)
 			chefDashboard.GET("/expenses/summary", chefExpensesHandler.GetExpenseSummary)
+			chefDashboard.POST("/expenses/receipt", chefExpensesHandler.UploadExpenseReceipt)
 			chefDashboard.PUT("/expenses/:id", chefExpensesHandler.UpdateExpense)
 			chefDashboard.DELETE("/expenses/:id", chefExpensesHandler.DeleteExpense)
 			// Refund history — one entry per refunded order, item breakdown.
@@ -1154,6 +1156,7 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/chefs/:id/reject", adminHandler.RejectChef)
 			admin.PUT("/chefs/:id/suspend", adminHandler.SuspendChef)
 			admin.GET("/chefs/:id/documents", adminHandler.GetChefDocuments)
+			admin.GET("/chefs/:id/expenses", adminChefExpensesHandler.GetChefExpenses)
 			admin.PUT("/documents/:docId/verify", adminHandler.VerifyChefDocument)
 
 			// Order management

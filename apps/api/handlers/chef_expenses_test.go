@@ -53,6 +53,7 @@ func setupExpenseDB(t *testing.T) *gorm.DB {
 			amount       REAL NOT NULL,
 			currency     TEXT DEFAULT 'INR',
 			note         TEXT,
+			order_id     TEXT,
 			expense_date DATETIME NOT NULL,
 			receipt_url  TEXT,
 			created_at   DATETIME,
@@ -216,6 +217,51 @@ func TestExpenseValidationAndOwnership(t *testing.T) {
 		"category": "gas", "amount": 1.0, "expenseDate": "2025-06-10",
 	})
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestExpenseOrderLinking(t *testing.T) {
+	db := setupExpenseDB(t)
+	userID := uuid.New()
+	chefID := seedExpenseChef(t, db, userID)
+
+	orderID := uuid.NewString()
+	require.NoError(t, db.Exec(`
+		INSERT INTO orders (id, order_number, chef_id, status, delivered_at, subtotal)
+		VALUES (?, 'HC042', ?, 'preparing', NULL, 500)
+	`, orderID, chefID.String()).Error)
+
+	// Linking my own order works and the list echoes the order number.
+	w := expenseReq(t, userID, http.MethodPost, "/chef/expenses", gin.H{
+		"category": "ingredients", "amount": 250.0, "expenseDate": "2025-06-10",
+		"orderId": orderID,
+	})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	w = expenseReq(t, userID, http.MethodGet, "/chef/expenses?orderId="+orderID, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var list struct {
+		Expenses []struct {
+			OrderID     *uuid.UUID `json:"orderId"`
+			OrderNumber string     `json:"orderNumber"`
+		} `json:"expenses"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &list))
+	require.Len(t, list.Expenses, 1)
+	assert.Equal(t, "HC042", list.Expenses[0].OrderNumber)
+
+	// Another chef's order cannot be linked.
+	otherUser := uuid.New()
+	otherChef := seedExpenseChef(t, db, otherUser)
+	otherOrder := uuid.NewString()
+	require.NoError(t, db.Exec(`
+		INSERT INTO orders (id, order_number, chef_id, status, delivered_at, subtotal)
+		VALUES (?, 'HC099', ?, 'preparing', NULL, 100)
+	`, otherOrder, otherChef.String()).Error)
+	w = expenseReq(t, userID, http.MethodPost, "/chef/expenses", gin.H{
+		"category": "gas", "amount": 50.0, "expenseDate": "2025-06-10",
+		"orderId": otherOrder,
+	})
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestExpenseSummaryBucketsByFY(t *testing.T) {

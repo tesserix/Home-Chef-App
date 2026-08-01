@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../lib/api';
-
-// ---- API contract types -------------------------------------------------------
-// Must match handlers/chef_expenses.go and services/fy_statement.go exactly.
 
 export type ExpenseCategory =
   | 'ingredients'
@@ -36,6 +34,9 @@ export interface ChefExpense {
   currency: string;
   note?: string;
   expenseDate: string;
+  orderId?: string;
+  orderNumber?: string;
+  receiptPath?: string;
   receiptUrl?: string;
   createdAt: string;
 }
@@ -44,7 +45,9 @@ export interface ExpenseInput {
   category: ExpenseCategory;
   amount: number;
   note?: string;
-  expenseDate: string; // YYYY-MM-DD
+  expenseDate: string;
+  orderId?: string;
+  receiptPath?: string;
 }
 
 export interface ExpenseSummary {
@@ -78,21 +81,22 @@ export interface FYStatement {
   netIncome: number;
 }
 
-/** FY start-year for today (Jan–Mar belong to the previous April's FY). */
 export function currentFyStartYear(d: Date = new Date()): number {
   return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
 }
 
-export function useChefExpenses(limit = 100) {
+export function useChefExpenses(options?: { orderId?: string; limit?: number }) {
+  const limit = options?.limit ?? 100;
+  const orderId = options?.orderId;
   return useQuery<{ expenses: ChefExpense[]; total: number }>({
-    queryKey: ['chef', 'expenses', limit],
-    queryFn: () =>
-      api
-        .get<{ expenses: ChefExpense[]; total: number }>(`/chef/expenses?limit=${limit}`)
-        .then((r) => ({
-          expenses: r.data?.expenses ?? [],
-          total: r.data?.total ?? 0,
-        })),
+    queryKey: ['chef', 'expenses', { limit, orderId: orderId ?? null }],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (orderId) params.set('orderId', orderId);
+      return api
+        .get<{ expenses: ChefExpense[]; total: number }>(`/chef/expenses?${params}`)
+        .then((r) => ({ expenses: r.data?.expenses ?? [], total: r.data?.total ?? 0 }));
+    },
   });
 }
 
@@ -104,7 +108,31 @@ export function useFYStatement(fyStartYear: number) {
   });
 }
 
-/** Create / delete an expense; both refresh the list and the FY statement. */
+export function useUploadExpenseReceipt() {
+  return useMutation({
+    mutationFn: async (uri: string) => {
+      const formData = new FormData();
+      const filename = uri.split('/').pop() ?? 'receipt.jpg';
+      const ext = filename.toLowerCase().split('.').pop() ?? '';
+      const type =
+        ext === 'png'
+          ? 'image/png'
+          : ext === 'webp'
+            ? 'image/webp'
+            : ext === 'heic' || ext === 'heif'
+              ? `image/${ext}`
+              : 'image/jpeg';
+      formData.append('file', { uri, name: filename, type } as unknown as Blob);
+      const res = await api.post<{ path: string }>(
+        '/chef/expenses/receipt',
+        formData,
+        multipartConfig(),
+      );
+      return res.data.path;
+    },
+  });
+}
+
 export function useExpenseMutations() {
   const queryClient = useQueryClient();
   const invalidate = () => {

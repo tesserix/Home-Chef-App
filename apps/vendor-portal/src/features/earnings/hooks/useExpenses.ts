@@ -35,7 +35,11 @@ export interface ChefExpense {
   amount: number;
   currency: string;
   note?: string;
-  expenseDate: string; // ISO timestamp (IST midnight)
+  expenseDate: string;
+  orderId?: string;
+  orderNumber?: string;
+  receiptPath?: string;
+  /** Short-lived signed URL, present only when a receipt is attached. */
   receiptUrl?: string;
   createdAt: string;
 }
@@ -45,7 +49,8 @@ export interface ExpenseInput {
   amount: number;
   note?: string;
   expenseDate: string; // YYYY-MM-DD
-  receiptUrl?: string;
+  orderId?: string;
+  receiptPath?: string;
 }
 
 export interface ExpenseCategoryTotal {
@@ -129,6 +134,17 @@ export function useFYStatement(fyStartYear: number) {
   return useQuery<FYStatement>({
     queryKey: ['chef', 'fy-statement', fyStartYear],
     queryFn: () => apiClient.get<FYStatement>(`/chef/tax/fy-statement?year=${fyStartYear}`),
+  });
+}
+
+export function useUploadReceipt() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await apiClient.postForm<{ path: string }>('/chef/expenses/receipt', form);
+      return res.path;
+    },
   });
 }
 

@@ -27,6 +27,7 @@ import {
   showAlertOutsideReact,
 } from '@homechef/mobile-shared/ui';
 import { DietIcon } from '../../components/vendor/DietIcon';
+import { OrderExpensesCard } from '../../components/OrderExpensesCard';
 import {
   useOrderDetail,
   type OrderDetail,
@@ -60,6 +61,14 @@ const CANCELLABLE_STATUSES: ReadonlySet<OrderDetailStatus> = new Set([
   'accepted',
   'preparing',
   'ready',
+]);
+
+const ACTIVE_EXPENSE_STATUSES: ReadonlySet<OrderDetailStatus> = new Set([
+  'accepted',
+  'preparing',
+  'ready',
+  'picked_up',
+  'delivered',
 ]);
 
 // CANCEL_REASONS preserves a stable display order across iOS/Android
@@ -1583,6 +1592,13 @@ export default function OrderDetailScreen() {
             hasBorderBottom={false}
           />
         </View>
+
+        {ACTIVE_EXPENSE_STATUSES.has(order.status) ? (
+          <>
+            <SectionLabel>MY EXPENSES</SectionLabel>
+            <OrderExpensesCard orderId={order.id} />
+          </>
+        ) : null}
 
         {/* Bottom padding for footer */}
         <View style={{ height: theme.spacing[10] }} />

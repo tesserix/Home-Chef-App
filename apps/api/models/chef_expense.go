@@ -45,12 +45,20 @@ type ChefExpense struct {
 	Currency string              `gorm:"type:varchar(3);default:'INR'" json:"currency"`
 	Note     string              `gorm:"type:varchar(500)" json:"note,omitempty"`
 
+	// OrderID optionally ties the expense to the order it was incurred for
+	// (recorded from the order screen while cooking). Purely informational —
+	// analytics and the FY statement sum expenses the same either way.
+	OrderID *uuid.UUID `gorm:"type:uuid;index" json:"orderId,omitempty"`
+
 	// ExpenseDate is the day the expense was incurred (date-only, stored UTC
 	// midnight IST). FY bucketing uses this, not CreatedAt.
 	ExpenseDate time.Time `gorm:"not null;index:idx_chef_expense_chef_date" json:"expenseDate"`
 
-	// ReceiptURL is an optional uploaded bill/receipt image.
-	ReceiptURL string `gorm:"type:varchar(500)" json:"receiptUrl,omitempty"`
+	// ReceiptPath is the private-bucket object path of an optional uploaded
+	// bill/receipt image. Never a fetchable URL — readers (chef app, admin)
+	// get a short-lived signed URL derived from it at response time. Column
+	// name kept from the first cut of the schema.
+	ReceiptPath string `gorm:"column:receipt_url;type:varchar(500)" json:"receiptPath,omitempty"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
