@@ -377,7 +377,7 @@ func (h *MealSubscriptionHandler) Skip(c *gin.Context) {
 	nowIST := time.Now().In(ist)
 	todayIST := time.Date(nowIST.Year(), nowIST.Month(), nowIST.Day(), 0, 0, 0, 0, ist)
 	if !d.After(todayIST) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "You can only skip a future day before its cutoff"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "You can only skip a day that hasn't started yet"})
 		return
 	}
 	skip := models.MealSubscriptionSkip{MealSubscriptionID: sub.ID, Date: d}
