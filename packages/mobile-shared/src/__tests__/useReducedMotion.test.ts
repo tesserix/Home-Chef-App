@@ -1,11 +1,14 @@
-// useReducedMotion — coverage for the shared OS "Reduce Motion" hook
+// watchReducedMotion — coverage for the shared OS "Reduce Motion" subscription
 // (GitHub #881 AC4). Mocks AccessibilityInfo locally (the shared
 // src/__mocks__/react-native.ts has no AccessibilityInfo today and is used
 // by unrelated screen tests, so this mock stays scoped to this file).
+//
+// These exercise `watchReducedMotion`, the plain core of `useReducedMotion`,
+// rather than the hook itself: `packages/mobile-shared` has no React renderer
+// dependency and this change deliberately avoids adding one. The hook is a
+// four-line `useState` + `useEffect` wrapper over exactly this function.
 
-import { createElement } from 'react';
-import { act, create } from 'react-test-renderer';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { isReduceMotionEnabled, addEventListener } = vi.hoisted(() => ({
   isReduceMotionEnabled: vi.fn(),
@@ -19,57 +22,33 @@ vi.mock('react-native', () => ({
   },
 }));
 
-import { useReducedMotion } from '../ui/useReducedMotion';
+import { watchReducedMotion } from '../ui/useReducedMotion';
 
-function Harness({ onValue }: { onValue: (v: boolean) => void }) {
-  onValue(useReducedMotion());
-  return null;
-}
-
-describe('useReducedMotion', () => {
-  it('returns false synchronously on first render, before the async check resolves', async () => {
-    let resolveCheck: (v: boolean) => void = () => {};
-    isReduceMotionEnabled.mockReturnValue(
-      new Promise<boolean>((resolve) => {
-        resolveCheck = resolve;
-      }),
-    );
-    addEventListener.mockReturnValue({ remove: vi.fn() });
-
-    const values: boolean[] = [];
-    let renderer: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(createElement(Harness, { onValue: (v) => values.push(v) }));
-    });
-
-    expect(values[0]).toBe(false);
-
-    await act(async () => {
-      resolveCheck(false);
-      await Promise.resolve();
-    });
-
-    renderer!.unmount();
+describe('watchReducedMotion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('flips to true once isReduceMotionEnabled() resolves true', async () => {
+  it('does not emit synchronously — the hook renders false until the check resolves', () => {
+    isReduceMotionEnabled.mockReturnValue(new Promise<boolean>(() => {}));
+    addEventListener.mockReturnValue({ remove: vi.fn() });
+
+    const onChange = vi.fn();
+    watchReducedMotion(onChange);
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('emits true once isReduceMotionEnabled() resolves true', async () => {
     isReduceMotionEnabled.mockResolvedValue(true);
     addEventListener.mockReturnValue({ remove: vi.fn() });
 
-    const values: boolean[] = [];
-    let renderer: ReturnType<typeof create>;
-    await act(async () => {
-      renderer = create(createElement(Harness, { onValue: (v) => values.push(v) }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(values[values.length - 1]).toBe(true);
-
-    renderer!.unmount();
+    const onChange = vi.fn();
+    watchReducedMotion(onChange);
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(true));
   });
 
-  it('updates live from false to true when reduceMotionChanged fires with true', async () => {
+  it('emits again when reduceMotionChanged fires', async () => {
     isReduceMotionEnabled.mockResolvedValue(false);
     let changedCallback: (enabled: boolean) => void = () => {};
     addEventListener.mockImplementation((_event: string, cb: (enabled: boolean) => void) => {
@@ -77,42 +56,45 @@ describe('useReducedMotion', () => {
       return { remove: vi.fn() };
     });
 
-    const values: boolean[] = [];
-    let renderer: ReturnType<typeof create>;
-    await act(async () => {
-      renderer = create(createElement(Harness, { onValue: (v) => values.push(v) }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    const onChange = vi.fn();
+    watchReducedMotion(onChange);
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(false));
 
-    expect(values[values.length - 1]).toBe(false);
+    changedCallback(true);
 
-    await act(async () => {
-      changedCallback(true);
-    });
-
-    expect(values[values.length - 1]).toBe(true);
-
-    renderer!.unmount();
+    expect(onChange).toHaveBeenLastCalledWith(true);
   });
 
-  it('calls subscription.remove() when the consuming component unmounts', async () => {
+  it('removes the listener and stops emitting after unsubscribe', async () => {
     isReduceMotionEnabled.mockResolvedValue(false);
     const remove = vi.fn();
-    addEventListener.mockReturnValue({ remove });
-
-    let renderer: ReturnType<typeof create>;
-    await act(async () => {
-      renderer = create(createElement(Harness, { onValue: () => {} }));
-      await Promise.resolve();
+    let changedCallback: (enabled: boolean) => void = () => {};
+    addEventListener.mockImplementation((_event: string, cb: (enabled: boolean) => void) => {
+      changedCallback = cb;
+      return { remove };
     });
 
-    expect(remove).not.toHaveBeenCalled();
+    const onChange = vi.fn();
+    const unsubscribe = watchReducedMotion(onChange);
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(false));
 
-    act(() => {
-      renderer!.unmount();
-    });
-
+    unsubscribe();
     expect(remove).toHaveBeenCalledTimes(1);
+
+    // A listener that fires after unsubscribe must not reach the consumer —
+    // in the hook that would be a setState on an unmounted component.
+    changedCallback(true);
+    expect(onChange).not.toHaveBeenCalledWith(true);
+  });
+
+  it('falls back to animating when the OS check rejects', async () => {
+    isReduceMotionEnabled.mockRejectedValue(new Error('unavailable'));
+    addEventListener.mockReturnValue({ remove: vi.fn() });
+
+    const onChange = vi.fn();
+    watchReducedMotion(onChange);
+    await vi.waitFor(() => expect(isReduceMotionEnabled).toHaveBeenCalled());
+
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

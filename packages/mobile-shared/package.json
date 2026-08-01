@@ -37,10 +37,8 @@
   "devDependencies": {
     "@hookform/resolvers": "^5.4.0",
     "@types/react": "^19.2.0",
-    "@types/react-test-renderer": "^19.1.0",
     "axios": "^1.16.0",
     "react-hook-form": "^7.56.4",
-    "react-test-renderer": "^19.2.3",
     "typescript": "^6.0.3",
     "vitest": "^3.2.6",
     "zod": "^4.4.3"
