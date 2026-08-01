@@ -31,7 +31,7 @@ func setupPenaltyDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE weekly_statements (id TEXT PRIMARY KEY, chef_id TEXT, user_id TEXT,
 		week_start DATETIME, week_end DATETIME, currency TEXT, orders_count INTEGER, gross_revenue REAL,
 		platform_commission REAL, cgst REAL, sgst REAL, igst REAL, tds REAL, penalty_deductions REAL,
-		net_payout REAL, status TEXT, paid_at DATETIME, payout_ref TEXT, created_at DATETIME)`).Error)
+		bonus_additions REAL DEFAULT 0, net_payout REAL, status TEXT, paid_at DATETIME, payout_ref TEXT, created_at DATETIME)`).Error)
 	return db
 }
 

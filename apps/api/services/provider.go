@@ -410,6 +410,9 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 		if err := SetOrderHoldAwaitingConfirmation(database.DB, delivery.OrderID); err != nil {
 			log.Printf("payout-hold: park order %s on 3PL delivery failed: %v", delivery.OrderID, err)
 		}
+		// Chef rewards: loyalty points + referral milestone check (idempotent;
+		// no-op unless the order row actually reads delivered).
+		OnChefOrderDelivered(database.DB, delivery.OrderID)
 	}
 
 	// A 3PL delivery that terminally failed or was returned (RTO) freezes the order's

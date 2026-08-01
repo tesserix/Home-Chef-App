@@ -648,6 +648,8 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 			log.Printf("payout-hold: park order %s on courier delivery failed: %v", delivery.OrderID, err)
 		}
 		services.StartConfirmReceiptFlow(delivery.OrderID)
+		// Chef rewards: loyalty points + referral milestone check (idempotent).
+		services.OnChefOrderDelivered(database.DB, delivery.OrderID)
 		// Update partner stats
 		database.DB.Model(&partner).Updates(map[string]interface{}{
 			"total_deliveries": partner.TotalDeliveries + 1,

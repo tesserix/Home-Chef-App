@@ -73,6 +73,7 @@ const initialData: OnboardingData = {
   acceptedTerms: false,
   acceptedHygienePolicy: false,
   acceptedCancellationPolicy: false,
+  referralCode: '',
 };
 
 export const useOnboardingStore = create<OnboardingState>()(

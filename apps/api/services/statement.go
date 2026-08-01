@@ -131,6 +131,12 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			log.Printf("weekly-statement: penalty deduction failed for chef=%s week=%s (levies stay pending): %v",
 				chefID, weekStart.Format("2006-01-02"), pErr)
 		}
+		// Referral / cashback credits ride the same settlement: a failure leaves
+		// them pending for the next statement, never lost.
+		if _, bErr := ApplyChefBonusesToStatement(database.DB, stmt); bErr != nil {
+			log.Printf("weekly-statement: bonus credit failed for chef=%s week=%s (bonuses stay pending): %v",
+				chefID, weekStart.Format("2006-01-02"), bErr)
+		}
 		// Push the payout AFTER deductions — the number the chef will actually receive.
 		if err := sendStatementReadyPush(b.userID, weekStart, weekEnd, stmt.NetPayout); err != nil {
 			log.Printf("weekly-statement: push failed for chef=%s: %v", chefID, err)

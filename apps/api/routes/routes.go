@@ -563,6 +563,11 @@ func SetupRouter() *gin.Engine {
 		chefDashboard.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
 		{
 			chefDashboard.GET("/dashboard", chefHandler.GetChefDashboard)
+			// Rewards: referral code + progress, loyalty points, cashback conversion.
+			chefRewardsHandler := handlers.NewChefRewardsHandler()
+			chefDashboard.GET("/rewards", chefRewardsHandler.GetChefRewards)
+			chefDashboard.GET("/rewards/history", chefRewardsHandler.GetChefRewardsHistory)
+			chefDashboard.POST("/rewards/convert", chefRewardsHandler.ConvertChefRewards)
 			chefDashboard.GET("/profile", chefHandler.GetChefProfile)
 			chefDashboard.PUT("/profile", chefHandler.UpdateChefProfile)
 			// Tiffin meal-subscription offer config (#4/#280).
@@ -1276,6 +1281,11 @@ func SetupRouter() *gin.Engine {
 
 			admin.GET("/referral/config", adminHandler.GetReferralConfig)
 			admin.PUT("/referral/config", adminHandler.UpdateReferralConfig)
+			// Chef-refers-chef program + chef loyalty (points → cashback) config,
+			// and the kitchen-referral oversight list.
+			admin.GET("/chef-referral/config", adminHandler.GetChefReferralProgramConfig)
+			admin.PUT("/chef-referral/config", adminHandler.UpdateChefReferralProgramConfig)
+			admin.GET("/chef-referrals", adminHandler.ListChefReferrals)
 			// Loyalty program (#40) — config + analytics.
 			admin.GET("/loyalty/config", adminHandler.GetLoyaltyConfig)
 			admin.PUT("/loyalty/config", adminHandler.UpdateLoyaltyConfig)

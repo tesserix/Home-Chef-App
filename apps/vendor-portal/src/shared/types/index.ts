@@ -156,6 +156,8 @@ export interface OnboardingData {
   acceptedTerms: boolean;
   acceptedHygienePolicy: boolean;
   acceptedCancellationPolicy: boolean;
+  // Optional chef-refers-chef code, prefilled from the ?ref= share link
+  referralCode?: string;
   bankAccountName?: string;
   bankAccountNumber?: string;
   bankIfscCode?: string;

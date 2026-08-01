@@ -11,6 +11,7 @@ import {
   ChevronRight,
   DollarSign,
   FileText,
+  Gift,
   Landmark,
   Languages,
   LifeBuoy,
@@ -68,6 +69,7 @@ const ALL_SECTIONS: NavSection[] = [
       // until a method exists, so "add your payout details" has to lead
       // somewhere findable.
       { labelKey: 'payout', caption: 'Bank account for your earnings', route: '/payout', Icon: Landmark },
+      { labelKey: 'rewards', caption: 'Points, cashback, refer a chef', route: '/rewards', Icon: Gift },
       { labelKey: 'analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
     ],
   },

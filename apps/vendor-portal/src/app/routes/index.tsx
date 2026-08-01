@@ -53,6 +53,7 @@ const LiveOrdersPage = lazyWithRetry(() => import('@/features/orders/pages/LiveO
 const OrderHistoryPage = lazyWithRetry(() => import('@/features/orders/pages/OrderHistoryPage'));
 const EarningsPage = lazyWithRetry(() => import('@/features/earnings/pages/EarningsPage'));
 const PayoutsPage = lazyWithRetry(() => import('@/features/earnings/pages/PayoutsPage'));
+const RewardsPage = lazyWithRetry(() => import('@/features/rewards/pages/RewardsPage'));
 const ProfilePage = lazyWithRetry(() => import('@/features/profile/pages/ProfilePage'));
 const SecurityPage = lazyWithRetry(() => import('@/features/profile/pages/SecurityPage'));
 const KitchenSetupPage = lazyWithRetry(() => import('@/features/profile/pages/KitchenSetupPage'));
@@ -158,6 +159,7 @@ export function AppRoutes() {
           <Route path="orders/history" element={<OrderHistoryPage />} />
           <Route path="earnings" element={<EarningsPage />} />
           <Route path="earnings/payouts" element={<PayoutsPage />} />
+          <Route path="rewards" element={<RewardsPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="security" element={<SecurityPage />} />
           <Route path="profile/kitchen" element={<KitchenSetupPage />} />

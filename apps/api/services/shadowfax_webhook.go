@@ -103,6 +103,8 @@ func (s *ProviderService) handleShadowfaxWebhook(provider *models.DeliveryProvid
 		if err := SetOrderHoldAwaitingConfirmation(database.DB, order.ID); err != nil {
 			log.Printf("payout-hold: park order %s on shadowfax delivery failed: %v", order.ID, err)
 		}
+		// Chef rewards: loyalty points + referral milestone check (idempotent).
+		OnChefOrderDelivered(database.DB, order.ID)
 	}
 
 	// A failed / returned (RTO) Shadowfax delivery freezes the money for admin fault

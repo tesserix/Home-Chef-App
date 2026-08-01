@@ -1621,6 +1621,9 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		if err := services.SetOrderHoldAwaitingConfirmation(database.DB, order.ID); err != nil {
 			log.Printf("payout-hold: park order %s on chef self-delivery failed: %v", order.ID, err)
 		}
+		// Chef rewards: loyalty points for the delivered order + the referral
+		// milestone check. Both idempotent, never fatal.
+		services.OnChefOrderDelivered(database.DB, order.ID)
 		// Kick off the durable reminder + auto-confirm flow (#auto-confirm). Gated
 		// off by default; no-op until CONFIRM_RECEIPT_FLOW_ENABLED is set.
 		services.StartConfirmReceiptFlow(order.ID)

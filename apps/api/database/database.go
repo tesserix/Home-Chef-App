@@ -305,6 +305,12 @@ func Migrate() error {
 		&models.WeeklyStatement{},
 		// Chef cancellation levies, netted off the next settlement (#834).
 		&models.ChefPenalty{},
+		// Chef-refers-chef program: redemptions + settlement credits.
+		&models.ChefReferral{},
+		&models.ChefBonus{},
+		// Chef loyalty points (earn per delivered order → cashback conversion).
+		&models.ChefLoyaltyAccount{},
+		&models.ChefLoyaltyTxn{},
 
 		// Support Tickets
 		&models.SupportTicket{},

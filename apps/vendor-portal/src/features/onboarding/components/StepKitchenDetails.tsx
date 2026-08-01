@@ -205,6 +205,22 @@ export function StepKitchenDetails({ errors }: Props) {
           </Button>
         </div>
       </Card>
+
+      {/* Referral code */}
+      <Card>
+        <h3 className="text-lg font-semibold text-foreground">Referred by another chef?</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Enter their referral code — you both earn a cash bonus once you complete your first orders (optional)
+        </p>
+        <div className="mt-4 max-w-xs">
+          <Input
+            placeholder="e.g. ABCD2345"
+            value={data.referralCode ?? ''}
+            onChange={(e) => updateData({ referralCode: e.target.value.toUpperCase() })}
+            error={errors.referralCode}
+          />
+        </div>
+      </Card>
     </div>
   );
 }

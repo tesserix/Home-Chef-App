@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Stepper, StepperItem } from '@tesserix/web';
 import { toast } from 'sonner';
@@ -103,6 +103,16 @@ export default function OnboardingPage() {
       navigate('/dashboard', { replace: true });
     }
   }, [onboardingStatus, navigate]);
+
+  // Chef-refers-chef: capture the ?ref= code from the share link once; a code
+  // the chef typed by hand is never overwritten.
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    if (ref && !useOnboardingStore.getState().data.referralCode) {
+      useOnboardingStore.getState().updateData({ referralCode: ref.toUpperCase() });
+    }
+  }, [searchParams]);
 
   // Always pre-fill email/name from current logged-in user's session
   // This ensures a new user never sees a previous user's data

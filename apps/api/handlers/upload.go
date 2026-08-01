@@ -688,6 +688,15 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		return
 	}
 
+	// Chef-refers-chef: validate the code up front so a typo fails the submit
+	// with a field error instead of silently losing the referral.
+	if req.ReferralCode != "" {
+		if _, err := services.ResolveChefReferrer(database.DB, req.ReferralCode); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "That referral code isn't valid.", "field": "referralCode"})
+			return
+		}
+	}
+
 	chef := models.ChefProfile{
 		UserID: userID,
 		// Cashfree-preferred; see DefaultChefPaymentProvider for why this degrades
@@ -762,6 +771,18 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 
 		if err := h.seedDefaultCategoriesTx(tx, chef.ID); err != nil {
 			return fmt.Errorf("seed categories: %w", err)
+		}
+
+		// Record the referral atomically with the profile — the reward vests
+		// later, when this kitchen completes its delivered-orders milestone.
+		if req.ReferralCode != "" {
+			if _, err := services.AcceptChefReferral(tx, services.AcceptChefReferralInput{
+				RefereeChefID: chef.ID,
+				RefereeUserID: userID,
+				Code:          req.ReferralCode,
+			}); err != nil {
+				return fmt.Errorf("record referral: %w", err)
+			}
 		}
 
 		submittedData, _ := json.Marshal(map[string]interface{}{
@@ -936,6 +957,20 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 		}
 		if err := tx.Create(&approvalReq).Error; err != nil {
 			return fmt.Errorf("create approval request: %w", err)
+		}
+
+		// The wizard auto-creates the profile at the documents step, so a code
+		// typed on a later step lands on this update path, not the create path.
+		// AcceptChefReferral is idempotent on the same code; a bad code is only
+		// logged — a re-submit must not fail over an optional field.
+		if req.ReferralCode != "" {
+			if _, refErr := services.AcceptChefReferral(tx, services.AcceptChefReferralInput{
+				RefereeChefID: chef.ID,
+				RefereeUserID: chef.UserID,
+				Code:          req.ReferralCode,
+			}); refErr != nil {
+				log.Printf("[onboarding] referral code %q not recorded for chef=%s: %v", req.ReferralCode, chef.ID, refErr)
+			}
 		}
 		return nil
 	})
@@ -1166,6 +1201,10 @@ type OnboardingRequest struct {
 	// kitchen before approving the onboarding.
 	KitchenPhotos []string `json:"kitchenPhotos"`
 	AcceptedTerms bool     `json:"acceptedTerms"`
+	// ReferralCode is an optional chef-refers-chef code (prefilled from the
+	// vendors ?ref= link). Validated up front so a typo fails the submit
+	// loudly instead of silently dropping the referral.
+	ReferralCode string `json:"referralCode"`
 }
 
 type KitchenAddressReq struct {
