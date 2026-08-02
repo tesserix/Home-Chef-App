@@ -21,9 +21,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// istLocation is UTC+5:30. Settlement weeks are reckoned in IST so a week
-// boundary lands at the Indian Monday midnight, not UTC midnight.
-var istLocation = time.FixedZone("IST", 5*3600+1800)
+// istLocation is the zone settlement weeks are reckoned in, so a week boundary
+// lands at the Indian Monday midnight rather than UTC midnight.
+//
+// Kept as an alias rather than its own FixedZone: settlement and analytics must
+// agree on where a day ends, and a second definition here is how the codebase
+// ended up with three of them. BusinessLocation defaults to Asia/Kolkata, which
+// is the same +05:30 with no DST, so this is behaviour-preserving.
+var istLocation = BusinessLocation()
 
 // statementOrderRow is the join row scanned when generating statements —
 // order financials plus the owning chef's identity + home state (for the

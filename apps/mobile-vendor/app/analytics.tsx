@@ -18,6 +18,7 @@ import {
   useChefAnalytics,
   useSubscriptionMetrics,
   useDemandForecast,
+  useProfitLoss,
   type AnalyticsPeriod,
   type PopularItem,
   type Trend,
@@ -125,6 +126,88 @@ function TrendBars({ trend }: { trend: Trend }) {
   );
 }
 
+
+// One line of the P/L card. Deliberately plain rows rather than stat tiles: a
+// P/L is read down a column, and the figures must line up to be compared.
+function PLRow({
+  label,
+  value,
+  emphasis = false,
+  muted = false,
+  indented = false,
+  negative = false,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+  muted?: boolean;
+  indented?: boolean;
+  negative?: boolean;
+}) {
+  return (
+    <View style={[plStyles.row, emphasis && plStyles.rowEmphasis]}>
+      <Text
+        style={[
+          plStyles.label,
+          muted && plStyles.labelMuted,
+          indented && plStyles.labelIndented,
+          emphasis && plStyles.labelEmphasis,
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[
+          plStyles.value,
+          muted && plStyles.labelMuted,
+          emphasis && plStyles.valueEmphasis,
+          negative && plStyles.valueNegative,
+        ]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+const plStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    gap: theme.spacing[3],
+  },
+  // The profit line is the answer — a rule above it separates it from the
+  // workings, the way a printed statement does.
+  rowEmphasis: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+  },
+  label: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    flex: 1,
+  },
+  labelMuted: { color: theme.colors.ink.soft },
+  labelIndented: { paddingLeft: theme.spacing[3] },
+  labelEmphasis: { fontFamily: 'Inter-SemiBold' },
+  value: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  valueEmphasis: {
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.body.size,
+  },
+  valueNegative: { color: theme.colors.destructive.DEFAULT },
+});
+
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
@@ -135,6 +218,7 @@ export default function AnalyticsScreen() {
     useChefAnalytics(period);
   const { data: subs } = useSubscriptionMetrics();
   const { data: forecast } = useDemandForecast();
+  const { data: pl } = useProfitLoss(period);
 
   const summary = data?.summary;
   const hasData =
@@ -295,6 +379,41 @@ export default function AnalyticsScreen() {
                 )}
                 <Text style={styles.forecastBasis}>{forecast.basis}</Text>
               </View>
+            </View>
+          )}
+
+          {/* Profit & loss (#pl) — what the period actually left the chef with.
+              netEarnings is the server's payout figure, so this agrees with the
+              Earnings screen instead of offering a second opinion on money. */}
+          {pl && (pl.netEarnings > 0 || pl.expenses > 0) && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>PROFIT &amp; LOSS</Text>
+              <View style={styles.groupCard}>
+                <View style={styles.groupCardInner}>
+                  <PLRow label="Net earnings" value={inr(pl.netEarnings)} />
+                  <PLRow label="Expenses" value={`- ${inr(pl.expenses)}`} />
+                  {pl.expensesByCategory.map((e) => (
+                    <PLRow
+                      key={e.category}
+                      label={e.category}
+                      value={inr(e.amount)}
+                      muted
+                      indented
+                    />
+                  ))}
+                  <PLRow
+                    label={pl.netProfit >= 0 ? 'Profit' : 'Loss'}
+                    value={inr(Math.abs(pl.netProfit))}
+                    emphasis
+                    negative={pl.netProfit < 0}
+                  />
+                </View>
+              </View>
+              <Text style={styles.plCaption}>
+                {pl.orders} delivered {pl.orders === 1 ? 'order' : 'orders'} · after
+                commission, GST and TDS
+                {pl.netEarnings > 0 ? ` · ${pl.marginPercent}% kept` : ''}
+              </Text>
             </View>
           )}
 
@@ -487,6 +606,16 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
     ...theme.shadow[1],
   },
+  // Caption under the P/L card, aligned to the card gutter.
+  plCaption: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+    lineHeight: 16,
+    marginTop: theme.spacing[2],
+    marginHorizontal: theme.spacing[4],
+  },
+
   groupCardInner: {
     borderRadius: theme.radius.lg,
     overflow: 'hidden',

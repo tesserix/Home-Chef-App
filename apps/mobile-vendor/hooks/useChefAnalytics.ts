@@ -73,3 +73,28 @@ export function useDemandForecast() {
     staleTime: 60_000,
   });
 }
+
+// Profit & loss for the same window as the cards above (#pl). Net earnings come
+// from the server's payout calculator, not from revenue minus a guess, so this
+// card and the Earnings screen never disagree about money.
+export interface ProfitLoss {
+  period: AnalyticsPeriod;
+  from: string;
+  to: string;
+  orders: number;
+  grossSales: number;
+  deductions: { platformCommission: number; gst: number; tds: number };
+  netEarnings: number;
+  expenses: number;
+  expensesByCategory: { category: string; amount: number }[];
+  netProfit: number;
+  marginPercent: number;
+}
+
+export function useProfitLoss(period: AnalyticsPeriod) {
+  return useQuery<ProfitLoss>({
+    queryKey: ['chef', 'analytics', 'pl', period],
+    queryFn: () => api.get<ProfitLoss>(`/chef/analytics/pl?period=${period}`).then((r) => r.data),
+    staleTime: 60_000,
+  });
+}

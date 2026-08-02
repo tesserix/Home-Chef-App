@@ -936,11 +936,18 @@ func (h *DeliveryHandler) GetEarnings(c *gin.Context) {
 	}
 
 	var dailyEarnings []DailyEarning
+	// TO_CHAR, not DATE(): DATE() returns a Postgres `date`, which pgx decodes to
+	// time.Time and database/sql then renders into this string field as RFC3339 —
+	// so the driver app was handed "2026-08-02T00:00:00Z" where a day belongs.
+	// Bucketed in the business zone for the same reason the chef analytics are:
+	// a delivery at 01:00 IST belongs to the driver's night, not the previous
+	// UTC day.
+	dayExpr := "TO_CHAR(delivered_at AT TIME ZONE '" + services.BusinessTZName() + "', 'YYYY-MM-DD')"
 	database.DB.Model(&models.Delivery{}).
-		Select("DATE(delivered_at) as date, COUNT(*) as deliveries, COALESCE(SUM(total_payout), 0) as earnings").
+		Select(dayExpr+" as date, COUNT(*) as deliveries, COALESCE(SUM(total_payout), 0) as earnings").
 		Where("delivery_partner_id = ? AND status = ?", partner.ID, models.DeliveryDelivered).
 		Where("delivered_at >= ? OR ?", since, since.IsZero()).
-		Group("DATE(delivered_at)").
+		Group(dayExpr).
 		Order("date DESC").
 		Limit(30).
 		Scan(&dailyEarnings)
