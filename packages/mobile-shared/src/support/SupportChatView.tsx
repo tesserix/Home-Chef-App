@@ -119,6 +119,7 @@ export function SupportChatView({
 function senderLabel(t: DisplayMessage["sender_type"]): string {
   if (t === "customer") return "Me";
   if (t === "staff") return "Support";
+  if (t === "assistant") return "Assistant";
   return "System";
 }
 

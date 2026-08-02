@@ -49,7 +49,9 @@ export default function VendorSupportChatScreen() {
     () =>
       createSupportClient({
         baseUrl: process.env.EXPO_PUBLIC_API_URL!,
-        basePath: '/v1/support/chat',
+        // The vendor base URL already ends in /v1 (unlike the customer app's
+        // …/api), so this path must not repeat it.
+        basePath: '/support/chat',
         getToken: async () => useAuthStore.getState().accessToken,
         refreshToken: refreshSession,
         onUnauthorized: () => {

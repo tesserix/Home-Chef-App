@@ -144,7 +144,17 @@ export function createSupportClient(config: SupportClientConfig) {
 
     /** Returns the customer's most recent open thread, or null. */
     resume: async (): Promise<ResumeResult | null> => {
-      const data = await request("GET", "/resume");
+      let data: Record<string, unknown> | undefined;
+      try {
+        data = await request("GET", "/resume");
+      } catch (e) {
+        // Having no thread to resume is the normal first-visit state; otto
+        // signals it with 404. Only a real failure should surface an error —
+        // otherwise every new user opens the intake form under a red
+        // "not found".
+        if (e instanceof SupportError && e.status === 404) return null;
+        throw e;
+      }
       if (!data || data.conversation == null) return null;
       return {
         conversation: SupportConversationSchema.parse(data.conversation),

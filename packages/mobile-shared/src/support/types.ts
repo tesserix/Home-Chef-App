@@ -4,7 +4,10 @@
 // addition doesn't break parsing.
 import { z } from "zod";
 
-export const SupportSenderTypeSchema = z.enum(["customer", "staff", "system"]);
+// "assistant" is slm-router's AI reply. Omitting it made every bot message
+// fail schema validation, so the answer sat in otto while the thread looked
+// empty — the app rendered nothing and stayed on "Connecting…".
+export const SupportSenderTypeSchema = z.enum(["customer", "staff", "system", "assistant"]);
 export type SupportSenderType = z.infer<typeof SupportSenderTypeSchema>;
 
 export const SupportStatusSchema = z.enum(["pending", "active", "closed"]);
