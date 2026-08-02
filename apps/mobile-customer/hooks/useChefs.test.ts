@@ -70,6 +70,14 @@ describe('mapChef', () => {
     expect(chef.availability?.minutesToChange).toBe(20);
   });
 
+  it('carries the server unavailable message through (#794)', () => {
+    // The reduced payload for a kitchen under maintenance explains itself; the
+    // mapper must not drop that copy, or the screen is back to a bare "Closed".
+    const msg = 'Sorry for the inconvenience. This kitchen is temporarily unavailable due to maintenance and will reopen soon.';
+    expect(mapChef({ id: 'c', unavailableMessage: msg }).unavailableMessage).toBe(msg);
+    expect(mapChef({ id: 'c' }).unavailableMessage).toBeUndefined();
+  });
+
   it('prefers banner > kitchen photo > avatar for the card image', () => {
     expect(
       mapChef({ id: 'c', bannerImage: 'b.jpg', kitchenPhotos: ['k.jpg'], profileImage: 'p.jpg' }).imageUrl,

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,5 +79,13 @@ func TestClosedResponseLeaksNoCommerceFields(t *testing.T) {
 	}
 	if r.OffersPickup || r.OffersSelfDelivery || r.OffersDelivery {
 		t.Fatal("no fulfilment option may be advertised by a closed kitchen")
+	}
+	// #794: two false flags are not an explanation. The payload must carry copy
+	// the app can render, and it must not promise a notify we do not have.
+	if r.UnavailableMessage != models.ClosedForMaintenanceMessage {
+		t.Fatalf("the closed payload must explain itself, got %q", r.UnavailableMessage)
+	}
+	if strings.Contains(strings.ToLower(r.UnavailableMessage), "notify") {
+		t.Fatal("the closed copy must not promise a notify feature that does not exist")
 	}
 }

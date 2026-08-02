@@ -62,6 +62,9 @@ interface ApiChefProfile {
   offersSelfDelivery?: boolean;
   offersDelivery?: boolean;
   deliverableToYou?: boolean;
+  // Set only on the reduced payload for a kitchen that is unavailable — the API
+  // says why in words, so the app doesn't have to invent a reason (#794).
+  unavailableMessage?: string;
 }
 
 interface ApiMenuItem {
@@ -120,6 +123,7 @@ export function mapChef(c: ApiChefProfile): Chef {
     offersSelfDelivery: c.offersSelfDelivery,
     offersDelivery: c.offersDelivery,
     deliverableToYou: c.deliverableToYou,
+    unavailableMessage: c.unavailableMessage,
   };
 }
 

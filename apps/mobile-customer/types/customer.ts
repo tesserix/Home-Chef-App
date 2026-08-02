@@ -76,6 +76,11 @@ export interface Chef {
   // Full street address — only surfaced by TrackOrder for a PICKUP order (the
   // customer needs it to collect). Absent/fuzzed for delivery (privacy).
   address?: string;
+  // unavailableMessage (#794): server-supplied copy explaining why this kitchen
+  // cannot be ordered from right now. Only set on the reduced payload the API
+  // serves for a kitchen under maintenance; render it verbatim rather than
+  // leaving the customer to infer the reason from a bare "Closed".
+  unavailableMessage?: string;
 }
 
 export interface MenuItem {
