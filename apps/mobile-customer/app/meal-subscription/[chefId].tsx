@@ -22,6 +22,7 @@ import {
   useSubscribeMeal,
 } from '../../hooks/useMealSubscription';
 import { useAlert } from '@homechef/mobile-shared/ui';
+import { friendlyErrorMessage } from '../../lib/errors';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -88,7 +89,7 @@ export default function MealSubscribeScreen() {
           showAlert('Subscription created', 'Your daily tiffin is set up. Manage it under My Subscriptions.', [
             { text: 'View', onPress: () => router.replace('/subscriptions' as never) },
           ]),
-        onError: (e) => showAlert('Could not subscribe', e.message || 'Please try again.'),
+        onError: (e) => showAlert('Could not subscribe', friendlyErrorMessage(e, 'Could not subscribe. Please try again.')),
       },
     );
   }
