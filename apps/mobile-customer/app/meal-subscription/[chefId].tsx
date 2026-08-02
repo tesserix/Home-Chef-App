@@ -14,13 +14,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft, Check } from 'lucide-react-native';
+import { ChevronLeft, Check, AlertTriangle } from 'lucide-react-native';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
+import { findItemConflicts, hasDietaryProfile } from '@homechef/mobile-shared/dietary';
 import {
   useMealChefOffer,
   usePreviewMealPrice,
   useSubscribeMeal,
 } from '../../hooks/useMealSubscription';
+import { useChefWeeklyMenu } from '../../hooks/useMealPlans';
+import { useProfile } from '../../hooks/useProfile';
 import { useAlert } from '@homechef/mobile-shared/ui';
 import { friendlyErrorMessage } from '../../lib/errors';
 
@@ -44,12 +47,34 @@ export default function MealSubscribeScreen() {
   const { data: offer, isLoading, isError, refetch } = useMealChefOffer(chefId);
   const preview = usePreviewMealPrice();
   const subscribe = useSubscribeMeal();
+  const { data: profile } = useProfile();
+  const { data: weeklyMenu } = useChefWeeklyMenu(chefId);
 
   const [slots, setSlots] = useState<string[]>([]);
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [variant, setVariant] = useState<'veg' | 'nonveg'>('veg');
   const [cadence, setCadence] = useState<string>('weekly');
   const [price, setPrice] = useState<number | null>(null);
+
+  // Pre-commit dietary-conflict banner (#901) — non-blocking, informational
+  // only. Checks the chef's weekly-menu dishes matching the current
+  // slot/day/variant selection against the customer's saved profile.
+  const hasConflict = useMemo(() => {
+    if (!profile || !hasDietaryProfile({ dietaryPreferences: profile.dietaryPreferences, foodAllergies: profile.foodAllergies })) {
+      return false;
+    }
+    if (!weeklyMenu?.isPublished) return false;
+    return (weeklyMenu.items ?? []).some(
+      (item) =>
+        slots.includes(item.slot) &&
+        days.includes(item.dayOfWeek) &&
+        item.variant === variant &&
+        findItemConflicts(
+          { dietaryPreferences: profile.dietaryPreferences, foodAllergies: profile.foodAllergies },
+          { dietaryTags: item.dietaryTags, allergens: item.allergens, isVeg: item.variant === 'veg' },
+        ).length > 0,
+    );
+  }, [profile, weeklyMenu, slots, days, variant]);
 
   // Seed defaults from the offer.
   useEffect(() => {
@@ -189,6 +214,17 @@ export default function MealSubscribeScreen() {
               </Text>
             </View>
             {offer.deliveryFee ? <Text style={styles.muted}>Includes {money(offer.deliveryFee)} flat delivery</Text> : null}
+
+            {/* Pre-commit dietary-conflict banner (#901) — calm, factual, never
+                blocks Subscribe; informational only. */}
+            {hasConflict ? (
+              <View style={styles.conflictBanner}>
+                <AlertTriangle size={14} color={customerColors.destructive.DEFAULT} strokeWidth={2} />
+                <Text style={styles.conflictBannerText}>
+                  Some dishes in this chef&apos;s weekly menu may not match your saved dietary preferences.
+                </Text>
+              </View>
+            ) : null}
           </ScrollView>
 
           {/* Sticky CTA bar per spec §2.5 — white, top hairline + shadow[2],
@@ -290,6 +326,23 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   muted: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginTop: 8, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  // Pre-commit dietary-conflict banner (#901) — calm, factual, informational only.
+  conflictBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: customerColors.destructive.tint,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+  },
+  conflictBannerText: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 13,
+    lineHeight: 18,
+    color: customerColors.destructive.DEFAULT,
+  },
   retryButton: { marginTop: 16 },
   retryButtonInner: {
     backgroundColor: customerColors.coral.DEFAULT,

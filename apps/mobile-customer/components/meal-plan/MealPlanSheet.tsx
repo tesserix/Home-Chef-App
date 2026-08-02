@@ -43,6 +43,7 @@ export const MealPlanSheet = forwardRef<SheetHandle, MealPlanSheetProps>(functio
             future confirmed days (price column stays off — that's detail-only). */}
         <MealPlanDayList
           days={summary.days ?? []}
+          chefId={summary.chefId}
           showPrice={false}
           onSkip={canSkip ? confirmSkip : undefined}
           skipping={skipping}

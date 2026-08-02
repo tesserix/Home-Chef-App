@@ -176,6 +176,8 @@ export function WeeklyMenuPreview({ items }: { items: WeeklyMenuItem[] }) {
               price={c.price}
               imageUrl={c.imageUrl}
               description={c.description}
+              dietaryTags={c.dietaryTags}
+              allergens={c.allergens}
             />
           ))}
         </ScrollView>

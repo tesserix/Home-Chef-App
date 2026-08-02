@@ -254,6 +254,7 @@ export default function MealPlanDetailScreen() {
 
         <MealPlanDayList
           days={days}
+          chefId={plan.chefId}
           onSkip={canSkip ? confirmSkip : undefined}
           skipping={skipping}
           onConfirmReceived={confirmReceipt}
