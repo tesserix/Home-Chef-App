@@ -93,6 +93,11 @@ func (customerCascade) Purge(tx *gorm.DB, userID uuid.UUID) error {
 var customerPurgeUserTables = []string{
 	"addresses",
 	"campaign_deliveries",
+	// #937: the refund-abuse profile and the decisions taken on it are an assessment OF
+	// this person and go with them. That does hand a purged abuser a clean slate — the
+	// answer to re-registration is identity linkage, not retaining erased personal data.
+	"customer_risk_actions",
+	"customer_risk_profiles",
 	"customer_profiles",
 	"email_verification_tokens",
 	"favorite_chefs",
@@ -141,7 +146,7 @@ func purgeUserPersonalData(tx *gorm.DB, userID uuid.UUID) error {
 	}
 
 	// customer_id-keyed personal rows.
-	for _, table := range []string{"catering_requests", "meal_trials"} {
+	for _, table := range []string{"catering_requests", "meal_trials", "customer_risk_events"} {
 		if !tx.Migrator().HasTable(table) {
 			continue
 		}

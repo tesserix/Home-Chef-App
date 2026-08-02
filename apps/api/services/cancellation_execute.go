@@ -235,6 +235,21 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 	if hErr := WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, "customer cancellation"); hErr != nil {
 		log.Printf("cancellation payout cross-guard failed for order %s: %v", order.ID, hErr)
 	}
+	// #937: a cancellation the chef had already spent money or time on. `not_started`
+	// costs nobody anything and is not recorded; every later tier is a real loss the chef
+	// partly absorbs, so repeated ones belong on the customer's ledger.
+	if cr.RefundExecuted && cr.VendorReason != "" && CancellationReason(cr.VendorReason) != CancelReasonNotStarted {
+		cancelChefID := order.ChefID
+		TrackRiskEvent(database.DB, RecordRiskEventInput{
+			CustomerID: order.CustomerID,
+			Kind:       models.RiskCancelLate,
+			SourceKey:  "cancel:" + cr.ID.String(),
+			OrderID:    &order.ID,
+			ChefID:     &cancelChefID,
+			Amount:     refund,
+			Reason:     cr.VendorReason,
+		})
+	}
 	return nil
 }
 

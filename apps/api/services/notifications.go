@@ -144,6 +144,9 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayPrepared, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded, SubjectMealPlanDaySkippedChef, SubjectMealPlanDaySkipRequested, SubjectMealPlanDaySkipDeclined, SubjectMealPlanDayFailed, SubjectMealPlanCompleted, SubjectMealPlanChefReminder, SubjectMealPlanPayoutReleased}},
 		{Stream: "GROUP_ORDERS", Durable: "notify-group-orders", Handler: h,
 			Subjects: []string{SubjectGroupOrderLocked, SubjectGroupOrderPlaced, SubjectGroupOrderCancelled}},
+		// Customer refund-abuse flag → the admin investigation queue (#937).
+		{Stream: "RISK", Durable: "notify-risk", Handler: h,
+			Subjects: []string{SubjectRiskCustomerFlagged}},
 	}
 }
 
@@ -242,6 +245,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleApprovalInfoRequested)
 	case SubjectApprovalCreated:
 		return decodeThen(data, s.handleApprovalCreated)
+	case SubjectRiskCustomerFlagged:
+		return decodeThen(data, s.handleRiskCustomerFlagged)
 	case SubjectMealPlanCreated:
 		return decodeThen(data, s.handleMealPlanCreated)
 	case SubjectMealPlanAcceptedFull:
@@ -359,6 +364,33 @@ func (s *NotificationService) handleDriverOnboardingSubmitted(event Event) error
 			Data:    string(data),
 		}); err != nil {
 			return fmt.Errorf("save driver onboarding notification for admin %s: %w", admin.ID, err)
+		}
+	}
+	return nil
+}
+
+// handleRiskCustomerFlagged alerts admins that a customer's refund-abuse score reached
+// severe (#937). Deliberately in-app only and worded as a review request, not a verdict:
+// nothing has happened to the customer, and an admin has to look before anything does.
+func (s *NotificationService) handleRiskCustomerFlagged(event Event) error {
+	score, _ := event.Data["score"].(float64)
+	claims, _ := event.Data["issuesReported"].(float64)
+	orders, _ := event.Data["ordersInWindow"].(float64)
+
+	var admins []models.User
+	database.DB.Where("role = ?", models.RoleAdmin).Find(&admins)
+
+	data, _ := json.Marshal(event.Data)
+	for _, admin := range admins {
+		if err := s.saveNotification(&models.Notification{
+			UserID: admin.ID,
+			Type:   "customer_risk_flagged",
+			Title:  "Customer flagged for review",
+			Message: fmt.Sprintf("A customer has reported %.0f issues across %.0f orders (risk score %.0f). Review before any action is taken.",
+				claims, orders, score),
+			Data: string(data),
+		}); err != nil {
+			return fmt.Errorf("save customer risk notification for admin %s: %w", admin.ID, err)
 		}
 	}
 	return nil

@@ -69,6 +69,20 @@ func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.Mea
 		return terminalizeV2Day(tx, day, 0, dest, false)
 	}
 
+	// #937: a paid tiffin day being refunded back to the customer. Recorded inside the
+	// caller's tx (savepoint-isolated) so a later gateway failure rolls the event back
+	// with the refund — no refund, no ledger entry.
+	mpChefID := plan.ChefID
+	TrackRiskEvent(tx, RecordRiskEventInput{
+		CustomerID: plan.CustomerID,
+		Kind:       models.RiskMealPlanRefund,
+		SourceKey:  "mealplan-day-refund:" + day.ID.String(),
+		OrderID:    day.OrderID,
+		ChefID:     &mpChefID,
+		Amount:     amount,
+		Reason:     fmt.Sprintf("%d%% day refund", percent),
+	})
+
 	// Reverse the chef's held transfer by the refunded percentage; the chef keeps (100−P)% of
 	// their net payout as prep compensation. Best-effort on the gateway (a failed reverse is
 	// left as re-drivable drift for the payout-reconcile cron), never blocking the customer

@@ -110,6 +110,10 @@ const (
 	SubjectNotificationPush        = "notifications.push"
 	SubjectNotificationSMS         = "notifications.sms"
 
+	// SubjectRiskCustomerFlagged — a customer's refund-abuse score reached severe (#937).
+	// Fans out to admins; the money paths never consume it.
+	SubjectRiskCustomerFlagged = "risk.customer_flagged"
+
 	SubjectApprovalCreated       = "approvals.created"
 	SubjectApprovalApproved      = "approvals.approved"
 	SubjectApprovalRejected      = "approvals.rejected"
@@ -321,6 +325,9 @@ func (n *NATSClient) setupStreams() error {
 		{"MEAL_PLANS", "Tiffin meal-plan lifecycle events", []string{"meal_plans.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"GROUP_ORDERS", "Group / office order lifecycle events", []string{"group_orders.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"PROVIDER", "Third-party delivery provider events", []string{"provider.>"}, 30 * 24 * time.Hour, gib / 2},
+		// Customer refund-abuse flags (#937). Long retention: these drive an
+		// investigation an admin may not open for days.
+		{"RISK", "Customer refund-abuse risk events", []string{"risk.>"}, 30 * 24 * time.Hour, gib / 4},
 		// otto (support-platform) publishes these with a Nats-Msg-Id per
 		// transition, so the 2-minute dedup window absorbs the duplicate
 		// publishes from otto's replicated change-stream watchers.

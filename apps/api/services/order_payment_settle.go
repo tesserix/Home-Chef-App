@@ -100,6 +100,18 @@ func CompleteOrderPaymentTx(tx *gorm.DB, order *models.Order, updates, event map
 	if err := EnqueueEvent(tx, "orders.paid", "order.paid", order.CustomerID, event); err != nil {
 		return false, err
 	}
+	// #937: the risk denominator. Every claim rate is meaningless without a count of what
+	// the customer actually bought, and this guarded transition is the one place a paid
+	// order is counted exactly once across all providers. Savepoint-isolated inside.
+	chefID := order.ChefID
+	TrackRiskEvent(tx, RecordRiskEventInput{
+		CustomerID: order.CustomerID,
+		Kind:       models.RiskOrderPlaced,
+		SourceKey:  "order:" + order.ID.String(),
+		OrderID:    &order.ID,
+		ChefID:     &chefID,
+		Amount:     order.Total,
+	})
 	return true, nil
 }
 

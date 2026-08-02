@@ -1982,6 +1982,11 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 		PaymentMethod: order.PaymentMethod,
 	}
 
+	// #937: a neutral dispute-history heads-up, so a chef facing a repeat claimer can
+	// protect themselves with a handover photo. No score, no counts, no identity attached
+	// to a judgement — and nil unless risk enforcement is on.
+	detail.DisputeSignal = services.GetChefDisputeSignal(database.DB, order.CustomerID)
+
 	// The authoritative self-delivery CAPABILITY flag — the vendor app gates the
 	// Mark-Ready carrier choice on this, NOT on the distance fields below (which
 	// are 0 when the chef set no radius or coords are missing, so they can't tell

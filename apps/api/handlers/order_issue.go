@@ -92,6 +92,17 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 		return
 	}
 
+	// #937: the customer-scoped guard. Every check above is scoped to THIS order, so a
+	// customer claiming a little on many orders across many chefs passes all of them.
+	// Checked before the photo uploads below so a restricted account costs us no storage.
+	riskDecision := services.EvaluateIssueClaim(database.DB, userID)
+	if !riskDecision.Allowed {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "We can't accept a new report on this account right now. Please contact support and we'll look into it with you.",
+		})
+		return
+	}
+
 	reason := models.IssueReason(strings.TrimSpace(c.PostForm("reason")))
 	if !models.ValidIssueReason(reason) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reason"})
@@ -229,12 +240,21 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 		}
 	}
 
-	// Auto-refund small/clear cases instantly; otherwise leave pending for admin.
+	// #937: record the claim against the customer's risk ledger, plus the two quality
+	// signals only visible at report time — a photo-free quality complaint, and one filed
+	// in the dying hours of the window, when nothing is provable any more.
+	recordIssueRiskEvents(&issue, &order, len(photoURLs))
+
+	// Auto-refund small/clear cases instantly; otherwise leave pending for admin. A
+	// customer with an elevated dispute history keeps the refund but loses the INSTANT
+	// one: the claim is still filed, still refundable, and simply goes to assisted review.
 	cfg := services.GetIssueConfig(database.DB)
-	if services.ShouldAutoRefund(cfg, requested) {
+	if services.ShouldAutoRefund(cfg, requested) && riskDecision.AutoRefundAllowed {
 		if err := services.RefundIssueToWallet(database.DB, &issue, requested, "system", nil); err != nil {
 			log.Printf("order issue auto-refund failed for issue %s: %v", issue.ID, err)
 		}
+	} else if !riskDecision.AutoRefundAllowed {
+		log.Printf("order issue %s: auto-refund suppressed for customer %s (band=%s)", issue.ID, userID, riskDecision.Band)
 	}
 
 	// Route to the chef (in-app + push) via the outbox.
@@ -263,6 +283,49 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 		"refundAmount": issue.RefundAmount,
 		"message":      message,
 	})
+}
+
+// lateWindowFraction is how far into IssueReportWindow a report counts as a
+// deadline claim — filed when the food is long gone and nothing is provable.
+const lateWindowFraction = 0.75
+
+// recordIssueRiskEvents appends a filed claim to the customer's risk ledger (#937),
+// along with the two signals that are only observable at report time. Best-effort: the
+// report is already committed and must not fail on risk accounting.
+func recordIssueRiskEvents(issue *models.OrderIssue, order *models.Order, photoCount int) {
+	chefID := issue.ChefID
+	base := services.RecordRiskEventInput{
+		CustomerID: issue.CustomerID,
+		OrderID:    &issue.OrderID,
+		ChefID:     &chefID,
+		Reason:     string(issue.Reason),
+	}
+
+	claim := base
+	claim.Kind = models.RiskIssueReported
+	claim.SourceKey = "issue:" + issue.ID.String()
+	services.TrackRiskEvent(database.DB, claim)
+
+	// A quality/damage complaint with no photo is not proof of abuse — a phone dies, a
+	// meal gets eaten before anyone thinks to photograph it. Repeated across many orders
+	// it is the clearest tell there is, which is exactly what the ledger is for.
+	needsEvidence := issue.Reason == models.IssueQualityIssue ||
+		issue.Reason == models.IssueDamaged ||
+		issue.Reason == models.IssueWrongItem
+	if needsEvidence && photoCount == 0 {
+		noEvidence := base
+		noEvidence.Kind = models.RiskNoEvidenceClaim
+		noEvidence.SourceKey = "issue-noevidence:" + issue.ID.String()
+		services.TrackRiskEvent(database.DB, noEvidence)
+	}
+
+	if order.DeliveredAt != nil &&
+		time.Since(*order.DeliveredAt) > time.Duration(float64(IssueReportWindow)*lateWindowFraction) {
+		late := base
+		late.Kind = models.RiskLateWindowClaim
+		late.SourceKey = "issue-late:" + issue.ID.String()
+		services.TrackRiskEvent(database.DB, late)
+	}
 }
 
 // GetMyOrderIssues lists the caller's issues for an order.
@@ -454,16 +517,19 @@ func (h *OrderIssueHandler) AdminRejectIssue(c *gin.Context) {
 	now := time.Now()
 
 	var found, rejected bool
+	var rejectedIssue models.OrderIssue
 	if txErr := database.DB.Transaction(func(tx *gorm.DB) error {
 		// Load the issue's order so its payout hold can be driven in the same tx.
 		var issue models.OrderIssue
-		if err := tx.Select("id", "order_id").First(&issue, "id = ?", issueID).Error; err != nil {
+		if err := tx.Select("id", "order_id", "customer_id", "chef_id", "reason").
+			First(&issue, "id = ?", issueID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil // found stays false → 404
 			}
 			return err
 		}
 		found = true
+		rejectedIssue = issue
 
 		// #585: acquire the ORDER-row lock BEFORE the issue-row UPDATE, matching
 		// RefundIssueToWallet's order-first ordering. Rejecting an issue then drives the
@@ -507,6 +573,17 @@ func (h *OrderIssueHandler) AdminRejectIssue(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "This issue has already been handled"})
 		return
 	}
+	// #937: an admin looked at the evidence and said no. That is the strongest abuse
+	// signal the platform has — weighted well above the report itself.
+	rejectChefID := rejectedIssue.ChefID
+	services.TrackRiskEvent(database.DB, services.RecordRiskEventInput{
+		CustomerID: rejectedIssue.CustomerID,
+		Kind:       models.RiskIssueRejected,
+		SourceKey:  "issue-rejected:" + issueID.String(),
+		OrderID:    &rejectedIssue.OrderID,
+		ChefID:     &rejectChefID,
+		Reason:     string(rejectedIssue.Reason),
+	})
 	c.JSON(http.StatusOK, gin.H{"status": string(models.IssueRejected)})
 }
 
@@ -552,6 +629,20 @@ func (h *OrderIssueHandler) AdminResolveDeliveryFailure(c *gin.Context) {
 	case err != nil:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not resolve the delivery failure"})
 	default:
+		// #937: an admin ruled the failed delivery was the customer's fault — nobody was
+		// there, the address was wrong. Once is life; a pattern is the "never received"
+		// play, and only a customer-scoped ledger can tell the two apart.
+		if req.Fault == models.FaultCustomer {
+			dfChefID := issue.ChefID
+			services.TrackRiskEvent(database.DB, services.RecordRiskEventInput{
+				CustomerID: issue.CustomerID,
+				Kind:       models.RiskDeliveryFaultCustomer,
+				SourceKey:  "delivery-fault:" + issueID.String(),
+				OrderID:    &issue.OrderID,
+				ChefID:     &dfChefID,
+				Reason:     string(req.Fault),
+			})
+		}
 		c.JSON(http.StatusOK, gin.H{"status": "resolved", "fault": string(req.Fault)})
 	}
 }
