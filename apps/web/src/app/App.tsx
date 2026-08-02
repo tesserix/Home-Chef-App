@@ -30,12 +30,15 @@ export function App() {
                 <SkipLink />
                 <AppRoutes />
                 <OttoChat />
-                {/* Clears the Otto launcher (44px tall, 24px up) — it sits at
-                    z-index 2147483000, so toasts can only dodge it, not stack
-                    over it. */}
+                {/* Top-right, tucked under the sticky header (~64px): toasts
+                    can never collide with the Otto launcher or its open panel
+                    in the bottom-right corner, and stay clear of the header
+                    icons. The launcher itself is pinned to z-40 in globals.css
+                    so overlays and payment modals always win the corner. */}
                 <ThemedToaster
-                  position="bottom-right"
-                  offset="80px"
+                  position="top-right"
+                  offset="76px"
+                  mobileOffset={{ top: '72px' }}
                   expand={false}
                   closeButton
                   toastOptions={{

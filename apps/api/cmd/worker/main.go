@@ -141,10 +141,13 @@ func main() {
 		return err
 	}
 
+	// Support-chat staff queue SLA (otto.support.* NATS events).
+	workflows.SupportQueueNotifyFunc = services.SendSupportQueueNotice
+
 	if err := temporal.RunWorkers(
 		temporal.Queue(temporal.TaskQueueNotifications).
-			Workflows(workflows.NotificationWorkflow).
-			Activities(workflows.SendNotificationActivity),
+			Workflows(workflows.NotificationWorkflow, workflows.SupportQueueWorkflow).
+			Activities(workflows.SendNotificationActivity, workflows.SupportQueueNotifyActivity),
 		temporal.Queue(temporal.TaskQueueDelivery).
 			Workflows(workflows.DeliveryWorkflow).
 			Activities(workflows.DispatchDeliveryActivity),

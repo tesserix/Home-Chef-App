@@ -32,6 +32,15 @@ export interface SupportPalette {
   danger: string;
 }
 
+/** Context handed to onCreateTicket — everything a durable ticket needs. */
+export interface SupportTicketContext {
+  conversationId: string;
+  caseId: string;
+  subject: string;
+  reason: string;
+  transcript: string;
+}
+
 export interface SupportChatViewProps {
   chat: UseSupportChat;
   palette: SupportPalette;
@@ -43,6 +52,12 @@ export interface SupportChatViewProps {
   statusPlaceholder?: string;
   /** Returns true when the selected reason requires a date of birth. */
   requiresDob?: (reason: string) => boolean;
+  /**
+   * When set, a "Create a support ticket" action appears while the chat is
+   * queued (waiting for an agent) and after it closes, so nobody is forced
+   * to wait in line. The host app owns creation + navigation/toasts.
+   */
+  onCreateTicket?: (ctx: SupportTicketContext) => void;
 }
 
 export function SupportChatView({
@@ -55,6 +70,7 @@ export function SupportChatView({
   composerPlaceholder = "Type a message…",
   statusPlaceholder = "Briefly, what's going on?",
   requiresDob,
+  onCreateTicket,
 }: SupportChatViewProps) {
   const [composeNew, setComposeNew] = useState(false);
 
@@ -94,8 +110,16 @@ export function SupportChatView({
       palette={palette}
       composerPlaceholder={composerPlaceholder}
       onNewChat={() => setComposeNew(true)}
+      onCreateTicket={onCreateTicket}
     />
   );
+}
+
+// senderLabel renders a transcript line prefix for ticket descriptions.
+function senderLabel(t: DisplayMessage["sender_type"]): string {
+  if (t === "customer") return "Me";
+  if (t === "staff") return "Support";
+  return "System";
 }
 
 function ThreadView({
@@ -103,15 +127,31 @@ function ThreadView({
   palette,
   composerPlaceholder,
   onNewChat,
+  onCreateTicket,
 }: {
   chat: UseSupportChat;
   palette: SupportPalette;
   composerPlaceholder: string;
   onNewChat: () => void;
+  onCreateTicket?: (ctx: SupportTicketContext) => void;
 }) {
   const [draft, setDraft] = useState("");
   const listRef = useRef<FlatList<DisplayMessage>>(null);
   const closed = chat.conversation?.status === "closed" || chat.status === "closed";
+
+  const conv = chat.conversation;
+  const ticketContext = (): SupportTicketContext => ({
+    conversationId: conv?.id ?? "",
+    caseId: conv?.case_id ?? "",
+    subject: conv?.subject ?? "",
+    reason: ((conv as Record<string, unknown> | null)?.intake as { reason?: string } | undefined)?.reason ?? "",
+    transcript: chat.messages
+      .filter((m) => !m.failed)
+      .map((m) => `${senderLabel(m.sender_type)}: ${m.body}`)
+      .join("\n"),
+  });
+  const queued = !closed && conv?.status === "pending";
+  const offerTicket = Boolean(onCreateTicket && conv?.id);
 
   // Fire-and-forget: the durable outbox persists + retries the message, so
   // the composer can clear immediately and never block or lose the text.
@@ -129,6 +169,23 @@ function ThreadView({
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
       <StatusBar chat={chat} palette={palette} />
+      {queued && offerTicket ? (
+        <View style={[styles.queueBanner, { borderBottomColor: palette.border, backgroundColor: palette.surface }]}>
+          <Text style={[styles.queueBannerText, { color: palette.textSecondary }]}>
+            Prefer not to wait?
+          </Text>
+          <Pressable
+            onPress={() => onCreateTicket?.(ticketContext())}
+            accessibilityRole="button"
+            accessibilityLabel="Create a support ticket instead"
+            hitSlop={6}
+          >
+            <Text style={[styles.link, styles.queueBannerLink, { color: palette.primary }]}>
+              Create a support ticket
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
       <FlatList
         ref={listRef}
         data={chat.messages}
@@ -148,6 +205,15 @@ function ThreadView({
           <Pressable onPress={onNewChat} accessibilityRole="button" accessibilityLabel="Start a new chat">
             <Text style={[styles.link, { color: palette.primary }]}>Start a new chat</Text>
           </Pressable>
+          {offerTicket ? (
+            <Pressable
+              onPress={() => onCreateTicket?.(ticketContext())}
+              accessibilityRole="button"
+              accessibilityLabel="Create a support ticket from this conversation"
+            >
+              <Text style={[styles.link, { color: palette.primary }]}>Create a support ticket</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <View style={[styles.composer, { borderTopColor: palette.border, backgroundColor: palette.background }]}>
@@ -378,6 +444,9 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   listContent: { padding: 14, gap: 8 },
   statusBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+  queueBanner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  queueBannerText: { fontSize: 13 },
+  queueBannerLink: { fontSize: 14 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 12 },
   bubbleRow: { flexDirection: "row" },

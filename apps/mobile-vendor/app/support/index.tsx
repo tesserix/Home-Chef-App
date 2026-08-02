@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, MessageCircle, Plus } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { EmptyState, Skeleton } from '@homechef/mobile-shared/ui';
 import {
@@ -118,6 +118,31 @@ export default function SupportTicketsScreen() {
         <Text style={styles.commandTitle}>Support</Text>
       </View>
 
+      {/* Live chat entry — Otto answers instantly, a human takes over when
+          needed. Tickets below remain the async path. */}
+      <Pressable
+        onPress={() => router.push('/support/chat')}
+        accessibilityRole="button"
+        accessibilityLabel="Chat with support"
+        android_ripple={{ color: `${theme.colors.ink.DEFAULT}0F`, borderless: false }}
+      >
+        {({ pressed }) => (
+          <View
+            style={[
+              styles.chatCard,
+              pressed && Platform.OS === 'ios' && styles.cardPressed,
+            ]}
+          >
+            <MessageCircle size={20} color={theme.colors.ink.DEFAULT} strokeWidth={1.75} />
+            <View style={styles.chatCardBody}>
+              <Text style={styles.chatCardTitle}>Chat with support</Text>
+              <Text style={styles.chatCardSub}>Real-time help with payouts, orders and more</Text>
+            </View>
+            <ChevronRight size={18} color={theme.colors.ink.muted} strokeWidth={1.75} />
+          </View>
+        )}
+      </Pressable>
+
       {isLoading ? (
         <View style={styles.skeletonStack}>
           <Skeleton height={90} style={{ borderRadius: theme.radius.lg, marginBottom: theme.spacing[3] }} />
@@ -181,6 +206,22 @@ export default function SupportTicketsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bone },
+  chatCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+  },
+  chatCardBody: { flex: 1 },
+  chatCardTitle: { fontSize: 15, fontWeight: '600', color: theme.colors.ink.DEFAULT },
+  chatCardSub: { fontSize: 12.5, color: theme.colors.ink.soft, marginTop: 1 },
   commandBar: {
     flexDirection: 'row',
     alignItems: 'center',

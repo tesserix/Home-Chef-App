@@ -31,13 +31,17 @@ import (
 
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/middleware"
+	"github.com/homechef/api/models"
 )
 
 const (
 	// Pinned per HomeChef — mirrors apps/web/nginx.conf so mobile-created
 	// threads share the web tenant/store and surface in the platform inbox.
-	ottoTenantID = "homechef"
-	ottoStoreID  = "default"
+	// Chef-role callers are re-scoped to the vendor tenant so chef threads
+	// queue in their own lane (otto TenantReasons["homechef-vendor"]).
+	ottoTenantID       = "homechef"
+	ottoVendorTenantID = "homechef-vendor"
+	ottoStoreID        = "default"
 
 	ottoStorefrontBase = "/api/v1/storefront/otto"
 	ottoSessionCookie  = "otto_session"
@@ -168,8 +172,12 @@ func (h *SupportChatHandler) forward(c *gin.Context, method, path string) (*otto
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	tenant := ottoTenantID
+	if role, ok := middleware.GetUserRole(c); ok && role == models.RoleChef {
+		tenant = ottoVendorTenantID
+	}
 	req.Header.Set("X-Internal-Auth", h.secret)
-	req.Header.Set("X-Tenant-Id", ottoTenantID)
+	req.Header.Set("X-Tenant-Id", tenant)
 	req.Header.Set("X-Store-Id", ottoStoreID)
 	req.Header.Set("X-User-Id", userID)
 	if email != "" {

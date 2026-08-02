@@ -2,7 +2,7 @@
 // wired to the HomeChef API support-chat proxy, which bridges to otto's
 // homechef tenant. A Tesserix admin answers from the platform inbox; the
 // conversation carries the signed-in customer's identity so they skip OTP.
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -16,9 +16,12 @@ import {
   useSupportChat,
   type IntakeReason,
   type SupportPalette,
+  type SupportTicketContext,
 } from "@homechef/mobile-shared/support";
 import { customerColors } from "@homechef/mobile-shared/theme";
 import { refreshSession } from "@homechef/mobile-shared/auth";
+import { useToast } from "@homechef/mobile-shared/ui";
+import { api } from "../lib/api";
 import { useAuthStore } from "../store/auth-store";
 
 // Matches otto's TenantReasons["homechef"] whitelist + the web widget
@@ -39,6 +42,36 @@ const SESSION_KEY = "otto_homechef_support_session";
 export default function SupportChatScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const { show: showToast } = useToast();
+  const creatingTicket = useRef(false);
+
+  // Converts the chat into a durable support ticket (visible to the admin
+  // Support desk). The API converges on one ticket per conversation, so a
+  // second tap — or the backend escalation hook racing us — returns the
+  // already-created ticket instead of a duplicate.
+  const createTicket = async (ctx: SupportTicketContext) => {
+    if (creatingTicket.current) return;
+    creatingTicket.current = true;
+    try {
+      const res = await api.post<{ ticketNumber: string }>("/support/tickets", {
+        category: "other",
+        subject: ctx.subject || "Support chat follow-up",
+        description: ctx.transcript || "(no messages yet)",
+        conversationId: ctx.conversationId,
+      });
+      showToast({
+        message: `Ticket ${res.data.ticketNumber} created — our team will follow up.`,
+        tone: "success",
+      });
+    } catch {
+      showToast({
+        message: "Couldn't create the ticket. Please try again in a moment.",
+        tone: "error",
+      });
+    } finally {
+      creatingTicket.current = false;
+    }
+  };
 
   const client = useMemo(
     () =>
@@ -108,6 +141,7 @@ export default function SupportChatScreen() {
           palette={palette}
           reasons={HOMECHEF_REASONS}
           defaults={defaults}
+          onCreateTicket={createTicket}
           introTitle="How can we help?"
           introSubtitle="Message the Fe3dr support team — we'll get back to you here."
           composerPlaceholder="Type a message…"

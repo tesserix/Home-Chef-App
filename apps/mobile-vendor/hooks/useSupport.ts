@@ -102,6 +102,9 @@ export interface CreateTicketInput {
   description: string;
   priority?: TicketPriority;
   orderId?: string;
+  /** Otto support-chat conversation this ticket was created from. The API
+   *  converges on one ticket per conversation (unique index). */
+  conversationId?: string;
 }
 
 const SUPPORT_KEY = ['chef', 'support'] as const;

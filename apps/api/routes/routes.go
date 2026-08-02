@@ -260,6 +260,12 @@ func SetupRouter() *gin.Engine {
 		internal.POST("/users/upsert", internalUsersHandler.Upsert)
 	}
 
+	// slm-router escalation hook — its own static-secret gate (SUPPORT_HOOK_SECRET
+	// inside the handler), NOT the BFF HMAC: slm-router signs nothing, it sends
+	// the shared secret as X-Internal-Auth per its EscalationHook config.
+	supportHookHandler := handlers.NewSupportChatHookHandler()
+	r.POST("/internal/support/tickets/from-conversation", supportHookHandler.FromConversation)
+
 	// API v1 routes
 	v1 := r.Group("/api/v1")
 	// Mobile force-upgrade gate. No-op for any request missing

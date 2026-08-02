@@ -52,6 +52,10 @@ type SupportTicket struct {
 	Status       TicketStatus   `gorm:"type:varchar(30);default:'open'" json:"status"`
 	Subject      string         `gorm:"not null" json:"subject"`
 	Description  string         `gorm:"type:text;not null" json:"description"`
+	// ConversationID links a ticket born from an otto support chat to its
+	// conversation. Unique so the escalation hook and a user-initiated
+	// "create ticket" from the same chat converge on one ticket.
+	ConversationID *string `gorm:"uniqueIndex" json:"conversationId,omitempty"`
 	Resolution   string         `gorm:"type:text" json:"resolution,omitempty"`
 	ResolvedAt   *time.Time     `gorm:"" json:"resolvedAt,omitempty"`
 	ClosedAt     *time.Time     `gorm:"" json:"closedAt,omitempty"`

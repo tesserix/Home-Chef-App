@@ -51,6 +51,17 @@ func (r *Runtime) Signal(ctx context.Context, workflowID, signalName string, arg
 	return r.c.SignalWorkflow(ctx, workflowID, "", signalName, arg)
 }
 
+// SignalWithStart signals a workflow, starting it first when no run with this
+// ID exists. The atomicity makes at-least-once event consumers safe: replays
+// of the same event signal the existing run instead of double-starting it.
+func (r *Runtime) SignalWithStart(ctx context.Context, taskQueue, id, signalName string, signalArg any, wf any, args ...any) error {
+	_, err := r.c.SignalWithStartWorkflow(ctx, id, signalName, signalArg, client.StartWorkflowOptions{
+		ID:        id,
+		TaskQueue: taskQueue,
+	}, wf, args...)
+	return err
+}
+
 // RunWorkers starts the given workers, blocks until SIGINT/SIGTERM, then stops
 // them gracefully.
 func (r *Runtime) RunWorkers(specs ...WorkerSpec) error {

@@ -134,6 +134,15 @@ type Config struct {
 	OTTOInternalAuth string
 	OTTOWSPublicBase string
 
+	// Support staff queue (otto.support.* NATS events → SupportQueueWorkflow).
+	// SupportHookSecret gates the slm-router escalation/chat-started hook
+	// endpoint (/internal/support/tickets/from-conversation); empty ⇒ 503.
+	// SupportStaffEmail receives queue notices; AdminLiveChatURL is linked
+	// from those notices.
+	SupportHookSecret string
+	SupportStaffEmail string
+	AdminLiveChatURL  string
+
 	// NATS
 	NATSURL string
 	// NATSCreds is the path to a NATS user credentials (.creds) file. Empty for
@@ -494,6 +503,11 @@ func Load() {
 		OTTOURL:          getEnv("OTTO_URL", ""),
 		OTTOInternalAuth: getEnv("OTTO_INTERNAL_AUTH", ""),
 		OTTOWSPublicBase: getEnv("OTTO_WS_PUBLIC_BASE", ""),
+
+		// Support staff queue + slm-router hooks
+		SupportHookSecret: getEnv("SUPPORT_HOOK_SECRET", ""),
+		SupportStaffEmail: getEnv("SUPPORT_STAFF_EMAIL", "support@fe3dr.com"),
+		AdminLiveChatURL:  getEnv("ADMIN_LIVE_CHAT_URL", "https://tesserix.app/admin/support/live-chat"),
 
 		// NATS
 		NATSURL:             getEnv("NATS_URL", "nats://localhost:4222"),

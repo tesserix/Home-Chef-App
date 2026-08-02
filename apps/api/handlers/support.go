@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,9 @@ func (h *SupportHandler) CreateTicket(c *gin.Context) {
 		Priority    string     `json:"priority"`
 		Subject     string     `json:"subject" binding:"required"`
 		Description string     `json:"description" binding:"required"`
+		// Optional otto conversation this ticket was created from (support
+		// chat "create ticket" action). One ticket per conversation.
+		ConversationID *string `json:"conversationId"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -94,16 +98,39 @@ func (h *SupportHandler) CreateTicket(c *gin.Context) {
 		reporterRole = "delivery"
 	}
 
+	// A chat-born ticket converges with the escalation hook's ticket for the
+	// same conversation. The conversationId is client-supplied and NOT proof
+	// of participation, so an existing row is only returned to its verified
+	// reporter — never adopted or echoed to anyone else (IDOR guard: an
+	// orphan row from an anonymous web chat stays orphaned; support links it
+	// manually if the customer follows up).
+	if req.ConversationID != nil && strings.TrimSpace(*req.ConversationID) == "" {
+		req.ConversationID = nil // empty string must not occupy the unique index
+	}
+	if req.ConversationID != nil {
+		var existing models.SupportTicket
+		if err := database.DB.Where("conversation_id = ?", *req.ConversationID).
+			First(&existing).Error; err == nil {
+			if existing.ReporterID != userID {
+				c.JSON(http.StatusConflict, gin.H{"error": "Ticket already exists for this conversation"})
+				return
+			}
+			c.JSON(http.StatusOK, existing)
+			return
+		}
+	}
+
 	ticket := models.SupportTicket{
-		TicketNumber: generateTicketNumber(),
-		ReporterID:   userID,
-		ReporterRole: reporterRole,
-		OrderID:      req.OrderID,
-		Category:     models.TicketCategory(req.Category),
-		Priority:     priority,
-		Status:       models.TicketStatusOpen,
-		Subject:      req.Subject,
-		Description:  filteredDesc,
+		TicketNumber:   generateTicketNumber(),
+		ReporterID:     userID,
+		ReporterRole:   reporterRole,
+		OrderID:        req.OrderID,
+		Category:       models.TicketCategory(req.Category),
+		Priority:       priority,
+		Status:         models.TicketStatusOpen,
+		Subject:        req.Subject,
+		Description:    filteredDesc,
+		ConversationID: req.ConversationID,
 	}
 
 	if err := database.DB.Create(&ticket).Error; err != nil {

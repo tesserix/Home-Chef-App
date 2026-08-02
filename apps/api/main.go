@@ -273,6 +273,11 @@ func main() {
 		if err := handlers.RegisterPushConsumers(eventCtx, consumerManager); err != nil {
 			log.Printf("Warning: Failed to register push consumers: %v", err)
 		}
+
+		// Otto support-chat queue events → staff notices + SLA workflow
+		if err := services.RegisterSupportQueueConsumers(eventCtx, consumerManager); err != nil {
+			log.Printf("Warning: Failed to register support queue consumers: %v", err)
+		}
 	}
 
 	// Background daily scan: ping chefs whose FSSAI license expires

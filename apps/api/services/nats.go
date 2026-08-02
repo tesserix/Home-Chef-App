@@ -317,6 +317,10 @@ func (n *NATSClient) setupStreams() error {
 		{"MEAL_PLANS", "Tiffin meal-plan lifecycle events", []string{"meal_plans.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"GROUP_ORDERS", "Group / office order lifecycle events", []string{"group_orders.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"PROVIDER", "Third-party delivery provider events", []string{"provider.>"}, 30 * 24 * time.Hour, gib / 2},
+		// otto (support-platform) publishes these with a Nats-Msg-Id per
+		// transition, so the 2-minute dedup window absorbs the duplicate
+		// publishes from otto's replicated change-stream watchers.
+		{"SUPPORT", "Otto support-chat staff queue events", []string{"otto.support.>"}, 7 * 24 * time.Hour, gib / 4},
 		{"DLQ", "Dead-letter: events that exhausted consumer retries", []string{DLQSubjectPrefix + ".>"}, 30 * 24 * time.Hour, gib},
 	}
 
