@@ -8,6 +8,7 @@ import { SkipLink } from '@/shared/components/a11y/SkipLink';
 import { ThemeProvider, ThemedToaster } from '@/shared/theme';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 import { MFAChallengeOverlay } from '@/shared/components/MFAChallengeOverlay';
+import { OttoChat } from '@/features/support/OttoChat';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,9 @@ export function App() {
                 {/* Above the router: a two-factor challenge can be raised by any
                     request, and until it is answered every other one 403s. */}
                 <MFAChallengeOverlay />
+                {/* Inside AuthProvider — the launcher passes the signed-in chef
+                    through so they skip OTP on their own support thread. */}
+                <OttoChat />
                 <ThemedToaster
                   position="bottom-right"
                   expand={false}

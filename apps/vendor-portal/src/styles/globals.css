@@ -625,3 +625,15 @@
 }
 </content>
 </invoke>
+/* ---------------------------------------------------------------------------
+   Otto support launcher overrides
+   ---------------------------------------------------------------------------
+   @tesserix/otto-widget pins its launcher at `z-index: 2147483000`, above every
+   overlay on the page — in apps/web that made it swallow clicks meant for the
+   payment modal. Drop it below our own layers before the same thing happens
+   here: the chef portal raises an MFA challenge overlay and confirm dialogs
+   over the whole app, and a launcher above those would block them.
+--------------------------------------------------------------------------- */
+.otto-widget {
+  z-index: 40;
+}

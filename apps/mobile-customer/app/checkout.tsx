@@ -473,10 +473,10 @@ export default function CheckoutScreen() {
       // status. Keep the button DISABLED through payment (cleared in finally) so a
       // second tap can't create a duplicate order during the create→pay round-trip
       // before the native sheet appears.
-      // A 30s hold sits between the order and the gateway (#hold): nothing is
+      // A short hold sits between the order and the gateway (#hold): nothing is
       // charged until it elapses, so a change of mind costs a tap rather than a
       // refund. Only on first placement — a retry from an unpaid order pays now.
-      await startOrderPayment(orderId, credit, { holdSeconds: 30 });
+      await startOrderPayment(orderId, credit, { holdSeconds: 10 });
     } catch (err: unknown) {
       // Surface the real reason in a modal — the inline banner sits in the
       // scroll body, far from the sticky button, so a failed tap otherwise

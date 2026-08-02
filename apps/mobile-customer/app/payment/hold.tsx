@@ -32,7 +32,44 @@ import { api } from '../../lib/api';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { clearPendingGateway, launchGateway, takePendingGateway } from '../../lib/payment';
 
-const DEFAULT_SECONDS = 30;
+const DEFAULT_SECONDS = 10;
+
+const RING_SIZE = 176;
+const TICK_LENGTH = 14;
+const TICK_WIDTH = 4;
+
+// One tick per second, laid out radially by rotating a full-size container —
+// transform only, so it needs no SVG dependency (which would have meant a
+// native rebuild) and honours the "animate opacity and transform" rule.
+// A tick per second reads as time remaining at a glance, which a bare number
+// does not; the number stays in the middle for the exact count.
+function CountdownRing({ total, remaining }: { total: number; remaining: number }) {
+  const ticks = Math.max(4, Math.min(total, 12));
+  const perTick = total / ticks;
+  return (
+    <View style={styles.ring} accessibilityRole="progressbar" accessibilityValue={{ now: remaining, min: 0, max: total }}>
+      {Array.from({ length: ticks }, (_, i) => {
+        // Ticks are spent clockwise from 12 o'clock as the window drains.
+        const spent = i >= Math.ceil(remaining / perTick);
+        return (
+          <View
+            key={i}
+            style={[styles.tickOrbit, { transform: [{ rotate: `${(360 / ticks) * i}deg` }] }]}
+            pointerEvents="none"
+          >
+            <View style={[styles.tick, spent ? styles.tickSpent : styles.tickLive]} />
+          </View>
+        );
+      })}
+      <View style={styles.ringCentre}>
+        <Text style={styles.seconds}>{remaining}</Text>
+        <Text style={styles.secondsLabel}>
+          {remaining === 1 ? 'second' : 'seconds'}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 export default function PaymentHold() {
   const params = useLocalSearchParams() as unknown as {
@@ -116,8 +153,6 @@ export default function PaymentHold() {
     return () => sub.remove();
   }, []);
 
-  const pct = Math.max(0, Math.min(1, remaining / total));
-
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.body}>
@@ -128,18 +163,7 @@ export default function PaymentHold() {
           — otherwise we’ll take you to payment.
         </Text>
 
-        <View style={styles.countdown}>
-          <Text style={styles.seconds}>{remaining}</Text>
-          <Text style={styles.secondsLabel}>
-            {remaining === 1 ? 'second' : 'seconds'}
-          </Text>
-        </View>
-
-        {/* Draining bar rather than a spinner: it shows how much of the window
-            is left, which is the only thing the customer needs to judge here. */}
-        <View style={styles.track}>
-          <View style={[styles.fill, { width: `${pct * 100}%` }]} />
-        </View>
+        <CountdownRing total={total} remaining={remaining} />
       </View>
 
       <View style={styles.actions}>
@@ -147,14 +171,14 @@ export default function PaymentHold() {
           onPress={proceed}
           disabled={cancelling}
           accessibilityRole="button"
-          accessibilityLabel="Skip the wait and pay now"
+          accessibilityLabel="Skip the wait and go to payment now"
           style={({ pressed }) => [
             styles.payBtn,
             pressed && styles.pressed,
             cancelling && styles.disabled,
           ]}
         >
-          <Text style={styles.payLabel}>Pay now</Text>
+          <Text style={styles.payLabel}>Skip to payment</Text>
         </Pressable>
 
         <Pressable
@@ -205,29 +229,44 @@ const styles = StyleSheet.create({
     marginTop: 10,
     maxWidth: 320,
   },
-  countdown: { alignItems: 'center', marginTop: 40 },
+  ring: {
+    width: RING_SIZE,
+    height: RING_SIZE,
+    marginTop: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Full-size overlay rotated about its own centre; the tick sits at its top
+  // edge, so the rotation alone places the tick on the circle.
+  tickOrbit: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+  },
+  tick: {
+    width: TICK_WIDTH,
+    height: TICK_LENGTH,
+    borderRadius: TICK_WIDTH / 2,
+  },
+  tickLive: { backgroundColor: customerColors.coral.DEFAULT },
+  tickSpent: { backgroundColor: customerColors.hairline },
+  ringCentre: { alignItems: 'center' },
   seconds: {
     fontFamily: 'Geist-Bold',
-    fontSize: 64,
+    fontSize: 56,
+    lineHeight: 62,
     color: customerColors.charcoal.DEFAULT,
     fontVariant: ['tabular-nums'],
   },
   secondsLabel: {
     fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 13,
     color: customerColors.charcoal.soft,
-    marginTop: -4,
+    marginTop: -2,
   },
-  track: {
-    height: 4,
-    width: '100%',
-    maxWidth: 320,
-    borderRadius: 2,
-    backgroundColor: customerColors.hairline,
-    marginTop: 28,
-    overflow: 'hidden',
-  },
-  fill: { height: 4, borderRadius: 2, backgroundColor: customerColors.coral.DEFAULT },
   actions: { paddingHorizontal: 24, paddingBottom: 12, gap: 8 },
   payBtn: {
     height: 52,
