@@ -26,6 +26,10 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
 		capped := false // #644: set when the money move was capped below the snapshot; drives the breakdown re-persist
+		// #940: the provider's refund id for the card slice. Mirrored onto orders.refund_id
+		// below so gateway reconciliation can see a cancellation refund at all — until now the
+		// id only ever reached cancellation_requests.refund_ref, which nothing reconciles against.
+		gatewayRefundID := ""
 		if refund > 0 {
 			// #392: shared refund claim — the SAME two-column mutex every full-refund
 			// path uses (payment_status completed→refunded AND refunded_at IS NULL).
@@ -45,14 +49,20 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 				// sweep to retry — never permanently strand an owed refund on a
 				// transient claim loss.
 				var fresh models.Order
-				if err := tx.Select("refund_amount").First(&fresh, "id = ?", order.ID).Error; err != nil {
+				if err := tx.Select("refund_amount, refund_id").First(&fresh, "id = ?", order.ID).Error; err != nil {
 					return err
 				}
 				if fresh.RefundAmount+0.001 < refund {
 					return nil // not yet refunded — sweep retries (refund_executed stays false)
 				}
 				cr.RefundExecuted = true
-				cr.RefundRef = "already-refunded"
+				// #940: the sibling that won the claim owns the gateway refund id. Carry it over
+				// instead of overwriting the only reference we hold with a sentinel — an order
+				// whose card leg really was refunded must stay traceable to the provider. Fall
+				// back to the sentinel only when the winner recorded no id either.
+				if cr.RefundRef = fresh.RefundID; cr.RefundRef == "" {
+					cr.RefundRef = "already-refunded"
+				}
 				return tx.Model(&models.CancellationRequest{}).Where("order_id = ?", order.ID).
 					Updates(map[string]any{"refund_executed": true, "refund_ref": cr.RefundRef, "resolved_at": now}).Error
 			}
@@ -174,6 +184,7 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 						return rErr
 					}
 					cr.RefundRef = resp.RefundID
+					gatewayRefundID = resp.RefundID
 				} else {
 					cr.RefundRef = "wallet:cancel:" + cr.ID.String()
 				}
@@ -193,12 +204,23 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 		// stale read-modify-write (refund_amount under-counted → a later refund over-refunds).
 		// COALESCE so a NULL column increments from 0. Runs exactly once per cancellation (the
 		// payment_status claim gates re-entry; the sweep's retry loses the claim).
-		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]any{
+		orderUpdates := map[string]any{
 			"status":        models.OrderStatusCancelled,
 			"refund_amount": gorm.Expr("COALESCE(refund_amount, 0) + ?", refund),
 			"refunded_at":   now,
+			// #932: this path stamped refunded_at but never cancelled_at, so every order
+			// cancelled through the arbitration flow ended up `cancelled` with no cancellation
+			// timestamp. COALESCE keeps an earlier stamp if some other path already set one.
+			"cancelled_at":  gorm.Expr("COALESCE(cancelled_at, ?)", now),
 			"refund_reason": "customer cancellation",
-		}).Error; err != nil {
+		}
+		// #940: only a real gateway refund carries an id — a wallet/loyalty-only refund has no
+		// provider leg, and writing its sentinel here would put a non-id in a column the
+		// reconciler treats as one.
+		if gatewayRefundID != "" {
+			orderUpdates["refund_id"] = gatewayRefundID
+		}
+		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(orderUpdates).Error; err != nil {
 			return err
 		}
 		cr.RefundExecuted = true
