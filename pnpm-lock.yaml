@@ -889,9 +889,6 @@ importers:
       '@tanstack/react-query-devtools':
         specifier: ^5.62.8
         version: 5.101.0(@tanstack/react-query@5.101.0(react@19.2.7))(react@19.2.7)
-      '@tesserix/otto-widget':
-        specifier: ^0.6.0
-        version: 0.6.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tesserix/web':
         specifier: ^1.7.0
         version: 1.7.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(framer-motion@12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
@@ -1056,8 +1053,8 @@ importers:
         specifier: ^5.62.8
         version: 5.101.0(@tanstack/react-query@5.101.0(react@19.2.7))(react@19.2.7)
       '@tesserix/otto-widget':
-        specifier: ^0.6.0
-        version: 0.6.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: ^0.5.4
+        version: 0.5.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tesserix/web':
         specifier: ^1.7.0
         version: 1.7.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(framer-motion@12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
@@ -4020,40 +4017,37 @@ packages:
       react: ^18 || ^19
 
   '@tesserix/hooks@1.0.0':
-    resolution: {integrity: sha512-wddwrjuDkR0yu93DbhkqyZwhVcUZkJ03PNQYjGRi3jok5FjMh6SaLooIY1q+tyV0JvCxPOPkGdTSNaeqj597aQ==}
+    resolution: {integrity: sha512-1MxiKUtiI7NPfmh41GYn5Bfrziwv8gcKt3v5161jXmqJ/Qbwh/T+oEKV8hWvKzMp0XJqEV8W6gS5uLp7eLA2Kg==, tarball: https://npm.pkg.github.com/download/@tesserix/hooks/1.0.0/60c67e981047356fc504bcf1378154d843a6e44d}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
 
   '@tesserix/native@1.0.0':
-    resolution: {integrity: sha512-82Tqor3QIZ3Cg8z58i7wdqUcV6gIKQIeXSkCarIs74X1vQWBhgezaNo+iogGPVG2OqcoHwsamaMO+MHYEnCPiw==}
+    resolution: {integrity: sha512-GhzpJ1Scvqm3P7LbrxQNY1HlHOA09n7B1JGXwYwGanC6l5qrsu1DFCFYnuA4vUvzFYQIf1a4WIkri9MEc4tClw==, tarball: https://npm.pkg.github.com/download/@tesserix/native/1.0.0/aad8bdb8d3d7e5a47b371dc7f7988f3a21ed7cc0}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-native: '>=0.70.0'
 
-  '@tesserix/otto-widget@0.6.0':
-    resolution: {integrity: sha512-W6qw8iPpmOg11+zTTwsjoZz4KA/NAN7ASIZOjDFlr0cWz+1Jdw7qzckKfIhZH50P05sn9YodvXvYmEXkBqiAPg==}
+  '@tesserix/otto-widget@0.5.4':
+    resolution: {integrity: sha512-FLgwfnJC5E9+04qBTTiLECzMoP6I1UJ4gqQ05FaQlcROsClQJykGeJwi7qJQAbu9N+LqV27fctcvR+eYsydplA==, tarball: https://npm.pkg.github.com/download/@tesserix/otto-widget/0.5.4/9d42413b8151408d87044e717c462b5eec28c1d5}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
 
   '@tesserix/tokens@1.0.0':
-    resolution: {integrity: sha512-d28KWQxt/QnNRiWzrkqxC1row+A3Oq1OYrt++0rDQFyJVhZ3+Vv9sDmtyxySyP0OLrS7zlpUgs6blJUpgzN2Mg==}
+    resolution: {integrity: sha512-grimAfdmmFAo5f0+rTyZ06PrtNCUkgaTGQ7lRR4E5dsbBhhthIKpw/d7mm8X42cOCVke6FIoHu0vG6JDJHBsiw==, tarball: https://npm.pkg.github.com/download/@tesserix/tokens/1.0.0/8d0661040a60420abea18bdd61a2701d166a9f17}
 
   '@tesserix/utils@1.0.0':
-    resolution: {integrity: sha512-kKxY38ClYLulU/MGIkuBJbnfn9Ra09CR3mdC8NgTPSEx9qa9e8i2v5QJ1rHNHtaqRdjHyGiR/iPDRzxYObwYmg==}
+    resolution: {integrity: sha512-9adoLCg82aWWGnMEDXT+a/1aYk5k9D5HuCYHNID9CJl4m/DXxSu0g603GwkKC7/TomWsRYlU5N3yDVIHvnOL/A==, tarball: https://npm.pkg.github.com/download/@tesserix/utils/1.0.0/a3b6095d050faff9a1a2c11e259cbee82c6e4009}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
 
   '@tesserix/web@1.7.1':
-    resolution: {integrity: sha512-glD34DYjJ9rmxNzEuixf0bWYxYA8IS2+oPwZsKBvWyt3ailSt3jZIRmXszymMCatNEtn+XrRPzrdIqaQ8cgw9w==}
+    resolution: {integrity: sha512-GsZPLKZajOY+Wwpl8Hpv4LJaYcrOLUy+8BWXghwK/VQQ4Hhvt9IZ0T3lsRNDFh1vxOiFGkPi3MMBS4pk9A9aIQ==, tarball: https://npm.pkg.github.com/download/@tesserix/web/1.7.1/4e2c98eb12450103de795d73b915bc9f82cec508}
     peerDependencies:
       framer-motion: ^11.0.0 || ^12.0.0
       react: ^19.0.0
       react-dom: ^19.0.0
       tailwindcss: ^4.1.0
-    peerDependenciesMeta:
-      framer-motion:
-        optional: true
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -12186,7 +12180,7 @@ snapshots:
       react: 19.2.7
       react-native: 0.86.0(@babel/core@8.0.1)(@react-native/metro-config@0.85.3(@babel/core@8.0.1))(@types/react@19.2.17)(react@19.2.7)
 
-  '@tesserix/otto-widget@0.6.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@tesserix/otto-widget@0.5.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
@@ -12219,13 +12213,12 @@ snapshots:
       class-variance-authority: 0.7.1
       clsx: 2.1.1
       date-fns: 4.4.0
+      framer-motion: 12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react: 19.2.7
       react-day-picker: 9.14.0(react@19.2.7)
       react-dom: 19.2.7(react@19.2.7)
       tailwind-merge: 3.6.0
       tailwindcss: 4.3.1
-    optionalDependencies:
-      framer-motion: 12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
     transitivePeerDependencies:
       - '@types/react'
       - '@types/react-dom'
@@ -13678,7 +13671,7 @@ snapshots:
 
   expo-document-picker@56.0.4(expo@56.0.12):
     dependencies:
-      expo: 56.0.12(@babel/core@7.29.7)(@expo/dom-webview@56.0.5)(@expo/metro-runtime@56.0.15)(expo-router@56.2.11)(react-dom@19.2.7(react@19.2.7))(react-native-webview@13.16.1(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(react-native-worklets@0.9.2(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
+      expo: 56.0.12(@babel/core@8.0.1)(@expo/dom-webview@56.0.5)(@expo/metro-runtime@56.0.15)(expo-router@56.2.11)(react-dom@19.2.7(react@19.2.7))(react-native-webview@13.16.1(react-native@0.86.0(@babel/core@8.0.1)(@react-native/metro-config@0.85.3(@babel/core@8.0.1))(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(react-native-worklets@0.9.2(@babel/core@8.0.1)(@react-native/metro-config@0.85.3(@babel/core@8.0.1))(react-native@0.86.0(@babel/core@8.0.1)(@react-native/metro-config@0.85.3(@babel/core@8.0.1))(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(react-native@0.86.0(@babel/core@8.0.1)(@react-native/metro-config@0.85.3(@babel/core@8.0.1))(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
 
   expo-eas-client@56.0.1: {}
 

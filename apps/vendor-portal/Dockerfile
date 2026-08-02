@@ -54,13 +54,7 @@ RUN pnpm build
 FROM ghcr.io/tesserix/base-nginx-spa:latest AS runtime
 
 COPY apps/vendor-portal/nginx.conf /etc/nginx/templates/default.conf.template
-# OTTO_URL: shared Otto in support-platform (cross-namespace svc DNS).
-# OTTO_INTERNAL_AUTH: empty by default; populated from a K8s Secret at deploy
-# time. envsubst on /etc/nginx/templates fills both into the /api/otto proxy,
-# so the secret never reaches the browser bundle.
-ENV API_URL=http://localhost:8080 \
-    OTTO_URL=http://support-platform-otto.support-platform.svc.cluster.local:8089 \
-    OTTO_INTERNAL_AUTH=
+ENV API_URL=http://localhost:8080
 
 COPY --from=builder --chown=10001:10001 /app/apps/vendor-portal/dist /usr/share/nginx/html
 
