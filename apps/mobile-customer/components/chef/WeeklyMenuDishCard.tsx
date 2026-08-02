@@ -9,10 +9,11 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import { Check, UtensilsCrossed } from 'lucide-react-native';
+import { AlertTriangle, Check, UtensilsCrossed } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { DietIcon } from '@homechef/mobile-shared/ui';
 import { comboLabel } from '../../lib/combo-label';
+import { useDietaryConflicts } from '../../hooks/useDietaryConflicts';
 
 // Same blurhash placeholder the chef-detail MenuItemCard uses — one photo
 // language across the app.
@@ -52,6 +53,9 @@ export interface WeeklyMenuDishCardProps {
   description?: string;
   isCombo?: boolean;
   comboComponents?: string[];
+  /** Declared allergens + diet tags (#901) — feed useDietaryConflicts below. */
+  dietaryTags?: string[];
+  allergens?: string[];
   /** When true the card is a toggle (booking); otherwise a static preview card. */
   selectable?: boolean;
   selected?: boolean;
@@ -67,11 +71,16 @@ export function WeeklyMenuDishCard({
   description,
   isCombo,
   comboComponents,
+  dietaryTags,
+  allergens,
   selectable = false,
   selected = false,
   onPress,
 }: WeeklyMenuDishCardProps) {
   const isVeg = variant === 'veg';
+  // This component is the per-item card — each render is its own instance, so
+  // an unconditional hook call here never runs inside a loop/condition (#901).
+  const conflicts = useDietaryConflicts({ dietaryTags, allergens, isVeg });
   const slotLabel = slot === 'lunch' ? 'Lunch' : 'Dinner';
   const variantLabel = isVeg ? 'Veg' : 'Non-veg';
   const metaLabel = `${slotLabel} · ${variantLabel}${isCombo ? ` · ${comboLabel()}` : ''}`;
@@ -115,9 +124,31 @@ export function WeeklyMenuDishCard({
         </Text>
       </View>
 
+      {/* Allergen badges (#901) — same cautionary tone as MenuItemCard, wrapped
+          for this card's narrower 150px width. */}
+      {allergens && allergens.length > 0 ? (
+        <View style={styles.allergenRow}>
+          {allergens.map((a) => (
+            <View key={a} style={styles.allergenTag}>
+              <Text style={styles.allergenLabel}>{a}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       <Text style={styles.name} numberOfLines={2}>
         {name}
       </Text>
+
+      {/* Conflict warning (#901) — dish clashes with the customer's saved profile. */}
+      {conflicts.length > 0 ? (
+        <View style={styles.warnRow}>
+          <AlertTriangle size={13} color={customerColors.destructive.DEFAULT} strokeWidth={2} />
+          <Text style={styles.warnText} numberOfLines={2}>
+            {conflicts.map((cf) => cf.detail).join(' · ')}
+          </Text>
+        </View>
+      ) : null}
 
       {isCombo && comboComponents && comboComponents.length > 0 ? (
         <Text style={styles.description} numberOfLines={1}>
@@ -241,6 +272,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 19,
     color: customerColors.charcoal.DEFAULT,
+  },
+  // Allergen badges — cautionary tint, matching MenuItemCard's tone. Wraps
+  // since this card is 150px wide (MenuItemCard's tagRow is full-width).
+  allergenRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  allergenTag: {
+    backgroundColor: customerColors.destructive.tint,
+    borderRadius: 9999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  allergenLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.2,
+    color: customerColors.destructive.DEFAULT,
+  },
+  // Profile-conflict warning — calm, factual, no exclamation marks.
+  warnRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  warnText: {
+    flex: 1,
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    lineHeight: 15,
+    color: customerColors.destructive.DEFAULT,
   },
   description: {
     fontFamily: 'Inter',
