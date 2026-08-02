@@ -13,8 +13,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
@@ -61,78 +59,31 @@ func (h *SupportChatHookHandler) FromConversation(c *gin.Context) {
 		return
 	}
 
-	// Idempotency: one ticket per conversation, ever.
-	var existing models.SupportTicket
-	err := database.DB.Where("conversation_id = ?", req.ConversationID).First(&existing).Error
-	if err == nil {
-		c.JSON(http.StatusOK, existing)
-		return
+	priority := models.TicketPriorityHigh
+	if req.EscalationReason == "" {
+		// chat_started hook (not an escalation) — a plain record, not urgent.
+		priority = models.TicketPriorityMedium
 	}
-	if err != gorm.ErrRecordNotFound {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "lookup failed"})
-		return
-	}
-
-	// Attribute to the platform user when the chat identity matches one.
-	reporterID := uuid.Nil
-	reporterRole := "customer"
-	if req.TenantID == services.OttoTenantVendor {
-		reporterRole = "chef"
-	}
-	if email := strings.ToLower(strings.TrimSpace(req.CustomerEmail)); email != "" {
-		var user models.User
-		if err := database.DB.Where("LOWER(email) = ?", email).First(&user).Error; err == nil {
-			reporterID = user.ID
-			switch user.Role {
-			case models.RoleChef:
-				reporterRole = "chef"
-			case models.RoleDelivery:
-				reporterRole = "delivery"
-			}
-		}
-	}
-
 	subject := strings.TrimSpace(req.Subject)
 	if subject == "" {
 		subject = "Support chat escalation"
 	}
-	if len(subject) > 200 {
-		subject = subject[:200]
-	}
-	description := strings.TrimSpace(req.Description)
-	if description == "" {
-		description = "(no transcript provided)"
-	}
-	if len(description) > 5000 {
-		description = description[:5000]
-	}
-	filteredDesc, _, _ := services.FilterChatMessage(description)
 
-	convID := req.ConversationID
-	ticket := models.SupportTicket{
-		TicketNumber:   generateTicketNumber(),
-		ReporterID:     reporterID,
-		ReporterRole:   reporterRole,
-		Category:       models.TicketCategoryOther,
-		Priority:       models.TicketPriorityHigh,
-		Status:         models.TicketStatusOpen,
+	ticket, created, err := services.CreateTicketFromConversation(database.DB, services.ChatTicketInput{
+		ConversationID: req.ConversationID,
+		TenantID:       req.TenantID,
+		CustomerName:   req.CustomerName,
+		CustomerEmail:  req.CustomerEmail,
 		Subject:        subject,
-		Description:    filteredDesc,
-		ConversationID: &convID,
-	}
-	if req.EscalationReason == "" {
-		// chat_started hook (not an escalation) — a plain record, not urgent.
-		ticket.Priority = models.TicketPriorityMedium
-	}
-
-	if err := database.DB.Create(&ticket).Error; err != nil {
-		// Unique-index race with a concurrent hook retry: return the winner.
-		if dbErr := database.DB.Where("conversation_id = ?", req.ConversationID).
-			First(&existing).Error; dbErr == nil {
-			c.JSON(http.StatusOK, existing)
-			return
-		}
+		Description:    req.Description,
+		Priority:       priority,
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create ticket"})
+		return
+	}
+	if !created {
+		c.JSON(http.StatusOK, ticket)
 		return
 	}
 	c.JSON(http.StatusCreated, ticket)

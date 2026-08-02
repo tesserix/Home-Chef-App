@@ -32,7 +32,38 @@ type SupportQueueInput struct {
 	Subject        string `json:"subject,omitempty"`
 	IntakeReason   string `json:"intakeReason,omitempty"`
 	CustomerName   string `json:"customerName,omitempty"`
+	CustomerEmail  string `json:"customerEmail,omitempty"`
 	Escalated      bool   `json:"escalated"`
+}
+
+// SupportQueueTicketInput asks the activity to materialise a ticket for a
+// chat nobody answered in time.
+type SupportQueueTicketInput struct {
+	ConversationID string `json:"conversationId"`
+	TenantID       string `json:"tenantId"`
+	CaseID         string `json:"caseId,omitempty"`
+	Subject        string `json:"subject,omitempty"`
+	IntakeReason   string `json:"intakeReason,omitempty"`
+	CustomerName   string `json:"customerName,omitempty"`
+	CustomerEmail  string `json:"customerEmail,omitempty"`
+	WaitedSeconds  int    `json:"waitedSeconds"`
+}
+
+// SupportQueueTicketResult reports what the activity did.
+type SupportQueueTicketResult struct {
+	TicketNumber string `json:"ticketNumber"`
+	Created      bool   `json:"created"`
+}
+
+// SupportQueueTicketFunc is the pluggable ticket writer, wired by the worker
+// to services.RaiseSupportQueueTicket.
+var SupportQueueTicketFunc = func(_ context.Context, _ SupportQueueTicketInput) (SupportQueueTicketResult, error) {
+	return SupportQueueTicketResult{}, nil
+}
+
+// SupportQueueTicketActivity creates the ticket and notifies the admin.
+func SupportQueueTicketActivity(ctx context.Context, in SupportQueueTicketInput) (SupportQueueTicketResult, error) {
+	return SupportQueueTicketFunc(ctx, in)
 }
 
 // SupportQueueSignal is the payload delivered on SupportQueueSignalName.
@@ -63,12 +94,13 @@ func SupportQueueNotifyActivity(ctx context.Context, n SupportQueueNotice) error
 	return SupportQueueNotifyFunc(ctx, n)
 }
 
-// SLA thresholds. The first nudge lands fast — "notified within a few
-// seconds" is the immediate notice; these cover nobody picking it up.
+// SLA thresholds. The immediate notice goes out on entry; these cover nobody
+// picking the chat up. At supportQueueTicketTimeout the customer has waited
+// long enough that live chat has failed them, so the thread is converted into
+// a durable ticket and the admin is told — nobody is left waiting silently.
 const (
-	supportQueueFirstReminder = 3 * time.Minute
-	supportQueueUnattended    = 15 * time.Minute
-	supportQueueGiveUp        = 24 * time.Hour
+	supportQueueFirstReminder  = 3 * time.Minute
+	supportQueueTicketTimeout  = 10 * time.Minute
 )
 
 // SupportQueueWorkflow notifies staff about a waiting chat and escalates
@@ -102,27 +134,21 @@ func SupportQueueWorkflow(ctx workflow.Context, in SupportQueueInput) error {
 
 	sig := workflow.GetSignalChannel(ctx, SupportQueueSignalName)
 	start := workflow.Now(ctx)
-	reminders := []struct {
+	// Staged waits: nudge staff first, then give up on live chat and raise a
+	// ticket so the customer gets a tracked answer instead of silence.
+	stages := []struct {
 		after time.Duration
 		kind  string
 	}{
 		{supportQueueFirstReminder, SupportNoticeReminder},
-		{supportQueueUnattended, SupportNoticeUnattended},
+		{supportQueueTicketTimeout, SupportNoticeUnattended},
 	}
 	next := 0
 
-	for {
+	for next < len(stages) {
 		elapsed := workflow.Now(ctx).Sub(start)
-		var timer workflow.Future
-		var timerCtx workflow.Context
-		var cancelTimer workflow.CancelFunc
-		if next < len(reminders) {
-			timerCtx, cancelTimer = workflow.WithCancel(ctx)
-			timer = workflow.NewTimer(timerCtx, reminders[next].after-elapsed)
-		} else {
-			timerCtx, cancelTimer = workflow.WithCancel(ctx)
-			timer = workflow.NewTimer(timerCtx, supportQueueGiveUp-elapsed)
-		}
+		timerCtx, cancelTimer := workflow.WithCancel(ctx)
+		timer := workflow.NewTimer(timerCtx, stages[next].after-elapsed)
 
 		done := false
 		sel := workflow.NewSelector(ctx)
@@ -138,12 +164,15 @@ func SupportQueueWorkflow(ctx workflow.Context, in SupportQueueInput) error {
 			}
 		})
 		sel.AddFuture(timer, func(workflow.Future) {
-			if next < len(reminders) {
-				notice(reminders[next].kind, workflow.Now(ctx).Sub(start))
-				next++
-			} else {
-				done = true // 24h without accept/close — stop nagging
+			waited := workflow.Now(ctx).Sub(start)
+			notice(stages[next].kind, waited)
+			if stages[next].kind == SupportNoticeUnattended {
+				// Nobody picked it up inside the window: convert to a ticket
+				// so it is tracked and the customer hears back.
+				raiseTicket(ctx, in, waited)
+				done = true
 			}
+			next++
 		})
 		sel.Select(ctx)
 		cancelTimer()
@@ -151,4 +180,29 @@ func SupportQueueWorkflow(ctx workflow.Context, in SupportQueueInput) error {
 			return nil
 		}
 	}
+	return nil
+}
+
+// raiseTicket converts an unanswered queued chat into a durable ticket and
+// tells the admin. Best-effort: a failure here must not fail the workflow,
+// and the activity is idempotent on conversation_id.
+func raiseTicket(ctx workflow.Context, in SupportQueueInput, waited time.Duration) {
+	t := SupportQueueTicketInput{
+		ConversationID: in.ConversationID,
+		TenantID:       in.TenantID,
+		CaseID:         in.CaseID,
+		Subject:        in.Subject,
+		IntakeReason:   in.IntakeReason,
+		CustomerName:   in.CustomerName,
+		CustomerEmail:  in.CustomerEmail,
+		WaitedSeconds:  int(waited.Seconds()),
+	}
+	var out SupportQueueTicketResult
+	if err := workflow.ExecuteActivity(ctx, SupportQueueTicketActivity, t).Get(ctx, &out); err != nil {
+		workflow.GetLogger(ctx).Warn("support queue ticket creation failed",
+			"conversation_id", in.ConversationID, "err", err)
+		return
+	}
+	workflow.GetLogger(ctx).Info("support queue ticket raised",
+		"conversation_id", in.ConversationID, "ticket", out.TicketNumber, "created", out.Created)
 }

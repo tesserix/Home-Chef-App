@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/homechef/api/config"
+	"github.com/homechef/api/database"
+	"github.com/homechef/api/models"
 	apitemporal "github.com/homechef/api/temporal"
 	"github.com/homechef/api/temporal/workflows"
 	"go.temporal.io/api/serviceerror"
@@ -82,6 +84,7 @@ func handleOttoQueueEvent(ctx context.Context, subject string, data []byte) erro
 			Subject:        ev.Subject,
 			IntakeReason:   ev.IntakeReason,
 			CustomerName:   ev.CustomerName,
+			CustomerEmail:  ev.CustomerEmail,
 			Escalated:      ev.Event == "escalated",
 		}
 		if temporalRT == nil {
@@ -171,6 +174,70 @@ func SendSupportQueueNotice(_ context.Context, n workflows.SupportQueueNotice) e
 		inboxURL,
 	)
 	return GetEmailService().Send(to, subject, body)
+}
+
+// RaiseSupportQueueTicket materialises the ticket for a chat that waited past
+// the queue timeout, then emails the staff mailbox with the ticket number.
+// Idempotent on conversation_id — a retry returns the existing ticket.
+func RaiseSupportQueueTicket(_ context.Context, in workflows.SupportQueueTicketInput) (workflows.SupportQueueTicketResult, error) {
+	waited := time.Duration(in.WaitedSeconds) * time.Second
+	who := in.CustomerName
+	if who == "" {
+		who = "A user"
+	}
+	subject := in.Subject
+	if subject == "" {
+		subject = "Support chat — no agent available"
+	}
+	desc := fmt.Sprintf(
+		"Raised automatically: nobody accepted this live chat within %s.\n\nCase: %s\nFrom: %s\nTopic: %s\n\nThe full conversation is in the live-chat inbox.",
+		waitingLabel(waited), in.CaseID, who, in.IntakeReason)
+
+	ticket, created, err := CreateTicketFromConversation(database.DB, ChatTicketInput{
+		ConversationID: in.ConversationID,
+		TenantID:       in.TenantID,
+		CaseID:         in.CaseID,
+		CustomerName:   in.CustomerName,
+		CustomerEmail:  in.CustomerEmail,
+		Subject:        subject,
+		Description:    desc,
+		Priority:       models.TicketPriorityHigh,
+	})
+	if err != nil {
+		return workflows.SupportQueueTicketResult{}, err
+	}
+
+	// Tell the admin a chat fell through to a ticket.
+	if to := config.AppConfig.SupportStaffEmail; to != "" && created {
+		lane := "Customer"
+		if in.TenantID == OttoTenantVendor {
+			lane = "Chef / vendor"
+		}
+		body := fmt.Sprintf(`
+			<p>No agent accepted this chat within %s, so it was converted to a ticket.</p>
+			<table cellpadding="4" style="border-collapse:collapse">
+				<tr><td><b>Ticket</b></td><td>%s</td></tr>
+				<tr><td><b>Queue</b></td><td>%s</td></tr>
+				<tr><td><b>Case</b></td><td>%s</td></tr>
+				<tr><td><b>From</b></td><td>%s</td></tr>
+				<tr><td><b>Topic</b></td><td>%s</td></tr>
+			</table>
+			<p><a href="%s">Open the live-chat inbox</a></p>`,
+			html.EscapeString(waitingLabel(waited)),
+			html.EscapeString(ticket.TicketNumber),
+			html.EscapeString(lane),
+			html.EscapeString(in.CaseID),
+			html.EscapeString(who),
+			html.EscapeString(in.IntakeReason),
+			config.AppConfig.AdminLiveChatURL,
+		)
+		if err := GetEmailService().Send(to,
+			fmt.Sprintf("[Support chat] Unanswered — ticket %s raised", ticket.TicketNumber), body); err != nil {
+			log.Printf("[support-queue] ticket notice email failed: %v", err)
+		}
+	}
+
+	return workflows.SupportQueueTicketResult{TicketNumber: ticket.TicketNumber, Created: created}, nil
 }
 
 func waitingLabel(d time.Duration) string {
