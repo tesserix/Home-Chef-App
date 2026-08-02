@@ -86,6 +86,9 @@ const (
 	// application is withdrawn (chef must re-apply).
 	SubjectChefDocsDeadlineWarning = "chef.docs_deadline.warning"
 	SubjectChefDocsDeadlineExpired = "chef.docs_deadline.expired"
+	// Day-25 nudge for a chef who onboarded without payout details: earnings
+	// hold until a bank account is added (no removal — money just waits).
+	SubjectChefPayoutReminder = "chef.payout_details.reminder"
 	// SubjectChefAvailabilityChanged — the chef opened, closed or paused their
 	// kitchen. Customers browsing a closed kitchen would otherwise keep seeing
 	// it as open until their chef list happens to refetch.

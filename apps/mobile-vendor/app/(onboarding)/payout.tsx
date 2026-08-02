@@ -12,13 +12,15 @@
 // Secret Manager. Only a masked summary is kept in the onboarding draft.
 
 import { useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
-import { Landmark, ShieldCheck } from 'lucide-react-native';
-import { Input, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { CheckCircle, FileText, Image as ImageIcon, Landmark, ShieldCheck } from 'lucide-react-native';
+import { Input, OnboardingScaffold, useAlert, useToast } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
-import { getServerErrorMessage } from '@homechef/mobile-shared/api';
+import { getServerErrorMessage, multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
@@ -40,6 +42,51 @@ export default function PayoutStep() {
 
   const [values, setValues] = useState<PayoutFormValues>(emptyPayoutForm);
   const [errors, setErrors] = useState<PayoutValidationError[]>([]);
+  const { show: showToast } = useToast();
+  // Optional last-3-months bank statement — speeds up payout verification.
+  const [statementUploaded, setStatementUploaded] = useState(false);
+  const [statementUploading, setStatementUploading] = useState(false);
+
+  // Nothing typed yet = the step is skippable. Missing payout details never
+  // remove the account — they only hold payouts (payout gate #739) — so the
+  // chef may defer this and add it from Settings within 30 days.
+  const untouched =
+    !values.bankAccountName.trim() && !values.bankAccountNumber.trim() && !values.bankIFSC.trim();
+
+  async function uploadStatement(uri: string, mimeType: string, name: string): Promise<void> {
+    setStatementUploading(true);
+    try {
+      const form = new FormData();
+      form.append('type', 'bank_statement');
+      form.append('file', { uri, name, type: mimeType } as unknown as Blob);
+      await api.post('/chef/documents', form, multipartConfig());
+      setStatementUploaded(true);
+      showToast({ message: 'Bank statement uploaded', tone: 'success' });
+    } catch (err: unknown) {
+      showToast({
+        message: getServerErrorMessage(err, 'Could not upload the statement'),
+        tone: 'error',
+      });
+    } finally {
+      setStatementUploading(false);
+    }
+  }
+
+  async function pickStatementImage(): Promise<void> {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85 });
+    if (!result.canceled && result.assets[0]) {
+      await uploadStatement(result.assets[0].uri, 'image/jpeg', result.assets[0].uri.split('/').pop() ?? 'statement.jpg');
+    }
+  }
+
+  async function pickStatementPdf(): Promise<void> {
+    const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf'], copyToCacheDirectory: true });
+    if (!result.canceled && result.assets[0]) {
+      await uploadStatement(result.assets[0].uri, 'application/pdf', result.assets[0].name ?? 'statement.pdf');
+    }
+  }
 
   // R14 — scroll to the first invalid field on a failed submit instead of
   // leaving an already-scrolled-away chef staring at nothing happening.
@@ -65,6 +112,12 @@ export default function PayoutStep() {
   }
 
   function onNext(): void {
+    if (untouched) {
+      // Deferred: payouts stay on hold until details are added from Settings.
+      setStep(7);
+      router.push('/(onboarding)/review');
+      return;
+    }
     const found = validatePayoutInput(values);
     if (found.length > 0) {
       setErrors(found);
@@ -107,12 +160,22 @@ export default function PayoutStep() {
       stepName="Payouts"
       title="Where should we send your earnings?"
       subtitle="You'll be paid here after each order is delivered and confirmed. You can change this any time from Settings."
-      primaryLabel="Save and continue"
+      primaryLabel={untouched ? 'Skip for now' : 'Save and continue'}
       onPrimary={onNext}
       primaryLoading={save.isPending}
       onBack={() => router.back()}
       scrollRef={scrollRef}
     >
+      {untouched ? (
+        <View style={styles.deferCard}>
+          <Text style={styles.deferTitle}>You can add this later — within 30 days</Text>
+          <Text style={styles.deferBody}>
+            Until your bank details are in, earnings from delivered orders are held and payouts
+            are paused. Add them any time from Settings — sooner means no payment delays.
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.methods}>
         <View style={[styles.method, styles.methodActive]}>
           <Landmark size={20} color={theme.colors.ink.DEFAULT} />
@@ -154,6 +217,42 @@ export default function PayoutStep() {
         />
       </View>
 
+      {/* Optional bank statement — private bucket, admin-only access. */}
+      <View style={styles.statementCard}>
+        <View style={styles.statementHeader}>
+          <Text style={styles.statementTitle}>Bank statement (optional)</Text>
+          {statementUploaded ? (
+            <CheckCircle size={16} color={theme.colors.success.DEFAULT} strokeWidth={2} />
+          ) : null}
+        </View>
+        <Text style={styles.statementHint}>
+          Last 3 months, matching this account — speeds up payout verification. Stored privately;
+          only our verification team can open it.
+        </Text>
+        {statementUploading ? (
+          <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} style={styles.statementSpinner} />
+        ) : (
+          <View style={styles.statementActions}>
+            <Pressable
+              onPress={pickStatementImage}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.statementBtn, pressed && styles.statementBtnPressed]}
+            >
+              <ImageIcon size={15} color={theme.colors.ink.soft} strokeWidth={2} />
+              <Text style={styles.statementBtnLabel}>Gallery</Text>
+            </Pressable>
+            <Pressable
+              onPress={pickStatementPdf}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.statementBtn, pressed && styles.statementBtnPressed]}
+            >
+              <FileText size={15} color={theme.colors.ink.soft} strokeWidth={2} />
+              <Text style={styles.statementBtnLabel}>PDF</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
       <View style={styles.assurance}>
         <ShieldCheck size={16} color={theme.colors.ink.muted} />
         <Text style={styles.assuranceText}>
@@ -165,6 +264,73 @@ export default function PayoutStep() {
 }
 
 const styles = StyleSheet.create({
+  deferCard: {
+    backgroundColor: theme.colors.amber.tint,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.amber.DEFAULT,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    marginBottom: theme.spacing[4],
+  },
+  deferTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    marginBottom: 2,
+  },
+  deferBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.label.size,
+    lineHeight: theme.typography.size.label.size * 1.45,
+    color: theme.colors.ink.soft,
+  },
+
+  statementCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing[4],
+    marginTop: theme.spacing[4],
+  },
+  statementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  statementTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  statementHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.label.size,
+    lineHeight: theme.typography.size.label.size * 1.45,
+    color: theme.colors.ink.soft,
+    marginBottom: theme.spacing[3],
+  },
+  statementSpinner: { alignSelf: 'flex-start' },
+  statementActions: { flexDirection: 'row', gap: theme.spacing[2] },
+  statementBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+    borderRadius: theme.radius.DEFAULT,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+    minHeight: 40,
+  },
+  statementBtnPressed: { backgroundColor: theme.colors.bone },
+  statementBtnLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
+
   methods: { gap: theme.spacing[2], marginBottom: theme.spacing[4] },
   method: {
     flexDirection: 'row',

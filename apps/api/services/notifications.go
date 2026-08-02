@@ -94,7 +94,7 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		{Stream: "USERS", Durable: "notify-users", Handler: h,
 			Subjects: []string{SubjectUserRegistered, SubjectAccountDeleted, SubjectAccountRestored}},
 		{Stream: "CHEF", Durable: "notify-chef", Handler: h,
-			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified, SubjectChefTipReceived, SubjectChefDocsDeadlineWarning, SubjectChefDocsDeadlineExpired}},
+			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified, SubjectChefTipReceived, SubjectChefDocsDeadlineWarning, SubjectChefDocsDeadlineExpired, SubjectChefPayoutReminder}},
 		// Follower fan-out when a favorited chef publishes a weekly menu (#239).
 		// Its own durable so the (potentially large) fan-out is processed
 		// independently of the chef-facing notifications above.
@@ -178,6 +178,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleChefDocsDeadlineWarning)
 	case SubjectChefDocsDeadlineExpired:
 		return decodeThen(data, s.handleChefDocsDeadlineExpired)
+	case SubjectChefPayoutReminder:
+		return decodeThen(data, s.handleChefPayoutReminder)
 	case SubjectWeeklyMenuPublished:
 		return decodeThen(data, s.handleWeeklyMenuPublished)
 	case SubjectDailyMenuPublished:
@@ -884,6 +886,30 @@ func (s *NotificationService) handleChefDocsDeadlineExpired(event Event) error {
 		UserID: event.UserID, Type: "docs_deadline_expired", Title: title, Message: body, Data: string(data),
 	}); err != nil {
 		return fmt.Errorf("save docs_deadline_expired notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "email", Title: title, Message: body,
+	})
+	return nil
+}
+
+// handleChefPayoutReminder — the chef onboarded 25+ days ago with no payout
+// destination. Money-adjacent but not destructive: earnings are simply held
+// by the payout gate until a bank account is added.
+func (s *NotificationService) handleChefPayoutReminder(event Event) error {
+	title := "Add your payout details"
+	body := "Your kitchen has no bank account on file, so earnings from delivered orders can't be paid out. Add your payout details now to avoid payment delays."
+
+	if err := SendPushNotification(event.UserID, title, body,
+		map[string]string{"type": "payout_details_reminder", "action": "setup_payout"}); err != nil {
+		log.Printf("payout-reminder push failed for %s: %v", event.UserID, err)
+	}
+
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID: event.UserID, Type: "payout_details_reminder", Title: title, Message: body, Data: string(data),
+	}); err != nil {
+		return fmt.Errorf("save payout_details_reminder notification: %w", err)
 	}
 	PublishNotification(NotificationEvent{
 		UserID: event.UserID, Type: "email", Title: title, Message: body,

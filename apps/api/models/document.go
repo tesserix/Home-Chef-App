@@ -18,6 +18,10 @@ const (
 	// app's generic "id_proof" (PAN / Aadhaar / passport) upload.
 	DocAddressProof DocumentType = "address_proof"
 	DocIDProof      DocumentType = "id_proof"
+	// DocBankStatement — OPTIONAL last-3-months bank statement that speeds up
+	// payout verification. Never part of the required set; stored privately
+	// like every verification document.
+	DocBankStatement DocumentType = "bank_statement"
 	DocFoodSafetyCert  DocumentType = "food_safety_cert"
 	DocCancelledCheque DocumentType = "cancelled_cheque"
 	DocKitchenPhoto1   DocumentType = "kitchen_photo_1"

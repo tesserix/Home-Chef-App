@@ -24,8 +24,8 @@ func setupDocsDeadlineDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (
 		id text PRIMARY KEY, user_id text, business_name text DEFAULT '',
 		is_verified integer DEFAULT 0, is_active integer DEFAULT 1,
-		accepting_orders integer DEFAULT 0,
-		onboarded_at datetime, docs_warning_sent_at datetime,
+		accepting_orders integer DEFAULT 0, payout_method text DEFAULT '',
+		onboarded_at datetime, docs_warning_sent_at datetime, payout_reminder_sent_at datetime,
 		created_at datetime, updated_at datetime
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE chef_documents (
@@ -114,6 +114,28 @@ func TestDocsDeadline_WithdrawsAfterThirtyDays(t *testing.T) {
 	warned, withdrawn = sweepDocsDeadlines(db, time.Now())
 	require.Zero(t, warned)
 	require.Zero(t, withdrawn)
+}
+
+func TestPayoutReminder_NudgesOnceAfterDay25(t *testing.T) {
+	db := setupDocsDeadlineDB(t)
+	seedDeadlineChef(t, db, 26*24*time.Hour, requiredDocTypes) // docs done, payout not
+
+	nudged := sweepPayoutReminders(db, time.Now())
+	require.Equal(t, 1, nudged)
+	var events int
+	db.Raw(`SELECT COUNT(*) FROM outbox_events WHERE subject = ?`, SubjectChefPayoutReminder).Scan(&events)
+	require.Equal(t, 1, events)
+
+	// Stamp holds — never a second nudge.
+	require.Zero(t, sweepPayoutReminders(db, time.Now()))
+}
+
+func TestPayoutReminder_SkipsChefsWithPayoutMethod(t *testing.T) {
+	db := setupDocsDeadlineDB(t)
+	chefID := seedDeadlineChef(t, db, 26*24*time.Hour, requiredDocTypes)
+	require.NoError(t, db.Exec(`UPDATE chef_profiles SET payout_method = 'bank_transfer' WHERE id = ?`, chefID.String()).Error)
+
+	require.Zero(t, sweepPayoutReminders(db, time.Now()))
 }
 
 func TestDocsDeadline_CompleteDocsAreLeftAlone(t *testing.T) {

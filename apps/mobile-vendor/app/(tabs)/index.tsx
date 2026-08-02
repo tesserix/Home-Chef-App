@@ -150,6 +150,15 @@ export default function DashboardScreen() {
     onboardingInfo?.status === 'pending_review' ||
     onboardingInfo?.status === 'submitted';
   const docsMissing = underReview && onboardingInfo?.docsComplete === false;
+
+  // Payout standing: a verified chef with no bank account accrues earnings
+  // that cannot be paid out — surface it until the details are in.
+  const payoutQ = useQuery({
+    queryKey: ['chef', 'payout', 'readiness'],
+    queryFn: () => api.get<{ methodOnFile: boolean }>('/chef/payout/readiness'),
+    staleTime: 60_000,
+  });
+  const payoutMissing = payoutQ.data?.data ? !payoutQ.data.data.methodOnFile : false;
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const dockClearance = useDockClearance();
@@ -441,6 +450,18 @@ export default function DashboardScreen() {
           >
             <Text style={styles.reviewBannerTitle}>{t('onboarding.reviewBannerTitle')}</Text>
             <Text style={styles.reviewBannerBody}>{t('onboarding.reviewBannerBody')}</Text>
+          </Pressable>
+        ) : null}
+
+        {payoutMissing ? (
+          <Pressable
+            style={styles.reviewBannerUrgent}
+            onPress={() => router.push('/payout')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.reviewBannerTitle}>{t('onboarding.payoutBannerTitle')}</Text>
+            <Text style={styles.reviewBannerBody}>{t('onboarding.payoutBannerBody')}</Text>
+            <Text style={styles.reviewBannerCta}>{t('onboarding.payoutBannerCta')} →</Text>
           </Pressable>
         ) : null}
 

@@ -57,6 +57,10 @@ type ChefProfile struct {
 	// nudge exactly-once.
 	OnboardedAt       *time.Time `gorm:"" json:"onboardedAt,omitempty"`
 	DocsWarningSentAt *time.Time `gorm:"" json:"-"`
+	// PayoutReminderSentAt — exactly-once stamp for the day-25 "add your
+	// payout details" nudge. Unlike documents, missing payout details never
+	// remove the application — they only hold payouts (payout gate #739).
+	PayoutReminderSentAt *time.Time `gorm:"" json:"-"`
 
 	// Mode selects which Razorpay credential set, which visibility rules and
 	// which data partition apply to this kitchen. Defaults to live so every

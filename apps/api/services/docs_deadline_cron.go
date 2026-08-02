@@ -73,8 +73,9 @@ func runDocsDeadlineScan(ctx context.Context) {
 		return
 	}
 	warned, withdrawn := sweepDocsDeadlines(database.DB, time.Now())
-	if warned+withdrawn > 0 {
-		log.Printf("docs-deadline: warned=%d withdrawn=%d", warned, withdrawn)
+	nudged := sweepPayoutReminders(database.DB, time.Now())
+	if warned+withdrawn+nudged > 0 {
+		log.Printf("docs-deadline: warned=%d withdrawn=%d payout-nudged=%d", warned, withdrawn, nudged)
 	}
 	_ = ctx
 }
@@ -124,6 +125,54 @@ func sweepDocsDeadlines(db *gorm.DB, now time.Time) (warned, withdrawn int) {
 		}
 	}
 	return warned, withdrawn
+}
+
+// sweepPayoutReminders nudges chefs who onboarded ≥25 days ago and still have
+// no payout destination. Softer than the documents window: the account is
+// never removed — earnings simply cannot be paid out (payout gate #739) —
+// so this is one reminder, not an ultimatum. Applies to verified chefs too:
+// they are the ones actually accruing earnings with nowhere to send them.
+func sweepPayoutReminders(db *gorm.DB, now time.Time) int {
+	cutoff := now.Add(-(DocsUploadWindow - docsWarningLead)) // day 25
+	var chefs []models.ChefProfile
+	if err := db.Model(&models.ChefProfile{}).
+		Select("id, user_id, onboarded_at").
+		Where("onboarded_at IS NOT NULL AND onboarded_at <= ?", cutoff).
+		Where("(payout_method IS NULL OR TRIM(payout_method) = '')").
+		Where("payout_reminder_sent_at IS NULL").
+		Find(&chefs).Error; err != nil {
+		log.Printf("docs-deadline: payout-reminder query failed: %v", err)
+		return 0
+	}
+
+	nudged := 0
+	for _, chef := range chefs {
+		claimed := false
+		err := db.Transaction(func(tx *gorm.DB) error {
+			res := tx.Model(&models.ChefProfile{}).
+				Where("id = ? AND payout_reminder_sent_at IS NULL", chef.ID).
+				Update("payout_reminder_sent_at", now)
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected == 0 {
+				return nil // another sweep instance won
+			}
+			claimed = true
+			return EnqueueEvent(tx, SubjectChefPayoutReminder, "chef.payout_details.reminder", chef.UserID, map[string]any{
+				"chef_id": chef.ID.String(),
+			})
+		})
+		if err != nil {
+			log.Printf("docs-deadline: payout reminder tx failed for %s (will retry): %v", chef.ID, err)
+			CaptureBackgroundError(err)
+			continue
+		}
+		if claimed {
+			nudged++
+		}
+	}
+	return nudged
 }
 
 func warnDocsDeadline(db *gorm.DB, chef *models.ChefProfile, deadline, now time.Time) bool {

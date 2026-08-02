@@ -309,7 +309,11 @@ export default function ReviewScreen() {
       <Section title="Payouts" editRoute="/(onboarding)/payout">
         <RowItem
           label="Paid to"
-          value={payout.configured ? payout.summary : 'Not set up'}
+          value={
+            payout.configured
+              ? payout.summary
+              : 'Skipped — payouts stay on hold until bank details are added'
+          }
           isLast
         />
       </Section>
