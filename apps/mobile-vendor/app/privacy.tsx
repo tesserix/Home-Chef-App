@@ -58,8 +58,7 @@ const SECTIONS: LegalSection[] = [
     heading: '7. Changes and contact',
     paragraphs: [
       'We may update this policy from time to time; material changes will be notified in the app or by email.',
-      // TODO(ops): provision dpo@fe3dr.com mailbox + name a resident Grievance Officer (DPDP §13)
-      'For India data-protection grievances, contact our Grievance Officer at dpo@fe3dr.com. For any other privacy question or request, contact our general support and legal team at support@fe3dr.com.',
+      'For India data-protection grievances, contact our Grievance Officer at grievance@fe3dr.com. For any other privacy question or request, contact our general support and legal team at support@fe3dr.com.',
     ],
   },
 ];

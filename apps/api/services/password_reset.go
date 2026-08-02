@@ -16,7 +16,7 @@ package services
 //
 // So we split the job: Identity Platform stays the authority for minting and
 // validating the credential, and we own delivery — our authenticated sender
-// (noreply@tesserix.app, SPF+DKIM+DMARC verified), our branded template, and a
+// (noreply@fe3dr.com, SPF+DKIM+DMARC verified), our branded template, and a
 // link on our own domain.
 //
 // The link the user receives is OURS, not Firebase's. It carries an opaque

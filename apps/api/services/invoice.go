@@ -109,7 +109,7 @@ func GetCompanyInfo() (*InvoiceCompanyInfo, error) {
 	info := &InvoiceCompanyInfo{
 		Name:    "Fe3dr Technologies Pvt. Ltd.",
 		Address: "",
-		Email:   "billing@fe3dr.com",
+		Email:   "hello@fe3dr.com",
 		Phone:   "",
 		Website: "https://fe3dr.com",
 		TaxID:   "",

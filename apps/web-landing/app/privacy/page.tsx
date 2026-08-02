@@ -109,7 +109,6 @@ const SECTIONS: LegalSection[] = [
     paragraphs: [
       'For our India operations we have appointed a Grievance Officer under Section 13 of the DPDP Act and the IT (Intermediary Guidelines) Rules, 2021. They acknowledge complaints within 24 hours and aim to resolve them within 15 days.',
       // TODO(counsel): replace bracketed Grievance Officer name and phone with the real India-resident appointee before launch (DPDP §13 requirement).
-      // TODO(ops): provision dpo@fe3dr.com mailbox + name a resident Grievance Officer (DPDP §13)
       '• Name: [Grievance Officer Name]',
       '• Phone: [Grievance Officer Phone] (Mon–Fri, 10:00–18:00 IST)',
       `• Grievance Officer (India): ${LEGAL_GRIEVANCE_EMAIL}`,

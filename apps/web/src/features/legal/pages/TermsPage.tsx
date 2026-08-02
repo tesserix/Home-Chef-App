@@ -579,7 +579,7 @@ export default function TermsPage() {
             {/* TODO: replace [Grievance Officer Name] and phone with the real appointed person before public launch (DPDP §13 requirement) */}
             <div className="mt-4 rounded-md border border-border bg-bone p-4 text-sm text-ink">
               <p className="font-semibold">Grievance officer, Fe3dr</p>
-              <p className="mt-1">Email: dpo@fe3dr.com</p>
+              <p className="mt-1">Email: grievance@fe3dr.com</p>
               <p>Postal: Tesserix Pty Ltd, New South Wales, Australia (operations: Mumbai, India and Sydney, Australia)</p>
               <p className="mt-2 text-ink-soft">
                 We acknowledge complaints within 48 hours and aim to resolve them within

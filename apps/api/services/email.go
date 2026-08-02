@@ -60,7 +60,7 @@ func GetEmailService() *EmailService {
 // SPF covers postal, SES and Cloudflare — there is no sendgrid.net include and
 // no SendGrid DKIM selector.
 //
-// Mail sent through any other provider from noreply@tesserix.app therefore
+// Mail sent through any other provider from noreply@fe3dr.com therefore
 // fails SPF, fails DKIM, and so fails DMARC alignment — which lands it in spam.
 // A fallback that silently degrades deliverability is worse than no fallback,
 // because the failure is invisible: the send "succeeds" and the mail is never

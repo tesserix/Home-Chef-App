@@ -115,7 +115,7 @@ export const LAUNCH_CITY = 'Pune';
 
 // TODO(owner): confirm contact + chef-recruitment addresses.
 export const CONTACT_EMAIL = 'hello@fe3dr.com';
-export const CHEFS_EMAIL = 'chefs@fe3dr.com';
+export const CHEFS_EMAIL = 'chef-onboarding@fe3dr.com';
 
 // Canonical legal-document values — kept identical across landing + both apps.
 // LEGAL_SUPPORT_EMAIL is the general legal/support contact (distinct from the
@@ -146,8 +146,8 @@ export const POWERED_BY_LINE =
   'Powered by Zivana Innovations LLP, part of Tesserix Pty Ltd (ACN 694 070 865 · ABN 59 694 070 865)';
 // India grievance-officer contact (DPDP §13). Distinct from the general
 // LEGAL_SUPPORT_EMAIL; mark8ly exposes a dedicated dpo@ alongside general support.
-// TODO(ops): provision dpo@fe3dr.com mailbox + name a resident Grievance Officer (DPDP §13)
-export const LEGAL_GRIEVANCE_EMAIL = 'dpo@fe3dr.com';
+// TODO(ops): provision grievance@fe3dr.com mailbox + name a resident Grievance Officer (DPDP §13)
+export const LEGAL_GRIEVANCE_EMAIL = 'grievance@fe3dr.com';
 export const LEGAL_LAST_UPDATED = '26 July 2026';
 
 // TODO(owner): real social profiles (placeholders until accounts exist).

@@ -773,7 +773,7 @@ export default function RefundPolicyPage() {
                     Grievance Officer, Fe3dr
                   </dd>
                   <dt className="font-medium text-ink">Email:</dt>
-                  <dd className="text-ink-soft">dpo@fe3dr.com</dd>
+                  <dd className="text-ink-soft">grievance@fe3dr.com</dd>
                   <dt className="font-medium text-ink">Response:</dt>
                   <dd className="text-ink-soft">
                     Within 48 hours of your complaint

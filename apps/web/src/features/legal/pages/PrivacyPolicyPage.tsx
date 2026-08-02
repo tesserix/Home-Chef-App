@@ -668,10 +668,10 @@ export default function PrivacyPolicyPage() {
                 </dt>
                 <dd>
                   <a
-                    href="mailto:dpo@fe3dr.com"
+                    href="mailto:grievance@fe3dr.com"
                     className="text-herb underline underline-offset-2 hover:text-herb-dark"
                   >
-                    dpo@fe3dr.com
+                    grievance@fe3dr.com
                   </a>
                 </dd>
 

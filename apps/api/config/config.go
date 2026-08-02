@@ -477,7 +477,7 @@ func Load() {
 		// Recipients see the FromName, not the envelope domain, so the brand
 		// reads correctly without needing a second verified domain.
 		ResendAPIKey: getEnv("RESEND_API_KEY", ""),
-		FromEmail:    getEnv("FROM_EMAIL", "noreply@tesserix.app"),
+		FromEmail:    getEnv("FROM_EMAIL", "noreply@fe3dr.com"),
 		FromName:     getEnv("FROM_NAME", "Fe3dr"),
 
 		// Twilio
