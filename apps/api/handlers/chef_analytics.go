@@ -9,6 +9,7 @@ import (
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 // chef_analytics.go — the analytics endpoints behind the chef dashboard (#49):
@@ -116,8 +117,8 @@ func (h *ChefHandler) GetDemandForecast(c *gin.Context) {
 		SELECT COUNT(*) FROM orders
 		WHERE chef_id = ? AND deleted_at IS NULL
 		  AND created_at >= ?
-		  AND EXTRACT(DOW FROM created_at + interval '330 minutes') = ?
-	`, chef.ID, time.Now().AddDate(0, 0, -7*lookbackWeeks), weekday).Scan(&alaCarteCount)
+		  AND EXTRACT(DOW FROM created_at AT TIME ZONE ?) = ?
+	`, chef.ID, time.Now().AddDate(0, 0, -7*lookbackWeeks), services.BusinessTZName(), weekday).Scan(&alaCarteCount)
 	alaCarteForecast := forecastAvg(alaCarteCount, lookbackWeeks)
 
 	// Likely top à-la-carte dishes on this weekday (avg qty over the lookback).
@@ -132,11 +133,11 @@ func (h *ChefHandler) GetDemandForecast(c *gin.Context) {
 		JOIN orders o ON o.id = oi.order_id
 		WHERE o.chef_id = ? AND o.deleted_at IS NULL
 		  AND o.created_at >= ?
-		  AND EXTRACT(DOW FROM o.created_at + interval '330 minutes') = ?
+		  AND EXTRACT(DOW FROM o.created_at AT TIME ZONE ?) = ?
 		GROUP BY oi.name
 		ORDER BY qty DESC
 		LIMIT 5
-	`, chef.ID, time.Now().AddDate(0, 0, -7*lookbackWeeks), weekday).Scan(&topDishes)
+	`, chef.ID, time.Now().AddDate(0, 0, -7*lookbackWeeks), services.BusinessTZName(), weekday).Scan(&topDishes)
 
 	likely := make([]gin.H, 0, len(topDishes))
 	for _, d := range topDishes {

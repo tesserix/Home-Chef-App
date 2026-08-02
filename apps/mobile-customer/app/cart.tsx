@@ -16,6 +16,7 @@ import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useCartStore } from '../store/cart-store';
 import type { CartItem } from '../types/customer';
 import { useRequireAccount } from '../hooks/useRequireAccount';
+import { useDialog } from '@homechef/mobile-shared/ui';
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the ChefCard/MenuItemCard convention.
@@ -169,6 +170,22 @@ export default function CartScreen() {
   const total = useCartStore((s) => s.total());
   const chefName = useCartStore((s) => s.chefName);
   const hasHydrated = useCartStore((s) => s.hasHydrated);
+  const clearCart = useCartStore((s) => s.clearCart);
+  const dialog = useDialog();
+
+  // Confirmed, not immediate: this throws away every line plus their notes, and
+  // it sits in the header where a mis-tap is easy.
+  function confirmClearCart(): void {
+    dialog.confirm({
+      title: 'Clear your cart?',
+      message: 'This removes every dish and any notes you added.',
+      accentColor: customerColors.coral.DEFAULT,
+      actions: [
+        { label: 'Keep it', cancel: true },
+        { label: 'Clear cart', destructive: true, onPress: clearCart },
+      ],
+    });
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'bottom']}>
@@ -187,10 +204,30 @@ export default function CartScreen() {
             </View>
           )}
         </Pressable>
-        <View className="ml-2">
+        <View className="ml-2 flex-1">
           <Text className="text-xl font-bold text-charcoal font-display">Your Cart</Text>
           {chefName ? <Text className="text-sm text-charcoal-soft">{chefName}</Text> : null}
         </View>
+        {/* Emptying the cart one line at a time is the only way out today, and a
+            cart is single-chef — someone switching kitchens has to clear it. */}
+        {items.length > 0 ? (
+          <Pressable
+            onPress={confirmClearCart}
+            accessibilityRole="button"
+            accessibilityLabel="Clear cart"
+            hitSlop={10}
+            android_ripple={{ color: REMOVE_RIPPLE, borderless: true, radius: 20 }}
+          >
+            {({ pressed }) => (
+              <Text
+                className="text-sm font-medium text-charcoal-soft"
+                style={pressed ? { opacity: 0.6 } : undefined}
+              >
+                Clear
+              </Text>
+            )}
+          </Pressable>
+        ) : null}
       </View>
 
       {!hasHydrated ? (
@@ -262,6 +299,7 @@ export default function CartScreen() {
           </View>
         </KeyboardAvoidingView>
       )}
+      {dialog.element}
     </SafeAreaView>
   );
 }

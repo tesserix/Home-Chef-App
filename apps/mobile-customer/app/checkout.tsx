@@ -66,7 +66,7 @@ import { friendlyErrorMessage } from '../lib/errors';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { AddressLabelSelect } from '../components/address/AddressLabelSelect';
 import type { Address } from '../types/customer';
-import { useAlert } from '@homechef/mobile-shared/ui';
+import { useAlert, useDialog } from '@homechef/mobile-shared/ui';
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the ChefCard/MenuItemCard convention.
@@ -130,6 +130,7 @@ function useStaleValue<T>(value: T | undefined): T | undefined {
 
 export default function CheckoutScreen() {
   const { showAlert } = useAlert();
+  const dialog = useDialog();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const cartStore = useCartStore();
@@ -408,6 +409,21 @@ export default function CheckoutScreen() {
 
   // ─── Place Order flow ──────────────────────────────────────────────────────
 
+  // Leaving checkout keeps the cart — someone backing out usually wants to
+  // change something, not start over. Confirmed because the address, slot and
+  // notes entered on this screen are lost.
+  function confirmCancelCheckout(): void {
+    dialog.confirm({
+      title: 'Cancel checkout?',
+      message: 'Your cart is kept, but the details you entered here are cleared.',
+      accentColor: customerColors.coral.DEFAULT,
+      actions: [
+        { label: 'Keep going', cancel: true },
+        { label: 'Cancel checkout', destructive: true, onPress: () => router.replace('/cart') },
+      ],
+    });
+  }
+
   async function handlePlaceOrder() {
     const needsAddress = fulfillment !== 'pickup';
     // R14 — guide the customer to what's missing instead of a silent no-op tap:
@@ -648,6 +664,26 @@ export default function CheckoutScreen() {
           )}
         </Pressable>
         <Text className="text-xl font-bold text-charcoal font-display flex-1">Checkout</Text>
+        {/* An explicit way out. The back chevron only pops a screen, which reads
+            as "go look at something" rather than "abandon this" — and while the
+            order button is mid-flight the chevron is the only exit at all. */}
+        <Pressable
+          onPress={confirmCancelCheckout}
+          disabled={isLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel checkout"
+          hitSlop={8}
+          android_ripple={{ color: CHARCOAL_RIPPLE, borderless: true, radius: 20 }}
+        >
+          {({ pressed }) => (
+            <Text
+              className="text-sm font-medium text-charcoal-soft"
+              style={pressed || isLoading ? { opacity: 0.5 } : undefined}
+            >
+              Cancel
+            </Text>
+          )}
+        </Pressable>
       </View>
 
       <ScrollView
@@ -1854,6 +1890,7 @@ export default function CheckoutScreen() {
           )}
         </Pressable>
       </View>
+      {dialog.element}
     </KeyboardAvoidingView>
   );
 }

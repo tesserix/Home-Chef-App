@@ -79,7 +79,10 @@ func (h *ChefHandler) GetAdvancedAnalytics(c *gin.Context) {
 	}
 	var days []dayRow
 	database.DB.Model(&models.Order{}).
-		Select("EXTRACT(DOW FROM created_at)::int AS dow, COUNT(*) AS orders").
+		// In the business zone, not UTC: "your best day is Tuesday" must mean the
+		// chef's Tuesday. Its sibling forecast query has always offset for IST,
+		// so leaving this one on UTC made the two screens name different days.
+		Select("EXTRACT(DOW FROM created_at AT TIME ZONE ?)::int AS dow, COUNT(*) AS orders", services.BusinessTZName()).
 		Where("chef_id = ? AND status = ? AND created_at >= ?", chef.ID, "delivered", since).
 		Group("dow").Order("orders DESC").Scan(&days)
 	bestDay := ""
