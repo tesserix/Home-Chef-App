@@ -51,18 +51,36 @@ deletion. Deleting the Identity Platform user is not enough — Apple keeps its
 own record, and the app stays listed under *Settings → Apple ID → Sign in with
 Apple*. A reviewer who deletes the test account and looks there will see it.
 
+**Two apps, two client ids.** Both Customer and Vendor have native Sign in
+with Apple enabled (`usesAppleSignIn: true` in each `app.json`), and each is a
+separate App ID with its own bundle id. A native authorization code is bound
+to the App ID that issued it, so Apple's `/auth/token` and `/auth/revoke`
+reject a Customer-app code presented with the Vendor app's `client_id` and
+vice versa — one shared client id cannot serve both apps, even though they
+share a Team ID and a single Sign in with Apple private key.
+
 | Env var | Value |
 |---|---|
-| `APPLE_TEAM_ID` | Apple Developer team id (`2CRHRRYBPL`) |
-| `APPLE_KEY_ID` | Key id of the Sign in with Apple `.p8` |
-| `APPLE_SERVICES_CLIENT_ID` | The app's bundle id |
-| `APPLE_SIGNIN_PRIVATE_KEY_B64` | The `.p8` contents, base64-encoded |
+| `APPLE_TEAM_ID` | Apple Developer team id (`2CRHRRYBPL`) — shared by both apps |
+| `APPLE_KEY_ID` | Key id of the Sign in with Apple `.p8` — shared by both apps |
+| `APPLE_SERVICES_CLIENT_ID` | **Customer** app's bundle id (`com.tesserix.homechef.customer`) |
+| `APPLE_SERVICES_CLIENT_ID_VENDOR` | **Vendor** app's bundle id (`com.tesserix.homechef.vendor`) |
+| `APPLE_SIGNIN_PRIVATE_KEY_B64` | The `.p8` contents, base64-encoded — shared by both apps |
 
-All four must be set or revocation silently disables itself (logged at
-startup). See `apps/api/services/apple_signin.go`.
+The API resolves which client id to use per request from the user's role
+(customer vs. chef), not from a client-supplied header — see
+`apps/api/services/apple_signin.go`. Each app's revocation is independently
+gated: if only one app's client id is set, revocation works for that app and
+degrades to a safe no-op for the other (nothing is sent to Apple with the
+wrong client id). The shared vars (team id, key id, private key) plus at least
+one client id must be set for revocation to do anything at all; a startup log
+line names exactly which vars are missing and for which app(s), unconditional
+in every environment. See `apps/api/config/config.go`
+(`warnIfAppleSignInIncomplete`).
 
 > **Status:** not yet provisioned in prod. This is the one remaining
-> submission blocker that needs an action outside this repo.
+> submission blocker that needs an action outside this repo — for BOTH client
+> id vars, not just one, or only one app's revocation will actually work.
 
 ---
 
