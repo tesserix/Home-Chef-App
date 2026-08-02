@@ -736,6 +736,36 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 // paid — so a chef saw "3 Orders" over an empty queue while the customer
 // (whose own list has no payment filter) waited on an order the chef could
 // never see.
+// chefCountedOrdersSQL is the ONE definition of which orders count as a kitchen's real
+// business: money actually captured (or captured and later refunded — the order still
+// happened), or a confirmed meal-plan day, and only from the world the kitchen is
+// currently in.
+//
+// It exists as a SQL fragment because the vendor surfaces are split across two query
+// styles — the GORM builder on the dashboard, raw aggregates in analytics — and they must
+// agree. They did not: every analytics aggregate filtered on chef_id alone, so abandoned
+// checkouts, failed payments and sandbox orders were all counted as revenue and the
+// Analytics screen reported several times the dashboard's figure for the same week.
+// One definition, used by both, is what stops that recurring.
+//
+// `alias` is the orders table's name in the caller's query. Takes chefID TWICE.
+func chefCountedOrdersSQL(alias string) string {
+	return fmt.Sprintf(`%[1]s.chef_id = ?
+		AND %[1]s.deleted_at IS NULL
+		AND (%[1]s.payment_status IN ('%[2]s','%[3]s')
+			OR %[1]s.id IN (SELECT order_id FROM meal_plan_days WHERE order_id IS NOT NULL))
+		AND %[1]s.mode = COALESCE((SELECT mode FROM chef_profiles WHERE id = ?), '%[4]s')`,
+		alias, models.PaymentCompleted, models.PaymentRefunded, models.ChefModeLive)
+}
+
+// chefCountedRevenueExpr is the matching money expression: gross order value less whatever
+// has been refunded. A refunded order keeps its place in the counts (it happened) and
+// contributes only the money the kitchen actually kept, so counts and revenue can never
+// describe different populations.
+func chefCountedRevenueExpr(alias string) string {
+	return fmt.Sprintf("COALESCE(SUM(%[1]s.total - COALESCE(%[1]s.refund_amount, 0)), 0)", alias)
+}
+
 func chefVisibleOrders(chefID uuid.UUID) *gorm.DB {
 	// Paid orders always reach the chef. In ADDITION, meal-plan DAY orders reach
 	// the chef even while PaymentPending: with escrow off (the v1 default)
@@ -747,19 +777,13 @@ func chefVisibleOrders(chefID uuid.UUID) *gorm.DB {
 	// (the cycle charge / the group's consolidated payment), so the payment filter
 	// already covers them — no extra subquery needed here (the source tag still
 	// classifies them via ClassifyOrderSources).
-	mealPlanDayOrders := database.DB.Model(&models.MealPlanDay{}).
-		Select("order_id").Where("order_id IS NOT NULL")
-	return database.DB.Model(&models.Order{}).Where(
-		"chef_id = ? AND (payment_status IN ? OR id IN (?))",
-		chefID,
-		[]models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded},
-		mealPlanDayOrders,
-		// Scoped to the world the kitchen is currently in, so a sandbox session
-		// is a clean slate: while in test the chef sees only sandbox orders, and
-		// the moment they return to live their real queue reappears untouched.
-		// Applied here rather than at each of the eight callers so no vendor
-		// surface can be forgotten.
-	).Scopes(services.ChefOwnModeScope(chefID))
+	//
+	// The mode scope keeps a sandbox session a clean slate: while in test the chef sees
+	// only sandbox orders, and the moment they return to live their real queue reappears
+	// untouched. Applied inside the shared predicate rather than at each of the eight
+	// callers so no vendor surface can be forgotten.
+	return database.DB.Model(&models.Order{}).
+		Where(chefCountedOrdersSQL("orders"), chefID, chefID)
 }
 
 // GetChefDashboard returns the chef's dashboard data
@@ -779,16 +803,18 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	todayStart := services.CapacityDay(time.Now())
 	weekStart := todayStart.AddDate(0, 0, -7)
 
-	// Today's stats. Counters use chefVisibleOrders so the header can never
-	// disagree with the orders tab; revenue stays completed-only (captured money).
+	// Today's stats. Count AND revenue both go through chefVisibleOrders so the header can
+	// never disagree with the orders tab — the revenue queries used to bypass it, which
+	// left them unscoped by mode (sandbox money in a live total) and over a different
+	// population than the count sitting next to them.
 	var todayOrders int64
 	var todayRevenue float64
 	chefVisibleOrders(chef.ID).
 		Where("created_at >= ?", todayStart).
 		Count(&todayOrders)
-	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND created_at >= ? AND payment_status = ?", chef.ID, todayStart, models.PaymentCompleted).
-		Select("COALESCE(SUM(total), 0)").Scan(&todayRevenue)
+	chefVisibleOrders(chef.ID).
+		Where("created_at >= ?", todayStart).
+		Select(chefCountedRevenueExpr("orders")).Scan(&todayRevenue)
 
 	// Pending badge — same scope as the New tab, so the badge always equals the
 	// list the chef lands on.
@@ -803,19 +829,20 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	chefVisibleOrders(chef.ID).
 		Where("created_at >= ?", weekStart).
 		Count(&weekOrders)
-	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND created_at >= ? AND payment_status = ?", chef.ID, weekStart, models.PaymentCompleted).
-		Select("COALESCE(SUM(total), 0)").Scan(&weekRevenue)
+	chefVisibleOrders(chef.ID).
+		Where("created_at >= ?", weekStart).
+		Select(chefCountedRevenueExpr("orders")).Scan(&weekRevenue)
 
-	// Lifetime totals for the dashboard hero — computed from the orders table, not
-	// the denormalized chef.TotalOrders/earnings counters (which drift: TotalOrders
-	// read 0 for chefs with live orders). Earnings is completed-only (captured
-	// money), mirroring the today/week revenue queries; the order count uses the
-	// same chefVisibleOrders scope as today/week so the three periods agree.
+	// Lifetime totals for the dashboard hero — computed from the orders table, not the
+	// denormalized chef.TotalOrders/earnings counters (which drift: TotalOrders read 0 for
+	// chefs with live orders). Count and money share chefVisibleOrders, so all three
+	// periods and both metrics describe one population.
+	//
+	// NOTE this is gross order value (food + delivery + tax + platform fee), NOT the
+	// chef's payout — which is why it is larger than Net earnings on the P&L. The label
+	// on the hero is a product decision, not a bug in this query.
 	var totalEarnings float64
-	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND payment_status = ?", chef.ID, models.PaymentCompleted).
-		Select("COALESCE(SUM(total), 0)").Scan(&totalEarnings)
+	chefVisibleOrders(chef.ID).Select(chefCountedRevenueExpr("orders")).Scan(&totalEarnings)
 	var totalOrdersCount int64
 	chefVisibleOrders(chef.ID).Count(&totalOrdersCount)
 
@@ -2681,14 +2708,14 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 	// Bucketed in IST, and the Go loop below matches: the platform is India-first
 	// and a chef's "today" is their calendar day, not UTC's.
 	database.DB.Raw(`
-		SELECT TO_CHAR(created_at AT TIME ZONE ?, 'YYYY-MM-DD') as date,
+		SELECT TO_CHAR(o.created_at AT TIME ZONE ?, 'YYYY-MM-DD') as date,
 		       COUNT(*) as orders,
-		       COALESCE(SUM(total), 0) as revenue
-		FROM orders
-		WHERE chef_id = ? AND created_at >= ? AND deleted_at IS NULL
+		       `+chefCountedRevenueExpr("o")+` as revenue
+		FROM orders o
+		WHERE `+chefCountedOrdersSQL("o")+` AND o.created_at >= ?
 		GROUP BY 1
 		ORDER BY 1
-	`, services.BusinessTZName(), chef.ID, since).Scan(&dailyStats)
+	`, services.BusinessTZName(), chef.ID, chef.ID, since).Scan(&dailyStats)
 
 	// Build label→value maps for the full date range
 	dateMap := make(map[string]dailyStat)
@@ -2730,11 +2757,11 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 		SELECT oi.name, SUM(oi.quantity) as orders
 		FROM order_items oi
 		JOIN orders o ON o.id = oi.order_id
-		WHERE o.chef_id = ? AND o.created_at >= ? AND o.deleted_at IS NULL
+		WHERE `+chefCountedOrdersSQL("o")+` AND o.created_at >= ?
 		GROUP BY oi.name
 		ORDER BY orders DESC
 		LIMIT 5
-	`, chef.ID, since).Scan(&topItems)
+	`, chef.ID, chef.ID, since).Scan(&topItems)
 
 	// Calculate percentages
 	var totalItemOrders int
@@ -2761,13 +2788,13 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 	}
 	var hourStats []hourStat
 	database.DB.Raw(`
-		SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE ?)::int as hour,
+		SELECT EXTRACT(HOUR FROM o.created_at AT TIME ZONE ?)::int as hour,
 		       COUNT(*) as orders
-		FROM orders
-		WHERE chef_id = ? AND created_at >= ? AND deleted_at IS NULL
+		FROM orders o
+		WHERE `+chefCountedOrdersSQL("o")+` AND o.created_at >= ?
 		GROUP BY 1
 		ORDER BY 1
-	`, services.BusinessTZName(), chef.ID, since).Scan(&hourStats)
+	`, services.BusinessTZName(), chef.ID, chef.ID, since).Scan(&hourStats)
 
 	hourMap := make(map[int]int)
 	for _, hs := range hourStats {
@@ -2808,10 +2835,10 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 		JOIN orders o ON o.id = oi.order_id
 		LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
 		LEFT JOIN menu_categories mc ON mc.id = mi.category_id
-		WHERE o.chef_id = ? AND o.created_at >= ? AND o.deleted_at IS NULL
+		WHERE `+chefCountedOrdersSQL("o")+` AND o.created_at >= ?
 		GROUP BY mc.name
 		ORDER BY revenue DESC
-	`, chef.ID, since).Scan(&catStats)
+	`, chef.ID, chef.ID, since).Scan(&catStats)
 
 	var totalCatRevenue float64
 	for _, cs := range catStats {
@@ -2846,9 +2873,9 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 	prevSince := time.Now().AddDate(0, 0, -2*days)
 	var prevRevenue float64
 	database.DB.Raw(`
-		SELECT COALESCE(SUM(total), 0) FROM orders
-		WHERE chef_id = ? AND created_at >= ? AND created_at < ? AND deleted_at IS NULL
-	`, chef.ID, prevSince, since).Scan(&prevRevenue)
+		SELECT `+chefCountedRevenueExpr("o")+` FROM orders o
+		WHERE `+chefCountedOrdersSQL("o")+` AND o.created_at >= ? AND o.created_at < ?
+	`, chef.ID, chef.ID, prevSince, since).Scan(&prevRevenue)
 
 	c.JSON(http.StatusOK, gin.H{
 		"summary": gin.H{
@@ -2879,12 +2906,12 @@ func chefRepeatRate(chefID uuid.UUID) float64 {
 			COUNT(*) FILTER (WHERE cnt >= 2) AS repeat,
 			COUNT(*) AS total
 		FROM (
-			SELECT customer_id, COUNT(*) AS cnt
-			FROM orders
-			WHERE chef_id = ? AND deleted_at IS NULL
-			GROUP BY customer_id
+			SELECT o.customer_id, COUNT(*) AS cnt
+			FROM orders o
+			WHERE `+chefCountedOrdersSQL("o")+`
+			GROUP BY o.customer_id
 		) t
-	`, chefID).Scan(&row)
+	`, chefID, chefID).Scan(&row)
 	if row.Total == 0 {
 		return 0
 	}
