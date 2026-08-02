@@ -14,6 +14,10 @@ import { ImageResponse } from 'next/og';
  * paper/ink/persimmon system from .impeccable.md.
  */
 
+// The landing site uses `output: export` — image routes must declare
+// themselves static or the export build fails at page-data collection.
+export const dynamic = 'force-static';
+
 export const alt = 'Fe3dr — Real home-cooked food, delivered';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
