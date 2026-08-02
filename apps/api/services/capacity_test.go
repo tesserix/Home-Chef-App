@@ -15,7 +15,7 @@ import (
 
 func istAt(h, m int) time.Time {
 	// A fixed IST instant on 2026-06-20 at h:m, expressed in UTC.
-	return time.Date(2026, 6, 20, h, m, 0, 0, capacityIST)
+	return time.Date(2026, 6, 20, h, m, 0, 0, istLoc)
 }
 
 func TestParseCutoff(t *testing.T) {

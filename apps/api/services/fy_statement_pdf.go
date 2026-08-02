@@ -218,7 +218,7 @@ func addFYFooter(m core.Maroto) {
 		props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}, Style: fontstyle.Italic},
 	)))
 	m.AddRow(4, col.New(12).Add(text.New(
-		fmt.Sprintf("Generated %s · Home Chef Marketplace", time.Now().In(istLocation).Format("02 Jan 2006 15:04 IST")),
+		fmt.Sprintf("Generated %s · Home Chef Marketplace", time.Now().In(istLoc).Format("02 Jan 2006 15:04 IST")),
 		props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}},
 	)))
 }

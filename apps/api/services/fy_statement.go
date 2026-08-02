@@ -20,7 +20,7 @@ import (
 
 // ParseISTDate parses a YYYY-MM-DD string as an IST calendar day (UTC stored).
 func ParseISTDate(s string) (time.Time, error) {
-	t, err := time.ParseInLocation("2006-01-02", s, istLocation)
+	t, err := time.ParseInLocation("2006-01-02", s, istLoc)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -89,7 +89,7 @@ func ComputeExpenseSummary(chefID uuid.UUID, fyStartYear int) (*ExpenseSummary, 
 		}
 		ct.Amount += e.Amount
 		ct.Count++
-		month := e.ExpenseDate.In(istLocation).Format("2006-01")
+		month := e.ExpenseDate.In(istLoc).Format("2006-01")
 		if _, seen := byMonth[month]; !seen {
 			monthOrder = append(monthOrder, month)
 		}

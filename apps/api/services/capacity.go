@@ -23,19 +23,13 @@ import (
 // tracked follow-up. IsPastSlotCutoff is exported for that subscription-timing
 // use.
 
-// capacityIST is the business timezone for the daily-cap calendar day and the
-// "HH:MM" cutoff comparisons (IST has no DST). Containers run UTC, so all
-// day/time math must go through this zone.
-var capacityIST = time.FixedZone("IST", 5*3600+30*60)
-
 // ErrSoldOut is returned when a reservation would exceed a dish's daily cap.
 var ErrSoldOut = errors.New("sold out for today")
 
 // CapacityDay returns the IST calendar day (midnight) for an instant — the key
 // for the daily-sales counter and for releasing against the order's original day.
 func CapacityDay(t time.Time) time.Time {
-	ist := t.In(capacityIST)
-	return time.Date(ist.Year(), ist.Month(), ist.Day(), 0, 0, 0, 0, capacityIST)
+	return BusinessDayStart(t)
 }
 
 // TodayWeekday returns the current IST weekday (0=Sun..6=Sat), matching the
@@ -146,8 +140,8 @@ func IsPastCutoff(cutoff string, now time.Time) bool {
 	if !ok {
 		return false
 	}
-	ist := now.In(capacityIST)
-	deadline := time.Date(ist.Year(), ist.Month(), ist.Day(), h, m, 0, 0, capacityIST)
+	ist := now.In(istLoc)
+	deadline := time.Date(ist.Year(), ist.Month(), ist.Day(), h, m, 0, 0, istLoc)
 	return !ist.Before(deadline)
 }
 
@@ -282,8 +276,8 @@ func istDateAt(day time.Time, hhmm string) time.Time {
 	if !ok {
 		h, m = 0, 0
 	}
-	ist := day.In(capacityIST)
-	return time.Date(ist.Year(), ist.Month(), ist.Day(), h, m, 0, 0, capacityIST)
+	ist := day.In(istLoc)
+	return time.Date(ist.Year(), ist.Month(), ist.Day(), h, m, 0, 0, istLoc)
 }
 
 // ParseSlotDateIST parses a "YYYY-MM-DD" string into that IST calendar day
@@ -292,7 +286,7 @@ func ParseSlotDateIST(s string, now time.Time) (time.Time, bool) {
 	if s == "" {
 		return CapacityDay(now), true
 	}
-	t, err := time.ParseInLocation("2006-01-02", s, capacityIST)
+	t, err := time.ParseInLocation("2006-01-02", s, istLoc)
 	if err != nil {
 		return time.Time{}, false
 	}
@@ -316,7 +310,7 @@ func slotOpenForDay(s *models.ChefCapacitySettings, slot string, day, now time.T
 	}
 	_, end, _ := SlotWindow(s, slot)
 	if _, _, ok := ParseCutoff(end); ok {
-		return now.In(capacityIST).Before(istDateAt(day, end))
+		return now.In(istLoc).Before(istDateAt(day, end))
 	}
 	return true
 }

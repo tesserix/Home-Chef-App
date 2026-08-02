@@ -268,22 +268,22 @@ func TestMostRecentClosedWeek(t *testing.T) {
 		{
 			name:      "wednesday mid-week",
 			now:       time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC), // Wed
-			wantStart: time.Date(2026, 6, 1, 0, 0, 0, 0, istLocation),
-			wantEnd:   time.Date(2026, 6, 8, 0, 0, 0, 0, istLocation),
+			wantStart: time.Date(2026, 6, 1, 0, 0, 0, 0, istLoc),
+			wantEnd:   time.Date(2026, 6, 8, 0, 0, 0, 0, istLoc),
 		},
 		{
 			name:      "monday returns the week that just closed",
 			now:       time.Date(2026, 6, 8, 6, 0, 0, 0, time.UTC), // Mon (IST 11:30)
-			wantStart: time.Date(2026, 6, 1, 0, 0, 0, 0, istLocation),
-			wantEnd:   time.Date(2026, 6, 8, 0, 0, 0, 0, istLocation),
+			wantStart: time.Date(2026, 6, 1, 0, 0, 0, 0, istLoc),
+			wantEnd:   time.Date(2026, 6, 8, 0, 0, 0, 0, istLoc),
 		},
 		{
 			// On Sunday the current week (Jun 1–Jun 7) is still in progress,
 			// so the most recent *closed* week is the one before it.
 			name:      "sunday: current week not yet closed",
 			now:       time.Date(2026, 6, 7, 12, 0, 0, 0, time.UTC), // Sun
-			wantStart: time.Date(2026, 5, 25, 0, 0, 0, 0, istLocation),
-			wantEnd:   time.Date(2026, 6, 1, 0, 0, 0, 0, istLocation),
+			wantStart: time.Date(2026, 5, 25, 0, 0, 0, 0, istLoc),
+			wantEnd:   time.Date(2026, 6, 1, 0, 0, 0, 0, istLoc),
 		},
 	}
 	for _, tc := range tests {

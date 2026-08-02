@@ -90,12 +90,12 @@ func GenerateWeeklyStatementPDF(statementID uuid.UUID) ([]byte, string, error) {
 	if _, err := buf.Write(doc.GetBytes()); err != nil {
 		return nil, "", fmt.Errorf("buffer statement pdf: %w", err)
 	}
-	filename := fmt.Sprintf("statement-%s.pdf", stmt.WeekStart.In(istLocation).Format("2006-01-02"))
+	filename := fmt.Sprintf("statement-%s.pdf", stmt.WeekStart.In(istLoc).Format("2006-01-02"))
 	return buf.Bytes(), filename, nil
 }
 
 func addStatementHeader(m core.Maroto, stmt *models.WeeklyStatement) {
-	periodEnd := stmt.WeekEnd.In(istLocation).AddDate(0, 0, -1)
+	periodEnd := stmt.WeekEnd.In(istLoc).AddDate(0, 0, -1)
 	m.AddRow(12,
 		col.New(8).Add(
 			text.New("WEEKLY SETTLEMENT STATEMENT", props.Text{Top: 2, Size: 15, Style: fontstyle.Bold}),
@@ -107,10 +107,10 @@ func addStatementHeader(m core.Maroto, stmt *models.WeeklyStatement) {
 	m.AddRow(6,
 		col.New(8).Add(
 			text.New(fmt.Sprintf("Period: %s – %s",
-				stmt.WeekStart.In(istLocation).Format("02 Jan 2006"),
+				stmt.WeekStart.In(istLoc).Format("02 Jan 2006"),
 				periodEnd.Format("02 Jan 2006")),
 				props.Text{Size: 9}),
-			text.New(fmt.Sprintf("Issued: %s", stmt.CreatedAt.In(istLocation).Format("02 Jan 2006")),
+			text.New(fmt.Sprintf("Issued: %s", stmt.CreatedAt.In(istLoc).Format("02 Jan 2006")),
 				props.Text{Top: 4, Size: 9}),
 		),
 		col.New(4).Add(
@@ -193,7 +193,7 @@ func addStatementOrders(m core.Maroto, lines []OrderEarnings) {
 		deductions := Round2(e.PlatformCommission + e.TDS)
 		rows = append(rows, row.New(6).Add(
 			col.New(4).Add(text.New("#"+e.OrderNumber, props.Text{Size: 9})),
-			col.New(2).Add(text.New(e.CompletedAt.In(istLocation).Format("02 Jan"), props.Text{Size: 9})),
+			col.New(2).Add(text.New(e.CompletedAt.In(istLoc).Format("02 Jan"), props.Text{Size: 9})),
 			col.New(2).Add(text.New(fmt.Sprintf("%.2f", e.Gross), props.Text{Size: 9, Align: align.Right})),
 			col.New(2).Add(text.New(fmt.Sprintf("-%.2f", deductions), props.Text{Size: 9, Align: align.Right})),
 			col.New(2).Add(text.New(fmt.Sprintf("%.2f", e.NetPayout), props.Text{Size: 9, Align: align.Right, Style: fontstyle.Bold})),
@@ -210,7 +210,7 @@ func addStatementFooter(m core.Maroto) {
 		props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}, Style: fontstyle.Italic},
 	)))
 	m.AddRow(4, col.New(12).Add(text.New(
-		fmt.Sprintf("Generated %s · Home Chef Marketplace", time.Now().In(istLocation).Format("02 Jan 2006 15:04 IST")),
+		fmt.Sprintf("Generated %s · Home Chef Marketplace", time.Now().In(istLoc).Format("02 Jan 2006 15:04 IST")),
 		props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}},
 	)))
 }

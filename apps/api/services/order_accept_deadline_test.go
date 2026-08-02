@@ -58,7 +58,7 @@ func setupDeadlineDB(t *testing.T) (*gorm.DB, uuid.UUID) {
 
 // ist builds an IST wall-clock instant.
 func ist(y int, m time.Month, d, h, min int) time.Time {
-	return time.Date(y, m, d, h, min, 0, 0, capacityIST)
+	return time.Date(y, m, d, h, min, 0, 0, istLoc)
 }
 
 func orderFor(chefID uuid.UUID, slot string, scheduledFor time.Time, created time.Time) *models.Order {

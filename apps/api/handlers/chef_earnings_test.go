@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 // TestComputeOrderBreakdown_IntraState verifies the earnings math for an
@@ -228,21 +229,61 @@ func TestRound2(t *testing.T) {
 	}
 }
 
-// TestResolvePeriod_Week checks that the week period returns a 7-day window.
+// TestResolvePeriod_Week pins the earnings week to the CURRENT settlement week:
+// it opens on the Monday 00:00 IST the weekly statement opens on, and runs to
+// the end of today. A rolling 7-day window would start mid-week and put this
+// screen on a different week from the dashboard and the payout (#937).
 func TestResolvePeriod_Week(t *testing.T) {
 	start, end := resolvePeriod("week", uuid.Nil)
-	diff := end.Sub(start)
-	// Must be at least 6 days and at most 8 days (approximate)
-	if diff < 6*24*time.Hour || diff > 8*24*time.Hour {
-		t.Errorf("week period diff = %v, expected ~7 days", diff)
+
+	ist := services.BusinessLocation()
+	if got := start.In(ist).Weekday(); got != time.Monday {
+		t.Errorf("week start = %v, want a Monday", got)
+	}
+	if h, m, s := start.In(ist).Clock(); h|m|s != 0 {
+		t.Errorf("week start clock = %02d:%02d:%02d, want midnight IST", h, m, s)
+	}
+	if want := services.BusinessDayEnd(time.Now()); !end.Equal(want) {
+		t.Errorf("week end = %v, want end of today IST %v", end, want)
+	}
+	// Same Monday the settlement statement closes on, so the chef's "this week"
+	// and their payout week can never drift apart.
+	if _, closedEnd := services.MostRecentClosedWeek(time.Now()); !start.Equal(closedEnd) {
+		t.Errorf("week start %v != the Monday settlement closed on %v", start, closedEnd)
+	}
+	if !end.After(start) {
+		t.Errorf("week window is inverted: %v .. %v", start, end)
 	}
 }
 
-// TestResolvePeriod_Month checks that the month period returns a ~30-day window.
+// TestResolvePeriod_Month pins the earnings month to the current IST calendar
+// month-to-date, matching the "cycle" fallback rather than a rolling 30 days.
 func TestResolvePeriod_Month(t *testing.T) {
 	start, end := resolvePeriod("month", uuid.Nil)
-	diff := end.Sub(start)
-	if diff < 29*24*time.Hour || diff > 31*24*time.Hour {
-		t.Errorf("month period diff = %v, expected ~30 days", diff)
+
+	ist := services.BusinessLocation()
+	if got := start.In(ist).Day(); got != 1 {
+		t.Errorf("month start day = %d, want the 1st", got)
+	}
+	if h, m, s := start.In(ist).Clock(); h|m|s != 0 {
+		t.Errorf("month start clock = %02d:%02d:%02d, want midnight IST", h, m, s)
+	}
+	if got, want := start.In(ist).Month(), time.Now().In(ist).Month(); got != want {
+		t.Errorf("month start month = %v, want the current month %v", got, want)
+	}
+	if want := services.BusinessDayEnd(time.Now()); !end.Equal(want) {
+		t.Errorf("month end = %v, want end of today IST %v", end, want)
+	}
+}
+
+// TestResolvePeriod_UnknownFallsBackToWeek keeps an unrecognised ?period= on the
+// settlement week rather than silently widening the money window.
+func TestResolvePeriod_UnknownFallsBackToWeek(t *testing.T) {
+	wantStart, wantEnd := resolvePeriod("week", uuid.Nil)
+	gotStart, gotEnd := resolvePeriod("banana", uuid.Nil)
+
+	if !gotStart.Equal(wantStart) || !gotEnd.Equal(wantEnd) {
+		t.Errorf("unknown period = %v..%v, want the week window %v..%v",
+			gotStart, gotEnd, wantStart, wantEnd)
 	}
 }

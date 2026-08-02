@@ -66,7 +66,7 @@ func runReconciliationScan(ctx context.Context) {
 
 	if len(drifts) == 0 {
 		log.Printf("reconciliation: clean — %d orders checked for %s",
-			checked, start.In(istLocation).Format("2006-01-02"))
+			checked, start.In(istLoc).Format("2006-01-02"))
 		return
 	}
 
@@ -95,14 +95,14 @@ func runReconciliationScan(ctx context.Context) {
 	}
 	CaptureBackgroundError(fmt.Errorf(
 		"settlement reconciliation found %d drift(s) across %d orders for %s",
-		len(drifts), checked, start.In(istLocation).Format("2006-01-02")))
+		len(drifts), checked, start.In(istLoc).Format("2006-01-02")))
 }
 
 // previousISTDay returns [start, end) in UTC for the full IST calendar day
 // before now (00:00 IST yesterday .. 00:00 IST today).
 func previousISTDay(now time.Time) (time.Time, time.Time) {
-	ist := now.In(istLocation)
-	todayStart := time.Date(ist.Year(), ist.Month(), ist.Day(), 0, 0, 0, 0, istLocation)
+	ist := now.In(istLoc)
+	todayStart := time.Date(ist.Year(), ist.Month(), ist.Day(), 0, 0, 0, 0, istLoc)
 	yesterdayStart := todayStart.AddDate(0, 0, -1)
 	return yesterdayStart.UTC(), todayStart.UTC()
 }

@@ -12,8 +12,9 @@ package handlers
 //     finance team at settlement time, not here.
 //   - netPayout = gross − platformCommission − tds
 //
-// Period: week (last 7d), month (last 30d), cycle (chef's active subscription
-//         billing cycle — falls back to calendar month when no subscription).
+// Period: week (current Mon–Sun settlement week, IST), month (current calendar
+//         month, IST), cycle (chef's active subscription billing cycle — falls
+//         back to the calendar month when no subscription).
 
 import (
 	"net/http"
@@ -229,21 +230,21 @@ func computeOrderBreakdown(row earningsOrderRow, chefState string, commissionRat
 }
 
 // resolvePeriod returns the start/end timestamps for the requested period.
-// "cycle" resolves from the chef's active subscription billing window;
-// falls back to the current calendar month when no subscription row exists.
+//
+// Every boundary is drawn in the business zone (IST), not UTC, and "week" is
+// the Mon–Sun week the platform settles on — the same window the dashboard
+// snapshot and the weekly statement use. Rolling 7/30-day windows truncated at
+// UTC midnight put these three surfaces on three different weeks, so the same
+// money read differently depending on which screen the chef opened (#937).
+//
+// "cycle" resolves from the chef's active subscription billing window; falls
+// back to the current calendar month when no subscription row exists.
 func resolvePeriod(period string, userID uuid.UUID) (time.Time, time.Time) {
-	now := time.Now().UTC()
+	now := time.Now()
 
 	switch period {
-	case "week":
-		start := now.AddDate(0, 0, -7).Truncate(24 * time.Hour)
-		end := endOfDay(now)
-		return start, end
-
 	case "month":
-		start := now.AddDate(0, 0, -30).Truncate(24 * time.Hour)
-		end := endOfDay(now)
-		return start, end
+		return services.BusinessMonthStart(now), services.BusinessDayEnd(now)
 
 	case "cycle":
 		var sub models.Subscription
@@ -254,23 +255,13 @@ func resolvePeriod(period string, userID uuid.UUID) (time.Time, time.Time) {
 		if err == nil && sub.CurrentPeriodStart != nil && sub.CurrentPeriodEnd != nil {
 			return sub.CurrentPeriodStart.UTC(), sub.CurrentPeriodEnd.UTC()
 		}
-		// Fallback: current calendar month
-		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-		end := start.AddDate(0, 1, 0).Add(-time.Second) // last second of month
-		return start, end
+		start := services.BusinessMonthStart(now)
+		return start, start.AddDate(0, 1, 0).Add(-time.Nanosecond)
 
 	default:
-		// Treat unknown period as week
-		start := now.AddDate(0, 0, -7).Truncate(24 * time.Hour)
-		end := endOfDay(now)
-		return start, end
+		// "week", and any unknown period, resolve to the current settlement week.
+		return services.BusinessWeekStart(now), services.BusinessDayEnd(now)
 	}
-}
-
-// endOfDay returns 23:59:59.999999999 of the given day in UTC.
-func endOfDay(t time.Time) time.Time {
-	d := t.UTC().Truncate(24 * time.Hour)
-	return d.Add(24*time.Hour - time.Nanosecond)
 }
 
 // normaliseState delegates to services.NormaliseState (kept as a local alias

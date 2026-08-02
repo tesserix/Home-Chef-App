@@ -800,8 +800,14 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	// so a UTC CURRENT_DATE missed IST-evening orders that the History list
 	// (grouped client-side in IST) still shows under "Today" — the dashboard read
 	// 0 while History showed the order. Reuse the IST day helper so the two agree.
+	//
+	// "This week" is the Mon–Sun IST week the platform SETTLES on, not a rolling
+	// 7 days: a chef reading "this week" on the dashboard, opening Earnings, and
+	// reconciling against their weekly payout must see one window. The rolling
+	// window silently included last Sunday's orders and dropped them a day later,
+	// so the same week's revenue fell without an order being cancelled (#937).
 	todayStart := services.CapacityDay(time.Now())
-	weekStart := todayStart.AddDate(0, 0, -7)
+	weekStart := services.BusinessWeekStart(time.Now())
 
 	// Today's stats. Count AND revenue both go through chefVisibleOrders so the header can
 	// never disagree with the orders tab — the revenue queries used to bypass it, which

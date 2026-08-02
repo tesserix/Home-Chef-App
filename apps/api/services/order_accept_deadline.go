@@ -80,7 +80,7 @@ func inferSlot(order *models.Order) string {
 	if order.ScheduledFor != nil {
 		at = *order.ScheduledFor
 	}
-	if at.In(capacityIST).Hour() <= 16 {
+	if at.In(istLoc).Hour() <= 16 {
 		return string(models.MealSlotLunch)
 	}
 	return string(models.MealSlotDinner)
@@ -109,8 +109,8 @@ func atIST(day time.Time, hhmm string) (time.Time, bool) {
 	if h < 0 || h > 23 || m < 0 || m > 59 {
 		return time.Time{}, false
 	}
-	d := day.In(capacityIST)
-	return time.Date(d.Year(), d.Month(), d.Day(), h, m, 0, 0, capacityIST), true
+	d := day.In(istLoc)
+	return time.Date(d.Year(), d.Month(), d.Day(), h, m, 0, 0, istLoc), true
 }
 
 // ResolveAcceptDeadline works out when `order` stops being acceptable, reading
@@ -135,7 +135,7 @@ func ResolveAcceptDeadline(db *gorm.DB, order *models.Order) AcceptDeadline {
 
 	// 2. When the kitchen closes on that weekday.
 	var sched models.ChefSchedule
-	if err := db.Where("chef_id = ? AND day_of_week = ?", order.ChefID, int(day.In(capacityIST).Weekday())).
+	if err := db.Where("chef_id = ? AND day_of_week = ?", order.ChefID, int(day.In(istLoc).Weekday())).
 		First(&sched).Error; err == nil && !sched.IsClosed {
 		if at, ok := atIST(day, sched.CloseTime); ok {
 			return AcceptDeadline{At: at, Slot: slot, Source: "kitchen_close"}

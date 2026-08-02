@@ -131,13 +131,13 @@ func BuildSuggestedFulfillmentTimes(
 		byWeekday[s.DayOfWeek] = s
 	}
 
-	earliest := now.In(capacityIST).Add(time.Duration(prepMinutes) * time.Minute)
+	earliest := now.In(istLoc).Add(time.Duration(prepMinutes) * time.Minute)
 	seen := make(map[int64]bool)
 	out := make([]SuggestedFulfillmentTime, 0, limit)
 
 	for dayOffset := 0; dayOffset < fulfillmentHorizonDays && len(out) < limit; dayOffset++ {
 		day := CapacityDay(now).AddDate(0, 0, dayOffset)
-		weekday := int(day.In(capacityIST).Weekday())
+		weekday := int(day.In(istLoc).Weekday())
 
 		// Kitchen open-hours bound for the weekday, when the chef configured one.
 		var openT, closeT time.Time
@@ -180,7 +180,7 @@ func BuildSuggestedFulfillmentTimes(
 				seen[t.Unix()] = true
 				out = append(out, SuggestedFulfillmentTime{
 					At:    t,
-					Label: t.In(capacityIST).Format("3:04 pm"),
+					Label: t.In(istLoc).Format("3:04 pm"),
 					Day:   fulfillmentDayLabel(day, now),
 					Meal:  w.meal,
 				})
@@ -192,7 +192,7 @@ func BuildSuggestedFulfillmentTimes(
 
 // ceilToHalfHour rounds a time UP to the next :00 or :30 (in IST).
 func ceilToHalfHour(t time.Time) time.Time {
-	t = t.In(capacityIST).Truncate(time.Minute)
+	t = t.In(istLoc).Truncate(time.Minute)
 	switch m := t.Minute(); {
 	case m == 0 || m == 30:
 		return t
@@ -213,6 +213,6 @@ func fulfillmentDayLabel(day, now time.Time) string {
 	case d.Equal(today.AddDate(0, 0, 1)):
 		return "Tomorrow"
 	default:
-		return day.In(capacityIST).Format("Mon")
+		return day.In(istLoc).Format("Mon")
 	}
 }

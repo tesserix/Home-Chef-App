@@ -71,3 +71,41 @@ func BusinessTZName() string {
 func BusinessDay(t time.Time) string {
 	return t.In(BusinessLocation()).Format("2006-01-02")
 }
+
+// istLoc is the package-local handle on BusinessLocation, for the day/cutoff
+// math that reaches for the zone directly. One alias, not one per file — the
+// capacity, settlement and availability code each grew their own and that is
+// how the same instant ended up on two different days.
+var istLoc = BusinessLocation()
+
+// BusinessDayStart is midnight of the business day containing t.
+func BusinessDayStart(t time.Time) time.Time {
+	loc := BusinessLocation()
+	b := t.In(loc)
+	return time.Date(b.Year(), b.Month(), b.Day(), 0, 0, 0, 0, loc)
+}
+
+// BusinessDayEnd is the last instant of the business day containing t, for
+// queries written with an inclusive upper bound.
+func BusinessDayEnd(t time.Time) time.Time {
+	return BusinessDayStart(t).AddDate(0, 0, 1).Add(-time.Nanosecond)
+}
+
+// BusinessWeekStart is Monday 00:00 of the business week containing t.
+//
+// Mon–Sun is the week the platform settles on, so this is the boundary every
+// chef-facing "this week" figure must share: the dashboard snapshot, the
+// earnings breakdown and the weekly statement otherwise roll over on three
+// different instants and disagree about the same money (#937).
+func BusinessWeekStart(t time.Time) time.Time {
+	day := BusinessDayStart(t)
+	daysSinceMonday := (int(day.Weekday()) + 6) % 7 // Weekday: Sun=0 … Sat=6
+	return day.AddDate(0, 0, -daysSinceMonday)
+}
+
+// BusinessMonthStart is the first of the business month containing t.
+func BusinessMonthStart(t time.Time) time.Time {
+	loc := BusinessLocation()
+	b := t.In(loc)
+	return time.Date(b.Year(), b.Month(), 1, 0, 0, 0, 0, loc)
+}

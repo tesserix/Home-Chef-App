@@ -11,8 +11,8 @@ func TestPreviousISTDay(t *testing.T) {
 	// 2026-06-10 06:00 UTC = 11:30 IST on Jun 10 → previous IST day is Jun 9.
 	now := time.Date(2026, 6, 10, 6, 0, 0, 0, time.UTC)
 	start, end := previousISTDay(now)
-	wantStart := time.Date(2026, 6, 9, 0, 0, 0, 0, istLocation)
-	wantEnd := time.Date(2026, 6, 10, 0, 0, 0, 0, istLocation)
+	wantStart := time.Date(2026, 6, 9, 0, 0, 0, 0, istLoc)
+	wantEnd := time.Date(2026, 6, 10, 0, 0, 0, 0, istLoc)
 	if !start.Equal(wantStart) {
 		t.Errorf("start = %s, want %s", start, wantStart.UTC())
 	}
@@ -28,7 +28,7 @@ func TestPreviousISTDay_JustAfterMidnightIST(t *testing.T) {
 	// 18:35 UTC = 00:05 IST next day → previous IST day is the UTC day.
 	now := time.Date(2026, 6, 9, 18, 35, 0, 0, time.UTC) // 2026-06-10 00:05 IST
 	start, _ := previousISTDay(now)
-	wantStart := time.Date(2026, 6, 9, 0, 0, 0, 0, istLocation)
+	wantStart := time.Date(2026, 6, 9, 0, 0, 0, 0, istLoc)
 	if !start.Equal(wantStart) {
 		t.Errorf("start = %s, want %s", start, wantStart.UTC())
 	}

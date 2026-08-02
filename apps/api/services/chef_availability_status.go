@@ -158,7 +158,7 @@ func hhmmLabel(min int) string {
 
 // istMinutes reduces a wall-clock time to IST minutes-since-midnight.
 func istMinutes(now time.Time) int {
-	t := now.In(capacityIST)
+	t := now.In(istLoc)
 	return t.Hour()*60 + t.Minute()
 }
 
@@ -169,8 +169,8 @@ func pausedUntilMinutes(pausedUntil *time.Time, now time.Time) int {
 	if pausedUntil == nil || !pausedUntil.After(now) {
 		return -1
 	}
-	pu := pausedUntil.In(capacityIST)
-	nowIST := now.In(capacityIST)
+	pu := pausedUntil.In(istLoc)
+	nowIST := now.In(istLoc)
 	if pu.YearDay() != nowIST.YearDay() || pu.Year() != nowIST.Year() {
 		return 24*60 - 1
 	}
@@ -237,7 +237,7 @@ func ChefAvailabilityBatch(chefs []models.ChefProfile, now time.Time) map[uuid.U
 	for i := range chefs {
 		ids[i] = chefs[i].ID
 	}
-	weekday := int(now.In(capacityIST).Weekday()) // 0=Sun..6=Sat, matches ChefSchedule.DayOfWeek
+	weekday := int(now.In(istLoc).Weekday()) // 0=Sun..6=Sat, matches ChefSchedule.DayOfWeek
 
 	schedByChef := make(map[uuid.UUID]models.ChefSchedule)
 	var scheds []models.ChefSchedule
@@ -271,7 +271,7 @@ func ChefAvailabilityBatch(chefs []models.ChefProfile, now time.Time) map[uuid.U
 // detail handler already loads the full week). Picks today's IST row and loads the chef's capacity
 // settings, then defers to ComputeChefAvailability.
 func ChefAvailabilityOne(chef *models.ChefProfile, schedules []models.ChefSchedule, now time.Time) models.ChefAvailability {
-	weekday := int(now.In(capacityIST).Weekday())
+	weekday := int(now.In(istLoc).Weekday())
 	var today *models.ChefSchedule
 	for i := range schedules {
 		if schedules[i].DayOfWeek == weekday {

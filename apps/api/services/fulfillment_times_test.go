@@ -9,7 +9,7 @@ import (
 
 // istAt builds an IST instant for the test's "now".
 func istMoment(y int, mo time.Month, d, h, m int) time.Time {
-	return time.Date(y, mo, d, h, m, 0, 0, capacityIST)
+	return time.Date(y, mo, d, h, m, 0, 0, istLoc)
 }
 
 func TestParsePrepMinutes(t *testing.T) {
@@ -37,13 +37,13 @@ func TestSuggestedTimes_NoEarlyMorningSlots(t *testing.T) {
 		t.Fatal("expected suggestions")
 	}
 	for _, s := range times {
-		h := s.At.In(capacityIST).Hour()
+		h := s.At.In(istLoc).Hour()
 		if s.Day == "Today" && h < 8 {
 			t.Errorf("today slot before 08:00: %s (%s)", s.Label, s.Meal)
 		}
 	}
 	first := times[0]
-	if first.Meal != "Breakfast" || first.At.In(capacityIST).Hour() < 8 {
+	if first.Meal != "Breakfast" || first.At.In(istLoc).Hour() < 8 {
 		t.Errorf("first suggestion should be breakfast >=08:00, got %s %s", first.Meal, first.Label)
 	}
 }
@@ -76,8 +76,8 @@ func TestSuggestedTimes_ClipsToChefOpenHours(t *testing.T) {
 			continue
 		}
 		sawMonday = true
-		h := s.At.In(capacityIST).Hour()
-		mnt := s.At.In(capacityIST).Minute()
+		h := s.At.In(istLoc).Hour()
+		mnt := s.At.In(istLoc).Minute()
 		mins := h*60 + mnt
 		if mins < 12*60 || mins > 15*60 {
 			t.Errorf("Monday slot %s outside chef open hours 12:00-15:00", s.Label)
@@ -112,7 +112,7 @@ func TestSuggestedTimes_PrefersChefConfiguredWindows(t *testing.T) {
 	times := BuildSuggestedFulfillmentTimes(cap, nil, 30, now, 20)
 	for _, s := range times {
 		if s.Meal == "Lunch" && s.Day == "Today" {
-			mins := s.At.In(capacityIST).Hour()*60 + s.At.In(capacityIST).Minute()
+			mins := s.At.In(istLoc).Hour()*60 + s.At.In(istLoc).Minute()
 			if mins < 13*60 || mins > 14*60 {
 				t.Errorf("configured lunch slot %s outside 13:00-14:00", s.Label)
 			}

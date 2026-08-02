@@ -31,15 +31,15 @@ import (
 // financial year that begins on 1 Apr of fyStartYear (e.g. fyStartYear=2025 →
 // 1 Apr 2025 IST .. 1 Apr 2026 IST). Reckoned in IST.
 func FinancialYearWindow(fyStartYear int) (time.Time, time.Time) {
-	start := time.Date(fyStartYear, time.April, 1, 0, 0, 0, 0, istLocation)
-	end := time.Date(fyStartYear+1, time.April, 1, 0, 0, 0, 0, istLocation)
+	start := time.Date(fyStartYear, time.April, 1, 0, 0, 0, 0, istLoc)
+	end := time.Date(fyStartYear+1, time.April, 1, 0, 0, 0, 0, istLoc)
 	return start.UTC(), end.UTC()
 }
 
 // CurrentFinancialYearStart returns the FY start-year that contains now (IST).
 // Jan–Mar belong to the FY that started the previous calendar April.
 func CurrentFinancialYearStart(now time.Time) int {
-	ist := now.In(istLocation)
+	ist := now.In(istLoc)
 	if ist.Month() < time.April {
 		return ist.Year() - 1
 	}
@@ -142,7 +142,7 @@ func GenerateTDSCertificatePDF(chefID uuid.UUID, fyStartYear int) ([]byte, strin
 // financialQuarterIndex maps a delivery date (IST) to 0..3 (Q1..Q4) of the
 // Indian financial year. Apr=month 4 → Q1; Jan/Feb/Mar → Q4.
 func financialQuarterIndex(t time.Time) int {
-	m := int(t.In(istLocation).Month())
+	m := int(t.In(istLoc).Month())
 	switch {
 	case m >= 4 && m <= 6:
 		return 0
@@ -228,7 +228,7 @@ func addTDSFooter(m core.Maroto) {
 		props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}, Style: fontstyle.Italic},
 	)))
 	m.AddRow(4, col.New(12).Add(text.New(
-		fmt.Sprintf("Generated %s · Home Chef Marketplace", time.Now().In(istLocation).Format("02 Jan 2006 15:04 IST")),
+		fmt.Sprintf("Generated %s · Home Chef Marketplace", time.Now().In(istLoc).Format("02 Jan 2006 15:04 IST")),
 		props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}},
 	)))
 }

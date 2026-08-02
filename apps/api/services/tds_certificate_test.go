@@ -7,8 +7,8 @@ import (
 
 func TestFinancialYearWindow(t *testing.T) {
 	start, end := FinancialYearWindow(2025)
-	wantStart := time.Date(2025, time.April, 1, 0, 0, 0, 0, istLocation)
-	wantEnd := time.Date(2026, time.April, 1, 0, 0, 0, 0, istLocation)
+	wantStart := time.Date(2025, time.April, 1, 0, 0, 0, 0, istLoc)
+	wantEnd := time.Date(2026, time.April, 1, 0, 0, 0, 0, istLoc)
 	if !start.Equal(wantStart) {
 		t.Errorf("start = %s, want %s", start, wantStart.UTC())
 	}
@@ -24,8 +24,8 @@ func TestCurrentFinancialYearStart(t *testing.T) {
 	}{
 		{time.Date(2026, 5, 10, 6, 0, 0, 0, time.UTC), 2026},   // May → FY2026
 		{time.Date(2026, 2, 10, 6, 0, 0, 0, time.UTC), 2025},   // Feb → FY2025
-		{time.Date(2026, 4, 1, 0, 0, 0, 0, istLocation), 2026}, // 1 Apr boundary → FY2026
-		{time.Date(2026, 3, 31, 23, 0, 0, 0, istLocation), 2025},
+		{time.Date(2026, 4, 1, 0, 0, 0, 0, istLoc), 2026}, // 1 Apr boundary → FY2026
+		{time.Date(2026, 3, 31, 23, 0, 0, 0, istLoc), 2025},
 	}
 	for _, tc := range tests {
 		if got := CurrentFinancialYearStart(tc.now); got != tc.want {
@@ -45,7 +45,7 @@ func TestFinancialQuarterIndex(t *testing.T) {
 		{time.January, 3}, {time.March, 3},
 	}
 	for _, tc := range tests {
-		d := time.Date(2025, tc.month, 15, 12, 0, 0, 0, istLocation)
+		d := time.Date(2025, tc.month, 15, 12, 0, 0, 0, istLoc)
 		if got := financialQuarterIndex(d); got != tc.want {
 			t.Errorf("financialQuarterIndex(%s) = %d, want %d", tc.month, got, tc.want)
 		}

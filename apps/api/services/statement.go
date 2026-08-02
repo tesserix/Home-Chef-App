@@ -21,15 +21,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// istLocation is the zone settlement weeks are reckoned in, so a week boundary
-// lands at the Indian Monday midnight rather than UTC midnight.
-//
-// Kept as an alias rather than its own FixedZone: settlement and analytics must
-// agree on where a day ends, and a second definition here is how the codebase
-// ended up with three of them. BusinessLocation defaults to Asia/Kolkata, which
-// is the same +05:30 with no DST, so this is behaviour-preserving.
-var istLocation = BusinessLocation()
-
 // statementOrderRow is the join row scanned when generating statements —
 // order financials plus the owning chef's identity + home state (for the
 // intra/inter-state GST split).
@@ -55,13 +46,8 @@ type statementOrderRow struct {
 // recently completed Mon–Sun week relative to now, reckoned in IST. WeekStart
 // is Monday 00:00 IST; WeekEnd is the following Monday 00:00 IST (exclusive).
 func MostRecentClosedWeek(now time.Time) (time.Time, time.Time) {
-	ist := now.In(istLocation)
-	// Weekday: Sunday=0 … Saturday=6. Days since this week's Monday.
-	daysSinceMonday := (int(ist.Weekday()) + 6) % 7
-	thisMonday := time.Date(ist.Year(), ist.Month(), ist.Day(), 0, 0, 0, 0, istLocation).
-		AddDate(0, 0, -daysSinceMonday)
-	start := thisMonday.AddDate(0, 0, -7)
-	return start.UTC(), thisMonday.UTC()
+	thisMonday := BusinessWeekStart(now)
+	return thisMonday.AddDate(0, 0, -7).UTC(), thisMonday.UTC()
 }
 
 // GenerateWeeklyStatements computes and persists a WeeklyStatement for every
@@ -233,8 +219,8 @@ func sendStatementReadyPush(userID uuid.UUID, weekStart, weekEnd time.Time, netP
 	title := "Weekly statement ready"
 	body := fmt.Sprintf(
 		"Your settlement statement for %s–%s is ready. Net payout ₹%.2f.",
-		weekStart.In(istLocation).Format("2 Jan"),
-		weekEnd.In(istLocation).AddDate(0, 0, -1).Format("2 Jan"),
+		weekStart.In(istLoc).Format("2 Jan"),
+		weekEnd.In(istLoc).AddDate(0, 0, -1).Format("2 Jan"),
 		netPayout,
 	)
 	data := map[string]string{
