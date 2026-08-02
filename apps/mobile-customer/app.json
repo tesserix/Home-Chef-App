@@ -246,7 +246,9 @@
       [
         "expo-notifications",
         {
-          "mode": "production"
+          "mode": "production",
+          "icon": "./assets/notification-icon.png",
+          "color": "#FF385C"
         }
       ],
       [
