@@ -567,6 +567,53 @@ func Load() {
 		MFABackupCodeKey:                getEnv("MFA_BACKUP_CODE_KEY", ""),
 		FirebaseProjectID:               getEnv("FIREBASE_PROJECT_ID", getEnv("GCS_PROJECT_ID", "")),
 	}
+
+	warnIfAppleSignInIncomplete(AppConfig)
+}
+
+// warnIfAppleSignInIncomplete logs exactly which Sign in with Apple vars are
+// missing, and for which app(s) revocation is therefore disabled.
+//
+// Before this, an absent (as opposed to malformed — see the
+// APPLE_SIGNIN_PRIVATE_KEY_B64 check above) set of vars logged nothing at
+// all: AppleSignInConfiguredForRole degraded to a silent no-op by design (a
+// misconfigured deployment must never fail account deletion), which is
+// correct at request time but meant nobody found out revocation was off
+// until an App Reviewer deleted the test account and still saw the app
+// listed under Settings → Apple ID → Sign in with Apple.
+//
+// Logged unconditionally in every environment, not gated on IsProduction():
+// this fires once at process startup (config.Load is called only from
+// main.go and cmd/worker/main.go, never per-request or per-test), matching
+// the unconditional style of the malformed-key warning above, and
+// store-readiness should be visible from local/staging startup logs too —
+// not discovered for the first time against production.
+func warnIfAppleSignInIncomplete(cfg *Config) {
+	var missingShared []string
+	if cfg.AppleTeamID == "" {
+		missingShared = append(missingShared, "APPLE_TEAM_ID")
+	}
+	if cfg.AppleKeyID == "" {
+		missingShared = append(missingShared, "APPLE_KEY_ID")
+	}
+	if len(cfg.AppleSignInPrivateKey) == 0 {
+		missingShared = append(missingShared, "APPLE_SIGNIN_PRIVATE_KEY_B64")
+	}
+
+	var missingApps []string
+	if cfg.AppleServicesClientID == "" {
+		missingApps = append(missingApps, "customer (APPLE_SERVICES_CLIENT_ID)")
+	}
+	if cfg.AppleServicesClientIDVendor == "" {
+		missingApps = append(missingApps, "vendor (APPLE_SERVICES_CLIENT_ID_VENDOR)")
+	}
+
+	if len(missingShared) == 0 && len(missingApps) == 0 {
+		return
+	}
+	log.Printf("config: Sign in with Apple token revocation (App Review 5.1.1(v)) is NOT fully configured — "+
+		"missing shared vars: %v; app client ids missing for: %v — revocation silently no-ops for any affected "+
+		"app until these are set (see docs/store-release/README.md §1)", missingShared, missingApps)
 }
 
 func getEnv(key, defaultValue string) string {
