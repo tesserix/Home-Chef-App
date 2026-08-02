@@ -123,7 +123,7 @@ export default function VendorSupportChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.fill} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.fill} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}

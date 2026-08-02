@@ -282,6 +282,11 @@ function ThreadView({
             value={draft}
             onChangeText={setDraft}
             multiline
+            // Return sends instead of inserting a newline, and the field keeps
+            // focus so a reply can be typed straight after.
+            submitBehavior="submit"
+            returnKeyType="send"
+            onSubmitEditing={send}
             accessibilityLabel="Message"
           />
           <Pressable
@@ -521,9 +526,22 @@ const styles = StyleSheet.create({
   failedMeta: { fontWeight: "600", opacity: 1 },
   systemRow: { alignItems: "center", paddingVertical: 4 },
   systemText: { fontSize: 12, fontStyle: "italic" },
-  composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  input: { flex: 1, minHeight: 40, maxHeight: 120, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, fontSize: 15 },
-  sendBtn: { height: 40, paddingHorizontal: 16, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  // Centre-aligned so the field and Send sit on one line however tall the
+  // field grows; the input's own padding does the vertical centring of text.
+  composer: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  input: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 120,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingTop: Platform.OS === "ios" ? 10 : 8,
+    paddingBottom: Platform.OS === "ios" ? 10 : 8,
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  sendBtn: { height: 40, minWidth: 64, paddingHorizontal: 16, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   sendText: { fontSize: 15, fontWeight: "600" },
   closedBar: { padding: 16, borderTopWidth: StyleSheet.hairlineWidth, alignItems: "center", gap: 6 },
   closedText: { fontSize: 14 },
