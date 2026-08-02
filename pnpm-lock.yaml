@@ -889,6 +889,9 @@ importers:
       '@tanstack/react-query-devtools':
         specifier: ^5.62.8
         version: 5.101.0(@tanstack/react-query@5.101.0(react@19.2.7))(react@19.2.7)
+      '@tesserix/otto-widget':
+        specifier: ^0.6.0
+        version: 0.6.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tesserix/web':
         specifier: ^1.7.0
         version: 1.7.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(framer-motion@12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
@@ -1053,8 +1056,8 @@ importers:
         specifier: ^5.62.8
         version: 5.101.0(@tanstack/react-query@5.101.0(react@19.2.7))(react@19.2.7)
       '@tesserix/otto-widget':
-        specifier: ^0.5.4
-        version: 0.5.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: ^0.6.0
+        version: 0.6.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tesserix/web':
         specifier: ^1.7.0
         version: 1.7.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(framer-motion@12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
@@ -4027,8 +4030,8 @@ packages:
       react: ^18.0.0 || ^19.0.0
       react-native: '>=0.70.0'
 
-  '@tesserix/otto-widget@0.5.4':
-    resolution: {integrity: sha512-FLgwfnJC5E9+04qBTTiLECzMoP6I1UJ4gqQ05FaQlcROsClQJykGeJwi7qJQAbu9N+LqV27fctcvR+eYsydplA==, tarball: https://npm.pkg.github.com/download/@tesserix/otto-widget/0.5.4/9d42413b8151408d87044e717c462b5eec28c1d5}
+  '@tesserix/otto-widget@0.6.0':
+    resolution: {integrity: sha512-Wsd2EBXRYqW1J7shOBbF5Q0pwVx1ri6uNsmDhYQdep6ZjkVg3fo1o4Sm1/cBKah3Hl7s5gR6oeZRJH7Bia3MNg==, tarball: https://npm.pkg.github.com/download/@tesserix/otto-widget/0.6.0/e7e6a22a4b9035d0b198fe5ec921644ee94c52c3}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -11864,9 +11867,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/metro-config@0.85.3(@babel/core@8.0.1)':
     dependencies:
@@ -11876,9 +11877,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.85.3': {}
 
@@ -12180,7 +12179,7 @@ snapshots:
       react: 19.2.7
       react-native: 0.86.0(@babel/core@8.0.1)(@react-native/metro-config@0.85.3(@babel/core@8.0.1))(@types/react@19.2.17)(react@19.2.7)
 
-  '@tesserix/otto-widget@0.5.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@tesserix/otto-widget@0.6.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
