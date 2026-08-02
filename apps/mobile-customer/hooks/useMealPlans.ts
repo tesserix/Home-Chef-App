@@ -55,6 +55,11 @@ export interface DailyMenuItem {
   isCombo: boolean;
   comboComponents: string[];
   sortOrder: number;
+  // Mirrors the server's DailyMenuItem.DietaryTags/Allergens (#901 scope
+  // addition — book-meal-plan.tsx is the primary money-commit path and was
+  // dropping these the same way WeeklyMenuItem was).
+  dietaryTags?: string[];
+  allergens?: string[];
 }
 
 export interface DailyMenuDay {

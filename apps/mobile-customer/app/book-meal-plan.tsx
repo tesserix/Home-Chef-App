@@ -10,8 +10,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CalendarDays, ChevronLeft } from 'lucide-react-native';
+import { AlertTriangle, CalendarDays, ChevronLeft } from 'lucide-react-native';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
+import { findItemConflicts, hasDietaryProfile } from '@homechef/mobile-shared/dietary';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -32,6 +33,7 @@ import {
   istTodayIso,
 } from '../components/chef/WeeklyMenuDishCard';
 import { MealPlanBookRow } from '../components/chef/MealPlanBookRow';
+import { useProfile } from '../hooks/useProfile';
 import { useAlert } from '@homechef/mobile-shared/ui';
 
 const HORIZON_DAYS = 14; // how far ahead a customer can pre-book
@@ -51,6 +53,10 @@ interface BookableCell {
   // selection identity (that stays dailyMenuItemId / variant).
   imageUrl?: string;
   description?: string;
+  // Dietary-conflict inputs (#901 scope addition) — carried through to the
+  // selection so the pre-commit banner can check what's actually been picked.
+  dietaryTags?: string[];
+  allergens?: string[];
 }
 
 interface Selected {
@@ -60,6 +66,8 @@ interface Selected {
   price: number;
   name: string;
   dailyMenuItemId?: string;
+  dietaryTags?: string[];
+  allergens?: string[];
 }
 
 // IST (UTC+5:30, no DST) date helpers so the client's bookable-day set matches the
@@ -100,6 +108,7 @@ export default function BookMealPlanScreen() {
   const { showAlert } = useAlert();
   const { chefId } = useLocalSearchParams<{ chefId: string }>();
   const { data: menu, isLoading, isError, refetch } = useChefWeeklyMenu(chefId);
+  const { data: profile } = useProfile();
 
   // The horizon window (tomorrow .. +HORIZON_DAYS) for the per-date menu, in IST.
   const window = useMemo(() => {
@@ -152,6 +161,8 @@ export default function BookMealPlanScreen() {
             comboComponents: it.comboComponents,
             imageUrl: it.imageUrl,
             description: it.description,
+            dietaryTags: it.dietaryTags,
+            allergens: it.allergens,
           }))
           .sort((a, b) =>
             a.isCombo === b.isCombo ? bySlotVariant(a, b) : a.isCombo ? -1 : 1,
@@ -171,6 +182,8 @@ export default function BookMealPlanScreen() {
             comboComponents: it.comboComponents,
             imageUrl: it.imageUrl,
             description: it.description,
+            dietaryTags: it.dietaryTags,
+            allergens: it.allergens,
           }))
           .sort((a, b) =>
             a.isCombo === b.isCombo ? bySlotVariant(a, b) : a.isCombo ? -1 : 1,
@@ -190,6 +203,22 @@ export default function BookMealPlanScreen() {
 
   const selected = Object.values(selection);
   const total = selected.reduce((s, x) => s + x.price, 0);
+
+  // Pre-commit dietary-conflict banner (#901 scope addition) — non-blocking,
+  // informational only, same treatment as the daily-tiffin subscribe screen.
+  // Checks what the customer has actually picked (not the whole menu), so it
+  // stays accurate as the selection changes; a cell missing dietaryTags/
+  // allergens still gets caught by findItemConflicts' isVeg fallback.
+  const hasConflict =
+    !!profile &&
+    hasDietaryProfile({ dietaryPreferences: profile.dietaryPreferences, foodAllergies: profile.foodAllergies }) &&
+    selected.some(
+      (s) =>
+        findItemConflicts(
+          { dietaryPreferences: profile.dietaryPreferences, foodAllergies: profile.foodAllergies },
+          { dietaryTags: s.dietaryTags, allergens: s.allergens, isVeg: s.variant === 'veg' },
+        ).length > 0,
+    );
 
   // "Today" affordance — IST, never the device timezone. The horizon starts
   // tomorrow, so this only shows for devices running behind IST.
@@ -218,6 +247,8 @@ export default function BookMealPlanScreen() {
           price: cell.price,
           name: cell.name,
           dailyMenuItemId: cell.dailyMenuItemId,
+          dietaryTags: cell.dietaryTags,
+          allergens: cell.allergens,
         };
       }
       return next;
@@ -388,6 +419,17 @@ export default function BookMealPlanScreen() {
                 </View>
               );
             })}
+
+            {/* Pre-commit dietary-conflict banner (#901 scope addition) — calm,
+                factual, never blocks the Request CTA; informational only. */}
+            {hasConflict ? (
+              <View style={styles.conflictBanner}>
+                <AlertTriangle size={14} color={customerColors.destructive.DEFAULT} strokeWidth={2} />
+                <Text style={styles.conflictBannerText}>
+                  Some dishes in this chef&apos;s weekly menu may not match your saved dietary preferences.
+                </Text>
+              </View>
+            ) : null}
           </ScrollView>
 
           {/* Sticky CTA bar per spec §2.5 — white, top hairline + shadow[2],
@@ -516,6 +558,25 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   daySection: { marginBottom: 20 },
+  // Pre-commit dietary-conflict banner (#901 scope addition) — calm, factual,
+  // informational only. Same treatment as the subscribe-screen banner.
+  conflictBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: customerColors.destructive.tint,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  conflictBannerText: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 13,
+    lineHeight: 18,
+    color: customerColors.destructive.DEFAULT,
+  },
   // Each day is one hairline-bordered group; rows inside are separated by
   // hairlines (chrome-light — no per-row card borders). overflow:hidden clips
   // the coral selected-row tint to the rounded corners.
