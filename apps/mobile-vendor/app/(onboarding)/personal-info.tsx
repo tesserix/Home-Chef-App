@@ -11,6 +11,7 @@ import { theme } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
+import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 
 const schema = z.object({
   fullName: z.string().min(2, 'onboarding.errFullNameMin'),
@@ -23,6 +24,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function PersonalInfoScreen() {
+  const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { user } = useAuthStore();
@@ -122,6 +124,7 @@ export default function PersonalInfoScreen() {
 
   return (
     <OnboardingScaffold
+      onCancel={cancelOnboarding}
       step={1}
       total={6}
       stepName={t('onboarding.stepPersonal')}

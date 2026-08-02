@@ -13,7 +13,9 @@ import {
   linkPendingAppleGrant,
 } from '@homechef/mobile-shared/auth';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
+import { useMemo } from 'react';
 import { useAuthStore } from '../../store/auth-store';
+import { useRegisterDraftStore } from '../../store/register-draft-store';
 import { api } from '../../lib/api';
 import type { AuthResponse } from '@homechef/mobile-shared/types';
 
@@ -46,6 +48,18 @@ function bffToAuthResponse(
 export default function RegisterPage() {
   const { setAuthResponse } = useAuthStore();
   const { completeSignIn } = useAuth();
+  // Resume a half-finished sign-up after an app kill (name/email/phone only —
+  // passwords are never persisted). Cleared on success or explicit cancel.
+  const draft = useRegisterDraftStore();
+  const draftValues = useMemo(
+    () => ({
+      firstName: draft.firstName,
+      lastName: draft.lastName,
+      email: draft.email,
+      phone: draft.phone,
+    }),
+    [draft.firstName, draft.lastName, draft.email, draft.phone],
+  );
 
   useEffect(() => {
     const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
@@ -100,6 +114,19 @@ export default function RegisterPage() {
       brand="Fe3dr · Vendor"
       title="Open your kitchen"
       subtitle="A few details to get you cooking"
+      step2Title="Almost there"
+      step2Subtitle="Set a password and your kitchen is open."
+      backdrop="kitchen"
+      incentive={{
+        title: 'Turn your cooking into income',
+        body: 'Your menu, your prices — payouts go straight to your bank.',
+      }}
+      initialValues={draftValues}
+      onDraftSave={(d) => draft.update({ ...d, phone: d.phone ?? '' })}
+      onCancel={() => {
+        useRegisterDraftStore.getState().reset();
+        router.replace('/(auth)/login');
+      }}
       onRegister={async (data) => {
         await registerWithEmail(data.email, data.password);
         const idToken = await getIdToken();
@@ -116,6 +143,7 @@ export default function RegisterPage() {
         } catch {
           // Non-fatal: push registration failure should not block registration
         }
+        useRegisterDraftStore.getState().reset();
         router.replace('/(tabs)');
       }}
       onGoogleSignIn={handleGoogleSignIn}

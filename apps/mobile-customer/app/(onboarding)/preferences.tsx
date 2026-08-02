@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../store/auth-store';
 import { useCustomerOnboardingStore } from '../../store/onboarding-store';
+import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import { api } from '../../lib/api';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -26,6 +27,7 @@ const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const CTA_RIPPLE = `${customerColors.canvas}33`;
 
 export default function PreferencesScreen() {
+  const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const draft = useCustomerOnboardingStore();
   const selected = draft.cuisinePreferences;
@@ -93,9 +95,17 @@ export default function PreferencesScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* ── Step progress ── */}
-        <Text className="text-[13px] text-charcoal-soft mb-2">
-          Step 3 of 3
-        </Text>
+        <View className="mb-2 flex-row items-center justify-between">
+          <Text className="text-[13px] text-charcoal-soft">Step 3 of 3</Text>
+          <Pressable
+            onPress={cancelOnboarding}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel onboarding"
+          >
+            <Text className="text-[13px] font-medium text-charcoal-soft">Cancel</Text>
+          </Pressable>
+        </View>
         <View className="h-1 bg-hairline rounded-full mb-8 overflow-hidden">
           <View className="h-1 bg-coral rounded-full" style={{ width: '100%' }} />
         </View>

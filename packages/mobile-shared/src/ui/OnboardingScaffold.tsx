@@ -38,6 +38,10 @@ interface OnboardingScaffoldProps {
   /** Optional back action. When provided, renders a top-left chevron text
    *  link "Back". */
   onBack?: () => void;
+  /** Optional cancel action. When provided, renders a ✕ at the far right of
+   *  the top bar. The handler owns confirmation + cleanup (clear the saved
+   *  draft, sign out / navigate away) — the scaffold just reports the tap. */
+  onCancel?: () => void;
   /** One short line of encouragement for this step — what the chef gets out of
    *  finishing it, not what the form wants. A signup wizard reads as paperwork
    *  without it; this is the line that answers "why bother". */
@@ -80,6 +84,7 @@ export function OnboardingScaffold({
   primaryLoading = false,
   primaryDisabled = false,
   onBack,
+  onCancel,
   encouragement,
   scrollRef,
 }: OnboardingScaffoldProps) {
@@ -149,14 +154,28 @@ export function OnboardingScaffold({
           ) : (
             <View />
           )}
-          <Text
-            style={styles.stepLabel}
-            accessibilityLabel={`Step ${step} of ${total}, ${percent} percent complete`}
-          >
-            Step {step} of {total}
-            <Text style={styles.stepDivider}>{'  ·  '}</Text>
-            <Text style={styles.percentLabel}>{percent}%</Text>
-          </Text>
+          <View style={styles.topBarRight}>
+            <Text
+              style={styles.stepLabel}
+              accessibilityLabel={`Step ${step} of ${total}, ${percent} percent complete`}
+            >
+              Step {step} of {total}
+              <Text style={styles.stepDivider}>{'  ·  '}</Text>
+              <Text style={styles.percentLabel}>{percent}%</Text>
+            </Text>
+            {onCancel ? (
+              <Pressable
+                onPress={onCancel}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel onboarding"
+              >
+                {({ pressed }) => (
+                  <Text style={[styles.cancelGlyph, pressed && { opacity: 0.6 }]}>✕</Text>
+                )}
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         {/* Progress — one continuous track with an animated ink fill, plus a
@@ -239,6 +258,17 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   stepDivider: { color: theme.colors.mist.strong },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[4],
+  },
+  cancelGlyph: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: theme.colors.ink.soft,
+    paddingHorizontal: theme.spacing[1],
+  },
   percentLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.label.size,

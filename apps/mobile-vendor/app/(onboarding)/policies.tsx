@@ -10,6 +10,7 @@ import { Check, RotateCcw } from 'lucide-react-native';
 import { OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
+import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import {
   CANCELLATION_POLICY_OPTIONS,
   type CancellationPolicy,
@@ -28,6 +29,7 @@ const TERMS_BULLET_KEYS = [
 ];
 
 export default function PoliciesScreen() {
+  const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { policies, updatePolicies, setStep } = useVendorOnboardingStore();
@@ -63,6 +65,7 @@ export default function PoliciesScreen() {
 
   return (
     <OnboardingScaffold
+      onCancel={cancelOnboarding}
       step={5}
       total={6}
       stepName={t('onboarding.stepPolicies')}

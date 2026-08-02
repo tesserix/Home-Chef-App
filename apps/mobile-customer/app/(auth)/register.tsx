@@ -14,7 +14,10 @@ import {
   getIdToken,
 } from '@homechef/mobile-shared/auth';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
+import { useMemo } from 'react';
 import { useAuthStore } from '../../store/auth-store';
+import { useRegisterDraftStore } from '../../store/register-draft-store';
+import { useCustomerOnboardingStore } from '../../store/onboarding-store';
 import { api } from '../../lib/api';
 import type { AuthResponse } from '@homechef/mobile-shared/types';
 
@@ -50,6 +53,18 @@ export default function RegisterPage() {
   // A referral code may arrive via a deep link (fe3dr.com/refer/CODE → ?ref=CODE)
   // (#38). Applied once, right after the account is authenticated; best-effort.
   const { ref } = useLocalSearchParams<{ ref?: string }>();
+  // Resume a half-finished sign-up after an app kill (name/email/phone only —
+  // passwords are never persisted). Cleared on success or explicit cancel.
+  const draft = useRegisterDraftStore();
+  const draftValues = useMemo(
+    () => ({
+      firstName: draft.firstName,
+      lastName: draft.lastName,
+      email: draft.email,
+      phone: draft.phone,
+    }),
+    [draft.firstName, draft.lastName, draft.email, draft.phone],
+  );
   const applyReferral = async () => {
     const code = typeof ref === 'string' ? ref.trim() : '';
     if (!code) return;
@@ -117,6 +132,16 @@ export default function RegisterPage() {
 
   return (
     <RegisterScreen
+      title="Create your account"
+      subtitle="Your first home-cooked meal is minutes away"
+      step2Title="Almost there"
+      step2Subtitle="Set a password and you're ready to order."
+      initialValues={draftValues}
+      onDraftSave={(d) => draft.update({ ...d, phone: d.phone ?? '' })}
+      onCancel={() => {
+        useRegisterDraftStore.getState().reset();
+        router.replace('/(auth)/login');
+      }}
       accent={customerColors.coral.DEFAULT}
       // THE SPEC §2 AA micro-adjustment: link text uses coral-pressed
       // (#E00B41), not the coral fill (#FF385C), which fails AA at link/body
@@ -139,6 +164,14 @@ export default function RegisterPage() {
           // Non-fatal: push registration failure should not block registration
         }
         await applyReferral();
+        // Carry the sign-up details into the onboarding wizard's draft so the
+        // user never types their name or phone twice; the register draft is done.
+        useCustomerOnboardingStore.getState().update({
+          firstName: data.firstName,
+          lastName: data.lastName,
+          phone: data.phone ?? '',
+        });
+        useRegisterDraftStore.getState().reset();
         routeAfterAuth();
       }}
       onGoogleSignIn={handleGoogleSignIn}

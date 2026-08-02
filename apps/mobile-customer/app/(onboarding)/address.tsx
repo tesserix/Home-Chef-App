@@ -25,6 +25,7 @@ import {
 } from '../../hooks/useLocations';
 import { AddressLabelSelect } from '../../components/address/AddressLabelSelect';
 import { useCustomerOnboardingStore } from '../../store/onboarding-store';
+import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 
 const schema = z.object({
   label: z.string().min(1),
@@ -57,6 +58,7 @@ function fieldBorderStyle(hasError: boolean, isFocused: boolean) {
 }
 
 export default function AddressScreen() {
+  const cancelOnboarding = useCancelOnboarding();
   const draft = useCustomerOnboardingStore();
   const [focusedField, setFocusedField] = useState<OnboardingAddressField | null>(null);
 
@@ -164,9 +166,17 @@ export default function AddressScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* ── Step progress ── */}
-          <Text className="text-[13px] text-charcoal-soft mb-2">
-            Step 2 of 3
-          </Text>
+          <View className="mb-2 flex-row items-center justify-between">
+            <Text className="text-[13px] text-charcoal-soft">Step 2 of 3</Text>
+            <Pressable
+              onPress={cancelOnboarding}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel onboarding"
+            >
+              <Text className="text-[13px] font-medium text-charcoal-soft">Cancel</Text>
+            </Pressable>
+          </View>
           <View className="h-1 bg-hairline rounded-full mb-8 overflow-hidden">
             <View className="h-1 bg-coral rounded-full" style={{ width: '66%' }} />
           </View>

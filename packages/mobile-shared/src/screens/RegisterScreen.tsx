@@ -5,20 +5,27 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
+  Keyboard,
+  KeyboardAvoidingView,
+  type LayoutChangeEvent,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Screen } from '../ui/Screen';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { useAlert } from '../ui/DialogProvider';
 import { theme } from '../theme/tokens';
 import { resolveAuthErrorMessage } from '../auth/bff-session';
 import { SocialIconButton, GoogleGlyph, AppleGlyph } from './_socialIcons';
+import { KitchenBackdrop } from './_kitchenBackdrop';
 import {
   getPhoneRule,
   sanitizePhoneInput,
@@ -37,6 +44,12 @@ interface RegisterFormData {
   password: string;
   confirmPassword: string;
 }
+
+/** The persistable slice of the form — never includes passwords. */
+export type RegisterDraft = Pick<
+  RegisterFormData,
+  'firstName' | 'lastName' | 'email' | 'phone'
+>;
 
 // Country-aware so a future non-India market just supplies a different phone
 // rule (length + pattern) — the rest of the form is unchanged.
@@ -66,10 +79,13 @@ function makeRegisterSchema(rule: PhoneRule) {
     });
 }
 
+const EMAIL_LIKE = /^\S+@\S+\.\S+$/;
+const STEP1_FIELDS = ['firstName', 'lastName', 'email', 'phone'] as const;
+
 interface RegisterScreenProps {
   onRegister: (data: RegisterFormData) => Promise<void>;
   onNavigateToLogin?: () => void;
-  /** When provided, the social icon row appears below the form under an
+  /** When provided, the social icon row appears on step 1 under an
    *  "or continue with" hairline divider — same pattern as LoginScreen.
    *  The OAuth handler is expected to create the account and route the
    *  user into the app on success. */
@@ -77,12 +93,15 @@ interface RegisterScreenProps {
   /** Same pattern as `onGoogleSignIn`, iOS only — callers should gate by
    *  `Platform.OS === 'ios'`. */
   onAppleSignIn?: () => Promise<void>;
-  /** Optional brand wordmark. When provided, renders above the title. */
+  /** Optional brand wordmark. Renders in the top bar on step 1. */
   brand?: string;
   title?: string;
   subtitle?: string;
-  /** Optional accent colour for the primary CTA + Input focus rings. Customer
-   *  passes its Airbnb coral; vendor/driver omit it and keep the ink palette. */
+  /** Step 2 headline — the "you're nearly in" moment. */
+  step2Title?: string;
+  step2Subtitle?: string;
+  /** Optional accent colour for the primary CTA, progress fill and Input focus
+   *  rings. Customer passes its Airbnb coral; vendor omits it (ink). */
   accent?: string;
   /** Optional colour override for the "Sign in" text link only — distinct
    *  from `accent` (CTA fill + Input focus ring). THE SPEC's AA
@@ -94,6 +113,24 @@ interface RegisterScreenProps {
   /** ISO country for the phone rule (digit length + format). Defaults to India;
    *  a future market passes its own code. */
   phoneCountry?: string;
+  /** Renders a ✕ in the top bar. Called AFTER the user confirms discarding —
+   *  the wrapper clears any persisted draft and navigates away. */
+  onCancel?: () => void;
+  /** Pre-fill from a persisted draft (name/email/phone — never passwords).
+   *  Applied only while the form is untouched, so async store hydration
+   *  can't clobber typing. */
+  initialValues?: Partial<RegisterDraft>;
+  /** Called with the step-1 values when the user advances to step 2 — the
+   *  wrapper persists them so a killed app resumes where it left off. */
+  onDraftSave?: (draft: RegisterDraft) => void;
+  /** Whisper-quiet decorative sketch layer behind the form. 'kitchen' scatters
+   *  faint pan/cloche/steam line glyphs — the vendor app's "this is about
+   *  cooking" cue. Omit for a plain surface. */
+  backdrop?: 'kitchen';
+  /** Quiet "why sign up" card on step 1 — a ₹ badge + one earning-focused
+   *  line. No invented numbers: copy states what the platform actually does
+   *  (own menu/prices, bank payouts). */
+  incentive?: { title: string; body: string };
 }
 
 export function RegisterScreen({
@@ -103,15 +140,24 @@ export function RegisterScreen({
   onAppleSignIn,
   title = 'Create account',
   subtitle = 'A few details to get you cooking',
+  step2Title = 'Almost there',
+  step2Subtitle = "Set a password and you're in.",
   brand,
   accent,
   linkColor,
   phoneCountry = DEFAULT_PHONE_COUNTRY,
+  onCancel,
+  initialValues,
+  onDraftSave,
+  backdrop,
+  incentive,
 }: RegisterScreenProps) {
   const resolvedLinkColor = linkColor ?? accent;
+  const accentColor = accent ?? theme.colors.ink.DEFAULT;
+  const { showAlert } = useAlert();
+  const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
-  const errorOpacity = useRef(new Animated.Value(0)).current;
-  const errorTranslate = useRef(new Animated.Value(-8)).current;
+  const scrollRef = useRef<ScrollView>(null);
 
   // No Reanimated dependency on this screen, so Reduce Motion is read the
   // same way the shared UI primitives (Skeleton/SheetBase/Toast) do — via
@@ -140,38 +186,128 @@ export function RegisterScreen({
     control,
     handleSubmit,
     watch,
-    formState: { errors, isSubmitting },
+    trigger,
+    getValues,
+    reset,
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: { firstName: '', lastName: '', email: '', phone: '', password: '', confirmPassword: '' },
   });
 
-  // Live password-requirement checklist. Only shown once the user starts typing
-  // a password, so an untouched form isn't nagging.
-  const passwordValue = watch('password') ?? '';
+  // Resume a persisted draft, but only while the form is untouched — store
+  // hydration is async and must never clobber what the user is typing.
+  useEffect(() => {
+    if (!initialValues || isDirty) return;
+    const hasDraft = Object.values(initialValues).some((v) => !!v);
+    if (!hasDraft) return;
+    reset({
+      firstName: initialValues.firstName ?? '',
+      lastName: initialValues.lastName ?? '',
+      email: initialValues.email ?? '',
+      phone: initialValues.phone ?? '',
+      password: '',
+      confirmPassword: '',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialValues]);
+
+  const formValues = watch();
+  const passwordValue = formValues.password ?? '';
   const passwordChecks = passwordCheckResults(passwordValue);
 
+  // Continuous journey progress: step 1 fills the first half of the track as
+  // its fields become valid, step 2 fills the rest (#697: a completion
+  // indicator that shows how much is LEFT, not just where you are).
+  const step1Done =
+    Number(!!formValues.firstName?.trim()) +
+    Number(!!formValues.lastName?.trim()) +
+    Number(EMAIL_LIKE.test(formValues.email ?? ''));
+  const step2Done =
+    Number(isStrongPassword(passwordValue)) +
+    Number(!!formValues.confirmPassword && formValues.confirmPassword === passwordValue);
+  const fraction =
+    step === 1 ? (step1Done / 3) * 0.5 : 0.5 + (step2Done / 2) * 0.5;
+  const complete = fraction >= 1;
+
+  // The fill is a full-width bar slid left by translateX (transform-only —
+  // width never animates, per .impeccable.md §Motion), native-driver safe.
+  const [trackWidth, setTrackWidth] = useState(0);
+  const fillX = useRef(new Animated.Value(0)).current;
+  const onTrackLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    setTrackWidth(w);
+    // First paint at the correct position — no fill-then-drain flash.
+    fillX.setValue(-w * (1 - fraction));
+  };
   useEffect(() => {
+    if (trackWidth === 0) return;
+    const target = -trackWidth * (1 - fraction);
     if (reduceMotion) {
-      errorOpacity.setValue(error ? 1 : 0);
-      errorTranslate.setValue(error ? 0 : -8);
+      fillX.setValue(target);
       return;
     }
-    Animated.parallel([
-      Animated.timing(errorOpacity, {
-        toValue: error ? 1 : 0,
-        duration: theme.motion.duration.default,
-        easing: Easing.bezier(...theme.motion.easing.entrance),
-        useNativeDriver: true,
-      }),
-      Animated.timing(errorTranslate, {
-        toValue: error ? 0 : -8,
-        duration: theme.motion.duration.default,
-        easing: Easing.bezier(...theme.motion.easing.entrance),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [error, errorOpacity, errorTranslate, reduceMotion]);
+    Animated.timing(fillX, {
+      toValue: target,
+      duration: theme.motion.duration.default,
+      easing: Easing.bezier(...theme.motion.easing.state),
+      useNativeDriver: true,
+    }).start();
+  }, [fraction, trackWidth, reduceMotion, fillX]);
+
+  // Step transition — the incoming step fades in and settles from the side
+  // it came from. Entrance easing, opacity/transform only.
+  const stepAnim = useRef(new Animated.Value(1)).current;
+  const stepDir = useRef(1);
+  const goToStep = (next: 1 | 2) => {
+    stepDir.current = next > step ? 1 : -1;
+    Keyboard.dismiss();
+    setError(null);
+    setStep(next);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    if (reduceMotion) {
+      stepAnim.setValue(1);
+      return;
+    }
+    stepAnim.setValue(0);
+    Animated.timing(stepAnim, {
+      toValue: 1,
+      duration: theme.motion.duration.default,
+      easing: Easing.bezier(...theme.motion.easing.entrance),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleContinue = async () => {
+    const ok = await trigger([...STEP1_FIELDS]);
+    if (!ok) return;
+    const v = getValues();
+    onDraftSave?.({
+      firstName: v.firstName,
+      lastName: v.lastName,
+      email: v.email,
+      phone: v.phone,
+    });
+    goToStep(2);
+  };
+
+  const handleCancel = () => {
+    showAlert(
+      'Cancel sign-up?',
+      "This clears everything you've entered so far.",
+      [
+        { text: 'Keep going', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            reset();
+            onCancel?.();
+          },
+        },
+      ],
+    );
+  };
 
   const onSubmit = async (data: RegisterFormData) => {
     setError(null);
@@ -191,243 +327,491 @@ export function RegisterScreen({
     }
   };
 
+  const stepStyle = {
+    opacity: stepAnim,
+    transform: [
+      {
+        translateX: stepAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [24 * stepDir.current, 0],
+        }),
+      },
+    ],
+  };
+
   return (
-    <Screen scroll paddingX={theme.spacing[6]}>
-      <View style={styles.topGap} />
-
-      {brand ? <Text style={styles.brand}>{brand}</Text> : null}
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.subtitle}>{subtitle}</Text>
-
-      <Animated.View
-        style={[
-          styles.errorBannerWrap,
-          {
-            opacity: errorOpacity,
-            transform: [{ translateY: errorTranslate }],
-            // Reserve no space when error is null, so layout doesn't jump.
-            height: error ? undefined : 0,
-            marginBottom: error ? theme.spacing[4] : 0,
-          },
-        ]}
-        pointerEvents={error ? 'auto' : 'none'}
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      {backdrop === 'kitchen' ? <KitchenBackdrop /> : null}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.kav}
       >
-        {error ? (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-      </Animated.View>
-
-      <View style={styles.nameRow}>
-        <View style={styles.nameField}>
-          <Controller
-            control={control}
-            name="firstName"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label="First name"
-                autoCapitalize="words"
-                autoComplete="given-name"
-                onBlur={onBlur}
-                onChangeText={onChange}
-                value={value}
-                error={errors.firstName?.message}
-                accentColor={accent}
-              />
-            )}
-          />
-        </View>
-        <View style={styles.nameField}>
-          <Controller
-            control={control}
-            name="lastName"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label="Last name"
-                autoCapitalize="words"
-                autoComplete="family-name"
-                onBlur={onBlur}
-                onChangeText={onChange}
-                value={value}
-                error={errors.lastName?.message}
-                accentColor={accent}
-              />
-            )}
-          />
-        </View>
-      </View>
-
-      <Controller
-        control={control}
-        name="email"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Email"
-            placeholder="you@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
-            error={errors.email?.message}
-            accentColor={accent}
-          />
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="phone"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Phone (optional)"
-            placeholder={phoneRule.example}
-            keyboardType="number-pad"
-            autoComplete="tel"
-            // Hard guard: strip non-digits and cap at the country's national
-            // length, so the user physically cannot type an extra digit.
-            // maxLength backs this up at the native TextInput level.
-            maxLength={phoneRule.length}
-            onBlur={onBlur}
-            onChangeText={(text) => onChange(sanitizePhoneInput(text, phoneCountry))}
-            value={value ?? ''}
-            error={errors.phone?.message}
-            helper={`${phoneRule.dialCode} · ${phoneRule.length}-digit mobile. Only for order issues — never shared.`}
-            accentColor={accent}
-          />
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="password"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Password"
-            placeholder="Create a strong password"
-            secureTextEntry
-            passwordPeek
-            autoComplete="new-password"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
-            error={errors.password?.message}
-            accentColor={accent}
-          />
-        )}
-      />
-
-      {/* Live password-requirement checklist — turns green as each rule is met.
-          Only appears once the user starts typing, so it guides rather than nags. */}
-      {passwordValue.length > 0 ? (
-        <View style={styles.pwChecklist}>
-          {passwordChecks.map((c) => (
-            <View key={c.id} style={styles.pwCheckRow}>
-              <Text
-                style={[styles.pwCheckMark, c.met ? styles.pwCheckMarkMet : null]}
-                accessibilityLabel={c.met ? 'met' : 'not met'}
+        {/* Top bar: back / brand · step counter · cancel */}
+        <View style={styles.topBar}>
+          <View style={styles.topBarSide}>
+            {step === 2 ? (
+              <Pressable
+                onPress={() => goToStep(1)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Back to your details"
               >
-                {c.met ? '✓' : '○'}
-              </Text>
-              <Text style={[styles.pwCheckLabel, c.met ? styles.pwCheckLabelMet : null]}>
-                {c.label}
-              </Text>
-            </View>
-          ))}
+                {({ pressed }) => (
+                  <Text style={[styles.backLink, pressed && { opacity: 0.6 }]}>← Back</Text>
+                )}
+              </Pressable>
+            ) : brand ? (
+              <Text style={styles.brand}>{brand}</Text>
+            ) : null}
+          </View>
+          <View style={styles.topBarRight}>
+            <Text style={styles.stepLabel}>Step {step} of 2</Text>
+            {onCancel ? (
+              <Pressable
+                onPress={handleCancel}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel sign-up"
+              >
+                {({ pressed }) => (
+                  <Text style={[styles.cancelGlyph, pressed && { opacity: 0.6 }]}>✕</Text>
+                )}
+              </Pressable>
+            ) : null}
+          </View>
         </View>
-      ) : null}
 
-      <Controller
-        control={control}
-        name="confirmPassword"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Confirm password"
-            placeholder="Re-enter your password"
-            secureTextEntry
-            passwordPeek
-            autoComplete="new-password"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
-            error={errors.confirmPassword?.message}
-            accentColor={accent}
-          />
-        )}
-      />
-
-      <View style={styles.primaryActions}>
-        <Button
-          label={isSubmitting ? 'Creating account…' : 'Create account'}
-          onPress={handleSubmit(onSubmit)}
-          loading={isSubmitting}
-          disabled={isSubmitting}
-          accentColor={accent}
-        />
-      </View>
-
-      {onGoogleSignIn || onAppleSignIn ? (
-        <>
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerLabel}>or continue with</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <View style={styles.socialIconRow}>
-            {onGoogleSignIn ? (
-              <SocialIconButton
-                label="Continue with Google"
-                onPress={wrap(onGoogleSignIn)}
-                icon={<GoogleGlyph />}
-              />
-            ) : null}
-            {onAppleSignIn ? (
-              <SocialIconButton
-                label="Continue with Apple"
-                onPress={wrap(onAppleSignIn)}
-                icon={<AppleGlyph />}
-              />
-            ) : null}
-          </View>
-        </>
-      ) : null}
-
-      {onNavigateToLogin ? (
-        <View style={styles.signinRow}>
-          <Pressable
-            onPress={onNavigateToLogin}
-            hitSlop={8}
-            accessibilityRole="link"
-            accessibilityLabel="Already have an account? Sign in"
-          >
-            <Text style={styles.signinPrompt}>
-              Already have an account?{' '}
-              <Text
+        {/* Journey progress — one continuous track across both steps. */}
+        <View
+          style={styles.progressRow}
+          accessibilityRole="progressbar"
+          accessibilityValue={{ min: 0, max: 100, now: Math.round(fraction * 100) }}
+        >
+          <View style={styles.track} onLayout={onTrackLayout}>
+            {trackWidth > 0 ? (
+              <Animated.View
                 style={[
-                  styles.signinCTA,
-                  resolvedLinkColor
-                    ? { color: resolvedLinkColor, textDecorationLine: 'none' }
-                    : null,
+                  styles.trackFill,
+                  {
+                    backgroundColor: complete ? theme.colors.success.DEFAULT : accentColor,
+                    transform: [{ translateX: fillX }],
+                  },
                 ]}
-              >
-                Sign in
-              </Text>
-            </Text>
-          </Pressable>
+              />
+            ) : null}
+            <View style={styles.tickRow} pointerEvents="none">
+              <View style={styles.tick} />
+            </View>
+          </View>
         </View>
-      ) : null}
 
-      <View style={styles.bottomGap} />
-    </Screen>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View style={stepStyle}>
+            <Text style={styles.title}>{step === 1 ? title : step2Title}</Text>
+            <Text style={styles.subtitle}>{step === 1 ? subtitle : step2Subtitle}</Text>
+
+            {error ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            {step === 1 ? (
+              <>
+                {incentive ? (
+                  <View style={styles.incentiveCard}>
+                    <View style={styles.incentiveBadge}>
+                      <Text style={styles.incentiveRupee}>₹</Text>
+                    </View>
+                    <View style={styles.incentiveCopy}>
+                      <Text style={styles.incentiveTitle}>{incentive.title}</Text>
+                      <Text style={styles.incentiveBody}>{incentive.body}</Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                <View style={styles.nameRow}>
+                  <View style={styles.nameField}>
+                    <Controller
+                      control={control}
+                      name="firstName"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <Input
+                          label="First name"
+                          autoCapitalize="words"
+                          autoComplete="given-name"
+                          onBlur={onBlur}
+                          onChangeText={onChange}
+                          value={value}
+                          error={errors.firstName?.message}
+                          accentColor={accent}
+                        />
+                      )}
+                    />
+                  </View>
+                  <View style={styles.nameField}>
+                    <Controller
+                      control={control}
+                      name="lastName"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <Input
+                          label="Last name"
+                          autoCapitalize="words"
+                          autoComplete="family-name"
+                          onBlur={onBlur}
+                          onChangeText={onChange}
+                          value={value}
+                          error={errors.lastName?.message}
+                          accentColor={accent}
+                        />
+                      )}
+                    />
+                  </View>
+                </View>
+
+                <Controller
+                  control={control}
+                  name="email"
+                  render={({ field: { onChange, onBlur, value } }) => (
+                    <Input
+                      label="Email"
+                      placeholder="you@example.com"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      onBlur={onBlur}
+                      onChangeText={onChange}
+                      value={value}
+                      error={errors.email?.message}
+                      accentColor={accent}
+                    />
+                  )}
+                />
+
+                <Controller
+                  control={control}
+                  name="phone"
+                  render={({ field: { onChange, onBlur, value } }) => (
+                    <Input
+                      label="Phone (optional)"
+                      placeholder={phoneRule.example}
+                      keyboardType="number-pad"
+                      autoComplete="tel"
+                      // Hard guard: strip non-digits and cap at the country's national
+                      // length, so the user physically cannot type an extra digit.
+                      // maxLength backs this up at the native TextInput level.
+                      maxLength={phoneRule.length}
+                      onBlur={onBlur}
+                      onChangeText={(text) => onChange(sanitizePhoneInput(text, phoneCountry))}
+                      value={value ?? ''}
+                      error={errors.phone?.message}
+                      helper={`${phoneRule.dialCode} · ${phoneRule.length}-digit mobile. Only for order issues — never shared.`}
+                      accentColor={accent}
+                    />
+                  )}
+                />
+
+                {onGoogleSignIn || onAppleSignIn ? (
+                  <>
+                    <View style={styles.divider}>
+                      <View style={styles.dividerLine} />
+                      <Text style={styles.dividerLabel}>or continue with</Text>
+                      <View style={styles.dividerLine} />
+                    </View>
+
+                    <View style={styles.socialIconRow}>
+                      {onGoogleSignIn ? (
+                        <SocialIconButton
+                          label="Continue with Google"
+                          onPress={wrap(onGoogleSignIn)}
+                          icon={<GoogleGlyph />}
+                        />
+                      ) : null}
+                      {onAppleSignIn ? (
+                        <SocialIconButton
+                          label="Continue with Apple"
+                          onPress={wrap(onAppleSignIn)}
+                          icon={<AppleGlyph />}
+                        />
+                      ) : null}
+                    </View>
+                  </>
+                ) : null}
+
+                {onNavigateToLogin ? (
+                  <View style={styles.signinRow}>
+                    <Pressable
+                      onPress={onNavigateToLogin}
+                      hitSlop={8}
+                      accessibilityRole="link"
+                      accessibilityLabel="Already have an account? Sign in"
+                    >
+                      <Text style={styles.signinPrompt}>
+                        Already have an account?{' '}
+                        <Text
+                          style={[
+                            styles.signinCTA,
+                            resolvedLinkColor
+                              ? { color: resolvedLinkColor, textDecorationLine: 'none' }
+                              : null,
+                          ]}
+                        >
+                          Sign in
+                        </Text>
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Controller
+                  control={control}
+                  name="password"
+                  render={({ field: { onChange, onBlur, value } }) => (
+                    <Input
+                      label="Password"
+                      placeholder="Create a strong password"
+                      secureTextEntry
+                      passwordPeek
+                      autoComplete="new-password"
+                      onBlur={onBlur}
+                      onChangeText={onChange}
+                      value={value}
+                      error={errors.password?.message}
+                      accentColor={accent}
+                    />
+                  )}
+                />
+
+                {/* Live password-requirement checklist — turns green as each rule is met.
+                    Only appears once the user starts typing, so it guides rather than nags. */}
+                {passwordValue.length > 0 ? (
+                  <View style={styles.pwChecklist}>
+                    {passwordChecks.map((c) => (
+                      <View key={c.id} style={styles.pwCheckRow}>
+                        <Text
+                          style={[styles.pwCheckMark, c.met ? styles.pwCheckMarkMet : null]}
+                          accessibilityLabel={c.met ? 'met' : 'not met'}
+                        >
+                          {c.met ? '✓' : '○'}
+                        </Text>
+                        <Text style={[styles.pwCheckLabel, c.met ? styles.pwCheckLabelMet : null]}>
+                          {c.label}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                <Controller
+                  control={control}
+                  name="confirmPassword"
+                  render={({ field: { onChange, onBlur, value } }) => (
+                    <Input
+                      label="Confirm password"
+                      placeholder="Re-enter your password"
+                      secureTextEntry
+                      passwordPeek
+                      autoComplete="new-password"
+                      onBlur={onBlur}
+                      onChangeText={onChange}
+                      value={value}
+                      error={errors.confirmPassword?.message}
+                      accentColor={accent}
+                    />
+                  )}
+                />
+              </>
+            )}
+          </Animated.View>
+        </ScrollView>
+
+        {/* Sticky CTA — always visible, lifts above the keyboard on iOS. */}
+        <View style={styles.ctaWrap}>
+          {step === 1 ? (
+            <Button label="Continue" onPress={handleContinue} accentColor={accent} />
+          ) : (
+            <Button
+              label={isSubmitting ? 'Creating account…' : 'Create account'}
+              onPress={handleSubmit(onSubmit)}
+              loading={isSubmitting}
+              disabled={isSubmitting}
+              accentColor={accent}
+            />
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  topGap: { height: theme.spacing[6] },
-  bottomGap: { height: theme.spacing[8] },
+  root: { flex: 1, backgroundColor: theme.colors.paper },
+  kav: { flex: 1 },
+
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing[6],
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[3],
+  },
+  topBarSide: { flexShrink: 1 },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[4],
+  },
+  brand: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  backLink: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
+  stepLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.label.size,
+    color: theme.colors.ink.muted,
+    letterSpacing: 0.5,
+    fontVariant: ['tabular-nums'],
+  },
+  cancelGlyph: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: theme.colors.ink.soft,
+    paddingHorizontal: theme.spacing[1],
+  },
+
+  progressRow: {
+    paddingHorizontal: theme.spacing[6],
+    paddingBottom: theme.spacing[5],
+  },
+  track: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  trackFill: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderRadius: 2,
+  },
+  // Midpoint tick keeps the "2 discrete steps" reading on the continuous track.
+  tickRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100%',
+  },
+  tick: {
+    width: 1,
+    height: '100%',
+    backgroundColor: theme.colors.paper,
+    opacity: 0.9,
+  },
+
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: theme.spacing[6],
+    paddingBottom: theme.spacing[8],
+  },
+
+  title: {
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.display.size,
+    lineHeight:
+      theme.typography.size.display.size *
+      theme.typography.size.display.lineHeight,
+    letterSpacing: theme.typography.size.display.letterSpacing,
+    color: theme.colors.ink.DEFAULT,
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+  },
+  // ink.soft (not ink.muted) — subtitle is secondary, not tertiary.
+  // Matches LoginScreen's subtitle style exactly.
+  subtitle: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.soft,
+    marginBottom: theme.spacing[6],
+  },
+
+  errorBanner: {
+    backgroundColor: theme.colors.destructive.tint,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.destructive.DEFAULT,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
+    marginBottom: theme.spacing[4],
+  },
+  errorText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.destructive.DEFAULT,
+  },
+
+  nameRow: {
+    flexDirection: 'row',
+    gap: theme.spacing[3],
+  },
+  nameField: { flex: 1 },
+
+  incentiveCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    marginBottom: theme.spacing[5],
+  },
+  incentiveBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.success.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  incentiveRupee: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: theme.colors.success.soft,
+  },
+  incentiveCopy: { flex: 1 },
+  incentiveTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    marginBottom: 2,
+  },
+  incentiveBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.label.size,
+    lineHeight: theme.typography.size.label.size * 1.4,
+    color: theme.colors.ink.soft,
+  },
 
   pwChecklist: {
     marginBottom: theme.spacing[4],
@@ -446,62 +830,10 @@ const styles = StyleSheet.create({
   pwCheckLabel: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.muted },
   pwCheckLabelMet: { color: theme.colors.ink.soft },
 
-  brand: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.caption.size,
-    color: theme.colors.ink.muted,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: theme.spacing[6],
-  },
-  title: {
-    fontFamily: 'Geist-Bold',
-    fontSize: theme.typography.size.display.size,
-    lineHeight:
-      theme.typography.size.display.size *
-      theme.typography.size.display.lineHeight,
-    letterSpacing: theme.typography.size.display.letterSpacing,
-    color: theme.colors.ink.DEFAULT,
-    marginBottom: theme.spacing[1],
-  },
-  // ink.soft (not ink.muted) — subtitle is secondary, not tertiary.
-  // Matches LoginScreen's subtitle style exactly.
-  subtitle: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.soft,
-    marginBottom: theme.spacing[6],
-  },
-
-  errorBannerWrap: { overflow: 'hidden' },
-  errorBanner: {
-    backgroundColor: theme.colors.destructive.tint,
-    borderLeftWidth: 3,
-    borderLeftColor: theme.colors.destructive.DEFAULT,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[3],
-  },
-  errorText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.destructive.DEFAULT,
-  },
-
-  nameRow: {
-    flexDirection: 'row',
-    gap: theme.spacing[3],
-  },
-  nameField: { flex: 1 },
-
-  primaryActions: {
-    marginTop: theme.spacing[2],
-    marginBottom: theme.spacing[6],
-  },
-
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: theme.spacing[2],
     marginBottom: theme.spacing[4],
   },
   dividerLine: {
@@ -538,5 +870,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: theme.colors.ink.DEFAULT,
     textDecorationLine: 'underline',
+  },
+
+  ctaWrap: {
+    paddingHorizontal: theme.spacing[6],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.paper,
   },
 });

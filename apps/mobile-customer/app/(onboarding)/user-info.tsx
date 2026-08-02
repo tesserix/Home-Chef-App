@@ -19,6 +19,7 @@ import { useAuth } from '@homechef/mobile-shared/auth';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
 import { useCustomerOnboardingStore } from '../../store/onboarding-store';
+import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import { useAlert } from '@homechef/mobile-shared/ui';
 
 const schema = z.object({
@@ -56,6 +57,7 @@ function fieldBorderStyle(hasError: boolean, isFocused: boolean) {
 }
 
 export default function UserInfoScreen() {
+  const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   // Prefill from whatever the user already gave at sign-up (email signup
   // captures name + phone into the auth store; social sign-up leaves them
@@ -192,9 +194,17 @@ export default function UserInfoScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* ── Step progress ── */}
-          <Text className="text-[13px] text-charcoal-soft mb-2">
-            Step 1 of 3
-          </Text>
+          <View className="mb-2 flex-row items-center justify-between">
+            <Text className="text-[13px] text-charcoal-soft">Step 1 of 3</Text>
+            <Pressable
+              onPress={cancelOnboarding}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel onboarding"
+            >
+              <Text className="text-[13px] font-medium text-charcoal-soft">Cancel</Text>
+            </Pressable>
+          </View>
           <View className="h-1 bg-hairline rounded-full mb-8 overflow-hidden">
             <View className="h-1 bg-coral rounded-full" style={{ width: '33%' }} />
           </View>

@@ -10,6 +10,7 @@ import { Clock, Timer, MapPin } from 'lucide-react-native';
 import { Input, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
+import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 
 type DayHours = { open: string; close: string; closed: boolean };
 type HoursMap = Record<string, DayHours>;
@@ -38,6 +39,7 @@ const DAY_LABELS: Record<Day, string> = {
 const PREP_TIME_OPTIONS = ['15min', '30min', '45min', '60min', '90min'] as const;
 
 export default function OperationsScreen() {
+  const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { operations, updateOperations, setStep } = useVendorOnboardingStore();
@@ -101,6 +103,7 @@ export default function OperationsScreen() {
 
   return (
     <OnboardingScaffold
+      onCancel={cancelOnboarding}
       step={3}
       total={6}
       stepName={t('onboarding.stepOperations')}

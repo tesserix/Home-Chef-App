@@ -21,6 +21,7 @@ import { theme } from '@homechef/mobile-shared/theme';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
+import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import {
   buildPayoutPayload,
   emptyPayoutForm,
@@ -33,6 +34,7 @@ import {
 // UPI is not an accepted payout method (#767): Route settles to a bank account
 // only. Bank transfer is the only option.
 export default function PayoutStep() {
+  const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { updatePayout, setStep } = useVendorOnboardingStore();
 
@@ -99,6 +101,7 @@ export default function PayoutStep() {
 
   return (
     <OnboardingScaffold
+      onCancel={cancelOnboarding}
       step={6}
       total={7}
       stepName="Payouts"

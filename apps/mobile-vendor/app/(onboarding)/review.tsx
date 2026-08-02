@@ -13,6 +13,7 @@ import { OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
+import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 
 interface CachedOnboardingStatus {
   data: {
@@ -99,6 +100,7 @@ function Section({
 }
 
 export default function ReviewScreen() {
+  const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
   const store = useVendorOnboardingStore();
@@ -205,6 +207,7 @@ export default function ReviewScreen() {
 
   return (
     <OnboardingScaffold
+      onCancel={cancelOnboarding}
       step={7}
       total={7}
       stepName={t('onboarding.stepReview')}

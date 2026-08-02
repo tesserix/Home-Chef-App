@@ -27,6 +27,7 @@ import { Input, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui'
 import { useToast } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
+import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import { api } from '../../lib/api';
 import {
   useStates,
@@ -71,6 +72,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function KitchenDetailsScreen() {
+  const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { kitchenDetails, updateKitchenDetails, setStep } = useVendorOnboardingStore();
@@ -303,6 +305,7 @@ export default function KitchenDetailsScreen() {
 
   return (
     <OnboardingScaffold
+      onCancel={cancelOnboarding}
       step={2}
       total={6}
       stepName={t('onboarding.stepKitchen')}

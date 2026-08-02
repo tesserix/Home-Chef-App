@@ -35,6 +35,7 @@ import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { ocrDocument } from '../../lib/ocr';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
+import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 
 type DocumentType = 'id_proof' | 'fssai_license';
 
@@ -52,6 +53,7 @@ function uriToFilename(uri: string, fileType: 'image' | 'pdf' | null): string {
 }
 
 export default function DocumentsScreen() {
+  const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { documents, updateDocuments, setStep } = useVendorOnboardingStore();
@@ -553,6 +555,7 @@ export default function DocumentsScreen() {
 
   return (
     <OnboardingScaffold
+      onCancel={cancelOnboarding}
       step={4}
       total={6}
       stepName={t('onboarding.stepDocuments')}
