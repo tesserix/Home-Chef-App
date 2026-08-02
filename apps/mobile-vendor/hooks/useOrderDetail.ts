@@ -101,6 +101,18 @@ export interface OrderDetail {
   // chef reported "couldn't deliver"; an admin hasn't confirmed fault yet. The
   // footer closes the order off (no actions) and shows an "under review" caption.
   deliveryFailureReported: boolean;
+  // Set while the customer has asked to cancel and this chef hasn't answered
+  // (#475). Null otherwise. The screen banners it and disables the stage-advance
+  // button; the API refuses the transition on the same condition.
+  cancellationRequested: PendingCancellation | null;
+}
+
+/** A cancellation awaiting the chef's decision — the chef-facing subset. */
+export interface PendingCancellation {
+  id: string;
+  reason?: string;
+  requestedAt: string;
+  respondBy?: string | null;
 }
 
 // ---- Hook --------------------------------------------------------------------
@@ -158,6 +170,7 @@ interface RawChefOrderDetailResponse {
   selfDeliveryMaxDistanceKm?: number;
   riderDispatchAvailable?: boolean;
   deliveryFailureReported?: boolean;
+  cancellationRequested?: PendingCancellation | null;
 }
 
 function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
@@ -209,6 +222,7 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
     selfDeliveryMaxDistanceKm: raw.selfDeliveryMaxDistanceKm ?? 0,
     riderDispatchAvailable: raw.riderDispatchAvailable ?? false,
     deliveryFailureReported: raw.deliveryFailureReported ?? false,
+    cancellationRequested: raw.cancellationRequested ?? null,
   };
 }
 

@@ -17,10 +17,19 @@ export interface LiveEventPayload {
 
 // The chef's own views. Grouped by what a change actually invalidates rather than by which
 // event produced it, because several events land on the same lists.
+// ['chef','orders'] is a PREFIX: React Query matches it against
+// ['chef','orders','detail-v2',<id>] too, so an open order-detail screen
+// refetches on the same event as the list. That is what makes a cancellation
+// request grey out the stage button while the chef is looking at the order,
+// rather than on their next pull-to-refresh (#475).
 const ORDER_KEYS = [
   ['chef', 'orders'],
   ['chef', 'dashboard'],
   ['chef', 'upcoming'],
+  // The cancellation queue is where the chef answers that request. Leaving it
+  // off meant the banner said "respond now" and the queue behind it was still
+  // up to 30 s stale.
+  ['chef', 'cancel-requests'],
 ];
 const MEAL_PLAN_KEYS = [
   ['chef', 'meal-plans'],

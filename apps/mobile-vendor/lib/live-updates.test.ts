@@ -9,7 +9,24 @@ describe('invalidationsFor', () => {
       ['chef', 'orders'],
       ['chef', 'dashboard'],
       ['chef', 'upcoming'],
+      ['chef', 'cancel-requests'],
     ]);
+  });
+
+  // A cancellation request arrives as an order event. The chef answers it in the
+  // cancellations queue, so that queue must refresh on the same frame — without
+  // this the order banner said "respond now" and the queue behind it was empty
+  // for up to 30 s (#475).
+  it('refreshes the cancellation queue for an order event', () => {
+    expect(invalidationsFor({ order_id: 'o1' })).toContainEqual(['chef', 'cancel-requests']);
+  });
+
+  // The order-detail screen caches under ['chef','orders','detail-v2',id]. React
+  // Query matches invalidations by PREFIX, so ['chef','orders'] has to be emitted
+  // un-suffixed or an open order would never refetch and the stage button would
+  // stay live under a pending cancellation.
+  it('emits the order prefix that also matches the open detail screen', () => {
+    expect(invalidationsFor({ order_id: 'o1' })).toContainEqual(['chef', 'orders']);
   });
 
   it('refreshes the plan lists for a meal-plan event', () => {

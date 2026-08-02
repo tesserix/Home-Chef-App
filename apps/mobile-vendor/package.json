@@ -72,6 +72,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
+    "@react-native/jest-preset": "0.86.0",
     "@testing-library/react-native": "^14.0.0",
     "jest-expo": "~56.0.5",
     "typescript": "^6.0.3"

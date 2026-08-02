@@ -388,6 +388,11 @@ interface FooterActionsProps {
   /** An open delivery-failure review — closes the order off (no actions, an
    *  "under review" caption) until an admin confirms fault (#393). */
   deliveryFailureReported: boolean;
+  /** The customer has asked to cancel and this chef hasn't answered (#475).
+   *  Freezes every stage advance; "Cancel order" stays live because it is a way
+   *  OUT of the request, not a way past it. The API refuses the same
+   *  transitions, so this is the explanation, not the enforcement. */
+  cancellationPending: boolean;
   /** ISO timestamp of the last status transition — used to compute
    *  waiting-for-driver elapsed time in the `ready` state. */
   updatedAt?: string;
@@ -424,7 +429,8 @@ function FooterActions({
   orderId,
   customerName,
   total,
-  disabled,
+  disabled: busy,
+  cancellationPending,
   updatedAt,
   canSelfDeliver,
   riderAvailable,
@@ -444,6 +450,13 @@ function FooterActions({
   onReportDeliveryFailure,
   deliveryFailureReported,
 }: FooterActionsProps) {
+  // Every stage-advance button below gates on `disabled`, so gating the whole
+  // set on a pending cancellation is one line here rather than a flag threaded
+  // through thirteen call sites — one of which would eventually be missed, and
+  // that one is a chef cooking on through a cancellation. `busy` (the in-flight
+  // mutation) stays separate so the destructive links, which are the way OUT of
+  // a pending request, are not frozen by it (#475).
+  const disabled = busy || cancellationPending;
   const isPickup = fulfillmentType === 'pickup';
   const isChefDelivery = fulfillmentType === 'chef_delivery';
   // Ticks every 45 s so the "ready" caption's elapsed counter updates.
@@ -469,7 +482,7 @@ function FooterActions({
   const cancelLink = CANCELLABLE_STATUSES.has(status) ? (
     <Pressable
       onPress={onCancel}
-      disabled={disabled}
+      disabled={busy}
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel="Cancel this order"
@@ -488,7 +501,7 @@ function FooterActions({
     isChefDelivery && status === 'picked_up' ? (
       <Pressable
         onPress={onReportDeliveryFailure}
-        disabled={disabled}
+        disabled={busy}
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="Report that you couldn't deliver this order"
@@ -498,6 +511,21 @@ function FooterActions({
         <Text style={styles.cancelLinkLabel}>Couldn&apos;t deliver this order</Text>
       </Pressable>
     ) : null;
+
+  // A pending cancellation greys the stage buttons; without a reason on the
+  // same screen that reads as a broken app. Say why, and keep the way out
+  // (Cancel order) under it.
+  if (cancellationPending && CANCELLABLE_STATUSES.has(status)) {
+    return (
+      <View style={[styles.footer, styles.footerBlockedWrap]}>
+        <Text style={styles.footerCaptionBlocked}>
+          Paused — the customer asked to cancel. Respond in Cancellations before
+          moving this order on.
+        </Text>
+        {cancelLink}
+      </View>
+    );
+  }
 
   // An open delivery-failure review closes the order off for the chef (#393):
   // no status actions until an admin confirms fault and resolves the payout.
@@ -549,7 +577,10 @@ function FooterActions({
                 disabled && { opacity: 0.4 },
               ]}
             >
-              <Text style={styles.primaryLabel}>Accept</Text>
+              {/* The tap has to SAY something. Greying alone reads as a dead
+                  button during the undo window, which is what got it tapped
+                  again. */}
+              <Text style={styles.primaryLabel}>{busy ? 'Working…' : 'Accept'}</Text>
             </View>
           )}
         </Pressable>
@@ -891,7 +922,7 @@ export default function OrderDetailScreen() {
   const { showAlert } = useAlert();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
   const { data: order, isLoading, isError, refetch } = useOrderDetail(orderId);
-  const { triggerAction, isLoading: actionLoading } = useOrderAction();
+  const { triggerAction, isLoading: actionLoading, isActioning } = useOrderAction();
   // Home-tiffin scheduling (#709): at accept the chef confirms the customer's
   // requested time (null) or bumps it by a preset when the kitchen needs longer.
   const [proposeOffsetMin, setProposeOffsetMin] = useState<number | null>(null);
@@ -1270,6 +1301,27 @@ export default function OrderDetailScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* The customer is trying to cancel THIS order. First thing on the
+            screen, in the destructive colour, because everything below it —
+            the items, the stage button — is work the chef should stop doing
+            until they answer it (#475). */}
+        {order.cancellationRequested ? (
+          <Pressable
+            onPress={() => router.push('/cancel-requests')}
+            accessibilityRole="button"
+            accessibilityLabel="Cancellation requested — open your cancellations queue to respond"
+            style={styles.cancelBanner}
+          >
+            <Text style={styles.cancelBannerTitle}>Cancellation requested</Text>
+            <Text style={styles.cancelBannerBody}>
+              {order.cancellationRequested.reason
+                ? `“${order.cancellationRequested.reason}” — respond before you carry on.`
+                : 'The customer asked to cancel. Respond before you carry on.'}
+            </Text>
+            <Text style={styles.cancelBannerAction}>Respond now →</Text>
+          </Pressable>
+        ) : null}
+
         {/* CUSTOMER section — first name only. Phone + direct call/message are
             intentionally not shown: the rider handles pickup→delivery, and
             withholding contact prevents off-platform arrangements. */}
@@ -1664,6 +1716,9 @@ export default function OrderDetailScreen() {
         customerName={order.customerName || 'this customer'}
         total={effectiveTotal}
         disabled={
+          // isActioning covers the 3s undo window that actionLoading cannot see
+          // — without it Accept stayed tappable for seconds after the tap.
+          isActioning(order.id) ||
           actionLoading ||
           updateStatus.isPending ||
           uploadPhoto.isPending ||
@@ -1716,6 +1771,7 @@ export default function OrderDetailScreen() {
         onCancel={openCancelSheet}
         onReportDeliveryFailure={openDeliveryFailureSheet}
         deliveryFailureReported={order.deliveryFailureReported}
+        cancellationPending={!!order.cancellationRequested}
       />
     </SafeAreaView>
   );
@@ -2362,6 +2418,46 @@ const styles = StyleSheet.create({
   },
   footerCaptionWrap: {
     justifyContent: 'center',
+  },
+  // The frozen footer stacks its reason above the one action still open, so
+  // `footer`'s row direction has to be overridden here.
+  footerBlockedWrap: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: theme.spacing[1],
+  },
+  footerCaptionBlocked: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.destructive.DEFAULT,
+    textAlign: 'center',
+  },
+  // Cancellation banner — destructive tint, not a fill: it must stop the chef
+  // without reading as an error state for the whole screen.
+  cancelBanner: {
+    backgroundColor: theme.colors.destructive.tint,
+    borderRadius: theme.radius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.destructive.DEFAULT,
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
+    gap: theme.spacing[1],
+  },
+  cancelBannerTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.destructive.DEFAULT,
+  },
+  cancelBannerBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  cancelBannerAction: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.destructive.DEFAULT,
   },
   // Carrier choice buttons — full-width (no flex, so they don't stretch
   // vertically in the column footer). Primary = ink fill, secondary = ink

@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../lib/api';
 import type { DashboardData, RecentOrder } from './useVendorDashboard';
+import type { OrderDetail } from './useOrderDetail';
 
 /** Lifecycle photo kinds the chef attaches to an order. */
 export type OrderPhotoKind = 'ready' | 'handover';
@@ -163,6 +164,23 @@ export function useOrderAction() {
   // and cooked it; the server still had it `pending` and the customer saw an
   // unaccepted order.
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Which orders the chef has already actioned and not undone. REACTIVE, unlike
+  // the module-level `actionedOrderIds` set the pending-list filter uses — the
+  // order-detail footer has to re-render the instant Accept is tapped.
+  //
+  // Without it the footer stayed live for the whole 3s undo window (the mutation
+  // hasn't started, so `mutation.isPending` is still false and the order is still
+  // `pending` on the server), which reads as a dead button. Tapping again then
+  // re-entered triggerAction and RESET the timer — so an impatient double-tap
+  // pushed the accept further away, the opposite of what the chef intended.
+  const [actioningIds, setActioningIds] = useState<ReadonlySet<string>>(new Set());
+  const releaseActioning = (orderId: string) =>
+    setActioningIds((cur) => {
+      if (!cur.has(orderId)) return cur;
+      const next = new Set(cur);
+      next.delete(orderId);
+      return next;
+    });
 
   const mutation = useMutation({
     mutationFn: ({
@@ -204,6 +222,7 @@ export function useOrderAction() {
       // Action failed — let the order resurface so the chef can retry, and drop
       // the optimistic "In Progress" entry we may have added on accept.
       actionedOrderIds.delete(vars.orderId);
+      releaseActioning(vars.orderId);
       if (context?.previous) {
         queryClient.setQueryData(['chef', 'orders', 'pending'], context.previous);
       }
@@ -219,6 +238,10 @@ export function useOrderAction() {
     },
     onSettled: (_data, _err, vars) => {
       actionedOrderIds.delete(vars.orderId);
+      // Released only now: the refetch below carries the server's own status, so
+      // the footer moves straight from "Accepting…" to the real next stage
+      // instead of flashing Accept again in between.
+      releaseActioning(vars.orderId);
       // Refresh the order lists AND the dashboard stats (pending count, today's
       // totals) — the dashboard was previously left stale after accept/reject.
       queryClient.invalidateQueries({ queryKey: ['chef', 'orders'] });
@@ -236,12 +259,20 @@ export function useOrderAction() {
     // Delivery fee the chef sets at accept (#703). Absent = charge as-is.
     deliveryFee?: number,
   ) {
+    // A repeat tap on an order already actioned is a NO-OP, not a re-arm. The
+    // old code cleared and re-set this order's timer, so every impatient tap
+    // during the 3s window delayed the accept by another 3s — hold the button
+    // down and the order is never accepted at all. Undo clears the timer, so a
+    // genuine re-accept after an undo still passes this guard.
+    if (timersRef.current.has(orderId)) return;
+
     // Haptic feedback on decisive order action (accept or reject)
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     // Mark actioned so background polls can't resurrect the card during the
     // undo window, then optimistically remove it and schedule the API call.
     actionedOrderIds.add(orderId);
+    setActioningIds((cur) => new Set(cur).add(orderId));
     // Grab the order before removing it — for an accept we move it straight
     // into the dashboard "In Progress" list so it doesn't vanish during the
     // undo window and then pop back a few seconds later (the flicker).
@@ -308,6 +339,7 @@ export function useOrderAction() {
       if (t) clearTimeout(t);
       timersRef.current.delete(undoId);
       actionedOrderIds.delete(undoId);
+      releaseActioning(undoId);
       // Pull the order back out of "In Progress" — the accept was undone.
       queryClient.setQueryData<DashboardData>(['chef', 'dashboard'], (old) =>
         old
@@ -324,7 +356,16 @@ export function useOrderAction() {
     setPendingUndo(null);
   }
 
-  return { triggerAction, handleUndo, pendingUndo, isLoading: mutation.isPending };
+  return {
+    triggerAction,
+    handleUndo,
+    pendingUndo,
+    isLoading: mutation.isPending,
+    // True from the tap until the server has answered — including the undo
+    // window, which `isLoading` cannot see. Screens gate their accept/reject
+    // buttons on this so the tap lands visibly and cannot be repeated.
+    isActioning: (orderId: string) => actioningIds.has(orderId),
+  };
 }
 
 // Generic status mutation used by the order detail screen and Dashboard "In
@@ -348,19 +389,21 @@ export function useUpdateOrderStatus() {
       carrier?: 'chef_delivery' | 'delivery';
     }) => api.put(`/chef/orders/${orderId}/status`, { status, carrier }),
     onMutate: async ({ orderId, status }) => {
-      await queryClient.cancelQueries({ queryKey: ['chef', 'orders', 'detail', orderId] });
-      const previous = queryClient.getQueryData<Order>(['chef', 'orders', 'detail', orderId]);
+      // The screen that shows this footer reads ['chef','orders','detail-v2',id]
+      // (useOrderDetail). This optimistic write addressed the older 'detail' key,
+      // so it updated a cache nobody rendered and the footer sat on the old stage
+      // until the refetch landed — the transition felt seconds slow for no reason.
+      const detailKey = ['chef', 'orders', 'detail-v2', orderId];
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const previous = queryClient.getQueryData<OrderDetail>(detailKey);
       if (previous) {
-        queryClient.setQueryData<Order>(['chef', 'orders', 'detail', orderId], {
-          ...previous,
-          status,
-        });
+        queryClient.setQueryData<OrderDetail>(detailKey, { ...previous, status });
       }
-      return { previous };
+      return { previous, detailKey };
     },
-    onError: (_err, { orderId }, context) => {
+    onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(['chef', 'orders', 'detail', orderId], context.previous);
+        queryClient.setQueryData(context.detailKey, context.previous);
       }
     },
     onSettled: () => {

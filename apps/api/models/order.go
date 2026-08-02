@@ -560,6 +560,25 @@ type ChefOrderDetailResponse struct {
 	// carries no numbers — the chef is told to photograph the handover, not who to
 	// distrust. Only ever populated once risk enforcement is switched on.
 	DisputeSignal *DisputeSignal `json:"disputeSignal,omitempty"`
+	// CancellationRequested is set while the customer has asked to cancel and the
+	// request is awaiting THIS chef's decision (#475). Nil at every other time.
+	// The vendor app freezes the order on it: the stage-advance button greys out
+	// and a red banner names the request, so a chef cannot keep cooking an order
+	// the customer is trying to cancel. UpdateOrderStatus enforces the same rule
+	// server-side — this field only lets the app say so before the tap.
+	CancellationRequested *PendingCancellation `json:"cancellationRequested,omitempty"`
+}
+
+// PendingCancellation is the chef-facing view of a cancellation request awaiting
+// their decision. Deliberately a SUBSET of CancellationRequest: the refund
+// snapshot is not decided until the chef picks a tier, so exposing those zeroed
+// paise fields here would show the chef a ₹0 refund that is not yet a fact.
+type PendingCancellation struct {
+	ID uuid.UUID `json:"id"`
+	// Reason is the customer's own words, shown verbatim in the banner.
+	Reason      string     `json:"reason,omitempty"`
+	RequestedAt time.Time  `json:"requestedAt"`
+	RespondBy   *time.Time `json:"respondBy,omitempty"`
 }
 
 func (o *Order) ToResponse() OrderResponse {

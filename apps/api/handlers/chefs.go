@@ -1283,6 +1283,29 @@ func hasOpenDeliveryFailure(orderID uuid.UUID) bool {
 	return n > 0
 }
 
+// pendingCancellationFor returns the customer's cancellation request when it is
+// still awaiting THIS order's chef, else nil (#475).
+//
+// The single source of truth for "is this order frozen": GetOrderDetail surfaces
+// it so the vendor app can grey the stage-advance button before the tap, and
+// UpdateOrderStatus refuses the transition on the same answer. Two readers, one
+// query — an app-only check would leave the hole open to a stale screen, a
+// retried request, or any other client.
+func pendingCancellationFor(orderID uuid.UUID) *models.PendingCancellation {
+	var cr models.CancellationRequest
+	if err := database.DB.
+		Where("order_id = ? AND status = ?", orderID, models.CancelReqPendingVendor).
+		First(&cr).Error; err != nil {
+		return nil
+	}
+	return &models.PendingCancellation{
+		ID:          cr.ID,
+		Reason:      cr.CustomerReason,
+		RequestedAt: cr.CreatedAt,
+		RespondBy:   cr.VendorRespondBy,
+	}
+}
+
 // openDeliveryFailureOrderIDs returns which of the given order IDs have an
 // unresolved delivery-failure review (#393). Batched sibling of
 // hasOpenDeliveryFailure so the chef order list can flag "under review" rows
@@ -1450,6 +1473,21 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{
 			"error":   "delivery_failure_under_review",
 			"message": "You reported this order as undelivered — our team is reviewing it. It can't be changed until that's resolved.",
+		})
+		return
+	}
+
+	// A cancellation request awaiting this chef freezes the order (#475). Letting
+	// the chef advance it anyway is how the customer sees "Cancellation requested"
+	// while the order marches on to Ready and out the door — the two screens
+	// disagree, and the tier the chef later picks is decided against a stage they
+	// only reached after the customer asked them to stop. Answer the request
+	// first (POST /chef/cancel-requests/:id/confirm) or cancel the order outright;
+	// both remain open. Re-stamping the same status stays an idempotent no-op.
+	if newStatus != priorStatus && pendingCancellationFor(order.ID) != nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "cancellation_pending",
+			"message": "The customer has asked to cancel this order. Respond to the cancellation request before changing its status.",
 		})
 		return
 	}
@@ -2035,6 +2073,11 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 	// the vendor app swaps the action footer for an "under review" caption and
 	// drops the order from the active list.
 	detail.DeliveryFailureReported = hasOpenDeliveryFailure(order.ID)
+
+	// A cancellation the customer has asked for and this chef hasn't answered yet
+	// freezes the order: the app greys the stage-advance button and banners the
+	// request rather than letting the chef cook on toward a refund (#475).
+	detail.CancellationRequested = pendingCancellationFor(order.ID)
 
 	// Surface the chef→drop distance + comfort radius for the Mark-Ready carrier
 	// decision: on chef_delivery orders AND on delivery orders the chef COULD
