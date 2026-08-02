@@ -66,14 +66,30 @@ type Config struct {
 	// Apple keeps its own record of the app-to-Apple-ID grant, which stays live
 	// under Settings → Apple ID → Sign in with Apple until it is revoked.
 	//
+	// AppleTeamID and AppleSignInPrivateKey are shared across every app on the
+	// team — one Apple Developer team, one Sign in with Apple key. The
+	// client_id is NOT shared: a native authorization code is bound to the App
+	// ID that issued it, so Apple's /auth/token and /auth/revoke reject a
+	// customer-app code presented with the vendor app's client_id and vice
+	// versa (confirmed against Apple's Sign in with Apple docs — App ID
+	// grouping shares the Team ID, not the client_id). There are two apps with
+	// Sign in with Apple enabled (apps/mobile-customer, apps/mobile-vendor), so
+	// there are two client ids: AppleServicesClientID for the customer app
+	// (kept under its original name for backward compatibility with the
+	// already-provisioned env var) and AppleServicesClientIDVendor for the
+	// vendor app. A role this doesn't have a mapped client id for (delivery,
+	// admin — neither offers Sign in with Apple) degrades to "not configured"
+	// for that role.
+	//
 	// AppleSignInPrivateKey is the contents of the .p8 key downloaded from the
 	// Apple Developer portal (PKCS#8 ECDSA P-256), supplied base64-encoded so
 	// it survives a single-line env var / Secret Manager value.
 	// Leave any of these empty to disable revocation cleanly.
-	AppleTeamID           string
-	AppleKeyID            string
-	AppleServicesClientID string
-	AppleSignInPrivateKey []byte
+	AppleTeamID                 string
+	AppleKeyID                  string
+	AppleServicesClientID       string // customer app (apps/mobile-customer)
+	AppleServicesClientIDVendor string // vendor app (apps/mobile-vendor)
+	AppleSignInPrivateKey       []byte
 
 	// PublicAPIBaseURL is this API's externally reachable origin. Used to build
 	// links we put in emails, so recipients see a hostname they recognise
@@ -451,10 +467,12 @@ func Load() {
 		PublicAPIBaseURL:    getEnv("PUBLIC_API_BASE_URL", "https://api.fe3dr.com"),
 
 		// Sign in with Apple (5.1.1(v) token revocation on account deletion).
-		AppleTeamID:           getEnv("APPLE_TEAM_ID", ""),
-		AppleKeyID:            getEnv("APPLE_KEY_ID", ""),
-		AppleServicesClientID: getEnv("APPLE_SERVICES_CLIENT_ID", ""),
-		AppleSignInPrivateKey: applePrivateKey,
+		// Two client ids, one per app — see the struct field comments above.
+		AppleTeamID:                 getEnv("APPLE_TEAM_ID", ""),
+		AppleKeyID:                  getEnv("APPLE_KEY_ID", ""),
+		AppleServicesClientID:       getEnv("APPLE_SERVICES_CLIENT_ID", ""),
+		AppleServicesClientIDVendor: getEnv("APPLE_SERVICES_CLIENT_ID_VENDOR", ""),
+		AppleSignInPrivateKey:       applePrivateKey,
 
 		// Razorpay
 		RazorpayKeyID:         getEnv("RAZORPAY_KEY_ID", ""),

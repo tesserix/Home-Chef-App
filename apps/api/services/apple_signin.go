@@ -18,6 +18,20 @@ package services
 // Every entry point degrades to a no-op when the app is not configured for
 // Apple (empty team/key/client id or key material), so local dev, tests and the
 // Android-only path are unaffected.
+//
+// Two apps, two client ids: a native authorization code is bound to the App ID
+// that issued it, so Apple's /auth/token and /auth/revoke reject a
+// customer-app code presented with the vendor app's client_id and vice versa,
+// even though both apps share one Team ID and one Sign in with Apple private
+// key (config.AppConfig.AppleTeamID / AppleSignInPrivateKey). Every function
+// here that talks to Apple therefore takes the user's models.UserRole and
+// resolves the matching client_id via appleClientIDForRole — RoleCustomer for
+// apps/mobile-customer, RoleChef for apps/mobile-vendor (that role is set at
+// account creation from the GIP business pool, not deferred until kitchen
+// approval — see auth-bff's defaultRoleForPool). Any other role has no client
+// id mapped and degrades to ErrAppleNotConfigured, the same safe no-op as a
+// fully unconfigured deployment, rather than guessing and sending a wrong
+// client_id to Apple.
 
 import (
 	"context"
@@ -64,28 +78,87 @@ var ErrAppleNotConfigured = errors.New("apple: sign in with apple is not configu
 // appleHTTPClient is overridable in tests.
 var appleHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-// AppleSignInConfigured reports whether enough is set to talk to Apple.
+// AppleSignInConfigured reports whether the shared Apple service-account
+// material is set AND at least one app has a client id — a coarse "is Sign in
+// with Apple wired up for anything at all" check.
 //
 // Nil-safe: AppConfig is only populated by config.Load, and the deletion path
 // this feeds must degrade to "no revocation" rather than panic in any context
 // that skips it.
+//
+// This does not tell you whether a SPECIFIC app is configured — two apps have
+// two independent client ids, and one can be set while the other is not. Call
+// sites that know which user/app they are acting for must use
+// AppleSignInConfiguredForRole instead; this is kept for the coarse checks
+// (docs, tests) that predate the per-app split.
 func AppleSignInConfigured() bool {
 	cfg := config.AppConfig
+	if !appleSharedConfigured(cfg) {
+		return false
+	}
+	return cfg.AppleServicesClientID != "" || cfg.AppleServicesClientIDVendor != ""
+}
+
+// AppleSignInConfiguredForRole reports whether enough is set to talk to Apple
+// on behalf of the app the given role belongs to.
+func AppleSignInConfiguredForRole(role models.UserRole) bool {
+	if !appleSharedConfigured(config.AppConfig) {
+		return false
+	}
+	_, ok := appleClientIDForRole(role)
+	return ok
+}
+
+// appleSharedConfigured checks the pieces every app shares: team id, key id,
+// and the private key material. Nil-safe for the same reason as
+// AppleSignInConfigured above.
+func appleSharedConfigured(cfg *config.Config) bool {
 	if cfg == nil {
 		return false
 	}
 	return cfg.AppleTeamID != "" &&
 		cfg.AppleKeyID != "" &&
-		cfg.AppleServicesClientID != "" &&
 		len(cfg.AppleSignInPrivateKey) > 0
+}
+
+// appleClientIDForRole resolves which Apple client_id (== that app's bundle
+// id) to present to Apple for a given user's role.
+//
+// RoleCustomer maps to apps/mobile-customer, RoleChef to apps/mobile-vendor —
+// the only two apps with Sign in with Apple enabled (both app.json list
+// usesAppleSignIn: true). Every other role (delivery, admin, fleet manager)
+// has no Sign in with Apple integration and returns ok=false, matching an
+// unconfigured deployment rather than guessing a client_id that would be
+// wrong for that user and get rejected by Apple as invalid_client.
+func appleClientIDForRole(role models.UserRole) (clientID string, ok bool) {
+	cfg := config.AppConfig
+	if cfg == nil {
+		return "", false
+	}
+	switch role {
+	case models.RoleCustomer:
+		if cfg.AppleServicesClientID != "" {
+			return cfg.AppleServicesClientID, true
+		}
+	case models.RoleChef:
+		if cfg.AppleServicesClientIDVendor != "" {
+			return cfg.AppleServicesClientIDVendor, true
+		}
+	}
+	return "", false
 }
 
 // appleClientSecret mints the ES256-signed JWT Apple accepts in place of a
 // static client secret. Apple requires: iss=team id, aud=appleid.apple.com,
 // sub=client id, and the key id in the header.
-func appleClientSecret() (string, error) {
+//
+// clientID is the caller's already-resolved per-app client id (see
+// appleClientIDForRole) — the client_secret's sub claim must equal whatever
+// client_id accompanies it in the same request, or Apple answers
+// invalid_client.
+func appleClientSecret(clientID string) (string, error) {
 	cfg := config.AppConfig
-	if !AppleSignInConfigured() {
+	if !appleSharedConfigured(cfg) {
 		return "", ErrAppleNotConfigured
 	}
 
@@ -97,7 +170,7 @@ func appleClientSecret() (string, error) {
 	now := time.Now()
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.RegisteredClaims{
 		Issuer:    cfg.AppleTeamID,
-		Subject:   cfg.AppleServicesClientID,
+		Subject:   clientID,
 		Audience:  jwt.ClaimStrings{appleAudience},
 		IssuedAt:  jwt.NewNumericDate(now),
 		ExpiresAt: jwt.NewNumericDate(now.Add(appleClientSecretTTL)),
@@ -132,23 +205,29 @@ func parseApplePrivateKey(raw []byte) (*ecdsa.PrivateKey, error) {
 // from Apple for a refresh token, which is the only credential /auth/revoke
 // accepts on a long-lived basis.
 //
+// role selects which app's client_id to present — the authorization code was
+// minted for a specific bundle id, and role must be the role of the user who
+// produced it (see the file-level comment for why a wrong client_id fails
+// with invalid_client rather than silently working).
+//
 // The authorization code expires in ~5 minutes and is single-use, so this must
 // be called promptly after sign-in and must not be retried with the same code.
-func ExchangeAppleAuthCode(ctx context.Context, authCode string) (string, error) {
+func ExchangeAppleAuthCode(ctx context.Context, authCode string, role models.UserRole) (string, error) {
 	if authCode == "" {
 		return "", fmt.Errorf("apple: authorization code is required")
 	}
-	if !AppleSignInConfigured() {
+	clientID, ok := appleClientIDForRole(role)
+	if !ok {
 		return "", ErrAppleNotConfigured
 	}
 
-	secret, err := appleClientSecret()
+	secret, err := appleClientSecret(clientID)
 	if err != nil {
 		return "", err
 	}
 
 	form := url.Values{
-		"client_id":     {config.AppConfig.AppleServicesClientID},
+		"client_id":     {clientID},
 		"client_secret": {secret},
 		"code":          {authCode},
 		"grant_type":    {"authorization_code"},
@@ -177,25 +256,29 @@ func ExchangeAppleAuthCode(ctx context.Context, authCode string) (string, error)
 // RevokeAppleRefreshToken revokes the user's grant with Apple. This is the call
 // guideline 5.1.1(v) is actually asking for.
 //
+// role selects which app's client_id to present — must be the role of the
+// user the refresh token was issued to (see the file-level comment).
+//
 // Idempotent in practice: Apple answers 200 for an already-revoked token, and
 // an invalid_grant response means the grant is gone, which is the desired end
 // state — both report success so the deletion path and the purge sweeper do not
 // wedge retrying.
-func RevokeAppleRefreshToken(ctx context.Context, refreshToken string) error {
+func RevokeAppleRefreshToken(ctx context.Context, refreshToken string, role models.UserRole) error {
 	if refreshToken == "" {
 		return nil // nothing was ever stored — e.g. an Android or email signup
 	}
-	if !AppleSignInConfigured() {
+	clientID, ok := appleClientIDForRole(role)
+	if !ok {
 		return ErrAppleNotConfigured
 	}
 
-	secret, err := appleClientSecret()
+	secret, err := appleClientSecret(clientID)
 	if err != nil {
 		return err
 	}
 
 	form := url.Values{
-		"client_id":       {config.AppConfig.AppleServicesClientID},
+		"client_id":       {clientID},
 		"client_secret":   {secret},
 		"token":           {refreshToken},
 		"token_type_hint": {"refresh_token"},
@@ -213,16 +296,18 @@ func RevokeAppleRefreshToken(ctx context.Context, refreshToken string) error {
 // LinkAppleGrant exchanges a fresh authorization code and stores the resulting
 // refresh token against the user, so deletion can revoke it later.
 //
+// The authorization code is bound to the app the user signed in on, which
+// this resolves from user.Role rather than any request header — the request
+// body only ever carried authorizationCode (see the handler), and role is
+// durably known for the authenticated user by the time this is called. See
+// the file-level comment for why the client_id must match.
+//
 // Best-effort by design: a user who signs in successfully must not be blocked
 // because Apple's token endpoint was briefly unhappy. A failure here degrades
 // to "we cannot revoke on delete", which is logged and visible, rather than a
 // failed login.
 func LinkAppleGrant(ctx context.Context, db *gorm.DB, user *models.User, authCode string) error {
-	if !AppleSignInConfigured() {
-		return ErrAppleNotConfigured
-	}
-
-	refreshToken, err := ExchangeAppleAuthCode(ctx, authCode)
+	refreshToken, err := ExchangeAppleAuthCode(ctx, authCode, user.Role)
 	if err != nil {
 		return err
 	}
@@ -238,17 +323,24 @@ func LinkAppleGrant(ctx context.Context, db *gorm.DB, user *models.User, authCod
 
 // RevokeAppleGrantForUser revokes the user's Apple grant if one was ever
 // recorded. Best-effort and always safe to call: it no-ops for users who never
-// used Sign in with Apple and for deployments with no Apple key configured.
+// used Sign in with Apple and for deployments with no Apple key configured for
+// this user's app (user.Role — see the file-level comment).
 //
 // Errors are logged, never returned — every caller is on the deletion path,
 // where failing the user's deletion request because Apple was unreachable is
 // the worse outcome. The purge sweeper calls this again before erasing.
 func RevokeAppleGrantForUser(ctx context.Context, user *models.User) {
 	token := user.AppleRefreshTokenEnc.String()
-	if token == "" || !AppleSignInConfigured() {
+	if token == "" {
 		return
 	}
-	if err := RevokeAppleRefreshToken(ctx, token); err != nil {
+	if err := RevokeAppleRefreshToken(ctx, token, user.Role); err != nil {
+		if errors.Is(err, ErrAppleNotConfigured) {
+			// Nothing wired up for this user's app — the startup warning
+			// (config.warnIfAppleSignInIncomplete) already surfaced this once;
+			// logging it again on every deletion would just be noise.
+			return
+		}
 		log.Printf("apple: token revocation failed for user=%s: %v", user.ID, err)
 		return
 	}
