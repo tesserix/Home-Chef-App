@@ -566,6 +566,17 @@ export default function ChefDetailScreen() {
               {formatCuisines(chef.cuisine)}
             </Text>
 
+            {/* Unavailable kitchen (#794): the API sends ready-to-render copy
+                saying WHY it can't be ordered from. A bare "Closed" left a
+                customer who followed a link with nothing to go on. Rendered
+                verbatim — the app must not embellish it with a promise (e.g.
+                "we'll notify you") the platform can't keep. */}
+            {chef.unavailableMessage ? (
+              <Text style={styles.unavailableNote}>
+                {chef.unavailableMessage}
+              </Text>
+            ) : null}
+
             {/* Sandbox kitchen. Reaching this screen at all means the viewer
                 is on the test-mode allowlist, so this is a reminder rather than
                 a warning: nothing bought here costs real money. */}
@@ -966,6 +977,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: customerColors.charcoal.soft,
     marginTop: 6,
+  },
+  // A full sentence, not a chip: soft surface block so it reads as an
+  // explanation rather than a status pill, and wraps without cramping.
+  unavailableNote: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    lineHeight: 19,
+    color: customerColors.charcoal.DEFAULT,
+    backgroundColor: customerColors.surface.soft,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 10,
   },
 
   // ── Reviews tab pane (embedded ChefReviewList) ────────────────────────────

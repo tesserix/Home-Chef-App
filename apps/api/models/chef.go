@@ -402,8 +402,18 @@ type ChefProfileResponse struct {
 	// pills. nil on responses that don't compute it (older callers); the app then
 	// falls back to acceptingOrders.
 	Availability *ChefAvailability `json:"availability,omitempty"`
-	CreatedAt    time.Time         `json:"createdAt"`
+	// UnavailableMessage is ready-to-render copy explaining why this kitchen
+	// cannot be ordered from right now. Set only on the reduced closed payload
+	// (see ToClosedResponse); empty and omitted everywhere else, where the
+	// ordinary open/closed presentation already says enough.
+	UnavailableMessage string    `json:"unavailableMessage,omitempty"`
+	CreatedAt          time.Time `json:"createdAt"`
 }
+
+// ClosedForMaintenanceMessage is what a customer reads on a kitchen an admin has
+// flipped into test mode. It commits to nothing we cannot honour — there is no
+// notify-me feature, so it does not offer one.
+const ClosedForMaintenanceMessage = "Sorry for the inconvenience. This kitchen is temporarily unavailable due to maintenance and will reopen soon."
 
 // ChefAvailability is the customer-facing real-time availability of a kitchen. Its Status is one of
 // the services.Avail* constants ("open" | "closing_soon" | "opening_soon" | "paused" | "closed").
@@ -602,5 +612,10 @@ func (c *ChefProfile) ToClosedResponse() ChefProfileResponse {
 		State:           c.State,
 		AcceptingOrders: false,
 		IsOnline:        false,
+		// Say why, rather than leaving the app to guess from two false flags.
+		// Only ever reached for a test-mode kitchen (services.ChefVisibility
+		// returns VisibilityClosed for nothing else), so "maintenance" is
+		// honest without disclosing that the kitchen is being debugged.
+		UnavailableMessage: ClosedForMaintenanceMessage,
 	}
 }
