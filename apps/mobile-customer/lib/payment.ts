@@ -64,58 +64,44 @@ interface RazorpayError {
   description?: string;
 }
 
+// Hand-off slot for the resolved gateway payload while the customer sits in the
+// pre-payment hold (#hold). Route params are strings; this is a whole object,
+// and serialising it into the URL would put payment session ids in navigation
+// state. One slot is enough — a customer can only be paying for one thing.
+let pendingGateway: { orderId: string; data: RazorpayPaymentData } | null = null;
+
+export function takePendingGateway(orderId: string): RazorpayPaymentData | null {
+  if (!pendingGateway || pendingGateway.orderId !== orderId) return null;
+  const { data } = pendingGateway;
+  pendingGateway = null;
+  return data;
+}
+
+export function clearPendingGateway(): void {
+  pendingGateway = null;
+}
+
 /**
- * Create (or re-create) the Razorpay payment for an existing order, open the
- * NATIVE checkout sheet, and route to the result screen. Safe to call on a
- * pending order to retry — the server rejects already-paid orders with 400.
- *
- * The result screen is authoritative: it polls the order's real paymentStatus
- * (set by the verify below OR the payment.captured webhook), so a failed
- * client-side verify never shows a false failure.
- *
- * @param orderId  internal order id
- * @param credit   which credit rails to apply, and optionally how much of each
- *
- * The client sends INTENT, never a computed payable: the server re-runs the whole
- * allocation from the live balance and the real order, and its answer is what is
- * charged. Posting an amount is what let the screen show one figure while the
- * gateway took another.
+ * Open the gateway for a payment the server has already created, and route to
+ * the result screen. Split out of startOrderPayment so the pre-payment hold can
+ * own the "actually charge me" moment without re-creating the payment.
  */
-export async function startOrderPayment(
+export async function launchGateway(
   orderId: string,
-  credit: {
-    useWallet: boolean;
-    walletAmount?: number;
-    useLoyalty: boolean;
-    loyaltyPoints?: number;
-  } = { useWallet: false, useLoyalty: false },
+  data: RazorpayPaymentData,
+  // From the hold screen, REPLACE — the hold must not survive in the back stack
+  // for the customer to return to a countdown that has already elapsed.
+  opts: { replace?: boolean } = {},
 ): Promise<void> {
-  const resp = await api.post<{ data: RazorpayPaymentData }>(
-    `/v1/payments/order/${orderId}/create`,
-    credit,
-  );
-  const data = resp.data.data ?? (resp.data as unknown as RazorpayPaymentData);
-
-  // Full-wallet order: store credit covered the total, so the server already
-  // marked it paid — no gateway sheet. Go straight to the result poller.
-  if (data.provider === 'wallet' || data.paid) {
-    useCartStore.getState().clearCart();
-    router.replace(`/payment/result?order_id=${orderId}`);
-    return;
-  }
-
-  // Cashfree kitchens open the v3 web SDK in a WebView rather than a native
-  // sheet. That is a deliberate trade: the Cashfree RN SDK is a native module, so
-  // using it would gate the gateway behind a new EAS build and a store release,
-  // whereas the WebView ships OTA. The sheet itself (including UPI intent) is the
-  // same one the native SDK presents.
   if (data.provider === 'cashfree') {
-    router.push(
-      `/payment/cashfree?orderId=${encodeURIComponent(orderId)}` +
-        `&paymentSessionId=${encodeURIComponent(data.cashfreePaymentSessionId ?? '')}` +
-        `&cashfreeOrderId=${encodeURIComponent(data.cashfreeOrderId ?? '')}` +
-        `&env=${encodeURIComponent(data.cashfreeEnv ?? '')}`,
-    );
+    // Built at runtime, so typedRoutes can't narrow it — `as never` is the cast
+    // this app already uses for a composed href (see checkout's group-order push).
+    const href = (`/payment/cashfree?orderId=${encodeURIComponent(orderId)}` +
+      `&paymentSessionId=${encodeURIComponent(data.cashfreePaymentSessionId ?? '')}` +
+      `&cashfreeOrderId=${encodeURIComponent(data.cashfreeOrderId ?? '')}` +
+      `&env=${encodeURIComponent(data.cashfreeEnv ?? '')}`) as never;
+    if (opts.replace) router.replace(href);
+    else router.push(href);
     return;
   }
 
@@ -161,4 +147,69 @@ export async function startOrderPayment(
     // Genuine failure — the result screen shows status + a Retry option.
     router.replace(`/payment/result?order_id=${orderId}`);
   }
+}
+
+/**
+ * Create (or re-create) the Razorpay payment for an existing order, open the
+ * NATIVE checkout sheet, and route to the result screen. Safe to call on a
+ * pending order to retry — the server rejects already-paid orders with 400.
+ *
+ * The result screen is authoritative: it polls the order's real paymentStatus
+ * (set by the verify below OR the payment.captured webhook), so a failed
+ * client-side verify never shows a false failure.
+ *
+ * @param orderId  internal order id
+ * @param credit   which credit rails to apply, and optionally how much of each
+ *
+ * The client sends INTENT, never a computed payable: the server re-runs the whole
+ * allocation from the live balance and the real order, and its answer is what is
+ * charged. Posting an amount is what let the screen show one figure while the
+ * gateway took another.
+ */
+export async function startOrderPayment(
+  orderId: string,
+  credit: {
+    useWallet: boolean;
+    walletAmount?: number;
+    useLoyalty: boolean;
+    loyaltyPoints?: number;
+  } = { useWallet: false, useLoyalty: false },
+  // Seconds to hold before the gateway opens, giving the customer a window to
+  // change their mind with nothing charged (#hold). Only for a first placement —
+  // a retry on an unpaid order should go straight to paying. 0 = no hold.
+  opts: { holdSeconds?: number } = {},
+): Promise<void> {
+  const resp = await api.post<{ data: RazorpayPaymentData }>(
+    `/v1/payments/order/${orderId}/create`,
+    credit,
+  );
+  const data = resp.data.data ?? (resp.data as unknown as RazorpayPaymentData);
+
+  // Full-wallet order: store credit covered the total, so the server already
+  // marked it paid — no gateway sheet. Go straight to the result poller.
+  if (data.provider === 'wallet' || data.paid) {
+    useCartStore.getState().clearCart();
+    router.replace(`/payment/result?order_id=${orderId}`);
+    return;
+  }
+
+  // Pre-payment hold: the payment now EXISTS at the gateway but nothing has been
+  // charged — a session is not a charge — so cancelling here costs the customer
+  // nothing. Held after /create rather than before it so a fully wallet-funded
+  // order (already settled above) never sits through a countdown it can't act on.
+  const holdSeconds = opts.holdSeconds ?? 0;
+  if (holdSeconds > 0) {
+    pendingGateway = { orderId, data };
+    router.replace(
+      `/payment/hold?orderId=${encodeURIComponent(orderId)}&seconds=${holdSeconds}`,
+    );
+    return;
+  }
+
+  // Cashfree kitchens open the v3 web SDK in a WebView rather than a native
+  // sheet. That is a deliberate trade: the Cashfree RN SDK is a native module, so
+  // using it would gate the gateway behind a new EAS build and a store release,
+  // whereas the WebView ships OTA. The sheet itself (including UPI intent) is the
+  // same one the native SDK presents.
+  await launchGateway(orderId, data);
 }
