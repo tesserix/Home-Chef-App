@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -119,6 +120,7 @@ func (h *MealSubscriptionHandler) UpdateSubscription(c *gin.Context) {
 		Where("id = ? AND customer_id = ? AND status = ?", id, userID, sub.Status).
 		Updates(updates)
 	if res.Error != nil {
+		log.Printf("meal-subscription: update failed for subscription=%s customer=%s: %v", id, userID, res.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update subscription"})
 		return
 	}

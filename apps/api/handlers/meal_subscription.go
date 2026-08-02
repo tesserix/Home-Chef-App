@@ -192,11 +192,12 @@ type mealSubSelection struct {
 // normaliseDayVariants keeps only well-formed entries: a day the customer
 // actually subscribed to, and a variant the chef actually offers. Anything else
 // is dropped rather than stored, so VariantForDay never has to defend against
-// junk and the plan default cleanly covers the gap. Returns "" when nothing
-// survives, which is the "no override" state.
+// junk and the plan default cleanly covers the gap. Returns "{}" (valid empty
+// JSON, never the Go zero value "") when nothing survives — the DayVariants
+// column is jsonb and Postgres rejects the empty string as invalid JSON (#904).
 func normaliseDayVariants(in map[string]string, days []int64) string {
 	if len(in) == 0 {
-		return ""
+		return "{}"
 	}
 	allowed := make(map[string]bool, len(days))
 	for _, d := range days {
@@ -214,11 +215,11 @@ func normaliseDayVariants(in map[string]string, days []int64) string {
 		out[k] = string(mv)
 	}
 	if len(out) == 0 {
-		return ""
+		return "{}"
 	}
 	b, err := json.Marshal(out)
 	if err != nil {
-		return ""
+		return "{}"
 	}
 	return string(b)
 }
@@ -297,6 +298,7 @@ func (h *MealSubscriptionHandler) Subscribe(c *gin.Context) {
 		}
 	}
 	if err := database.DB.Create(&sub).Error; err != nil {
+		log.Printf("meal-subscription: create failed for customer=%s chef=%s: %v", userID, chefID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subscription"})
 		return
 	}
