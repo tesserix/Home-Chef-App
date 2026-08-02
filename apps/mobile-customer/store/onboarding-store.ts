@@ -27,6 +27,10 @@ interface OnboardingDraft {
   longitude: number | null;
   // Step 3 — taste preferences
   cuisinePreferences: string[];
+  // Step 3 — dietary profile (#912). Optional; drives the conflict warnings
+  // in useDietaryConflicts, which stay dormant until one of these is set.
+  dietaryPreferences: string[];
+  foodAllergies: string[];
 }
 
 interface CustomerOnboardingState extends OnboardingDraft {
@@ -48,6 +52,8 @@ const initialDraft: OnboardingDraft = {
   latitude: null,
   longitude: null,
   cuisinePreferences: [],
+  dietaryPreferences: [],
+  foodAllergies: [],
 };
 
 export const useCustomerOnboardingStore = create<CustomerOnboardingState>()(
@@ -75,6 +81,8 @@ export const useCustomerOnboardingStore = create<CustomerOnboardingState>()(
         latitude: state.latitude,
         longitude: state.longitude,
         cuisinePreferences: state.cuisinePreferences,
+        dietaryPreferences: state.dietaryPreferences,
+        foodAllergies: state.foodAllergies,
       }),
     },
   ),
