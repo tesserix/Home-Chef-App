@@ -9,7 +9,7 @@ a single canonical set of values:
 
 - **Operator:** Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia
 - **General support / legal email:** support@fe3dr.com
-- **India Grievance Officer email:** dpo@fe3dr.com *(TODO(ops): mailbox to be provisioned)*
+- **India Grievance Officer:** Samyak Rout, grievance@fe3dr.com *(mailbox provisioned and monitored via Cloudflare Email Routing, confirmed 2 Aug 2026; no phone published — see below)*
 - **Governing law:** New South Wales, Australia (with non-excludable consumer-protection forum carve-out)
 - **Date line:** Last updated: 11 June 2026
 
@@ -42,9 +42,11 @@ Home Chef now mirrors the parent's house structure across every live legal surfa
   in alignment with India's Digital Personal Data Protection Act, 2023 (DPDP)." Deliberately
   DPDP-*aligned*, not sole-India-framed and not over-claiming GDPR/UK-GDPR/CCPA (see residual (c)).
 - **India Grievance Officer** retained: general support stays at `support@fe3dr.com`; a dedicated
-  India grievance line `dpo@fe3dr.com` was added (mirroring mark8ly's `dpo@mark8ly.com`), each
-  flagged with `// TODO(ops): provision dpo@fe3dr.com mailbox + name a resident Grievance Officer
-  (DPDP §13)`.
+  India grievance line `grievance@fe3dr.com` was added (mirroring mark8ly's `dpo@mark8ly.com`).
+  *(Earlier revisions of this document called the address `dpo@fe3dr.com`. That was wrong — the
+  code has always published `grievance@fe3dr.com` and `dpo@` appears nowhere in app code.
+  Corrected 2 Aug 2026, GH #916.)* As of 2 Aug 2026 the mailbox is **provisioned and monitored**
+  and the appointee is **named**, so the `TODO(ops)` markers have been removed.
 
 All India-operational specifics that genuinely apply are **kept**: FSSAI food-safety, Indian GST
 invoicing, RBI Payment Aggregator refund timelines, and the India grievance officer.
@@ -125,22 +127,31 @@ NSW Australia (confirmed against mark8ly). Removed from the needed list. Still o
 
 - [ ] **GSTIN** (India operations) — drives GST invoicing and TDS §194-O in the vendor earnings flow
   and Chef & Vendor Agreement; see residual (a) for whether it must sit on an India-registered entity.
-- [ ] **India Grievance Officer name** + **provisioned `dpo@fe3dr.com` mailbox** (currently bracketed
-  `[Grievance Officer Name]` / `[Grievance Officer Phone]` in landing Privacy §10, with
-  `// TODO(ops)` markers on the dpo line across landing + both apps).
+- [x] **India Grievance Officer name** + **provisioned `grievance@fe3dr.com` mailbox** — supplied by
+  the owner 2 Aug 2026 (GH #916). Officer: **Samyak Rout**; mailbox provisioned and monitored via
+  Cloudflare Email Routing. The bracketed name/phone placeholders in landing Privacy §10 and in the
+  web SPA's legal pages are gone, and the `TODO(ops)` / `TODO(counsel)` markers with them.
+  **No phone is published:** the owner declined to publish a number, so the phone line and the
+  `(Mon–Fri, 10:00–18:00 IST)` hours claim hanging off it were *deleted* rather than blanked —
+  advertising hours for a channel nobody answers would be a new false statement. Counsel should
+  confirm a DPDP §13 appointee contactable by email alone is acceptable.
 - [ ] **Registered street address** of the operating entity — only if a regulator requires more than
   "New South Wales, Australia".
 - [ ] Confirm the support email **support@fe3dr.com** is monitored and contractually named as the
-  general legal contact, alongside **dpo@fe3dr.com** as the India grievance contact.
+  general legal contact, alongside **grievance@fe3dr.com** as the India grievance contact.
 
 ## Known drift deliberately left
 
-- **Sunset web SPA (`apps/web/**`).** The three React-Router legal pages
-  (`PrivacyPolicyPage.tsx`, `TermsPage.tsx`, `RefundPolicyPage.tsx`) still carry the old values —
-  **13 May 2026** date, **support@homechef.in / grievance@homechef.in / legal@homechef.in** emails,
-  and the full **ACN 694 070 865 / ABN 59 694 070 865, NSW Australia** identifiers. These were left
-  untouched on purpose: all three web apps are being sunset (the platform is app-only; fe3dr.com is
-  landing-only). They are listed here only so counsel is not surprised if they grep the repo.
+- **Web SPA (`apps/web/**`) — NOT sunset. Re-classified 2 Aug 2026 (GH #916).** This entry used to
+  read "sunset web SPA … left untouched on purpose". That is wrong now: `apps/web/SUNSET.md` opens
+  "**ACTIVE again (was paused)**" and the app is built and deployed on every `main` commit as of
+  2026-07-27, so its React-Router legal pages and the signed-in `MainLayout` footer are **live legal
+  copy**. Current status of the old values: the `*@homechef.in` addresses are **gone** (zero hits;
+  the pages publish `grievance@fe3dr.com` / `support@fe3dr.com`), and the Grievance Officer
+  placeholders were fixed under #916. Still drifting: the **13 May 2026** date line in
+  `PrivacyPolicyPage.tsx`, `TermsPage.tsx`, `CookiePolicyPage.tsx` and `RefundPolicyPage.tsx`, which
+  does not match the canonical `LEGAL_LAST_UPDATED`. Treat that as an open defect on a live surface,
+  not as accepted drift.
 - **API host fallback `https://api.homechef.app`** in
   `apps/mobile-customer/hooks/useOrderTrackingWS.ts`. This is an infrastructure host fallback URL,
   not user-facing legal-contact copy, so it was out of scope for the legal consistency sweep. Noted

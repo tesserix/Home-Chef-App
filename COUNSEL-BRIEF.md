@@ -12,7 +12,9 @@
 
 Prepared 8 July 2026, verified against `main` (post-#662). Canonical values, per `apps/web-landing/lib/site.ts`:
 Operator **Tesserix Pty Ltd** (ACN 694 070 865, ABN 59 694 070 865), NSW Australia · support `support@fe3dr.com` ·
-India grievance `dpo@fe3dr.com` · governing law NSW · date line **11 June 2026**.
+India grievance `grievance@fe3dr.com` · governing law NSW · date line **11 June 2026**.
+(Earlier drafts of this brief said `dpo@fe3dr.com`; the address the code has always published is
+`grievance@fe3dr.com` — `dpo@` appears nowhere in app code. Corrected 2 Aug 2026, GH #916.)
 
 ---
 
@@ -32,9 +34,13 @@ Method: grepped every live legal surface (landing `apps/web-landing/**`, custome
 | DPDP-*aligned* posture (not over-claiming GDPR/CCPA) | ✅ PASS | "APP … and, for our India operations, in alignment with India's DPDP Act, 2023" |
 | Refund copy internally consistent (7 working days, original method, RBI PA Master Direction 17 Mar 2020) | ✅ PASS | `apps/web-landing/app/refund/page.tsx:18,25,38,51,52,72,92`; customer `app/refund.tsx` |
 
-**Deliberate, documented drift (not a defect):** the sunset React web SPA (`apps/web/src/features/legal/*`) still carries
-old values (`13 May 2026`, `*@homechef.in`) — it is being retired (app-only platform; fe3dr.com is landing-only), so it
-was intentionally left untouched. Noted here only so counsel is not surprised by a repo grep. See COUNSEL-REVIEW "Known drift".
+**Drift in the React web SPA (`apps/web/src/features/legal/*`) — re-classified 2 Aug 2026, GH #916.**
+This was previously written off as "the sunset SPA, intentionally left untouched". That is **no longer
+true**: `apps/web/SUNSET.md` now opens "ACTIVE again (was paused)" — the app is built and deployed on
+every `main` commit as of 2026-07-27, so its legal pages are **live copy**, not dead code. Status of the
+old values: `*@homechef.in` is **gone** (zero hits). The `13 May 2026` date line **still stands** across
+`PrivacyPolicyPage` / `TermsPage` / `CookiePolicyPage` / `RefundPolicyPage`, diverging from the canonical
+`LEGAL_LAST_UPDATED`. That is an open defect, not documented drift. See COUNSEL-REVIEW "Known drift".
 
 **Conclusion:** the "policy bodies drafted and wired into all apps + landing (code-done 2026-06-15)" claim on #19 **holds**.
 The only in-code gaps are the owner-fact placeholders in Part C.
@@ -68,7 +74,7 @@ For each item: **Code asserts** = what the shipped copy currently states (with l
 
 ### B3 — Data protection / DPDP
 
-- **Q7.** **Named Grievance Officer + 15-day response.** DPDP §13 requires a **real, India-resident** grievance officer; the copy commits to a 15-day grievance response. *Owner fact needed — see C2.* *Code:* landing Privacy §10 (`privacy/page.tsx:110-113`), customer/vendor `privacy.tsx`.
+- **Q7.** **Named Grievance Officer + 15-day response.** DPDP §13 requires a **real, India-resident** grievance officer; the copy commits to a 15-day grievance response. *Owner fact now supplied (2 Aug 2026): the officer is **Samyak Rout**, reachable at the monitored `grievance@fe3dr.com`; no phone is published — see C2.* Counsel to confirm email-only contact satisfies §13 and that the appointee's residency qualifies. *Code:* landing Privacy §10 (`privacy/page.tsx`, "10. Grievance Officer"), customer/vendor `privacy.tsx`, SPA `PrivacyPolicyPage.tsx` / `CookiePolicyPage.tsx` / `TermsPage.tsx` / `MainLayout.tsx`.
 - **Q8.** **Retention periods.** Live policies summarise retention (tax records per Indian law; FSSAI traceability; 90-day deletion of closed-account data) **without hard numbers**. Confirm the numbers before they are restored to copy. *Code:* landing Privacy §6.
 - **Q9.** **Cross-border transfer (DPDP §16).** Stripe processing in the US. DPDP uses a blacklist (restricted-country) model; confirm the US is permitted and the transfer wording is adequate.
 - **Q10.** **Breach notification** to affected users + the Data Protection Board of India without undue delay — confirm wording.
@@ -94,8 +100,8 @@ For each item: **Code asserts** = what the shipped copy currently states (with l
 None of these can be derived from the code or invented — they gate the placeholders currently in the copy.
 
 - [ ] **C1 — Platform GSTIN** (15-char). Drives GST invoices + TDS §194-O. **Depends on Q1** (which entity holds it). Not in user-facing copy yet; needed in the backend invoicing/earnings flow. *(Note: the vendor app's GSTIN field is the **chef's own** GSTIN at onboarding — a different value.)*
-- [ ] **C2 — India Grievance Officer: real name + phone.** DPDP §13 requires a named India-resident appointee. Fills `[Grievance Officer Name]` / `[Grievance Officer Phone]` at `apps/web-landing/app/privacy/page.tsx:112-113` (TODO(counsel) at :110).
-- [ ] **C3 — Provision `dpo@fe3dr.com` mailbox**, routed to the C2 appointee, monitored with the 15-day/30-day SLA. TODO(ops) at `site.ts:37`, customer `privacy.tsx:72`, vendor `privacy.tsx:61`. *(You are creating the Cloudflare alias — see the email list I sent; `support@` and `dpo@` are the two launch-critical ones.)*
+- [x] **C2 — India Grievance Officer: real name.** Owner supplied **Samyak Rout** (2 Aug 2026). Now published in landing Privacy §10 and in the SPA's legal pages/footer. **No phone is published** — the owner deliberately declined to publish a number, so the phone line and the `(Mon–Fri, 10:00–18:00 IST)` hours claim were *deleted*, not filled: publishing hours for an unstaffed channel would be a fresh false statement. The named officer + the monitored mailbox are the contact channels. *Counsel to confirm whether a DPDP §13 appointee may be contactable by email alone.*
+- [x] **C3 — `grievance@fe3dr.com` mailbox is provisioned and monitored** (Cloudflare Email Routing, confirmed by owner 2 Aug 2026), routed to the C2 appointee. The stale `TODO(ops)` asserting it still needed provisioning has been removed from `apps/web-landing/lib/site.ts`. *(This is `grievance@`, not the `dpo@` this brief previously named.)*
 - [ ] **C4 — Confirm `support@fe3dr.com` is monitored** and contractually named as the general legal contact.
 - [ ] **C5 — Registered street address** of the operating entity — only if a regulator (FSSAI / GST / consumer) requires more than "New South Wales, Australia".
 
@@ -105,7 +111,7 @@ None of these can be derived from the code or invented — they gate the placeho
 
 - [ ] Counsel sign-off on Privacy / Terms / Refund / Chef & Vendor Agreement / EULA (Part B answered).
 - [ ] Residuals resolved: **Q1** GST entity/GSTIN, **Q2** NSW enforceability (the two cross-border items).
-- [ ] Owner facts filled: **C1** GSTIN, **C2** Grievance Officer, **C3** dpo mailbox, **C4** support mailbox, **C5** address (if required).
+- [ ] Owner facts filled: **C1** GSTIN, ~~**C2** Grievance Officer~~ (done), ~~**C3** grievance mailbox~~ (done), **C4** support mailbox, **C5** address (if required).
 - [ ] TCS §52 in/out-of-scope decision recorded (Q1(iii)) — flag if it gates the escrow flag flip.
 
 **Sources (background research, verify independently):**
