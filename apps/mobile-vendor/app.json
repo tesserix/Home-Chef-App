@@ -217,7 +217,9 @@
       [
         "expo-notifications",
         {
-          "mode": "production"
+          "mode": "production",
+          "icon": "./assets/notification-icon.png",
+          "color": "#FA6F5C"
         }
       ],
       "expo-web-browser",
