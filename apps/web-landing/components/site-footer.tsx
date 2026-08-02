@@ -69,6 +69,15 @@ export function SiteFooter() {
             <h2 className="text-sm font-semibold text-charcoal">Contact</h2>
             <ul className="mt-4 space-y-3">
               <li>
+                {/* The `supportUrl` on both App Store listings. */}
+                <a
+                  href="/support/"
+                  className="text-sm text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal"
+                >
+                  Help &amp; support
+                </a>
+              </li>
+              <li>
                 <a
                   href={`mailto:${CONTACT_EMAIL}`}
                   className="text-sm text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal"
