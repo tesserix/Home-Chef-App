@@ -164,6 +164,16 @@ export function createSupportClient(config: SupportClientConfig) {
       };
     },
 
+    /** The caller's own chat history, newest first. */
+    history: async (): Promise<SupportConversation[]> => {
+      const data = await request("GET", "/conversations");
+      const rows = (data?.conversations ?? []) as unknown[];
+      return rows
+        .map((r) => SupportConversationSchema.safeParse(r))
+        .filter((p): p is { success: true; data: SupportConversation } => p.success)
+        .map((p) => p.data);
+    },
+
     getConversation: async (id: string): Promise<SupportConversation> => {
       const data = await request("GET", `/conversations/${encodeURIComponent(id)}`);
       return SupportConversationSchema.parse(data.conversation);

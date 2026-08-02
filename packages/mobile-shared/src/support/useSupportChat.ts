@@ -51,11 +51,17 @@ export interface UseSupportChat {
   /** True while any queued message is still unconfirmed. */
   hasPending: boolean;
   error: string | null;
+  /** This user's past chats, newest first — resolved and unresolved alike. */
+  history: SupportConversation[];
+  historyLoading: boolean;
   startConversation: (input: CreateConversationInput) => Promise<void>;
+  /** Reopens a past thread: live if still open, read-only once resolved. */
+  openConversation: (id: string) => Promise<void>;
   sendMessage: (body: string) => Promise<void>;
   retryFailed: () => void;
   closeConversation: () => Promise<void>;
   refresh: () => Promise<void>;
+  refreshHistory: () => Promise<void>;
 }
 
 const MAX_BACKOFF_MS = 15_000;
@@ -89,6 +95,8 @@ export function useSupportChat({
 
   const socketRef = useRef<WebSocket | null>(null);
   const sseRef = useRef<SseHandle | null>(null);
+  const [history, setHistory] = useState<SupportConversation[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attemptsRef = useRef(0);
@@ -317,6 +325,38 @@ export function useSupportChat({
     [connect, teardownSocket, storage, drainOutbox],
   );
 
+  // Past threads for this signed-in user, so nothing raised is ever lost —
+  // an unanswered chat stays visible and can be picked back up.
+  const refreshHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      setHistory(await client.history());
+    } catch {
+      // History is additive; a failure must not block starting a new chat.
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [client]);
+
+  // Reopens a past thread. A resolved one loads read-only; anything still
+  // open reconnects live, which is how a customer returns to a chat that was
+  // waiting on us.
+  const openConversation = useCallback(
+    async (id: string) => {
+      setStatus("loading");
+      try {
+        const conv = await client.getConversation(id);
+        const msgs = await client.listMessages(id);
+        closedByUsRef.current = false;
+        await adoptConversation(conv, msgs);
+      } catch (e) {
+        setStatus("idle");
+        setError(e instanceof Error ? e.message : null);
+      }
+    },
+    [client, adoptConversation],
+  );
+
   const startConversation = useCallback(
     async (input: CreateConversationInput) => {
       setStatus("loading");
@@ -399,10 +439,14 @@ export function useSupportChat({
     connected,
     hasPending: outbox.length > 0,
     error,
+    history,
+    historyLoading,
     startConversation,
+    openConversation,
     sendMessage,
     retryFailed,
     closeConversation,
     refresh,
+    refreshHistory,
   };
 }

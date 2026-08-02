@@ -2,7 +2,7 @@
 // intake form, the live message thread, the composer, and the closed/queue
 // states from a UseSupportChat instance. Both mobile apps render it with
 // their own palette so there is one chat UI, not two.
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 
+import { SupportChatHistory } from "./SupportChatHistory";
 import type { DisplayMessage, UseSupportChat } from "./useSupportChat";
 import type { IntakeReason } from "./types";
 
@@ -96,6 +97,17 @@ export function SupportChatView({
         requiresDob={requiresDob}
         submitting={chat.status === "loading"}
         error={chat.error}
+        history={
+          <SupportChatHistory
+            conversations={chat.history}
+            palette={palette}
+            loading={chat.historyLoading}
+            onOpen={(c) => {
+              setComposeNew(false);
+              void chat.openConversation(c.id);
+            }}
+          />
+        }
         onSubmit={async (input) => {
           await chat.startConversation(input);
           setComposeNew(false);
@@ -362,6 +374,7 @@ function IntakeForm({
   requiresDob,
   submitting,
   error,
+  history,
   onSubmit,
 }: {
   palette: SupportPalette;
@@ -373,6 +386,7 @@ function IntakeForm({
   requiresDob?: (reason: string) => boolean;
   submitting: boolean;
   error: string | null;
+  history?: ReactNode;
   onSubmit: (input: {
     message: string;
     reason: string;
@@ -399,6 +413,7 @@ function IntakeForm({
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        {history}
         <View style={styles.intake}>
             <Text style={[styles.introTitle, { color: palette.text }]}>{introTitle}</Text>
             <Text style={[styles.introSubtitle, { color: palette.textSecondary }]}>{introSubtitle}</Text>

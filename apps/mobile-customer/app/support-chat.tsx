@@ -2,7 +2,7 @@
 // wired to the HomeChef API support-chat proxy, which bridges to otto's
 // homechef tenant. A Tesserix admin answers from the platform inbox; the
 // conversation carries the signed-in customer's identity so they skip OTP.
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -92,6 +92,12 @@ export default function SupportChatScreen() {
   );
 
   const chat = useSupportChat({ client, storage: secureStoreKV });
+
+  // Past chats (resolved and not) so nothing raised is lost.
+  useEffect(() => {
+    void chat.refreshHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Outgoing bubbles are neutral charcoal-on-soft, not coral — every message
   // the customer sends would otherwise repeat the accent. Coral stays reserved

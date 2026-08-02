@@ -3,7 +3,7 @@
 // homechef-vendor tenant, so these threads queue in the vendor lane of the
 // admin inbox and route to vendor-specific answers. "Create a support ticket"
 // converts the chat into a durable ticket and lands on its detail screen.
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -64,6 +64,12 @@ export default function VendorSupportChatScreen() {
   );
 
   const chat = useSupportChat({ client, storage: secureStoreKV });
+
+  // Past chats (resolved and not) so nothing raised is lost.
+  useEffect(() => {
+    void chat.refreshHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Vendor app carries actions in ink (persimmon retired as accent here);
   // own bubbles stay ink so the single Send action reads as THE action.

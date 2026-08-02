@@ -97,6 +97,9 @@ func (h *SupportChatHandler) enabled() bool {
 func (h *SupportChatHandler) Register(g *gin.RouterGroup) {
 	g.POST("/conversations", h.proxy(http.MethodPost, staticPath("/conversations")))
 	g.GET("/resume", h.proxy(http.MethodGet, staticPath("/resume")))
+	// The caller's own chat history, scoped by otto to the verified user we
+	// forward — so the app can list past threads and whether they resolved.
+	g.GET("/conversations", h.proxy(http.MethodGet, staticPath("/conversations")))
 	g.GET("/conversations/:id", h.proxy(http.MethodGet, convPath("")))
 	g.GET("/conversations/:id/messages", h.proxy(http.MethodGet, convPath("/messages")))
 	g.POST("/conversations/:id/messages", h.proxy(http.MethodPost, convPath("/messages")))

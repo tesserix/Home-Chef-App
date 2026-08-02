@@ -6,4 +6,5 @@ export * from "./client";
 export * from "./sse";
 export * from "./useSupportChat";
 export * from "./SupportChatView";
+export * from "./SupportChatHistory";
 export { secureStoreKV } from "./storage";
