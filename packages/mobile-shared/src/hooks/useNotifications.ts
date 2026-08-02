@@ -16,6 +16,8 @@ import {
 } from '@tanstack/react-query';
 import type { AxiosInstance } from 'axios';
 
+import { socketReconnectDelayMs } from '../utils/socket-backoff';
+
 export interface AppNotification {
   id: string;
   type: string;
@@ -177,14 +179,42 @@ type WSCtor = {
   ): WebSocket;
 };
 
-const MAX_WS_FAILURES = 4;
-const RECONNECT_DELAY_MS = 3000;
+/**
+ * Fixes #909; mirrors #892's fix already applied to the other three sockets
+ * (`useOrderStatusWS`, `useOrderTrackingWS`, vendor `useLiveUpdates`).
+ * `onclose` delegates to these two pure functions so the hook and its tests
+ * exercise the exact same decision logic instead of parallel copies.
+ *
+ * Accepts consecutiveFailures so the signature itself documents that #909
+ * removed the cap — it never gates on failure count, only on enabled.
+ */
+export function shouldReconnectNotificationSocket(
+  enabled: boolean,
+  _consecutiveFailures: number,
+): boolean {
+  return enabled;
+}
+
+/** Delay before the next reconnect attempt, per the shared capped-exponential
+ * backoff curve (1s, 2s, 4s, 8s, 16s, capped at 30s) already proven for the
+ * other three sockets in #892. */
+export function notificationSocketReconnectDelayMs(
+  consecutiveFailures: number,
+): number {
+  return socketReconnectDelayMs(consecutiveFailures);
+}
 
 /**
  * Holds the user's real-time notification socket. On any server message
  * (`unread_count` on connect, `new_notification` thereafter) it refreshes the
  * bell's list + count queries, so a new notification lights the bell instantly.
- * The REST queries above remain the fallback if the socket can't connect.
+ *
+ * Unlike `useOrderStatusWS` (no fallback), this socket already degrades
+ * gracefully today via REST polling (`useUnreadCount` / `useNotificationList`)
+ * — those remain exactly as-is. The socket itself now retries indefinitely
+ * with capped exponential backoff instead of giving up permanently after a
+ * handful of failures, so REST polling only has to cover the gap while the
+ * socket is reconnecting, not stand in forever after a one-time give-up.
  *
  * `apiBaseUrl` is the app's EXPO_PUBLIC_API_URL (ends in `/api`); the WS path is
  * `/v1/notifications/ws`. `getToken` returns the current Bearer token.
@@ -229,20 +259,14 @@ export function useNotificationSocket(opts: {
     };
     ws.onerror = () => {
       failures.current += 1;
-      console.warn(`[notif-ws] error (${failures.current}/${MAX_WS_FAILURES} failures)`);
+      console.warn(`[notif-ws] error (${failures.current} consecutive failures)`);
     };
     ws.onclose = () => {
       wsRef.current = null;
-      if (!enabled) return;
-      if (failures.current >= MAX_WS_FAILURES) {
-        // Give up; REST polling (useUnreadCount/useNotificationList) remains the fallback.
-        console.error(
-          `[notif-ws] giving up after ${failures.current} consecutive failures — no further reconnects, REST polling remains the fallback`,
-        );
-        return;
-      }
-      console.warn(`[notif-ws] closed, reconnecting in ${RECONNECT_DELAY_MS}ms`);
-      reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
+      if (!shouldReconnectNotificationSocket(enabled, failures.current)) return;
+      const delay = notificationSocketReconnectDelayMs(failures.current);
+      console.warn(`[notif-ws] closed, reconnecting in ${delay}ms`);
+      reconnectTimer.current = setTimeout(connect, delay);
     };
   }, [apiBaseUrl, getToken, enabled, qc]);
 
