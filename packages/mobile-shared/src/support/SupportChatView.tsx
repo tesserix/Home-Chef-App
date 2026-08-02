@@ -163,6 +163,24 @@ function ThreadView({
     void chat.sendMessage(body);
   };
 
+  // Offer a human once the bot has answered and nobody is queued yet, so
+  // being unsatisfied is a one-tap path rather than something the customer
+  // has to phrase correctly. The phrase below is what slm-router's
+  // escalation pre-check matches on.
+  const lastMessage = chat.messages[chat.messages.length - 1];
+  const [handoffDismissed, setHandoffDismissed] = useState(false);
+  const offerHuman =
+    !closed &&
+    !handoffDismissed &&
+    conv?.status === "active" &&
+    conv?.needs_human !== true &&
+    lastMessage?.sender_type === "assistant";
+
+  const requestHuman = () => {
+    setHandoffDismissed(true);
+    void chat.sendMessage("I'd like to talk to a human agent, please.");
+  };
+
   return (
     <KeyboardAvoidingView
       style={[styles.flex, { backgroundColor: palette.background }]}
@@ -185,6 +203,33 @@ function ThreadView({
               Create a support ticket
             </Text>
           </Pressable>
+        </View>
+      ) : null}
+      {offerHuman ? (
+        <View style={[styles.queueBanner, { borderBottomColor: palette.border, backgroundColor: palette.surface }]}>
+          <Text style={[styles.queueBannerText, { color: palette.textSecondary }]}>
+            Did that answer it?
+          </Text>
+          <View style={styles.handoffActions}>
+            <Pressable
+              onPress={() => setHandoffDismissed(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Yes, that answered my question"
+              hitSlop={6}
+            >
+              <Text style={[styles.queueBannerText, { color: palette.textSecondary }]}>Yes</Text>
+            </Pressable>
+            <Pressable
+              onPress={requestHuman}
+              accessibilityRole="button"
+              accessibilityLabel="No, talk to a human agent"
+              hitSlop={6}
+            >
+              <Text style={[styles.link, styles.queueBannerLink, { color: palette.primary }]}>
+                Talk to a human
+              </Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
       <FlatList
@@ -448,6 +493,7 @@ const styles = StyleSheet.create({
   queueBanner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   queueBannerText: { fontSize: 13 },
   queueBannerLink: { fontSize: 14 },
+  handoffActions: { flexDirection: "row", alignItems: "center", gap: 18 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 12 },
   bubbleRow: { flexDirection: "row" },

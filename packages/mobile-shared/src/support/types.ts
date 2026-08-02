@@ -31,6 +31,9 @@ export const SupportConversationSchema = z
     subject: z.string().optional().default(""),
     created_at: z.string().optional(),
     closed_at: z.string().optional(),
+    // True once the thread is handed to a person; the UI stops offering a
+    // handoff that is already under way.
+    needs_human: z.boolean().optional().default(false),
   })
   .passthrough();
 export type SupportConversation = z.infer<typeof SupportConversationSchema>;
