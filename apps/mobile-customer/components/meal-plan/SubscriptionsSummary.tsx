@@ -1,9 +1,12 @@
 import { useMemo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { ChevronRight, UtensilsCrossed } from 'lucide-react-native';
+import { CalendarCheck, ChevronRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { istCalendarDate, pickSubscriptionMealDay } from '@homechef/mobile-shared/utils';
+import {
+  pickSubscriptionMealDay,
+  subscriptionRowSummary,
+} from '@homechef/mobile-shared/utils';
 
 import {
   useMealFulfillments,
@@ -72,19 +75,19 @@ function SubscriptionRow({ sub }: { sub: MealSubscription }) {
     () => (fulfil?.data ? pickSubscriptionMealDay(fulfil.data) : null),
     [fulfil?.data],
   );
-  const summary = summaryLine(isLoading, isError, picked);
+  const summary = subscriptionRowSummary(isLoading, isError, picked);
 
   return (
     <Pressable
       onPress={() => router.push('/subscriptions')}
       accessibilityRole="button"
-      accessibilityLabel={`Manage your tiffin subscription: ${summary}`}
+      accessibilityLabel={`Manage your tiffin subscription — ${summary.replace(/^Tiffin · /, '')}`}
       android_ripple={{ color: ROW_RIPPLE, borderless: false }}
     >
       {({ pressed }) => (
         <View style={[styles.card, pressed && Platform.OS === 'ios' && styles.pressed]}>
           <View style={styles.iconWrap}>
-            <UtensilsCrossed size={18} color={customerColors.coral.DEFAULT} />
+            <CalendarCheck size={18} color={customerColors.coral.DEFAULT} />
           </View>
           <Text style={styles.summary} numberOfLines={1}>
             {summary}
@@ -94,32 +97,6 @@ function SubscriptionRow({ sub }: { sub: MealSubscription }) {
       )}
     </Pressable>
   );
-}
-
-function summaryLine(
-  isLoading: boolean,
-  isError: boolean,
-  picked: ReturnType<typeof pickSubscriptionMealDay>,
-): string {
-  if (isLoading) return 'Loading…';
-  if (isError) return "Couldn't load today's meal — tap to view";
-  if (!picked) return 'No upcoming meals scheduled';
-  if (picked.isToday) return `Tiffin · today: ${slotLabel(picked.day.slot)}`;
-  return `Tiffin · next: ${shortWeekday(picked.day.date)} ${slotLabel(picked.day.slot).toLowerCase()}`;
-}
-
-function slotLabel(slot: string): string {
-  if (slot === 'lunch') return 'Lunch';
-  if (slot === 'dinner') return 'Dinner';
-  return slot.charAt(0).toUpperCase() + slot.slice(1);
-}
-
-function shortWeekday(dateISO: string): string {
-  const [y, m, d] = istCalendarDate(new Date(dateISO)).split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-US', {
-    weekday: 'short',
-    timeZone: 'UTC',
-  });
 }
 
 function SkeletonRow() {
