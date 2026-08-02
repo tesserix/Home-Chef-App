@@ -630,6 +630,9 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/tax/fy-statement.pdf", chefTaxHandler.GetFYStatementPDF)
 			// Self-declared business expenses (gas, ingredients, utensils …) —
 			// the chef's own books; feeds analytics + the FY statement.
+			// Earnings vs expenses for the analytics period (#pl). Net side uses
+			// the same calculator as the Earnings screen so the two agree.
+			chefDashboard.GET("/analytics/pl", chefHandler.GetChefProfitLoss)
 			chefDashboard.GET("/expenses", chefExpensesHandler.ListExpenses)
 			chefDashboard.POST("/expenses", chefExpensesHandler.CreateExpense)
 			chefDashboard.GET("/expenses/summary", chefExpensesHandler.GetExpenseSummary)
