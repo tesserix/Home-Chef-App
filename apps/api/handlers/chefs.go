@@ -2636,6 +2636,16 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 }
 
 // GetChefAnalytics returns analytics data for the authenticated chef
+// istLocation resolves Asia/Kolkata, falling back to a fixed +05:30 offset if
+// the image ships no tzdata. The fallback matters: without it a missing zone
+// would silently bucket analytics in UTC and shift every day.
+func istLocation() *time.Location {
+	if loc, err := time.LoadLocation("Asia/Kolkata"); err == nil {
+		return loc
+	}
+	return time.FixedZone("IST", 5*3600+30*60)
+}
+
 func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
@@ -2666,14 +2676,23 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 		Revenue float64 `json:"revenue"`
 	}
 	var dailyStats []dailyStat
+	// TO_CHAR, not DATE(): DATE() returns a Postgres `date`, which pgx decodes to
+	// time.Time and database/sql then renders into this string field as RFC3339
+	// ("2026-08-02T00:00:00Z"). The lookup below keys on "2026-08-02", so every
+	// bucket missed and the whole screen read zero — revenue, orders and AOV are
+	// all summed from these rows, which is why a chef with 43 orders in the week
+	// saw ₹0. Returning text from SQL removes the driver from the contract.
+	//
+	// Bucketed in IST, and the Go loop below matches: the platform is India-first
+	// and a chef's "today" is their calendar day, not UTC's.
 	database.DB.Raw(`
-		SELECT DATE(created_at) as date,
+		SELECT TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') as date,
 		       COUNT(*) as orders,
 		       COALESCE(SUM(total), 0) as revenue
 		FROM orders
 		WHERE chef_id = ? AND created_at >= ? AND deleted_at IS NULL
-		GROUP BY DATE(created_at)
-		ORDER BY date
+		GROUP BY 1
+		ORDER BY 1
 	`, chef.ID, since).Scan(&dailyStats)
 
 	// Build label→value maps for the full date range
@@ -2687,8 +2706,11 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 	var revenueLabels []string
 	var revenueData []float64
 
+	// Same zone as the SQL bucketing above — a mismatch here silently shifts
+	// every day by one and drops the edges.
+	ist := istLocation()
 	for i := days - 1; i >= 0; i-- {
-		d := time.Now().AddDate(0, 0, -i)
+		d := time.Now().In(ist).AddDate(0, 0, -i)
 		dateStr := d.Format("2006-01-02")
 		var label string
 		if days <= 7 {
@@ -2745,11 +2767,12 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 	}
 	var hourStats []hourStat
 	database.DB.Raw(`
-		SELECT EXTRACT(HOUR FROM created_at)::int as hour, COUNT(*) as orders
+		SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Kolkata')::int as hour,
+		       COUNT(*) as orders
 		FROM orders
 		WHERE chef_id = ? AND created_at >= ? AND deleted_at IS NULL
-		GROUP BY hour
-		ORDER BY hour
+		GROUP BY 1
+		ORDER BY 1
 	`, chef.ID, since).Scan(&hourStats)
 
 	hourMap := make(map[int]int)
