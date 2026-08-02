@@ -18,6 +18,11 @@ const (
 	NotifCategoryAccount   NotificationCategory = "account"   // welcome, password, approvals
 	NotifCategoryMarketing NotificationCategory = "marketing" // promos, newsletters
 	NotifCategoryFavorites NotificationCategory = "favorites" // updates from chefs you follow (#239)
+	// NotifCategoryPayment is money moving either way — a charge, a refund, a
+	// payout release or hold, a loyalty/referral reward. Split out of "account"
+	// so muting account chatter can never silence a refund the customer is
+	// waiting on, or a payout a chef is counting.
+	NotifCategoryPayment NotificationCategory = "payment"
 )
 
 // AllNotificationCategories powers the admin/user settings UI so the list of
@@ -30,6 +35,7 @@ func AllNotificationCategories() []NotificationCategory {
 		NotifCategoryAccount,
 		NotifCategoryMarketing,
 		NotifCategoryFavorites,
+		NotifCategoryPayment,
 	}
 }
 

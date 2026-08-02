@@ -565,6 +565,7 @@ func (h *PaymentHandler) handleCashfreePaymentSuccess(payload json.RawMessage, s
 			First(&ord).Error; err == nil {
 			services.MaybeGrantReward(database.DB, ord.ID)
 			services.StartOrderSaga(ord.ID)
+			services.NotifyPaymentSucceeded(database.DB, ord.ID)
 			// The guarded update above makes this the single pending→completed
 			// transition, so the client verify path won't also push. Best-effort.
 			if err := services.NotifyChefNewOrderTx(database.DB, &ord); err != nil {
@@ -616,11 +617,26 @@ func (h *PaymentHandler) handleCashfreePaymentUnsuccessful(payload json.RawMessa
 	}
 	log.Printf("Cashfree %s for order %s (%s)", eventType, cfOrderID, data.Payment.PaymentMessage)
 
-	return database.DB.Model(&models.Order{}).
+	res := database.DB.Model(&models.Order{}).
 		Where(models.GatewayOrderIDColumn+" = ? AND mode = ? AND payment_provider = ? AND payment_status NOT IN ?",
 			cfOrderID, models.NormalizeMode(signedMode), models.PaymentProviderCashfree,
 			[]models.PaymentStatus{models.PaymentCompleted, models.PaymentFailed, models.PaymentRefunded}).
-		Update("payment_status", models.PaymentFailed).Error
+		Update("payment_status", models.PaymentFailed)
+	if res.Error != nil {
+		return res.Error
+	}
+	// Notify on a real failure only, and only on the single transition.
+	// USER_DROPPED is the customer closing the sheet themselves — telling them
+	// their payment failed would be noise about a thing they just did.
+	if res.RowsAffected > 0 && eventType == cfWebhookPaymentFailed {
+		var ord models.Order
+		if err := database.DB.Select("id").
+			Where(models.GatewayOrderIDColumn+" = ? AND mode = ?", cfOrderID, models.NormalizeMode(signedMode)).
+			First(&ord).Error; err == nil {
+			services.NotifyPaymentFailed(database.DB, ord.ID, data.Payment.PaymentMessage)
+		}
+	}
+	return nil
 }
 
 // cashfreeRefundEvent is the data block of REFUND_STATUS_WEBHOOK.

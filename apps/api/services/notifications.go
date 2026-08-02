@@ -91,6 +91,15 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 			Subjects: []string{SubjectCancellationRequested, SubjectCancellationResolved}},
 		{Stream: "NOTIFICATIONS", Durable: "notify-dispatch", Handler: h,
 			Subjects: []string{SubjectNotificationEmail, SubjectNotificationPush, SubjectNotificationSMS}},
+		// Money (#notify-money). The PAYMENTS stream existed and was being written
+		// to, but nothing ever consumed it — every payment result and every payout
+		// transition was persisted to JetStream and then dropped. Own durable so a
+		// backlog here can never stall order-lifecycle notifications.
+		{Stream: "PAYMENTS", Durable: "notify-payments", Handler: h,
+			Subjects: []string{
+				SubjectPaymentSuccess, SubjectPaymentFailed,
+				SubjectHoldReleaseEligible, SubjectHoldReleased, SubjectHoldDisputed,
+			}},
 		{Stream: "USERS", Durable: "notify-users", Handler: h,
 			Subjects: []string{SubjectUserRegistered, SubjectAccountDeleted, SubjectAccountRestored}},
 		{Stream: "CHEF", Durable: "notify-chef", Handler: h,
@@ -124,6 +133,9 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		// Customer meal-subscription lifecycle → confirmations (#2/#3).
 		{Stream: "SUBSCRIPTIONS", Durable: "notify-meal-subscription", Handler: h,
 			Subjects: []string{SubjectMealSubscriptionCreated, SubjectMealSubscriptionCancelled}},
+		// Chef crossed their earnings threshold for the cycle (#notify-money).
+		{Stream: "SUBSCRIPTIONS", Durable: "notify-earnings", Handler: h,
+			Subjects: []string{SubjectEarningsThresholdMet}},
 		{Stream: "DELIVERY", Durable: "notify-delivery", Handler: h,
 			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted, SubjectDriverTipReceived}},
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
@@ -254,6 +266,21 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleMealPlanChefReminder)
 	case SubjectMealPlanPayoutReleased:
 		return decodeThen(data, s.handleMealPlanPayoutReleased)
+	// Money events (#notify-money). Every one of these was published with no
+	// handler at all, so the payment, the payout and the earnings milestone were
+	// all silent. Refunds are absent on purpose — see nats.go.
+	case SubjectPaymentSuccess:
+		return decodeThen(data, s.handlePaymentSuccess)
+	case SubjectPaymentFailed:
+		return decodeThen(data, s.handlePaymentFailed)
+	case SubjectHoldReleaseEligible:
+		return decodeThen(data, s.handleHoldReleaseEligible)
+	case SubjectHoldReleased:
+		return decodeThen(data, s.handleHoldReleased)
+	case SubjectHoldDisputed:
+		return decodeThen(data, s.handleHoldDisputed)
+	case SubjectEarningsThresholdMet:
+		return decodeThen(data, s.handleEarningsThresholdMet)
 	default:
 		log.Printf("notification: no handler for subject %q", subject)
 		return nil
@@ -1748,6 +1775,12 @@ func (s *NotificationService) sendPushNotification(notif NotificationEvent) erro
 	notifType, _ := notif.Data["type"].(string)
 	if !IsSecurityAlert(notifType) && !ShouldSendForType(notif.UserID, notifType, ChannelPush) {
 		log.Printf("Push dispatch skipped for user %s (category=%s opted-out)", notif.UserID, notificationTypeCategory(notifType))
+		return nil
+	}
+	// Chefs have a second, chef-specific grid (new orders / payouts / messages /
+	// promo + quiet hours). Both gates must pass. Security alerts bypass, as above.
+	if !IsSecurityAlert(notifType) && !ChefAllowsPush(notif.UserID, notifType) {
+		log.Printf("Push dispatch skipped for chef %s (type=%s muted by chef preferences)", notif.UserID, notifType)
 		return nil
 	}
 

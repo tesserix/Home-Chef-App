@@ -106,6 +106,15 @@ function resolvePushRoute(data: Record<string, string> | undefined): string | nu
       return '/documents/renew';
     case 'weekly_statement':
       return '/earnings';
+    // Money events (#notify-money) carry an aggregate_id, not an orderId, so
+    // they fall through the orderId branch above — send them to Earnings, which
+    // is where the payout they describe actually shows up.
+    case 'payout_hold_release_eligible':
+    case 'payout_hold_released':
+    case 'payout_hold_disputed':
+    case 'earnings_threshold_met':
+    case 'tip_received':
+      return '/earnings';
     case 'availability_resumed':
       return '/(tabs)';
     case 'new_order':

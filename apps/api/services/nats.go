@@ -64,8 +64,12 @@ const (
 	SubjectDeliveryPickedUp    = "delivery.picked_up"
 	SubjectDeliveryFailed      = "delivery.failed"   // → customer/chef: delivery failed, resolution pending (#393)
 	SubjectDeliveryLocation    = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
-	SubjectPaymentSuccess      = "payments.success"
-	SubjectPaymentFailed       = "payments.failed"
+	SubjectPaymentSuccess = "payments.success"
+	SubjectPaymentFailed  = "payments.failed"
+	// There is deliberately NO payments.refunded subject: every refund path
+	// already reaches the customer through orders.cancelled, orders.voided or
+	// orders.cancellation_resolved (and the chef's fee reduction through its own
+	// push). A fourth event would notify twice for the same money.
 	// Payout hold state machine (#387). Both route to the PAYMENTS stream
 	// (payments.>) and drive the admin release queue (#388) downstream.
 	SubjectHoldReleaseEligible = "payments.hold_release_eligible" // → hold advanced awaiting → release_eligible

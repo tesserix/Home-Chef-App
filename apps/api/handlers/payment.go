@@ -284,6 +284,9 @@ func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Ord
 		services.MaybeGrantReward(database.DB, order.ID)
 		// Start the durable order saga (#122) — gated, idempotent, no-op when off.
 		services.StartOrderSaga(order.ID)
+		// Store credit covered the whole total — still a payment, and the only
+		// confirmation the customer gets (#notify-money).
+		services.NotifyPaymentSucceeded(database.DB, order.ID)
 	}
 
 	// Pay the chef/driver from the platform balance (the whole split is a top-up).
@@ -1294,6 +1297,7 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage, signedMo
 			services.MaybeGrantReward(database.DB, ord.ID)
 			// Start the durable order saga (#122) — gated, idempotent, no-op when off.
 			services.StartOrderSaga(ord.ID)
+			services.NotifyPaymentSucceeded(database.DB, ord.ID)
 			// Notify the chef now that the order is paid. The conditional update
 			// above (RowsAffected > 0) guarantees this is the single
 			// pending→completed transition, so the client verify path won't also
@@ -1341,13 +1345,27 @@ func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage, signedMode
 
 	// Idempotent: only transition from a non-terminal state. Avoids
 	// overwriting a completed payment if events arrive out-of-order.
-	return database.DB.Model(&models.Order{}).
+	res := database.DB.Model(&models.Order{}).
 		Where("razorpay_order_id = ? AND mode = ? AND payment_status NOT IN ?", payment.OrderID, models.NormalizeMode(signedMode), []models.PaymentStatus{
 			models.PaymentCompleted,
 			models.PaymentFailed,
 			models.PaymentRefunded,
 		}).
-		Update("payment_status", models.PaymentFailed).Error
+		Update("payment_status", models.PaymentFailed)
+	if res.Error != nil {
+		return res.Error
+	}
+	// Tell the customer, on the single transition only — a webhook replay must
+	// not notify twice (#notify-money).
+	if res.RowsAffected > 0 {
+		var ord models.Order
+		if err := database.DB.Select("id").
+			Where("razorpay_order_id = ? AND mode = ?", payment.OrderID, models.NormalizeMode(signedMode)).
+			First(&ord).Error; err == nil {
+			services.NotifyPaymentFailed(database.DB, ord.ID, payment.Status)
+		}
+	}
+	return nil
 }
 
 func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage, signedMode string) error {
@@ -1583,6 +1601,7 @@ func (h *PaymentHandler) handleStripePaymentSucceeded(obj json.RawMessage) {
 	}
 	services.MaybeGrantReward(database.DB, ord.ID)
 	services.StartOrderSaga(ord.ID)
+	services.NotifyPaymentSucceeded(database.DB, ord.ID)
 	if err := services.NotifyChefNewOrderTx(database.DB, &ord); err != nil {
 		log.Printf("Failed to enqueue chef new-order push for order %s: %v", ord.ID, err)
 		services.CaptureBackgroundError(err)
@@ -1599,12 +1618,22 @@ func (h *PaymentHandler) handleStripePaymentFailed(obj json.RawMessage) {
 
 	// Guarded: only transition from a non-terminal state (#563 — was UNCONDITIONAL and
 	// could overwrite a completed/refunded order on an out-of-order/duplicate delivery).
-	if err := database.DB.Model(&models.Order{}).
+	res := database.DB.Model(&models.Order{}).
 		Where("stripe_payment_intent_id = ? AND payment_status NOT IN ?", pi.ID, []models.PaymentStatus{
 			models.PaymentCompleted, models.PaymentFailed, models.PaymentRefunded,
 		}).
-		Update("payment_status", models.PaymentFailed).Error; err != nil {
-		log.Printf("Failed to apply stripe payment_intent.payment_failed for %s: %v", pi.ID, err)
+		Update("payment_status", models.PaymentFailed)
+	if res.Error != nil {
+		log.Printf("Failed to apply stripe payment_intent.payment_failed for %s: %v", pi.ID, res.Error)
+		return
+	}
+	// Single transition only, so a redelivery can't notify twice (#notify-money).
+	if res.RowsAffected > 0 {
+		var ord models.Order
+		if err := database.DB.Select("id").
+			Where("stripe_payment_intent_id = ?", pi.ID).First(&ord).Error; err == nil {
+			services.NotifyPaymentFailed(database.DB, ord.ID, "card declined")
+		}
 	}
 }
 

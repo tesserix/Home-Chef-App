@@ -31,6 +31,15 @@ func notificationTypeCategory(notifType string) models.NotificationCategory {
 		return models.NotifCategoryMarketing
 	case "weekly_menu_published", "daily_menu_published":
 		return models.NotifCategoryFavorites
+	// Money in either direction. These used to fall through to "account", so a
+	// user who muted account notifications stopped hearing about their own
+	// refunds and payouts — see NotifCategoryPayment.
+	case "payment_success", "payment_failed", "payment_refunded",
+		"delivery_fee_refund", "cancellation_refund",
+		"payout_hold_release_eligible", "payout_hold_released", "payout_hold_disputed",
+		"earnings_threshold_met", "tip_received",
+		"loyalty_earned", "loyalty_redeemed", "referral_rewarded":
+		return models.NotifCategoryPayment
 	default:
 		return models.NotifCategoryAccount
 	}

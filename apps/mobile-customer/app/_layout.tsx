@@ -204,8 +204,15 @@ export default function RootLayout() {
           // (never-actually-sent) `order_update` type routed, so real order pushes
           // — status changes, and the void apology — landed nowhere. Match on the
           // presence of an order id + an order-ish type instead.
-          if (orderId && (type === '' || type.startsWith('order'))) {
+          // Order-scoped types (including the payment result, which carries the
+          // same orderId) open the order. `payment_*` does not start with
+          // "order", so without it here a payment push tapped nowhere.
+          if (orderId && (type === '' || type.startsWith('order') || type.startsWith('payment'))) {
             router.push(`/order/${orderId}`);
+          } else if (type === 'loyalty_earned' || type === 'loyalty_redeemed') {
+            router.push('/loyalty');
+          } else if (type === 'referral_rewarded') {
+            router.push('/referral');
           } else if (data?.chefId && type === 'weekly_menu_published') {
             // A favorited chef dropped a new weekly menu (#239) → open the chef.
             router.push(`/chef/${data.chefId}`);

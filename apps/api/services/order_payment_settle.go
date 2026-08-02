@@ -423,6 +423,7 @@ func SettleCashfreeOrder(order *models.Order) (bool, string, error) {
 	} else {
 		MaybeGrantReward(database.DB, order.ID)
 		StartOrderSaga(order.ID)
+		NotifyPaymentSucceeded(database.DB, order.ID)
 	}
 
 	// Debit the applied store credit and burn the loyalty points now that the
@@ -491,6 +492,7 @@ func SettleRazorpayOrderFromPayment(order *models.Order, payment *PaymentRespons
 		MaybeGrantReward(database.DB, order.ID)
 		// Start the durable order saga (#122) — gated, idempotent, no-op when off.
 		StartOrderSaga(order.ID)
+		NotifyPaymentSucceeded(database.DB, order.ID)
 	}
 
 	// Wallet-at-checkout settlement (#141): now that the gateway capture is
