@@ -4,10 +4,22 @@ import { CONTACT_EMAIL, LEGAL_OPERATOR, LEGAL_SUPPORT_EMAIL } from '@/lib/site';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteNav } from '@/components/site-nav';
 
+export interface LegalSectionLink {
+  href: string;
+  label: string;
+}
+
 export interface LegalSection {
   heading: string;
   /** Each entry is a paragraph. Prefix with "• " to render as a bullet line. */
   paragraphs: string[];
+  /**
+   * Optional follow-on links, rendered under the paragraphs. Paragraph text is
+   * plain (no markup), so a section that must send the reader somewhere — the
+   * account-deletion instructions, a policy — puts the destination here rather
+   * than spelling out a URL nobody can click.
+   */
+  links?: readonly LegalSectionLink[];
 }
 
 interface LegalPageProps {
@@ -22,9 +34,20 @@ interface LegalPageProps {
   lastUpdated?: string;
   /** Full structured policy body. When present, the stub placeholder is dropped. */
   sections?: LegalSection[];
+  /**
+   * Overrides the lead-in of the closing contact line. Defaults to
+   * "Questions about this {title}?", which only reads well for a policy.
+   */
+  contactPrompt?: string;
 }
 
-export function LegalPage({ title, summary, lastUpdated, sections }: LegalPageProps) {
+export function LegalPage({
+  title,
+  summary,
+  lastUpdated,
+  sections,
+  contactPrompt,
+}: LegalPageProps) {
   const hasBody = Array.isArray(sections) && sections.length > 0;
 
   return (
@@ -51,12 +74,26 @@ export function LegalPage({ title, summary, lastUpdated, sections }: LegalPagePr
                       {section.heading}
                     </h2>
                     <LegalSectionBody paragraphs={section.paragraphs} />
+                    {section.links && section.links.length > 0 ? (
+                      <ul className="mt-4 space-y-2">
+                        {section.links.map((link) => (
+                          <li key={link.href}>
+                            <a
+                              href={link.href}
+                              className="font-medium text-charcoal underline underline-offset-4 transition-colors duration-micro ease-state hover:text-charcoal-soft"
+                            >
+                              {link.label}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </section>
                 ))}
               </div>
 
               <p className="mt-12 border-t border-charcoal/10 pt-6 text-sm leading-relaxed text-charcoal-soft">
-                Questions about this {title.toLowerCase()}? Write to{' '}
+                {contactPrompt ?? `Questions about this ${title.toLowerCase()}?`} Write to{' '}
                 <a
                   href={`mailto:${LEGAL_SUPPORT_EMAIL}`}
                   className="font-medium text-charcoal underline underline-offset-4 transition-colors duration-micro ease-state hover:text-charcoal-soft"

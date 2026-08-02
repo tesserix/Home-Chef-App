@@ -11,6 +11,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/`, lastModified, changeFrequency: 'weekly', priority: 1 },
     { url: `${SITE_URL}/explore/`, lastModified, changeFrequency: 'daily', priority: 0.8 },
     { url: `${SITE_URL}/download/`, lastModified, changeFrequency: 'monthly', priority: 0.7 },
+    // Declared as `supportUrl` on both App Store listings, so it must stay
+    // reachable and crawlable — a 404 there is an App Review 1.5 rejection.
+    { url: `${SITE_URL}/support/`, lastModified, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${SITE_URL}/privacy/`, lastModified, changeFrequency: 'monthly', priority: 0.3 },
     { url: `${SITE_URL}/terms/`, lastModified, changeFrequency: 'monthly', priority: 0.3 },
     { url: `${SITE_URL}/refund/`, lastModified, changeFrequency: 'monthly', priority: 0.3 },
