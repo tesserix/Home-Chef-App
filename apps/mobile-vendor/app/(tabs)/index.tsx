@@ -27,6 +27,7 @@ import {
   useNotificationSocket,
 } from '@homechef/mobile-shared/hooks';
 import { api } from '../../lib/api';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton, useAlert } from '@homechef/mobile-shared/ui';
@@ -130,6 +131,25 @@ const IN_FLIGHT_STATUSES = new Set<Order['status']>([
 export default function DashboardScreen() {
   const { showAlert } = useAlert();
   const { t } = useTranslation();
+
+  // Review + docs-deadline standing. Shares the root layout's cache entry, so
+  // this is usually a cache read; the banner below is the chef's main surface
+  // for "you're under review" and the 30-day documents countdown.
+  const onboardingQ = useQuery({
+    queryKey: ['chef', 'onboarding', 'status'],
+    queryFn: () =>
+      api.get<{
+        status: string;
+        docsComplete?: boolean;
+        docsDaysLeft?: number;
+      }>('/chef/onboarding/status'),
+    staleTime: 60_000,
+  });
+  const onboardingInfo = onboardingQ.data?.data;
+  const underReview =
+    onboardingInfo?.status === 'pending_review' ||
+    onboardingInfo?.status === 'submitted';
+  const docsMissing = underReview && onboardingInfo?.docsComplete === false;
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const dockClearance = useDockClearance();
@@ -396,6 +416,34 @@ export default function DashboardScreen() {
           />
         }
       >
+        {/* Review standing — the chef's main surface for "you're under
+            review" and the 30-day documents countdown. Amber = act now
+            (documents missing); bone = calm status (docs in, awaiting admin). */}
+        {docsMissing ? (
+          <Pressable
+            style={styles.reviewBannerUrgent}
+            onPress={() => router.push('/(onboarding)/documents')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.reviewBannerTitle}>
+              {t('onboarding.docsBannerTitle', {
+                days: onboardingInfo?.docsDaysLeft ?? 30,
+              })}
+            </Text>
+            <Text style={styles.reviewBannerBody}>{t('onboarding.docsBannerBody')}</Text>
+            <Text style={styles.reviewBannerCta}>{t('onboarding.docsBannerCta')} →</Text>
+          </Pressable>
+        ) : underReview ? (
+          <Pressable
+            style={styles.reviewBannerCalm}
+            onPress={() => router.push('/(onboarding)/pending')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.reviewBannerTitle}>{t('onboarding.reviewBannerTitle')}</Text>
+            <Text style={styles.reviewBannerBody}>{t('onboarding.reviewBannerBody')}</Text>
+          </Pressable>
+        ) : null}
+
         {/* Zone A — Dark hero banner (UI-V2 §4, reinstated). Greeting + name,
             the Open/Closed status pill, and today's numbers folded into one ink
             card — the single statement piece; everything below is calm
@@ -1100,6 +1148,41 @@ const styles = StyleSheet.create({
 
   // Zone A — Dark hero banner (reinstated): greeting + status + today's numbers
   // folded into one ink card. The single statement piece.
+  reviewBannerUrgent: {
+    backgroundColor: theme.colors.amber.tint,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.amber.DEFAULT,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    marginBottom: theme.spacing[3],
+  },
+  reviewBannerCalm: {
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    marginBottom: theme.spacing[3],
+  },
+  reviewBannerTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    marginBottom: 2,
+  },
+  reviewBannerBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.label.size,
+    lineHeight: theme.typography.size.label.size * 1.45,
+    color: theme.colors.ink.soft,
+  },
+  reviewBannerCta: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.label.size,
+    color: theme.colors.ink.DEFAULT,
+    marginTop: theme.spacing[2],
+  },
+
   hero: {
     backgroundColor: theme.colors.ink.DEFAULT,
     borderRadius: theme.radius.lg,

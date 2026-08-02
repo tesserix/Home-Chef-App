@@ -42,6 +42,11 @@ func CloseVision() {
 type OCRResult struct {
 	FSSAINumber string `json:"fssaiNumber"`
 	ExpiryDate  string `json:"expiryDate"` // ISO YYYY-MM-DD
+	// PanNumber — detected PAN (ABCDE1234F) on an ID upload, for pre-fill.
+	PanNumber string `json:"panNumber,omitempty"`
+	// BillDate — the likely issue date of a utility bill (address proof),
+	// ISO YYYY-MM-DD. Drives the 3-month recency guardrail.
+	BillDate string `json:"billDate,omitempty"`
 }
 
 var (
@@ -51,6 +56,8 @@ var (
 	numDateRe = regexp.MustCompile(`(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{2,4})`)
 	// Month-name dates: 01 Jan 2027 / 1 January 2027.
 	monDateRe = regexp.MustCompile(`(?i)(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})`)
+	// PAN: five letters, four digits, one letter.
+	panOcrRe = regexp.MustCompile(`\b([A-Z]{5}\d{4}[A-Z])\b`)
 )
 
 var monthAbbrev = map[string]int{
@@ -90,7 +97,38 @@ func DetectDocumentFields(ctx context.Context, imageBytes []byte) (OCRResult, er
 		res.FSSAINumber = m
 	}
 	res.ExpiryDate = extractExpiry(text)
+	if m := panOcrRe.FindString(strings.ToUpper(text)); m != "" {
+		res.PanNumber = m
+	}
+	if billDate, ok := ExtractBillDate(text); ok {
+		res.BillDate = billDate.Format("2006-01-02")
+	}
 	return res, nil
+}
+
+// ExtractBillDate finds the likely issue date of a utility bill: the latest
+// date on the page that isn't far in the future (a bill carries its bill date
+// plus a due date up to ~6 weeks ahead; anything later is a validity/expiry
+// on some other document). Used by the address-proof recency guardrail.
+func ExtractBillDate(text string) (time.Time, bool) {
+	horizon := time.Now().AddDate(0, 0, 45)
+	var best time.Time
+	for _, dm := range collectDates(text) {
+		if dm.t.After(horizon) || dm.t.Year() < 2000 {
+			continue
+		}
+		if dm.t.After(best) {
+			best = dm.t
+		}
+	}
+	return best, !best.IsZero()
+}
+
+// AddressProofTooOld reports whether a bill dated billDate falls outside the
+// allowed window: the current calendar month or the three before it.
+func AddressProofTooOld(billDate, now time.Time) bool {
+	windowStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -3, 0)
+	return billDate.Before(windowStart)
 }
 
 // AssessDocumentImage OCRs an image and returns a genuineness verdict for the
@@ -110,13 +148,11 @@ type dateMatch struct {
 	t   time.Time
 }
 
-// extractExpiry finds the most likely expiry date in the OCR text: it prefers
-// a date sitting just after a "valid upto / validity / expiry" keyword and in
-// the future, falling back to the latest plausible date on the page.
-func extractExpiry(text string) string {
-	lower := strings.ToLower(text)
+// collectDates finds every parseable date on the page (numeric and
+// month-name forms) with its text offset. Shared by the expiry and
+// bill-date extractors.
+func collectDates(text string) []dateMatch {
 	var matches []dateMatch
-
 	for _, m := range numDateRe.FindAllStringSubmatchIndex(text, -1) {
 		if iso, t, ok := buildISO(text[m[2]:m[3]], text[m[4]:m[5]], text[m[6]:m[7]]); ok {
 			matches = append(matches, dateMatch{iso, m[0], t})
@@ -132,6 +168,15 @@ func extractExpiry(text string) string {
 			matches = append(matches, dateMatch{iso, m[0], t})
 		}
 	}
+	return matches
+}
+
+// extractExpiry finds the most likely expiry date in the OCR text: it prefers
+// a date sitting just after a "valid upto / validity / expiry" keyword and in
+// the future, falling back to the latest plausible date on the page.
+func extractExpiry(text string) string {
+	lower := strings.ToLower(text)
+	matches := collectDates(text)
 	if len(matches) == 0 {
 		return ""
 	}

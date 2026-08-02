@@ -1028,6 +1028,9 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 		chef.ServiceRadius = *req.ServiceRadius
 	}
 	if req.AcceptingOrders != nil {
+		if verificationGateBlocks(c, &chef, *req.AcceptingOrders) {
+			return
+		}
 		if payoutGateBlocks(c, &chef, *req.AcceptingOrders) {
 			return
 		}
@@ -2218,6 +2221,9 @@ func (h *ChefHandler) UpdateChefSettings(c *gin.Context) {
 		return
 	}
 
+	if verificationGateBlocks(c, &chef, req.AcceptingOrders) {
+		return
+	}
 	if payoutGateBlocks(c, &chef, req.AcceptingOrders) {
 		return
 	}

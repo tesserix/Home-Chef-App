@@ -81,6 +81,11 @@ const (
 	SubjectAccountRestored = "users.account_restored"
 	SubjectAccountPurged   = "users.account_purged"
 	SubjectChefVerified    = "chef.verified"
+	// Docs-deadline guardrail: warning fires 5 days before the 30-day document
+	// window closes; expired fires when the window lapses and the pending
+	// application is withdrawn (chef must re-apply).
+	SubjectChefDocsDeadlineWarning = "chef.docs_deadline.warning"
+	SubjectChefDocsDeadlineExpired = "chef.docs_deadline.expired"
 	// SubjectChefAvailabilityChanged — the chef opened, closed or paused their
 	// kitchen. Customers browsing a closed kitchen would otherwise keep seeing
 	// it as open until their chef list happens to refetch.

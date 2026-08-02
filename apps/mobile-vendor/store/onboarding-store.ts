@@ -37,6 +37,10 @@ interface Documents {
   idProofType: 'image' | 'pdf' | null;
   fssaiUri: string | null;
   fssaiType: 'image' | 'pdf' | null;
+  // Address proof (gas / electricity bill at the kitchen address) — evidence
+  // the kitchen is a genuine home, not a commercial premises.
+  addressProofUri: string | null;
+  addressProofType: 'image' | 'pdf' | null;
   // 14-digit Food Safety license number. Stored alongside the photo
   // upload so admin tooling (and Wave 3 invoicing) can resolve it
   // without re-reading the document image. Optional during partial
@@ -130,6 +134,8 @@ const initialState = {
     idProofType: null,
     fssaiUri: null,
     fssaiType: null,
+    addressProofUri: null,
+    addressProofType: null,
     fssaiLicenseNumber: '',
     fssaiExpiryDate: '',
     gstin: '',

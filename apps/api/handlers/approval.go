@@ -288,6 +288,23 @@ func (h *ApprovalHandler) GetApprovalRequest(c *gin.Context) {
 		database.DB.Where("chef_id = ?", approval.ChefID).Order("created_at DESC").Find(&docs)
 		response["documents"] = docs
 
+		// Docs-deadline guardrail: which of the three required documents are
+		// still missing, so the admin UI can show the checklist and explain why
+		// Approve is refused (approveOneRequest hard-blocks on the same set).
+		if approval.Type == models.ApprovalKitchenOnboarding {
+			present := map[string]bool{}
+			for _, d := range docs {
+				present[string(d.Type)] = true
+			}
+			missing := []string{}
+			for _, req := range []models.DocumentType{models.DocIDProof, models.DocAddressProof, models.DocFSSAILicense} {
+				if !present[string(req)] {
+					missing = append(missing, string(req))
+				}
+			}
+			response["requiredDocsMissing"] = missing
+		}
+
 		// Home-chefs-only review aids. Surface (1) whether the FSSAI number looks
 		// like a State/Central licence — a larger, likely-commercial operator —
 		// and (2) whether the kitchen type is anything other than home, so the
@@ -324,6 +341,13 @@ func approveOneRequest(id uuid.UUID, adminUserID uuid.UUID, notes, mode string) 
 		var k models.ChefProfile
 		if err := database.DB.First(&k, "id = ?", *approval.ChefID).Error; err == nil && !k.IsHomeKitchen() {
 			return errApprovalNotHomeKitchen
+		}
+		// Docs-deadline guardrail: documents are skippable at submission, so an
+		// application can sit in this queue without them — but it must never be
+		// APPROVED without them. Verification is the promise that an admin saw
+		// the ID proof, address proof and FSSAI licence.
+		if !services.ChefDocsComplete(database.DB, *approval.ChefID) {
+			return fmt.Errorf("cannot approve: the chef has not uploaded all required documents (ID proof, address proof, FSSAI licence) yet")
 		}
 	}
 

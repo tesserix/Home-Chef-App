@@ -1,46 +1,15 @@
 import { Stack } from 'expo-router';
 
+// OnboardingScaffold owns every piece of wizard chrome (step counter,
+// progress track, back, cancel) — a native header on top of it double-prints
+// "Step N of M" and wastes a full row of vertical space.
 export default function OnboardingLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: true,
-        headerBackVisible: false,
+        headerShown: false,
         gestureEnabled: false,
       }}
-    >
-      <Stack.Screen
-        name="personal-info"
-        options={{ title: 'Step 1 of 7', gestureEnabled: false }}
-      />
-      <Stack.Screen
-        name="kitchen-details"
-        options={{ title: 'Step 2 of 7', gestureEnabled: false }}
-      />
-      <Stack.Screen
-        name="operations"
-        options={{ title: 'Step 3 of 7', gestureEnabled: false }}
-      />
-      <Stack.Screen
-        name="documents"
-        options={{ title: 'Step 4 of 7', gestureEnabled: false }}
-      />
-      <Stack.Screen
-        name="policies"
-        options={{ title: 'Step 5 of 7', gestureEnabled: false }}
-      />
-      <Stack.Screen
-        name="payout"
-        options={{ title: 'Step 6 of 7', gestureEnabled: false }}
-      />
-      <Stack.Screen
-        name="review"
-        options={{ title: 'Step 7 of 7', gestureEnabled: false }}
-      />
-      <Stack.Screen
-        name="pending"
-        options={{ headerShown: false, gestureEnabled: false }}
-      />
-    </Stack>
+    />
   );
 }

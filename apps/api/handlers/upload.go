@@ -117,6 +117,15 @@ func (h *UploadHandler) UploadDocument(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid expiryDate format. Use YYYY-MM-DD or RFC3339."})
 			return
 		}
+		// An already-lapsed licence can't be the basis for verification — the
+		// client checks this too, but only the server check is exploit-proof.
+		if docType == models.DocFSSAILicense && parsed.Before(time.Now().Truncate(24*time.Hour)) {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{
+				"error": "This FSSAI licence has already expired. Please renew it and upload the current licence.",
+				"field": "expiryDate",
+			})
+			return
+		}
 		expiryDate = &parsed
 	}
 
@@ -494,6 +503,19 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 		step = 4 // Documents done
 	}
 
+	// Docs-deadline guardrail: surface the 30-day clock so the app can show a
+	// countdown banner and the wizard knows whether the required set is in.
+	docsComplete := services.ChefDocsComplete(database.DB, chef.ID)
+	var docsDeadlineAt *time.Time
+	docsDaysLeft := 0
+	if !chef.IsVerified && !docsComplete && chef.OnboardedAt != nil {
+		d := chef.OnboardedAt.Add(services.DocsUploadWindow)
+		docsDeadlineAt = &d
+		if left := int(time.Until(d).Hours() / 24); left > 0 {
+			docsDaysLeft = left
+		}
+	}
+
 	// Check if there's a pending or rejected approval request
 	var latestApproval models.ApprovalRequest
 	hasApproval := false
@@ -547,6 +569,9 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 		"chefId":         chef.ID,
 		"approvalStatus": approvalStatus,
 		"adminNotes":     approvalNotes,
+		"docsComplete":   docsComplete,
+		"docsDeadlineAt": docsDeadlineAt,
+		"docsDaysLeft":   docsDaysLeft,
 		"profile": gin.H{
 			"businessName":   wireBusinessName,
 			"description":    chef.Description,
@@ -729,6 +754,10 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		IsActive:           true,
 		AcceptingOrders:    false,
 	}
+	// Start the 30-day document clock at submission (documents are optional at
+	// this point; the docs-deadline sweep enforces the window).
+	submittedAt := time.Now()
+	chef.OnboardedAt = &submittedAt
 
 	approvalReq := models.ApprovalRequest{
 		Type:          models.ApprovalKitchenOnboarding,
@@ -897,6 +926,11 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 	}
 	chef.KitchenType = kitchenType
 	chef.IsActive = true
+	// A (re-)submission restarts the 30-day document clock and re-arms the
+	// single warning.
+	resubmittedAt := time.Now()
+	chef.OnboardedAt = &resubmittedAt
+	chef.DocsWarningSentAt = nil
 
 	approvalReq := models.ApprovalRequest{
 		Type:          models.ApprovalKitchenOnboarding,
@@ -1420,13 +1454,34 @@ func (h *UploadHandler) runDocChecks(c *gin.Context, file multipart.File, sniffe
 	}
 
 	if enforce {
-		verdict, err := services.AssessDocumentImage(c.Request.Context(), data, string(docType))
+		// One Vision call feeds both the genuineness verdict and the
+		// address-proof recency guardrail.
+		text, err := services.DetectText(c.Request.Context(), data)
 		if err != nil {
-			log.Printf("doc-authenticity: assess failed (fail-open) type=%s: %v", docType, err)
-		} else if verdict.Status == docverify.StatusRejected {
+			log.Printf("doc-authenticity: OCR failed (fail-open) type=%s: %v", docType, err)
+			return phash, true
+		}
+		verdict := docverify.Assess(string(docType), text)
+		if verdict.Status == docverify.StatusRejected {
 			log.Printf("doc-authenticity: %s upload rejected: %s", docType, verdict.Reason)
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": verdict.Reason, "field": "file", "authenticity": verdict})
 			return "", false
+		}
+		// Address proof must be recent — a bill from the current or the last
+		// three calendar months. An old bill proves nothing about where the
+		// kitchen operates TODAY, and accepting stale ones invites reuse of a
+		// years-old PDF from a different address. Fail-open when no date is
+		// readable: the admin sees the document either way.
+		if docType == models.DocAddressProof {
+			if billDate, found := services.ExtractBillDate(text); found &&
+				services.AddressProofTooOld(billDate, time.Now()) {
+				msg := fmt.Sprintf(
+					"This bill is dated %s. Address proof must be from the current or the last 3 months — please upload a recent gas or electricity bill.",
+					billDate.Format("January 2006"))
+				log.Printf("doc-authenticity: address_proof too old (%s) chef=%s", billDate.Format("2006-01-02"), chefID)
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg, "field": "file"})
+				return "", false
+			}
 		}
 	}
 	return phash, true

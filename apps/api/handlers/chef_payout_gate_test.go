@@ -25,8 +25,7 @@ import (
 	"github.com/homechef/api/database"
 )
 
-const payoutGateChefDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, 
-	id text PRIMARY KEY, user_id text, business_name text,
+const payoutGateChefDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, onboarded_at datetime, docs_warning_sent_at datetime, is_verified integer DEFAULT 1, 	id text PRIMARY KEY, user_id text, business_name text,
 	is_active integer DEFAULT 1, accepting_orders integer DEFAULT 0,
 	paused_until datetime, payout_method text DEFAULT '',
 	created_at datetime, updated_at datetime

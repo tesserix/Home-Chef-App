@@ -94,6 +94,9 @@ func cronJobs() []cronJob {
 		// elapsed, after archiving their PII-stripped financial record. Without
 		// this the retention promise is only half kept — data hidden, never erased.
 		{"account-purge", accountPurgeInterval, runAccountPurgeScan, StartAccountPurgeCron},
+		// Chef document deadline (#onboarding): warn at day 25, withdraw the
+		// pending application at day 30 if the required documents never arrived.
+		{"docs-deadline", docsDeadlineInterval, runDocsDeadlineScan, StartDocsDeadlineCron},
 		{"loyalty-expiry", loyaltyExpiryInterval, runLoyaltyExpiryScan, StartLoyaltyExpiryCron},
 	}
 }

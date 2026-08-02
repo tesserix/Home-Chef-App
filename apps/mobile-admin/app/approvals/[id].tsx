@@ -55,6 +55,16 @@ export default function ApprovalDetailScreen() {
 
   const a = q.data;
   const isPending = a?.status === 'pending' || a?.status === 'info_requested';
+  // Kitchen onboarding: the API refuses to approve while required documents
+  // (id_proof, address_proof, fssai_license) are missing — mirror that here.
+  const docsMissing =
+    (a as { requiredDocsMissing?: string[] } | undefined)?.requiredDocsMissing ?? [];
+  const docsIncomplete = a?.type === 'kitchen_onboarding' && docsMissing.length > 0;
+  const DOC_LABELS: Record<string, string> = {
+    id_proof: 'ID proof',
+    address_proof: 'Address proof (gas/electricity bill)',
+    fssai_license: 'FSSAI licence',
+  };
   const busy = approve.isPending || reject.isPending || reqInfo.isPending;
 
   const doApprove = () => {
@@ -94,6 +104,13 @@ export default function ApprovalDetailScreen() {
           ) : null}
           {a.fssaiLooksCommercial ? (
             <Warning text="FSSAI licence looks like a commercial (State/Central) registration — verify this is a home kitchen." />
+          ) : null}
+          {docsIncomplete ? (
+            <Warning
+              text={`Required documents not uploaded yet: ${docsMissing
+                .map((d) => DOC_LABELS[d] ?? titleCase(d))
+                .join(', ')}. Cannot approve until they are in (30-day window from submission).`}
+            />
           ) : null}
 
           <Card>
@@ -142,7 +159,7 @@ export default function ApprovalDetailScreen() {
             <>
               <SectionTitle>Decision</SectionTitle>
               <View style={{ gap: 10 }}>
-                <Button label="Approve" onPress={doApprove} loading={approve.isPending} disabled={busy} />
+                <Button label="Approve" onPress={doApprove} loading={approve.isPending} disabled={busy || docsIncomplete} />
                 <Button
                   label="Request more info"
                   variant="secondary"

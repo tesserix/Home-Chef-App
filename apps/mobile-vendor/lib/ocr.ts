@@ -5,6 +5,21 @@ import { api } from './api';
 export interface OcrResult {
   fssaiNumber?: string;
   expiryDate?: string; // ISO YYYY-MM-DD
+  panNumber?: string; // ABCDE1234F, detected on ID uploads
+  billDate?: string; // ISO YYYY-MM-DD — utility-bill issue date (address proof)
+}
+
+/** True when a bill date falls outside the allowed window: the current
+ *  calendar month or the three before it. Mirrors the server guardrail —
+ *  the server is authoritative; this exists for a friendlier early error. */
+export function billDateTooOld(billDateISO: string): boolean {
+  const bill = new Date(`${billDateISO}T00:00:00`);
+  if (Number.isNaN(bill.getTime())) return false;
+  const windowStart = new Date();
+  windowStart.setHours(0, 0, 0, 0);
+  windowStart.setDate(1);
+  windowStart.setMonth(windowStart.getMonth() - 3);
+  return bill < windowStart;
 }
 
 /**

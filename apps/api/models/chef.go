@@ -49,6 +49,15 @@ type ChefProfile struct {
 	IsVerified bool       `gorm:"default:false" json:"verified"`
 	VerifiedAt *time.Time `gorm:"" json:"verifiedAt"`
 
+	// Docs-deadline guardrail: OnboardedAt is stamped when the chef submits the
+	// onboarding application (documents may be skipped at that point). Required
+	// documents must land within services.DocsUploadWindow of this stamp or the
+	// pending application is withdrawn and the chef must re-apply; the sweep
+	// clears the stamp on withdrawal. DocsWarningSentAt makes the "5 days left"
+	// nudge exactly-once.
+	OnboardedAt       *time.Time `gorm:"" json:"onboardedAt,omitempty"`
+	DocsWarningSentAt *time.Time `gorm:"" json:"-"`
+
 	// Mode selects which Razorpay credential set, which visibility rules and
 	// which data partition apply to this kitchen. Defaults to live so every
 	// existing chef and every new onboarding is a real kitchen unless an admin

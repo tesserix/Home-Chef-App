@@ -105,7 +105,7 @@ export default function OperationsScreen() {
     <OnboardingScaffold
       onCancel={cancelOnboarding}
       step={3}
-      total={6}
+      total={7}
       stepName={t('onboarding.stepOperations')}
       title={t('onboarding.operationsTitle')}
       subtitle={t('onboarding.operationsSubtitle')}

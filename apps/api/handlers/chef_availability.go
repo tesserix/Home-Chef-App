@@ -85,6 +85,9 @@ func (h *ChefAvailabilityHandler) ResumeReceiving(c *gin.Context) {
 		return
 	}
 
+	if verificationGateBlocks(c, &chef, true) {
+		return
+	}
 	if payoutGateBlocks(c, &chef, true) {
 		return
 	}

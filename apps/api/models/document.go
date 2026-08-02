@@ -12,6 +12,12 @@ const (
 	DocPanCard         DocumentType = "pan_card"
 	DocAadhaarCard     DocumentType = "aadhaar_card"
 	DocFSSAILicense    DocumentType = "fssai_license"
+	// DocAddressProof — gas or electricity bill at the kitchen address,
+	// evidence the kitchen is a genuine home and not a commercial premises.
+	// The vendor app uploads it as "address_proof"; DocIDProof mirrors the
+	// app's generic "id_proof" (PAN / Aadhaar / passport) upload.
+	DocAddressProof DocumentType = "address_proof"
+	DocIDProof      DocumentType = "id_proof"
 	DocFoodSafetyCert  DocumentType = "food_safety_cert"
 	DocCancelledCheque DocumentType = "cancelled_cheque"
 	DocKitchenPhoto1   DocumentType = "kitchen_photo_1"

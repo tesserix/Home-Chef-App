@@ -26,6 +26,7 @@ import {
   X,
   ShieldCheck,
   CreditCard,
+  Home,
   Video,
   Film,
 } from 'lucide-react-native';
@@ -33,11 +34,11 @@ import { OnboardingScaffold, useToast, useAlert } from '@homechef/mobile-shared/
 import { theme } from '@homechef/mobile-shared/theme';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
-import { ocrDocument } from '../../lib/ocr';
+import { ocrDocument, billDateTooOld } from '../../lib/ocr';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 
-type DocumentType = 'id_proof' | 'fssai_license';
+type DocumentType = 'id_proof' | 'fssai_license' | 'address_proof';
 
 interface UploadState {
   uploading: boolean;
@@ -61,11 +62,14 @@ export default function DocumentsScreen() {
 
   const [idUpload, setIdUpload] = useState<UploadState>({ uploading: false, error: null });
   const [fssaiUpload, setFssaiUpload] = useState<UploadState>({ uploading: false, error: null });
+  const [addressUpload, setAddressUpload] = useState<UploadState>({ uploading: false, error: null });
   const [kitchenUpload, setKitchenUpload] = useState<UploadState>({ uploading: false, error: null });
 
   function setUploadState(docType: DocumentType, state: UploadState): void {
     if (docType === 'id_proof') {
       setIdUpload(state);
+    } else if (docType === 'address_proof') {
+      setAddressUpload(state);
     } else {
       setFssaiUpload(state);
     }
@@ -108,6 +112,25 @@ export default function DocumentsScreen() {
         }
       }
 
+      // Address proof must be a recent bill (current or last 3 calendar
+      // months). Catch an obviously old one BEFORE the upload round-trip —
+      // the server enforces the same rule authoritatively.
+      if (docType === 'address_proof' && fileType === 'image') {
+        try {
+          const ocr = await ocrDocument(uri, mimeType);
+          if (ocr.billDate && billDateTooOld(ocr.billDate)) {
+            setUploadState(docType, { uploading: false, error: null });
+            showAlert(
+              t('onboarding.addressProofTooOldTitle'),
+              t('onboarding.addressProofTooOldBody'),
+            );
+            return;
+          }
+        } catch {
+          // Best-effort — the server-side check still applies.
+        }
+      }
+
       const formData = new FormData();
       formData.append('type', docType);
       const filename = uri.split('/').pop() ?? (fileType === 'pdf' ? 'document.pdf' : 'document.jpg');
@@ -124,12 +147,19 @@ export default function DocumentsScreen() {
 
       if (docType === 'id_proof') {
         updateDocuments({ idProofUri: uri, idProofType: fileType });
+      } else if (docType === 'address_proof') {
+        updateDocuments({ addressProofUri: uri, addressProofType: fileType });
       } else {
         updateDocuments({ fssaiUri: uri, fssaiType: fileType });
       }
       setUploadState(docType, { uploading: false, error: null });
       showToast({
-        message: docType === 'id_proof' ? t('onboarding.idProofUploaded') : t('onboarding.fssaiUploaded'),
+        message:
+          docType === 'id_proof'
+            ? t('onboarding.idProofUploaded')
+            : docType === 'address_proof'
+              ? t('onboarding.addressProofUploaded')
+              : t('onboarding.fssaiUploaded'),
         tone: 'success',
       });
     } catch (error: unknown) {
@@ -145,6 +175,8 @@ export default function DocumentsScreen() {
   function removeDocument(docType: DocumentType): void {
     if (docType === 'id_proof') {
       updateDocuments({ idProofUri: null, idProofType: null });
+    } else if (docType === 'address_proof') {
+      updateDocuments({ addressProofUri: null, addressProofType: null });
     } else {
       updateDocuments({ fssaiUri: null, fssaiType: null });
     }
@@ -315,57 +347,47 @@ export default function DocumentsScreen() {
   const kitchenMediaComplete = hasKitchenPhoto && hasKitchenVideo;
 
   function onNext(): void {
-    if (!documents.idProofUri || !documents.fssaiUri) {
-      showAlert(
-        t('onboarding.documentsRequired'),
-        t('onboarding.documentsRequiredBody'),
-      );
-      return;
-    }
-    if (!kitchenMediaComplete) {
-      showAlert(
-        t('onboarding.kitchenMediaRequired'),
-        t('onboarding.kitchenMediaError'),
-      );
-      return;
-    }
-    // The licence number and expiry were only ever checked inline — and that hint
-    // is suppressed while the field is empty, so a chef could submit with the
-    // document attached but neither value filled in. That leaves admins verifying
-    // against nothing, and leaves the expiry-reminder cron
-    // (services/fssai_reminder.go) with no date to fire on, so the licence lapses
-    // silently. OCR pre-fills both when it can; this guarantees they are present.
-    if (documents.fssaiLicenseNumber.length !== 14) {
-      showAlert(
-        t('onboarding.fssaiNumberRequired'),
-        t('onboarding.fssaiNumberRequiredBody'),
-      );
-      return;
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(documents.fssaiExpiryDate)) {
-      showAlert(
-        t('onboarding.fssaiExpiryRequired'),
-        t('onboarding.fssaiExpiryRequiredBody'),
-      );
-      return;
-    }
-    // An already-lapsed licence can't be the basis for going live.
-    const expiry = new Date(`${documents.fssaiExpiryDate}T00:00:00`);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (!Number.isNaN(expiry.getTime()) && expiry < today) {
-      showAlert(
-        t('onboarding.fssaiExpiredTitle'),
-        t('onboarding.fssaiExpiredBody'),
-      );
-      return;
+    // Documents are OPTIONAL at this step: the chef has 30 days after
+    // submitting to upload them (docs-deadline guardrail; the API withdraws
+    // the application after that). Only what the chef actually started is
+    // validated, so half-entered data can't ride along.
+    if (documents.fssaiUri) {
+      // The licence number and expiry were only ever checked inline — and that
+      // hint is suppressed while the field is empty. OCR pre-fills both when it
+      // can; this guarantees they accompany an uploaded licence so admins have
+      // something to verify and the expiry-reminder cron has a date to fire on.
+      if (documents.fssaiLicenseNumber.length !== 14) {
+        showAlert(
+          t('onboarding.fssaiNumberRequired'),
+          t('onboarding.fssaiNumberRequiredBody'),
+        );
+        return;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(documents.fssaiExpiryDate)) {
+        showAlert(
+          t('onboarding.fssaiExpiryRequired'),
+          t('onboarding.fssaiExpiryRequiredBody'),
+        );
+        return;
+      }
+      // An already-lapsed licence can't be the basis for going live.
+      const expiry = new Date(`${documents.fssaiExpiryDate}T00:00:00`);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (!Number.isNaN(expiry.getTime()) && expiry < today) {
+        showAlert(
+          t('onboarding.fssaiExpiredTitle'),
+          t('onboarding.fssaiExpiredBody'),
+        );
+        return;
+      }
     }
     setStep(5);
     router.push('/(onboarding)/policies');
   }
 
   const bothUploaded = Boolean(
-    documents.idProofUri && documents.fssaiUri && kitchenMediaComplete,
+    documents.idProofUri && documents.fssaiUri && documents.addressProofUri && kitchenMediaComplete,
   );
 
   function renderUploadTile(
@@ -502,7 +524,7 @@ export default function DocumentsScreen() {
                   pressed && Platform.OS === 'ios' && { opacity: 0.85 },
                 ]}
               >
-                <Camera size={15} color={theme.colors.paper} strokeWidth={2} />
+                <Camera size={15} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
                 <Text style={styles.actionBtnPrimaryLabel}>{t('onboarding.camera')}</Text>
               </View>
             )}
@@ -557,15 +579,22 @@ export default function DocumentsScreen() {
     <OnboardingScaffold
       onCancel={cancelOnboarding}
       step={4}
-      total={6}
+      total={7}
       stepName={t('onboarding.stepDocuments')}
       title={t('onboarding.documentsTitle')}
       subtitle={t('onboarding.documentsSubtitle')}
       encouragement={t('onboarding.encDocuments')}
-      primaryLabel={t('onboarding.continue')}
+      primaryLabel={bothUploaded ? t('onboarding.continue') : t('onboarding.skipForNow')}
       onPrimary={onNext}
-      primaryDisabled={!bothUploaded}
     >
+      {/* 30-day window — the one rule that matters if the chef skips. */}
+      {!documents.idProofUri || !documents.fssaiUri || !documents.addressProofUri ? (
+        <View style={styles.deadlineCard}>
+          <Text style={styles.deadlineTitle}>{t('onboarding.docsSkipTitle')}</Text>
+          <Text style={styles.deadlineBody}>{t('onboarding.docsSkipBody')}</Text>
+        </View>
+      ) : null}
+
       {/* Context note */}
       <View style={styles.noteRow}>
         <ShieldCheck size={14} color={theme.colors.success.DEFAULT} strokeWidth={2} />
@@ -587,6 +616,18 @@ export default function DocumentsScreen() {
         documents.idProofUri,
         documents.idProofType,
         idUpload,
+      )}
+
+      <View style={styles.tileSpacer} />
+
+      {renderUploadTile(
+        t('onboarding.addressProof'),
+        t('onboarding.addressProofSubtitle'),
+        <Home size={18} color={theme.colors.ink.soft} strokeWidth={1.5} />,
+        'address_proof',
+        documents.addressProofUri,
+        documents.addressProofType,
+        addressUpload,
       )}
 
       <View style={styles.tileSpacer} />
@@ -785,7 +826,7 @@ export default function DocumentsScreen() {
                     pressed && Platform.OS === 'ios' && { opacity: 0.85 },
                   ]}
                 >
-                  <Camera size={15} color={theme.colors.paper} strokeWidth={2} />
+                  <Camera size={15} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
                   <Text style={styles.actionBtnPrimaryLabel}>{t('onboarding.kitchenPhotoAction')}</Text>
                 </View>
               )}
@@ -841,6 +882,28 @@ export default function DocumentsScreen() {
 
 const styles = StyleSheet.create({
   // Context note strip
+  deadlineCard: {
+    backgroundColor: theme.colors.amber.tint,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.amber.DEFAULT,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    marginBottom: theme.spacing[4],
+  },
+  deadlineTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    marginBottom: 2,
+  },
+  deadlineBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.label.size,
+    lineHeight: theme.typography.size.label.size * 1.45,
+    color: theme.colors.ink.soft,
+  },
+
   noteRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1074,22 +1137,25 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing[4],
   },
 
-  // Camera — ink-filled primary (fast path)
+  // Camera — same quiet bordered chip as Gallery/PDF; the sticky CTA is the
+  // screen's only filled action. Slightly stronger label = still the fast path.
   actionBtnPrimary: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing[1],
-    backgroundColor: theme.colors.ink.DEFAULT,
-    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.DEFAULT,
     paddingVertical: theme.spacing[3],
     minHeight: theme.touchTarget.vendor,
   },
   actionBtnPrimaryLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.paper,
+    color: theme.colors.ink.DEFAULT,
   },
 
   // Gallery + PDF — hairline outlined secondary
@@ -1101,7 +1167,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing[1],
     borderWidth: 1,
     borderColor: theme.colors.mist.strong,
-    borderRadius: theme.radius.sm,
+    borderRadius: theme.radius.DEFAULT,
     paddingVertical: theme.spacing[3],
     minHeight: theme.touchTarget.vendor,
     backgroundColor: theme.colors.paper,

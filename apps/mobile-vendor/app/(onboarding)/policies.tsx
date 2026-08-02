@@ -67,7 +67,7 @@ export default function PoliciesScreen() {
     <OnboardingScaffold
       onCancel={cancelOnboarding}
       step={5}
-      total={6}
+      total={7}
       stepName={t('onboarding.stepPolicies')}
       title={t('onboarding.policiesTitle')}
       subtitle={t('onboarding.policiesSubtitle')}

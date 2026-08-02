@@ -126,7 +126,7 @@ export default function PersonalInfoScreen() {
     <OnboardingScaffold
       onCancel={cancelOnboarding}
       step={1}
-      total={6}
+      total={7}
       stepName={t('onboarding.stepPersonal')}
       title={t('onboarding.personalTitle')}
       subtitle={t('onboarding.personalSubtitle')}

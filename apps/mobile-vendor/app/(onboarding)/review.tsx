@@ -191,6 +191,7 @@ export default function ReviewScreen() {
 
   // Document status pills
   const idStatus = documents.idProofUri ? t('onboarding.uploaded') : t('onboarding.missing');
+  const addressStatus = documents.addressProofUri ? t('onboarding.uploaded') : t('onboarding.missing');
   const fssaiStatus = documents.fssaiUri ? t('onboarding.uploaded') : t('onboarding.missing');
   const kitchenPhotoCount = documents.kitchenMedia.filter((m) => m.type === 'image').length;
   const kitchenVideoCount = documents.kitchenMedia.filter((m) => m.type === 'video').length;
@@ -202,7 +203,10 @@ export default function ReviewScreen() {
       })
     : t('onboarding.missing');
   const docsComplete = Boolean(
-    documents.idProofUri && documents.fssaiUri && kitchenMediaComplete,
+    documents.idProofUri &&
+      documents.fssaiUri &&
+      documents.addressProofUri &&
+      kitchenMediaComplete,
   );
 
   return (
@@ -229,7 +233,7 @@ export default function ReviewScreen() {
         <Text style={[styles.readinessText, docsComplete && styles.readinessTextComplete]}>
           {docsComplete
             ? t('onboarding.readyToSubmit')
-            : t('onboarding.missingDocuments')}
+            : t('onboarding.docsSkippedNotice')}
         </Text>
       </View>
 
@@ -280,6 +284,7 @@ export default function ReviewScreen() {
       {/* ── DOCUMENTS ────────────────────────────────────────── */}
       <Section title={t('onboarding.documents')} editRoute="/(onboarding)/documents">
         <RowItem label={t('onboarding.idProof')} value={idStatus} />
+        <RowItem label={t('onboarding.addressProof')} value={addressStatus} />
         <RowItem label={t('onboarding.fssaiLicense')} value={fssaiStatus} />
         <RowItem label={t('onboarding.kitchenMediaLabel')} value={kitchenStatus} isLast />
       </Section>

@@ -53,6 +53,11 @@ interface OnboardingStatusResponse {
   step: number;
   chefId: string | null;
   profile: object | null;
+  // Docs-deadline guardrail: whether the required documents (ID proof +
+  // FSSAI licence) are in, and how long the 30-day upload window has left.
+  docsComplete?: boolean;
+  docsDeadlineAt?: string | null;
+  docsDaysLeft?: number;
 }
 
 const queryClient = new QueryClient({
@@ -452,10 +457,20 @@ function AppNavigator() {
     const { status, step } = onboardingStatus.data;
     if (status === 'verified') return '/(tabs)';
     if (status === 'pending_review' || status === 'submitted') {
-      return '/(onboarding)/pending';
+      // Under review: the chef lands on the tabs so they can build their
+      // kitchen, menus and settings while waiting. They cannot OPEN (the API's
+      // verification gate blocks accepting_orders) and customers cannot see
+      // them (listings filter is_verified). The dashboard banner carries the
+      // review status + the 30-day documents countdown; /pending stays
+      // reachable for the full status view.
+      return '/(tabs)';
     }
     return wizardPathForStep(step);
   })();
+
+  const underReview =
+    onboardingStatus?.data.status === 'pending_review' ||
+    onboardingStatus?.data.status === 'submitted';
 
   // Force-upgrade gate. Polls /mobile/min-version while foregrounded;
   // when the running app is below the configured minimum, every other
@@ -546,7 +561,10 @@ function AppNavigator() {
     const matched = target === '/'
       ? !here.startsWith('/login') &&
         !here.startsWith('/personal-info') &&
-        !here.startsWith('/pending')
+        // Under review the pending screen is a legitimate detail view the
+        // chef may open from the dashboard banner; for a verified chef it is
+        // stale chrome and still bounces to tabs.
+        (underReview || !here.startsWith('/pending'))
       : target === '/login'
         ? AUTH_SCREENS.includes(here) // unauth: any auth screen (register / forgot-password) is on track
         : ONBOARDING_STEPS.includes(target) && ONBOARDING_STEPS.includes(here)
@@ -562,6 +580,7 @@ function AppNavigator() {
     forceLift,
     pathname,
     expectedPath,
+    underReview,
     authKey,
     upgradeRequired,
     minVersion,

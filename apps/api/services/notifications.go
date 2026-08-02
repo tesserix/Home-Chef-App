@@ -94,7 +94,7 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		{Stream: "USERS", Durable: "notify-users", Handler: h,
 			Subjects: []string{SubjectUserRegistered, SubjectAccountDeleted, SubjectAccountRestored}},
 		{Stream: "CHEF", Durable: "notify-chef", Handler: h,
-			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified, SubjectChefTipReceived}},
+			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified, SubjectChefTipReceived, SubjectChefDocsDeadlineWarning, SubjectChefDocsDeadlineExpired}},
 		// Follower fan-out when a favorited chef publishes a weekly menu (#239).
 		// Its own durable so the (potentially large) fan-out is processed
 		// independently of the chef-facing notifications above.
@@ -174,6 +174,10 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleAccountRestored)
 	case SubjectChefVerified:
 		return decodeThen(data, s.handleChefVerified)
+	case SubjectChefDocsDeadlineWarning:
+		return decodeThen(data, s.handleChefDocsDeadlineWarning)
+	case SubjectChefDocsDeadlineExpired:
+		return decodeThen(data, s.handleChefDocsDeadlineExpired)
 	case SubjectWeeklyMenuPublished:
 		return decodeThen(data, s.handleWeeklyMenuPublished)
 	case SubjectDailyMenuPublished:
@@ -829,6 +833,60 @@ func (s *NotificationService) handleChefVerified(event Event) error {
 		UserID: event.UserID, Type: "email",
 		Title:   "Your Chef Profile is Verified!",
 		Message: "Congratulations! Your chef profile has been verified. You can now start accepting orders!",
+	})
+	return nil
+}
+
+// handleChefDocsDeadlineWarning — 5 days before the 30-day document window
+// closes: push + in-app + email, one time only (the cron claims a stamp).
+func (s *NotificationService) handleChefDocsDeadlineWarning(event Event) error {
+	daysLeft := 5
+	if v, ok := event.Data["days_left"].(float64); ok && v > 0 {
+		daysLeft = int(v)
+	}
+	title := fmt.Sprintf("%d days left to upload your documents", daysLeft)
+	body := "Your kitchen application is missing its ID proof, address proof and FSSAI licence. Upload them in the next " +
+		fmt.Sprintf("%d days", daysLeft) +
+		" or your application will be withdrawn and you'll need to re-apply."
+
+	if err := SendPushNotification(event.UserID, title, body,
+		map[string]string{"type": "docs_deadline_warning", "action": "upload_documents"}); err != nil {
+		log.Printf("docs-deadline warning push failed for %s: %v", event.UserID, err)
+	}
+
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID: event.UserID, Type: "docs_deadline_warning", Title: title, Message: body, Data: string(data),
+	}); err != nil {
+		return fmt.Errorf("save docs_deadline_warning notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "email", Title: title, Message: body,
+	})
+	return nil
+}
+
+// handleChefDocsDeadlineExpired — the window lapsed and the application was
+// withdrawn. The chef keeps their account, menus and kitchen setup, and can
+// re-apply from the app.
+func (s *NotificationService) handleChefDocsDeadlineExpired(event Event) error {
+	title := "Your kitchen application was withdrawn"
+	body := "The required documents (ID proof, address proof and FSSAI licence) weren't uploaded within 30 days, " +
+		"so your application was withdrawn. Everything you set up is saved — re-apply from the app whenever you're ready."
+
+	if err := SendPushNotification(event.UserID, title, body,
+		map[string]string{"type": "docs_deadline_expired", "action": "reapply"}); err != nil {
+		log.Printf("docs-deadline expiry push failed for %s: %v", event.UserID, err)
+	}
+
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID: event.UserID, Type: "docs_deadline_expired", Title: title, Message: body, Data: string(data),
+	}); err != nil {
+		return fmt.Errorf("save docs_deadline_expired notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "email", Title: title, Message: body,
 	})
 	return nil
 }

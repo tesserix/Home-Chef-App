@@ -307,7 +307,7 @@ export default function KitchenDetailsScreen() {
     <OnboardingScaffold
       onCancel={cancelOnboarding}
       step={2}
-      total={6}
+      total={7}
       stepName={t('onboarding.stepKitchen')}
       title={t('onboarding.kitchenTitle')}
       subtitle={t('onboarding.kitchenSubtitle')}

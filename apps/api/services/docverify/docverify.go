@@ -37,6 +37,14 @@ var anchors = map[string][]string{
 	"passport":         {"republic of india", "passport"},
 	"fssai_license":    {"food safety", "fssai", "food safety and standards"},
 	"food_safety_cert": {"food safety", "fssai"},
+	// Address proof — a gas or electricity bill. Anchor on utility-bill
+	// vocabulary; the recency guardrail (bill within the last 3 months) is
+	// enforced separately at upload time from the OCR'd dates.
+	"address_proof": {
+		"electricity", "power supply", "energy", "units consumed", "meter",
+		"bill date", "bill period", "consumer no", "consumer number",
+		"gas", "lpg", "cylinder", "vidyut", "बिजली",
+	},
 }
 
 var prettyNames = map[string]string{
@@ -45,6 +53,7 @@ var prettyNames = map[string]string{
 	"passport":         "passport",
 	"fssai_license":    "FSSAI licence",
 	"food_safety_cert": "food safety certificate",
+	"address_proof":    "gas or electricity bill",
 }
 
 var (
@@ -186,6 +195,10 @@ func assessNumber(claimedType, ocrText string, signals map[string]bool) bool {
 		return false
 	case "fssai_license", "food_safety_cert":
 		return fssaiRe.MatchString(ocrText)
+	case "address_proof":
+		// Utility bills carry no standard identifying number — the anchor
+		// vocabulary plus the upload-time recency check are the signals.
+		return true
 	case "passport":
 		up := strings.ToUpper(ocrText)
 		hasNo := passportNoRe.MatchString(up)

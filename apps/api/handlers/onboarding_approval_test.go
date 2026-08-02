@@ -100,6 +100,18 @@ func apprDoc(t *testing.T, db *gorm.DB, chefID uuid.UUID, status models.Document
 		uuid.New().String(), chefID.String(), string(models.DocFSSAILicense), string(status), exp, time.Now(), time.Now()).Error)
 }
 
+// apprRequiredDocs seeds the full required-document set (id_proof,
+// address_proof, fssai_license) — approveOneRequest refuses kitchen
+// onboardings without all three (docs-deadline guardrail).
+func apprRequiredDocs(t *testing.T, db *gorm.DB, chefID uuid.UUID) {
+	t.Helper()
+	for _, typ := range []models.DocumentType{models.DocIDProof, models.DocAddressProof, models.DocFSSAILicense} {
+		require.NoError(t, db.Exec(
+			`INSERT INTO chef_documents (id, chef_id, type, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?)`,
+			uuid.New().String(), chefID.String(), string(typ), time.Now(), time.Now()).Error)
+	}
+}
+
 func apprRequest(t *testing.T, db *gorm.DB, chefID, submitter uuid.UUID, typ models.ApprovalRequestType, status models.ApprovalRequestStatus) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
@@ -140,10 +152,29 @@ func TestApproveRequest_AlreadyApproved_400(t *testing.T) {
 	}
 }
 
+func TestApproveRequest_KitchenOnboarding_DocsMissing_400(t *testing.T) {
+	db := setupApprovalDB(t)
+	chefUser := apprUser(t, db, "customer")
+	chef := apprChef(t, db, chefUser, false)
+	appr := apprRequest(t, db, chef, chefUser, models.ApprovalKitchenOnboarding, models.ApprovalPending)
+
+	// No documents seeded — the docs-deadline guardrail must refuse approval.
+	w := callApprove(apprUser(t, db, "admin"), appr)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400 (docs missing), got %d (%s)", w.Code, w.Body.String())
+	}
+	var isVerified int
+	db.Raw(`SELECT is_verified FROM chef_profiles WHERE id = ?`, chef.String()).Scan(&isVerified)
+	if isVerified != 0 {
+		t.Fatalf("chef must stay unverified when approval is refused")
+	}
+}
+
 func TestApproveRequest_KitchenOnboarding_GoesLive(t *testing.T) {
 	db := setupApprovalDB(t)
 	chefUser := apprUser(t, db, "customer")
 	chef := apprChef(t, db, chefUser, false)
+	apprRequiredDocs(t, db, chef)
 	appr := apprRequest(t, db, chef, chefUser, models.ApprovalKitchenOnboarding, models.ApprovalPending)
 
 	w := callApprove(apprUser(t, db, "admin"), appr)
