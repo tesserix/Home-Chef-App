@@ -261,9 +261,9 @@ export function MainLayout() {
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-ink-soft mb-1">Grievance Officer</h3>
-                    {/* TODO: replace [Grievance Officer Name] and phone with the real appointed person before public launch (DPDP §13 requirement) */}
+                    {/* Email only — no phone is published, because none is staffed. */}
                     <address className="not-italic">
-                      [Grievance Officer Name]<br />
+                      Samyak Rout<br />
                       <a href="mailto:grievance@fe3dr.com" className="text-herb hover:underline">grievance@fe3dr.com</a><br />
                       Response within 15 days (DPDP Act §13)
                     </address>

@@ -146,7 +146,9 @@ export const POWERED_BY_LINE =
   'Powered by Zivana Innovations LLP, part of Tesserix Pty Ltd (ACN 694 070 865 · ABN 59 694 070 865)';
 // India grievance-officer contact (DPDP §13). Distinct from the general
 // LEGAL_SUPPORT_EMAIL; mark8ly exposes a dedicated dpo@ alongside general support.
-// TODO(ops): provision grievance@fe3dr.com mailbox + name a resident Grievance Officer (DPDP §13)
+// Mailbox is provisioned and monitored (Cloudflare Email Routing); the appointed
+// Grievance Officer is Samyak Rout. No phone is published — we list only channels
+// we actually staff, so there is no number and no business-hours claim anywhere.
 export const LEGAL_GRIEVANCE_EMAIL = 'grievance@fe3dr.com';
 export const LEGAL_LAST_UPDATED = '26 July 2026';
 

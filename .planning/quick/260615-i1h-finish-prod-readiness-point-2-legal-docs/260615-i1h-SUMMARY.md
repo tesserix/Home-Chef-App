@@ -122,9 +122,13 @@ AU-entity-vs-India-operation conflict as the top item.
 
 ## Known stubs
 
-None that block the goal. Bracketed `[Grievance Officer Name]` / `[Grievance Officer Phone]` in
-landing Privacy §10 are intentional `TODO(counsel)` placeholders — these are values only counsel can
-fill, and they are tracked as the first item in COUNSEL-REVIEW.md "Outstanding placeholders".
+None that block the goal. The bracketed Grievance Officer name/phone placeholders in landing
+Privacy §10 were intentional `TODO(counsel)` markers at the time, tracked as the first item in
+COUNSEL-REVIEW.md "Outstanding placeholders".
+
+**Resolved 2 Aug 2026 (GH #916):** the officer is named (Samyak Rout), `grievance@fe3dr.com` is
+provisioned and monitored, and no phone is published — the phone line and its business-hours claim
+were deleted rather than filled, because the owner declined to publish a number.
 
 ## Self-Check: PASSED
 - Created files: all 9 verified present (5 landing pages incl. 2 new, vendor LegalScreen + 4 screens, customer eula, COUNSEL-REVIEW.md).
