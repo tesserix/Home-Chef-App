@@ -8,6 +8,8 @@
 //   - unwraps otto's { conversation } / { messages } / { message } envelopes
 import { z } from "zod";
 
+import { openSse, type SseHandle, type SseOptions } from "./sse";
+
 import {
   CreateConversationInput,
   FeedbackInput,
@@ -200,6 +202,26 @@ export function createSupportClient(config: SupportClientConfig) {
     /** Builds the full WebSocket URL (origin + path + ?ticket=). */
     buildWsUrl: (ticket: WsTicket): string =>
       `${ticket.ws_url}?ticket=${encodeURIComponent(ticket.ticket)}`,
+
+    /**
+     * Opens the API-proxied SSE stream for a conversation. Same Envelope
+     * frames as the WebSocket, over the origin the app is already
+     * authenticated to — no ticket, no second host, no upgrade.
+     */
+    openEvents: (
+      id: string,
+      handlers: { onFrame: (data: string) => void; onOpen?: () => void; onClose?: SseOptions["onClose"] },
+    ): Promise<SseHandle> =>
+      loadSession().then(async () => {
+        const token = await config.getToken();
+        return openSse({
+          url: `${config.baseUrl}${config.basePath}/conversations/${encodeURIComponent(id)}/sse`,
+          authorization: token ? `Bearer ${token}` : undefined,
+          onFrame: handlers.onFrame,
+          onOpen: handlers.onOpen,
+          onClose: handlers.onClose,
+        });
+      }),
 
     /** The currently held otto session token, if any. */
     currentSessionToken: (): string | null => sessionToken,

@@ -104,6 +104,11 @@ func (h *SupportChatHandler) Register(g *gin.RouterGroup) {
 	g.GET("/conversations/:id/queue", h.proxy(http.MethodGet, convPath("/queue")))
 	g.POST("/conversations/:id/feedback", h.proxy(http.MethodPost, convPath("/feedback")))
 	g.POST("/conversations/:id/ws-ticket", h.wsTicket())
+	// Server-sent events: same frames as the WebSocket, but over the ordinary
+	// HTTPS origin the app already talks to. The client never handles a
+	// ticket — this mints one server-side and streams otto's SSE straight
+	// through — so real-time works where a cross-origin WS upgrade doesn't.
+	g.GET("/conversations/:id/sse", h.sse())
 }
 
 type pathFunc func(c *gin.Context) string
@@ -246,6 +251,77 @@ func (h *SupportChatHandler) wsTicket() gin.HandlerFunc {
 			"ticket": minted.Ticket,
 			"ws_url": h.wsURL(c, c.Param("id")),
 		})
+	}
+}
+
+// sse streams otto's server-sent events for one conversation. The caller is
+// already BFF-authenticated, so this mints the otto ticket itself and pipes
+// the stream through — the app needs no ticket, no second origin, and no
+// WebSocket upgrade. Frames are forwarded verbatim (same Envelope JSON the
+// socket carries) and flushed per chunk so nothing buffers.
+func (h *SupportChatHandler) sse() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		res, ok := h.forward(c, http.MethodPost, convPath("/ws-ticket")(c))
+		if !ok {
+			return
+		}
+		if res.Status != http.StatusOK {
+			h.relay(c, res)
+			return
+		}
+		var minted struct {
+			Ticket string `json:"ticket"`
+		}
+		if err := json.Unmarshal(res.Body, &minted); err != nil || minted.Ticket == "" {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "ticket_mint_failed"})
+			return
+		}
+
+		upstream := h.baseURL + ottoStorefrontBase +
+			"/conversations/" + url.PathEscape(c.Param("id")) +
+			"/sse?ticket=" + url.QueryEscape(minted.Ticket)
+
+		// No client timeout: an SSE stream is meant to stay open. The
+		// request context ends it when the app disconnects.
+		req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, upstream, nil)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "support_unreachable"})
+			return
+		}
+		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("X-Internal-Auth", h.secret)
+
+		resp, err := (&http.Client{}).Do(req)
+		if err != nil {
+			log.Printf("support_chat: otto sse failed: %v", err)
+			c.JSON(http.StatusBadGateway, gin.H{"error": "support_unreachable"})
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "support_unreachable"})
+			return
+		}
+
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("Connection", "keep-alive")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+		c.Writer.Flush()
+
+		buf := make([]byte, 4096)
+		for {
+			n, err := resp.Body.Read(buf)
+			if n > 0 {
+				if _, werr := c.Writer.Write(buf[:n]); werr != nil {
+					return
+				}
+				c.Writer.Flush()
+			}
+			if err != nil {
+				return // upstream closed or the peer went away
+			}
+		}
 	}
 }
 

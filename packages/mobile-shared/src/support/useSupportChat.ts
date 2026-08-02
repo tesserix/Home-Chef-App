@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 
 import { SupportError, type SupportClient } from "./client";
+import type { SseHandle } from "./sse";
 import { mergeMessage, mergeMessages, parseOttoEvent } from "./events";
 import {
   addItem,
@@ -87,6 +88,7 @@ export function useSupportChat({
   const [error, setError] = useState<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
+  const sseRef = useRef<SseHandle | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attemptsRef = useRef(0);
@@ -187,6 +189,10 @@ export function useSupportChat({
       socketRef.current.close();
       socketRef.current = null;
     }
+    if (sseRef.current) {
+      sseRef.current.close();
+      sseRef.current = null;
+    }
     setConnectedBoth(false);
   }, []);
 
@@ -220,6 +226,31 @@ export function useSupportChat({
           teardownSocket();
         }
       };
+
+      // SSE first. It runs over the same authenticated origin as every other
+      // API call, so it works on networks and clients where a cross-origin
+      // WebSocket upgrade does not — and it carries identical frames. The
+      // socket stays as the upgrade path when SSE is unavailable.
+      try {
+        const stream = await client.openEvents(conversationId, {
+          onFrame,
+          onOpen,
+          onClose: (reason) => {
+            sseRef.current = null;
+            setConnectedBoth(false);
+            if (closedByUsRef.current || reason === "unauthorized") return;
+            reconnect();
+          },
+        });
+        if (closedByUsRef.current) {
+          stream.close();
+          return;
+        }
+        sseRef.current = stream;
+        return;
+      } catch {
+        // Fall through to the WebSocket.
+      }
 
       let ticket;
       try {
