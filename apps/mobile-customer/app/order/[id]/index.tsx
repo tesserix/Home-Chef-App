@@ -324,6 +324,14 @@ export default function OrderDetailScreen() {
   // "delivery fee" as (total − subtotal), which mislabels service fee + tax.
   const isPickup = order.fulfillmentType === 'pickup';
   const deliveryFee = order.deliveryFee ?? 0;
+  // #703 — the chef can lower the delivery fee when they accept, and the
+  // difference is refunded. The row keeps the CHARGED figure (so the breakdown
+  // still sums to Total, which is what was billed); the reduction is called out
+  // on its own line rather than silently folded into the generic refund total.
+  const deliveryFeeReduction =
+    typeof order.deliveryFeeFinal === 'number'
+      ? Math.round((deliveryFee - order.deliveryFeeFinal) * 100) / 100
+      : 0;
   const platformFee = order.platformFee ?? 0;
   const tax = order.tax ?? 0;
   const discount = order.discount ?? 0;
@@ -916,6 +924,12 @@ export default function OrderDetailScreen() {
               {isPickup ? 'Free' : `₹${deliveryFee.toFixed(2)}`}
             </Text>
           </View>
+          {deliveryFeeReduction > 0.005 ? (
+            <Text style={styles.priceNote}>
+              Your chef set delivery to ₹{(order.deliveryFeeFinal ?? 0).toFixed(2)} — ₹
+              {deliveryFeeReduction.toFixed(2)} refunded to your original payment method.
+            </Text>
+          ) : null}
           {platformFee > 0 ? (
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Platform fee</Text>
@@ -956,7 +970,14 @@ export default function OrderDetailScreen() {
               </View>
               {order.totalAmount - order.refundAmount > 0.5 ? (
                 <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Retained (fees + cancellation charge)</Text>
+                  {/* "cancellation charge" is only true of a cancelled order —
+                      a live order refunds for other reasons (#703 delivery-fee
+                      reduction), where the remainder is simply what they paid. */}
+                  <Text style={styles.priceLabel}>
+                    {order.status === 'cancelled' || order.status === 'refunded'
+                      ? 'Retained (fees + cancellation charge)'
+                      : 'You paid'}
+                  </Text>
                   <Text style={styles.priceValue}>
                     ₹{(order.totalAmount - order.refundAmount).toFixed(2)}
                   </Text>
@@ -1588,6 +1609,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: customerColors.charcoal.DEFAULT,
     fontVariant: ['tabular-nums'],
+  },
+  // Caption hanging off the row above it — explains a figure without adding a
+  // second money column the breakdown would then have to reconcile.
+  priceNote: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    lineHeight: 16,
+    color: customerColors.success.DEFAULT,
+    marginTop: -4,
+    marginBottom: 8,
   },
   // Total row — hairline above, heavier weight
   totalRow: {
