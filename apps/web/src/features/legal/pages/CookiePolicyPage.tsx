@@ -590,14 +590,14 @@ export default function CookiePolicyPage() {
                 Questions about cookies, or want to file a complaint about
                 how we handle them? Reach our Grievance Officer.
               </p>
-              {/* TODO: replace [Grievance Officer Name] and phone with the real appointed person before public launch (DPDP §13 requirement) */}
+              {/* Email only — no phone is published, because none is staffed. */}
               <Card variant="filled" padding="md" className="mt-6">
                 <dl className="space-y-3 text-sm">
                   <div className="flex flex-wrap gap-x-3">
                     <dt className="font-medium text-ink">
                       Grievance Officer:
                     </dt>
-                    <dd className="text-ink-soft">[Grievance Officer Name]</dd>
+                    <dd className="text-ink-soft">Samyak Rout</dd>
                   </div>
                   <div className="flex flex-wrap gap-x-3">
                     <dt className="font-medium text-ink">Email:</dt>

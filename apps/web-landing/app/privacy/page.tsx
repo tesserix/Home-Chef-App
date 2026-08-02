@@ -108,10 +108,10 @@ const SECTIONS: LegalSection[] = [
     heading: '10. Grievance Officer',
     paragraphs: [
       'For our India operations we have appointed a Grievance Officer under Section 13 of the DPDP Act and the IT (Intermediary Guidelines) Rules, 2021. They acknowledge complaints within 24 hours and aim to resolve them within 15 days.',
-      // TODO(counsel): replace bracketed Grievance Officer name and phone with the real India-resident appointee before launch (DPDP §13 requirement).
-      '• Name: [Grievance Officer Name]',
-      '• Phone: [Grievance Officer Phone] (Mon–Fri, 10:00–18:00 IST)',
-      `• Grievance Officer (India): ${LEGAL_GRIEVANCE_EMAIL}`,
+      // No phone line by design: we publish only channels we actually monitor.
+      // A number we do not answer (and hours for it) would be a false statement.
+      '• Name: Samyak Rout',
+      `• Email: ${LEGAL_GRIEVANCE_EMAIL}`,
       `• General support and legal contact: ${LEGAL_SUPPORT_EMAIL}`,
       'If we do not resolve your grievance, you can complain to the Data Protection Board of India.',
     ],

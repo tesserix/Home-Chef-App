@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import {
   ShieldAlert,
   Mail,
-  Phone,
   Scale,
   UserCheck,
   Baby,
@@ -655,10 +654,10 @@ export default function PrivacyPolicyPage() {
                   </p>
                 </div>
               </div>
-              {/* TODO: replace [Grievance Officer Name] and phone with the real appointed person before public launch (DPDP §13 requirement) */}
+              {/* Email only — no phone is published, because none is staffed. */}
               <dl className="grid gap-y-3 sm:grid-cols-[160px_1fr] text-ink">
                 <dt className="font-semibold">Name</dt>
-                <dd>[Grievance Officer Name]</dd>
+                <dd>Samyak Rout</dd>
 
                 <dt className="font-semibold">Designation</dt>
                 <dd>Grievance Officer, Tesserix Pty Ltd</dd>
@@ -674,11 +673,6 @@ export default function PrivacyPolicyPage() {
                     grievance@fe3dr.com
                   </a>
                 </dd>
-
-                <dt className="font-semibold inline-flex items-center gap-1.5">
-                  <Phone aria-hidden="true" className="h-4 w-4" /> Phone
-                </dt>
-                <dd>[Grievance Officer Phone] (Mon–Fri, 10:00–18:00 IST)</dd>
 
                 <dt className="font-semibold">Postal address</dt>
                 <dd>Tesserix Pty Ltd, New South Wales, Australia (operations: Mumbai, India and Sydney, Australia)</dd>
