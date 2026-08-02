@@ -800,6 +800,25 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 		}
 	}
 
+	// Date window. `since_days` is a rolling window; `from`/`to` are inclusive
+	// calendar dates (YYYY-MM-DD) for "what did I order on the 12th".
+	//
+	// These are what the support assistant's list_recent_orders tool has always
+	// sent — it advertises "orders in the last N days" and passed since_days,
+	// which this handler silently ignored, so Otto described a 14-day window
+	// while listing every order the customer had ever placed.
+	if d, err := strconv.Atoi(c.Query("since_days")); err == nil && d > 0 {
+		query = query.Where("created_at >= ?", time.Now().AddDate(0, 0, -d))
+	}
+	if from, err := time.Parse("2006-01-02", c.Query("from")); err == nil {
+		query = query.Where("created_at >= ?", from)
+	}
+	if to, err := time.Parse("2006-01-02", c.Query("to")); err == nil {
+		// Inclusive of the whole end day — a customer asking about "the 12th"
+		// means all of it, not up to midnight at its start.
+		query = query.Where("created_at < ?", to.AddDate(0, 0, 1))
+	}
+
 	var total int64
 	query.Model(&models.Order{}).Count(&total)
 
