@@ -248,7 +248,8 @@
         {
           "mode": "production",
           "icon": "./assets/notification-icon.png",
-          "color": "#FF385C"
+          "color": "#FF385C",
+          "defaultChannel": "order-updates"
         }
       ],
       [

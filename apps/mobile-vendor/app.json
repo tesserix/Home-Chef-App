@@ -219,7 +219,8 @@
         {
           "mode": "production",
           "icon": "./assets/notification-icon.png",
-          "color": "#FA6F5C"
+          "color": "#FA6F5C",
+          "defaultChannel": "order-updates"
         }
       ],
       "expo-web-browser",
