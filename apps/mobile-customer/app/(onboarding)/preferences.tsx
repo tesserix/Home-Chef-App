@@ -9,6 +9,11 @@ import { api } from '../../lib/api';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useAlert } from '@homechef/mobile-shared/ui';
+import {
+  DIET_OPTIONS,
+  ALLERGEN_OPTIONS,
+  type DietaryOption,
+} from '@homechef/mobile-shared/dietary';
 
 const CUISINE_OPTIONS = [
   'North Indian',
@@ -26,11 +31,77 @@ const CUISINE_OPTIONS = [
 const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const CTA_RIPPLE = `${customerColors.canvas}33`;
 
+/** Immutable add/remove — never mutates the array held in the draft store. */
+const toggleValue = (list: string[], value: string): string[] =>
+  list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+
+function SectionHeading({ title, helper }: { title: string; helper: string }) {
+  return (
+    <>
+      <Text className="text-base font-semibold text-charcoal mb-1">{title}</Text>
+      <Text className="text-[13px] text-charcoal-soft mb-3">{helper}</Text>
+    </>
+  );
+}
+
+/**
+ * Chip group for the shared {value,label} dietary taxonomy. Same neutral coral
+ * chips as the cuisine row above — allergens are deliberately not tinted
+ * destructive here: this is an optional question during signup, not a warning.
+ * iOS Pressable pattern: layout/visual classes live on the inner View.
+ */
+function OptionChips({
+  options,
+  selectedValues,
+  onToggle,
+}: {
+  options: DietaryOption[];
+  selectedValues: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <View className="flex-row flex-wrap gap-2 mb-8">
+      {options.map((opt) => {
+        const isActive = selectedValues.includes(opt.value);
+        return (
+          <Pressable
+            key={opt.value}
+            onPress={() => onToggle(opt.value)}
+            accessibilityRole="checkbox"
+            accessibilityLabel={opt.label}
+            accessibilityState={{ checked: isActive }}
+            android_ripple={{ color: CHIP_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                className={`px-4 py-2 rounded-full border ${
+                  isActive ? 'bg-coral-tint border-coral' : 'bg-canvas border-hairline'
+                }`}
+                style={pressed && Platform.OS === 'ios' ? { opacity: 0.7 } : undefined}
+              >
+                <Text
+                  className={`text-sm font-medium ${
+                    isActive ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                  }`}
+                >
+                  {opt.label}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function PreferencesScreen() {
   const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const draft = useCustomerOnboardingStore();
   const selected = draft.cuisinePreferences;
+  const dietPrefs = draft.dietaryPreferences;
+  const allergyPrefs = draft.foodAllergies;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const setOnboardingComplete = useAuthStore(
@@ -38,11 +109,15 @@ export default function PreferencesScreen() {
   );
 
   const toggleChip = (cuisine: string) => {
-    draft.update({
-      cuisinePreferences: selected.includes(cuisine)
-        ? selected.filter((c) => c !== cuisine)
-        : [...selected, cuisine],
-    });
+    draft.update({ cuisinePreferences: toggleValue(selected, cuisine) });
+  };
+
+  const toggleDiet = (value: string) => {
+    draft.update({ dietaryPreferences: toggleValue(dietPrefs, value) });
+  };
+
+  const toggleAllergy = (value: string) => {
+    draft.update({ foodAllergies: toggleValue(allergyPrefs, value) });
   };
 
   const onFinish = async () => {
@@ -67,6 +142,10 @@ export default function PreferencesScreen() {
         addressLatitude: draft.latitude ?? 0,
         addressLongitude: draft.longitude ?? 0,
         cuisinePreferences: selected,
+        // Field names must match the Go binding tags on CompleteOnboarding —
+        // the server already persists both; the client just never sent them (#912).
+        dietaryPreferences: dietPrefs,
+        foodAllergies: allergyPrefs,
       });
 
       // Application saved — clear the local draft so a future re-onboard
@@ -112,15 +191,20 @@ export default function PreferencesScreen() {
 
         {/* ── Heading ── */}
         <Text className="text-[26px] font-bold text-charcoal tracking-tight font-display mb-2">
-          What do you love to eat?
+          Tell us about your food
         </Text>
         <Text className="text-[15px] text-charcoal-soft mb-8">
-          Select your favourite cuisines to get personalised recommendations.
+          This helps us recommend dishes you'll love and flag the ones that don't
+          suit you. All of it is optional.
         </Text>
 
         {/* ── Cuisine chips ── */}
+        <SectionHeading
+          title="Cuisines you love"
+          helper="We'll show these first in your recommendations."
+        />
         {/* iOS Pressable pattern: visual styles on inner View */}
-        <View className="flex-row flex-wrap gap-2 mb-10">
+        <View className="flex-row flex-wrap gap-2 mb-8">
           {CUISINE_OPTIONS.map((cuisine) => {
             const isActive = selected.includes(cuisine);
             return (
@@ -154,6 +238,28 @@ export default function PreferencesScreen() {
             );
           })}
         </View>
+
+        {/* ── Diet chips (#912) ── */}
+        <SectionHeading
+          title="Diet"
+          helper="We'll flag dishes that don't match how you eat."
+        />
+        <OptionChips
+          options={DIET_OPTIONS}
+          selectedValues={dietPrefs}
+          onToggle={toggleDiet}
+        />
+
+        {/* ── Allergen chips (#912) ── */}
+        <SectionHeading
+          title="Allergies to avoid"
+          helper="Optional — we'll warn you before you order a dish containing these. You can change this any time in Profile → Food preferences."
+        />
+        <OptionChips
+          options={ALLERGEN_OPTIONS}
+          selectedValues={allergyPrefs}
+          onToggle={toggleAllergy}
+        />
 
         {/* ── Primary CTA ── */}
         <Pressable
