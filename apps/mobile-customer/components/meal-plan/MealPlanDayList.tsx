@@ -9,11 +9,13 @@
 // optional Skip action (detail screen only — the sheet is read-only).
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Check, X } from 'lucide-react-native';
+import { AlertTriangle, Check, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { DietIcon } from '@homechef/mobile-shared/ui';
+import { findItemConflicts } from '@homechef/mobile-shared/dietary';
 
-import { type MealPlanDay } from '../../hooks/useMealPlans';
+import { type MealPlanDay, type WeeklyMenuItem, useChefWeeklyMenu } from '../../hooks/useMealPlans';
+import { useProfile } from '../../hooks/useProfile';
 import { mealPlanDayStatusMeta, isDeclinedDayStatus } from '../../lib/meal-plan';
 import { canConfirmReceipt } from '../../lib/payout-hold';
 import { CookingIndicator } from '../status/CookingIndicator';
@@ -28,6 +30,9 @@ function dayLabel(d: MealPlanDay): string {
 
 export interface MealPlanDayListProps {
   days: MealPlanDay[];
+  /** The plan's chef — resolves each day's dish against the chef's weekly
+   *  menu for the dietary-conflict warning (#901). */
+  chefId: string;
   /** When provided, a Skip link renders on still-skippable (confirmed) days. */
   onSkip?: (dayId: string) => void;
   /** Disables the Skip links while a skip request is in flight. */
@@ -46,6 +51,7 @@ export interface MealPlanDayListProps {
 
 export function MealPlanDayList({
   days,
+  chefId,
   onSkip,
   skipping,
   onConfirmReceived,
@@ -53,11 +59,30 @@ export function MealPlanDayList({
   onReportIssue,
   showPrice = true,
 }: MealPlanDayListProps) {
+  // Dietary-conflict data (#901) — fetched once per render, not per day (hooks
+  // rule: no per-row hook calls in the .map() below).
+  const { data: profile } = useProfile();
+  const { data: weeklyMenu } = useChefWeeklyMenu(chefId);
+  const menuById = new Map<string, WeeklyMenuItem>();
+  for (const it of weeklyMenu?.items ?? []) {
+    if (it.id) menuById.set(it.id, it);
+  }
+
   return (
     <View style={styles.card}>
       {days.map((d, i) => {
         const declined = isDeclinedDayStatus(d.status);
         const meta = mealPlanDayStatusMeta(d.status);
+        // Resolve the day's dish against the chef's weekly menu when possible;
+        // even unmatched, the day's own variant still catches a veg/non-veg
+        // clash, so this never silently shows nothing (#901 quality bar).
+        const matched = d.weeklyMenuItemId ? menuById.get(d.weeklyMenuItemId) : undefined;
+        const conflicts = profile
+          ? findItemConflicts(
+              { dietaryPreferences: profile.dietaryPreferences, foodAllergies: profile.foodAllergies },
+              { dietaryTags: matched?.dietaryTags, allergens: matched?.allergens, isVeg: d.variant === 'veg' },
+            )
+          : [];
         return (
           <View key={d.id} style={[styles.dayRow, i < days.length - 1 && styles.divider]}>
             <View style={[styles.statusIcon, declined ? styles.statusBad : styles.statusOk]}>
@@ -93,6 +118,15 @@ export function MealPlanDayList({
                   <Text style={[styles.dayStatusText, { color: meta.color }]}>{meta.label}</Text>
                 </View>
               </View>
+              {/* Dietary-conflict warning (#901) — calm, factual, informational only. */}
+              {conflicts.length > 0 ? (
+                <View style={styles.warnRow}>
+                  <AlertTriangle size={12} color={customerColors.destructive.DEFAULT} strokeWidth={2} />
+                  <Text style={styles.warnText} numberOfLines={2}>
+                    {conflicts.map((cf) => cf.detail).join(' · ')}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               {showPrice ? (
@@ -168,6 +202,9 @@ const styles = StyleSheet.create({
   dayStatusPill: { borderRadius: 9999, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start' },
   dayStatusText: { fontFamily: 'Inter-SemiBold', fontSize: 11, letterSpacing: 0.2 },
   daySub: { flex: 1, fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
+  // Dietary-conflict warning (#901) — matches WeeklyMenuDishCard/MenuItemCard tone.
+  warnRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 5 },
+  warnText: { flex: 1, fontFamily: 'Inter-SemiBold', fontSize: 11, lineHeight: 15, color: customerColors.destructive.DEFAULT },
   price: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT, fontVariant: ['tabular-nums'] },
   dim: { color: customerColors.charcoal.soft, textDecorationLine: 'line-through' },
   // WCAG 2.2 target floor. These were 12px text + hitSlop 8 -> ~32px: the
