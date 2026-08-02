@@ -308,6 +308,24 @@ func RefundIssueToWalletWithPolicy(db *gorm.DB, issue *models.OrderIssue, amount
 	if !won {
 		return nil // lost the claim → no credit happened → must not touch the payout hold
 	}
+	// #937: money actually went back to this customer — record it against their risk
+	// ledger. Keyed on the issue, so the claim guard above already guarantees once-only;
+	// the unique SourceKey is defence in depth. Best-effort, post-commit: the refund is
+	// done and must not be undone by risk accounting.
+	refundKind := models.RiskIssueResolved
+	if by == "system" {
+		refundKind = models.RiskIssueAutoRefunded
+	}
+	riskChefID := issue.ChefID
+	TrackRiskEvent(db, RecordRiskEventInput{
+		CustomerID: issue.CustomerID,
+		Kind:       refundKind,
+		SourceKey:  "issue-refund:" + issue.ID.String(),
+		OrderID:    &issue.OrderID,
+		ChefID:     &riskChefID,
+		Amount:     creditApplied,
+		Reason:     string(issue.Reason),
+	})
 	// Cross-guard the payout hold (#457/#549/#586): the customer just got money back, so the
 	// chef must not keep it. A FULL refund drives the WHOLE hold to withheld/reversed; a
 	// PARTIAL claws back ONLY the refunded portion from the chef's transfer and LEAVES the

@@ -266,6 +266,12 @@ func Migrate() error {
 		&models.Referral{},
 		&models.OrderIssue{},
 
+		// Customer refund-abuse detection (#937): append-only event ledger, the
+		// derived score the admin queue reads, and the audit of every decision.
+		&models.CustomerRiskEvent{},
+		&models.CustomerRiskProfile{},
+		&models.CustomerRiskAction{},
+
 		// Notifications
 		&models.Notification{},
 		&models.NotificationPreference{},

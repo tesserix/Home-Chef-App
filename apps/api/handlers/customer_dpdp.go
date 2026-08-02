@@ -5,6 +5,7 @@ import (
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 // customer_dpdp.go — DPDP Act 2023 data-subject endpoints for the customer role,
@@ -67,6 +68,16 @@ func (h *CustomerDPDPHandler) ExportMyData(c *gin.Context) {
 	var catering []models.CateringRequest
 	database.DB.Where("customer_id = ?", userID).Find(&catering)
 	dump["cateringRequests"] = catering
+
+	// #937: the refund-abuse profile and the events behind it are personal data and an
+	// automated assessment of the person, so the export has to show both — the score AND
+	// what it was derived from. Anything less is a decision the subject cannot contest.
+	if profile := services.GetCustomerRiskProfile(database.DB, userID); profile != nil {
+		dump["riskProfile"] = profile
+	}
+	var riskEvents []models.CustomerRiskEvent
+	database.DB.Where("customer_id = ?", userID).Order("occurred_at DESC").Find(&riskEvents)
+	dump["riskEvents"] = riskEvents
 
 	writeExportJSON(c, dump)
 }

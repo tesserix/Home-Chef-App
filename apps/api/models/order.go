@@ -555,6 +555,11 @@ type ChefOrderDetailResponse struct {
 	// no more Mark-delivered/Couldn't-deliver actions, a terminal "under review"
 	// footer, and it drops out of the active list.
 	DeliveryFailureReported bool `json:"deliveryFailureReported,omitempty"`
+	// DisputeSignal is a neutral heads-up when this customer has an elevated dispute
+	// history (#937): a band word and one action. Omitted for almost every order, and it
+	// carries no numbers — the chef is told to photograph the handover, not who to
+	// distrust. Only ever populated once risk enforcement is switched on.
+	DisputeSignal *DisputeSignal `json:"disputeSignal,omitempty"`
 }
 
 func (o *Order) ToResponse() OrderResponse {

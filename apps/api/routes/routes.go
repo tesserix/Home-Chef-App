@@ -1299,6 +1299,16 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/order-issue/config", adminHandler.GetOrderIssueConfig)
 			admin.PUT("/order-issue/config", adminHandler.UpdateOrderIssueConfig)
 
+			// Customer refund-abuse investigation queue (#937). Every order-scoped guard
+			// on the issue path is blind to a customer claiming a little on many orders;
+			// this is the customer-scoped view, and the only place an account is actioned.
+			admin.GET("/customer-risk", adminHandler.GetCustomerRiskQueue)
+			admin.GET("/customer-risk/config", adminHandler.GetCustomerRiskConfig)
+			admin.PUT("/customer-risk/config", adminHandler.UpdateCustomerRiskConfig)
+			admin.GET("/customer-risk/:userId", adminHandler.GetCustomerRiskDetail)
+			admin.POST("/customer-risk/:userId/review", adminHandler.ReviewCustomerRisk)
+			admin.POST("/customer-risk/:userId/recompute", adminHandler.RecomputeCustomerRiskProfile)
+
 			admin.GET("/referral/config", adminHandler.GetReferralConfig)
 			admin.PUT("/referral/config", adminHandler.UpdateReferralConfig)
 			// Chef-refers-chef program + chef loyalty (points → cashback) config,
