@@ -28,6 +28,10 @@ export interface WeeklyMenuItem {
   isCombo?: boolean;
   /** The dishes the thali/combo includes (e.g. ["Rice","Dal","Sabji"]). */
   comboComponents?: string[];
+  // Mirrors the server's WeeklyMenuItem.DietaryTags/Allergens (#41/#901 —
+  // previously dropped client-side, so recurring surfaces never saw them).
+  dietaryTags?: string[];
+  allergens?: string[];
 }
 
 export interface WeeklyMenu {
@@ -51,6 +55,11 @@ export interface DailyMenuItem {
   isCombo: boolean;
   comboComponents: string[];
   sortOrder: number;
+  // Mirrors the server's DailyMenuItem.DietaryTags/Allergens (#901 scope
+  // addition — book-meal-plan.tsx is the primary money-commit path and was
+  // dropping these the same way WeeklyMenuItem was).
+  dietaryTags?: string[];
+  allergens?: string[];
 }
 
 export interface DailyMenuDay {
@@ -62,6 +71,9 @@ export interface DailyMenuDay {
 
 export interface MealPlanDay {
   id: string;
+  // Mirrors the server's MealPlanDay.WeeklyMenuItemID (#901) — resolves this
+  // day's booked dish back against the chef's weekly menu for conflict checks.
+  weeklyMenuItemId?: string;
   date: string;
   slot: MealSlot;
   variant: MealVariant;
