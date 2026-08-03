@@ -105,6 +105,56 @@ func TestSuggestedTimes_SkipsClosedDay(t *testing.T) {
 	}
 }
 
+func TestSuggestedTimes_CoversWholeOpenDay(t *testing.T) {
+	// The reported bug: a chef open 10:00–22:00 was only offered the platform meal
+	// windows (12:00–14:30 / 16:30–18:00 / 19:00–21:30), so 10:00–12:00, 14:30–16:30,
+	// 18:00–19:00 and 21:00–22:00 were open but unbookable. Open hours are the offer.
+	monday := istMoment(2026, time.July, 20, 6, 0)
+	schedules := []models.ChefSchedule{
+		{DayOfWeek: int(time.Monday), OpenTime: "10:00", CloseTime: "22:00"},
+	}
+	times := BuildSuggestedFulfillmentTimes(nil, schedules, 30, monday, 64)
+
+	got := make(map[string]bool)
+	for _, s := range times {
+		if s.Day != "Today" {
+			continue
+		}
+		got[s.At.In(istLoc).Format("15:04")] = true
+		mins := s.At.In(istLoc).Hour()*60 + s.At.In(istLoc).Minute()
+		if mins < 10*60 || mins >= 22*60 {
+			t.Errorf("slot %s outside open hours 10:00-22:00", s.Label)
+		}
+		if s.Meal == "" {
+			t.Errorf("slot %s has no meal label", s.Label)
+		}
+	}
+	// Times inside the old platform gaps must now be offered.
+	for _, want := range []string{"10:00", "11:00", "15:00", "16:00", "18:30", "21:30"} {
+		if !got[want] {
+			t.Errorf("expected slot %s inside the kitchen's open hours, not offered", want)
+		}
+	}
+}
+
+func TestSuggestedTimes_MealLabelsAreContiguous(t *testing.T) {
+	// Every slot in an all-day kitchen gets a label, so the checkout groups cleanly.
+	monday := istMoment(2026, time.July, 20, 6, 0)
+	schedules := []models.ChefSchedule{
+		{DayOfWeek: int(time.Monday), OpenTime: "09:00", CloseTime: "21:00"},
+	}
+	times := BuildSuggestedFulfillmentTimes(nil, schedules, 30, monday, 64)
+	want := map[string]string{"09:30": "Breakfast", "12:00": "Lunch", "17:00": "Snacks", "20:00": "Dinner"}
+	for _, s := range times {
+		if s.Day != "Today" {
+			continue
+		}
+		if w, ok := want[s.At.In(istLoc).Format("15:04")]; ok && s.Meal != w {
+			t.Errorf("slot %s labelled %q, want %q", s.Label, s.Meal, w)
+		}
+	}
+}
+
 func TestSuggestedTimes_PrefersChefConfiguredWindows(t *testing.T) {
 	// Chef lunch window 13:00–14:00 overrides the default 12:00 lunch start.
 	now := istMoment(2026, time.July, 20, 6, 0)

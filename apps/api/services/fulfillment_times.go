@@ -13,14 +13,18 @@ package services
 //
 // WHERE THE TIMES COME FROM (the chef's own configuration, then sensible defaults)
 //
-//  1. Meal windows — the chef's configured lunch/dinner slot windows
-//     (ChefCapacitySettings.LunchSlot*/DinnerSlot*) when set, else platform
-//     default meal windows (breakfast/lunch/snacks/dinner).
-//  2. Bounded by the kitchen's open hours for that weekday (ChefSchedule); a day
-//     the kitchen is closed produces no times, and windows are clipped to
-//     open–close so nothing outside service hours is offered.
-//  3. Never earlier than now + prep headroom (from the chef's PrepTime), and it
+//  1. The kitchen's open hours for that weekday (ChefSchedule) ARE the offer —
+//     a chef open 10:00–22:00 is bookable across all of it. A day the kitchen is
+//     closed produces no times.
+//  2. A chef who configured explicit service windows
+//     (ChefCapacitySettings.LunchSlot*/DinnerSlot*) gets exactly those instead —
+//     that narrowing is their own deliberate choice.
+//  3. Only when neither is configured do the platform default meal windows apply.
+//  4. Never earlier than now + prep headroom (from the chef's PrepTime), and it
 //     rolls forward across days until enough real slots are found.
+//
+// Meal names LABEL a slot, they never gate it — platform windows carving holes
+// out of an open kitchen's day is what made checkout times look arbitrary.
 //
 // The customer still defaults to "as soon as ready" (the chef decides); these are
 // the concrete alternatives they can propose instead.
@@ -65,25 +69,35 @@ func defaultMealWindows() []mealWindow {
 	}
 }
 
-// chefMealWindows prefers the chef's own lunch/dinner windows over the defaults.
-func chefMealWindows(cap *models.ChefCapacitySettings) []mealWindow {
-	ws := defaultMealWindows()
+// chefConfiguredWindows returns only the service windows the chef set themselves,
+// or nil when they set none — in which case their open hours are the offer.
+func chefConfiguredWindows(cap *models.ChefCapacitySettings) []mealWindow {
 	if cap == nil {
-		return ws
+		return nil
 	}
-	for i := range ws {
-		switch ws[i].meal {
-		case "Lunch":
-			if cap.LunchSlotStart != "" && cap.LunchSlotEnd != "" {
-				ws[i].start, ws[i].end = cap.LunchSlotStart, cap.LunchSlotEnd
-			}
-		case "Dinner":
-			if cap.DinnerSlotStart != "" && cap.DinnerSlotEnd != "" {
-				ws[i].start, ws[i].end = cap.DinnerSlotStart, cap.DinnerSlotEnd
-			}
-		}
+	var ws []mealWindow
+	if cap.LunchSlotStart != "" && cap.LunchSlotEnd != "" {
+		ws = append(ws, mealWindow{"Lunch", cap.LunchSlotStart, cap.LunchSlotEnd})
+	}
+	if cap.DinnerSlotStart != "" && cap.DinnerSlotEnd != "" {
+		ws = append(ws, mealWindow{"Dinner", cap.DinnerSlotStart, cap.DinnerSlotEnd})
 	}
 	return ws
+}
+
+// mealLabelFor names a slot by time of day. The bands are contiguous so every
+// time inside a kitchen's open hours gets a label and the UI groups cleanly.
+func mealLabelFor(t time.Time) string {
+	switch h := t.In(istLoc).Hour(); {
+	case h < 11:
+		return "Breakfast"
+	case h < 16:
+		return "Lunch"
+	case h < 19:
+		return "Snacks"
+	default:
+		return "Dinner"
+	}
 }
 
 var prepNumberRe = regexp.MustCompile(`\d+`)
@@ -124,7 +138,7 @@ func BuildSuggestedFulfillmentTimes(
 	if prepMinutes <= 0 {
 		prepMinutes = defaultPrepMinutes
 	}
-	windows := chefMealWindows(cap)
+	configured := chefConfiguredWindows(cap)
 
 	byWeekday := make(map[int]models.ChefSchedule, len(schedules))
 	for _, s := range schedules {
@@ -153,13 +167,37 @@ func BuildSuggestedFulfillmentTimes(
 			}
 		}
 
-		for _, w := range windows {
-			ws, ok1 := atIST(day, w.start)
-			we, ok2 := atIST(day, w.end)
-			if !ok1 || !ok2 || !we.After(ws) {
-				continue
+		// The kitchen's open hours are the offer unless the chef narrowed them
+		// themselves; platform defaults only cover a chef with no schedule at all.
+		type slotWindow struct {
+			meal       string // "" — label each slot from its own time of day
+			start, end time.Time
+		}
+		var dayWindows []slotWindow
+		switch {
+		case len(configured) > 0:
+			for _, w := range configured {
+				ws, ok1 := atIST(day, w.start)
+				we, ok2 := atIST(day, w.end)
+				if ok1 && ok2 && we.After(ws) {
+					dayWindows = append(dayWindows, slotWindow{w.meal, ws, we})
+				}
 			}
-			if haveSchedule { // clip the meal window to the kitchen's open hours.
+		case haveSchedule:
+			dayWindows = []slotWindow{{"", openT, closeT}}
+		default:
+			for _, w := range defaultMealWindows() {
+				ws, ok1 := atIST(day, w.start)
+				we, ok2 := atIST(day, w.end)
+				if ok1 && ok2 && we.After(ws) {
+					dayWindows = append(dayWindows, slotWindow{w.meal, ws, we})
+				}
+			}
+		}
+
+		for _, w := range dayWindows {
+			ws, we := w.start, w.end
+			if haveSchedule { // never offer a time the kitchen is shut.
 				if ws.Before(openT) {
 					ws = openT
 				}
@@ -178,11 +216,15 @@ func BuildSuggestedFulfillmentTimes(
 					continue
 				}
 				seen[t.Unix()] = true
+				meal := w.meal
+				if meal == "" {
+					meal = mealLabelFor(t)
+				}
 				out = append(out, SuggestedFulfillmentTime{
 					At:    t,
 					Label: t.In(istLoc).Format("3:04 pm"),
 					Day:   fulfillmentDayLabel(day, now),
-					Meal:  w.meal,
+					Meal:  meal,
 				})
 			}
 		}
