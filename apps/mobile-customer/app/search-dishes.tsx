@@ -9,19 +9,12 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { useSearchDishes, type DishResult } from '../hooks/useSearchDishes';
 import { useChefs } from '../hooks/useChefs';
 import type { Chef } from '../types/customer';
+import { formatMoney } from '../lib/format';
 
 // Android ripple tints — translucent tokens derived from existing colours,
 // never a new literal colour (matches the ChefCard `withAlpha` convention).
 const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const CTA_RIPPLE = `${customerColors.canvas}33`;
-
-function formatMoney(amount: number): string {
-  try {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
-  } catch {
-    return `₹${amount.toFixed(0)}`;
-  }
-}
 
 // ─── Dish result row ──────────────────────────────────────────────────────────
 // Photo on the right (radius 12, R2 fallback), tabular price, and a wayfinding

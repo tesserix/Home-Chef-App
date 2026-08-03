@@ -35,6 +35,7 @@ import {
 import { MealPlanBookRow } from '../components/chef/MealPlanBookRow';
 import { useProfile } from '../hooks/useProfile';
 import { useAlert } from '@homechef/mobile-shared/ui';
+import { formatMoney } from '../lib/format';
 
 const HORIZON_DAYS = 14; // how far ahead a customer can pre-book
 const LEAD_MS = 12 * 60 * 60 * 1000; // server's booking lead time (mealPlanLeadTime)
@@ -440,7 +441,7 @@ export default function BookMealPlanScreen() {
                 <Text style={styles.footerCount}>
                   {selected.length} meal{selected.length === 1 ? '' : 's'} · food subtotal
                 </Text>
-                <Text style={styles.footerTotal}>₹{total.toFixed(0)}</Text>
+                <Text style={styles.footerTotal}>{formatMoney(total)}</Text>
               </View>
               <Text style={styles.footerNote}>
                 GST &amp; delivery shown before you pay

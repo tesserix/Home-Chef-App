@@ -18,6 +18,7 @@ import {
 } from '../../hooks/useMealPlans';
 import { formatDateRange, mealPlanStatusMeta } from '../../lib/meal-plan';
 import { useDockClearance } from '../navigation/Dock';
+import { formatMoney } from '../../lib/format';
 
 // MealPlanList — the shared list of every meal plan the customer has booked (#196),
 // with a status chip and an "approval needed" flag. Headerless + self-contained (it
@@ -174,7 +175,7 @@ function PlanRow({ plan }: { plan: MealPlan }) {
           <View style={styles.cardBottom}>
             <Text style={styles.meta}>
               {formatDateRange(plan.startDate, plan.endDate)} · {days.length} day
-              {days.length === 1 ? '' : 's'} · ₹{plan.total.toFixed(0)}
+              {days.length === 1 ? '' : 's'} · {formatMoney(plan.total)}
             </Text>
             <ChevronRight size={18} color={customerColors.charcoal.soft} />
           </View>

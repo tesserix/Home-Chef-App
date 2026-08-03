@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, Minus, Plus, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { MenuItem, SelectedModifier } from '../../types/customer';
+import { formatMoney } from '../../lib/format';
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the ChefCard `withAlpha` convention.
@@ -117,7 +118,7 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
                       accessibilityState={{ selected: on, disabled }}
                       accessibilityLabel={
                         o.priceDelta !== 0
-                          ? `${o.name}, ${o.priceDelta > 0 ? '+' : ''}₹${o.priceDelta.toFixed(0)}`
+                          ? `${o.name}, ${o.priceDelta > 0 ? '+' : ''}${formatMoney(o.priceDelta)}`
                           : `${o.name}, free`
                       }
                       android_ripple={disabled ? undefined : { color: OPTION_RIPPLE }}
@@ -140,7 +141,7 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
                           <Text className="flex-1 text-sm text-charcoal">{o.name}</Text>
                           {o.priceDelta !== 0 ? (
                             <Text className="text-sm text-charcoal-soft" style={{ fontVariant: ['tabular-nums'] }}>
-                              {o.priceDelta > 0 ? '+' : ''}₹{o.priceDelta.toFixed(0)}
+                              {o.priceDelta > 0 ? '+' : ''}{formatMoney(o.priceDelta)}
                             </Text>
                           ) : (
                             <Text className="text-xs text-charcoal-soft">Free</Text>
@@ -213,7 +214,7 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
                 }`}
               >
                 <Text className="text-canvas font-semibold text-base tabular-nums">
-                  Add {qty} · ₹{(unitPrice * qty).toFixed(0)}
+                  Add {qty} · {formatMoney((unitPrice * qty))}
                 </Text>
               </View>
             )}

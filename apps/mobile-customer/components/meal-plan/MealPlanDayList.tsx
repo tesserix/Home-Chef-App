@@ -19,6 +19,7 @@ import { useProfile } from '../../hooks/useProfile';
 import { mealPlanDayStatusMeta, isDeclinedDayStatus } from '../../lib/meal-plan';
 import { canConfirmReceipt } from '../../lib/payout-hold';
 import { CookingIndicator } from '../status/CookingIndicator';
+import { formatMoney } from '../../lib/format';
 
 function dayLabel(d: MealPlanDay): string {
   return new Date(d.date).toLocaleDateString(undefined, {
@@ -131,7 +132,7 @@ export function MealPlanDayList({
             <View style={{ alignItems: 'flex-end' }}>
               {showPrice ? (
                 <Text style={[styles.price, declined && styles.dim]}>
-                  ₹{(d.price ?? 0).toFixed(0)}
+                  {formatMoney((d.price ?? 0))}
                 </Text>
               ) : null}
               {onSkip && d.status === 'confirmed' ? (

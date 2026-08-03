@@ -11,6 +11,7 @@ import { ModifierSheet } from '../cart/ModifierSheet';
 import { FavoriteHeart } from '../shared/FavoriteHeart';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { CartItem, MenuItem, SelectedModifier } from '../../types/customer';
+import { formatMoney } from '../../lib/format';
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the ChefCard `withAlpha` convention.
@@ -181,7 +182,7 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
         ) : null}
 
         {/* Price — tabular figures per spec */}
-        <Text style={styles.price}>₹{item.price.toFixed(0)}</Text>
+        <Text style={styles.price}>{formatMoney(item.price)}</Text>
 
         {/* Capacity (#48): low-stock hint for a capped dish that isn't sold out. */}
         {item.remainingToday != null && item.remainingToday > 0 && !item.soldOut ? (
