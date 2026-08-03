@@ -46,11 +46,15 @@ export function useConfirmCancellation() {
 
 // Shared verbatim with mobile-vendor (apps/mobile-vendor/hooks/useCancellations.ts)
 // so the two vendor surfaces present identically.
+// The percentages apply to the FOOD only — delivery and its share of tax are
+// still refunded while no driver has been dispatched, so the bottom two tiers are
+// not "no refund" (#946). Kept in step with apps/mobile-vendor even though this
+// surface is sunset, so the two do not disagree while both are live.
 export const CANCEL_REASONS = [
-  { value: 'not_started', label: 'Not started yet', hint: 'Customer gets most of it back (~90%)' },
-  { value: 'materials_purchased', label: 'Ingredients bought', hint: 'Materials covered — customer gets ~40% back' },
-  { value: 'in_preparation', label: 'Already cooking', hint: 'Preparation started — no refund' },
-  { value: 'ready', label: 'Already made', hint: 'Food is ready — no refund' },
+  { value: 'not_started', label: 'Not started yet', hint: 'Customer gets most of the food cost back (~90%)' },
+  { value: 'materials_purchased', label: 'Ingredients bought', hint: 'Materials covered — customer gets ~40% of the food cost back' },
+  { value: 'in_preparation', label: 'Already cooking', hint: 'Preparation started — you keep the food cost, the delivery fee is still refunded' },
+  { value: 'ready', label: 'Already made', hint: 'Food is ready — you keep the food cost, the delivery fee is still refunded' },
 ] as const;
 
 export type CancelReasonValue = (typeof CANCEL_REASONS)[number]['value'];

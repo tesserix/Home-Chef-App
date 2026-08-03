@@ -51,11 +51,21 @@ export function useConfirmCancellation() {
 // The reason tiers the vendor chooses — SHARED verbatim with the web vendor-portal
 // so the two surfaces are consistent. The % is the default; the API resolves the
 // live percentage from PlatformSettings.
+//
+// The percentages apply to the FOOD only. Delivery and its share of tax are still
+// refunded whenever no driver has been dispatched (`ComputeCancellationRefund`:
+// `deliveryRefund = deliveryPaise` unless `orderDispatched`), so the bottom two
+// tiers are not "no refund" — they are no refund ON THE FOOD.
+//
+// That wording was wrong in a way that mattered: a chef picking "Already cooking"
+// on a live order was told the customer got nothing, and the customer's screen
+// then read "₹41.07 refunded" — the delivery fee and its tax. Neither party had
+// been told the same thing about the same cancellation (#946).
 export const CANCEL_REASONS = [
-  { value: 'not_started', label: 'Not started yet', hint: 'Customer gets most of it back (~90%)' },
-  { value: 'materials_purchased', label: 'Ingredients bought', hint: 'Materials covered — customer gets ~40% back' },
-  { value: 'in_preparation', label: 'Already cooking', hint: 'Preparation started — no refund' },
-  { value: 'ready', label: 'Already made', hint: 'Food is ready — no refund' },
+  { value: 'not_started', label: 'Not started yet', hint: 'Customer gets most of the food cost back (~90%)' },
+  { value: 'materials_purchased', label: 'Ingredients bought', hint: 'Materials covered — customer gets ~40% of the food cost back' },
+  { value: 'in_preparation', label: 'Already cooking', hint: 'Preparation started — you keep the food cost, the delivery fee is still refunded' },
+  { value: 'ready', label: 'Already made', hint: 'Food is ready — you keep the food cost, the delivery fee is still refunded' },
 ] as const;
 
 export type CancelReasonValue = (typeof CANCEL_REASONS)[number]['value'];
