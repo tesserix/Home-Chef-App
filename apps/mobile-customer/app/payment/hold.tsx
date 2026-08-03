@@ -172,11 +172,7 @@ export default function PaymentHold() {
           disabled={cancelling}
           accessibilityRole="button"
           accessibilityLabel="Skip the wait and go to payment now"
-          style={({ pressed }) => [
-            styles.payBtn,
-            pressed && styles.pressed,
-            cancelling && styles.disabled,
-          ]}
+          style={[styles.payBtn, cancelling && styles.disabled]}
         >
           <Text style={styles.payLabel}>Skip to payment</Text>
         </Pressable>
@@ -186,7 +182,7 @@ export default function PaymentHold() {
           disabled={cancelling}
           accessibilityRole="button"
           accessibilityLabel="Cancel this order"
-          style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}
+          style={styles.cancelBtn}
         >
           {cancelling ? (
             <ActivityIndicator size="small" color={customerColors.charcoal.soft} />
@@ -287,6 +283,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: customerColors.charcoal.soft,
   },
-  pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
 });

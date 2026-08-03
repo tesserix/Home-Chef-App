@@ -116,10 +116,9 @@ export default function NotificationsScreen() {
           accessibilityRole="button"
           accessibilityLabel={`${item.title}. ${item.message}${item.isRead ? '' : '. Unread'}`}
           android_ripple={{ color: `${customerColors.charcoal.DEFAULT}0F` }}
-          style={({ pressed }) => [styles.rowPressable, pressed && { opacity: 0.7 }]}
+          style={styles.rowPressable}
         >
-          {/* Layout on a plain View — a Pressable with a function-style prop
-              drops flex props on this Fabric build (icon/body/dot would stack). */}
+          {/* Layout stays on this View; the Pressable only carries its own box. */}
           <View style={[styles.row, !item.isRead && styles.rowUnread]}>
             <View style={[styles.iconCircle, !item.isRead && styles.iconCircleUnread]}>
               <Icon

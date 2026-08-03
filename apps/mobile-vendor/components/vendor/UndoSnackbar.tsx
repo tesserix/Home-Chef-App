@@ -94,7 +94,7 @@ export function UndoSnackbar({
         <Pressable
           onPress={onPressAction}
           hitSlop={8}
-          style={({ pressed }) => [styles.action, pressed && { opacity: 0.7 }]}
+          style={styles.action}
           accessibilityRole="button"
           accessibilityLabel={isError ? "Retry" : "Undo"}
         >

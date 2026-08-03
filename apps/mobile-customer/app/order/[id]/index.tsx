@@ -815,10 +815,7 @@ export default function OrderDetailScreen() {
                 onPress={() => router.push(`/order/${order.id}/messages` as never)}
                 accessibilityRole="button"
                 accessibilityLabel="Message support about this order"
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && Platform.OS === 'ios' && { opacity: 0.6 },
-                ]}
+                style={styles.secondaryButton}
                 android_ripple={{ color: SECONDARY_RIPPLE, borderless: false }}
               >
                 <Text style={styles.secondaryButtonText}>Message support about this order</Text>
@@ -834,10 +831,7 @@ export default function OrderDetailScreen() {
               onPress={() => router.push(`/order/${order.id}/report-issue` as never)}
               accessibilityRole="button"
               accessibilityLabel="Report an issue with this order"
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
-              ]}
+              style={styles.secondaryButton}
               android_ripple={{ color: SECONDARY_RIPPLE, borderless: false }}
             >
               <Text style={styles.secondaryButtonText}>Report an issue with this order</Text>
@@ -1061,11 +1055,8 @@ export default function OrderDetailScreen() {
               onPress={() => router.push(`/order/${order.id}/receipt`)}
               accessibilityRole="button"
               accessibilityLabel="View receipt"
-              style={({ pressed }) => (pressed ? { opacity: 0.6 } : null)}
             >
-              {/* Layout lives on this inner View, not the Pressable: a function-
-                  style Pressable returning an array drops flex props on iOS, which
-                  collapsed the row and stacked the icon above the label. */}
+              {/* Layout stays on this View; the Pressable carries no style. */}
               <View style={styles.receiptLink}>
                 <Receipt size={16} color={customerColors.coral.pressed} />
                 <Text style={styles.receiptLinkText}>View receipt</Text>

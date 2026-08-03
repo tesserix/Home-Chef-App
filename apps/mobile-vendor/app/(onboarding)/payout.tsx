@@ -236,7 +236,7 @@ export default function PayoutStep() {
             <Pressable
               onPress={pickStatementImage}
               accessibilityRole="button"
-              style={({ pressed }) => [styles.statementBtn, pressed && styles.statementBtnPressed]}
+              style={styles.statementBtn}
             >
               <ImageIcon size={15} color={theme.colors.ink.soft} strokeWidth={2} />
               <Text style={styles.statementBtnLabel}>Gallery</Text>
@@ -244,7 +244,7 @@ export default function PayoutStep() {
             <Pressable
               onPress={pickStatementPdf}
               accessibilityRole="button"
-              style={({ pressed }) => [styles.statementBtn, pressed && styles.statementBtnPressed]}
+              style={styles.statementBtn}
             >
               <FileText size={15} color={theme.colors.ink.soft} strokeWidth={2} />
               <Text style={styles.statementBtnLabel}>PDF</Text>
@@ -324,7 +324,6 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[2],
     minHeight: 40,
   },
-  statementBtnPressed: { backgroundColor: theme.colors.bone },
   statementBtnLabel: {
     fontFamily: 'Inter-Medium',
     fontSize: theme.typography.size.bodySm.size,

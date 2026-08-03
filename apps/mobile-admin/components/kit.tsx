@@ -85,7 +85,7 @@ export function Card({
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [styles.card, pressed && styles.cardPressed, style]}
+        style={[styles.card, style]}
       >
         {children}
       </Pressable>
@@ -179,7 +179,7 @@ export function ListItem({
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [styles.row, pressed && styles.cardPressed]}
+        style={styles.row}
       >
         {body}
       </Pressable>
@@ -340,7 +340,6 @@ const styles = StyleSheet.create({
     borderColor: c.mist.DEFAULT,
     padding: 14,
   },
-  cardPressed: { opacity: 0.6 },
   statCard: {
     flex: 1,
     backgroundColor: c.bone,
