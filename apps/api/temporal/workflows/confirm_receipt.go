@@ -3,8 +3,9 @@ package workflows
 // confirm_receipt.go — the durable confirm-receipt reminder + auto-confirm
 // flow. Started per-order when a delivery transitions to delivered/awaiting
 // confirmation. It reminds the customer up to MaxReminders times (one every
-// ReminderIntervalSeconds); an order.confirmed or order.disputed signal ends
-// it early. If the customer never acts, it auto-confirms on their behalf.
+// ReminderIntervalSeconds); an order.confirmed, order.disputed or
+// order.confirm_cancelled signal ends it early. If the customer never acts, it
+// auto-confirms on their behalf.
 //
 // This workflow only advances the hold to release_eligible/disputed via the
 // existing ConfirmOrderHold transition (wired through AutoConfirmFunc) — it
@@ -27,6 +28,21 @@ import (
 const (
 	SignalOrderConfirmed = "order.confirmed"
 	SignalOrderDisputed  = "order.disputed"
+	// SignalConfirmCancelled — the order was cancelled or refunded while the
+	// reminder loop was still running.
+	//
+	// Without it, cancelling did not stop the flow: it ran to MaxReminders, one
+	// activity per interval, and then called AutoConfirmActivity. The reminder
+	// guard makes each of those a no-op (#931), and AutoConfirmOrderReceipt
+	// refuses a cancelled order, so nothing wrong happened — a workflow per
+	// cancelled order simply stayed open for the whole reminder window doing
+	// nothing (#956). PickupReadyWorkflow already had this signal.
+	//
+	// Namespaced like SignalPickupCancelled rather than reusing the order saga's
+	// "order.cancelled": that constant belongs to a different workflow with a
+	// different workflow id, and sharing the string across two flows in one
+	// package invites signalling the wrong one.
+	SignalConfirmCancelled = "order.confirm_cancelled"
 )
 
 // ConfirmReceiptInput starts the flow for one delivered order. Interval/count
@@ -72,11 +88,14 @@ func AutoConfirmActivity(ctx context.Context, orderID uuid.UUID) error {
 
 // ConfirmReceiptWorkflow reminds the customer to confirm receipt up to
 // MaxReminders times (one every ReminderIntervalSeconds), then auto-confirms
-// if they never act. A confirmed/disputed signal ends it early.
+// if they never act. A confirmed/disputed/cancelled signal ends it early — and a
+// cancellation must end it WITHOUT auto-confirming, which is why the channel is
+// drained again after the loop.
 func ConfirmReceiptWorkflow(ctx workflow.Context, in ConfirmReceiptInput) error {
 	interval := time.Duration(in.ReminderIntervalSeconds) * time.Second
 	confirmedCh := workflow.GetSignalChannel(ctx, SignalOrderConfirmed)
 	disputedCh := workflow.GetSignalChannel(ctx, SignalOrderDisputed)
+	cancelledCh := workflow.GetSignalChannel(ctx, SignalConfirmCancelled)
 
 	actx := apitemporal.Activities(ctx, 30*time.Second)
 
@@ -85,15 +104,25 @@ func ConfirmReceiptWorkflow(ctx workflow.Context, in ConfirmReceiptInput) error 
 		sel := workflow.NewSelector(ctx)
 		sel.AddReceive(confirmedCh, func(c workflow.ReceiveChannel, _ bool) { c.Receive(ctx, nil); done = true })
 		sel.AddReceive(disputedCh, func(c workflow.ReceiveChannel, _ bool) { c.Receive(ctx, nil); done = true })
+		sel.AddReceive(cancelledCh, func(c workflow.ReceiveChannel, _ bool) { c.Receive(ctx, nil); done = true })
 		sel.AddFuture(workflow.NewTimer(ctx, interval), func(workflow.Future) {})
 		sel.Select(ctx)
 		if done {
-			return nil // customer confirmed or a dispute opened
+			return nil // confirmed, disputed, or cancelled — nothing left to do
 		}
 		// Timer fired → send this attempt's reminder (best-effort).
 		_ = workflow.ExecuteActivity(actx, ReminderActivity, ReminderActivityInput{
 			OrderID: in.OrderID, Attempt: attempt,
 		}).Get(ctx, nil)
+	}
+
+	// A signal delivered WHILE the last reminder activity was running is not seen
+	// by the selector — the loop has already exited. Drain the channel before
+	// auto-confirming so a cancellation that landed in that window still wins.
+	// AutoConfirmOrderReceipt re-reads the order and refuses a cancelled one
+	// anyway, so this is defence in depth rather than the only guard.
+	if cancelledCh.ReceiveAsync(nil) {
+		return nil
 	}
 
 	// Reminders exhausted, no confirmation → auto-confirm.

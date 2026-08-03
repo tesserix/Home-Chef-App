@@ -83,3 +83,16 @@ func SignalOrderConfirmedFlow(orderID uuid.UUID) {
 func SignalOrderDisputedFlow(orderID uuid.UUID) {
 	signalConfirmFlow(orderID, workflows.SignalOrderDisputed)
 }
+
+// SignalOrderCancelledFlow tells a running confirm-receipt flow the order was
+// cancelled or refunded, ending the reminder loop early.
+//
+// Call it from every path that cancels or refunds an order. Missing one leaves
+// the flow running exactly as it did before: reminders that all no-op against
+// the #931 guard, for the full reminder window, one workflow per cancelled
+// order. Best-effort like its siblings — the caller's synchronous cancellation
+// is the authoritative work, and AutoConfirmOrderReceipt refuses a cancelled
+// order regardless.
+func SignalOrderCancelledFlow(orderID uuid.UUID) {
+	signalConfirmFlow(orderID, workflows.SignalConfirmCancelled)
+}

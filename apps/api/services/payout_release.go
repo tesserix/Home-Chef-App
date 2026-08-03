@@ -712,6 +712,20 @@ func WithholdOrReverseOrderHoldForRefund(db *gorm.DB, orderID uuid.UUID, reason 
 			return err
 		}
 	}
+
+	// Stop any confirm-receipt reminder loop still running for this order (#956).
+	//
+	// Hooked HERE rather than at each cancellation site on purpose. Every full
+	// refund and cancellation path already funnels through this cross-guard —
+	// the arbitration flow, the chef reject and chef cancel, the direct
+	// CancelOrder, the order-issue refunds, and the reconcile sweeps — so one
+	// call covers them all. Adding it per-caller meant enumerating eight sites
+	// and silently leaving the flow running wherever one was missed, which is
+	// the failure this issue is about.
+	//
+	// Best-effort by contract: it drops harmlessly when no flow is running, and
+	// it must never fail a refund that has already moved money.
+	SignalOrderCancelledFlow(orderID)
 	return nil
 }
 
