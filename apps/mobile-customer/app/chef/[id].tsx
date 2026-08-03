@@ -29,6 +29,7 @@ import * as Haptics from 'expo-haptics';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useChef, useChefMenu } from '../../hooks/useChefs';
 import { useCustomerCoords } from '../../hooks/useCustomerCoords';
+import { useChefAvailabilityWS } from '../../hooks/useChefAvailabilityWS';
 import { useChefWeeklyMenu } from '../../hooks/useMealPlans';
 import { useMealChefOffer } from '../../hooks/useMealSubscription';
 import { useCreateGroupOrder, type GroupType } from '../../hooks/useGroupOrder';
@@ -114,6 +115,9 @@ export default function ChefDetailScreen() {
   const { data: menuData, isLoading: menuLoading, isError: menuError } = useChefMenu(
     chefData?.data?.id ?? id ?? ''
   );
+  // Live open/close, so the badge and the reserve note never go stale under the
+  // customer while they read the menu (#970). Keyed on the resolved UUID.
+  useChefAvailabilityWS(chefData?.data?.id);
   const { data: favData } = useFavorites();
   const toggleFavorite = useToggleFavorite();
   const createGroup = useCreateGroupOrder();

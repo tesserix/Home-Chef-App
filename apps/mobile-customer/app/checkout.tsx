@@ -46,6 +46,7 @@ import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
 import { useChef } from '../hooks/useChefs';
+import { useChefAvailabilityWS } from '../hooks/useChefAvailabilityWS';
 import { useCustomerCoords } from '../hooks/useCustomerCoords';
 import { useDeliveryQuote } from '../hooks/useDeliveryQuote';
 import { useValidatePromo, promoErrorMessage, type PromoValidationResult } from '../hooks/usePromoCode';
@@ -139,6 +140,8 @@ export default function CheckoutScreen() {
   const createOrder = useCreateOrder();
   const coords = useCustomerCoords();
   const { data: chefData } = useChef(cartStore.chefId ?? '', coords ?? undefined);
+  // If the kitchen closes mid-checkout, the slot rules below must follow (#970).
+  useChefAvailabilityWS(cartStore.chefId);
   const offersPickup = !!chefData?.data?.offersPickup;
   // Whether the customer can pick "Delivery" at all. Server-computed = the chef
   // self-delivers OR a 3PL provider is live. With 3PL dark and a non-self-

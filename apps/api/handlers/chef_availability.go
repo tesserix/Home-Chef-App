@@ -10,15 +10,19 @@ package handlers
 // the timer elapses; the chef can also resume early via /resume.
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
+	natsclient "github.com/nats-io/nats.go"
 )
 
 // allowedPauseMinutes are the only durations the UI offers; validated here so
@@ -109,4 +113,78 @@ func (h *ChefAvailabilityHandler) ResumeReceiving(c *gin.Context) {
 	services.LogAudit(c, "chef.availability.resume", "chef", chef.ID.String(), nil, nil)
 
 	c.JSON(http.StatusOK, availabilityResponse{AcceptingOrders: true, PausedUntil: nil})
+}
+
+// StreamChefAvailabilityWS pushes a chef's open/closed state to customers who are
+// looking at that kitchen right now.
+//
+// chef.availability_changed was published but had nothing subscribed to it, so a
+// customer's screen kept saying "Open" until they pulled to refresh — and they
+// only found out at Place Order (#970). This subscribes to the same subject the
+// outbox relay publishes and forwards the events for this chef.
+// GET /ws/chefs/:id/availability
+func (h *ChefAvailabilityHandler) StreamChefAvailabilityWS(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+
+	conn, err := notifWSUpgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("Chef availability WS upgrade failed for chef %s: %v", chefID, err)
+		return
+	}
+	defer conn.Close()
+
+	// Send the current state on connect so a client that joined after a toggle
+	// is correct immediately rather than waiting for the next one.
+	var chef models.ChefProfile
+	if err := database.DB.Select("id", "accepting_orders").First(&chef, "id = ?", chefID).Error; err == nil {
+		initial, _ := json.Marshal(map[string]any{
+			"type":            "availability",
+			"chefId":          chefID.String(),
+			"acceptingOrders": chef.AcceptingOrders,
+		})
+		conn.WriteMessage(websocket.TextMessage, initial)
+	}
+
+	writeCh := make(chan []byte, 16)
+	defer close(writeCh)
+
+	go func() {
+		for msg := range writeCh {
+			if werr := conn.WriteMessage(websocket.TextMessage, msg); werr != nil {
+				return
+			}
+		}
+	}()
+
+	sub, err := services.GetNATSClient().Subscribe(services.SubjectChefAvailabilityChanged, func(msg *natsclient.Msg) {
+		var ev services.ChefAvailabilityEvent
+		if jerr := json.Unmarshal(msg.Data, &ev); jerr != nil || ev.ChefID != chefID {
+			return
+		}
+		payload, _ := json.Marshal(map[string]any{
+			"type":            "availability",
+			"chefId":          ev.ChefID.String(),
+			"acceptingOrders": ev.AcceptingOrders,
+		})
+		select {
+		case writeCh <- payload:
+		default:
+		}
+	})
+	if err != nil {
+		log.Printf("NATS subscribe failed for chef availability %s: %v", chefID, err)
+		return
+	}
+	defer sub.Unsubscribe()
+
+	// Block until the client goes away; reads double as the disconnect signal.
+	for {
+		if _, _, rerr := conn.ReadMessage(); rerr != nil {
+			return
+		}
+	}
 }

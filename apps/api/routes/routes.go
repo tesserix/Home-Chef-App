@@ -248,6 +248,8 @@ func SetupRouter() *gin.Engine {
 	{
 		wsGroup.GET("/notifications", notificationHandler.StreamNotificationsWS)
 		wsGroup.GET("/orders/:id/track", orderHandler.TrackOrderWS)
+		// Kitchen open/close, pushed to customers viewing that chef (#970).
+		wsGroup.GET("/chefs/:id/availability", chefAvailabilityHandler.StreamChefAvailabilityWS)
 	}
 
 	// Internal endpoints — invoked by apps/auth-bff to materialize user
@@ -461,6 +463,8 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id/subscription", mealSubHandler.GetChefOffer)              // #280 tiffin offer
 			chefs.GET("/:id/delivery-slots", chefHandler.GetChefDeliverySlots)       // #51 scheduled slots
 			chefs.GET("/:id/fulfillment-times", chefHandler.GetChefFulfillmentTimes) // #709 home-tiffin suggested times
+			// Live kitchen open/close for customers on this chef's page (#970).
+			chefs.GET("/:id/availability/ws", chefAvailabilityHandler.StreamChefAvailabilityWS)
 			// Per-mode delivery-fee preview so checkout can show the real fee +
 			// pickup's saving. Same computation CreateOrder charges.
 			chefs.POST("/:id/delivery-quote", orderHandler.QuoteDeliveryFee)
