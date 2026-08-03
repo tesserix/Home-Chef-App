@@ -67,7 +67,15 @@ func BuildCreditQuote(db *gorm.DB, order *models.Order, userID uuid.UUID, req Cr
 			return CreditQuote{}, err
 		}
 		if w != nil {
-			in.WalletBalancePaise = ToPaise(w.Balance)
+			// Offer only what is not already spoken for. Credit is stamped on an
+			// order at checkout but not debited until settlement, so the raw balance
+			// re-offers rupees a still-unpaid order is holding (#936) — and the
+			// second order then settles into reconcile rather than completing.
+			claimed, cErr := WalletClaimedByUnpaidOrdersPaise(db, userID, order.ID)
+			if cErr != nil {
+				return CreditQuote{}, cErr
+			}
+			in.WalletBalancePaise = spendableWalletPaise(ToPaise(w.Balance), claimed)
 		}
 	}
 	if !in.LoyaltyDisabled {
