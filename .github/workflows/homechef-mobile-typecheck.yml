@@ -84,3 +84,58 @@ jobs:
             echo "- **Result:** ${{ job.status }}"
             echo "- \`tsc --noEmit\` over apps/mobile-${{ matrix.app }}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: jest (mobile-${{ matrix.app }})
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # customer ONLY for now. vendor/admin/delivery still use the `jest-expo`
+        # preset, which needs the unmet `@react-native/jest-preset` peer and so
+        # dies at startup — see #957. Adding that peer as a dependency is not the
+        # fix: 6435cc39 reverted exactly that because it re-keys react-native's
+        # peer resolution and breaks Metro. Add an app here once it carries a
+        # standalone jest config like apps/mobile-customer/jest.config.js.
+        app: [customer]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Get pnpm store directory
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --filter @homechef/mobile-${{ matrix.app }}... --frozen-lockfile
+
+      - name: Test
+        working-directory: apps/mobile-${{ matrix.app }}
+        # No --passWithNoTests: this job exists because these tests were silently
+        # not running. An empty run should fail, not go green.
+        run: pnpm exec jest --ci
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Jest — mobile-${{ matrix.app }}"
+            echo ""
+            echo "- **Result:** ${{ job.status }}"
+            echo "- \`jest --ci\` over apps/mobile-${{ matrix.app }}"
+          } >> "$GITHUB_STEP_SUMMARY"
