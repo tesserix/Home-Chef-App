@@ -6,6 +6,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -94,4 +95,14 @@ func TestBulkApprove_EmptyRejected(t *testing.T) {
 	setupRemindDB(t)
 	w := bulkApprove(t, uuid.New(), []string{})
 	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// An approval that cannot name its approver must be refused outright, rather than
+// silently recording uuid.Nil as the reviewer the way production did for 24/24
+// rows before #968.
+func TestApproveOneRequest_RejectsNilAdmin(t *testing.T) {
+	err := approveOneRequest(uuid.New(), uuid.Nil, "", models.ChefModeLive)
+	if !errors.Is(err, errApprovalNoAdminIdentity) {
+		t.Fatalf("approveOneRequest with a nil admin = %v, want errApprovalNoAdminIdentity", err)
+	}
 }

@@ -27,6 +27,8 @@ var (
 	errApprovalNotFound = errors.New("approval: not found")
 	errApprovalDecided  = errors.New("approval: already decided")
 	errApprovalTooSoon  = errors.New("approval: reminder cooldown not elapsed")
+	// errApprovalNoAdminIdentity guards the audit trail — see approveOneRequest.
+	errApprovalNoAdminIdentity = errors.New("approval: admin identity required")
 )
 
 // ApprovalHandler manages admin approval workflows
@@ -329,6 +331,12 @@ var errApprovalNotHomeKitchen = errors.New("this kitchen is not an individual ho
 // ApproveRequest and BulkApproveRequests so bulk approval behaves identically to single approval.
 // Returns a sentinel or descriptive error the caller maps to an HTTP status / per-item result.
 func approveOneRequest(id uuid.UUID, adminUserID uuid.UUID, notes, mode string) error {
+	// An approval that cannot name its approver is not an approval. Every
+	// caller checks this too; this is the shared choke point so a future one
+	// cannot reintroduce the unattributed writes of #968.
+	if adminUserID == uuid.Nil {
+		return errApprovalNoAdminIdentity
+	}
 	var approval models.ApprovalRequest
 	if err := database.DB.First(&approval, "id = ?", id).Error; err != nil {
 		return errApprovalNotFound
@@ -466,7 +474,11 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 		Mode string `json:"mode"`
 	}
 	c.ShouldBindJSON(&req)
-	adminUserID, _ := middleware.GetUserID(c)
+	adminUserID, ok := middleware.GetUserID(c)
+	if !ok || adminUserID == uuid.Nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "admin identity required"})
+		return
+	}
 
 	if err := approveOneRequest(id, adminUserID, req.Notes, req.Mode); err != nil {
 		switch {
@@ -511,7 +523,11 @@ func (h *ApprovalHandler) BulkApproveRequests(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Too many ids (max 200 per bulk approve)"})
 		return
 	}
-	adminUserID, _ := middleware.GetUserID(c)
+	adminUserID, ok := middleware.GetUserID(c)
+	if !ok || adminUserID == uuid.Nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "admin identity required"})
+		return
+	}
 
 	approved := 0
 	failures := make([]bulkApproveFailure, 0)
@@ -552,7 +568,11 @@ func (h *ApprovalHandler) RejectRequest(c *gin.Context) {
 	}
 	c.ShouldBindJSON(&req)
 
-	adminUserID, _ := middleware.GetUserID(c)
+	adminUserID, ok := middleware.GetUserID(c)
+	if !ok || adminUserID == uuid.Nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "admin identity required"})
+		return
+	}
 
 	var approval models.ApprovalRequest
 	if err := database.DB.First(&approval, "id = ?", id).Error; err != nil {
@@ -664,7 +684,11 @@ func (h *ApprovalHandler) RequestMoreInfo(c *gin.Context) {
 		return
 	}
 
-	adminUserID, _ := middleware.GetUserID(c)
+	adminUserID, ok := middleware.GetUserID(c)
+	if !ok || adminUserID == uuid.Nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "admin identity required"})
+		return
+	}
 
 	var approval models.ApprovalRequest
 	if err := database.DB.First(&approval, "id = ?", id).Error; err != nil {

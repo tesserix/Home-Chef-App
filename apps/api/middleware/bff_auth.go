@@ -194,6 +194,8 @@ func applyBFFIdentity(c *gin.Context, id *BFFIdentity) {
 	// downstream handlers will treat that as "no user".
 	if parsed, perr := uuid.Parse(id.UserID); perr == nil {
 		c.Set("userID", parsed)
+	} else if resolved, ok := resolveLocalUserID(id); ok {
+		c.Set("userID", resolved)
 	}
 	c.Set("userEmail", id.Email)
 	if id.Role != "" {
@@ -396,4 +398,53 @@ func verifyBearer(r *http.Request, bffSessionURL string, client *http.Client) (*
 		Role:   body.Role,
 		Pool:   body.Pool,
 	}, nil
+}
+
+// resolveLocalUserID maps a non-UUID caller (the tesserix-home admin gateway
+// signs with the OIDC `sub`, not a HomeChef id) onto the local user row, so
+// admin actions are attributed to a real person.
+//
+// Without this every approval, rejection and document verification recorded
+// uuid.Nil as the actor — 24/24 rows in production carried no reviewer (#968).
+// UUID callers (mobile, the auth BFF) never reach here, so the lookup only
+// costs the low-volume admin path and is served by the gip_uid unique index.
+func resolveLocalUserID(id *BFFIdentity) (uuid.UUID, bool) {
+	if database.DB == nil || id == nil {
+		return uuid.Nil, false
+	}
+	if id.UserID == "" && id.Email == "" {
+		return uuid.Nil, false
+	}
+
+	var user models.User
+	q := database.DB.Select("id")
+	if id.UserID != "" {
+		q = q.Where("gip_uid = ?", id.UserID)
+	} else {
+		q = q.Where("lower(email) = lower(?) AND auth_pool = ?", id.Email, models.PoolInternal)
+	}
+	if err := q.First(&user).Error; err == nil && user.ID != uuid.Nil {
+		return user.ID, true
+	}
+
+	// Platform admins sign in against tesserix-home, so they have never had a
+	// HomeChef row — leaving nothing to attribute an approval to. Materialise
+	// one on first use, the same way the auth BFF does for every other GIP
+	// identity. Only for an internal-pool admin, and role/pool are inside the
+	// HMAC the gateway signs, so this cannot be driven by a caller.
+	if id.Pool != string(models.PoolInternal) || id.Role != string(models.RoleAdmin) || id.Email == "" {
+		return uuid.Nil, false
+	}
+	admin := models.User{
+		ID:       uuid.New(), // set here, not via the Postgres-only column default
+		Email:    strings.ToLower(id.Email),
+		GIPUid:   id.UserID,
+		AuthPool: models.PoolInternal,
+		Role:     models.RoleAdmin,
+		IsActive: true,
+	}
+	if err := database.DB.Create(&admin).Error; err != nil || admin.ID == uuid.Nil {
+		return uuid.Nil, false
+	}
+	return admin.ID, true
 }
