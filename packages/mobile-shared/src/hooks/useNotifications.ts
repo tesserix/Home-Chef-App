@@ -204,6 +204,26 @@ export function notificationSocketReconnectDelayMs(
   return socketReconnectDelayMs(consecutiveFailures);
 }
 
+/** How long a connection must survive to count as healthy rather than a flap. */
+export const NOTIFICATION_SOCKET_STABLE_MS = 30_000;
+
+/**
+ * Failure count to carry into the next reconnect, given how long the socket
+ * that just closed stayed open (null = it never opened).
+ *
+ * Reaching `onopen` is not proof the session works: against production the
+ * socket opened and dropped roughly once a second, and because `onopen` reset
+ * the counter the curve in #910 re-armed at 1s every time and never escalated
+ * (#928). Only surviving `NOTIFICATION_SOCKET_STABLE_MS` clears the count.
+ */
+export function nextConsecutiveFailures(
+  previousFailures: number,
+  openForMs: number | null,
+): number {
+  if (openForMs !== null && openForMs >= NOTIFICATION_SOCKET_STABLE_MS) return 0;
+  return previousFailures + 1;
+}
+
 /**
  * Holds the user's real-time notification socket. On any server message
  * (`unread_count` on connect, `new_notification` thereafter) it refreshes the
@@ -228,6 +248,7 @@ export function useNotificationSocket(opts: {
   const qc = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
   const failures = useRef(0);
+  const openedAt = useRef<number | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback(() => {
@@ -246,11 +267,11 @@ export function useNotificationSocket(opts: {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      failures.current = 0;
+      // Deliberately does NOT clear `failures` — see nextConsecutiveFailures.
+      openedAt.current = Date.now();
       console.info(`[notif-ws] connected ${url}`);
     };
     ws.onmessage = () => {
-      failures.current = 0;
       // The socket signals "something changed" (a new notification, or the
       // initial count). Refetch the two feed queries — cheap, and avoids
       // hand-patching the list/count from a message whose shape varies by event.
@@ -258,14 +279,19 @@ export function useNotificationSocket(opts: {
       qc.invalidateQueries({ queryKey: NOTIFICATION_UNREAD_KEY });
     };
     ws.onerror = () => {
-      failures.current += 1;
-      console.warn(`[notif-ws] error (${failures.current} consecutive failures)`);
+      console.warn('[notif-ws] error');
     };
     ws.onclose = () => {
       wsRef.current = null;
+      const openForMs =
+        openedAt.current === null ? null : Date.now() - openedAt.current;
+      openedAt.current = null;
+      failures.current = nextConsecutiveFailures(failures.current, openForMs);
       if (!shouldReconnectNotificationSocket(enabled, failures.current)) return;
       const delay = notificationSocketReconnectDelayMs(failures.current);
-      console.warn(`[notif-ws] closed, reconnecting in ${delay}ms`);
+      console.warn(
+        `[notif-ws] closed after ${openForMs ?? 0}ms, reconnecting in ${delay}ms (${failures.current} consecutive failures)`,
+      );
       reconnectTimer.current = setTimeout(connect, delay);
     };
   }, [apiBaseUrl, getToken, enabled, qc]);
