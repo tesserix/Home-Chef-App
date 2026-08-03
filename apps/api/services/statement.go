@@ -152,6 +152,26 @@ func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, 
 		-- Easy Split orders settled the chef's share at the gateway; putting
 		-- them on the weekly statement would pay that share a second time.
 		AND    COALESCE(o.gateway_split_paise, 0) = 0
+		-- #927: a refunded order must never bill the chef. status stays 'delivered'
+		-- on the order-issue refund path (it stamps refunded_at instead), so
+		-- filtering on status alone lets a fully-refunded order onto the statement.
+		-- Mirrors the payout-release guard (payout_release.go), which has always had
+		-- this predicate — the statement path simply never grew one.
+		AND    o.refunded_at   IS NULL
+		-- #927: and never bill a hold that was deliberately blocked or clawed back.
+		-- Both states are TERMINAL (see WithholdHold / ReverseHold), so excluding
+		-- them cannot strand a chef's money in a week that has already closed.
+		--
+		-- Transient states (awaiting_customer_confirmation, disputed) are NOT
+		-- excluded, deliberately. This query is windowed on delivered_at and each
+		-- (chef, week) statement is generated exactly once and then frozen, so an
+		-- order skipped for its own week is never billed on any later one. Excluding
+		-- a state the order can still LEAVE would silently lose the chef that money —
+		-- which is why the "only bill release_eligible/released" shape suggested on
+		-- #927 is not safe as written. Closing that half needs a catch-up path for
+		-- orders cleared after their week closed (the ChefBonus settlement-credit
+		-- mechanism used for #947 is the natural fit); tracked on the issue.
+		AND    COALESCE(o.payout_hold_status, '') NOT IN ('withheld', 'reversed')
 		ORDER  BY o.chef_id, o.delivered_at ASC
 	`, weekStart, weekEnd).Scan(&rows).Error
 	return rows, err
