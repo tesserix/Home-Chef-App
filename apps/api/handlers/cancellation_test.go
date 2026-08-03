@@ -50,6 +50,13 @@ func setupCancelDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID, uuid.UUID) {
 			amount real, balance_after real, currency text, order_id text, reason text, created_by text,
 			idempotency_key text UNIQUE, created_at datetime)`,
 		`CREATE TABLE platform_settings (id text PRIMARY KEY, key text, value text, type text, updated_by text, updated_at datetime)`,
+		// #940: the refund ledger. A cancellation refund now records a succeeded row
+		// here inside its own transaction, so a fixture without this table fails the
+		// whole refund rather than silently skipping the record.
+		`CREATE TABLE refund_transactions (id text PRIMARY KEY, order_id text, provider text,
+			provider_payment_id text, provider_refund_id text, amount real, currency_code text,
+			status text, reason text, idempotency_key text UNIQUE, scope_id text, actor text,
+			failure_reason text, created_at datetime, updated_at datetime, completed_at datetime)`,
 		`CREATE TABLE outbox_events (id text PRIMARY KEY, subject text, msg_id text, aggregate_type text, aggregate_id text,
 			payload text, status text, attempts int, last_error text, next_retry_at datetime, created_at datetime, updated_at datetime, published_at datetime)`,
 		// #544: RequestCancellation now checks TypedRefundOrderKind, which Counts these by order_id.
