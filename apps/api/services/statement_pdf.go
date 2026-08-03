@@ -57,7 +57,7 @@ func GenerateWeeklyStatementPDF(statementID uuid.UUID) ([]byte, string, error) {
 			OrderNumber:        r.OrderNumber,
 			CompletedAt:        r.CompletedAt,
 			ItemRevenue:        r.ItemRevenue,
-			Tax:                r.Tax,
+			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
 			ChefFundedDiscount: r.ChefFundedDiscount,
 			DeliveryFee:        r.DeliveryFee,
 			ChefTip:            r.ChefTip,

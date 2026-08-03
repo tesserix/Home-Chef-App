@@ -195,10 +195,41 @@ func (t *EarningsTotals) Add(e OrderEarnings) {
 // with a transfer already sent. A legacy 0 falls back to DefaultCommissionRate
 // inside ComputeOrderEarnings. Delivery is the DRIVER's money and is excluded.
 // Requires order.Chef preloaded (for the intra/inter-state GST state).
+// ChefAttributableTax is the GST on the FOOD — the only tax that is the chef's
+// income. The tax on the platform fee and on a platform-arranged delivery is the
+// platform's own output tax and must never reach a chef statement.
+//
+// This function exists because order.Tax was passed here directly, and order.Tax
+// is the whole order's tax. Every chef was therefore credited the GST charged on
+// the delivery fee and the platform fee as well as their own — ₹30.78 on a single
+// pending statement in the July test run (D-02). It gets worse, not better, once
+// the platform fee is rated above the food: on a ₹500 order the chef would be
+// handed ₹28.81 where ₹25.00 is theirs.
+//
+// Orders placed before tax was split per supply have no snapshot to read, and
+// their statements may already be settled, so they keep the figure they were
+// reconciled against rather than being restated years later.
+func ChefAttributableTax(order *models.Order) float64 {
+	return ChefTaxOf(order.Tax, order.TaxFood, order.TaxService)
+}
+
+// ChefTaxOf is ChefAttributableTax for the SQL projections the statement, FY
+// statement, TDS certificate and payout paths scan into. Every one of them must
+// use it, or the four figures that are documented to never drift will.
+//
+// taxFood or taxService being non-zero is what proves the per-supply snapshot
+// exists; without it the row predates the split and keeps its settled figure.
+func ChefTaxOf(orderTax, taxFood, taxService float64) float64 {
+	if taxFood > 0 || taxService > 0 {
+		return taxFood
+	}
+	return orderTax
+}
+
 func ChefNetPayoutFor(order *models.Order) float64 {
 	return ComputeOrderEarnings(EarningsInput{
 		ItemRevenue:        order.Subtotal,
-		Tax:                order.Tax,
+		Tax:                ChefAttributableTax(order),
 		ChefTip:            order.ChefTip,
 		DeliveryFee:        order.DeliveryFee,
 		ChefFundedDiscount: order.ChefFundedDiscount,

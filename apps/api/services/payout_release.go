@@ -152,13 +152,15 @@ func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 		HasOpenIssue        bool
 		Subtotal            float64
 		Tax                 float64
+		TaxFood             float64
+		TaxService          float64
 		ChefTip             float64
 		ChefFundedDiscount  float64
 		CommissionRate      float64
 	}
 	q := db.Table("orders").
 		Select("id, chef_id, total AS amount, payout_hold_status, delivered_at, customer_confirmed_at, "+
-			"order_number AS context, subtotal, tax, chef_tip, chef_funded_discount, commission_rate, "+
+			"order_number AS context, subtotal, tax, tax_food, tax_service, chef_tip, chef_funded_discount, commission_rate, "+
 			"EXISTS(SELECT 1 FROM order_issues oi WHERE oi.order_id = orders.id AND oi.status = 'pending') AS has_open_issue").
 		Where("payout_hold_status IN ?", f.pendingStatuses()).
 		// Cross-guard (#457): never surface a refunded/cancelled order NOR one with
@@ -180,7 +182,7 @@ func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	for _, r := range raw {
 		net := ComputeOrderEarnings(EarningsInput{
 			ItemRevenue:        r.Subtotal,
-			Tax:                r.Tax,
+			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
 			ChefTip:            r.ChefTip,
 			ChefFundedDiscount: r.ChefFundedDiscount,
 			CommissionRate:     r.CommissionRate,

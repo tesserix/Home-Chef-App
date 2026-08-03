@@ -132,6 +132,8 @@ type catchupRow struct {
 	StatementID uuid.UUID
 	Subtotal    float64
 	Tax         float64
+	TaxFood     float64
+	TaxService  float64
 	ChefTip     float64
 	// ChefFundedDiscount reduces the chef's revenue before commission (#39).
 	ChefFundedDiscount float64
@@ -150,7 +152,7 @@ func loadCatchupOrders(db *gorm.DB, limit int) ([]catchupRow, error) {
 	var rows []catchupRow
 	err := db.Table("orders o").
 		Select(`o.id, o.order_number, o.chef_id, s.id AS statement_id,
-			o.subtotal, o.tax, o.chef_tip, o.chef_funded_discount, o.commission_rate,
+			o.subtotal, o.tax, o.tax_food, o.tax_service, o.chef_tip, o.chef_funded_discount, o.commission_rate,
 			c.state AS chef_state, o.delivery_address_state AS delivery_state`).
 		Joins("JOIN chef_profiles c ON c.id = o.chef_id").
 		Joins(`JOIN weekly_statements s ON s.chef_id = o.chef_id
@@ -192,7 +194,7 @@ func reconcileStatementCatchup() {
 		r := rows[i]
 		net := ComputeOrderEarnings(EarningsInput{
 			ItemRevenue:        r.Subtotal,
-			Tax:                r.Tax,
+			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
 			ChefTip:            r.ChefTip,
 			ChefFundedDiscount: r.ChefFundedDiscount,
 			CommissionRate:     r.CommissionRate,
