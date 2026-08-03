@@ -80,6 +80,13 @@ const (
 	ChefBonusReferralReferee  ChefBonusKind = "referral_referee"
 	// ChefBonusLoyaltyCashback — a chef converted loyalty points into cashback.
 	ChefBonusLoyaltyCashback ChefBonusKind = "loyalty_cashback"
+	// ChefBonusCancellationRetained — the share of a CANCELLED order the chef
+	// retained under the epic #475 tier model (the food the customer was not
+	// refunded because the chef had already started work). Computed and shown to
+	// the customer since #475 but never paid until #947; it settles through the
+	// weekly statement like any other bonus rather than through the payout-hold
+	// path, which must keep excluding cancelled orders.
+	ChefBonusCancellationRetained ChefBonusKind = "cancellation_retained"
 )
 
 // ChefBonus is a rupee credit owed to a chef, added onto their next weekly
