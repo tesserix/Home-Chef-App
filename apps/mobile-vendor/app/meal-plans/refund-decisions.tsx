@@ -8,7 +8,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -78,7 +77,7 @@ export default function RefundDecisionsScreen() {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Back"
-          style={({ pressed }) => [styles.backBtn, pressed && Platform.OS === 'ios' && { opacity: 0.6 }]}
+          style={styles.backBtn}
         >
           <ChevronLeft size={24} color={theme.colors.ink.DEFAULT} />
         </Pressable>
@@ -159,9 +158,8 @@ function DecisionCard({
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Refund less"
-            style={({ pressed }) => [
+            style={[
               styles.stepBtn,
-              pressed && { opacity: 0.7 },
               (busy || percent <= day.minPercent) && styles.btnDisabled,
             ]}
           >
@@ -177,11 +175,7 @@ function DecisionCard({
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Refund more"
-            style={({ pressed }) => [
-              styles.stepBtn,
-              pressed && { opacity: 0.7 },
-              (busy || percent >= 100) && styles.btnDisabled,
-            ]}
+            style={[styles.stepBtn, (busy || percent >= 100) && styles.btnDisabled]}
           >
             <Text style={styles.stepBtnText}>+</Text>
           </Pressable>
@@ -192,11 +186,7 @@ function DecisionCard({
               key={p}
               disabled={busy}
               onPress={() => setPercent(p)}
-              style={({ pressed }) => [
-                styles.preset,
-                percent === p && styles.presetOn,
-                pressed && { opacity: 0.7 },
-              ]}
+              style={[styles.preset, percent === p && styles.presetOn]}
             >
               <Text style={[styles.presetText, percent === p && styles.presetTextOn]}>{p}%</Text>
             </Pressable>
@@ -213,14 +203,14 @@ function DecisionCard({
         <Pressable
           disabled={busy}
           onPress={() => onAct(day, percent)}
-          style={({ pressed }) => [styles.btnPrimary, pressed && { opacity: 0.9 }, busy && styles.btnDisabled]}
+          style={[styles.btnPrimary, busy && styles.btnDisabled]}
         >
           <Text style={styles.btnPrimaryText}>Refund {money(refundAtPercent(day, percent))}</Text>
         </Pressable>
         <Pressable
           disabled={busy}
           onPress={() => onAct(day, 0, true)}
-          style={({ pressed }) => [styles.btnGhost, pressed && { opacity: 0.7 }, busy && styles.btnDisabled]}
+          style={[styles.btnGhost, busy && styles.btnDisabled]}
         >
           <Text style={styles.btnGhostText}>Keep this day — cook it as planned</Text>
         </Pressable>
@@ -255,7 +245,6 @@ const styles = StyleSheet.create({
   cardDish: { fontFamily: 'Inter-Medium', fontSize: 15, color: theme.colors.ink.DEFAULT, marginTop: 2 },
   cardSub: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 2 },
   actions: { marginTop: 12, gap: 8 },
-  actionRow: { flexDirection: 'row', gap: 8 },
   picker: {
     marginTop: 12,
     gap: 10,
@@ -297,7 +286,7 @@ const styles = StyleSheet.create({
   btnPrimaryText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.paper },
   btnOutline: { borderRadius: 10, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.ink.DEFAULT },
   btnOutlineText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.ink.DEFAULT },
-  btnGhost: { flex: 1, borderRadius: 10, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.mist.DEFAULT },
+  btnGhost: { borderRadius: 10, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.mist.DEFAULT },
   btnGhostText: { fontFamily: 'Inter-Medium', fontSize: 14, color: theme.colors.ink.soft },
   btnDisabled: { opacity: 0.5 },
 });
