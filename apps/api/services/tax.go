@@ -107,11 +107,33 @@ func SeedTaxRates() {
 		Rate    float64
 		Incl    bool
 		Notes   string
+		// Per-supply overrides. Left at 0 the supply takes Rate, which is what
+		// every non-India row below does — they are single-rate jurisdictions.
+		Food             float64
+		Service          float64
+		ServiceIncl      bool
+		DeliverySelf     float64
+		DeliveryPlatform float64
+		Subscription     float64
+		IDLabel          string
 	}
 	seeds := []seed{
-		// India — GST for restaurants (5% no-ITC for small, 18% with-ITC
-		// for large). Platform defaults to 5%; admin can raise per-state.
-		{Country: "IN", Name: "GST", Rate: 5.0, Incl: false, Notes: "India GST on restaurant services (CGST+SGST total)."},
+		// India. One bill, three rates — see docs/india-gst-model.md:
+		//   food                5% exclusive  — restaurant service, no ITC (Notif. 11/2017-CTR)
+		//   platform fee       18% INCLUSIVE  — the platform's own service. Inclusive is the
+		//                                      pricing decision: the customer's all-in fee does
+		//                                      not move and the GST is backed out of it.
+		//   chef self-delivery  5% exclusive  — door delivery by the cook, arguable as part of
+		//                                      the composite restaurant supply (open: §7 Q2)
+		//   platform delivery  18% exclusive  — local delivery through an ECO, a notified §9(5)
+		//                                      supply since 22 Sep 2025 (56th Council, 3 Sep 2025)
+		//   subscription       18% exclusive  — recurring plan fee, a standard-rated service
+		{
+			Country: "IN", Name: "GST", Rate: 5.0, Incl: false,
+			Food: 5, Service: 18, ServiceIncl: true, DeliverySelf: 5, DeliveryPlatform: 18, Subscription: 18,
+			IDLabel: "GSTIN",
+			Notes:   "India GST. Food 5% (no ITC); platform fee 18% inclusive; delivery 5% chef / 18% platform.",
+		},
 
 		// European Union — reduced VAT on prepared food varies (5%–10%);
 		// picking a mid-point per country. Admins should confirm.
@@ -178,54 +200,72 @@ func SeedTaxRates() {
 			"country_code = ? AND region = ?",
 			strings.ToUpper(s.Country), strings.ToUpper(s.Region),
 		).Attrs(models.TaxRate{
-			TaxName:   s.Name,
-			Rate:      s.Rate,
-			Inclusive: s.Incl,
-			Notes:     s.Notes,
-			IsActive:  true,
+			TaxName:                 s.Name,
+			Rate:                    s.Rate,
+			Inclusive:               s.Incl,
+			FoodPercent:             s.Food,
+			ServicePercent:          s.Service,
+			ServiceInclusive:        s.ServiceIncl,
+			DeliverySelfPercent:     s.DeliverySelf,
+			DeliveryPlatformPercent: s.DeliveryPlatform,
+			SubscriptionPercent:     s.Subscription,
+			RegistrationIDLabel:     s.IDLabel,
+			Notes:                   s.Notes,
+			IsActive:                true,
 		}).FirstOrCreate(&row, models.TaxRate{
 			CountryCode: strings.ToUpper(s.Country),
 			Region:      strings.ToUpper(s.Region),
 		})
 		if result.Error != nil {
 			log.Printf("tax: seed failed for %s/%s: %v", s.Country, s.Region, result.Error)
+			continue
 		}
+		fillUnsetSupplyRates(row, s.Food, s.Service, s.ServiceIncl, s.DeliverySelf, s.DeliveryPlatform, s.Subscription, s.IDLabel)
 	}
-	adoptLegacyTaxIdentity()
 	InvalidateTaxCache()
 	log.Printf("tax: seeded %d baseline rules (existing admin edits preserved)", len(seeds))
 }
 
-// adoptLegacyTaxIdentity fills the columns that took over from the separate
-// per-country tax config this table replaced, on rows that predate them.
+// fillUnsetSupplyRates back-fills the per-supply columns on a row that predates
+// them — one UPDATE per column, each guarded on the column still being unset, so
+// a rate an admin has deliberately chosen is never overwritten and re-running is
+// a no-op.
 //
-// Only the subscription rate and the registration label move: the food, service
-// and delivery percents are deliberately left unset so every component keeps
-// taking Rate — that is what orders were actually charged, and separating them
-// is a deliberate admin decision, not a migration side effect
-// (docs/india-gst-model.md §8). Idempotent: it never overwrites a set value.
-func adoptLegacyTaxIdentity() {
-	legacy := map[string]struct {
-		Subscription float64
-		IDLabel      string
-	}{
-		"IN": {18, "GSTIN"},
-		"AU": {10, "ABN"},
-		"PK": {17, "NTN"},
-		"BD": {15, "TIN"},
-		"LK": {8, "TIN"},
-		"NP": {13, "PAN"},
+// ⚠️ On an existing deployment this is the step that MOVES MONEY: an India row
+// created before per-supply rates existed carries 0 in every column, so this is
+// what puts the platform fee on 18% and platform-arranged delivery on 18%. That
+// is the intended go-live (docs/gst-refunds-and-gateway-costs.md §9) — but it
+// happens on the first boot after deploy, not on an admin's say-so, so the log
+// line below is deliberately loud.
+func fillUnsetSupplyRates(row models.TaxRate, food, service float64, serviceIncl bool, deliverySelf, deliveryPlatform, subscription float64, idLabel string) {
+	set := func(column string, value any, guard string, guardArgs ...any) {
+		args := append([]any{row.ID}, guardArgs...)
+		if err := database.DB.Model(&models.TaxRate{}).
+			Where("id = ? AND "+guard, args...).
+			Update(column, value).Error; err != nil {
+			log.Printf("tax: adopt %s failed for %s: %v", column, row.CountryCode, err)
+		}
 	}
-	for country, v := range legacy {
-		if err := database.DB.Model(&models.TaxRate{}).
-			Where("country_code = ? AND subscription_percent = 0", country).
-			Update("subscription_percent", v.Subscription).Error; err != nil {
-			log.Printf("tax: subscription rate adopt failed for %s: %v", country, err)
+	for _, c := range []struct {
+		column string
+		value  float64
+	}{
+		{"food_percent", food},
+		{"service_percent", service},
+		{"delivery_self_percent", deliverySelf},
+		{"delivery_platform_percent", deliveryPlatform},
+		{"subscription_percent", subscription},
+	} {
+		if c.value > 0 {
+			set(c.column, c.value, c.column+" = 0")
 		}
-		if err := database.DB.Model(&models.TaxRate{}).
-			Where("country_code = ? AND (registration_id_label = '' OR registration_id_label IS NULL)", country).
-			Update("registration_id_label", v.IDLabel).Error; err != nil {
-			log.Printf("tax: registration label adopt failed for %s: %v", country, err)
-		}
+	}
+	// Inclusivity rides with the service rate: it is only meaningful once that
+	// rate is set, and it is set in the same "was still unset" window.
+	if serviceIncl {
+		set("service_inclusive", true, "service_percent = ? AND service_inclusive = false", service)
+	}
+	if idLabel != "" {
+		set("registration_id_label", idLabel, "(registration_id_label = '' OR registration_id_label IS NULL)")
 	}
 }

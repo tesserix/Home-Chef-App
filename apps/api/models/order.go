@@ -155,6 +155,15 @@ type Order struct {
 	// cannot tell whether the tax line is part of the total or additional to it.
 	// Defaults false, which is correct for every order placed before it existed.
 	TaxInclusive bool `gorm:"default:false" json:"taxInclusive"`
+	// TaxServiceInclusive freezes whether the platform fee was quoted all-in with
+	// the GST backed out of it, separately from the food — the two can differ.
+	TaxServiceInclusive bool `gorm:"default:false" json:"taxServiceInclusive"`
+	// TaxDeliveryByPlatform freezes WHICH delivery rule applied: a platform-arranged
+	// rider is a notified §9(5) local-delivery supply, a chef carrying their own
+	// food is arguable as part of the composite restaurant supply. The carrier is
+	// chosen at Mark Ready, so the decision is recorded at checkout and never
+	// re-derived — otherwise a later carrier switch would restate a tax invoice.
+	TaxDeliveryByPlatform bool `gorm:"default:false" json:"taxDeliveryByPlatform"`
 	// CommissionRate freezes the platform commission rate applied when the order
 	// was placed, so a later admin retune of the runtime rate cannot make the
 	// settlement statement disagree with the Route transfer already sent (#390).
@@ -637,11 +646,13 @@ func (o *Order) SnapshotRates() TaxRates {
 		return o.TaxRate
 	}
 	return TaxRates{
-		Name:      o.TaxName,
-		Inclusive: o.TaxInclusive,
-		Food:      or(o.TaxRateFood),
-		Service:   or(o.TaxRateService),
-		Delivery:  or(o.TaxRateDelivery),
+		Name:             o.TaxName,
+		Food:             or(o.TaxRateFood),
+		FoodInclusive:    o.TaxInclusive,
+		Service:            or(o.TaxRateService),
+		ServiceInclusive:   o.TaxServiceInclusive,
+		Delivery:           or(o.TaxRateDelivery),
+		DeliveryByPlatform: o.TaxDeliveryByPlatform,
 	}
 }
 

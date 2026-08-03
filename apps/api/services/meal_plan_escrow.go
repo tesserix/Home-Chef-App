@@ -62,7 +62,7 @@ func MealPlanFeeTotals(subtotal float64, numDays int) (float64, float64, float64
 	// read policy.TaxPercent, which defaults to 8% while à la carte orders are
 	// taxed at the 5% in tax_rates — the same meal, two rates, depending on how it
 	// was bought.
-	foodRate := ResolveTaxRate("IN", "").ComponentRates().Food
+	foodRate := ResolveTaxRate("IN", "").ComponentRates(false).Food
 	tax := Round2(subtotal * (foodRate / 100.0))
 	delivery := Round2(policy.BaseDeliveryFee * float64(numDays))
 	return platformFee, tax, foodRate, delivery

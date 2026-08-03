@@ -48,7 +48,7 @@ func ComputeMealCycleCharge(cycleAmount, creditBalance float64) (charge, remaini
 // one tax_rates row every other money path also reads. 0 when unknown so
 // generation never fails.
 func mealInvoiceTaxRate(countryCode string) float64 {
-	return ResolveTaxRate(countryCode, "").ComponentRates().Subscription / 100
+	return ResolveTaxRate(countryCode, "").ComponentRates(false).Subscription / 100
 }
 
 // GenerateMealCycleInvoice creates the next-cycle invoice for a subscription,

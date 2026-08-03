@@ -499,7 +499,9 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 	if g.Chef != nil {
 		chefState = g.Chef.State
 	}
-	rates := taxRule.ComponentRates()
+	// A group order is always plain delivery, so the carrier question resolves the
+	// same way a single order's does.
+	rates := taxRule.ComponentRates(services.DeliveryByPlatform(models.FulfillmentDelivery, services.ThirdPartyDeliveryEnabled()))
 	pricing := models.ComputeOrderPricing(models.PricingInput{
 		Subtotal:    subtotal,
 		DeliveryFee: deliveryFee,

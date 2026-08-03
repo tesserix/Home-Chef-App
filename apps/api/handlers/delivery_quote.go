@@ -48,6 +48,17 @@ type deliveryQuoteRequest struct {
 	services.CreditRequest
 }
 
+// fulfillmentForTax maps the client's requested mode to the one CreateOrder will
+// actually record, so the quote resolves the delivery tax rule the same way the
+// charge will. Anything but pickup is created as plain delivery — the chef picks
+// the carrier at Mark Ready (resolveFulfillment).
+func fulfillmentForTax(requested string) models.FulfillmentType {
+	if requested == string(models.FulfillmentPickup) {
+		return models.FulfillmentPickup
+	}
+	return models.FulfillmentDelivery
+}
+
 // QuoteDeliveryFee returns the per-mode delivery fee for a chef + drop address,
 // so checkout can show the real delivery cost and pickup's saving.
 //
@@ -118,7 +129,7 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		PlatformFee: req.Subtotal * (policy.PlatformFeePercent / 100.0),
 		Discount:    req.Discount,
 		Tip:         req.Tip,
-		Rates:       taxRule.ComponentRates(),
+		Rates:       taxRule.ComponentRates(services.DeliveryByPlatform(fulfillmentForTax(req.Fulfillment), services.ThirdPartyDeliveryEnabled())),
 		Country:     country,
 		IntraState:  services.IsIntraStateSupply(chef.State, req.State),
 	})

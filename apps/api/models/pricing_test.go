@@ -126,18 +126,55 @@ func TestBuildTaxLines_InterStateIsOneIGSTLine(t *testing.T) {
 	assertFoots(t, p, false)
 }
 
-// An inclusive rate is already inside the base — the tax line is informational
-// and must not be added to the total a second time.
-func TestComputeOrderPricing_InclusiveTaxIsNotAddedToTotal(t *testing.T) {
+// An inclusive rate is quoted gross, so the tax comes OUT of the amount rather
+// than on top of it: the customer still pays 100, the displayed line drops to the
+// net, and the tax row states what is inside. The total does not move.
+func TestComputeOrderPricing_InclusiveTaxComesOutOfTheAmount(t *testing.T) {
 	p := ComputeOrderPricing(PricingInput{
 		Subtotal: 100,
-		Rates:    TaxRates{Name: "VAT", Inclusive: true, Food: 20, Service: 20, Delivery: 20},
+		Rates:    TaxRates{Name: "VAT", FoodInclusive: true, ServiceInclusive: true, Food: 20, Service: 20, Delivery: 20},
 		Country:  "GB",
 	})
-	require.Equal(t, 100.0, p.Total)
+	require.Equal(t, 100.0, p.Total, "an inclusive rate cannot change what the customer pays")
+	require.Equal(t, 83.33, p.Subtotal, "the displayed line is the net — the tax row states the rest")
 	require.Equal(t, 16.67, p.Tax)
-	require.Equal(t, "VAT (incl.)", p.TaxLines[0].Label)
-	assertFoots(t, p, true)
+	require.Equal(t, "VAT", p.TaxLines[0].Label)
+	assertFoots(t, p, false)
+}
+
+// Option B on the order from the receipt: the customer's all-in platform fee does
+// not move, the GST is backed out of it, and the invoice states both halves.
+func TestComputeOrderPricing_OptionB_FeeIsQuotedAllIn(t *testing.T) {
+	in := indiaGST(500, 0, 0, 0)
+	in.Rates = TaxRates{Name: "GST", Food: 5, Service: 18, ServiceInclusive: true, Delivery: 5}
+	p := ComputeOrderPricing(in)
+
+	require.Equal(t, 21.14, p.PlatformFee, "the 24.95 all-in fee shown net of its own GST")
+	require.Equal(t, 3.81, p.TaxService, "and the GST inside it")
+	require.Equal(t, 24.95, RoundAmount(p.PlatformFee+p.TaxService), "which sum back to the all-in fee")
+	require.Equal(t, 25.0, p.TaxFood, "food is still quoted net and taxed on top")
+	require.Equal(t, 549.95, p.Total)
+	assertFoots(t, p, false)
+}
+
+// Chef self-delivery takes the restaurant rate; a platform-arranged rider takes
+// the notified local-delivery rate. Same order, same fee, different tax.
+func TestComputeOrderPricing_DeliveryRateFollowsTheCarrier(t *testing.T) {
+	base := indiaGST(500, 39, 0, 0)
+
+	self := base
+	self.Rates = TaxRates{Name: "GST", Food: 5, Service: 18, ServiceInclusive: true, Delivery: 5}
+	byChef := ComputeOrderPricing(self)
+
+	platform := base
+	platform.Rates = TaxRates{Name: "GST", Food: 5, Service: 18, ServiceInclusive: true, Delivery: 18, DeliveryByPlatform: true}
+	byPlatform := ComputeOrderPricing(platform)
+
+	require.Equal(t, 1.95, byChef.TaxDelivery, "39 at the restaurant rate")
+	require.Equal(t, 7.02, byPlatform.TaxDelivery, "39 at the local-delivery rate")
+	require.Equal(t, 5.07, RoundAmount(byPlatform.Total-byChef.Total), "the whole difference is tax")
+	assertFoots(t, byChef, false)
+	assertFoots(t, byPlatform, false)
 }
 
 // A tax carried by an order written before the rate was snapshotted must be
@@ -187,16 +224,18 @@ func TestBuildTaxLines_DivergentRatesSplitPerRate(t *testing.T) {
 	assertFoots(t, p, false)
 }
 
-// Splitting the model must not have moved a paise while every rate is the same:
-// a uniform rate is charged as one base with one rounding, exactly as before.
-func TestComputeOrderPricing_UniformRatesChargeTheLegacyFigure(t *testing.T) {
+// Taxing each supply separately means three roundings where the single-rate model
+// had one, so a uniform-rate order can differ from the old figure by the paise
+// those roundings disagree on. That is accepted and bounded — it is not a licence
+// for the two to drift further.
+func TestComputeOrderPricing_UniformRatesStayWithinAPaiseOfTheLegacyFigure(t *testing.T) {
 	for _, c := range []struct{ subtotal, delivery, discount float64 }{
-		{240, 0, 0}, {249.99, 39, 0}, {333.33, 45.5, 50}, {1000.01, 0, 0},
+		{240, 0, 0}, {249.99, 39, 0}, {333.33, 45.5, 50}, {1000.01, 0, 0}, {77.77, 19.5, 12.5},
 	} {
 		p := ComputeOrderPricing(indiaGST(c.subtotal, c.delivery, c.discount, 0))
-		legacyBase := p.Subtotal + p.DeliveryFee + p.PlatformFee - p.Discount
-		require.InDelta(t, RoundAmount(legacyBase*5/100), p.Tax, 1e-9,
-			"one rate over one base — the figure this charged before tax was per-component")
+		legacy := RoundAmount((p.Subtotal + p.DeliveryFee + p.PlatformFee - p.Discount) * 5 / 100)
+		require.InDelta(t, legacy, p.Tax, 0.02,
+			"three roundings instead of one may differ by a paise per supply, never more")
 	}
 }
 

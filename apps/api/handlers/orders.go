@@ -505,7 +505,11 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// sum of the lines the customer is shown — this used to store raw products
 	// like 240 × 4.99% = 11.976 and the receipt's lines then out-summed its own
 	// total by a paise. Tip is excluded from the tax base (pass-through).
-	rates := taxRule.ComponentRates()
+	// Which delivery rule applies is decided ONCE, here, and frozen on the order —
+	// the chef only picks the carrier at Mark Ready, and a later switch must not
+	// restate a tax invoice already issued (services/gst.go).
+	deliveryByPlatform := services.DeliveryByPlatform(fulfillment, services.ThirdPartyDeliveryEnabled())
+	rates := taxRule.ComponentRates(deliveryByPlatform)
 	pricing := models.ComputeOrderPricing(models.PricingInput{
 		Subtotal:    subtotal,
 		DeliveryFee: deliveryFee,
@@ -618,9 +622,11 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		TaxFood:         pricing.TaxFood,
 		TaxService:      pricing.TaxService,
 		TaxDelivery:     pricing.TaxDelivery,
-		TaxRateFood:     rates.Food,
-		TaxRateService:  rates.Service,
-		TaxRateDelivery: rates.Delivery,
+		TaxRateFood:           rates.Food,
+		TaxRateService:        rates.Service,
+		TaxRateDelivery:       rates.Delivery,
+		TaxServiceInclusive:   rates.ServiceInclusive,
+		TaxDeliveryByPlatform: rates.DeliveryByPlatform,
 		Tip:             tip,
 		// #964: route the tip to the chef. `Tip` is the LEGACY total column
 		// (models/order.go) and nothing in the payout stack reads it — earnings,

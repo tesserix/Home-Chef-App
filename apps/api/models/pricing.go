@@ -95,8 +95,12 @@ type OrderPricing struct {
 	Total    float64 `json:"total"`
 }
 
-// ComputeOrderPricing prices an order that has not been charged yet. Every
-// component is rounded to paise first, so Total is the exact sum of the lines.
+// ComputeOrderPricing prices an order that has not been charged yet.
+//
+// One rule, applied three times: every supply is split into the net the seller
+// keeps and the tax the government takes, and contributes net + tax to the total.
+// Inclusive and exclusive pricing differ only in how that split is derived — see
+// splitSupply — so there is no second code path for either.
 func ComputeOrderPricing(in PricingInput) OrderPricing {
 	p := OrderPricing{
 		Subtotal:    RoundAmount(nonNegative(in.Subtotal)),
@@ -111,72 +115,67 @@ func ComputeOrderPricing(in PricingInput) OrderPricing {
 	if charge := p.Subtotal + p.DeliveryFee + p.PlatformFee; p.Discount > charge {
 		p.Discount = charge
 	}
-	// A promo discounts the food, and only spills onto delivery and the fee once
-	// the food is exhausted — so a rate that differs per component is applied to
-	// the base that component actually kept.
-	food, delivery, fee := spendDiscount(p.Subtotal, p.DeliveryFee, p.PlatformFee, p.Discount)
-	incl := in.Rates.Inclusive
+	// A promo comes off the food first and only spills onto delivery and the fee
+	// once the food is exhausted, so a supply with its own rate is taxed on the
+	// base it actually kept.
+	kept, absorbed := spendDiscount(p.Subtotal, p.DeliveryFee, p.PlatformFee, p.Discount)
 
-	if in.Rates.Uniform() {
-		// One rate over one base and ONE rounding — bit-for-bit the figure this
-		// charged before tax became per-component, so splitting the model moved no
-		// money. The parts below are an apportionment of that single number.
-		p.Tax = taxOn(food+delivery+fee, in.Rates.Food, incl)
-		p.TaxFood, p.TaxDelivery, p.TaxService = apportion(p.Tax, food, delivery, fee)
-	} else {
-		p.TaxFood = taxOn(food, in.Rates.Food, incl)
-		p.TaxDelivery = taxOn(delivery, in.Rates.Delivery, incl)
-		p.TaxService = taxOn(fee, in.Rates.Service, incl)
-		p.Tax = RoundAmount(p.TaxFood + p.TaxDelivery + p.TaxService)
-	}
+	foodNet, taxFood := splitSupply(kept[0], in.Rates.Food, in.Rates.FoodInclusive)
+	deliveryNet, taxDelivery := splitSupply(kept[1], in.Rates.Delivery, in.Rates.FoodInclusive)
+	feeNet, taxService := splitSupply(kept[2], in.Rates.Service, in.Rates.ServiceInclusive)
+
+	// Displayed lines are NET of tax, because the tax rows state it separately —
+	// a fee quoted all-in appears as its net plus its own tax rows, which sum back
+	// to the figure the customer agreed to. The discount each supply absorbed is
+	// added back so the Discount line still reconciles against them.
+	p.Subtotal = RoundAmount(foodNet + absorbed[0])
+	p.DeliveryFee = RoundAmount(deliveryNet + absorbed[1])
+	p.PlatformFee = RoundAmount(feeNet + absorbed[2])
+
+	p.TaxFood, p.TaxDelivery, p.TaxService = taxFood, taxDelivery, taxService
+	p.Tax = RoundAmount(taxFood + taxDelivery + taxService)
 
 	// Tip rides in the total but never in the tax base — it is a pass-through to
-	// the chef or rider, not consideration for the platform's supply. An inclusive
-	// rate is already inside the base; adding it would charge the tax twice.
-	charged := food + delivery + fee
-	if !incl {
-		charged += p.Tax
-	}
-	p.Total = RoundAmount(charged + p.Tip)
+	// the chef or rider, not consideration for anybody's supply.
+	p.Total = RoundAmount(foodNet + deliveryNet + feeNet + p.Tax + p.Tip)
 	p.TaxLines = BuildTaxLines(p, in)
 	return p
 }
 
-// taxOn is the tax carried by one base at one rate, to the paise.
-func taxOn(base, ratePercent float64, inclusive bool) float64 {
-	if base <= 0 || ratePercent <= 0 {
-		return 0
+// splitSupply divides one supply into the net kept and the tax carried.
+//
+//	exclusive — the amount IS the net, and tax is added on top
+//	inclusive — the amount is the gross, and tax is backed out of it
+//
+// Either way the supply contributes net + tax to the total, which is why the two
+// pricing styles need no separate handling anywhere above this line.
+func splitSupply(amount, ratePercent float64, inclusive bool) (net, tax float64) {
+	amount = RoundAmount(amount)
+	if amount <= 0 || ratePercent <= 0 {
+		return amount, 0
 	}
 	if inclusive {
-		return RoundAmount(base - base/(1+ratePercent/100.0))
+		net = RoundAmount(amount / (1 + ratePercent/100.0))
+		return net, RoundAmount(amount - net)
 	}
-	return RoundAmount(base * ratePercent / 100.0)
+	return amount, RoundAmount(amount * ratePercent / 100.0)
 }
 
 // spendDiscount takes the discount off the food first, then delivery, then the
-// platform fee, returning what each component keeps.
-func spendDiscount(food, delivery, fee, discount float64) (float64, float64, float64) {
-	for _, part := range []*float64{&food, &delivery, &fee} {
+// platform fee. Returns what each supply keeps and what each absorbed, indexed
+// [food, delivery, fee].
+func spendDiscount(food, delivery, fee, discount float64) (kept, absorbed [3]float64) {
+	kept = [3]float64{food, delivery, fee}
+	for i := range kept {
 		take := discount
-		if take > *part {
-			take = *part
+		if take > kept[i] {
+			take = kept[i]
 		}
-		*part = RoundAmount(*part - take)
+		kept[i] = RoundAmount(kept[i] - take)
+		absorbed[i] = RoundAmount(take)
 		discount = RoundAmount(discount - take)
 	}
-	return food, delivery, fee
-}
-
-// apportion splits one tax figure across three bases so the parts sum EXACTLY to
-// it — the last takes the remainder rather than being rounded on its own.
-func apportion(tax, food, delivery, fee float64) (float64, float64, float64) {
-	base := food + delivery + fee
-	if base <= 0 || tax == 0 {
-		return 0, 0, 0
-	}
-	tFood := RoundAmount(tax * food / base)
-	tDelivery := RoundAmount(tax * delivery / base)
-	return tFood, tDelivery, RoundAmount(tax - tFood - tDelivery)
+	return kept, absorbed
 }
 
 // TaxSnapshot is the tax an order was actually charged, per supply. Food/Service
@@ -205,10 +204,9 @@ func PresentOrderPricing(in PricingInput, charged TaxSnapshot, chargedTotal floa
 		TaxDelivery: RoundAmount(charged.Delivery),
 		Total:       RoundAmount(chargedTotal),
 	}
-	lines := p.Subtotal + p.DeliveryFee + p.PlatformFee - p.Discount + p.Tip
-	if !in.Rates.Inclusive {
-		lines += p.Tax
-	}
+	// Displayed lines are net of tax whichever way each supply was priced (see
+	// ComputeOrderPricing), so the tax always adds — no inclusive special case.
+	lines := p.Subtotal + p.DeliveryFee + p.PlatformFee - p.Discount + p.Tip + p.Tax
 	p.Rounding = RoundAmount(p.Total - lines)
 	p.TaxLines = BuildTaxLines(p, in)
 	return p
@@ -263,9 +261,6 @@ func BuildTaxLines(p OrderPricing, in PricingInput) []TaxLine {
 			name := strings.TrimSpace(in.Rates.Name)
 			if name == "" {
 				name = "Tax"
-			}
-			if in.Rates.Inclusive {
-				name += " (incl.)"
 			}
 			lines = append(lines, TaxLine{Code: TaxLineOther, Label: name + on, Rate: g.rate, Amount: g.amount})
 		}

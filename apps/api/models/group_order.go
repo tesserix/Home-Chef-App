@@ -127,7 +127,8 @@ type GroupOrder struct {
 	TaxName string  `gorm:"" json:"taxName,omitempty"`
 	// Frozen with the rest so the spawned order inherits the rule the group was
 	// priced under, rather than re-resolving it at consolidation time.
-	TaxInclusive bool `gorm:"default:false" json:"taxInclusive"`
+	TaxInclusive        bool `gorm:"default:false" json:"taxInclusive"`
+	TaxServiceInclusive bool `gorm:"default:false" json:"taxServiceInclusive"`
 	// Per-supply snapshot, mirroring Order — frozen at lock and inherited by the
 	// consolidated order so both documents state the same heads.
 	TaxFood         float64 `gorm:"default:0" json:"taxFood"`
@@ -170,11 +171,12 @@ func (g *GroupOrder) SnapshotRates() TaxRates {
 		return g.TaxRate
 	}
 	return TaxRates{
-		Name:      g.TaxName,
-		Inclusive: g.TaxInclusive,
-		Food:      or(g.TaxRateFood),
-		Service:   or(g.TaxRateService),
-		Delivery:  or(g.TaxRateDelivery),
+		Name:             g.TaxName,
+		Food:             or(g.TaxRateFood),
+		FoodInclusive:    g.TaxInclusive,
+		Service:          or(g.TaxRateService),
+		ServiceInclusive: g.TaxServiceInclusive,
+		Delivery:         or(g.TaxRateDelivery),
 	}
 }
 

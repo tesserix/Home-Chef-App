@@ -33,7 +33,7 @@ func (h *TaxHandler) GetPublicTaxRate(c *gin.Context) {
 		return
 	}
 	rule := services.ResolveTaxRate(country, region)
-	rates := rule.ComponentRates()
+	rates := rule.ComponentRates(services.DeliveryByPlatform(models.FulfillmentDelivery, services.ThirdPartyDeliveryEnabled()))
 	c.JSON(http.StatusOK, gin.H{
 		"country":   country,
 		"region":    region,
