@@ -15,6 +15,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -200,10 +201,22 @@ type LedgerDrift struct {
 	UserID      uuid.UUID
 	LegacyMinor models.Money
 	LedgerMinor models.Money
+	// Orphaned — the wallet's owner has no `users` row. The position is real but
+	// unactionable: there is nobody left to credit or debit.
+	Orphaned bool
 }
 
 // ReconcileLedgerVsWallet returns every wallet whose ledger projection differs from its
 // legacy balance. It NEVER corrects — a mismatch is surfaced for investigation (SEV-1).
+//
+// Drift on a PURGED account (no `users` row) is classified rather than dropped.
+// A deleted customer's financial rows outlive the account, so their residue
+// drifts forever and cannot be actioned by crediting anyone — there is nobody to
+// credit. Reporting it at the same severity as a live customer's wrong balance is
+// what makes the noise dangerous: production carries one such row today (#948),
+// and an operator who learns to ignore the DRIFT line will ignore the real one
+// too. Splitting them keeps the SEV-1 signal clean while leaving the orphan
+// visible for a deliberate write-off.
 func ReconcileLedgerVsWallet(db *gorm.DB) ([]LedgerDrift, error) {
 	var wallets []models.Wallet
 	if err := db.Find(&wallets).Error; err != nil {
@@ -217,10 +230,27 @@ func ReconcileLedgerVsWallet(db *gorm.DB) ([]LedgerDrift, error) {
 			return nil, err
 		}
 		if legacy := models.RupeesToMoney(w.Balance); lb != legacy {
-			drift = append(drift, LedgerDrift{UserID: w.UserID, LegacyMinor: legacy, LedgerMinor: lb})
+			orphaned, err := walletOwnerPurged(db, w.UserID)
+			if err != nil {
+				return nil, err
+			}
+			drift = append(drift, LedgerDrift{
+				UserID: w.UserID, LegacyMinor: legacy, LedgerMinor: lb, Orphaned: orphaned,
+			})
 		}
 	}
 	return drift, nil
+}
+
+// walletOwnerPurged reports whether the wallet's owner no longer exists. Uses
+// Unscoped so a SOFT-deleted user still counts as present — that account can be
+// restored and its balance still belongs to a real person.
+func walletOwnerPurged(db *gorm.DB, userID uuid.UUID) (bool, error) {
+	var n int64
+	if err := db.Model(&models.User{}).Unscoped().Where("id = ?", userID).Count(&n).Error; err != nil {
+		return false, fmt.Errorf("ledger-reconcile: check owner of wallet %s: %w", userID, err)
+	}
+	return n == 0, nil
 }
 
 const ledgerReconcileInterval = 30 * time.Minute
@@ -249,11 +279,20 @@ func runLedgerReconcileScan(_ context.Context) {
 		log.Printf("ledger-reconcile: scan failed: %v", err)
 		return
 	}
+	live := 0
 	for _, d := range drift {
+		if d.Orphaned {
+			// Distinct, greppable, and NOT the SEV-1 line — a purged account's residue
+			// cannot be corrected by crediting anyone (#948).
+			log.Printf("ledger-reconcile: ORPHAN-DRIFT user=%s legacy=%dp ledger=%dp — owner purged; settle or write off, not creditable",
+				d.UserID, d.LegacyMinor, d.LedgerMinor)
+			continue
+		}
+		live++
 		log.Printf("ledger-reconcile: DRIFT user=%s legacy=%dp ledger=%dp", d.UserID, d.LegacyMinor, d.LedgerMinor)
 	}
-	if len(drift) > 0 {
-		log.Printf("ledger-reconcile: %d wallet(s) drifted between legacy balance and ledger — investigate, do NOT auto-correct", len(drift))
+	if live > 0 {
+		log.Printf("ledger-reconcile: %d wallet(s) drifted between legacy balance and ledger — investigate, do NOT auto-correct", live)
 	}
 }
 
