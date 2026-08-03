@@ -264,9 +264,27 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	// A closed kitchen still takes reservations for a future slot inside its own
+	// open hours — that is the tiffin model, and refusing them stranded customers
+	// at the end of a completed checkout. Only an immediate order is refused. (#969)
+	reservedFor := req.ScheduledFor
+	if reservedFor == nil {
+		reservedFor = req.RequestedFulfillmentAt
+	}
 	if !chef.AcceptingOrders {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Chef is not accepting orders"})
-		return
+		var chefSchedules []models.ChefSchedule
+		database.DB.Where("chef_id = ?", req.ChefID).Find(&chefSchedules)
+		switch {
+		case reservedFor == nil:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen is closed right now. Pick a delivery time to reserve a slot."})
+			return
+		case !reservedFor.After(time.Now()):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen is closed right now. Pick a later delivery time."})
+			return
+		case !services.ChefOpenAt(chefSchedules, *reservedFor):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen is closed at that time. Please pick another slot."})
+			return
+		}
 	}
 
 	if err := assertMayOrderFromChef(c, &chef); err != nil {
@@ -287,8 +305,11 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 
 	// Capacity cutoff (#48): a chef can auto-close ordering once their meal
 	// cutoffs have passed (extends pause-receiving).
+	// Today's cutoff says nothing about a slot reserved for a later day. (#969)
 	capSettings := services.GetChefCapacitySettings(req.ChefID)
-	if services.IsPastDailyClose(capSettings, time.Now()) {
+	reservedForToday := reservedFor == nil ||
+		services.CapacityDay(*reservedFor).Equal(services.CapacityDay(time.Now()))
+	if reservedForToday && services.IsPastDailyClose(capSettings, time.Now()) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen has closed ordering for today."})
 		return
 	}

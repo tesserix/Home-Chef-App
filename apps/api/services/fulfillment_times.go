@@ -237,6 +237,30 @@ func BuildSuggestedFulfillmentTimes(
 	return out
 }
 
+// ChefOpenAt reports whether `at` falls inside the kitchen's open hours for that
+// IST weekday. A chef with no usable schedule row for the day is treated as open,
+// mirroring BuildSuggestedFulfillmentTimes — an unconfigured schedule must not
+// silently block every reservation.
+func ChefOpenAt(schedules []models.ChefSchedule, at time.Time) bool {
+	t := at.In(istLoc)
+	day := CapacityDay(at)
+	for _, s := range schedules {
+		if s.DayOfWeek != int(t.Weekday()) {
+			continue
+		}
+		if s.IsClosed {
+			return false
+		}
+		o, ok1 := atIST(day, s.OpenTime)
+		cl, ok2 := atIST(day, s.CloseTime)
+		if !ok1 || !ok2 || !cl.After(o) {
+			return true
+		}
+		return !t.Before(o) && !t.After(cl)
+	}
+	return true
+}
+
 // ceilToHalfHour rounds a time UP to the next :00 or :30 (in IST).
 func ceilToHalfHour(t time.Time) time.Time {
 	t = t.In(istLoc).Truncate(time.Minute)

@@ -169,3 +169,32 @@ func TestSuggestedTimes_PrefersChefConfiguredWindows(t *testing.T) {
 		}
 	}
 }
+
+func TestChefOpenAt(t *testing.T) {
+	// Monday 10:00-22:00, Tuesday closed. (#969)
+	schedules := []models.ChefSchedule{
+		{DayOfWeek: int(time.Monday), OpenTime: "10:00", CloseTime: "22:00"},
+		{DayOfWeek: int(time.Tuesday), IsClosed: true},
+	}
+	cases := []struct {
+		name string
+		at   time.Time
+		want bool
+	}{
+		{"inside open hours", istMoment(2026, time.July, 20, 13, 0), true},
+		{"exactly at open", istMoment(2026, time.July, 20, 10, 0), true},
+		{"exactly at close", istMoment(2026, time.July, 20, 22, 0), true},
+		{"before open", istMoment(2026, time.July, 20, 9, 30), false},
+		{"after close", istMoment(2026, time.July, 20, 22, 30), false},
+		{"closed weekday", istMoment(2026, time.July, 21, 13, 0), false},
+		{"weekday with no row is open", istMoment(2026, time.July, 22, 13, 0), true},
+	}
+	for _, c := range cases {
+		if got := ChefOpenAt(schedules, c.at); got != c.want {
+			t.Errorf("%s: ChefOpenAt(%s) = %v, want %v", c.name, c.at.Format(time.RFC3339), got, c.want)
+		}
+	}
+	if !ChefOpenAt(nil, istMoment(2026, time.July, 20, 3, 0)) {
+		t.Error("a chef with no schedule at all must not be blocked")
+	}
+}

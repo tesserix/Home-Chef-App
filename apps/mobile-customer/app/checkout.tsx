@@ -254,6 +254,10 @@ export default function CheckoutScreen() {
   // Slot chips stay collapsed while "As soon as ready" is selected (#871) —
   // most customers keep the default, and the grid pushed the pay CTA off screen.
   const [showTimeGrid, setShowTimeGrid] = useState(false);
+  // A closed kitchen has nothing to be "ready" soon: the server refuses an ASAP
+  // order but honours a reserved slot, so the grid opens and a time is required
+  // rather than letting checkout complete into a rejection (#969).
+  const kitchenClosed = chefData?.data?.availability?.orderable === false;
   // Realistic proposable times come from the server, derived from the CHEF's meal
   // windows + open hours + prep headroom — NOT "now + 1h" (which proposed 9am for a
   // 6am order). Same list for delivery and pickup.
@@ -521,6 +525,8 @@ export default function CheckoutScreen() {
     (fulfillment === 'pickup' || !!selectedAddressId) &&
     !!cartStore.chefId &&
     !isLoading &&
+    // A closed kitchen only accepts a reserved slot, so a time is mandatory (#969).
+    (!kitchenClosed || requestedTime !== null) &&
     acceptedTerms;
 
   function formatAddress(addr: Address): string {
@@ -1613,14 +1619,18 @@ export default function CheckoutScreen() {
               {fulfillment === 'pickup' ? 'Preferred pickup time' : 'Preferred delivery time'}
             </Text>
             <Text className="text-xs text-charcoal-soft mb-3 leading-4">
-              {fulfillment === 'pickup'
-                ? "When will you come to collect? It's a home kitchen — the chef confirms once they accept."
-                : "Suggest when you'd like it. It's a home kitchen, not a restaurant — the chef confirms or proposes a time when they accept."}
+              {kitchenClosed
+                ? 'This kitchen is closed right now. Pick a time below to reserve your order for when they reopen.'
+                : fulfillment === 'pickup'
+                  ? "When will you come to collect? It's a home kitchen — the chef confirms once they accept."
+                  : "Suggest when you'd like it. It's a home kitchen, not a restaurant — the chef confirms or proposes a time when they accept."}
             </Text>
             <View className="gap-3">
               {/* As soon as ready (default) — recommended, full-width so it reads
                   as the primary choice above the specific-time clusters (R14: the
-                  default hero option). */}
+                  default hero option). Withheld while the kitchen is closed:
+                  there is no "soon" to be ready, and the server would reject it. */}
+              {kitchenClosed ? null : (
               <Pressable
                 onPress={() => {
                   // Re-selecting ASAP collapses the grid and clears any picked
@@ -1655,13 +1665,14 @@ export default function CheckoutScreen() {
                   </View>
                 )}
               </Pressable>
+              )}
 
               {/* Most people keep ASAP, so the ~2 screens of chips below are
                   noise that pushes the estimate and the pay CTA below the fold
                   (#871). Collapse them behind a one-tap affordance; scheduling
                   stays one tap away, and the grid re-appears automatically once
                   a specific time is picked. */}
-              {!showTimeGrid && requestedTime === null ? (
+              {!kitchenClosed && !showTimeGrid && requestedTime === null ? (
                 <Pressable
                   onPress={() => setShowTimeGrid(true)}
                   accessibilityRole="button"
@@ -1686,7 +1697,7 @@ export default function CheckoutScreen() {
 
               {/* Specific times, grouped into scannable day·meal clusters. Chips
                   show just the clock label — the cluster header carries day+meal. */}
-              {(showTimeGrid || requestedTime !== null) &&
+              {(kitchenClosed || showTimeGrid || requestedTime !== null) &&
                 fulfillmentTimeGroups.map((group) => (
                 <View key={group.key} className="gap-2">
                   <Text className="text-xs font-semibold text-charcoal-soft">{group.key}</Text>

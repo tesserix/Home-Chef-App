@@ -577,6 +577,16 @@ export default function ChefDetailScreen() {
               </Text>
             ) : null}
 
+            {/* A closed kitchen still takes reservations, so Add stays live —
+                say so here rather than letting the customer discover it at the
+                Place Order rejection (#969). */}
+            {chef.isOpen === false && !chef.unavailableMessage ? (
+              <Text style={styles.unavailableNote}>
+                Closed right now — you can still order and reserve a slot for
+                when they reopen.
+              </Text>
+            ) : null}
+
             {/* Sandbox kitchen. Reaching this screen at all means the viewer
                 is on the test-mode allowlist, so this is a reminder rather than
                 a warning: nothing bought here costs real money. */}
