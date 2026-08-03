@@ -114,26 +114,80 @@ func (r CancellationRefund) CappedAt(remainingPaise int) CancellationRefund {
 	}
 }
 
+// CancellationOrder is the order money the tier model operates on, all in paise.
+//
+// A struct rather than positional ints deliberately: every field is a rupee
+// amount of the same type, so a transposed argument moves money silently and
+// compiles cleanly. #962 was exactly that class of defect.
+type CancellationOrder struct {
+	// FoodPaise is the order subtotal at LIST price, before any promo discount.
+	FoodPaise        int
+	DeliveryPaise    int
+	PlatformFeePaise int
+	TaxPaise         int
+	// DiscountPaise is the promo the customer did NOT pay. Checkout computes it on
+	// the subtotal (handlers/orders.go validateAndCalculateDiscount), and the order
+	// total is `subtotal + delivery + fee + tax + tip − discount`, so it belongs on
+	// the food base and nowhere else.
+	DiscountPaise int
+	// Dispatched — a driver is already carrying the order, so the delivery fee is
+	// non-refundable (the driver is paid regardless).
+	Dispatched bool
+}
+
+// EffectiveFoodPaise is the food the customer actually paid for: list price less
+// the promo they did not pay. Floored at 0 — a discount larger than the subtotal
+// must never produce a negative food base (it would invert the whole breakdown).
+func (o CancellationOrder) EffectiveFoodPaise() int {
+	food := o.FoodPaise - o.DiscountPaise
+	if food < 0 {
+		return 0
+	}
+	return food
+}
+
+// GrandPaise is what the customer was actually charged, and therefore the figure
+// conservation is measured against: it equals orders.total exactly.
+func (o CancellationOrder) GrandPaise() int {
+	return o.EffectiveFoodPaise() + o.DeliveryPaise + o.PlatformFeePaise + o.TaxPaise
+}
+
 // ComputeCancellationRefund computes the refund for a cancellation. foodRefundPct
 // comes from the vendor's chosen tier (see CancellationTiers.FoodRefundPct).
-func ComputeCancellationRefund(foodPaise, deliveryPaise, platformFeePaise, taxPaise int, dispatched bool, foodRefundPct int) CancellationRefund {
+//
+// #962: the tier is applied to the food the customer PAID (subtotal − discount),
+// not the list subtotal. Computing against the list price made the model's grand
+// total exceed orders.total on any discounted order; CappedAt then scaled the
+// refund down and attributed the phantom gap to the vendor, inventing a retained
+// share out of a promo nobody paid. Production carried a 100%-refunded order
+// whose snapshot still claimed the chef kept ₹40.53 — a figure shown to the
+// customer, and (until the #947 solvency cap) very nearly paid to a chef.
+//
+// KNOWN GAP — the customer tip is not modelled here. orders.total includes it,
+// so a cancelled order does not return the customer's tip and the money sits
+// outside this breakdown entirely. It is not silently absorbed into PlatformKept
+// (grand excludes it too), it is simply unhandled. Tracked in #964, alongside the
+// larger defect that tips never reach the chef at all; no cancelled order has
+// ever carried one. Fixing it needs a tip column on the snapshot, so it is
+// deliberately out of scope here rather than half-done.
+func ComputeCancellationRefund(o CancellationOrder, foodRefundPct int) CancellationRefund {
 	foodRefundPct = clampPct(foodRefundPct)
 
+	foodPaise := o.EffectiveFoodPaise()
 	foodRefund := foodPaise * foodRefundPct / 100
 	deliveryRefund := 0
-	if !dispatched {
-		deliveryRefund = deliveryPaise
+	if !o.Dispatched {
+		deliveryRefund = o.DeliveryPaise
 	}
 	// Tax refunds in proportion to the refunded pre-tax amount over the total
 	// pre-tax base — the platform fee's share of tax is therefore always kept.
-	preTaxTotal := foodPaise + deliveryPaise + platformFeePaise
+	preTaxTotal := foodPaise + o.DeliveryPaise + o.PlatformFeePaise
 	taxRefund := 0
 	if preTaxTotal > 0 {
-		taxRefund = taxPaise * (foodRefund + deliveryRefund) / preTaxTotal
+		taxRefund = o.TaxPaise * (foodRefund + deliveryRefund) / preTaxTotal
 	}
 
 	total := foodRefund + deliveryRefund + taxRefund
-	grand := foodPaise + deliveryPaise + platformFeePaise + taxPaise
 	vendorKept := foodPaise - foodRefund
 	return CancellationRefund{
 		FoodRefund:     foodRefund,
@@ -143,6 +197,6 @@ func ComputeCancellationRefund(foodPaise, deliveryPaise, platformFeePaise, taxPa
 		VendorKept:     vendorKept,
 		// Everything not refunded to the customer and not kept by the vendor —
 		// computed as the remainder so conservation holds exactly (no rounding drift).
-		PlatformKept: grand - total - vendorKept,
+		PlatformKept: o.GrandPaise() - total - vendorKept,
 	}
 }

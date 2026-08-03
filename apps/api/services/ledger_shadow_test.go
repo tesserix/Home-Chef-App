@@ -23,6 +23,8 @@ func setupShadowDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
+		// #948: reconcile classifies drift on a purged owner separately, so it needs users.
+		`CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, deleted_at DATETIME)`,
 		`CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT UNIQUE, balance REAL DEFAULT 0,
 			currency TEXT DEFAULT 'INR', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE wallet_txns (id TEXT PRIMARY KEY, wallet_id TEXT, user_id TEXT, type TEXT, source TEXT,
@@ -124,4 +126,40 @@ func TestLedgerBackfillAndReconcile(t *testing.T) {
 	n, err = BackfillLedgerOpeningBalances(db)
 	require.NoError(t, err)
 	require.Equal(t, 0, n)
+}
+
+// #948: drift on a PURGED account is real but unactionable — there is nobody left
+// to credit. Reporting it at the same severity as a live customer's wrong balance
+// trains operators to ignore the DRIFT line, which is how the next real one gets
+// missed. Production carries exactly one such row.
+func TestReconcileLedgerVsWallet_ClassifiesPurgedOwner(t *testing.T) {
+	db := setupShadowDB(t)
+	live, ghost := uuid.New(), uuid.New()
+
+	require.NoError(t, db.Exec(`INSERT INTO users (id, email) VALUES (?,?)`,
+		live.String(), "live@example.com").Error)
+	// The ghost deliberately has NO users row — the account was erased while its
+	// financial rows survived.
+
+	for _, u := range []uuid.UUID{live, ghost} {
+		require.NoError(t, db.Exec(`INSERT INTO wallets (id, user_id, balance) VALUES (?,?,0)`,
+			uuid.NewString(), u.String()).Error)
+		txn := uuid.NewString()
+		require.NoError(t, db.Exec(
+			`INSERT INTO ledger_entries (id, transaction_id, account_kind, user_id, direction, amount_minor, currency)
+			 VALUES (?,?,?,?,?,?,'INR')`,
+			uuid.NewString(), txn, "user_wallet_refund", u.String(), "credit", 14587).Error)
+	}
+
+	drift, err := ReconcileLedgerVsWallet(db)
+	require.NoError(t, err)
+	require.Len(t, drift, 2, "both wallets drift; only their actionability differs")
+
+	byUser := map[uuid.UUID]LedgerDrift{}
+	for _, d := range drift {
+		byUser[d.UserID] = d
+	}
+	require.False(t, byUser[live].Orphaned, "a live customer's drift is the SEV-1 signal")
+	require.True(t, byUser[ghost].Orphaned, "a purged owner's residue must not be reported as SEV-1")
+	require.EqualValues(t, 14587, byUser[ghost].LedgerMinor, "the position is still reported, not dropped")
 }

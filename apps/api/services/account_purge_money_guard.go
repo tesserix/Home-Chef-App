@@ -88,6 +88,18 @@ func AccountUnsettledMoney(db *gorm.DB, userID uuid.UUID) (UnsettledMoney, error
 	}
 
 	// Captured but never refunded on a terminated order.
+	//
+	// `payment_status = completed` alone does NOT mean money was taken. A
+	// meal-plan per-day fulfillment order inherits that status from its parent
+	// plan while carrying no payment of its own — the plan captures once on its
+	// escrow payment, never per day. Counting those as captured invented ₹297.58
+	// of "stranded customer money" on the account that motivated this guard (#948),
+	// none of which was ever charged, and would have blocked that erasure forever
+	// on a phantom balance.
+	//
+	// So require EVIDENCE of a capture: a gateway payment id, or credit actually
+	// applied at checkout. Wallet/loyalty-funded orders have no gateway id but did
+	// take the customer's money, so they must still count.
 	type row struct {
 		Total  float64
 		Refund float64
@@ -101,6 +113,7 @@ func AccountUnsettledMoney(db *gorm.DB, userID uuid.UUID) (UnsettledMoney, error
 			models.OrderStatusRejected,
 			models.OrderStatusRefunded,
 		}).
+		Where("COALESCE(razorpay_payment_id, '') <> '' OR COALESCE(wallet_applied, 0) > 0 OR COALESCE(loyalty_applied, 0) > 0").
 		Select("total, COALESCE(refund_amount, 0) as refund").Scan(&rows).Error; err != nil {
 		return out, fmt.Errorf("purge-guard: terminated orders for %s: %w", userID, err)
 	}

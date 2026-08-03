@@ -223,6 +223,19 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(orderUpdates).Error; err != nil {
 			return err
 		}
+		// #940: put this refund on the refund ledger. Written INSIDE the tx so the
+		// row and the money move commit together — a refund that happened but was
+		// never recorded is exactly the state that made cancellation refunds
+		// invisible to gateway reconciliation.
+		if err := recordCancellationRefundLedger(tx, cancellationRefundLedgerInput{
+			Order:           order,
+			Amount:          refund,
+			GatewayRefundID: gatewayRefundID,
+			WalletRef:       cr.RefundRef,
+			Reason:          "customer cancellation",
+		}); err != nil {
+			return err
+		}
 		cr.RefundExecuted = true
 		// Key by order_id (one request per order, unique) so this is robust even
 		// when the request id was assigned by the DB default.

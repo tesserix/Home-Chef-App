@@ -42,6 +42,9 @@ func setupSweepDB(t *testing.T) *gorm.DB {
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
+	// #940: the refund ledger row is written inside the refund transaction.
+	createTableFor(t, db, &models.RefundTransaction{})
+
 	orig := database.DB
 	database.DB = db
 	t.Cleanup(func() { database.DB = orig })

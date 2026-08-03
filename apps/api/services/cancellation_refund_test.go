@@ -19,12 +19,21 @@ const (
 	grand    = food + delivery + fee + tax
 )
 
+// ord builds the example order at a given dispatch state. No discount — the
+// discounted cases are pinned separately in TestComputeCancellationRefund_Discount.
+func ord(dispatched bool) CancellationOrder {
+	return CancellationOrder{
+		FoodPaise: food, DeliveryPaise: delivery, PlatformFeePaise: fee,
+		TaxPaise: tax, Dispatched: dispatched,
+	}
+}
+
 func TestComputeCancellationRefund_Conservation(t *testing.T) {
 	// Every tier × dispatched flag must conserve money exactly and never refund
 	// the platform fee.
 	for _, pct := range []int{0, 40, 90, 100} {
 		for _, dispatched := range []bool{false, true} {
-			r := ComputeCancellationRefund(food, delivery, fee, tax, dispatched, pct)
+			r := ComputeCancellationRefund(ord(dispatched), pct)
 			require.Equal(t, grand, r.Total+r.VendorKept+r.PlatformKept,
 				"conservation failed at pct=%d dispatched=%v", pct, dispatched)
 			// The platform fee is always inside PlatformKept.
@@ -37,7 +46,7 @@ func TestComputeCancellationRefund_Conservation(t *testing.T) {
 
 func TestComputeCancellationRefund_Tiers(t *testing.T) {
 	// not_started 90% (undispatched): 90% of food + all delivery + proportional tax.
-	r := ComputeCancellationRefund(food, delivery, fee, tax, false, 90)
+	r := ComputeCancellationRefund(ord(false), 90)
 	require.Equal(t, 45000, r.FoodRefund)      // 90% of 50000
 	require.Equal(t, 4000, r.DeliveryRefund)   // delivery refunded (not dispatched)
 	require.Equal(t, food-45000, r.VendorKept) // vendor keeps 10%
@@ -46,7 +55,7 @@ func TestComputeCancellationRefund_Tiers(t *testing.T) {
 	// in_preparation 0%: no food refund, vendor keeps ALL food. Delivery still
 	// refunds (not dispatched), so its proportional share of tax refunds too — the
 	// food's tax does not.
-	r0 := ComputeCancellationRefund(food, delivery, fee, tax, false, 0)
+	r0 := ComputeCancellationRefund(ord(false), 0)
 	require.Equal(t, 0, r0.FoodRefund)
 	require.Equal(t, food, r0.VendorKept)
 	require.Equal(t, delivery, r0.DeliveryRefund, "delivery still refunds if not dispatched")
@@ -54,12 +63,12 @@ func TestComputeCancellationRefund_Tiers(t *testing.T) {
 
 	// in_preparation 0% AND dispatched: truly nothing refunds — vendor keeps food,
 	// platform keeps fee + delivery + all tax.
-	rd := ComputeCancellationRefund(food, delivery, fee, tax, true, 0)
+	rd := ComputeCancellationRefund(ord(true), 0)
 	require.Equal(t, 0, rd.Total, "0% + dispatched → no refund at all")
 }
 
 func TestComputeCancellationRefund_DispatchedKeepsDelivery(t *testing.T) {
-	r := ComputeCancellationRefund(food, delivery, fee, tax, true, 90)
+	r := ComputeCancellationRefund(ord(true), 90)
 	require.Equal(t, 0, r.DeliveryRefund, "a dispatched order keeps the delivery fee (driver is paid)")
 	// Delivery stays inside PlatformKept.
 	require.GreaterOrEqual(t, r.PlatformKept, fee+delivery)
@@ -79,7 +88,7 @@ func TestCancellationTiers_FoodRefundPct(t *testing.T) {
 }
 
 func TestComputeCancellationRefund_ZeroOrderNoPanic(t *testing.T) {
-	r := ComputeCancellationRefund(0, 0, 0, 0, false, 90)
+	r := ComputeCancellationRefund(CancellationOrder{}, 90)
 	require.Equal(t, CancellationRefund{}, r)
 }
 
@@ -87,7 +96,7 @@ func TestComputeCancellationRefund_ZeroOrderNoPanic(t *testing.T) {
 // (Total − already-refunded) so a cancellation AFTER a prior partial refund can't over-refund,
 // while keeping the breakdown's exact-conservation invariant.
 func TestCancellationRefund_CappedAt(t *testing.T) {
-	full := ComputeCancellationRefund(food, delivery, fee, tax, false, 90)
+	full := ComputeCancellationRefund(ord(false), 90)
 	grandTotal := full.Total + full.VendorKept + full.PlatformKept
 
 	// No cap when remaining ≥ total (the normal, no-prior-refund case).
@@ -110,4 +119,55 @@ func TestCancellationRefund_CappedAt(t *testing.T) {
 
 	// Negative remaining is treated as zero (never negative refund).
 	require.Equal(t, 0, full.CappedAt(-100).Total)
+}
+
+// #962 — the discount must reduce the food base, so the model's grand total equals
+// what the customer was actually charged (orders.total). Computing against the LIST
+// subtotal made grand exceed total on any discounted order; CappedAt then scaled the
+// refund down and booked the phantom gap as the vendor's retained share.
+//
+// The numbers are production order SAFFRON-HOME-KITCHEN-HC26080212501971 verbatim.
+func TestComputeCancellationRefund_Discount(t *testing.T) {
+	o := CancellationOrder{
+		FoodPaise: 32000, DeliveryPaise: 3912, PlatformFeePaise: 1597,
+		TaxPaise: 1555, DiscountPaise: 6400,
+	}
+	// The checkout formula is subtotal + delivery + fee + tax − discount.
+	require.Equal(t, 32664, o.GrandPaise(), "grand must equal orders.total exactly")
+	require.Equal(t, 25600, o.EffectiveFoodPaise(), "the customer paid for food less the promo")
+
+	// The real case: chef never engaged → 100% food refund. The vendor keeps NOTHING.
+	r := ComputeCancellationRefund(o, 100)
+	require.Equal(t, 0, r.VendorKept,
+		"a 100%% food refund must leave the vendor nothing — this returned 4053 before #962")
+	require.Equal(t, o.GrandPaise(), r.Total+r.VendorKept+r.PlatformKept,
+		"conservation against what the customer actually paid")
+	// The refund never exceeds the capture, so CappedAt no longer spuriously bites.
+	require.LessOrEqual(t, r.Total, o.GrandPaise())
+	require.Equal(t, r, r.CappedAt(o.GrandPaise()), "the cap must be a no-op on a well-formed order")
+
+	// Conservation holds at every tier and dispatch state on a discounted order.
+	for _, pct := range []int{0, 40, 90, 100} {
+		for _, dispatched := range []bool{false, true} {
+			d := o
+			d.Dispatched = dispatched
+			got := ComputeCancellationRefund(d, pct)
+			require.Equal(t, d.GrandPaise(), got.Total+got.VendorKept+got.PlatformKept,
+				"conservation failed at pct=%d dispatched=%v", pct, dispatched)
+			require.LessOrEqual(t, got.VendorKept, d.EffectiveFoodPaise(),
+				"the vendor can never keep more food than the customer paid for")
+			require.GreaterOrEqual(t, got.VendorKept, 0)
+		}
+	}
+}
+
+// A discount larger than the subtotal must not invert the breakdown.
+func TestComputeCancellationRefund_DiscountExceedsFood(t *testing.T) {
+	o := CancellationOrder{FoodPaise: 1000, DeliveryPaise: 4000, PlatformFeePaise: 500,
+		TaxPaise: 300, DiscountPaise: 9999}
+	require.Equal(t, 0, o.EffectiveFoodPaise())
+	r := ComputeCancellationRefund(o, 90)
+	require.Equal(t, 0, r.VendorKept)
+	require.GreaterOrEqual(t, r.Total, 0)
+	require.Equal(t, o.GrandPaise(), r.Total+r.VendorKept+r.PlatformKept)
 }

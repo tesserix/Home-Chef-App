@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+
+	"github.com/homechef/api/models"
 )
 
 func purgeGuardDB(t *testing.T) *gorm.DB {
@@ -18,6 +20,11 @@ func purgeGuardDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE ledger_entries (
 		id text PRIMARY KEY, transaction_id text, account_kind text, user_id text,
 		direction text, amount_minor integer, currency text, created_at datetime)`).Error)
+	// #948: the guard reads razorpay_payment_id / wallet_applied / loyalty_applied to
+	// tell a real capture from a per-day order that only INHERITED payment_status.
+	// Rebuild orders from the model so this fixture cannot drift from what it reads.
+	require.NoError(t, db.Exec(`DROP TABLE IF EXISTS orders`).Error)
+	createTableFor(t, db, &models.Order{})
 	return db
 }
 
@@ -73,25 +80,65 @@ func TestAccountUnsettledMoney_LedgerNetsToZero(t *testing.T) {
 }
 
 // The #872 shape: captured, then cancelled, never refunded.
+// insertGuardOrder writes a terminated order with explicit capture evidence.
+func insertGuardOrder(t *testing.T, db *gorm.DB, u uuid.UUID,
+	status string, total, refund float64, payID string, walletApplied, loyaltyApplied float64) {
+	t.Helper()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, status, payment_status, subtotal, total, refund_amount,
+		   razorpay_payment_id, wallet_applied, loyalty_applied)
+		 VALUES (?,?,?,?,0,?,?,?,?,?)`,
+		uuid.NewString(), u.String(), status, "completed", total, refund,
+		payID, walletApplied, loyaltyApplied).Error)
+}
+
 func TestAccountUnsettledMoney_CapturedNeverRefunded(t *testing.T) {
 	db := purgeGuardDB(t)
 	u := uuid.New()
-	insert := func(status string, total, refund float64) {
-		require.NoError(t, db.Exec(
-			`INSERT INTO orders (id, customer_id, status, payment_status, subtotal, total, refund_amount)
-			 VALUES (?,?,?,?,0,?,?)`,
-			uuid.NewString(), u.String(), status, "completed", total, refund).Error)
-	}
-	insert("cancelled", 154.19, 0) // both live rows
-	insert("cancelled", 143.39, 0)
-	insert("cancelled", 297.65, 297.65) // properly refunded — not outstanding
-	insert("delivered", 500.00, 0)      // still a live order, not a terminated one
+
+	insertGuardOrder(t, db, u, "cancelled", 154.19, 0, "pay_A", 0, 0)      // gateway capture, unrefunded
+	insertGuardOrder(t, db, u, "cancelled", 143.39, 0, "", 143.39, 0)      // wallet-funded, unrefunded
+	insertGuardOrder(t, db, u, "cancelled", 297.65, 297.65, "pay_B", 0, 0) // properly refunded
+	insertGuardOrder(t, db, u, "delivered", 500.00, 0, "pay_C", 0, 0)      // live order, not terminated
 
 	owed, err := AccountUnsettledMoney(db, u)
 	require.NoError(t, err)
 	require.True(t, owed.Any())
 	require.InDelta(t, 297.58, owed.CapturedNotRefund, 0.001)
 	require.Equal(t, 2, owed.OrderCount)
+}
+
+// #948: `payment_status = completed` does NOT mean money was taken. A meal-plan
+// per-day fulfillment order inherits that status from its parent plan while
+// carrying no payment of its own — the plan captures once on its escrow payment,
+// never per day.
+//
+// Counting those invented ₹297.58 of "stranded customer money" on the very
+// account this guard was written for, and would have blocked that erasure
+// forever on a balance nobody was ever charged. Erasure is a legal commitment,
+// so a phantom blocker is not a harmless false positive.
+func TestAccountUnsettledMoney_IgnoresOrdersThatNeverCaptured(t *testing.T) {
+	db := purgeGuardDB(t)
+	u := uuid.New()
+
+	// The two real production rows: cancelled, payment_status completed, no payment
+	// id, no credit applied — nothing was ever charged for them.
+	insertGuardOrder(t, db, u, "cancelled", 154.19, 0, "", 0, 0)
+	insertGuardOrder(t, db, u, "cancelled", 143.39, 0, "", 0, 0)
+
+	owed, err := AccountUnsettledMoney(db, u)
+	require.NoError(t, err)
+	require.Zero(t, owed.CapturedNotRefund, "an order that never captured owes nothing")
+	require.Zero(t, owed.OrderCount)
+	require.False(t, owed.Any(), "the account is erasable: %s", owed)
+
+	// A loyalty-funded order DID take the customer's money and must still count,
+	// even though it has no gateway payment id.
+	insertGuardOrder(t, db, u, "cancelled", 50.00, 0, "", 0, 2.50)
+	owed, err = AccountUnsettledMoney(db, u)
+	require.NoError(t, err)
+	require.InDelta(t, 50.00, owed.CapturedNotRefund, 0.001)
+	require.True(t, owed.Any())
 }
 
 func TestAccountUnsettledMoney_NilInputs(t *testing.T) {
