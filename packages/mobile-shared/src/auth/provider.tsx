@@ -9,6 +9,7 @@ import {
   setSessionRefresher,
 } from "./bff-session";
 import { getIdToken, signOut as fbSignOut } from "./sign-in";
+import { isDevSimSessionActive } from "./dev-sim-auth";
 import { setTokens } from "../utils/storage";
 import { useAuthStore } from "../hooks/useAuth";
 
@@ -72,7 +73,9 @@ export function AuthProvider({ children, bffUrl, tenantId }: AuthProviderProps) 
       if (cancelled) return;
 
       unsub = auth().onAuthStateChanged(async (fb) => {
-        if (!fb) {
+        // A dev-only REST sign-in (iOS Simulator) has no Firebase user; don't
+        // let the null notification tear down its session.
+        if (!fb && !(__DEV__ && isDevSimSessionActive())) {
           await clearStoredSession();
           setUser(null);
           setLoading(false);

@@ -1,4 +1,10 @@
 import auth, { FirebaseAuthTypes } from "@react-native-firebase/auth";
+import {
+  clearDevSimSession,
+  devSimSignIn,
+  getDevSimIdToken,
+  isKeychainError,
+} from "./dev-sim-auth";
 
 export async function signInWithGoogleCredential(idToken: string, accessToken?: string) {
   const cred = auth.GoogleAuthProvider.credential(idToken, accessToken);
@@ -54,7 +60,16 @@ function buildDisplayName(fullName?: AppleFullName | null): string {
 }
 
 export async function signInWithEmail(email: string, password: string) {
-  return auth().signInWithEmailAndPassword(email, password);
+  try {
+    return await auth().signInWithEmailAndPassword(email, password);
+  } catch (err) {
+    // iOS Simulator has no keychain entitlement; fall back to GIP REST in dev.
+    if (__DEV__ && isKeychainError(err)) {
+      await devSimSignIn(auth().tenantId ?? "", email, password);
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function registerWithEmail(email: string, password: string) {
@@ -67,10 +82,12 @@ export async function startPhoneSignIn(phone: string) {
 
 export async function getIdToken(forceRefresh = false): Promise<string | null> {
   const u = auth().currentUser;
-  return u ? u.getIdToken(forceRefresh) : null;
+  if (u) return u.getIdToken(forceRefresh);
+  return __DEV__ ? getDevSimIdToken() : null;
 }
 
 export async function signOut(): Promise<void> {
+  clearDevSimSession();
   return auth().signOut();
 }
 
