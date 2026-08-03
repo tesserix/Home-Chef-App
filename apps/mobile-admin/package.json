@@ -11,7 +11,7 @@
     "build:android": "eas build --platform android",
     "build:local": "eas build --local",
     "typecheck": "tsc --noEmit",
-    "test": "jest --passWithNoTests"
+    "test": "jest"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",
@@ -65,8 +65,5 @@
     "@testing-library/react-native": "^14.0.0",
     "jest-expo": "~56.0.5",
     "typescript": "^6.0.3"
-  },
-  "jest": {
-    "preset": "jest-expo"
   }
 }

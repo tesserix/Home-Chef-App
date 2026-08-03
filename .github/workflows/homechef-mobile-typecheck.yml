@@ -91,13 +91,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # customer ONLY for now. vendor/admin/delivery still use the `jest-expo`
-        # preset, which needs the unmet `@react-native/jest-preset` peer and so
-        # dies at startup — see #957. Adding that peer as a dependency is not the
-        # fix: 6435cc39 reverted exactly that because it re-keys react-native's
-        # peer resolution and breaks Metro. Add an app here once it carries a
-        # standalone jest config like apps/mobile-customer/jest.config.js.
-        app: [customer]
+        # delivery is excluded: it still carries the `jest-expo` preset, which
+        # needs the unmet `@react-native/jest-preset` peer and dies at startup
+        # (#957), and it has no suite to run yet. Adding that peer as a
+        # dependency is not the fix: 6435cc39 reverted exactly that because it
+        # re-keys react-native's peer resolution and breaks Metro. Add it here
+        # once it carries a standalone jest config and a test.
+        app: [customer, vendor, admin]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
