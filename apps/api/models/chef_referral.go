@@ -87,6 +87,11 @@ const (
 	// weekly statement like any other bonus rather than through the payout-hold
 	// path, which must keep excluding cancelled orders.
 	ChefBonusCancellationRetained ChefBonusKind = "cancellation_retained"
+	// ChefBonusTipCatchup — a customer tip that was charged but never reached the
+	// chef (#964), on an order already billed on a FROZEN weekly statement that can
+	// no longer absorb it. Only ever raised by the backfill; once checkout writes
+	// chef_tip the statement includes tips directly and no catch-up is needed.
+	ChefBonusTipCatchup ChefBonusKind = "tip_catchup"
 )
 
 // ChefBonus is a rupee credit owed to a chef, added onto their next weekly
