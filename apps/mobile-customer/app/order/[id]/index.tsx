@@ -383,9 +383,12 @@ export default function OrderDetailScreen() {
           }
         };
 
-        // Cross-chef conflict: confirm before replacing the current cart.
         const cart = useCartStore.getState();
-        if (cart.chefId && cart.chefId !== res.chefId && cart.items.length > 0) {
+        const hasItems = cart.items.length > 0;
+        const sameChef = cart.chefId === res.chefId;
+
+        if (hasItems && cart.chefId && !sameChef) {
+          // Cross-chef conflict: confirm before replacing the current cart.
           showAlert(
             'Replace cart?',
             'Your cart has items from another chef. Replace them with this order?',
@@ -399,6 +402,30 @@ export default function OrderDetailScreen() {
                   fillAndGo();
                 },
               },
+            ],
+          );
+        } else if (hasItems && sameChef) {
+          // Same chef, cart not empty. This used to fall through to fillAndGo(),
+          // which ADDS on top of what is already there — so a second tap of
+          // Reorder silently doubled the order and a third tripled it, with no
+          // prompt and nothing on screen to say why the total had grown (#938).
+          // Tapping twice is the realistic mistake, so the doubling has to be a
+          // choice rather than the default. Ordering another round is legitimate,
+          // hence "Add" stays available.
+          showAlert(
+            'Add to your cart?',
+            'Your cart already has items from this kitchen. Adding this order again will increase the quantities.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Replace cart',
+                style: 'destructive',
+                onPress: () => {
+                  useCartStore.getState().clearCart();
+                  fillAndGo();
+                },
+              },
+              { text: 'Add', onPress: fillAndGo },
             ],
           );
         } else {
