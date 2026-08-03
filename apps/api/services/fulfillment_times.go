@@ -50,6 +50,11 @@ const (
 	defaultPrepMinutes         = 45
 	fulfillmentHorizonDays     = 7
 	defaultFulfillmentSlotSpan = 30 * time.Minute
+
+	// FulfillmentTimesPageSize must cover a full open day at half-hour steps —
+	// a 12-hour kitchen is 24 slots — or late slots fall off and the customer
+	// cannot book dinner from a kitchen that is plainly open for it.
+	FulfillmentTimesPageSize = 32
 )
 
 type mealWindow struct {

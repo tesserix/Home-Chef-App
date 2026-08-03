@@ -1991,7 +1991,8 @@ func (h *ChefHandler) GetChefFulfillmentTimes(c *gin.Context) {
 	database.DB.Where("chef_id = ?", chefID).Find(&schedules)
 
 	times := services.BuildSuggestedFulfillmentTimes(
-		cap, schedules, services.ParsePrepMinutes(chef.PrepTime), time.Now(), 12,
+		cap, schedules, services.ParsePrepMinutes(chef.PrepTime), time.Now(),
+		services.FulfillmentTimesPageSize,
 	)
 	c.JSON(http.StatusOK, gin.H{"times": times})
 }
