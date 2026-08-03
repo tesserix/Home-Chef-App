@@ -71,6 +71,18 @@ func (h *TaxHandler) AdminUpsertTaxRate(c *gin.Context) {
 		Inclusive   bool    `json:"inclusive"`
 		Notes       string  `json:"notes"`
 		IsActive    *bool   `json:"isActive"`
+		// Per-supply overrides. Omit one and it is left as-is; send 0 and that
+		// supply falls back to Rate. Setting ServicePercent is how the platform fee
+		// moves off the restaurant rate, and DeliveryPlatformPercent how a
+		// platform-arranged rider does — both without a deploy.
+		FoodPercent             *float64 `json:"foodPercent"`
+		ServicePercent          *float64 `json:"servicePercent"`
+		ServiceInclusive        *bool    `json:"serviceInclusive"`
+		DeliverySelfPercent     *float64 `json:"deliverySelfPercent"`
+		DeliveryPlatformPercent *float64 `json:"deliveryPlatformPercent"`
+		SubscriptionPercent     *float64 `json:"subscriptionPercent"`
+		RegistrationIDLabel     *string  `json:"registrationIdLabel"`
+		CompanyTaxID            *string  `json:"companyTaxId"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -79,6 +91,16 @@ func (h *TaxHandler) AdminUpsertTaxRate(c *gin.Context) {
 	if req.Rate < 0 || req.Rate > 100 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "rate must be between 0 and 100"})
 		return
+	}
+	for label, v := range map[string]*float64{
+		"foodPercent": req.FoodPercent, "servicePercent": req.ServicePercent,
+		"deliverySelfPercent": req.DeliverySelfPercent, "deliveryPlatformPercent": req.DeliveryPlatformPercent,
+		"subscriptionPercent": req.SubscriptionPercent,
+	} {
+		if v != nil && (*v < 0 || *v > 100) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": label + " must be between 0 and 100"})
+			return
+		}
 	}
 	country := strings.ToUpper(req.CountryCode)
 	region := strings.ToUpper(req.Region)
@@ -93,6 +115,35 @@ func (h *TaxHandler) AdminUpsertTaxRate(c *gin.Context) {
 		Where("country_code = ? AND region = ?", country, region).
 		First(&row).Error
 
+	// Only the per-supply fields actually sent are touched, so an admin editing the
+	// headline rate never silently resets an override someone else chose.
+	applyOverrides := func(row *models.TaxRate) {
+		if req.FoodPercent != nil {
+			row.FoodPercent = *req.FoodPercent
+		}
+		if req.ServicePercent != nil {
+			row.ServicePercent = *req.ServicePercent
+		}
+		if req.ServiceInclusive != nil {
+			row.ServiceInclusive = *req.ServiceInclusive
+		}
+		if req.DeliverySelfPercent != nil {
+			row.DeliverySelfPercent = *req.DeliverySelfPercent
+		}
+		if req.DeliveryPlatformPercent != nil {
+			row.DeliveryPlatformPercent = *req.DeliveryPlatformPercent
+		}
+		if req.SubscriptionPercent != nil {
+			row.SubscriptionPercent = *req.SubscriptionPercent
+		}
+		if req.RegistrationIDLabel != nil {
+			row.RegistrationIDLabel = *req.RegistrationIDLabel
+		}
+		if req.CompanyTaxID != nil {
+			row.CompanyTaxID = *req.CompanyTaxID
+		}
+	}
+
 	if err != nil {
 		row = models.TaxRate{
 			CountryCode: country,
@@ -103,6 +154,7 @@ func (h *TaxHandler) AdminUpsertTaxRate(c *gin.Context) {
 			Notes:       req.Notes,
 			IsActive:    active,
 		}
+		applyOverrides(&row)
 		if err := database.DB.Create(&row).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create tax rate"})
 			return
@@ -113,6 +165,7 @@ func (h *TaxHandler) AdminUpsertTaxRate(c *gin.Context) {
 		row.Inclusive = req.Inclusive
 		row.Notes = req.Notes
 		row.IsActive = active
+		applyOverrides(&row)
 		if err := database.DB.Save(&row).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update tax rate"})
 			return

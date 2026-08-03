@@ -402,6 +402,7 @@ func SetupRouter() *gin.Engine {
 		// Tax rate lookup (public — used by checkout to preview tax line
 		// before the order is created)
 		taxHandler := handlers.NewTaxHandler()
+		pricingSimulatorHandler := handlers.NewPricingSimulatorHandler()
 		v1.GET("/tax-rates/lookup", taxHandler.GetPublicTaxRate)
 
 		// Auth routes (public). All credential, session, OAuth, password-reset,
@@ -1260,6 +1261,11 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/tax-rates", taxHandler.AdminListTaxRates)
 			admin.POST("/tax-rates", taxHandler.AdminUpsertTaxRate)
 			admin.DELETE("/tax-rates/:id", taxHandler.AdminDeleteTaxRate)
+
+			// Pricing sandbox — models an order end to end at the CURRENT rates,
+			// for every fulfilment mode and refund tier, using the same functions
+			// that charge and refund. Read-only: it moves no money.
+			admin.POST("/pricing/simulate", pricingSimulatorHandler.SimulatePricing)
 
 			// Security policy + API keys
 			admin.GET("/security/policy", securityHandler.AdminGetSecurityPolicy)

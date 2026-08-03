@@ -247,7 +247,9 @@ func BuildTaxLines(p OrderPricing, in PricingInput) []TaxLine {
 		}
 		switch {
 		case india && in.IntraState:
-			half := g.rate / 2
+			// Halved to two decimals like every other figure on the document — a
+			// rate the invoice states must be the rate the invoice can print.
+			half := RoundAmount(g.rate / 2)
 			cgst := RoundAmount(g.amount / 2)
 			lines = append(lines,
 				TaxLine{Code: TaxLineCGST, Label: taxLineLabel("CGST", half, g.rate > 0) + on, Rate: half, Amount: cgst},
@@ -276,9 +278,12 @@ func groupTaxByRate(p OrderPricing, in PricingInput) []taxGroup {
 		rate   float64
 		amount float64
 	}{
-		{"food", in.Rates.Food, RoundAmount(p.TaxFood)},
-		{"delivery", in.Rates.Delivery, RoundAmount(p.TaxDelivery)},
-		{"platform fee", in.Rates.Service, RoundAmount(p.TaxService)},
+		// Rates are rounded HERE, once, so every branch below inherits a rate the
+		// invoice can actually print — an unrounded 12.375 reached the wire as
+		// three decimals on a document where nothing else has more than two.
+		{"food", RoundAmount(in.Rates.Food), RoundAmount(p.TaxFood)},
+		{"delivery", RoundAmount(in.Rates.Delivery), RoundAmount(p.TaxDelivery)},
+		{"platform fee", RoundAmount(in.Rates.Service), RoundAmount(p.TaxService)},
 	}
 	// An order placed before tax was split per component carries only a total. It
 	// is one supply at one rate, which is exactly how it was charged.
@@ -286,7 +291,7 @@ func groupTaxByRate(p OrderPricing, in PricingInput) []taxGroup {
 		if RoundAmount(p.Tax) <= 0 {
 			return nil
 		}
-		return []taxGroup{{rate: in.Rates.Food, amount: RoundAmount(p.Tax), sources: []string{"this order"}}}
+		return []taxGroup{{rate: RoundAmount(in.Rates.Food), amount: RoundAmount(p.Tax), sources: []string{"this order"}}}
 	}
 
 	var groups []taxGroup
