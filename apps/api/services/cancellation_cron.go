@@ -25,6 +25,10 @@ func runCancellationSweep(ctx context.Context) {
 	_ = ctx
 	SweepCancellationRefunds()
 	SweepCancellationTimeouts(time.Now())
+	// #947: credit the chef the share they retained on a settled cancellation.
+	// Runs AFTER the refund sweep so a refund executed in this same pass is
+	// already committed and its entitlement is raised without waiting a cycle.
+	SweepCancellationChefEntitlements()
 }
 
 // StartCancellationCron is the in-process ticker fallback (Temporal disabled).

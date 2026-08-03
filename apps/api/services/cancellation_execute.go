@@ -257,6 +257,22 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 	if hErr := WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, "customer cancellation"); hErr != nil {
 		log.Printf("cancellation payout cross-guard failed for order %s: %v", order.ID, hErr)
 	}
+	// #947: the other half of that cross-guard. The refunded slice must never reach
+	// the chef — and the RETAINED slice must reach them, which until now it never
+	// did. Best-effort, deliberately: a payable that cannot be recorded must not
+	// fail a refund whose money has already moved. SweepCancellationChefEntitlements
+	// is the backstop and re-drives this idempotently.
+	//
+	// Re-read the order so the solvency cap sees the refund_amount this tx just
+	// incremented in-SQL rather than the caller's stale in-memory value — which is
+	// still pre-refund and would make a fully-refunded order look solvent.
+	var settled models.Order
+	if err := database.DB.Select("id", "order_number", "status", "total", "refund_amount", "refunded_at").
+		First(&settled, "id = ?", order.ID).Error; err != nil {
+		log.Printf("cancellation entitlement: reload order %s failed (sweep will retry): %v", order.ID, err)
+	} else if eErr := RaiseCancellationRetainedBonus(database.DB, &settled, cr); eErr != nil {
+		log.Printf("cancellation entitlement: raise for order %s failed (sweep will retry): %v", order.ID, eErr)
+	}
 	// #937: a cancellation the chef had already spent money or time on. `not_started`
 	// costs nobody anything and is not recorded; every later tier is a real loss the chef
 	// partly absorbs, so repeated ones belong on the customer's ledger.
