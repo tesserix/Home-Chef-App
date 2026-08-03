@@ -20,6 +20,35 @@ import (
 	"github.com/homechef/api/models"
 )
 
+// orderAwaitingReceiptConfirmation is the single answer to "is this order still
+// genuinely waiting for the customer to say it arrived?".
+//
+// It exists because the two callers had drifted apart. AutoConfirmOrderReceipt
+// checked the hold, the confirmation, the refund and the terminal statuses;
+// SendConfirmReceiptReminder checked only the hold and the confirmation. A
+// cancelled order whose payout hold had not been moved therefore sailed through
+// the reminder and kept pushing "Did your order arrive? Tap to confirm you
+// received your order" at a customer who had cancelled and been refunded (#931).
+//
+// The hold status is a proxy for this question, not the fact — and it is wrong
+// exactly when an order has been cancelled out from under a stale hold. Deciding
+// it in one place is what stops the two from diverging again.
+//
+// A `rejected` order is excluded for the same reason as `cancelled`: the chef
+// declined it, so there is nothing to have arrived.
+func orderAwaitingReceiptConfirmation(order *models.Order) bool {
+	if order.CustomerConfirmedAt != nil ||
+		order.PayoutHoldStatus != models.PayoutHoldAwaitingConfirmation ||
+		order.RefundedAt != nil {
+		return false
+	}
+	switch order.Status {
+	case models.OrderStatusCancelled, models.OrderStatusRefunded, models.OrderStatusRejected:
+		return false
+	}
+	return true
+}
+
 // AutoConfirmOrderReceipt confirms receipt on the customer's behalf once the
 // reminder window has elapsed with no customer action. It re-reads the order
 // fresh (the caller may be an async activity with a stale/no view of state)
@@ -34,11 +63,7 @@ func AutoConfirmOrderReceipt(db *gorm.DB, orderID uuid.UUID) (models.PayoutHoldS
 	if err := db.First(&order, "id = ?", orderID).Error; err != nil {
 		return "", false, err
 	}
-	if order.CustomerConfirmedAt != nil ||
-		order.PayoutHoldStatus != models.PayoutHoldAwaitingConfirmation ||
-		order.RefundedAt != nil ||
-		order.Status == models.OrderStatusCancelled ||
-		order.Status == models.OrderStatusRefunded {
+	if !orderAwaitingReceiptConfirmation(&order) {
 		return order.PayoutHoldStatus, false, nil
 	}
 	status, err := ConfirmOrderHold(db, &order)
@@ -91,8 +116,7 @@ func SendConfirmReceiptReminder(db *gorm.DB, orderID uuid.UUID, attempt int) (bo
 	if err := db.First(&order, "id = ?", orderID).Error; err != nil {
 		return false, err
 	}
-	if order.CustomerConfirmedAt != nil ||
-		order.PayoutHoldStatus != models.PayoutHoldAwaitingConfirmation {
+	if !orderAwaitingReceiptConfirmation(&order) {
 		return false, nil
 	}
 

@@ -414,7 +414,7 @@ func ApplyChefPenaltiesToStatement(db *gorm.DB, stmt *models.WeeklyStatement) (f
 // NotifyCustomerOfChefCancelPenalty tells the customer their chef cancelled, what they get back,
 // and that the chef was held accountable. Best-effort: a failed push must never fail a cancel.
 func NotifyCustomerOfChefCancelPenalty(customerID uuid.UUID, orderRef string, refund float64, levied bool) {
-	body := fmt.Sprintf("Your chef cancelled order %s. ₹%.0f — the full amount including taxes and fees — is on its way back to you.", orderRef, refund)
+	body := fmt.Sprintf("Your chef cancelled order %s. %s — the full amount including taxes and fees — is on its way back to you.", orderRef, FormatMoney(refund))
 	if levied {
 		body += " We've also charged the kitchen a cancellation fee."
 	}
