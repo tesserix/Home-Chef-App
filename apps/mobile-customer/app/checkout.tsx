@@ -67,6 +67,7 @@ import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { AddressLabelSelect } from '../components/address/AddressLabelSelect';
 import type { Address } from '../types/customer';
 import { useAlert, useDialog } from '@homechef/mobile-shared/ui';
+import { formatMoney } from '../lib/format';
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the ChefCard/MenuItemCard convention.
@@ -817,7 +818,7 @@ export default function CheckoutScreen() {
           <Pressable
             onPress={() => setFulfillment('pickup')}
             accessibilityRole="button"
-            accessibilityLabel={`Switch to pickup and save ₹${pickupSaving.toFixed(0)}`}
+            accessibilityLabel={`Switch to pickup and save ${formatMoney(pickupSaving)}`}
             android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
@@ -828,7 +829,7 @@ export default function CheckoutScreen() {
               >
                 <View className="flex-1 pr-3">
                   <Text className="text-sm font-semibold text-coral-pressed tabular-nums">
-                    Pick up & save ₹{pickupSaving.toFixed(0)}
+                    Pick up & save {formatMoney(pickupSaving)}
                   </Text>
                   <Text className="text-xs text-charcoal-soft mt-0.5">
                     Collect from the kitchen — no delivery fee.
@@ -1392,7 +1393,7 @@ export default function CheckoutScreen() {
                     ) : null}
                     {selfDeliveryBreakdown.capped ? (
                       <Text className="text-xs text-charcoal-soft leading-4 tabular-nums">
-                        Capped at the chef's ₹{selfDeliveryBreakdown.maxFee.toFixed(0)} maximum
+                        Capped at the chef's {formatMoney(selfDeliveryBreakdown.maxFee)} maximum
                       </Text>
                     ) : null}
                     <Text className="text-xs text-charcoal-soft leading-4 pt-2 border-t border-hairline">

@@ -54,6 +54,7 @@ import { useAddresses } from '../../hooks/useAddresses';
 import { useConfirmGroupOrderReceived } from '../../hooks/useConfirmReceived';
 import { canConfirmReceipt, payoutHoldMeta } from '../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../lib/errors';
+import { formatMoney } from '../../lib/format';
 
 const STATUS_LABEL: Record<string, string> = {
   open: 'Open — add items',
@@ -355,7 +356,7 @@ export default function GroupOrderHubScreen() {
                         <View style={{ flex: 1 }}>
                           <Text style={styles.menuName} numberOfLines={1}>{item.name}</Text>
                           <Text style={styles.menuPrice}>
-                            ₹{item.price.toFixed(0)}
+                            {formatMoney(item.price)}
                             {item.soldOut
                               ? ' · Sold out'
                               : item.remainingToday != null && item.remainingToday > 0
@@ -404,7 +405,7 @@ export default function GroupOrderHubScreen() {
               onPress={pay}
               disabled={payShare.isPending}
               accessibilityRole="button"
-              accessibilityLabel={`Pay your share · ₹${me.shareAmount.toFixed(0)}`}
+              accessibilityLabel={`Pay your share · ${formatMoney(me.shareAmount)}`}
               android_ripple={payShare.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
             >
               {({ pressed }) => (
@@ -412,7 +413,7 @@ export default function GroupOrderHubScreen() {
                   {payShare.isPending ? (
                     <ActivityIndicator color={customerColors.canvas} />
                   ) : (
-                    <Text style={styles.ctaText}>Pay your share · ₹{me.shareAmount.toFixed(0)}</Text>
+                    <Text style={styles.ctaText}>Pay your share · {formatMoney(me.shareAmount)}</Text>
                   )}
                 </View>
               )}
@@ -426,7 +427,7 @@ export default function GroupOrderHubScreen() {
               onPress={lock}
               disabled={lockGroup.isPending || items.length === 0}
               accessibilityRole="button"
-              accessibilityLabel={items.length === 0 ? 'Add items to continue' : `Lock and collect · ₹${itemsSubtotal.toFixed(0)}`}
+              accessibilityLabel={items.length === 0 ? 'Add items to continue' : `Lock and collect · ${formatMoney(itemsSubtotal)}`}
               android_ripple={
                 lockGroup.isPending || items.length === 0
                   ? undefined
@@ -442,7 +443,7 @@ export default function GroupOrderHubScreen() {
                   ]}
                 >
                   <Text style={styles.ctaText}>
-                    {items.length === 0 ? 'Add items to continue' : `Lock & collect · ₹${itemsSubtotal.toFixed(0)}`}
+                    {items.length === 0 ? 'Add items to continue' : `Lock & collect · ${formatMoney(itemsSubtotal)}`}
                   </Text>
                 </View>
               )}
@@ -561,11 +562,11 @@ function ParticipantBlock({
           </Text>
           {showShare ? (
             <Text style={[styles.pShareLine, paid && styles.pPaid]}>
-              {paid ? '✓ Paid' : `Share · ₹${participant.shareAmount.toFixed(0)}`}
+              {paid ? '✓ Paid' : `Share · ${formatMoney(participant.shareAmount)}`}
             </Text>
           ) : null}
         </View>
-        <Text style={styles.pSubtotal}>₹{subtotal.toFixed(0)}</Text>
+        <Text style={styles.pSubtotal}>{formatMoney(subtotal)}</Text>
       </View>
       {lines.length === 0 ? (
         <Text style={styles.pEmpty}>No items yet</Text>
@@ -600,7 +601,7 @@ function ParticipantBlock({
             ) : (
               <Text style={styles.itemQty}>×{ci.quantity}</Text>
             )}
-            <Text style={styles.itemPrice}>₹{ci.subtotal.toFixed(0)}</Text>
+            <Text style={styles.itemPrice}>{formatMoney(ci.subtotal)}</Text>
           </View>
         ))
       )}
@@ -622,7 +623,7 @@ function OrderSummary({
   locked: boolean;
   myShare: number;
 }) {
-  const money = (n: number) => `₹${n.toFixed(0)}`;
+  const money = (n: number) => `${formatMoney(n)}`;
   const gstLabel = g.taxName || 'GST';
   return (
     <View style={styles.summaryCard}>

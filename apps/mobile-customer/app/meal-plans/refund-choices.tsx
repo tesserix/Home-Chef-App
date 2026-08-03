@@ -18,6 +18,7 @@ import {
   useChooseRefundMedium,
   type RefundChoiceDay,
 } from '../../hooks/useMealPlans';
+import { formatMoney } from '../../lib/format';
 
 // Slot → display label ('lunch' → 'Lunch'). Trivial + local; not worth a lib export.
 const slotLabel = (slot: string) => (slot ? slot.charAt(0).toUpperCase() + slot.slice(1) : '');
@@ -110,7 +111,7 @@ function RefundCard({ choice }: { choice: RefundChoiceDay }) {
     <View style={styles.card}>
       <View style={styles.cardTop}>
         <Text style={styles.planNo}>{choice.mealPlanNumber}</Text>
-        <Text style={styles.amount}>₹{choice.amount.toFixed(0)}</Text>
+        <Text style={styles.amount}>{formatMoney(choice.amount)}</Text>
       </View>
       <Text style={styles.dish} numberOfLines={1}>
         {choice.dishName || 'Meal'}

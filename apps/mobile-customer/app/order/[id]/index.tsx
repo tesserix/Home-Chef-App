@@ -35,6 +35,7 @@ import { useOrderStatusWS } from '../../../hooks/useOrderStatusWS';
 import { getChipLabel, getStatusLine } from '../../../lib/orderSteps';
 import { MESSAGING_ENABLED } from '../../../lib/features';
 import type { Order } from '../../../types/customer';
+import { formatMoney } from '../../../lib/format';
 
 // Android ripple tint for coral-filled CTAs — translucent white derived from
 // the canvas token, never a new literal colour.
@@ -505,7 +506,7 @@ export default function OrderDetailScreen() {
             <Text style={styles.voidBody}>{order.cancelReason}.</Text>
             {order.refundAmount && order.refundAmount > 0 ? (
               <Text style={styles.voidRefund}>
-                ₹{order.refundAmount.toFixed(0)} has been refunded to your original
+                {formatMoney(order.refundAmount)} has been refunded to your original
                 payment method.
               </Text>
             ) : (

@@ -38,6 +38,7 @@ import {
 import { canConfirmReceipt } from '../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { MealPlanDayList } from '../../components/meal-plan/MealPlanDayList';
+import { formatMoney } from '../../lib/format';
 
 // Plan detail (#196): the booked days with per-day status. When the chef has
 // cherry-picked (status awaiting_customer), the customer approves the revised
@@ -267,7 +268,7 @@ export default function MealPlanDetailScreen() {
             {needsApproval ? 'If approved' : 'Total'}
           </Text>
           <Text style={styles.totalValue}>
-            ₹{(needsApproval ? acceptedTotal : plan.total).toFixed(0)}
+            {formatMoney((needsApproval ? acceptedTotal : plan.total))}
           </Text>
         </View>
       </ScrollView>
