@@ -55,12 +55,27 @@ func dayRefundKey(dayID uuid.UUID) string {
 // way they order. GST stays on the food subtotal alone here — meal-plan tax is a
 // snapshot the chef day-transfer and TDS reporting are withheld against
 // (perDayFoodGST), so widening its base would shift already-reconciled payout math.
-func MealPlanFeeTotals(subtotal float64, numDays int) (float64, float64, float64, float64) {
+func MealPlanFeeTotals(subtotal float64, numDays int) (models.OrderPricing, models.TaxRates) {
 	policy := GetPlatformPolicy()
-	platformFee := Round2(subtotal * (policy.PlatformFeePercent / 100.0))
-	tax := Round2(subtotal * (policy.TaxPercent / 100.0))
-	delivery := Round2(policy.BaseDeliveryFee * float64(numDays))
-	return platformFee, tax, policy.TaxPercent, delivery
+	// A tiffin plan is carried by the chef who cooked it, so its delivery leg takes
+	// the chef-delivery rate rather than the local-delivery one.
+	rates := ResolveTaxRate("IN", "").ComponentRates(false)
+	// The SAME function that prices an à la carte order. This used to compute its
+	// own fee and tax — reading policy.TaxPercent, which defaults to 8% while
+	// orders are taxed at the 5% in tax_rates — so the same meal carried two
+	// different rates depending on how it was bought, and the GST on the plan's
+	// platform fee and delivery was never charged to anyone at all.
+	//
+	// IntraState is only a presentation choice (CGST+SGST vs IGST) and never
+	// changes the amount; each spawned day order resolves it from its own address.
+	return models.ComputeOrderPricing(models.PricingInput{
+		Subtotal:    subtotal,
+		DeliveryFee: policy.BaseDeliveryFee * float64(numDays),
+		PlatformFee: subtotal * policy.PlatformFeePercent / 100.0,
+		Rates:       rates,
+		Country:     "IN",
+		IntraState:  true,
+	}), rates
 }
 
 // planDeliveryTotal is the plan's total delivery charge, derived from the snapshot
@@ -97,7 +112,10 @@ func perDayGross(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 	if plan.Subtotal <= 0 || n == 0 {
 		return day.Price
 	}
-	tax := perDayFoodGST(plan, day)
+	// The WHOLE tax for the day, not just the chef's share: a make-whole refund
+	// returns every rupee the customer paid for a meal they never got, including
+	// the GST on the platform fee and on the delivery.
+	tax := perDayTax(plan, day)
 	fee := perDayPlatformFee(plan, day)
 	delivery := planDeliveryTotal(plan) / float64(n)
 	return Round2(day.Price + fee + tax + delivery)
@@ -109,6 +127,31 @@ func perDayGross(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 // #540), so reported-TDS == withheld-TDS exactly (no sub-rupee drift from a live-policy-rate
 // recompute). Zero when the plan has no snapshotted subtotal (food-only fallback).
 func perDayFoodGST(plan *models.MealPlan, day *models.MealPlanDay) float64 {
+	if plan.Subtotal <= 0 {
+		return 0
+	}
+	return planFoodTax(plan) * (day.Price / plan.Subtotal)
+}
+
+// planFoodTax is the plan's FOOD GST — the only tax the chef's payout is withheld
+// against. The tax on the platform fee and on delivery is the platform's own
+// output tax and must never reach a chef transfer (the meal-plan half of D-02).
+//
+// Plans booked before tax was split per supply have no TaxFood and their Tax was
+// food GST alone, so they keep it: their transfers, TDS reporting and credit
+// notes were reconciled against that figure.
+func planFoodTax(plan *models.MealPlan) float64 {
+	if plan.TaxFood > 0 || plan.TaxService > 0 || plan.TaxDelivery > 0 {
+		return plan.TaxFood
+	}
+	return plan.Tax
+}
+
+// perDayTax is the day's share of the WHOLE tax the customer paid — food, the
+// platform fee's and delivery's. Distinct from perDayFoodGST, which is the chef's
+// basis: a make-whole refund returns everything the customer paid for that day,
+// not just the part the chef was credited.
+func perDayTax(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 	if plan.Subtotal <= 0 {
 		return 0
 	}

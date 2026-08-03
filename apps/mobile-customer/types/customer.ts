@@ -183,6 +183,18 @@ export interface OrderItem {
   quantity: number;
 }
 
+/**
+ * One statutory tax row, split and labelled by the API so the app, the web page
+ * and the invoice PDF print identical wording and identical paise.
+ * `label` already carries the rate ("CGST (2.5%)") — render it verbatim.
+ */
+export interface TaxLine {
+  code: 'cgst' | 'sgst' | 'igst' | 'tax';
+  label: string;
+  rate: number;
+  amount: number;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -230,9 +242,18 @@ export interface Order {
   /** Chef's chosen delivery fee at accept (#703); the difference was refunded. */
   deliveryFeeFinal?: number;
   platformFee?: number;
+  subtotal?: number;
+  tip?: number;
   tax?: number;
   /** Frozen tax rate % — for the receipt CGST/SGST/IGST rate labels (#invoice). */
   taxRate?: number;
+  /**
+   * Statutory tax rows, already split and labelled by the API (models/pricing.go).
+   * Render these — never re-derive CGST/SGST here, or the app and the PDF drift.
+   */
+  taxLines?: TaxLine[];
+  /** Paise needed to make the lines above sum to totalAmount. 0 for new orders. */
+  rounding?: number;
   discount?: number;
   // Public URL of the chef's food-ready photo (the prepared dish), shown on the
   // order detail once the chef marks the order ready.

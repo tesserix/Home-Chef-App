@@ -48,6 +48,17 @@ type deliveryQuoteRequest struct {
 	services.CreditRequest
 }
 
+// fulfillmentForTax maps the client's requested mode to the one CreateOrder will
+// actually record, so the quote resolves the delivery tax rule the same way the
+// charge will. Anything but pickup is created as plain delivery — the chef picks
+// the carrier at Mark Ready (resolveFulfillment).
+func fulfillmentForTax(requested string) models.FulfillmentType {
+	if requested == string(models.FulfillmentPickup) {
+		return models.FulfillmentPickup
+	}
+	return models.FulfillmentDelivery
+}
+
 // QuoteDeliveryFee returns the per-mode delivery fee for a chef + drop address,
 // so checkout can show the real delivery cost and pickup's saving.
 //
@@ -98,27 +109,48 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 	reach := services.DeliveryReach(chef, req.Latitude, req.Longitude)
 	deliverable := reach.Deliverable || services.ThirdPartyDeliveryEnabled()
 
-	// Platform fee + tax rule — computed exactly as CreateOrder does
-	// so the checkout total matches what's charged (#fee-transparency). platformFee
-	// is a % of subtotal; tax is left for the client to apply on the discounted
-	// base (it knows the promo), using taxRatePercent + taxInclusive.
 	policy := services.GetPlatformPolicy()
-	platformFee := req.Subtotal * (policy.PlatformFeePercent / 100.0)
 	taxRule := services.ResolveTaxRate(country, req.State)
+
+	// Price the mode the customer actually chose — a pickup quote priced on the
+	// delivery fee would preview a total the order never charges.
+	effectiveDelivery := deliveryFee
+	if req.Fulfillment == string(models.FulfillmentPickup) {
+		effectiveDelivery = pickupFee
+	}
+	// The SAME function CreateOrder prices with (models/pricing.go), so the total
+	// previewed here is the total charged, to the paise, and the tax lines the app
+	// renders at checkout are the ones its receipt will carry. Clients render these
+	// rather than recomputing — four surfaces doing their own arithmetic is how
+	// checkout came to show ₹264.58 for an order the receipt called ₹264.57.
+	pricing := models.ComputeOrderPricing(models.PricingInput{
+		Subtotal:    req.Subtotal,
+		DeliveryFee: effectiveDelivery,
+		PlatformFee: req.Subtotal * (policy.PlatformFeePercent / 100.0),
+		Discount:    req.Discount,
+		Tip:         req.Tip,
+		Rates:       taxRule.ComponentRates(services.DeliveryByPlatform(fulfillmentForTax(req.Fulfillment), services.ThirdPartyDeliveryEnabled())),
+		Country:     country,
+		IntraState:  services.IsIntraStateSupply(chef.State, req.State),
+	})
 
 	resp := gin.H{
 		"deliveryFee": models.RoundAmount(deliveryFee),
 		"pickupFee":   pickupFee,
-		"platformFee": models.RoundAmount(platformFee),
-		// The client computes tax = taxRatePercent% of (subtotal+delivery+service−discount),
-		// backing it out when inclusive — the same math as CreateOrder.
+		"platformFee": pricing.PlatformFee,
+		// The priced breakdown for the chosen mode. effectiveDeliveryFee is the
+		// delivery line that went INTO total (0 for pickup), where deliveryFee above
+		// stays the delivery-mode fee the pickup-saving compares against.
+		"effectiveDeliveryFee": pricing.DeliveryFee,
+		"tax":                  pricing.Tax,
+		"taxLines":             pricing.TaxLines,
+		"total":                pricing.Total,
+		// Kept for app builds already in the field that still compute their own tax.
 		"taxRatePercent": taxRule.Rate,
 		"taxName":        taxRule.TaxName,
 		"taxInclusive":   taxRule.Inclusive,
-		// GST compliance (#invoice): intra-state → the client shows CGST+SGST, else
-		// IGST. Based on the chef's state vs the delivery state.
-		"taxCountry":    country,
-		"taxIntraState": services.IsIntraStateSupply(chef.State, req.State),
+		"taxCountry":     country,
+		"taxIntraState":  services.IsIntraStateSupply(chef.State, req.State),
 		// pickupSaving is what the customer keeps by collecting. 0 when delivery is
 		// itself free — the app then shows no incentive rather than a fake one.
 		"pickupSaving":       models.RoundAmount(saving),
@@ -149,32 +181,6 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 	// keeps the preview and the eventual charge in agreement; payment creation still
 	// recomputes from the real order and remains authoritative.
 	if userID, ok := middleware.GetUserID(c); ok {
-		effectiveDelivery := deliveryFee
-		if req.Fulfillment == string(models.FulfillmentPickup) {
-			effectiveDelivery = pickupFee
-		}
-		taxBase := req.Subtotal + effectiveDelivery + platformFee - req.Discount
-		if taxBase < 0 {
-			taxBase = 0
-		}
-		// Mirrors CreateOrder exactly. An inclusive rate is already inside taxBase, so
-		// it is backed out for display and NOT added to the total; adding it would
-		// charge the customer the tax twice.
-		// A negative tip is a client bug, never an instruction — floor it rather than
-		// letting it shrink the total the customer is quoted.
-		tip := req.Tip
-		if tip < 0 {
-			tip = 0
-		}
-		var tax, total float64
-		if taxRule.Inclusive {
-			tax = taxBase - (taxBase / (1 + taxRule.Rate/100.0))
-			total = req.Subtotal + effectiveDelivery + platformFee + tip - req.Discount
-		} else {
-			tax = taxBase * (taxRule.Rate / 100.0)
-			total = req.Subtotal + effectiveDelivery + platformFee + tax + tip - req.Discount
-		}
-
 		// The RESOLVED gateway, not the chef's stored column. Two things read it:
 		// the credit quote below, and — via the response — the RBI Payment
 		// Aggregator disclosure the checkout screen must render. That disclosure
@@ -187,8 +193,12 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		preview := &models.Order{
 			CustomerID: userID, Currency: services.CurrencyForCountry(chef.PayoutCountry),
 			PaymentProvider: resolvedProvider,
-			Subtotal:        req.Subtotal, Discount: req.Discount, DeliveryFee: effectiveDelivery,
-			PlatformFee: platformFee, Tax: tax, Total: total,
+			Subtotal:    pricing.Subtotal,
+			Discount:    pricing.Discount,
+			DeliveryFee: pricing.DeliveryFee,
+			PlatformFee: pricing.PlatformFee,
+			Tax:         pricing.Tax,
+			Total:       pricing.Total,
 		}
 		if q, err := services.BuildCreditQuote(database.DB, preview, userID, req.CreditRequest, creditFlags()); err == nil {
 			resp["credit"] = creditQuoteResponse(q)

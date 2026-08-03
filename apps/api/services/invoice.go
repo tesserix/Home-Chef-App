@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,18 +12,6 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
-
-// TaxConfig holds per-country tax configuration loaded from PlatformSettings
-type TaxConfig struct {
-	CountryCode         string
-	TaxName             string // GST, VAT, Sales Tax
-	FoodPercent         float64
-	ServicePercent      float64
-	DeliveryPercent     float64
-	SubscriptionPercent float64
-	RegistrationIDLabel string // GSTIN, ABN, TIN
-	CompanyTaxID        string
-}
 
 // InvoiceCompanyInfo holds Fe3dr company details for invoices
 type InvoiceCompanyInfo struct {
@@ -34,74 +21,6 @@ type InvoiceCompanyInfo struct {
 	Phone   string
 	Website string
 	TaxID   string
-}
-
-// Default tax configurations per country
-var defaultTaxConfigs = map[string]TaxConfig{
-	"IN": {CountryCode: "IN", TaxName: "GST", FoodPercent: 5, ServicePercent: 18, DeliveryPercent: 18, SubscriptionPercent: 18, RegistrationIDLabel: "GSTIN", CompanyTaxID: ""},
-	"AU": {CountryCode: "AU", TaxName: "GST", FoodPercent: 10, ServicePercent: 10, DeliveryPercent: 10, SubscriptionPercent: 10, RegistrationIDLabel: "ABN", CompanyTaxID: ""},
-	"PK": {CountryCode: "PK", TaxName: "Sales Tax", FoodPercent: 17, ServicePercent: 17, DeliveryPercent: 17, SubscriptionPercent: 17, RegistrationIDLabel: "NTN", CompanyTaxID: ""},
-	"BD": {CountryCode: "BD", TaxName: "VAT", FoodPercent: 15, ServicePercent: 15, DeliveryPercent: 15, SubscriptionPercent: 15, RegistrationIDLabel: "TIN", CompanyTaxID: ""},
-	"LK": {CountryCode: "LK", TaxName: "VAT", FoodPercent: 8, ServicePercent: 8, DeliveryPercent: 8, SubscriptionPercent: 8, RegistrationIDLabel: "TIN", CompanyTaxID: ""},
-	"NP": {CountryCode: "NP", TaxName: "VAT", FoodPercent: 13, ServicePercent: 13, DeliveryPercent: 13, SubscriptionPercent: 13, RegistrationIDLabel: "PAN", CompanyTaxID: ""},
-}
-
-// GetTaxConfig loads tax configuration for a country from PlatformSettings, falling back to defaults
-func GetTaxConfig(countryCode string) (*TaxConfig, error) {
-	cc := strings.ToUpper(countryCode)
-
-	// Start with defaults
-	cfg := TaxConfig{
-		CountryCode:         cc,
-		TaxName:             "Tax",
-		FoodPercent:         0,
-		ServicePercent:      0,
-		DeliveryPercent:     0,
-		SubscriptionPercent: 0,
-		RegistrationIDLabel: "Tax ID",
-		CompanyTaxID:        "",
-	}
-
-	if defaults, ok := defaultTaxConfigs[cc]; ok {
-		cfg = defaults
-	}
-
-	// Try to load overrides from PlatformSettings
-	prefix := fmt.Sprintf("tax.%s.", cc)
-	var settings []models.PlatformSettings
-	database.DB.Where("key LIKE ?", prefix+"%").Find(&settings)
-
-	for _, s := range settings {
-		key := strings.TrimPrefix(s.Key, prefix)
-		val := s.Value
-
-		switch key {
-		case "tax_name":
-			cfg.TaxName = val
-		case "food_percent":
-			if v, err := strconv.ParseFloat(val, 64); err == nil {
-				cfg.FoodPercent = v
-			}
-		case "service_percent":
-			if v, err := strconv.ParseFloat(val, 64); err == nil {
-				cfg.ServicePercent = v
-			}
-		case "delivery_percent":
-			if v, err := strconv.ParseFloat(val, 64); err == nil {
-				cfg.DeliveryPercent = v
-			}
-		case "subscription_percent":
-			if v, err := strconv.ParseFloat(val, 64); err == nil {
-				cfg.SubscriptionPercent = v
-			}
-		case "registration_id_label":
-			cfg.RegistrationIDLabel = val
-		case "company_tax_id":
-			cfg.CompanyTaxID = val
-		}
-	}
-
-	return &cfg, nil
 }
 
 // GetCompanyInfo loads Fe3dr company details from PlatformSettings
@@ -161,11 +80,7 @@ func GenerateOrderInvoice(order *models.Order) (*models.OrderInvoice, error) {
 		}
 	}
 
-	// Load tax config
-	taxCfg, err := GetTaxConfig(countryCode)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load tax config: %w", err)
-	}
+	rates := order.SnapshotRates()
 
 	// Load company info
 	companyInfo, err := GetCompanyInfo()
@@ -198,16 +113,25 @@ func GenerateOrderInvoice(order *models.Order) (*models.OrderInvoice, error) {
 	}
 	subtotal = models.RoundAmount(subtotal)
 
-	// Calculate taxes
-	foodTax := models.RoundAmount(subtotal * taxCfg.FoodPercent / 100)
-	deliveryFee := order.DeliveryFee
-	deliveryTax := models.RoundAmount(deliveryFee * taxCfg.DeliveryPercent / 100)
-	platformFee := order.PlatformFee
-	serviceTax := models.RoundAmount(platformFee * taxCfg.ServicePercent / 100)
-	tip := order.Tip
-	discount := order.Discount
-
-	totalAmount := models.RoundAmount(subtotal + foodTax + deliveryFee + deliveryTax + platformFee + serviceTax + tip - discount)
+	// The tax the order was CHARGED, per supply — never recomputed here. This used
+	// to re-derive it from live rates and produced a stored invoice whose total
+	// disagreed with the payment (₹266.14 against a ₹264.57 charge on
+	// HC26080306287649), which GET /orders/:id/invoice then served to the customer.
+	p := order.ToResponse()
+	subtotal = p.Subtotal
+	foodTax := order.TaxFood
+	deliveryFee := p.DeliveryFee
+	deliveryTax := order.TaxDelivery
+	platformFee := p.PlatformFee
+	serviceTax := order.TaxService
+	tip := p.Tip
+	discount := p.Discount
+	// Orders placed before tax was split per supply carry only a total; it was one
+	// supply at one rate, so it all sits on the food line.
+	if foodTax == 0 && serviceTax == 0 && deliveryTax == 0 {
+		foodTax = p.Tax
+	}
+	totalAmount := p.Total
 
 	// Serialize line items to JSON
 	lineItemsJSON, err := json.Marshal(lineItems)
@@ -250,10 +174,11 @@ func GenerateOrderInvoice(order *models.Order) (*models.OrderInvoice, error) {
 		}
 	}
 
-	// Determine company tax ID
+	// Determine company tax ID — the jurisdiction's own registration wins over the
+	// global company one when set.
 	companyTaxID := companyInfo.TaxID
-	if taxCfg.CompanyTaxID != "" {
-		companyTaxID = taxCfg.CompanyTaxID
+	if jurisdiction := ResolveTaxRate(countryCode, order.DeliveryAddressState); jurisdiction.CompanyTaxID != "" {
+		companyTaxID = jurisdiction.CompanyTaxID
 	}
 
 	now := time.Now().UTC()
@@ -274,12 +199,14 @@ func GenerateOrderInvoice(order *models.Order) (*models.OrderInvoice, error) {
 		Discount:    discount,
 		TotalAmount: totalAmount,
 
-		CountryCode:        countryCode,
-		Currency:           currency,
-		TaxName:            taxCfg.TaxName,
-		FoodTaxPercent:     taxCfg.FoodPercent,
-		ServiceTaxPercent:  taxCfg.ServicePercent,
-		DeliveryTaxPercent: taxCfg.DeliveryPercent,
+		CountryCode: countryCode,
+		Currency:    currency,
+		// The rates FROZEN on the order, not today's — an admin retuning a rate must
+		// not restate an invoice already issued.
+		TaxName:            order.TaxName,
+		FoodTaxPercent:     rates.Food,
+		ServiceTaxPercent:  rates.Service,
+		DeliveryTaxPercent: rates.Delivery,
 
 		CustomerName:    order.Customer.FirstName + " " + order.Customer.LastName,
 		CustomerEmail:   order.Customer.Email,
@@ -313,11 +240,7 @@ func GenerateSubscriptionInvoiceData(invoice *models.SubscriptionInvoice) (map[s
 		return nil, fmt.Errorf("subscription not found: %w", err)
 	}
 
-	// Load tax config
-	taxCfg, err := GetTaxConfig(sub.CountryCode)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load tax config: %w", err)
-	}
+	taxCfg := ResolveTaxRate(sub.CountryCode, "")
 
 	// Load company info
 	companyInfo, err := GetCompanyInfo()

@@ -30,6 +30,8 @@ type statementOrderRow struct {
 	CompletedAt        time.Time `gorm:"column:delivered_at"`
 	ItemRevenue        float64   `gorm:"column:subtotal"`
 	Tax                float64   `gorm:"column:tax"`
+	TaxFood            float64   `gorm:"column:tax_food"`
+	TaxService         float64   `gorm:"column:tax_service"`
 	ChefFundedDiscount float64   `gorm:"column:chef_funded_discount"`
 	DeliveryFee        float64   `gorm:"column:delivery_fee"`
 	ChefTip            float64   `gorm:"column:chef_tip"`
@@ -92,7 +94,7 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			OrderNumber:        r.OrderNumber,
 			CompletedAt:        r.CompletedAt,
 			ItemRevenue:        r.ItemRevenue,
-			Tax:                r.Tax,
+			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
 			ChefFundedDiscount: r.ChefFundedDiscount,
 			DeliveryFee:        r.DeliveryFee,
 			ChefTip:            r.ChefTip,

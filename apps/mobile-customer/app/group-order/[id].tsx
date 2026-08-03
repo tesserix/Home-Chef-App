@@ -655,15 +655,14 @@ function OrderSummary({
               <Text style={styles.sumValue}>{money(g.platformFee)}</Text>
             </View>
           ) : null}
-          {g.tax > 0 ? (
-            <View style={styles.sumRow}>
-              <Text style={styles.sumLabel}>
-                {gstLabel}
-                {g.taxRate ? ` (${g.taxRate}%)` : ''}
-              </Text>
-              <Text style={styles.sumValue}>{money(g.tax)}</Text>
+          {/* Split by the API, so this screen and the receipt of the order it
+              becomes label the tax the same way. */}
+          {(g.taxLines ?? []).map((t) => (
+            <View key={t.code} style={styles.sumRow}>
+              <Text style={styles.sumLabel}>{t.label}</Text>
+              <Text style={styles.sumValue}>{money(t.amount)}</Text>
             </View>
-          ) : null}
+          ))}
           <View style={styles.sumDivider} />
           <View style={styles.sumRow}>
             <Text style={styles.sumTotalLabel}>Total</Text>

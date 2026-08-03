@@ -44,14 +44,11 @@ func ComputeMealCycleCharge(cycleAmount, creditBalance float64) (charge, remaini
 	return models.RoundAmount(charge), models.RoundAmount(remainingCredit)
 }
 
-// mealInvoiceTaxRate returns the subscription tax rate for a country (reuses the
-// existing tax config). 0 when unknown so generation never fails.
+// mealInvoiceTaxRate returns the subscription tax rate for a country, from the
+// one tax_rates row every other money path also reads. 0 when unknown so
+// generation never fails.
 func mealInvoiceTaxRate(countryCode string) float64 {
-	cfg, err := GetTaxConfig(countryCode)
-	if err != nil || cfg == nil {
-		return 0
-	}
-	return cfg.SubscriptionPercent / 100
+	return ResolveTaxRate(countryCode, "").ComponentRates(false).Subscription / 100
 }
 
 // GenerateMealCycleInvoice creates the next-cycle invoice for a subscription,

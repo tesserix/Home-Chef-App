@@ -5,6 +5,8 @@ import (
 	"html"
 	"strings"
 	"time"
+
+	"github.com/homechef/api/models"
 )
 
 // esc HTML-escapes user-controlled free text before it is interpolated into an
@@ -201,11 +203,14 @@ type OrderInvoiceDetails struct {
 	DeliveryFee float64
 	PlatformFee float64
 	Discount    float64
-	CGSTAmount  float64 // intra-state component
-	SGSTAmount  float64 // intra-state component
-	IGSTAmount  float64 // inter-state (set when CGST/SGST are zero)
-	GSTRatePct  float64 // e.g. 5 for prepared food via e-commerce
-	HSNCode     string  // SAC for service; defaults to "996331" (food via e-commerce)
+	Tip         float64
+	// TaxLines and Rounding come straight off OrderResponse (models/pricing.go) —
+	// the same rows the app, the web page and the PDF show. Building the split here
+	// instead is how five surfaces came to disagree about one order's tax.
+	TaxLines   []models.TaxLine
+	Rounding   float64
+	GSTRatePct float64 // e.g. 5 for prepared food via e-commerce
+	HSNCode    string  // SAC for service; defaults to "996331" (food via e-commerce)
 
 	// Fulfilment context
 	ChefName        string
@@ -358,8 +363,7 @@ func renderFulfilmentBlock(d *OrderInvoiceDetails) string {
 // renderInvoiceSummary returns the GST breakup rows. Empty when no GST data
 // is supplied so the legacy "total only" email stays unchanged.
 func renderInvoiceSummary(d *OrderInvoiceDetails) string {
-	hasBreakdown := d.Subtotal > 0 || d.DeliveryFee > 0 || d.PlatformFee > 0 ||
-		d.CGSTAmount > 0 || d.SGSTAmount > 0 || d.IGSTAmount > 0
+	hasBreakdown := d.Subtotal > 0 || d.DeliveryFee > 0 || d.PlatformFee > 0 || len(d.TaxLines) > 0
 	if !hasBreakdown {
 		return ""
 	}
@@ -377,14 +381,14 @@ func renderInvoiceSummary(d *OrderInvoiceDetails) string {
 	if d.Discount > 0 {
 		rows += fmt.Sprintf(`<tr><td style="padding:6px 0;color:#15803D;font-size:14px;">Discount</td><td style="padding:6px 0;text-align:right;color:#15803D;font-size:14px;">-₹%.2f</td></tr>`, d.Discount)
 	}
-	if d.CGSTAmount > 0 {
-		rows += fmt.Sprintf(rowFmt, fmt.Sprintf("CGST @ %.1f%%", d.GSTRatePct/2), d.CGSTAmount)
+	for _, line := range d.TaxLines {
+		rows += fmt.Sprintf(rowFmt, line.Label, line.Amount)
 	}
-	if d.SGSTAmount > 0 {
-		rows += fmt.Sprintf(rowFmt, fmt.Sprintf("SGST @ %.1f%%", d.GSTRatePct/2), d.SGSTAmount)
+	if d.Tip > 0 {
+		rows += fmt.Sprintf(rowFmt, "Tip", d.Tip)
 	}
-	if d.IGSTAmount > 0 {
-		rows += fmt.Sprintf(rowFmt, fmt.Sprintf("IGST @ %.1f%%", d.GSTRatePct), d.IGSTAmount)
+	if d.Rounding != 0 {
+		rows += fmt.Sprintf(rowFmt, "Rounding", d.Rounding)
 	}
 	return fmt.Sprintf(`<table width="100%%" cellpadding="0" cellspacing="0" style="margin:0 0 8px 0;">%s</table>`, rows)
 }

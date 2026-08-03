@@ -43,6 +43,8 @@ type earningsOrderRow struct {
 	CompletedAt        time.Time `gorm:"column:delivered_at"`
 	ItemRevenue        float64   `gorm:"column:subtotal"`
 	Tax                float64   `gorm:"column:tax"`
+	TaxFood            float64   `gorm:"column:tax_food"`
+	TaxService         float64   `gorm:"column:tax_service"`
 	ChefFundedDiscount float64   `gorm:"column:chef_funded_discount"`
 	DeliveryFee        float64   `gorm:"column:delivery_fee"`
 	ChefTip            float64   `gorm:"column:chef_tip"`
@@ -201,7 +203,7 @@ func computeOrderBreakdown(row earningsOrderRow, chefState string, commissionRat
 		OrderNumber:        row.OrderNumber,
 		CompletedAt:        row.CompletedAt,
 		ItemRevenue:        row.ItemRevenue,
-		Tax:                row.Tax,
+		Tax:                services.ChefTaxOf(row.Tax, row.TaxFood, row.TaxService),
 		ChefFundedDiscount: row.ChefFundedDiscount,
 		DeliveryFee:        row.DeliveryFee,
 		ChefTip:            row.ChefTip,

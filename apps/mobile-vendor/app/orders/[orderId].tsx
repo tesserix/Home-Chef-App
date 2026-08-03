@@ -1677,11 +1677,16 @@ export default function OrderDetailScreen() {
           {pricing.platformFee > 0 ? (
             <TotalRow label="Platform fee" value={pricing.platformFee} />
           ) : null}
-          {pricing.tax > 0 ? (
-            <TotalRow label="Tax" value={pricing.tax} />
-          ) : null}
+          {/* Split by the API — the chef sees the rows the customer's receipt
+              carries, not a single "Tax" the two documents disagree on. */}
+          {pricing.taxLines.map((t) => (
+            <TotalRow key={t.code} label={t.label} value={t.amount} />
+          ))}
           {pricing.chefTip > 0 ? (
             <TotalRow label="Tip" value={pricing.chefTip} />
+          ) : null}
+          {pricing.rounding !== 0 ? (
+            <TotalRow label="Rounding" value={pricing.rounding} />
           ) : null}
           <TotalRow
             label="Total"

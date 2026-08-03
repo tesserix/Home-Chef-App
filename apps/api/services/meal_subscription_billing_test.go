@@ -55,15 +55,26 @@ func setupMealBillingDB(t *testing.T) *gorm.DB {
 			status TEXT, cycle_amount REAL, credit_applied REAL, amount REAL, tax_amount REAL, total_amount REAL,
 			currency TEXT, period_start DATETIME, period_end DATETIME, gateway_payment_id TEXT, paid_at DATETIME,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
-		// GetTaxConfig (for the invoice tax) reads platform_settings off the global DB.
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT UNIQUE, value TEXT, type TEXT, updated_by TEXT, updated_at DATETIME)`,
+		// The subscription rate now comes from the one tax_rates row every other
+		// money path reads, so the fixture has to carry it.
+		`CREATE TABLE tax_rates (id TEXT PRIMARY KEY, country_code TEXT, region TEXT DEFAULT '', tax_name TEXT,
+			rate REAL, food_percent REAL DEFAULT 0, service_percent REAL DEFAULT 0, delivery_percent REAL DEFAULT 0,
+			subscription_percent REAL DEFAULT 0, inclusive BOOLEAN DEFAULT 0, registration_id_label TEXT DEFAULT '',
+			company_tax_id TEXT DEFAULT '', notes TEXT, is_active BOOLEAN DEFAULT 1,
+			created_at DATETIME, updated_at DATETIME)`,
+		// A real UUID: the id column scans into uuid.UUID, and a bare string fails
+		// the whole Find, leaving the resolver with no rules at all.
+		`INSERT INTO tax_rates (id, country_code, region, tax_name, rate, subscription_percent, is_active)
+			VALUES ('11111111-1111-1111-1111-111111111111', 'IN', '', 'GST', 5, 18, 1)`,
 	}
 	for _, s := range stmts {
 		require.NoError(t, db.Exec(s).Error)
 	}
 	prev := database.DB
 	database.DB = db
-	t.Cleanup(func() { database.DB = prev })
+	InvalidateTaxCache()
+	t.Cleanup(func() { database.DB = prev; InvalidateTaxCache() })
 	return db
 }
 

@@ -199,7 +199,7 @@ func ComputeFYStatement(chefID uuid.UUID, fyStartYear int) (*FYStatement, error)
 	for _, r := range rows {
 		e := ComputeOrderEarnings(EarningsInput{
 			ItemRevenue:        r.ItemRevenue,
-			Tax:                r.Tax,
+			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
 			ChefFundedDiscount: r.ChefFundedDiscount,
 			DeliveryFee:        r.DeliveryFee,
 			ChefTip:            r.ChefTip,

@@ -44,7 +44,7 @@ func setupOrchestrationDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY, meal_plan_number text, customer_id text, chef_id text,
-			status text, subtotal real, platform_fee real DEFAULT 0, tax_rate real DEFAULT 0, tax real, total real, currency text, escrow_payment_id text,
+			status text, subtotal real, platform_fee real DEFAULT 0, tax_rate real DEFAULT 0, tax real, tax_food real DEFAULT 0, tax_service real DEFAULT 0, tax_delivery real DEFAULT 0, tax_rate_food real DEFAULT 0, tax_rate_service real DEFAULT 0, tax_rate_delivery real DEFAULT 0, tax_service_inclusive integer DEFAULT 0, total real, currency text, escrow_payment_id text,
 			razorpay_order_id text, chef_respond_by datetime, customer_approve_by datetime, confirmed_at datetime,
 			cancelled_at datetime, cancel_reason text, start_date datetime, end_date datetime,
 			created_at datetime, updated_at datetime)`,

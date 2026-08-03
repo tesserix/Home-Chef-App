@@ -140,6 +140,30 @@ type Order struct {
 	// invoices. TaxName is the label shown on the invoice ("GST", "VAT", ...).
 	TaxRate float64 `gorm:"default:0" json:"taxRate"`
 	TaxName string  `gorm:"type:varchar(40);default:''" json:"taxName"`
+	// Per-supply snapshot: the amount and the rate each component was taxed at,
+	// frozen so a later rate change cannot restate a historical invoice or a
+	// refund. All zero on orders placed before tax became per-component — those
+	// are one supply at TaxRate, which is how they were charged.
+	TaxFood         float64 `gorm:"default:0" json:"taxFood"`
+	TaxService      float64 `gorm:"default:0" json:"taxService"`
+	TaxDelivery     float64 `gorm:"default:0" json:"taxDelivery"`
+	TaxRateFood     float64 `gorm:"default:0" json:"taxRateFood"`
+	TaxRateService  float64 `gorm:"default:0" json:"taxRateService"`
+	TaxRateDelivery float64 `gorm:"default:0" json:"taxRateDelivery"`
+	// TaxInclusive freezes whether the rate was already inside the charged base
+	// (EU VAT and friends) or added on top (Indian GST). Without it a receipt
+	// cannot tell whether the tax line is part of the total or additional to it.
+	// Defaults false, which is correct for every order placed before it existed.
+	TaxInclusive bool `gorm:"default:false" json:"taxInclusive"`
+	// TaxServiceInclusive freezes whether the platform fee was quoted all-in with
+	// the GST backed out of it, separately from the food — the two can differ.
+	TaxServiceInclusive bool `gorm:"default:false" json:"taxServiceInclusive"`
+	// TaxDeliveryByPlatform freezes WHICH delivery rule applied: a platform-arranged
+	// rider is a notified §9(5) local-delivery supply, a chef carrying their own
+	// food is arguable as part of the composite restaurant supply. The carrier is
+	// chosen at Mark Ready, so the decision is recorded at checkout and never
+	// re-derived — otherwise a later carrier switch would restate a tax invoice.
+	TaxDeliveryByPlatform bool `gorm:"default:false" json:"taxDeliveryByPlatform"`
 	// CommissionRate freezes the platform commission rate applied when the order
 	// was placed, so a later admin retune of the runtime rate cannot make the
 	// settlement statement disagree with the Route transfer already sent (#390).
@@ -434,7 +458,18 @@ type OrderResponse struct {
 	Tax              float64             `json:"tax"`
 	TaxRate          float64             `json:"taxRate"`
 	TaxName          string              `json:"taxName,omitempty"`
-	Tip              float64             `json:"tip"`
+	// TaxLines is the statutory split every surface renders — CGST+SGST, IGST, or
+	// a single foreign tax line. Built here so the app, the web page and the PDF
+	// cannot each reach a different answer; clients print Label and Amount as-is.
+	TaxLines []TaxLine `json:"taxLines,omitempty"`
+	// TaxBreakdown is the same tax stated per RATE, naming what each is charged
+	// on — the form a tax invoice must take when one bill carries two rates. The
+	// PDF and the admin render this; the apps render the summary above.
+	TaxBreakdown []TaxLine `json:"taxBreakdown,omitempty"`
+	// Rounding is the paise needed to make the lines above sum to Total. Non-zero
+	// only for orders placed before the money was rounded at creation.
+	Rounding float64 `json:"rounding,omitempty"`
+	Tip      float64 `json:"tip"`
 	ChefTip          float64             `json:"chefTip,omitempty"`
 	DriverTip        float64             `json:"driverTip,omitempty"`
 	Discount         float64             `json:"discount"`
@@ -602,6 +637,34 @@ type PendingCancellation struct {
 	RespondBy   *time.Time `json:"respondBy,omitempty"`
 }
 
+// SnapshotRates is the rule this order was charged under, rebuilt from the
+// frozen columns rather than the live tax_rates row — a rate the admin changes
+// tomorrow must not restate an invoice issued today. Orders written before tax
+// became per-component fall back to the single TaxRate, which is how they were
+// charged.
+func (o *Order) SnapshotRates() TaxRates {
+	or := func(v float64) float64 {
+		if v > 0 {
+			return v
+		}
+		return o.TaxRate
+	}
+	return TaxRates{
+		Name:             o.TaxName,
+		Food:             or(o.TaxRateFood),
+		FoodInclusive:    o.TaxInclusive,
+		Service:            or(o.TaxRateService),
+		ServiceInclusive:   o.TaxServiceInclusive,
+		Delivery:           or(o.TaxRateDelivery),
+		DeliveryByPlatform: o.TaxDeliveryByPlatform,
+	}
+}
+
+// TaxSnapshot is the tax this order was charged, per supply.
+func (o *Order) TaxSnapshot() TaxSnapshot {
+	return TaxSnapshot{Total: o.Tax, Food: o.TaxFood, Service: o.TaxService, Delivery: o.TaxDelivery}
+}
+
 func (o *Order) ToResponse() OrderResponse {
 	items := make([]OrderItemResponse, len(o.Items))
 	for i, item := range o.Items {
@@ -646,6 +709,20 @@ func (o *Order) ToResponse() OrderResponse {
 		}
 	}
 
+	// One breakdown for every surface (pricing.go). Reconciled to the total the
+	// customer was actually charged, so the lines on a receipt always add up to
+	// the figure underneath them.
+	pricing := PresentOrderPricing(PricingInput{
+		Subtotal:    o.Subtotal,
+		DeliveryFee: o.DeliveryFee,
+		PlatformFee: o.PlatformFee,
+		Discount:    o.Discount,
+		Tip:         o.Tip,
+		Rates:       o.SnapshotRates(),
+		Country:     o.DeliveryAddressCountry,
+		IntraState:  IntraStateSupply(o.Chef.State, o.DeliveryAddressState),
+	}, o.TaxSnapshot(), o.Total)
+
 	return OrderResponse{
 		ID:          o.ID,
 		OrderNumber: o.OrderNumber,
@@ -659,18 +736,21 @@ func (o *Order) ToResponse() OrderResponse {
 		PaymentStatus:    o.PaymentStatus,
 		PaymentProvider:  o.PaymentProvider,
 		Currency:         currency,
-		Subtotal:         o.Subtotal,
-		DeliveryFee:      o.DeliveryFee,
+		Subtotal:         pricing.Subtotal,
+		DeliveryFee:      pricing.DeliveryFee,
 		DeliveryFeeFinal: o.DeliveryFeeFinal,
-		PlatformFee:      o.PlatformFee,
-		Tax:              o.Tax,
+		PlatformFee:      pricing.PlatformFee,
+		Tax:              pricing.Tax,
 		TaxRate:          o.TaxRate,
 		TaxName:          o.TaxName,
-		Tip:              o.Tip,
+		TaxLines:         pricing.TaxLines,
+		TaxBreakdown:     pricing.TaxBreakdown,
+		Rounding:         pricing.Rounding,
+		Tip:              pricing.Tip,
 		ChefTip:          o.ChefTip,
 		DriverTip:        o.DriverTip,
-		Discount:         o.Discount,
-		Total:            o.Total,
+		Discount:         pricing.Discount,
+		Total:            pricing.Total,
 		Items:            items,
 		DeliveryAddress: AddressResponse{
 			Line1:      o.DeliveryAddressLine1,

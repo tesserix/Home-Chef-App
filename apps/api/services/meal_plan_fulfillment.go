@@ -261,6 +261,13 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 			PlatformFee:               dayPlatformFee,
 			Tax:                       dayTax,
 			TaxRate:                   dayTaxRate,
+			// A meal plan taxes the FOOD only (MealPlanFeeTotals), so the whole of
+			// dayTax sits on the food line. Saying so explicitly rather than leaving
+			// the snapshot empty is what keeps this day order's receipt, its refund
+			// and the chef's earnings on the same per-supply basis as every other
+			// order — an empty snapshot falls back to the single-supply model.
+			TaxFood:     dayTax,
+			TaxRateFood: dayTaxRate,
 			DeliveryFee:               dayDelivery,
 			Total:                     dayTotal,
 			DeliveryAddressLine1:      addr.Line1,

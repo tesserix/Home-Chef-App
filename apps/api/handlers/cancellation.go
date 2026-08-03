@@ -46,6 +46,12 @@ func uncappedSnapshot(order *models.Order, pct int) services.CancellationRefund 
 		TaxPaise:         services.ToPaise(order.Tax),                    // tax
 		DiscountPaise:    services.ToPaise(order.Discount),               // #962: the promo the customer never paid
 		Dispatched:       orderDispatched(order.Status),
+		// The tax frozen per supply, so only the tax on what is actually given back
+		// is refunded. Zero on orders priced before the split, which fall back to the
+		// proportional model that was correct for their single rate.
+		TaxFoodPaise:     services.ToPaise(order.TaxFood),
+		TaxDeliveryPaise: services.ToPaise(order.TaxDelivery),
+		TaxServicePaise:  services.ToPaise(order.TaxService),
 	}, pct)
 }
 

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import type { PayoutHoldStatus } from '../lib/payout-hold';
+import type { TaxLine } from '../types/customer';
 
 // Group / office orders (#46): shared cart + split pay + single delivery.
 
@@ -52,6 +53,9 @@ export interface GroupOrder {
   tax: number;
   taxRate?: number;
   taxName?: string;
+  /** Statutory rows split by the API — the same ones the consolidated order's
+   *  receipt carries. Render these rather than labelling `tax` here. */
+  taxLines?: TaxLine[];
   total: number;
   participants: GroupParticipant[];
   items: GroupItem[];

@@ -133,6 +133,20 @@ type CancellationOrder struct {
 	// Dispatched — a driver is already carrying the order, so the delivery fee is
 	// non-refundable (the driver is paid regardless).
 	Dispatched bool
+	// The tax FROZEN on the order per supply. Refunding tax requires knowing which
+	// supply carried it: once the platform fee sits at 18% and the food at 5%,
+	// value stops being a proxy for tax and apportioning by value hands back tax
+	// belonging to a fee that was kept — money that cannot be credit-noted, because
+	// that supply did happen. All zero on an order priced before the split, which
+	// falls back to the proportional model that was correct for a single rate.
+	TaxFoodPaise     int
+	TaxDeliveryPaise int
+	TaxServicePaise  int
+}
+
+// hasSupplyTax reports whether this order carries the per-supply snapshot.
+func (o CancellationOrder) hasSupplyTax() bool {
+	return o.TaxFoodPaise != 0 || o.TaxDeliveryPaise != 0 || o.TaxServicePaise != 0
 }
 
 // EffectiveFoodPaise is the food the customer actually paid for: list price less
@@ -179,13 +193,7 @@ func ComputeCancellationRefund(o CancellationOrder, foodRefundPct int) Cancellat
 	if !o.Dispatched {
 		deliveryRefund = o.DeliveryPaise
 	}
-	// Tax refunds in proportion to the refunded pre-tax amount over the total
-	// pre-tax base — the platform fee's share of tax is therefore always kept.
-	preTaxTotal := foodPaise + o.DeliveryPaise + o.PlatformFeePaise
-	taxRefund := 0
-	if preTaxTotal > 0 {
-		taxRefund = o.TaxPaise * (foodRefund + deliveryRefund) / preTaxTotal
-	}
+	taxRefund := refundableTax(o, foodPaise, foodRefund, deliveryRefund)
 
 	total := foodRefund + deliveryRefund + taxRefund
 	vendorKept := foodPaise - foodRefund
@@ -199,4 +207,33 @@ func ComputeCancellationRefund(o CancellationOrder, foodRefundPct int) Cancellat
 		// computed as the remainder so conservation holds exactly (no rounding drift).
 		PlatformKept: o.GrandPaise() - total - vendorKept,
 	}
+}
+
+// refundableTax is the tax attributable to the part of the order being given
+// back — and ONLY that part.
+//
+// With the per-supply snapshot it is exact: the food's own tax scaled by how much
+// food is refunded, plus the delivery's own tax when the delivery is refunded.
+// The platform fee's tax is never touched here, because the fee is kept and that
+// supply happened.
+//
+// Without the snapshot (an order priced before tax was split) the old
+// proportional model stands: it is correct whenever every supply shared one rate,
+// which is exactly the condition under which those orders were charged.
+func refundableTax(o CancellationOrder, foodPaise, foodRefund, deliveryRefund int) int {
+	if o.hasSupplyTax() {
+		tax := 0
+		if foodPaise > 0 {
+			tax += o.TaxFoodPaise * foodRefund / foodPaise
+		}
+		if deliveryRefund > 0 && o.DeliveryPaise > 0 {
+			tax += o.TaxDeliveryPaise * deliveryRefund / o.DeliveryPaise
+		}
+		return tax
+	}
+	preTaxTotal := foodPaise + o.DeliveryPaise + o.PlatformFeePaise
+	if preTaxTotal <= 0 {
+		return 0
+	}
+	return o.TaxPaise * (foodRefund + deliveryRefund) / preTaxTotal
 }

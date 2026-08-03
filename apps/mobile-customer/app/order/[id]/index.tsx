@@ -323,10 +323,11 @@ export default function OrderDetailScreen() {
     ? tracking?.delivery?.externalTrackingUrl
     : undefined;
 
-  const subtotal = order.items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0,
-  );
+  // The API's own subtotal, so this breakdown and the receipt agree even when a
+  // line was cancelled; the item sum is the fallback for a cached older payload.
+  const subtotal =
+    order.subtotal ??
+    order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   // Pickup orders have no delivery address/fee — the customer collects from the
   // chef. Use the REAL fee breakdown from the API rather than deriving a single
   // "delivery fee" as (total − subtotal), which mislabels service fee + tax.
@@ -341,7 +342,11 @@ export default function OrderDetailScreen() {
       ? Math.round((deliveryFee - order.deliveryFeeFinal) * 100) / 100
       : 0;
   const platformFee = order.platformFee ?? 0;
-  const tax = order.tax ?? 0;
+  // The API's split tax rows (CGST+SGST / IGST), the same ones the receipt and
+  // the PDF print. A single "Tax" row here contradicted both.
+  const taxLines = order.taxLines ?? [];
+  const tip = order.tip ?? 0;
+  const rounding = order.rounding ?? 0;
   const discount = order.discount ?? 0;
   // Chef pickup address comes from TrackOrder (only populated for pickup orders).
   const pickupAddress = tracking?.chef?.address?.trim();
@@ -971,16 +976,28 @@ export default function OrderDetailScreen() {
               <Text style={styles.priceValue}>₹{platformFee.toFixed(2)}</Text>
             </View>
           ) : null}
-          {tax > 0 ? (
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Tax</Text>
-              <Text style={styles.priceValue}>₹{tax.toFixed(2)}</Text>
+          {taxLines.map((t) => (
+            <View key={t.code} style={styles.priceRow}>
+              <Text style={styles.priceLabel}>{t.label}</Text>
+              <Text style={styles.priceValue}>₹{t.amount.toFixed(2)}</Text>
             </View>
-          ) : null}
+          ))}
           {discount > 0 ? (
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Discount</Text>
               <Text style={styles.priceValue}>−₹{discount.toFixed(2)}</Text>
+            </View>
+          ) : null}
+          {tip > 0 ? (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Tip</Text>
+              <Text style={styles.priceValue}>₹{tip.toFixed(2)}</Text>
+            </View>
+          ) : null}
+          {rounding !== 0 ? (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Rounding</Text>
+              <Text style={styles.priceValue}>₹{rounding.toFixed(2)}</Text>
             </View>
           ) : null}
           {/* Total row — hairline rule above, heavier weight. Total stays the

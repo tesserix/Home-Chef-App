@@ -500,29 +500,33 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	deliveryFee = services.QuoteOrderDeliveryFee(chef, fulfillment, deliveryAddr.Latitude, deliveryAddr.Longitude, deliveryAddr.City, deliveryCountry)
 
 	taxRule := services.ResolveTaxRate(deliveryCountry, deliveryAddr.State)
-	// Tax base: subtotal + deliveryFee + platformFee, after promo discount.
-	// Tip is excluded (direct pass-through to chef/driver).
-	taxBase := subtotal + deliveryFee + platformFee - discount
-	if taxBase < 0 {
-		taxBase = 0
-	}
-	var tax float64
-	if taxRule.Inclusive {
-		// Inclusive rate: the base already contains the tax; back it out
-		// for line-item display but don't add it to total.
-		tax = taxBase - (taxBase / (1 + taxRule.Rate/100.0))
-	} else {
-		tax = taxBase * (taxRule.Rate / 100.0)
-	}
-
-	// Order total. For inclusive-tax jurisdictions (EU VAT etc.) the tax
-	// line is informational — it's part of taxBase already, so we don't
-	// add it again or the customer would be charged twice.
-	var total float64
-	if taxRule.Inclusive {
-		total = subtotal + deliveryFee + platformFee + tip - discount
-	} else {
-		total = subtotal + deliveryFee + platformFee + tax + tip - discount
+	// One pricing function for the whole platform (models/pricing.go). It rounds
+	// every component to paise BEFORE summing, so the total charged is the exact
+	// sum of the lines the customer is shown — this used to store raw products
+	// like 240 × 4.99% = 11.976 and the receipt's lines then out-summed its own
+	// total by a paise. Tip is excluded from the tax base (pass-through).
+	// Which delivery rule applies is decided ONCE, here, and frozen on the order —
+	// the chef only picks the carrier at Mark Ready, and a later switch must not
+	// restate a tax invoice already issued (services/gst.go).
+	deliveryByPlatform := services.DeliveryByPlatform(fulfillment, services.ThirdPartyDeliveryEnabled())
+	rates := taxRule.ComponentRates(deliveryByPlatform)
+	pricing := models.ComputeOrderPricing(models.PricingInput{
+		Subtotal:    subtotal,
+		DeliveryFee: deliveryFee,
+		PlatformFee: platformFee,
+		Discount:    discount,
+		Tip:         tip,
+		Rates:       rates,
+		Country:     deliveryCountry,
+		IntraState:  services.IsIntraStateSupply(chef.State, deliveryAddr.State),
+	})
+	deliveryFee, platformFee = pricing.DeliveryFee, pricing.PlatformFee
+	subtotal, discount, tip = pricing.Subtotal, pricing.Discount, pricing.Tip
+	tax, total := pricing.Tax, pricing.Total
+	// The chef is billed their share of the discount ACTUALLY applied, which
+	// pricing caps at the charge — never of a promo larger than the order.
+	if chefFundedDiscount > discount {
+		chefFundedDiscount = discount
 	}
 
 	// If the admin has configured delivery zones, enforce coverage. When no
@@ -612,6 +616,17 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		Tax:             tax,
 		TaxRate:         taxRule.Rate,
 		TaxName:         taxRule.TaxName,
+		TaxInclusive:    taxRule.Inclusive,
+		// Freeze the rule per supply, so a rate the admin edits tomorrow cannot
+		// restate this invoice or misprice its refund.
+		TaxFood:         pricing.TaxFood,
+		TaxService:      pricing.TaxService,
+		TaxDelivery:     pricing.TaxDelivery,
+		TaxRateFood:           rates.Food,
+		TaxRateService:        rates.Service,
+		TaxRateDelivery:       rates.Delivery,
+		TaxServiceInclusive:   rates.ServiceInclusive,
+		TaxDeliveryByPlatform: rates.DeliveryByPlatform,
 		Tip:             tip,
 		// #964: route the tip to the chef. `Tip` is the LEGACY total column
 		// (models/order.go) and nothing in the payout stack reads it — earnings,

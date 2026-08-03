@@ -88,36 +88,19 @@ export default function OrderReceiptScreen() {
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-  const subtotal = (order?.items ?? []).reduce((s, it) => s + it.price * it.quantity, 0);
+  // Every figure below comes from the API's one breakdown (models/pricing.go),
+  // including the CGST/SGST split and the rounding row that makes the lines reach
+  // the total. This screen used to do its own arithmetic: it printed lines that
+  // summed to a paise MORE than the total underneath them, and compared the two
+  // state spellings as raw strings, so it could say IGST where the PDF said
+  // CGST+SGST for the same order.
+  const subtotal =
+    order?.subtotal ?? (order?.items ?? []).reduce((s, it) => s + it.price * it.quantity, 0);
   const deliveryFee = order?.deliveryFee ?? 0;
   const platformFee = order?.platformFee ?? 0;
-  const tax = order?.tax ?? 0;
-  // GST-compliant split (#invoice): an Indian supply shows CGST+SGST (intra-state:
-  // chef state == delivery state) or IGST (inter-state); no chef state → single
-  // "Tax" line. rate labels come from the frozen order tax rate.
-  const taxRate = order?.taxRate ?? 0;
-  const chefState = (order?.chef?.state ?? '').trim().toLowerCase();
-  const dropState = (order?.deliveryAddress?.state ?? '').trim().toLowerCase();
-  const isIndiaTax = !!chefState; // chef state present ⇒ IN supplier
-  const taxIntra = !chefState || !dropState || chefState === dropState;
-  const trimPct = (n: number) => n.toFixed(2).replace(/\.?0+$/, '');
-  // Only claim a percentage when we actually froze one. Orders written before the
-  // meal-plan path snapshotted TaxRate carry a non-zero Tax with taxRate 0, which
-  // rendered as a flatly false "IGST (0%) ₹11.20". With no rate, name the tax but
-  // state no rate — never print a 0% that the amount contradicts.
-  const hasRate = taxRate > 0;
-  const pct = (r: number) => (hasRate ? ` (${trimPct(r)}%)` : '');
-  const taxLines: Array<{ label: string; amt: number }> =
-    tax <= 0
-      ? []
-      : isIndiaTax
-        ? taxIntra
-          ? [
-              { label: `CGST${pct(taxRate / 2)}`, amt: tax / 2 },
-              { label: `SGST${pct(taxRate / 2)}`, amt: tax - tax / 2 },
-            ]
-          : [{ label: `IGST${pct(taxRate)}`, amt: tax }]
-        : [{ label: 'Tax', amt: tax }];
+  const tip = order?.tip ?? 0;
+  const taxLines = order?.taxLines ?? [];
+  const rounding = order?.rounding ?? 0;
   const discount = order?.discount ?? 0;
   const refund = order?.refundAmount ?? 0;
 
@@ -147,8 +130,12 @@ export default function OrderReceiptScreen() {
       `Subtotal: ${money(subtotal)}`,
       deliveryFee > 0 ? `Delivery: ${money(deliveryFee)}` : '',
       platformFee > 0 ? `Platform fee: ${money(platformFee)}` : '',
-      tax > 0 ? `Tax: ${money(tax)}` : '',
+      // Same lines as the rendered receipt — a shared copy that summarised the
+      // GST as one "Tax" row disagreed with the document it was sharing.
+      ...taxLines.map((t) => `${t.label}: ${money(t.amount)}`),
       discount > 0 ? `Discount: -${money(discount)}` : '',
+      tip > 0 ? `Tip: ${money(tip)}` : '',
+      rounding !== 0 ? `Rounding: ${money(rounding)}` : '',
       `Total: ${money(order.totalAmount)}`,
       refund > 0 ? `Refunded: -${money(refund)}` : '',
     ].filter(Boolean);
@@ -270,9 +257,11 @@ export default function OrderReceiptScreen() {
             {deliveryFee > 0 ? <Line label="Delivery" value={money(deliveryFee)} /> : null}
             {platformFee > 0 ? <Line label="Platform fee" value={money(platformFee)} /> : null}
             {taxLines.map((t) => (
-              <Line key={t.label} label={t.label} value={money(t.amt)} />
+              <Line key={t.code} label={t.label} value={money(t.amount)} />
             ))}
             {discount > 0 ? <Line label="Discount" value={`-${money(discount)}`} /> : null}
+            {tip > 0 ? <Line label="Tip" value={money(tip)} /> : null}
+            {rounding !== 0 ? <Line label="Rounding" value={money(rounding)} /> : null}
             <Line label="Total" value={money(order.totalAmount)} bold />
             {refund > 0 ? (
               <Line label="Refunded" value={`-${money(refund)}`} refund />

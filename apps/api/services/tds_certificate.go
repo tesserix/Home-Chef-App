@@ -91,7 +91,7 @@ func GenerateTDSCertificatePDF(chefID uuid.UUID, fyStartYear int) ([]byte, strin
 	for _, r := range rows {
 		e := ComputeOrderEarnings(EarningsInput{
 			ItemRevenue:        r.ItemRevenue,
-			Tax:                r.Tax,
+			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
 			ChefFundedDiscount: r.ChefFundedDiscount,
 			DeliveryFee:        r.DeliveryFee,
 			ChefTip:            r.ChefTip,
