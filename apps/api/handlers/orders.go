@@ -577,21 +577,34 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		// Snapshot the kitchen's mode onto the order. From here on every gateway
 		// operation for this order reads order.Mode — never the chef's current
 		// mode, which an admin may flip at any time.
-		ModePartition:             services.PartitionForChef(&chef),
-		OrderNumber:               orderNumber,
-		CustomerID:                userID,
-		ChefID:                    chef.ID,
-		PaymentProvider:           orderProvider,
-		Currency:                  orderCurrency,
-		Status:                    models.OrderStatusPending,
-		PaymentStatus:             models.PaymentPending,
-		Subtotal:                  subtotal,
-		DeliveryFee:               deliveryFee,
-		PlatformFee:               platformFee,
-		Tax:                       tax,
-		TaxRate:                   taxRule.Rate,
-		TaxName:                   taxRule.TaxName,
-		Tip:                       tip,
+		ModePartition:   services.PartitionForChef(&chef),
+		OrderNumber:     orderNumber,
+		CustomerID:      userID,
+		ChefID:          chef.ID,
+		PaymentProvider: orderProvider,
+		Currency:        orderCurrency,
+		Status:          models.OrderStatusPending,
+		PaymentStatus:   models.PaymentPending,
+		Subtotal:        subtotal,
+		DeliveryFee:     deliveryFee,
+		PlatformFee:     platformFee,
+		Tax:             tax,
+		TaxRate:         taxRule.Rate,
+		TaxName:         taxRule.TaxName,
+		Tip:             tip,
+		// #964: route the tip to the chef. `Tip` is the LEGACY total column
+		// (models/order.go) and nothing in the payout stack reads it — earnings,
+		// the weekly statement, the FY statement, the statement PDF, the TDS
+		// certificate and the payout queue all read `chef_tip`, which nothing ever
+		// wrote. Every tip was therefore charged to the customer, carried in
+		// order.total, and paid to nobody.
+		//
+		// 100% goes to the chef because that is exactly what the checkout screen
+		// promises the customer ("100% of your tip goes to the home chef" —
+		// apps/mobile-customer/app/checkout.tsx). DriverTip stays 0: the client
+		// sends a single `tip` and offers no rider split at checkout. If a split is
+		// ever introduced, take it from the request rather than re-dividing here.
+		ChefTip:                   tip,
 		Discount:                  discount,
 		ChefFundedDiscount:        chefFundedDiscount,
 		Total:                     total,

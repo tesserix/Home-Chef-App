@@ -85,6 +85,10 @@ func runPayoutReconcileScan(_ context.Context) {
 	if df := reconcileStrandedDeliveryFailures(); df > 0 {
 		log.Printf("payout-reconcile: froze %d stranded delivery-failure order(s)", df)
 	}
+
+	// #964: settle tips that were charged before checkout wrote chef_tip. Drains to
+	// a no-op once no such order remains, so it costs one indexed query per run.
+	BackfillChefTips()
 	if mp := reconcileStrandedMealPlanDayFailures(); mp > 0 {
 		log.Printf("payout-reconcile: froze %d stranded meal-plan-day delivery-failure(s)", mp)
 	}
