@@ -11,6 +11,8 @@ package handlers
 // because it tells you what someone once believed the system does.
 
 import (
+	"fmt"
+	"math"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -47,9 +49,12 @@ type simulatedScenario struct {
 	Fulfillment string              `json:"fulfillment"`
 	Label       string              `json:"label"`
 	Pricing     models.OrderPricing `json:"pricing"`
-	Rates       models.TaxRates     `json:"rates"`
-	Gateway     gatewayCost         `json:"gateway"`
-	Refunds     []simulatedRefund   `json:"refunds"`
+	// Validations are the invariants checked on THIS scenario, so the admin sees
+	// that the numbers hold rather than being asked to take it on trust.
+	Validations []validationCheck `json:"validations"`
+	Rates       models.TaxRates   `json:"rates"`
+	Gateway     gatewayCost       `json:"gateway"`
+	Refunds     []simulatedRefund `json:"refunds"`
 }
 
 type gatewayCost struct {
@@ -77,8 +82,17 @@ type simulatedRefund struct {
 	// PlatformMargin is what the platform is left with once the gateway fee (sunk
 	// at capture, never returned) is taken off what it kept.
 	PlatformMargin float64 `json:"platformMargin"`
+	// TaxRefundFood / TaxRefundDelivery break the credit note down by supply. The
+	// platform fee's tax never appears: the fee is kept, that supply happened, and
+	// its tax cannot be credit-noted.
+	TaxRefundFood     float64 `json:"taxRefundFood"`
+	TaxRefundDelivery float64 `json:"taxRefundDelivery"`
+	TaxKeptOnFee      float64 `json:"taxKeptOnFee"`
 	// Conserves is the invariant: nothing appears or disappears.
 	Conserves bool `json:"conserves"`
+	// Warnings are conditions worth an operator's attention — a refund that costs
+	// the platform money, or tax handed back that cannot be reclaimed.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // SimulatePricing models an order end to end at the CURRENT configuration.
@@ -150,13 +164,15 @@ func (h *PricingSimulatorHandler) SimulatePricing(c *gin.Context) {
 			IntraState:  intraState,
 		})
 		gw := computeGatewayCost(pricing.Total, gatewayPct, rates.Service > rates.Food)
+		refunds := simulateRefunds(pricing, tiers, gw.Real)
 		scenarios = append(scenarios, simulatedScenario{
 			Fulfillment: string(m.fulfillment),
 			Label:       m.label,
 			Pricing:     pricing,
 			Rates:       rates,
 			Gateway:     gw,
-			Refunds:     simulateRefunds(pricing, tiers, gw.Real),
+			Refunds:     refunds,
+			Validations: validateScenario(pricing, refunds),
 		})
 	}
 
@@ -175,6 +191,69 @@ func (h *PricingSimulatorHandler) SimulatePricing(c *gin.Context) {
 // computeGatewayCost models the MDR. reclaimable is true when the platform has a
 // standard-rated output supply to set the gateway's own tax against — which is
 // precisely what charging the platform fee above the restaurant rate creates.
+// validationCheck is one asserted property of a scenario, reported rather than
+// merely assumed. The admin page shows these so a rate change that breaks an
+// invariant is visible immediately, not at the next reconciliation.
+type validationCheck struct {
+	Name   string `json:"name"`
+	Passed bool   `json:"passed"`
+	Detail string `json:"detail"`
+}
+
+// validateScenario re-checks, on the produced numbers, the properties the whole
+// pricing model is supposed to guarantee.
+func validateScenario(p models.OrderPricing, refunds []simulatedRefund) []validationCheck {
+	sum := func(ls []models.TaxLine) float64 {
+		var t float64
+		for _, l := range ls {
+			t = models.RoundAmount(t + l.Amount)
+		}
+		return t
+	}
+	rows := models.RoundAmount(p.Subtotal + p.DeliveryFee + p.PlatformFee - p.Discount + p.Tip + p.Tax + p.Rounding)
+	parts := models.RoundAmount(p.TaxFood + p.TaxService + p.TaxDelivery)
+
+	checks := []validationCheck{
+		{"Rows add up to the total", rows == p.Total,
+			fmt.Sprintf("rows %.2f vs total %.2f", rows, p.Total)},
+		{"Tax per supply sums to the tax", parts == models.RoundAmount(p.Tax),
+			fmt.Sprintf("food %.2f + fee %.2f + delivery %.2f = %.2f vs %.2f", p.TaxFood, p.TaxService, p.TaxDelivery, parts, p.Tax)},
+		{"Customer view sums to the tax", sum(p.TaxLines) == models.RoundAmount(p.Tax),
+			fmt.Sprintf("%d rows totalling %.2f", len(p.TaxLines), sum(p.TaxLines))},
+		{"Invoice view sums to the tax", sum(p.TaxBreakdown) == models.RoundAmount(p.Tax),
+			fmt.Sprintf("%d rows totalling %.2f", len(p.TaxBreakdown), sum(p.TaxBreakdown))},
+		{"Every figure is two decimals", twoDecimals(p),
+			"no amount carries a third decimal place"},
+	}
+
+	conserved := true
+	for _, r := range refunds {
+		if !r.Conserves {
+			conserved = false
+		}
+	}
+	checks = append(checks, validationCheck{
+		"Every refund conserves money", conserved,
+		"refund + chef + platform equals the order total at every tier",
+	})
+	return checks
+}
+
+// twoDecimals reports whether every money figure on the breakdown is whole paise.
+func twoDecimals(p models.OrderPricing) bool {
+	vals := []float64{p.Subtotal, p.DeliveryFee, p.PlatformFee, p.Discount, p.Tip,
+		p.Tax, p.TaxFood, p.TaxService, p.TaxDelivery, p.Rounding, p.Total}
+	for _, l := range p.TaxBreakdown {
+		vals = append(vals, l.Amount)
+	}
+	for _, v := range vals {
+		if math.Abs(v*100-math.Round(v*100)) > 1e-6 {
+			return false
+		}
+	}
+	return true
+}
+
 func computeGatewayCost(total, percent float64, reclaimable bool) gatewayCost {
 	fee := models.RoundAmount(total * percent / 100)
 	taxOnFee := models.RoundAmount(fee * 0.18)
@@ -216,6 +295,28 @@ func simulateRefunds(p models.OrderPricing, tiers []int, gatewayReal float64) []
 				label += " (rider already dispatched)"
 			}
 			platformKeeps := services.FromPaise(r.PlatformKept)
+
+			// The credit note, split the way it will actually be raised: the tax on
+			// the food refunded, plus the delivery's when the delivery is refunded.
+			taxFood, taxDelivery := 0.0, 0.0
+			if p.Subtotal > 0 {
+				taxFood = models.RoundAmount(p.TaxFood * services.FromPaise(r.FoodRefund) / p.Subtotal)
+			}
+			if r.DeliveryRefund > 0 {
+				taxDelivery = p.TaxDelivery
+			}
+
+			margin := models.RoundAmount(platformKeeps - p.TaxService - gatewayReal)
+			warnings := []string{}
+			if margin < 0 {
+				warnings = append(warnings,
+					"This refund costs the platform money: the gateway fee is sunk at capture and is not returned. The chef-fault gateway-fee levy recovers it.")
+			}
+			if !(r.Total+r.VendorKept+r.PlatformKept == o.GrandPaise()) {
+				warnings = append(warnings,
+					"Money is not conserved — refund + chef + platform does not equal the order total. This is a bug, not a policy.")
+			}
+
 			out = append(out, simulatedRefund{
 				Label:          label,
 				FoodRefundPct:  pct,
@@ -229,8 +330,12 @@ func simulateRefunds(p models.OrderPricing, tiers []int, gatewayReal float64) []
 				CreditNote:     services.FromPaise(r.TaxRefund),
 				// The gateway fee is sunk at capture whatever is refunded, so it comes
 				// off whatever the platform was left holding.
-				PlatformMargin: models.RoundAmount(platformKeeps - p.TaxService - gatewayReal),
-				Conserves:      r.Total+r.VendorKept+r.PlatformKept == o.GrandPaise(),
+				PlatformMargin:    margin,
+				TaxRefundFood:     taxFood,
+				TaxRefundDelivery: taxDelivery,
+				TaxKeptOnFee:      p.TaxService,
+				Conserves:         r.Total+r.VendorKept+r.PlatformKept == o.GrandPaise(),
+				Warnings:          warnings,
 			})
 		}
 	}

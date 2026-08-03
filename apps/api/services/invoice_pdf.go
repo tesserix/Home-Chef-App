@@ -231,7 +231,9 @@ func addInvoiceTotals(m core.Maroto, order *models.Order) {
 	if p.PlatformFee > 0 {
 		rows = append(rows, totalRow("Platform fee", p.PlatformFee, false))
 	}
-	for _, line := range p.TaxLines {
+	// The per-RATE breakdown, not the summary the apps show: this is the tax
+	// invoice, and Rule 46 wants the rate and amount of each head stated.
+	for _, line := range p.TaxBreakdown {
 		rows = append(rows, totalRow(line.Label, line.Amount, false))
 	}
 	if p.Discount > 0 {

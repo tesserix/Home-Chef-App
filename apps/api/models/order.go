@@ -462,6 +462,10 @@ type OrderResponse struct {
 	// a single foreign tax line. Built here so the app, the web page and the PDF
 	// cannot each reach a different answer; clients print Label and Amount as-is.
 	TaxLines []TaxLine `json:"taxLines,omitempty"`
+	// TaxBreakdown is the same tax stated per RATE, naming what each is charged
+	// on — the form a tax invoice must take when one bill carries two rates. The
+	// PDF and the admin render this; the apps render the summary above.
+	TaxBreakdown []TaxLine `json:"taxBreakdown,omitempty"`
 	// Rounding is the paise needed to make the lines above sum to Total. Non-zero
 	// only for orders placed before the money was rounded at creation.
 	Rounding float64 `json:"rounding,omitempty"`
@@ -740,6 +744,7 @@ func (o *Order) ToResponse() OrderResponse {
 		TaxRate:          o.TaxRate,
 		TaxName:          o.TaxName,
 		TaxLines:         pricing.TaxLines,
+		TaxBreakdown:     pricing.TaxBreakdown,
 		Rounding:         pricing.Rounding,
 		Tip:              pricing.Tip,
 		ChefTip:          o.ChefTip,

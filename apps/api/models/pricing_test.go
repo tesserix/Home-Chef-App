@@ -138,7 +138,7 @@ func TestComputeOrderPricing_InclusiveTaxComesOutOfTheAmount(t *testing.T) {
 	require.Equal(t, 100.0, p.Total, "an inclusive rate cannot change what the customer pays")
 	require.Equal(t, 83.33, p.Subtotal, "the displayed line is the net — the tax row states the rest")
 	require.Equal(t, 16.67, p.Tax)
-	require.Equal(t, "VAT", p.TaxLines[0].Label)
+	require.Equal(t, "VAT (20%)", p.TaxLines[0].Label)
 	assertFoots(t, p, false)
 }
 
@@ -212,11 +212,17 @@ func TestBuildTaxLines_DivergentRatesSplitPerRate(t *testing.T) {
 	in.Rates = TaxRates{Name: "GST", Food: 5, Service: 18, Delivery: 18}
 	p := ComputeOrderPricing(in)
 
-	require.Len(t, p.TaxLines, 4, "one CGST/SGST pair for the food, one for the 18% supplies")
-	require.Equal(t, "CGST (2.5%) on food", p.TaxLines[0].Label)
-	require.Equal(t, "SGST (2.5%) on food", p.TaxLines[1].Label)
-	require.Equal(t, "CGST (9%) on delivery + platform fee", p.TaxLines[2].Label)
-	require.Equal(t, "SGST (9%) on delivery + platform fee", p.TaxLines[3].Label)
+	require.Len(t, p.TaxBreakdown, 4, "one CGST/SGST pair for the food, one for the 18% supplies")
+	require.Equal(t, "CGST (2.5%) on food", p.TaxBreakdown[0].Label)
+	require.Equal(t, "SGST (2.5%) on food", p.TaxBreakdown[1].Label)
+	require.Equal(t, "CGST (9%) on delivery + platform fee", p.TaxBreakdown[2].Label)
+	require.Equal(t, "SGST (9%) on delivery + platform fee", p.TaxBreakdown[3].Label)
+
+	// The customer sees one row per head, with no rate — because there is no
+	// single CGST percentage once two supplies are rated differently.
+	require.Len(t, p.TaxLines, 2, "a phone receipt does not need four tax rows")
+	require.Equal(t, "CGST", p.TaxLines[0].Label)
+	require.Equal(t, "SGST", p.TaxLines[1].Label)
 
 	require.Equal(t, 12.0, p.TaxFood, "240 at 5%")
 	require.Equal(t, 7.2, p.TaxDelivery, "40 at 18%")
@@ -256,4 +262,46 @@ func TestIntraStateSupply_BlankSideDefaultsToIntra(t *testing.T) {
 	require.True(t, IntraStateSupply("Odisha", ""))
 	require.True(t, IntraStateSupply("Odisha", " odisha "))
 	require.False(t, IntraStateSupply("Odisha", "Maharashtra"))
+}
+
+// The two views must never disagree about the money — only about how much detail
+// they show. This is the whole safety property of having two.
+func TestSummaryAndBreakdownAlwaysAgreeOnTheMoney(t *testing.T) {
+	rates := []TaxRates{
+		indiaRates(5),
+		{Name: "GST", Food: 5, Service: 18, ServiceInclusive: true, Delivery: 5},
+		{Name: "GST", Food: 5, Service: 18, ServiceInclusive: true, Delivery: 18, DeliveryByPlatform: true},
+		{Name: "VAT", Food: 20, Service: 20, Delivery: 20, FoodInclusive: true, ServiceInclusive: true},
+	}
+	for _, r := range rates {
+		for _, intra := range []bool{true, false} {
+			for _, sub := range []float64{500, 333.33, 77.77} {
+				p := ComputeOrderPricing(PricingInput{
+					Subtotal: sub, DeliveryFee: 39, PlatformFee: sub * 4.99 / 100, Tip: 7.77,
+					Rates: r, Country: "IN", IntraState: intra,
+				})
+				var summary, breakdown float64
+				for _, l := range p.TaxLines {
+					summary = RoundAmount(summary + l.Amount)
+				}
+				for _, l := range p.TaxBreakdown {
+					breakdown = RoundAmount(breakdown + l.Amount)
+				}
+				require.InDelta(t, p.Tax, summary, 1e-9, "the customer view must sum to the tax")
+				require.InDelta(t, p.Tax, breakdown, 1e-9, "so must the invoice view")
+				require.LessOrEqual(t, len(p.TaxLines), len(p.TaxBreakdown),
+					"the summary can never be longer than what it summarises")
+			}
+		}
+	}
+}
+
+// A single rate keeps its percentage in the summary — there is nothing ambiguous
+// about it, and dropping it would make the simple view less informative for the
+// case that covers almost every order.
+func TestSummaryKeepsTheRateWhenThereIsOnlyOne(t *testing.T) {
+	p := ComputeOrderPricing(indiaGST(500, 39, 0, 0))
+	require.Len(t, p.TaxLines, 2)
+	require.Equal(t, "CGST (2.5%)", p.TaxLines[0].Label)
+	require.Equal(t, "SGST (2.5%)", p.TaxLines[1].Label)
 }

@@ -85,10 +85,17 @@ type OrderPricing struct {
 	Tax         float64 `json:"tax"`
 	// Tax per supply, because the food (restaurant service) and the platform's own
 	// fee are not the same supply and need not share a rate. They always sum to Tax.
-	TaxFood     float64   `json:"taxFood"`
-	TaxService  float64   `json:"taxService"`
-	TaxDelivery float64   `json:"taxDelivery"`
-	TaxLines    []TaxLine `json:"taxLines"`
+	TaxFood     float64 `json:"taxFood"`
+	TaxService  float64 `json:"taxService"`
+	TaxDelivery float64 `json:"taxDelivery"`
+	// TaxLines is the CUSTOMER view: one row per tax head, and nothing else. A
+	// receipt on a phone answers "how much GST did I pay", and answering it with
+	// four rows because two supplies carry different rates is a worse answer.
+	TaxLines []TaxLine `json:"taxLines"`
+	// TaxBreakdown is the same tax stated per RATE, naming what each is charged
+	// on. This is the form a tax invoice must take once one bill carries two
+	// rates, so it is what the PDF and the admin render. Both always sum to Tax.
+	TaxBreakdown []TaxLine `json:"taxBreakdown"`
 	// Rounding reconciles a pre-rounding order's stored total to the sum of its
 	// displayed lines. Always 0 for anything ComputeOrderPricing produced.
 	Rounding float64 `json:"rounding,omitempty"`
@@ -138,7 +145,8 @@ func ComputeOrderPricing(in PricingInput) OrderPricing {
 	// Tip rides in the total but never in the tax base — it is a pass-through to
 	// the chef or rider, not consideration for anybody's supply.
 	p.Total = RoundAmount(foodNet + deliveryNet + feeNet + p.Tax + p.Tip)
-	p.TaxLines = BuildTaxLines(p, in)
+	p.TaxBreakdown = BuildTaxLines(p, in)
+	p.TaxLines = SummariseTaxLines(p.TaxBreakdown)
 	return p
 }
 
@@ -208,8 +216,73 @@ func PresentOrderPricing(in PricingInput, charged TaxSnapshot, chargedTotal floa
 	// ComputeOrderPricing), so the tax always adds — no inclusive special case.
 	lines := p.Subtotal + p.DeliveryFee + p.PlatformFee - p.Discount + p.Tip + p.Tax
 	p.Rounding = RoundAmount(p.Total - lines)
-	p.TaxLines = BuildTaxLines(p, in)
+	p.TaxBreakdown = BuildTaxLines(p, in)
+	p.TaxLines = SummariseTaxLines(p.TaxBreakdown)
 	return p
+}
+
+// SummariseTaxLines collapses the per-rate breakdown into one row per tax head —
+// the customer view.
+//
+// A rate is only printed when every row under that head shares it: with food at
+// 5% and the platform fee at 18% there is no single CGST percentage, and stating
+// one would be false. The amounts still sum to exactly the same tax, so the
+// simple view and the invoice can never disagree about the money — only about how
+// much detail they show.
+func SummariseTaxLines(breakdown []TaxLine) []TaxLine {
+	if len(breakdown) == 0 {
+		return nil
+	}
+	order := []string{}
+	byCode := map[string]*TaxLine{}
+	mixed := map[string]bool{}
+
+	for _, l := range breakdown {
+		head, ok := byCode[l.Code]
+		if !ok {
+			// Copy so the summary never aliases the breakdown's row.
+			cp := l
+			cp.Label = taxHeadName(l)
+			byCode[l.Code] = &cp
+			order = append(order, l.Code)
+			continue
+		}
+		head.Amount = RoundAmount(head.Amount + l.Amount)
+		if head.Rate != l.Rate {
+			mixed[l.Code] = true
+		}
+	}
+
+	out := make([]TaxLine, 0, len(order))
+	for _, code := range order {
+		l := *byCode[code]
+		if mixed[code] {
+			l.Rate = 0 // no single rate applies
+		} else {
+			l.Label = taxLineLabel(l.Label, l.Rate, l.Rate > 0)
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
+// taxHeadName recovers the bare head ("CGST") from a breakdown row's label,
+// which carries the rate and often what it is charged on.
+func taxHeadName(l TaxLine) string {
+	switch l.Code {
+	case TaxLineCGST:
+		return "CGST"
+	case TaxLineSGST:
+		return "SGST"
+	case TaxLineIGST:
+		return "IGST"
+	}
+	// A foreign single-tax line has no fixed head; keep its configured name,
+	// minus any " on …" suffix the breakdown added.
+	if i := strings.Index(l.Label, " on "); i > 0 {
+		return l.Label[:i]
+	}
+	return l.Label
 }
 
 // taxGroup is the supplies sharing one rate — the unit an invoice states a tax
