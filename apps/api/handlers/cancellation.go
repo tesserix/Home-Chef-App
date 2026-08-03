@@ -39,14 +39,14 @@ func orderDispatched(status models.OrderStatus) bool {
 // cap). Callers apply the cap with the basis appropriate to their path (see snapshotFor and the
 // admin disputed-adjust in admin_cancellation.go).
 func uncappedSnapshot(order *models.Order, pct int) services.CancellationRefund {
-	return services.ComputeCancellationRefund(
-		services.ToPaise(order.Subtotal),               // food (vendor)
-		services.ToPaise(order.EffectiveDeliveryFee()), // delivery (post-#703 effective)
-		services.ToPaise(order.PlatformFee),            // platform fee — always kept
-		services.ToPaise(order.Tax),                    // tax
-		orderDispatched(order.Status),
-		pct,
-	)
+	return services.ComputeCancellationRefund(services.CancellationOrder{
+		FoodPaise:        services.ToPaise(order.Subtotal),               // food (vendor), list price
+		DeliveryPaise:    services.ToPaise(order.EffectiveDeliveryFee()), // delivery (post-#703 effective)
+		PlatformFeePaise: services.ToPaise(order.PlatformFee),            // platform fee — always kept
+		TaxPaise:         services.ToPaise(order.Tax),                    // tax
+		DiscountPaise:    services.ToPaise(order.Discount),               // #962: the promo the customer never paid
+		Dispatched:       orderDispatched(order.Status),
+	}, pct)
 }
 
 // remainingRefundablePaise is the order's still-refundable balance (Total − already-refunded), the

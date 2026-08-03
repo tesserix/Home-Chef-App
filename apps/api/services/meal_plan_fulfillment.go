@@ -241,6 +241,16 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		order := models.Order{
+			// #963: inherit the plan's partition. Without this the day order takes the
+			// column default and NormalizeMode's "anything not test becomes live"
+			// asymmetry silently makes a TEST plan spawn LIVE orders — which leaks test
+			// rows into the statement/earnings/reconcile paths mode exists to exclude,
+			// and would route a refund for a test-captured order to the live gateway.
+			// TestSessionID rides along so a session purge still collects them.
+			ModePartition: models.ModePartition{
+				Mode:          models.NormalizeMode(p.Mode),
+				TestSessionID: p.TestSessionID,
+			},
 			OrderNumber:               mealPlanOrderNumber(chefBusinessName(p.ChefID)),
 			CustomerID:                p.CustomerID,
 			ChefID:                    p.ChefID,

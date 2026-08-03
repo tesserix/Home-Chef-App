@@ -834,6 +834,12 @@ func (h *GroupOrderHandler) maybeConsolidate(groupID uuid.UUID) (bool, error) {
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		// Build the single consolidated Order from all participants' items.
 		order := models.Order{
+			// #963: inherit the group's partition, same reasoning as the meal-plan day
+			// order — a test group must not spawn a live consolidated order.
+			ModePartition: models.ModePartition{
+				Mode:          models.NormalizeMode(g.Mode),
+				TestSessionID: g.TestSessionID,
+			},
 			OrderNumber:               generateOrderNumber(chefName),
 			CustomerID:                g.HostID,
 			ChefID:                    g.ChefID,
