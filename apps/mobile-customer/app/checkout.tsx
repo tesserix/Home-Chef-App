@@ -63,6 +63,7 @@ import {
 } from '../hooks/useLocations';
 import { startOrderPayment } from '../lib/payment';
 import { friendlyErrorMessage } from '../lib/errors';
+import { paymentSecuredByLine } from '../lib/payment-provider';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { AddressLabelSelect } from '../components/address/AddressLabelSelect';
 import type { Address } from '../types/customer';
@@ -1736,7 +1737,7 @@ export default function CheckoutScreen() {
             </Text>
           </View>
           <Text className="text-xs text-charcoal-soft leading-5">
-            Payments secured by Razorpay (RBI-licensed). Refunds reach your original
+            {paymentSecuredByLine(quote?.paymentProvider)} Refunds reach your original
             payment method within 7 working days. See{' '}
             {/* Terms/refund links: coral, no underline per spec */}
             <Link href={'/refund' as Href} className="text-coral">

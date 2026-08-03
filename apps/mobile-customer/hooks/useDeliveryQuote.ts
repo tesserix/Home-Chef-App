@@ -67,6 +67,13 @@ export interface DeliveryQuote {
    *  from here — the screen does no money arithmetic of its own, which is what
    *  keeps what the customer sees and what they are charged in agreement. */
   credit?: CreditQuote;
+  /** The gateway that will actually take this payment, as RESOLVED by the server
+   *  (`SelectCheckoutGateway`) — not the chef's stored column, which the selection
+   *  may override. The RBI Payment Aggregator disclosure on checkout must name the
+   *  aggregator that processes the charge, so it has to come from the same
+   *  resolution the charge itself uses. The screen hardcoded "Razorpay" while
+   *  Cashfree took the money seconds later in the same flow (#933). */
+  paymentProvider?: string;
 }
 
 /** Why the loyalty row is capped, so the UI can explain the limit rather than
