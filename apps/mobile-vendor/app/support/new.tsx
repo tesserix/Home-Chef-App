@@ -136,10 +136,12 @@ export default function NewTicketScreen() {
       // the list, not this now-stale form.
       router.replace(`/support/${ticket.id}`);
     } catch (err: unknown) {
+      // Only the server's own message is fit to show; a raw native error
+      // ("Calling the 'setValueWithKeyAsync' function has failed…") means
+      // nothing to a chef.
       const msg =
         (err as { response?: { data?: { error?: string } } } | null)?.response
-          ?.data?.error ??
-        (err instanceof Error ? err.message : "Couldn't create ticket.");
+          ?.data?.error ?? "Couldn't create ticket. Please try again.";
       showToast({ message: msg, tone: 'error' });
     }
   }

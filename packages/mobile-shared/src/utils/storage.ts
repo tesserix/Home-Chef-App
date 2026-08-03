@@ -36,7 +36,7 @@ const memoryStore = new Map<string, string>();
 // rather than returning null — treating that as "no token" is what spuriously
 // signs the user out (#428). So: try the Keychain, retry once on throw, then
 // fall back to the in-memory copy.
-async function secureGet(key: string): Promise<string | null> {
+export async function secureGet(key: string): Promise<string | null> {
   try {
     const v = await SecureStore.getItemAsync(key);
     if (v != null) return v;
@@ -51,7 +51,7 @@ async function secureGet(key: string): Promise<string | null> {
   return memoryStore.get(key) ?? null;
 }
 
-async function secureSet(
+export async function secureSet(
   key: string,
   value: string,
   options?: SecureStore.SecureStoreOptions
@@ -64,7 +64,7 @@ async function secureSet(
   }
 }
 
-async function secureDelete(key: string): Promise<void> {
+export async function secureDelete(key: string): Promise<void> {
   memoryStore.delete(key);
   try {
     await SecureStore.deleteItemAsync(key);

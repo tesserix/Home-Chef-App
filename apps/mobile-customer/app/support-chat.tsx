@@ -7,7 +7,6 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
-import * as SecureStore from "expo-secure-store";
 
 import {
   createSupportClient,
@@ -19,6 +18,7 @@ import {
   type SupportTicketContext,
 } from "@homechef/mobile-shared/support";
 import { customerColors } from "@homechef/mobile-shared/theme";
+import { secureGet, secureSet } from "@homechef/mobile-shared/utils";
 import { refreshSession } from "@homechef/mobile-shared/auth";
 import { useToast } from "@homechef/mobile-shared/ui";
 import { api } from "../lib/api";
@@ -85,8 +85,8 @@ export default function SupportChatScreen() {
           // the layout auth guard routes back to login.
           useAuthStore.getState().logout();
         },
-        loadSessionToken: () => SecureStore.getItemAsync(SESSION_KEY),
-        saveSessionToken: (t) => SecureStore.setItemAsync(SESSION_KEY, t),
+        loadSessionToken: () => secureGet(SESSION_KEY),
+        saveSessionToken: (t) => secureSet(SESSION_KEY, t),
       }),
     [],
   );
