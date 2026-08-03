@@ -191,6 +191,41 @@ func SeedTaxRates() {
 			log.Printf("tax: seed failed for %s/%s: %v", s.Country, s.Region, result.Error)
 		}
 	}
+	adoptLegacyTaxIdentity()
 	InvalidateTaxCache()
 	log.Printf("tax: seeded %d baseline rules (existing admin edits preserved)", len(seeds))
+}
+
+// adoptLegacyTaxIdentity fills the columns that took over from the separate
+// per-country tax config this table replaced, on rows that predate them.
+//
+// Only the subscription rate and the registration label move: the food, service
+// and delivery percents are deliberately left unset so every component keeps
+// taking Rate — that is what orders were actually charged, and separating them
+// is a deliberate admin decision, not a migration side effect
+// (docs/india-gst-model.md §8). Idempotent: it never overwrites a set value.
+func adoptLegacyTaxIdentity() {
+	legacy := map[string]struct {
+		Subscription float64
+		IDLabel      string
+	}{
+		"IN": {18, "GSTIN"},
+		"AU": {10, "ABN"},
+		"PK": {17, "NTN"},
+		"BD": {15, "TIN"},
+		"LK": {8, "TIN"},
+		"NP": {13, "PAN"},
+	}
+	for country, v := range legacy {
+		if err := database.DB.Model(&models.TaxRate{}).
+			Where("country_code = ? AND subscription_percent = 0", country).
+			Update("subscription_percent", v.Subscription).Error; err != nil {
+			log.Printf("tax: subscription rate adopt failed for %s: %v", country, err)
+		}
+		if err := database.DB.Model(&models.TaxRate{}).
+			Where("country_code = ? AND (registration_id_label = '' OR registration_id_label IS NULL)", country).
+			Update("registration_id_label", v.IDLabel).Error; err != nil {
+			log.Printf("tax: registration label adopt failed for %s: %v", country, err)
+		}
+	}
 }

@@ -499,15 +499,14 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 	if g.Chef != nil {
 		chefState = g.Chef.State
 	}
+	rates := taxRule.ComponentRates()
 	pricing := models.ComputeOrderPricing(models.PricingInput{
-		Subtotal:     subtotal,
-		DeliveryFee:  deliveryFee,
-		PlatformFee:  subtotal * policy.PlatformFeePercent / 100,
-		TaxRate:      taxRate(taxRule),
-		TaxName:      taxName(taxRule),
-		TaxInclusive: taxRule != nil && taxRule.Inclusive,
-		Country:      addr.Country,
-		IntraState:   services.IsIntraStateSupply(chefState, addr.State),
+		Subtotal:    subtotal,
+		DeliveryFee: deliveryFee,
+		PlatformFee: subtotal * policy.PlatformFeePercent / 100,
+		Rates:       rates,
+		Country:     addr.Country,
+		IntraState:  services.IsIntraStateSupply(chefState, addr.State),
 	})
 	subtotal, deliveryFee = pricing.Subtotal, pricing.DeliveryFee
 	platformFee, tax, total := pricing.PlatformFee, pricing.Tax, pricing.Total
@@ -564,6 +563,12 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 				"tax_rate":                     taxRate(taxRule),
 				"tax_name":                     taxName(taxRule),
 				"tax_inclusive":                taxRule != nil && taxRule.Inclusive,
+				"tax_food":                     pricing.TaxFood,
+				"tax_service":                  pricing.TaxService,
+				"tax_delivery":                 pricing.TaxDelivery,
+				"tax_rate_food":                rates.Food,
+				"tax_rate_service":             rates.Service,
+				"tax_rate_delivery":            rates.Delivery,
 				"total":                        round2(total),
 				"delivery_address_line1":       addr.Line1,
 				"delivery_address_line2":       addr.Line2,
@@ -861,6 +866,12 @@ func (h *GroupOrderHandler) maybeConsolidate(groupID uuid.UUID) (bool, error) {
 			TaxRate:                   g.TaxRate,
 			TaxName:                   g.TaxName,
 			TaxInclusive:              g.TaxInclusive,
+			TaxFood:                   g.TaxFood,
+			TaxService:                g.TaxService,
+			TaxDelivery:               g.TaxDelivery,
+			TaxRateFood:               g.TaxRateFood,
+			TaxRateService:            g.TaxRateService,
+			TaxRateDelivery:           g.TaxRateDelivery,
 			Total:                     g.Total,
 			DeliveryAddressLine1:      g.DeliveryAddressLine1,
 			DeliveryAddressLine2:      g.DeliveryAddressLine2,

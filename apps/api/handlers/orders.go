@@ -505,17 +505,16 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// sum of the lines the customer is shown — this used to store raw products
 	// like 240 × 4.99% = 11.976 and the receipt's lines then out-summed its own
 	// total by a paise. Tip is excluded from the tax base (pass-through).
+	rates := taxRule.ComponentRates()
 	pricing := models.ComputeOrderPricing(models.PricingInput{
-		Subtotal:     subtotal,
-		DeliveryFee:  deliveryFee,
-		PlatformFee:  platformFee,
-		Discount:     discount,
-		Tip:          tip,
-		TaxRate:      taxRule.Rate,
-		TaxName:      taxRule.TaxName,
-		TaxInclusive: taxRule.Inclusive,
-		Country:      deliveryCountry,
-		IntraState:   services.IsIntraStateSupply(chef.State, deliveryAddr.State),
+		Subtotal:    subtotal,
+		DeliveryFee: deliveryFee,
+		PlatformFee: platformFee,
+		Discount:    discount,
+		Tip:         tip,
+		Rates:       rates,
+		Country:     deliveryCountry,
+		IntraState:  services.IsIntraStateSupply(chef.State, deliveryAddr.State),
 	})
 	deliveryFee, platformFee = pricing.DeliveryFee, pricing.PlatformFee
 	subtotal, discount, tip = pricing.Subtotal, pricing.Discount, pricing.Tip
@@ -614,6 +613,14 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		TaxRate:         taxRule.Rate,
 		TaxName:         taxRule.TaxName,
 		TaxInclusive:    taxRule.Inclusive,
+		// Freeze the rule per supply, so a rate the admin edits tomorrow cannot
+		// restate this invoice or misprice its refund.
+		TaxFood:         pricing.TaxFood,
+		TaxService:      pricing.TaxService,
+		TaxDelivery:     pricing.TaxDelivery,
+		TaxRateFood:     rates.Food,
+		TaxRateService:  rates.Service,
+		TaxRateDelivery: rates.Delivery,
 		Tip:             tip,
 		// #964: route the tip to the chef. `Tip` is the LEGACY total column
 		// (models/order.go) and nothing in the payout stack reads it — earnings,

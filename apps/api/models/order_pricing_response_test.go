@@ -55,7 +55,7 @@ func TestOrderToResponse_LegacyOrderFootsToTheChargedTotal(t *testing.T) {
 func TestOrderToResponse_PricedOrderNeedsNoRoundingRow(t *testing.T) {
 	p := ComputeOrderPricing(PricingInput{
 		Subtotal: 240, PlatformFee: 240 * 4.99 / 100,
-		TaxRate: 5, TaxName: "GST", Country: "IN", IntraState: true,
+		Rates: indiaRates(5), Country: "IN", IntraState: true,
 	})
 	o := Order{
 		Subtotal: p.Subtotal, PlatformFee: p.PlatformFee, Tax: p.Tax, Total: p.Total,
@@ -73,7 +73,7 @@ func TestOrderToResponse_FullOrderFoots(t *testing.T) {
 	p := ComputeOrderPricing(PricingInput{
 		Subtotal: 749.5, DeliveryFee: 39, PlatformFee: 749.5 * 4.99 / 100,
 		Discount: 75, Tip: 30,
-		TaxRate: 5, TaxName: "GST", Country: "IN", IntraState: true,
+		Rates: indiaRates(5), Country: "IN", IntraState: true,
 	})
 	o := Order{
 		Subtotal: p.Subtotal, DeliveryFee: p.DeliveryFee, PlatformFee: p.PlatformFee,

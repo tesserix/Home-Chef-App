@@ -140,6 +140,16 @@ type Order struct {
 	// invoices. TaxName is the label shown on the invoice ("GST", "VAT", ...).
 	TaxRate float64 `gorm:"default:0" json:"taxRate"`
 	TaxName string  `gorm:"type:varchar(40);default:''" json:"taxName"`
+	// Per-supply snapshot: the amount and the rate each component was taxed at,
+	// frozen so a later rate change cannot restate a historical invoice or a
+	// refund. All zero on orders placed before tax became per-component — those
+	// are one supply at TaxRate, which is how they were charged.
+	TaxFood         float64 `gorm:"default:0" json:"taxFood"`
+	TaxService      float64 `gorm:"default:0" json:"taxService"`
+	TaxDelivery     float64 `gorm:"default:0" json:"taxDelivery"`
+	TaxRateFood     float64 `gorm:"default:0" json:"taxRateFood"`
+	TaxRateService  float64 `gorm:"default:0" json:"taxRateService"`
+	TaxRateDelivery float64 `gorm:"default:0" json:"taxRateDelivery"`
 	// TaxInclusive freezes whether the rate was already inside the charged base
 	// (EU VAT and friends) or added on top (Indian GST). Without it a receipt
 	// cannot tell whether the tax line is part of the total or additional to it.
@@ -614,6 +624,32 @@ type PendingCancellation struct {
 	RespondBy   *time.Time `json:"respondBy,omitempty"`
 }
 
+// SnapshotRates is the rule this order was charged under, rebuilt from the
+// frozen columns rather than the live tax_rates row — a rate the admin changes
+// tomorrow must not restate an invoice issued today. Orders written before tax
+// became per-component fall back to the single TaxRate, which is how they were
+// charged.
+func (o *Order) SnapshotRates() TaxRates {
+	or := func(v float64) float64 {
+		if v > 0 {
+			return v
+		}
+		return o.TaxRate
+	}
+	return TaxRates{
+		Name:      o.TaxName,
+		Inclusive: o.TaxInclusive,
+		Food:      or(o.TaxRateFood),
+		Service:   or(o.TaxRateService),
+		Delivery:  or(o.TaxRateDelivery),
+	}
+}
+
+// TaxSnapshot is the tax this order was charged, per supply.
+func (o *Order) TaxSnapshot() TaxSnapshot {
+	return TaxSnapshot{Total: o.Tax, Food: o.TaxFood, Service: o.TaxService, Delivery: o.TaxDelivery}
+}
+
 func (o *Order) ToResponse() OrderResponse {
 	items := make([]OrderItemResponse, len(o.Items))
 	for i, item := range o.Items {
@@ -662,17 +698,15 @@ func (o *Order) ToResponse() OrderResponse {
 	// customer was actually charged, so the lines on a receipt always add up to
 	// the figure underneath them.
 	pricing := PresentOrderPricing(PricingInput{
-		Subtotal:     o.Subtotal,
-		DeliveryFee:  o.DeliveryFee,
-		PlatformFee:  o.PlatformFee,
-		Discount:     o.Discount,
-		Tip:          o.Tip,
-		TaxRate:      o.TaxRate,
-		TaxName:      o.TaxName,
-		TaxInclusive: o.TaxInclusive,
-		Country:      o.DeliveryAddressCountry,
-		IntraState:   IntraStateSupply(o.Chef.State, o.DeliveryAddressState),
-	}, o.Tax, o.Total)
+		Subtotal:    o.Subtotal,
+		DeliveryFee: o.DeliveryFee,
+		PlatformFee: o.PlatformFee,
+		Discount:    o.Discount,
+		Tip:         o.Tip,
+		Rates:       o.SnapshotRates(),
+		Country:     o.DeliveryAddressCountry,
+		IntraState:  IntraStateSupply(o.Chef.State, o.DeliveryAddressState),
+	}, o.TaxSnapshot(), o.Total)
 
 	return OrderResponse{
 		ID:          o.ID,

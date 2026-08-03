@@ -12,11 +12,13 @@ import (
 // owns, fed into the one split in models/pricing.go.
 func gstLines(t *testing.T, tax, rate float64, sellerState, buyerState string) []models.TaxLine {
 	t.Helper()
-	return models.BuildTaxLines(tax, models.PricingInput{
-		TaxRate:    rate,
-		Country:    "IN",
-		IntraState: IsIntraStateSupply(sellerState, buyerState),
-	})
+	return models.BuildTaxLines(
+		models.OrderPricing{Tax: tax},
+		models.PricingInput{
+			Rates:      models.TaxRates{Food: rate, Service: rate, Delivery: rate},
+			Country:    "IN",
+			IntraState: IsIntraStateSupply(sellerState, buyerState),
+		})
 }
 
 func TestGSTLines(t *testing.T) {

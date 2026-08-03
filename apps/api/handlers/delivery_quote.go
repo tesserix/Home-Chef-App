@@ -113,16 +113,14 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 	// rather than recomputing — four surfaces doing their own arithmetic is how
 	// checkout came to show ₹264.58 for an order the receipt called ₹264.57.
 	pricing := models.ComputeOrderPricing(models.PricingInput{
-		Subtotal:     req.Subtotal,
-		DeliveryFee:  effectiveDelivery,
-		PlatformFee:  req.Subtotal * (policy.PlatformFeePercent / 100.0),
-		Discount:     req.Discount,
-		Tip:          req.Tip,
-		TaxRate:      taxRule.Rate,
-		TaxName:      taxRule.TaxName,
-		TaxInclusive: taxRule.Inclusive,
-		Country:      country,
-		IntraState:   services.IsIntraStateSupply(chef.State, req.State),
+		Subtotal:    req.Subtotal,
+		DeliveryFee: effectiveDelivery,
+		PlatformFee: req.Subtotal * (policy.PlatformFeePercent / 100.0),
+		Discount:    req.Discount,
+		Tip:         req.Tip,
+		Rates:       taxRule.ComponentRates(),
+		Country:     country,
+		IntraState:  services.IsIntraStateSupply(chef.State, req.State),
 	})
 
 	resp := gin.H{

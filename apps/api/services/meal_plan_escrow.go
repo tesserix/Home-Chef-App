@@ -58,9 +58,14 @@ func dayRefundKey(dayID uuid.UUID) string {
 func MealPlanFeeTotals(subtotal float64, numDays int) (float64, float64, float64, float64) {
 	policy := GetPlatformPolicy()
 	platformFee := Round2(subtotal * (policy.PlatformFeePercent / 100.0))
-	tax := Round2(subtotal * (policy.TaxPercent / 100.0))
+	// The food rate from the ONE tax_rates row, not a second rate of its own: this
+	// read policy.TaxPercent, which defaults to 8% while à la carte orders are
+	// taxed at the 5% in tax_rates — the same meal, two rates, depending on how it
+	// was bought.
+	foodRate := ResolveTaxRate("IN", "").ComponentRates().Food
+	tax := Round2(subtotal * (foodRate / 100.0))
 	delivery := Round2(policy.BaseDeliveryFee * float64(numDays))
-	return platformFee, tax, policy.TaxPercent, delivery
+	return platformFee, tax, foodRate, delivery
 }
 
 // planDeliveryTotal is the plan's total delivery charge, derived from the snapshot

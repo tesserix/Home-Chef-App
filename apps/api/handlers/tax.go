@@ -33,12 +33,16 @@ func (h *TaxHandler) GetPublicTaxRate(c *gin.Context) {
 		return
 	}
 	rule := services.ResolveTaxRate(country, region)
+	rates := rule.ComponentRates()
 	c.JSON(http.StatusOK, gin.H{
 		"country":   country,
 		"region":    region,
 		"taxName":   rule.TaxName,
 		"rate":      rule.Rate,
 		"inclusive": rule.Inclusive,
+		// The resolved per-supply rates — what each part of an order is actually
+		// taxed at, with any component left unset taking `rate`.
+		"rates": rates,
 	})
 }
 
