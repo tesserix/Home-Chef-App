@@ -60,8 +60,12 @@ interface ApiOrder {
   deliveryFee?: number;
   deliveryFeeFinal?: number;
   platformFee?: number;
+  subtotal?: number;
+  tip?: number;
   tax?: number;
   taxRate?: number;
+  taxLines?: Order['taxLines'];
+  rounding?: number;
   discount?: number;
   readyPhotoUrl?: string;
   items?: ApiOrderItem[];
@@ -145,8 +149,12 @@ function mapOrder(raw: ApiOrder): Order {
     deliveryFee: raw.deliveryFee,
     deliveryFeeFinal: raw.deliveryFeeFinal,
     platformFee: raw.platformFee,
+    subtotal: raw.subtotal,
+    tip: raw.tip,
     tax: raw.tax,
     taxRate: raw.taxRate,
+    taxLines: raw.taxLines,
+    rounding: raw.rounding,
     discount: raw.discount,
     readyPhotoUrl: raw.readyPhotoUrl,
     payoutHoldStatus: raw.payoutHoldStatus,

@@ -557,10 +557,15 @@ export default function OrderDetailPage() {
               <span>Platform fee</span>
               <span>{fp(order.platformFee)}</span>
             </div>
-            <div className="flex justify-between text-ink-soft">
-              <span>Tax</span>
-              <span>{fp(order.tax)}</span>
-            </div>
+            {/* The API's split rows (CGST+SGST / IGST), identical to the mobile
+                app and the invoice PDF. A single "Tax" line here contradicted
+                both documents for the same order. */}
+            {(order.taxLines ?? []).map((line) => (
+              <div key={line.code} className="flex justify-between text-ink-soft">
+                <span>{line.label}</span>
+                <span>{fp(line.amount)}</span>
+              </div>
+            ))}
             {order.discount > 0 && (
               <div className="flex justify-between text-herb">
                 <span>Discount</span>
@@ -571,6 +576,14 @@ export default function OrderDetailPage() {
               <div className="flex justify-between text-ink-soft">
                 <span>Tip</span>
                 <span>{fp(order.tip)}</span>
+              </div>
+            )}
+            {/* Only ever set on an order priced before the money was rounded at
+                creation; without it those rows cannot reach the total. */}
+            {(order.rounding ?? 0) !== 0 && (
+              <div className="flex justify-between text-ink-soft">
+                <span>Rounding</span>
+                <span>{fp(order.rounding ?? 0)}</span>
               </div>
             )}
           </div>

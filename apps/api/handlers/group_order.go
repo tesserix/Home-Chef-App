@@ -491,22 +491,29 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 			deliveryFee = quote
 		}
 	}
-	platformFee := subtotal * policy.PlatformFeePercent / 100
-
 	taxRule := services.ResolveTaxRate(addr.Country, addr.State)
-	taxBase := subtotal + deliveryFee + platformFee
-	var tax, total float64
-	if taxRule != nil && taxRule.Inclusive {
-		// Prices already include tax: derive the embedded portion.
-		tax = taxBase - (taxBase / (1 + taxRule.Rate/100))
-		total = taxBase
-	} else if taxRule != nil {
-		tax = taxBase * taxRule.Rate / 100
-		total = taxBase + tax
-	} else {
-		total = taxBase
+	// The same pricing every other order path uses (models/pricing.go), so a group
+	// order's receipt splits GST and foots exactly like an à la carte one — this
+	// path had its own copy of the arithmetic and stored unrounded fees.
+	var chefState string
+	if g.Chef != nil {
+		chefState = g.Chef.State
 	}
-	extras := deliveryFee + platformFee + tax
+	pricing := models.ComputeOrderPricing(models.PricingInput{
+		Subtotal:     subtotal,
+		DeliveryFee:  deliveryFee,
+		PlatformFee:  subtotal * policy.PlatformFeePercent / 100,
+		TaxRate:      taxRate(taxRule),
+		TaxName:      taxName(taxRule),
+		TaxInclusive: taxRule != nil && taxRule.Inclusive,
+		Country:      addr.Country,
+		IntraState:   services.IsIntraStateSupply(chefState, addr.State),
+	})
+	subtotal, deliveryFee = pricing.Subtotal, pricing.DeliveryFee
+	platformFee, tax, total := pricing.PlatformFee, pricing.Tax, pricing.Total
+	// Everything on top of the food, derived from the total so it stays exact and
+	// correctly excludes an inclusive tax that is already inside the subtotal.
+	extras := models.RoundAmount(total - subtotal)
 
 	now := time.Now()
 	// Compute shares.
@@ -556,6 +563,7 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 				"tax":                          round2(tax),
 				"tax_rate":                     taxRate(taxRule),
 				"tax_name":                     taxName(taxRule),
+				"tax_inclusive":                taxRule != nil && taxRule.Inclusive,
 				"total":                        round2(total),
 				"delivery_address_line1":       addr.Line1,
 				"delivery_address_line2":       addr.Line2,
@@ -852,6 +860,7 @@ func (h *GroupOrderHandler) maybeConsolidate(groupID uuid.UUID) (bool, error) {
 			Tax:                       g.Tax,
 			TaxRate:                   g.TaxRate,
 			TaxName:                   g.TaxName,
+			TaxInclusive:              g.TaxInclusive,
 			Total:                     g.Total,
 			DeliveryAddressLine1:      g.DeliveryAddressLine1,
 			DeliveryAddressLine2:      g.DeliveryAddressLine2,

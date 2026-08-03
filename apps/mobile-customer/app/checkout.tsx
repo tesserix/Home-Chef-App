@@ -583,20 +583,13 @@ export default function CheckoutScreen() {
   // What the customer would save by switching to pickup — only real when delivery
   // actually costs something. Drives the incentive nudge; 0 shows nothing.
   const pickupSaving = quote?.pickupSaving ?? 0;
-  // Platform (service) fee + tax — shown so the total is honest, computed the SAME
-  // way CreateOrder does (#fee-transparency). platformFee is a % of subtotal; tax is
-  // the rate on (subtotal+delivery+service−discount), backed out when inclusive.
+  // Fee, tax rows and total all come from the quote, which prices with the SAME
+  // function CreateOrder charges with (models/pricing.go). This screen used to
+  // redo that arithmetic on rounded inputs and previewed a total a paise off the
+  // one the receipt then printed.
   const platformFee = quote?.platformFee ?? 0;
-  const taxRate = quote?.taxRatePercent ?? 0;
-  const taxInclusive = quote?.taxInclusive ?? false;
-  const taxName = quote?.taxName || 'Tax';
-  const taxBase = Math.max(0, subtotal + deliveryFee + platformFee - discount);
-  const tax = taxInclusive ? taxBase - taxBase / (1 + taxRate / 100) : taxBase * (taxRate / 100);
-  // Tip is added AFTER tax, mirroring CreateOrder — it is a pass-through to the
-  // chef, so it is neither taxed nor fee-bearing.
-  const total = taxInclusive
-    ? Math.max(0, subtotal + deliveryFee + platformFee - discount) + tip
-    : Math.max(0, subtotal + deliveryFee + platformFee + tax - discount) + tip;
+  const taxLines = quote?.taxLines ?? [];
+  const total = quote?.total ?? 0;
   // The Place Order button is live only when the order is placeable AND not an
   // out-of-range delivery (which the server would reject anyway).
   const placeEnabled = canPlaceOrder && !deliveryOutOfRange && !deliveryNeedsLocation;
@@ -1291,29 +1284,19 @@ export default function CheckoutScreen() {
               </View>
             ) : null}
 
-            {/* Tax — GST-compliant: an Indian intra-state supply shows CGST+SGST,
-                inter-state shows IGST; other countries keep a single tax line. */}
-            {tax > 0
-              ? (quote?.taxCountry === 'IN'
-                  ? quote?.taxIntraState
-                    ? [
-                        { label: `CGST (${(taxRate / 2).toFixed(2).replace(/\.?0+$/, '')}%)`, amt: tax / 2 },
-                        { label: `SGST (${(taxRate / 2).toFixed(2).replace(/\.?0+$/, '')}%)`, amt: tax - tax / 2 },
-                      ]
-                    : [{ label: `IGST (${taxRate.toFixed(2).replace(/\.?0+$/, '')}%)`, amt: tax }]
-                  : [{ label: taxInclusive ? `${taxName} (incl.)` : taxName, amt: tax }]
-                ).map((row) => (
-                  <View key={row.label} className="flex-row justify-between">
-                    <Text className="text-sm text-charcoal-soft">{row.label}</Text>
-                    <Text
-                      className="text-sm text-charcoal font-medium"
-                      style={{ fontVariant: ['tabular-nums'] }}
-                    >
-                      ₹{row.amt.toFixed(2)}
-                    </Text>
-                  </View>
-                ))
-              : null}
+            {/* Tax rows exactly as the server split them — the same lines that
+                will appear on this order's receipt and its invoice PDF. */}
+            {taxLines.map((row) => (
+              <View key={row.code} className="flex-row justify-between">
+                <Text className="text-sm text-charcoal-soft">{row.label}</Text>
+                <Text
+                  className="text-sm text-charcoal font-medium"
+                  style={{ fontVariant: ['tabular-nums'] }}
+                >
+                  ₹{row.amount.toFixed(2)}
+                </Text>
+              </View>
+            ))}
 
             {/* Self-delivery estimate (#702), collapsed behind a disclosure (R14):
                 itemised base+distance+surge detail is secondary — the header row

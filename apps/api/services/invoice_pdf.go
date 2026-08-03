@@ -218,47 +218,34 @@ func addInvoiceTotals(m core.Maroto, order *models.Order) {
 		)
 	}
 
-	rows := []core.Row{totalRow("Subtotal", order.Subtotal, false)}
-	if order.DeliveryFee > 0 {
-		rows = append(rows, totalRow("Delivery", order.DeliveryFee, false))
+	// Same breakdown the app and the web page render (models/pricing.go), so the
+	// downloadable document and the in-app receipt can never disagree — including
+	// the GST split, which this file resolved through the states table while the
+	// app compared the two spellings as raw strings.
+	p := order.ToResponse()
+
+	rows := []core.Row{totalRow("Subtotal", p.Subtotal, false)}
+	if p.DeliveryFee > 0 {
+		rows = append(rows, totalRow("Delivery", p.DeliveryFee, false))
 	}
-	if order.PlatformFee > 0 {
-		rows = append(rows, totalRow("Platform fee", order.PlatformFee, false))
+	if p.PlatformFee > 0 {
+		rows = append(rows, totalRow("Platform fee", p.PlatformFee, false))
 	}
-	if order.Tax > 0 {
-		// GST-compliant split (#invoice): an Indian tax invoice must show CGST+SGST
-		// for an intra-state supply, or IGST for inter-state — never a single "GST".
-		// Non-IN keeps the configured tax name.
-		if strings.EqualFold(order.DeliveryAddressCountry, "IN") {
-			b := SplitIndiaGST(order.Tax, order.TaxRate, order.Chef.State, order.DeliveryAddressState)
-			// Only print a rate when one was actually frozen on the order. Rows written
-			// before the meal-plan path snapshotted TaxRate carry a non-zero Tax with rate
-			// 0, which rendered as a flatly false "IGST @ 0%" next to a real amount. Mirrors
-			// the in-app receipt so the two documents never disagree.
-			rate := func(r float64) string {
-				if order.TaxRate <= 0 {
-					return ""
-				}
-				return fmt.Sprintf(" @ %.2g%%", r)
-			}
-			if b.Intra {
-				rows = append(rows, totalRow("CGST"+rate(b.CGSTRate), b.CGST, false))
-				rows = append(rows, totalRow("SGST"+rate(b.SGSTRate), b.SGST, false))
-			} else {
-				rows = append(rows, totalRow("IGST"+rate(b.IGSTRate), b.IGST, false))
-			}
-		} else {
-			taxLabel := order.TaxName
-			if taxLabel == "" {
-				taxLabel = "Tax"
-			}
-			rows = append(rows, totalRow(taxLabel, order.Tax, false))
-		}
+	for _, line := range p.TaxLines {
+		rows = append(rows, totalRow(line.Label, line.Amount, false))
 	}
-	if order.Discount > 0 {
-		rows = append(rows, totalRow("Discount", -order.Discount, false))
+	if p.Discount > 0 {
+		rows = append(rows, totalRow("Discount", -p.Discount, false))
 	}
-	rows = append(rows, totalRow("TOTAL", order.Total, true))
+	// The tip was charged to the customer and belongs on the invoice; without it a
+	// tipped order's rows summed to less than its own TOTAL.
+	if p.Tip > 0 {
+		rows = append(rows, totalRow("Tip", p.Tip, false))
+	}
+	if p.Rounding != 0 {
+		rows = append(rows, totalRow("Rounding", p.Rounding, false))
+	}
+	rows = append(rows, totalRow("TOTAL", p.Total, true))
 	if order.RefundAmount > 0 {
 		rows = append(rows,
 			row.New(5).Add(

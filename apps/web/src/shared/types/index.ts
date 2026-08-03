@@ -228,6 +228,18 @@ export interface OrderChef {
   state?: string;
 }
 
+/**
+ * One statutory tax row, split and labelled by the API (models/pricing.go) so the
+ * web page, the mobile app and the invoice PDF print identical wording and
+ * identical paise. `label` already carries the rate ("CGST (2.5%)").
+ */
+export interface TaxLine {
+  code: "cgst" | "sgst" | "igst" | "tax";
+  label: string;
+  rate: number;
+  amount: number;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -242,6 +254,10 @@ export interface Order {
   deliveryFee: number;
   platformFee: number;
   tax: number;
+  /** Render these instead of deriving CGST/SGST here — see TaxLine. */
+  taxLines?: TaxLine[];
+  /** Paise needed to make the lines sum to total. 0 for orders priced after #977. */
+  rounding?: number;
   discount: number;
   tip: number;
   total: number;

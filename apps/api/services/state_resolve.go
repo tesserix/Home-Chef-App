@@ -29,6 +29,10 @@ import (
 // seeds `states` with {Code: "OR", Name: "Odisha"} for all 36 Indian states and
 // territories. It just wasn't being used for comparison.
 
+// Hand the resolver to models so a DTO can decide place of supply without models
+// importing services, which would be an import cycle. See models/pricing.go.
+func init() { models.SameStateFunc = SameState }
+
 // stateAliases maps every known spelling (lowercased code AND lowercased name)
 // to a single canonical key per state — the state's ID, e.g. "IN-OR".
 var (

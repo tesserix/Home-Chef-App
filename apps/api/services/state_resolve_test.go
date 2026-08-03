@@ -9,6 +9,7 @@ import (
 	glogger "gorm.io/gorm/logger"
 
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/models"
 )
 
 // A chef stores its state as a full name, an address geocoded by Mappls/Photon
@@ -95,15 +96,15 @@ func TestIsIntraStateSupply_ResolvesCodeAgainstName(t *testing.T) {
 	require.True(t, IsIntraStateSupply("Odisha", "OR"))
 	require.True(t, IsIntraStateSupply("OR", "Odisha"))
 
-	b := SplitIndiaGST(14.18, 5, "Odisha", "OR")
-	require.True(t, b.Intra, "same state, different spelling → CGST+SGST")
-	require.InDelta(t, 14.18, b.CGST+b.SGST, 1e-9)
-	require.Equal(t, 0.0, b.IGST)
+	lines := gstLines(t, 14.18, 5, "Odisha", "OR")
+	require.Len(t, lines, 2, "same state, different spelling → CGST+SGST")
+	require.InDelta(t, 14.18, lines[0].Amount+lines[1].Amount, 1e-9)
 
 	// A genuine inter-state supply is still IGST.
-	inter := SplitIndiaGST(14.18, 5, "Odisha", "MH")
-	require.False(t, inter.Intra)
-	require.InDelta(t, 14.18, inter.IGST, 1e-9)
+	inter := gstLines(t, 14.18, 5, "Odisha", "MH")
+	require.Len(t, inter, 1)
+	require.Equal(t, models.TaxLineIGST, inter[0].Code)
+	require.InDelta(t, 14.18, inter[0].Amount, 1e-9)
 }
 
 // Blank on either side keeps defaulting to intra — the safe case for a home

@@ -43,6 +43,15 @@ export interface OrderDetailTiming {
   fulfillmentTimeStatus?: 'requested' | 'confirmed' | 'proposed' | 'declined' | null;
 }
 
+/** One statutory tax row, split and labelled by the API (models/pricing.go). The
+ *  chef sees the same rows the customer's receipt carries. */
+export interface OrderDetailTaxLine {
+  code: 'cgst' | 'sgst' | 'igst' | 'tax';
+  label: string;
+  rate: number;
+  amount: number;
+}
+
 export interface OrderDetailPricing {
   subtotal: number;
   deliveryFee: number;
@@ -50,6 +59,9 @@ export interface OrderDetailPricing {
   deliveryFeeFinal?: number | null;
   platformFee: number;
   tax: number;
+  taxLines: OrderDetailTaxLine[];
+  /** Paise reconciling the rows to total on an order priced before rounding. */
+  rounding: number;
   chefTip: number;
   total: number;
 }
@@ -162,6 +174,8 @@ interface RawChefOrderDetailResponse {
   deliveryFeeFinal?: number | null;
   platformFee?: number;
   tax?: number;
+  taxLines?: OrderDetailTaxLine[];
+  rounding?: number;
   chefTip?: number;
   total?: number;
   // Self-delivery capability + distance gate
@@ -214,6 +228,8 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
       deliveryFeeFinal: raw.deliveryFeeFinal ?? null,
       platformFee: raw.platformFee ?? 0,
       tax: raw.tax ?? 0,
+      taxLines: raw.taxLines ?? [],
+      rounding: raw.rounding ?? 0,
       chefTip: raw.chefTip ?? 0,
       total: raw.total ?? 0,
     },

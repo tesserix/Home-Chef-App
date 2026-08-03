@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
+import type { TaxLine } from '@/shared/types';
 
 // Checkout pricing preview — the web mirror of
 // `apps/mobile-customer/hooks/useDeliveryQuote.ts`, hitting the same
@@ -84,12 +85,18 @@ export interface DeliveryQuote {
   maxRadiusKm: number;
   /** false when coords were missing so the distance couldn't be measured. */
   rangeKnown: boolean;
-  /** Platform (service) fee for the sent subtotal, and the tax rule to apply. */
+  /** The priced breakdown for the cart and fulfilment mode sent, from the SAME
+   *  function CreateOrder charges with (models/pricing.go). Render these; do not
+   *  recompute, or checkout and the receipt disagree by a paise. */
   platformFee: number;
+  /** The delivery line that went INTO total — 0 for pickup, unlike deliveryFee. */
+  effectiveDeliveryFee: number;
+  tax: number;
+  taxLines: TaxLine[];
+  total: number;
   taxRatePercent: number;
   taxName: string;
   taxInclusive: boolean;
-  /** GST compliance: 'IN' + intra-state → CGST+SGST; inter-state → IGST. */
   taxCountry: string;
   taxIntraState: boolean;
   /** Server-allocated wallet + loyalty credit for this cart. Absent when the

@@ -286,18 +286,13 @@ export default function CheckoutPage() {
   // What switching to pickup would save. Only real when delivery actually costs
   // something; 0 means show no incentive rather than a fake one.
   const pickupSaving = quote?.pickupSaving ?? 0;
+  // Fee, tax rows and total all come from the quote, priced by the SAME function
+  // CreateOrder charges with (models/pricing.go). The page redoing that
+  // arithmetic on rounded inputs is how checkout previewed a total a paise off
+  // the one the receipt then printed.
   const platformFee = quote?.platformFee ?? 0;
-  const rate = quote?.taxRatePercent ?? 0;
-  const isInclusive = quote?.taxInclusive ?? false;
-  const taxBase = Math.max(0, subtotal + deliveryFee + platformFee - discount);
-  const tax = isInclusive
-    ? taxBase - taxBase / (1 + rate / 100)
-    : taxBase * (rate / 100);
-  // Tip is added after tax, mirroring CreateOrder — it is a pass-through to the
-  // chef, so it is neither taxed nor fee-bearing.
-  const total = isInclusive
-    ? Math.max(0, subtotal + deliveryFee + platformFee - discount) + tip
-    : Math.max(0, subtotal + deliveryFee + platformFee + tax - discount) + tip;
+  const taxLines = quote?.taxLines ?? [];
+  const total = quote?.total ?? 0;
 
   // Wallet + loyalty credit. Every figure comes from the server quote; the page
   // does no money arithmetic of its own here. `payable` is what the gateway will
@@ -1582,41 +1577,21 @@ export default function CheckoutPage() {
                     <span>−{fp(discount, { currency: orderCurrency })}</span>
                   </div>
                 )}
-                {/* CW-01d / LEG-COREUX-031: GST-compliant tax lines. An Indian
-                    intra-state supply is CGST+SGST, inter-state is IGST; other
-                    countries keep a single line. The split mirrors the mobile
-                    app, which has shown it since #invoice.
+                {/* Tax rows exactly as the server split them — the same lines
+                    this order's receipt and invoice PDF will carry.
                     TODO(CW-01e): backend to attach the HSN/SAC code per CGST
                     Act 2017 §31. */}
-                {tax > 0 &&
-                  (quote?.taxCountry === "IN"
-                    ? quote?.taxIntraState
-                      ? [
-                          { label: `CGST (${rate / 2}%)`, amt: tax / 2 },
-                          { label: `SGST (${rate / 2}%)`, amt: tax - tax / 2 },
-                        ]
-                      : [{ label: `IGST (${rate}%)`, amt: tax }]
-                    : [
-                        {
-                          label: `${quote?.taxName || "Tax"}${
-                            rate > 0
-                              ? ` (${rate}%${isInclusive ? " incl." : ""})`
-                              : ""
-                          }`,
-                          amt: tax,
-                        },
-                      ]
-                  ).map((row) => (
-                    <div
-                      key={row.label}
-                      className="flex justify-between text-ink-soft"
-                    >
-                      <span>{row.label}</span>
-                      <span className="tabular-nums">
-                        {fp(row.amt, { currency: orderCurrency })}
-                      </span>
-                    </div>
-                  ))}
+                {taxLines.map((row) => (
+                  <div
+                    key={row.code}
+                    className="flex justify-between text-ink-soft"
+                  >
+                    <span>{row.label}</span>
+                    <span className="tabular-nums">
+                      {fp(row.amount, { currency: orderCurrency })}
+                    </span>
+                  </div>
+                ))}
                 {tip > 0 && (
                   <div className="flex justify-between text-ink-soft">
                     <span>Tip for the chef</span>

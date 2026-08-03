@@ -122,10 +122,16 @@ type GroupOrder struct {
 	// DB column stays `service_fee` (see models.Order.PlatformFee) — renamed in Go/API
 	// only, so no schema migration is required.
 	PlatformFee float64 `gorm:"column:service_fee;default:0" json:"platformFee"`
-	Tax         float64 `gorm:"default:0" json:"tax"`
-	TaxRate     float64 `gorm:"default:0" json:"taxRate"`
-	TaxName     string  `gorm:"" json:"taxName,omitempty"`
-	Total       float64 `gorm:"default:0" json:"total"`
+	Tax     float64 `gorm:"default:0" json:"tax"`
+	TaxRate float64 `gorm:"default:0" json:"taxRate"`
+	TaxName string  `gorm:"" json:"taxName,omitempty"`
+	// Frozen with the rest so the spawned order inherits the rule the group was
+	// priced under, rather than re-resolving it at consolidation time.
+	TaxInclusive bool    `gorm:"default:false" json:"taxInclusive"`
+	Total        float64 `gorm:"default:0" json:"total"`
+	// Derived on read by EnsureSlices, never stored — the statutory rows the group
+	// screen renders, identical to the ones on the order it consolidates into.
+	TaxLines []TaxLine `gorm:"-" json:"taxLines,omitempty"`
 
 	ScheduledFor *time.Time `gorm:"" json:"scheduledFor,omitempty"`
 	ExpiresAt    time.Time  `gorm:"index" json:"expiresAt"`
@@ -154,6 +160,21 @@ func (g *GroupOrder) EnsureSlices() *GroupOrder {
 	if g.Items == nil {
 		g.Items = []GroupOrderItem{}
 	}
+	// Same split the consolidated order's receipt will show (pricing.go), so the
+	// group screen and the invoice it turns into never label the tax differently.
+	// Chef is preloaded on every path that returns a group; without it the blank
+	// seller state defaults to intra, which is what this screen already assumed.
+	var chefState string
+	if g.Chef != nil {
+		chefState = g.Chef.State
+	}
+	g.TaxLines = BuildTaxLines(g.Tax, PricingInput{
+		TaxRate:      g.TaxRate,
+		TaxName:      g.TaxName,
+		TaxInclusive: g.TaxInclusive,
+		Country:      g.DeliveryAddressCountry,
+		IntraState:   IntraStateSupply(chefState, g.DeliveryAddressState),
+	})
 	return g
 }
 

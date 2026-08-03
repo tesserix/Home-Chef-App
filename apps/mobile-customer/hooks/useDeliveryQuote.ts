@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import type { TaxLine } from '../types/customer';
 
 // Checkout delivery-fee preview (#pickup-incentive). The screen used to show
 // "Delivery fee — Free" for every mode, which both hid the real fee and made
@@ -53,13 +54,19 @@ export interface DeliveryQuote {
   maxRadiusKm: number;
   /** false when coords were missing so the distance couldn't be measured. */
   rangeKnown: boolean;
-  /** Platform (service) fee for the sent subtotal, and the tax rule to apply —
-   *  so checkout shows the same total the order is charged (#fee-transparency). */
+  /** The priced breakdown for the cart and fulfilment mode sent, from the SAME
+   *  function CreateOrder charges with (models/pricing.go). Render these; do not
+   *  recompute. Checkout doing its own arithmetic is how it came to show ₹264.58
+   *  for an order whose receipt said ₹264.57. */
   platformFee: number;
+  /** The delivery line that went INTO total — 0 for pickup, unlike deliveryFee. */
+  effectiveDeliveryFee: number;
+  tax: number;
+  taxLines: TaxLine[];
+  total: number;
   taxRatePercent: number;
   taxName: string;
   taxInclusive: boolean;
-  /** GST compliance: 'IN' + intra-state → show CGST+SGST; inter-state → IGST. */
   taxCountry: string;
   taxIntraState: boolean;
   /** Server-allocated wallet + loyalty credit for this cart. Absent when the

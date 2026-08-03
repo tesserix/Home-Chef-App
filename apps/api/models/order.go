@@ -140,6 +140,11 @@ type Order struct {
 	// invoices. TaxName is the label shown on the invoice ("GST", "VAT", ...).
 	TaxRate float64 `gorm:"default:0" json:"taxRate"`
 	TaxName string  `gorm:"type:varchar(40);default:''" json:"taxName"`
+	// TaxInclusive freezes whether the rate was already inside the charged base
+	// (EU VAT and friends) or added on top (Indian GST). Without it a receipt
+	// cannot tell whether the tax line is part of the total or additional to it.
+	// Defaults false, which is correct for every order placed before it existed.
+	TaxInclusive bool `gorm:"default:false" json:"taxInclusive"`
 	// CommissionRate freezes the platform commission rate applied when the order
 	// was placed, so a later admin retune of the runtime rate cannot make the
 	// settlement statement disagree with the Route transfer already sent (#390).
@@ -434,7 +439,14 @@ type OrderResponse struct {
 	Tax              float64             `json:"tax"`
 	TaxRate          float64             `json:"taxRate"`
 	TaxName          string              `json:"taxName,omitempty"`
-	Tip              float64             `json:"tip"`
+	// TaxLines is the statutory split every surface renders — CGST+SGST, IGST, or
+	// a single foreign tax line. Built here so the app, the web page and the PDF
+	// cannot each reach a different answer; clients print Label and Amount as-is.
+	TaxLines []TaxLine `json:"taxLines,omitempty"`
+	// Rounding is the paise needed to make the lines above sum to Total. Non-zero
+	// only for orders placed before the money was rounded at creation.
+	Rounding float64 `json:"rounding,omitempty"`
+	Tip      float64 `json:"tip"`
 	ChefTip          float64             `json:"chefTip,omitempty"`
 	DriverTip        float64             `json:"driverTip,omitempty"`
 	Discount         float64             `json:"discount"`
@@ -646,6 +658,22 @@ func (o *Order) ToResponse() OrderResponse {
 		}
 	}
 
+	// One breakdown for every surface (pricing.go). Reconciled to the total the
+	// customer was actually charged, so the lines on a receipt always add up to
+	// the figure underneath them.
+	pricing := PresentOrderPricing(PricingInput{
+		Subtotal:     o.Subtotal,
+		DeliveryFee:  o.DeliveryFee,
+		PlatformFee:  o.PlatformFee,
+		Discount:     o.Discount,
+		Tip:          o.Tip,
+		TaxRate:      o.TaxRate,
+		TaxName:      o.TaxName,
+		TaxInclusive: o.TaxInclusive,
+		Country:      o.DeliveryAddressCountry,
+		IntraState:   IntraStateSupply(o.Chef.State, o.DeliveryAddressState),
+	}, o.Tax, o.Total)
+
 	return OrderResponse{
 		ID:          o.ID,
 		OrderNumber: o.OrderNumber,
@@ -659,18 +687,20 @@ func (o *Order) ToResponse() OrderResponse {
 		PaymentStatus:    o.PaymentStatus,
 		PaymentProvider:  o.PaymentProvider,
 		Currency:         currency,
-		Subtotal:         o.Subtotal,
-		DeliveryFee:      o.DeliveryFee,
+		Subtotal:         pricing.Subtotal,
+		DeliveryFee:      pricing.DeliveryFee,
 		DeliveryFeeFinal: o.DeliveryFeeFinal,
-		PlatformFee:      o.PlatformFee,
-		Tax:              o.Tax,
+		PlatformFee:      pricing.PlatformFee,
+		Tax:              pricing.Tax,
 		TaxRate:          o.TaxRate,
 		TaxName:          o.TaxName,
-		Tip:              o.Tip,
+		TaxLines:         pricing.TaxLines,
+		Rounding:         pricing.Rounding,
+		Tip:              pricing.Tip,
 		ChefTip:          o.ChefTip,
 		DriverTip:        o.DriverTip,
-		Discount:         o.Discount,
-		Total:            o.Total,
+		Discount:         pricing.Discount,
+		Total:            pricing.Total,
 		Items:            items,
 		DeliveryAddress: AddressResponse{
 			Line1:      o.DeliveryAddressLine1,
