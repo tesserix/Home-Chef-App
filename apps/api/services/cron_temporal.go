@@ -25,6 +25,9 @@ type cronJob struct {
 func cronJobs() []cronJob {
 	return []cronJob{
 		{"weekly-statement", statementCronInterval, runWeeklyStatementScan, StartWeeklyStatementCron},
+		// #927: settle orders whose payout was still held when their statement week
+		// closed. Registered next to the statement cron it compensates for.
+		{"statement-catchup", statementCatchupInterval, runStatementCatchupScan, StartStatementCatchupCron},
 		{"reconciliation", reconciliationInterval, runReconciliationScan, StartReconciliationCron},
 		{"fssai-reminder", fssaiReminderInterval, runFSSAIReminderScan, StartFSSAIReminderCron},
 		{"availability-resume", availabilityResumeInterval, runAvailabilityResumeScan, StartAvailabilityResumeCron},

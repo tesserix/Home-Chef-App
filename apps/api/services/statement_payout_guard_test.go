@@ -84,16 +84,55 @@ func TestLoadStatementOrderRows_ExcludesUnpayableOrders(t *testing.T) {
 	assert.False(t, billed["SKIP-refunded"],
 		"a refunded order must never bill — the issue path leaves status='delivered'")
 
-	// Transient states stay billable ON PURPOSE. The query is windowed on
-	// delivered_at and each (chef, week) statement is frozen after one generation,
-	// so an order skipped for its own week is never billed on any later one.
-	// Excluding a state the order can still LEAVE would silently lose the chef that
-	// money — the failure mode the naive "only bill release_eligible/released" fix
-	// would introduce.
-	assert.True(t, billed["PAYABLE-awaiting"],
-		"excluding a transient state would strand this order forever — the week is frozen")
-	assert.True(t, billed["PAYABLE-disputed"],
-		"a dispute resolved in the chef's favour must not cost them the order")
+	// Transient states are now EXCLUDED too — the customer has not confirmed, or is
+	// contesting, so the money is still held and can still go back to them. Billing
+	// them was the overpay risk this issue is about.
+	//
+	// This is only safe because reconcileStatementCatchup exists. The query is
+	// windowed on delivered_at and each (chef, week) statement is frozen after one
+	// generation, so an order skipped here is never billed by any later statement;
+	// the catch-up credit settles it once it clears. Excluding a transient state
+	// WITHOUT that credit — the shape suggested on #927 — would silently lose the
+	// chef the whole order. Pinned end-to-end in
+	// TestStatementCatchup_ClosesTheGapTheStatementOpens.
+	assert.False(t, billed["PAYABLE-awaiting"],
+		"the customer has not confirmed — the money is still held")
+	assert.False(t, billed["PAYABLE-disputed"],
+		"a contested order can still refund the customer; the catch-up pays it if it clears")
 
-	assert.Len(t, rows, 5)
+	assert.Len(t, rows, 3)
+}
+
+// An order already settled — by an earlier statement or by the catch-up credit —
+// must never be billed again. This is the half that makes the statement path and
+// the hold path reconcilable rather than merely independent.
+func TestLoadStatementOrderRows_ExcludesAlreadySettledOrders(t *testing.T) {
+	db := setupStatementRowsDB(t)
+	chefID := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, business_name, state) VALUES (?,?,?,?)`,
+		chefID.String(), uuid.New().String(), "Saffron Home Kitchen", "KA").Error)
+
+	weekStart := time.Date(2026, 7, 27, 0, 0, 0, 0, time.UTC)
+	delivered := weekStart.Add(36 * time.Hour)
+	priorStmt := uuid.New()
+
+	for _, tc := range []struct {
+		num    string
+		billed any
+	}{
+		{"UNSETTLED", nil},
+		{"ALREADY-SETTLED", priorStmt.String()},
+	} {
+		require.NoError(t, db.Exec(
+			`INSERT INTO orders (id, order_number, chef_id, status, delivered_at, subtotal, tax, total,
+			   payout_hold_status, commission_rate, billed_statement_id)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+			uuid.NewString(), tc.num, chefID.String(), "delivered", delivered,
+			500.0, 25.0, 630.0, "release_eligible", 0.06, tc.billed).Error)
+	}
+
+	rows, err := loadStatementOrderRows(weekStart, weekStart.AddDate(0, 0, 7))
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "UNSETTLED", rows[0].OrderNumber)
 }
