@@ -282,6 +282,18 @@ type Order struct {
 	PayoutSettledAt      *time.Time `gorm:"" json:"payoutSettledAt,omitempty"`
 	PayoutSettleAttempts int        `gorm:"default:0" json:"-"`
 
+	// BilledStatementID is the WeeklyStatement this order has been settled to the
+	// chef on (#927). Set when a statement bills it, or when the catch-up credit
+	// settles an order its own week's statement had to skip.
+	//
+	// It exists because "has this order already paid the chef?" was previously only
+	// INFERABLE — statements store frozen totals and re-derive their line items, so
+	// nothing recorded which orders a statement actually covered. That is precisely
+	// why the escrow hold machine and the statement batch could not be reconciled:
+	// neither could tell whether the other had already paid. Making it a recorded
+	// fact is what lets an order be paid at most once across both paths.
+	BilledStatementID *uuid.UUID `gorm:"type:uuid;index" json:"-"`
+
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

@@ -75,6 +75,9 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 		chefState      string
 		commissionRate float64
 		totals         EarningsTotals
+		// orderIDs are the orders this statement bills, stamped onto them when it
+		// is created so the catch-up can tell settled orders from skipped ones (#927).
+		orderIDs []uuid.UUID
 	}
 	buckets := make(map[uuid.UUID]*chefBucket)
 	for _, r := range rows {
@@ -83,6 +86,7 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			b = &chefBucket{userID: r.UserID, chefState: r.ChefState, commissionRate: flatRate}
 			buckets[r.ChefID] = b
 		}
+		b.orderIDs = append(b.orderIDs, r.OrderID)
 		b.totals.Add(ComputeOrderEarnings(EarningsInput{
 			OrderID:            r.OrderID,
 			OrderNumber:        r.OrderNumber,
@@ -105,7 +109,7 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			continue
 		}
 		b.totals.Round()
-		created, stmt, err := upsertWeeklyStatement(chefID, b.userID, weekStart, weekEnd, b.totals)
+		created, stmt, err := upsertWeeklyStatement(chefID, b.userID, weekStart, weekEnd, b.totals, b.orderIDs)
 		if err != nil {
 			log.Printf("weekly-statement: persist failed for chef=%s week=%s: %v",
 				chefID, weekStart.Format("2006-01-02"), err)
@@ -158,20 +162,27 @@ func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, 
 		-- Mirrors the payout-release guard (payout_release.go), which has always had
 		-- this predicate — the statement path simply never grew one.
 		AND    o.refunded_at   IS NULL
-		-- #927: and never bill a hold that was deliberately blocked or clawed back.
-		-- Both states are TERMINAL (see WithholdHold / ReverseHold), so excluding
-		-- them cannot strand a chef's money in a week that has already closed.
+		-- #927: bill ONLY a hold the chef is actually owed on.
 		--
-		-- Transient states (awaiting_customer_confirmation, disputed) are NOT
-		-- excluded, deliberately. This query is windowed on delivered_at and each
-		-- (chef, week) statement is generated exactly once and then frozen, so an
-		-- order skipped for its own week is never billed on any later one. Excluding
-		-- a state the order can still LEAVE would silently lose the chef that money —
-		-- which is why the "only bill release_eligible/released" shape suggested on
-		-- #927 is not safe as written. Closing that half needs a catch-up path for
-		-- orders cleared after their week closed (the ChefBonus settlement-credit
-		-- mechanism used for #947 is the natural fit); tracked on the issue.
-		AND    COALESCE(o.payout_hold_status, '') NOT IN ('withheld', 'reversed')
+		--   ''                → no hold was ever set (non-gateway order) — payable
+		--   release_eligible  → customer confirmed, cleared for payout      — payable
+		--   released          → already cleared                             — payable
+		--
+		-- Everything else is withheld/reversed (terminal, never payable) or awaiting/
+		-- disputed (the customer has not confirmed, or is contesting — the money is
+		-- still held and can still go back to them).
+		--
+		-- Excluding a TRANSIENT state is only safe because of the catch-up credit:
+		-- this query is windowed on delivered_at and each (chef, week) statement is
+		-- generated exactly once then frozen, so an order skipped here is never billed
+		-- by any later statement. reconcileStatementCatchup settles those once they
+		-- clear. Without it, a dispute resolved in the chef's favour after their week
+		-- closed would silently cost them the whole order.
+		AND    COALESCE(o.payout_hold_status, '') IN ('', 'release_eligible', 'released')
+		-- #927: and never bill an order already settled — by an earlier statement, or
+		-- by the catch-up credit. This is the half that makes the two payout paths
+		-- reconcilable rather than merely independent.
+		AND    o.billed_statement_id IS NULL
 		ORDER  BY o.chef_id, o.delivered_at ASC
 	`, weekStart, weekEnd).Scan(&rows).Error
 	return rows, err
@@ -182,7 +193,7 @@ func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, 
 // the authoritative race-winner across pods. The created row is returned so the
 // caller can apply post-creation adjustments (penalty deductions, #834).
 func upsertWeeklyStatement(
-	chefID, userID uuid.UUID, weekStart, weekEnd time.Time, t EarningsTotals,
+	chefID, userID uuid.UUID, weekStart, weekEnd time.Time, t EarningsTotals, orderIDs []uuid.UUID,
 ) (bool, *models.WeeklyStatement, error) {
 	var existing models.WeeklyStatement
 	err := database.DB.
@@ -210,7 +221,18 @@ func upsertWeeklyStatement(
 		TDS:                t.TDS,
 		NetPayout:          t.NetPayout,
 	}
-	if err := database.DB.Create(&stmt).Error; err != nil {
+	// #927: create the statement and stamp the orders it bills in ONE transaction.
+	// The atomicity is load-bearing, not tidiness: a crash between the two would
+	// leave a statement whose orders still read as unsettled, and the catch-up
+	// would then credit orders this statement had already billed — paying the chef
+	// twice for them.
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		if cErr := tx.Create(&stmt).Error; cErr != nil {
+			return cErr
+		}
+		return stampBilledOrders(tx, stmt.ID, orderIDs)
+	})
+	if err != nil {
 		// Lost the race to a concurrent pod — treat as "already issued".
 		return false, nil, nil
 	}

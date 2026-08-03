@@ -92,6 +92,12 @@ const (
 	// no longer absorb it. Only ever raised by the backfill; once checkout writes
 	// chef_tip the statement includes tips directly and no catch-up is needed.
 	ChefBonusTipCatchup ChefBonusKind = "tip_catchup"
+	// ChefBonusStatementCatchup — an order whose payout was still HELD (awaiting
+	// customer confirmation, or disputed) when its weekly statement closed, and so
+	// could not be billed on it (#927). Statements are frozen and windowed on
+	// delivered_at, so no later statement would ever pick it up; this credit is
+	// what makes excluding a transient hold state safe rather than a silent loss.
+	ChefBonusStatementCatchup ChefBonusKind = "statement_catchup"
 )
 
 // ChefBonus is a rupee credit owed to a chef, added onto their next weekly
