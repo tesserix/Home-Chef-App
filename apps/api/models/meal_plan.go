@@ -100,10 +100,26 @@ type MealPlan struct {
 	// TaxRate freezes the GST percent applied at booking so the spawned per-day orders
 	// can report a rate alongside the amount. Without it a receipt renders the tax
 	// line as "IGST (0%)" against a non-zero figure.
-	TaxRate  float64 `gorm:"default:0" json:"taxRate"`
-	Tax      float64 `gorm:"default:0" json:"tax"`
-	Total    float64 `gorm:"not null" json:"total"`
-	Currency string  `gorm:"type:varchar(3);default:'INR'" json:"currency"`
+	TaxRate float64 `gorm:"default:0" json:"taxRate"`
+	// Tax is the plan's TOTAL tax across every supply.
+	//
+	// On plans booked before tax was split per supply it is food GST alone, which
+	// is why perDayFoodGST falls back to it: the chef day-transfer, the TDS
+	// reporting and the credit notes on those plans were all reconciled against
+	// that figure and must not be restated.
+	Tax float64 `gorm:"default:0" json:"tax"`
+	// Per-supply snapshot, mirroring Order. TaxFood is the ONLY one the chef's
+	// payout is withheld against — the tax on the platform fee and on delivery is
+	// the platform's own output tax.
+	TaxFood             float64 `gorm:"default:0" json:"taxFood"`
+	TaxService          float64 `gorm:"default:0" json:"taxService"`
+	TaxDelivery         float64 `gorm:"default:0" json:"taxDelivery"`
+	TaxRateFood         float64 `gorm:"default:0" json:"taxRateFood"`
+	TaxRateService      float64 `gorm:"default:0" json:"taxRateService"`
+	TaxRateDelivery     float64 `gorm:"default:0" json:"taxRateDelivery"`
+	TaxServiceInclusive bool    `gorm:"default:false" json:"taxServiceInclusive"`
+	Total               float64 `gorm:"not null" json:"total"`
+	Currency            string  `gorm:"type:varchar(3);default:'INR'" json:"currency"`
 
 	// Escrow links (#194): the upfront capture that funds the held chef payouts.
 	EscrowPaymentID string `gorm:"" json:"escrowPaymentId,omitempty"`

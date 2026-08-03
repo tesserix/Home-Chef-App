@@ -355,8 +355,8 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 				"error": fmt.Sprintf(
 					"You've already booked %s with this chef. Pick other days, or cancel that booking first.",
 					strings.Join(labels, ", ")),
-				"code":  "duplicate_day",
-				"days":  labels,
+				"code": "duplicate_day",
+				"days": labels,
 			})
 			return
 		}
@@ -372,12 +372,16 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 	planTax := 0.0
 	planTaxRate := 0.0
 	planTotal := subtotal
+	var planPricing models.OrderPricing
+	var planRates models.TaxRates
 	if services.MealPlanEscrowActive() {
-		fee, tax, taxRate, delivery := services.MealPlanFeeTotals(subtotal, len(days))
-		planFee = fee
-		planTax = tax
-		planTaxRate = taxRate
-		planTotal = services.Round2(subtotal + fee + tax + delivery)
+		planPricing, planRates = services.MealPlanFeeTotals(subtotal, len(days))
+		planFee = planPricing.PlatformFee
+		planTax = planPricing.Tax
+		// TaxRate stays the FOOD rate: it is what a spawned day order labels its
+		// receipt with, and a day order carries food only.
+		planTaxRate = planRates.Food
+		planTotal = planPricing.Total
 	}
 
 	respondBy := time.Now().Add(chefRespondWindow)
@@ -393,10 +397,19 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		PlatformFee:    planFee,
 		TaxRate:        planTaxRate,
 		Tax:            planTax,
-		Total:          planTotal,
-		Currency:       "INR",
-		ChefRespondBy:  &respondBy,
-		Days:           days,
+		// Frozen per supply, so the chef's payout is withheld against the food GST
+		// alone and a later rate change cannot restate this plan.
+		TaxFood:             planPricing.TaxFood,
+		TaxService:          planPricing.TaxService,
+		TaxDelivery:         planPricing.TaxDelivery,
+		TaxRateFood:         planRates.Food,
+		TaxRateService:      planRates.Service,
+		TaxRateDelivery:     planRates.Delivery,
+		TaxServiceInclusive: planRates.ServiceInclusive,
+		Total:               planTotal,
+		Currency:            "INR",
+		ChefRespondBy:       &respondBy,
+		Days:                days,
 	}
 
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
@@ -531,8 +544,8 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 	// directly, and reject cancels — both handled by the tx below.)
 	if approve && services.MealPlanEscrowActive() {
 		accSub := plan.AcceptedTotal()
-		fee, tax, taxRate, delivery := services.MealPlanFeeTotals(accSub, plan.AcceptedDayCount())
-		total := services.Round2(accSub + fee + tax + delivery)
+		accPricing, accRates := services.MealPlanFeeTotals(accSub, plan.AcceptedDayCount())
+		fee, tax, total := accPricing.PlatformFee, accPricing.Tax, accPricing.Total
 
 		// Snapshot the accepted-days charge, guarded so only one approval mints an
 		// order and only while still awaiting_customer with none minted yet
@@ -541,11 +554,18 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 			Where("id = ? AND status = ? AND (razorpay_order_id IS NULL OR razorpay_order_id = '')",
 				plan.ID, models.MealPlanAwaitingCustomer).
 			Updates(map[string]any{
-				"subtotal":     accSub,
-				"platform_fee": fee,
-				"tax_rate":     taxRate,
-				"tax":          tax,
-				"total":        total,
+				"subtotal":              accSub,
+				"platform_fee":          fee,
+				"tax_rate":              accRates.Food,
+				"tax":                   tax,
+				"tax_food":              accPricing.TaxFood,
+				"tax_service":           accPricing.TaxService,
+				"tax_delivery":          accPricing.TaxDelivery,
+				"tax_rate_food":         accRates.Food,
+				"tax_rate_service":      accRates.Service,
+				"tax_rate_delivery":     accRates.Delivery,
+				"tax_service_inclusive": accRates.ServiceInclusive,
+				"total":                 total,
 			})
 		if res.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})
