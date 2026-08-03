@@ -56,7 +56,7 @@ func setupLoyaltyDB(t *testing.T) *gorm.DB {
 			id text PRIMARY KEY, user_id text, source text, points real, points_remaining real,
 			earned_at datetime, expires_at datetime, order_id text, idempotency_key text UNIQUE, created_at datetime
 		)`,
-		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY, customer_id text, status text DEFAULT 'pending', payment_status text DEFAULT 'pending', subtotal real, total real, wallet_applied real DEFAULT 0, loyalty_applied real DEFAULT 0, created_at datetime, deleted_at datetime)`,
+		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY, customer_id text, status text DEFAULT 'pending', payment_status text DEFAULT 'pending', subtotal real, total real, wallet_applied real DEFAULT 0, loyalty_applied real DEFAULT 0, refund_amount real DEFAULT 0, created_at datetime, deleted_at datetime)`,
 	}
 	for _, s := range stmts {
 		require.NoError(t, db.Exec(s).Error)

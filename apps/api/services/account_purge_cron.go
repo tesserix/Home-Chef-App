@@ -107,6 +107,26 @@ func purgeOneAccount(ctx context.Context, user models.User) (ok bool) {
 		}
 	}()
 
+	// Refuse to erase an account that still holds money (#948). Deleting the user
+	// row does not delete their financial position: production carries one user
+	// with no `users` row, no wallet, a ₹145.87 ledger credit that was never
+	// materialised, and ₹297.58 captured on cancelled orders and never refunded.
+	// The ledger-reconcile cron then reports that as DRIFT forever and refuses to
+	// auto-correct.
+	//
+	// Deliberately NOT silent and NOT permanent: the row keeps its purge_after so
+	// it re-surfaces every scan until someone settles or writes it off. Erasure is
+	// a legal commitment, so this must be noisy enough to action rather than a
+	// quiet block. A guard that cannot read the position lets the purge proceed —
+	// failing erasure on a database error would be the worse trade.
+	if owed, err := AccountUnsettledMoney(database.DB, user.ID); err != nil {
+		log.Printf("account-purge: could not check unsettled money for user=%s (continuing): %v", user.ID, err)
+	} else if owed.Any() {
+		log.Printf("account-purge: SKIPPING user=%s — account still holds money (%s); settle or write off before erasure",
+			user.ID, owed)
+		return false
+	}
+
 	// Archive before erasing. A failed archive must not stop the erasure: the
 	// user asked to be deleted, and holding their data back because a bucket
 	// write failed would be the worse outcome of the two.
