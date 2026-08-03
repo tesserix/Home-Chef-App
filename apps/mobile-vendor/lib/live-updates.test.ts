@@ -6,11 +6,28 @@ import { streamBase } from '../hooks/useLiveUpdates';
 describe('invalidationsFor', () => {
   it('refreshes the order lists for an order event', () => {
     expect(invalidationsFor({ order_id: 'o1' })).toEqual([
+      ['notifications', 'unread'],
+      ['notifications', 'list'],
       ['chef', 'orders'],
       ['chef', 'dashboard'],
       ['chef', 'upcoming'],
       ['chef', 'cancel-requests'],
     ]);
+  });
+
+  // Every frame we act on IS a notification that was just written. Without this the
+  // orders list refreshed live while the bell badge kept its old count: a paid order
+  // landed on the dashboard with the badge reading one short until something else
+  // refetched it.
+  it('refreshes the bell badge for every event', () => {
+    for (const payload of [
+      { order_id: 'o1' },
+      { meal_plan_id: 'p1' },
+      { meal_plan_day_id: 'd1' },
+    ]) {
+      expect(invalidationsFor(payload)).toContainEqual(['notifications', 'unread']);
+      expect(invalidationsFor(payload)).toContainEqual(['notifications', 'list']);
+    }
   });
 
   // A cancellation request arrives as an order event. The chef answers it in the
@@ -48,9 +65,15 @@ describe('invalidationsFor', () => {
     expect(invalidationsFor({ day_id: 'd1' })).toContainEqual(['chef', 'refund-decisions']);
   });
 
-  // An event we have no view for must be ignored, not refetch the world.
-  it('ignores an event with nothing we render', () => {
-    expect(invalidationsFor({})).toEqual([]);
+  // An event we have no view for must not refetch the world. The bell is the one
+  // exception: invalidationsFor only ever sees a frame parseLiveFrame accepted, and
+  // that is by definition a notification that was just written, so the badge is
+  // stale either way. Two small queries, not the chef's whole dataset.
+  it('refreshes only the bell for an event with nothing else we render', () => {
+    expect(invalidationsFor({})).toEqual([
+      ['notifications', 'unread'],
+      ['notifications', 'list'],
+    ]);
   });
 
   it('combines keys when one event touches a plan and its day', () => {

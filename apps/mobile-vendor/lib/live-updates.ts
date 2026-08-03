@@ -41,6 +41,14 @@ const REFUND_KEYS = [
   ['chef', 'refund-decisions'],
   ['chef', 'refunds'],
 ];
+// Every frame we act on IS a notification that was just written, so the bell's
+// badge and list are stale the moment it arrives. Without these the orders list
+// refreshed live while the badge sat on its old count until something else
+// refetched it — a paid order landed with the bell still reading one short.
+const NOTIFICATION_KEYS = [
+  ['notifications', 'unread'],
+  ['notifications', 'list'],
+];
 
 /**
  * The query keys a live event should invalidate. Returns an empty array for anything
@@ -48,7 +56,7 @@ const REFUND_KEYS = [
  * app because a loyalty point moved would be worse than ignoring it.
  */
 export function invalidationsFor(payload: LiveEventPayload): string[][] {
-  const keys: string[][] = [];
+  const keys: string[][] = [...NOTIFICATION_KEYS];
   if (payload.order_id) {
     keys.push(...ORDER_KEYS);
   }
