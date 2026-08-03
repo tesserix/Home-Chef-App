@@ -12,7 +12,6 @@ import { useState } from 'react';
 import { useAlert } from '@homechef/mobile-shared/ui';
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -166,10 +165,7 @@ export default function AccountLifecycleScreen() {
             disabled={exportData.isPending}
             accessibilityRole="button"
             accessibilityLabel="Download my data"
-            style={({ pressed }) => [
-              styles.buttonNeutral,
-              pressed && Platform.OS === 'ios' && styles.pressedNeutral,
-            ]}
+            style={styles.buttonNeutral}
           >
             {exportData.isPending ? (
               <ActivityIndicator color={theme.colors.ink.DEFAULT} />
@@ -192,10 +188,7 @@ export default function AccountLifecycleScreen() {
             disabled={deactivate.isPending}
             accessibilityRole="button"
             accessibilityLabel="Pause my kitchen"
-            style={({ pressed }) => [
-              styles.buttonNeutral,
-              pressed && Platform.OS === 'ios' && styles.pressedNeutral,
-            ]}
+            style={styles.buttonNeutral}
           >
             {deactivate.isPending ? (
               <ActivityIndicator color={theme.colors.ink.DEFAULT} />
@@ -249,11 +242,7 @@ export default function AccountLifecycleScreen() {
             disabled={!canDelete || deleteAccount.isPending}
             accessibilityRole="button"
             accessibilityLabel="Delete my account"
-            style={({ pressed }) => [
-              styles.buttonDanger,
-              !canDelete && styles.buttonDisabled,
-              canDelete && pressed && Platform.OS === 'ios' && styles.pressedDanger,
-            ]}
+            style={[styles.buttonDanger, !canDelete && styles.buttonDisabled]}
           >
             {deleteAccount.isPending ? (
               <ActivityIndicator color={theme.colors.destructive.DEFAULT} />
@@ -317,7 +306,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pressedNeutral: { backgroundColor: theme.colors.bone },
   buttonNeutralText: { fontSize: 16, fontWeight: '600', color: theme.colors.ink.DEFAULT },
   buttonDanger: {
     marginTop: 12,
@@ -328,7 +316,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pressedDanger: { backgroundColor: theme.colors.destructive.tint },
   buttonDangerText: { fontSize: 16, fontWeight: '600', color: theme.colors.destructive.DEFAULT },
   buttonDisabled: { borderColor: theme.colors.mist.DEFAULT },
   buttonDisabledText: { color: theme.colors.ink.muted },

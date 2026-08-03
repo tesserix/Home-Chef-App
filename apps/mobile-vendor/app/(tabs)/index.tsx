@@ -576,7 +576,7 @@ export default function DashboardScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Total earnings: ₹${(dashboard?.totalEarnings ?? 0).toFixed(0)}. Tap to see payouts and transactions.`}
                 hitSlop={8}
-                style={({ pressed }) => [styles.heroStatMain, pressed && styles.heroStatPressed]}
+                style={styles.heroStatMain}
               >
                 <Text style={styles.heroEarnings} numberOfLines={1}>
                   ₹{Math.round(dashboard?.totalEarnings ?? 0).toLocaleString('en-IN')}
@@ -590,7 +590,7 @@ export default function DashboardScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`${dashboard?.totalOrders ?? 0} orders in total. Tap to see them.`}
                 hitSlop={8}
-                style={({ pressed }) => [styles.heroStatCol, pressed && styles.heroStatPressed]}
+                style={styles.heroStatCol}
               >
                 <Text style={styles.heroStatValue}>{dashboard?.totalOrders ?? 0}</Text>
                 <Text style={styles.heroStatLabel} numberOfLines={1}>
@@ -606,7 +606,7 @@ export default function DashboardScreen() {
                     : 'No reviews yet. Tap to read your reviews.'
                 }
                 hitSlop={8}
-                style={({ pressed }) => [styles.heroStatCol, pressed && styles.heroStatPressed]}
+                style={styles.heroStatCol}
               >
                 {hasReviews ? (
                   <Text style={styles.heroStatValue}>
@@ -1278,9 +1278,6 @@ const styles = StyleSheet.create({
   },
   heroStatCol: {
     alignItems: 'flex-start',
-  },
-  heroStatPressed: {
-    opacity: 0.6,
   },
   heroEarnings: {
     fontFamily: 'Geist-Bold',

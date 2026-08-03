@@ -2,7 +2,7 @@
 // Step 5/6 — Terms checkbox + cancellation policy radio.
 // StyleSheet only — no NativeWind className.
 
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -109,12 +109,9 @@ export default function PoliciesScreen() {
         </View>
       </View>
 
-      {/* Acceptance row — ink checkbox. Outer Pressable carries only the
-          pressed opacity; inner View owns flex/bg/border. iOS drops those
-          styles when applied via the Pressable's function-style prop. */}
+      {/* Acceptance row — ink checkbox. The inner View owns flex/bg/border. */}
       <Pressable
         onPress={() => setAcceptedTerms((prev) => !prev)}
-        style={({ pressed }) => ({ opacity: pressed && Platform.OS === 'ios' ? 0.75 : 1 })}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: acceptedTerms }}
         accessibilityLabel={t('onboarding.acceptTerms')}
@@ -155,9 +152,6 @@ export default function PoliciesScreen() {
             <Pressable
               key={option.value}
               onPress={() => setCancellationPolicy(option.value)}
-              style={({ pressed }) => ({
-                opacity: pressed && !selected && Platform.OS === 'ios' ? 0.85 : 1,
-              })}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
               accessibilityLabel={optionLabel}

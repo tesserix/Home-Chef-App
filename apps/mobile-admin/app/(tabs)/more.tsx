@@ -48,7 +48,7 @@ function Row({ item }: { item: Item }) {
   return (
     <Pressable
       onPress={() => router.push(item.href)}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={styles.row}
     >
       <View style={styles.iconWrap}>
         <Icon size={20} color={c.ink.DEFAULT} strokeWidth={2} />
@@ -108,7 +108,7 @@ export default function MoreScreen() {
         <View style={styles.group}>
           <Pressable
             onPress={onLogout}
-            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            style={styles.row}
           >
             <View style={[styles.iconWrap, { backgroundColor: c.destructive.tint }]}>
               <LogOut size={20} color={c.destructive.DEFAULT} strokeWidth={2} />
@@ -141,7 +141,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.mist.DEFAULT,
   },
-  pressed: { backgroundColor: c.bone },
   iconWrap: {
     width: 38,
     height: 38,
