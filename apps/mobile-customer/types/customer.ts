@@ -249,6 +249,11 @@ export interface Order {
   cancelReason?: string;
   refundAmount?: number;
   refundedAt?: string;
+  // How the refund was divided across the rails that funded the order. An order
+  // part-paid with credit refunds part to the card and part to the wallet, so
+  // refundAmount alone cannot say where the money went.
+  walletRefunded?: number;
+  loyaltyRefunded?: number;
 }
 
 export interface TrackingResponse {

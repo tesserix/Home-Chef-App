@@ -517,7 +517,13 @@ export default function OrderDetailScreen() {
         ) : null}
 
         {/* Cancellation with vendor arbitration (#475/#478). */}
-        <CancellationSection orderId={order.id} status={order.status} source={order.source} />
+        <CancellationSection
+          orderId={order.id}
+          status={order.status}
+          source={order.source}
+          walletRefunded={order.walletRefunded}
+          loyaltyRefunded={order.loyaltyRefunded}
+        />
 
         {/* Pay now — unpaid order recovery (verify failed / sheet dismissed). */}
         {needsPayment && (

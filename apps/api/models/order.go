@@ -463,6 +463,15 @@ type OrderResponse struct {
 	CancelReason string     `json:"cancelReason,omitempty"`
 	RefundAmount float64    `json:"refundAmount,omitempty"`
 	RefundedAt   *time.Time `json:"refundedAt,omitempty"`
+
+	// How the refund was divided across the rails that funded the order
+	// (SplitRefundByFunding). RefundAmount alone cannot tell the customer where
+	// their money went: an order part-paid with credit refunds part to the card
+	// and part to the wallet, and the app was stating the whole figure reached
+	// whichever single destination the request recorded — "₹377 refunded to your
+	// card" when ₹132.22 reached the card and ₹244.85 the wallet.
+	WalletRefunded  float64 `json:"walletRefunded,omitempty"`
+	LoyaltyRefunded float64 `json:"loyaltyRefunded,omitempty"`
 }
 
 // OrderChefResponse is the minimal chef identity the customer order
@@ -672,6 +681,8 @@ func (o *Order) ToResponse() OrderResponse {
 		CancelReason:           o.CancelReason,
 		RefundAmount:           o.RefundAmount,
 		RefundedAt:             o.RefundedAt,
+		WalletRefunded:         o.WalletRefunded,
+		LoyaltyRefunded:        o.LoyaltyRefunded,
 	}
 }
 

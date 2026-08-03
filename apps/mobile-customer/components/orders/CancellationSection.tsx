@@ -16,6 +16,8 @@ import {
 import { useAlert, type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useRouter } from 'expo-router';
 import { friendlyErrorMessage } from '../../lib/errors';
+import { formatMoney } from '../../lib/format';
+import { refundDestinationLine } from '../../lib/refund-destination';
 import type { Order } from '../../types/customer';
 import { DisputeReasonSheet } from './DisputeReasonSheet';
 
@@ -58,16 +60,23 @@ const OWNING_FLOW: Partial<
 // reached Razorpay. The server now derives the destination from the order's
 // payment (handlers/cancellation.go resolveRefundDestination), so the client
 // no longer sends one.
-const money = (paise: number) => `₹${(paise / 100).toFixed(0)}`;
+// Money renders through lib/format.ts like every other figure in the app. The
+// local `(paise / 100).toFixed(0)` this replaced turned ₹377.07 into "₹377" —
+// three rupees adrift from what the customer can check against their bank.
+const money = (paise: number) => formatMoney(paise / 100);
 
 export function CancellationSection({
   orderId,
   status,
   source,
+  walletRefunded,
+  loyaltyRefunded,
 }: {
   orderId: string;
   status: string;
   source?: Order['source'];
+  walletRefunded?: number;
+  loyaltyRefunded?: number;
 }) {
   const { showAlert } = useAlert();
   const router = useRouter();
@@ -116,6 +125,8 @@ export function CancellationSection({
           orderId={orderId}
           onDispute={() => disputeSheetRef.current?.present()}
           disputePending={dispute.isPending}
+          walletRefunded={walletRefunded}
+          loyaltyRefunded={loyaltyRefunded}
         />
         <DisputeReasonSheet ref={disputeSheetRef} onSubmit={onDisputeSubmit} />
       </View>
@@ -152,8 +163,27 @@ export function CancellationSection({
     req.mutate(
       { orderId },
       {
-        onSuccess: () => {
+        // The server takes one of two paths and says which: a pre-acceptance
+        // cancel is refunded on the spot (`auto_refunded`), anything later waits
+        // for the chef (`pending_vendor`). This used to show the vendor-review
+        // copy for both, so a customer whose money was already back was told to
+        // wait for an outcome that had happened seconds earlier — with the screen
+        // behind the dialog already reading "Order cancelled".
+        onSuccess: (data) => {
           setExpanded(false);
+          const settled = data?.request as CancellationRequest | undefined;
+          if (settled?.status === 'auto_refunded') {
+            // Deliberately no destination here. The rail split lives on the order
+            // row, which this screen has not refetched yet at the moment the alert
+            // fires — naming a destination from stale data would reproduce exactly
+            // the bug this change fixes. The card below states the split once the
+            // refreshed order lands.
+            showAlert(
+              'Order cancelled',
+              `${money(settled.refundTotalPaise ?? 0)} has been refunded. The breakdown is on your order.`,
+            );
+            return;
+          }
           showAlert(
             'Cancellation requested',
             "We've asked the chef to confirm. You'll be notified of the outcome and any refund.",
@@ -218,13 +248,16 @@ function StatusView({
   request,
   onDispute,
   disputePending,
+  walletRefunded,
+  loyaltyRefunded,
 }: {
   request: CancellationRequest;
   orderId: string;
   onDispute: () => void;
   disputePending: boolean;
+  walletRefunded?: number;
+  loyaltyRefunded?: number;
 }) {
-  const dest = request.refundDestination === 'original' ? 'card' : 'wallet';
   switch (request.status) {
     case 'pending_vendor':
       return (
@@ -240,7 +273,12 @@ function StatusView({
         <>
           <Text style={styles.statusTitle}>Order cancelled</Text>
           <Text style={styles.statusBody}>
-            {money(request.refundTotalPaise)} refunded to your {dest}.
+            {refundDestinationLine(
+              request.refundTotalPaise,
+              walletRefunded,
+              loyaltyRefunded,
+              request.refundDestination,
+            )}
           </Text>
           {request.status === 'approved' ? (
             <Pressable
