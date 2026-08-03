@@ -14,6 +14,16 @@ export interface CancellationRequest {
   refundTotalPaise: number;
   refundExecuted: boolean;
   vendorRespondBy?: string | null;
+  /** How the un-refunded remainder divides. `vendorKeptPaise` is the chef's
+   *  compensation for food already bought or cooked — per epic #475, "the
+   *  withheld % becomes the vendor's payout". `platformKeptPaise` is the
+   *  non-refundable platform fee plus its share of tax.
+   *
+   *  These are separate because collapsing them into one "Retained (fees +
+   *  cancellation charge)" line told the customer the platform had taken
+   *  ₹352.77 in fees when ₹320.00 of it was the chef's (#945). */
+  vendorKeptPaise?: number;
+  platformKeptPaise?: number;
 }
 
 // Where a refund landed, as reported by the server. NOT a customer choice: the

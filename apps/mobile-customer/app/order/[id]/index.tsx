@@ -36,6 +36,7 @@ import { getChipLabel, getStatusLine } from '../../../lib/orderSteps';
 import { MESSAGING_ENABLED } from '../../../lib/features';
 import type { Order } from '../../../types/customer';
 import { formatMoney } from '../../../lib/format';
+import { useCancellationRequest } from '../../../hooks/useCancellation';
 
 // Android ripple tint for coral-filled CTAs — translucent white derived from
 // the canvas token, never a new literal colour.
@@ -187,6 +188,11 @@ export default function OrderDetailScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { data, isLoading, isError } = useOrder(id ?? '');
+  // Shares the ['order', id, 'cancel-request'] cache with CancellationSection
+  // below, so this is the same fetch rather than a second one. Needed here for
+  // the price breakdown: only the cancellation snapshot knows how the retained
+  // remainder splits between the chef and the platform (#945).
+  const { data: cancelRequest } = useCancellationRequest(id ?? undefined);
   const [paying, setPaying] = React.useState(false);
   // Food-ready photo lightbox — the inline photo is a compact thumbnail; the
   // full image opens in a tap-to-dismiss overlay so it doesn't dominate the screen.
@@ -250,6 +256,7 @@ export default function OrderDetailScreen() {
 
   const order = data.data;
   const chipStyle = getStatusChipStyle(order.status);
+  const cancelledOrder = order.status === 'cancelled' || order.status === 'refunded';
   const isActiveOrder = ACTIVE_STATUSES.includes(order.status);
 
   // Escrow confirmation (#617). `showConfirm` gates the "Confirm received" CTA to
@@ -1003,19 +1010,44 @@ export default function OrderDetailScreen() {
                 </Text>
               </View>
               {order.totalAmount - order.refundAmount > 0.5 ? (
-                <View style={styles.priceRow}>
-                  {/* "cancellation charge" is only true of a cancelled order —
-                      a live order refunds for other reasons (#703 delivery-fee
-                      reduction), where the remainder is simply what they paid. */}
-                  <Text style={styles.priceLabel}>
-                    {order.status === 'cancelled' || order.status === 'refunded'
-                      ? 'Retained (fees + cancellation charge)'
-                      : 'You paid'}
-                  </Text>
-                  <Text style={styles.priceValue}>
-                    ₹{(order.totalAmount - order.refundAmount).toFixed(2)}
-                  </Text>
-                </View>
+                cancelledOrder && (cancelRequest?.vendorKeptPaise ?? 0) > 0 ? (
+                  /* Split the remainder. Calling the whole thing "fees +
+                     cancellation charge" told the customer the platform had
+                     taken ₹352.77 when ₹320.00 of it went to the chef for food
+                     they had already cooked (#945) — on the same screen as the
+                     "Dispute the refund amount" button. Per epic #475 the
+                     withheld food share is the vendor's, so it is named. */
+                  <>
+                    <View style={styles.priceRow}>
+                      <Text style={styles.priceLabel}>Paid to the chef (food already prepared)</Text>
+                      <Text style={styles.priceValue}>
+                        {formatMoney((cancelRequest?.vendorKeptPaise ?? 0) / 100)}
+                      </Text>
+                    </View>
+                    <View style={styles.priceRow}>
+                      <Text style={styles.priceLabel}>Platform fee (non-refundable)</Text>
+                      <Text style={styles.priceValue}>
+                        {formatMoney(
+                          order.totalAmount -
+                            order.refundAmount -
+                            (cancelRequest?.vendorKeptPaise ?? 0) / 100,
+                        )}
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.priceRow}>
+                    {/* No cancellation snapshot (a live order refunding for another
+                        reason — #703 delivery-fee reduction — or a chef who kept
+                        nothing): the remainder is simply what they paid, or fees. */}
+                    <Text style={styles.priceLabel}>
+                      {cancelledOrder ? 'Retained (non-refundable fees)' : 'You paid'}
+                    </Text>
+                    <Text style={styles.priceValue}>
+                      {formatMoney(order.totalAmount - order.refundAmount)}
+                    </Text>
+                  </View>
+                )
               ) : null}
             </>
           ) : null}
