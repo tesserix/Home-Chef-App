@@ -32,7 +32,10 @@ func (s *NotificationService) handlePaymentSuccess(event Event) error {
 	number, _ := event.Data["orderNumber"].(string)
 	message := "Your payment went through — your chef is on it."
 	if amount > 0 {
-		message = fmt.Sprintf("₹%.0f paid for order %s. Your chef is on it.", amount, number)
+		// FormatMoney, not %.0f: this is the surface a customer is most likely to
+		// hold up against a bank alert, and "₹306" for a ₹303.48 charge is the one
+		// thing it must not say (#934).
+		message = fmt.Sprintf("%s paid for order %s. Your chef is on it.", FormatMoney(amount), number)
 	}
 	return s.notifyMoney(event, "payment_success", "Payment confirmed", message)
 }

@@ -520,8 +520,8 @@ func (s *NotificationService) handleOrderVoided(ev voidEvent) error {
 	}
 	title := "We're sorry — your order was cancelled"
 	body := fmt.Sprintf(
-		"No chef was able to accept your %s in time, so we've cancelled it and refunded ₹%.0f in full. We're sorry for the inconvenience.",
-		meal, ev.RefundedAmount)
+		"No chef was able to accept your %s in time, so we've cancelled it and refunded %s in full. We're sorry for the inconvenience.",
+		meal, FormatMoney(ev.RefundedAmount))
 
 	data, _ := json.Marshal(map[string]any{
 		"order_id": ev.OrderID.String(), "type": "order_voided", "refunded": ev.RefundedAmount,
@@ -746,7 +746,7 @@ func (s *NotificationService) handleTipReceived(event Event) error {
 	}
 	amount, _ := event.Data["amount"].(float64)
 	title := "You received a tip! 🎉"
-	message := fmt.Sprintf("A customer tipped you ₹%.0f — it's on its way to your payout.", amount)
+	message := fmt.Sprintf("A customer tipped you %s — it's on its way to your payout.", FormatMoney(amount))
 	data, _ := json.Marshal(event.Data)
 	if err := s.saveNotification(&models.Notification{
 		UserID:  event.UserID,
@@ -821,7 +821,7 @@ func (s *NotificationService) handleCancellationResolved(event Event) error {
 	title := "Order cancelled"
 	message := "Your cancellation is confirmed."
 	if refund > 0 {
-		message = fmt.Sprintf("Your cancellation is confirmed — ₹%.0f refunded.", refund)
+		message = fmt.Sprintf("Your cancellation is confirmed — %s refunded.", FormatMoney(refund))
 	}
 	data, _ := json.Marshal(event.Data)
 	if err := s.saveNotification(&models.Notification{
@@ -861,7 +861,7 @@ func (s *NotificationService) handleGroupOrderLocked(event Event) error {
 	share, _ := event.Data["share"].(float64)
 	return s.notifyGroup(event, "group_order_locked",
 		"Time to pay your share",
-		fmt.Sprintf("Your group order is locked. Pay your share of ₹%.0f to confirm it.", share))
+		fmt.Sprintf("Your group order is locked. Pay your share of %s to confirm it.", FormatMoney(share)))
 }
 
 // handleGroupOrderPlaced → host: the consolidated order is placed.
@@ -1066,7 +1066,7 @@ func (s *NotificationService) handleReferralRewarded(event Event) error {
 		return nil
 	}
 	title := "You earned referral credit!"
-	message := fmt.Sprintf("A friend placed their first order — ₹%.0f is now in your wallet.", reward)
+	message := fmt.Sprintf("A friend placed their first order — %s is now in your wallet.", FormatMoney(reward))
 	data, _ := json.Marshal(map[string]any{"type": "referral_rewarded"})
 
 	if err := s.saveNotification(&models.Notification{
@@ -1130,7 +1130,7 @@ func (s *NotificationService) handleLoyaltyRedeemed(event Event) error {
 		return nil
 	}
 	title := "Points redeemed"
-	message := fmt.Sprintf("You redeemed %.0f points for ₹%.0f wallet credit. Use it on your next order!", points, amount)
+	message := fmt.Sprintf("You redeemed %.0f points for %s wallet credit. Use it on your next order!", points, FormatMoney(amount))
 	data, _ := json.Marshal(map[string]any{"type": "loyalty_redeemed", "points": points, "amount": amount})
 	if err := s.saveNotification(&models.Notification{
 		UserID:  event.UserID,

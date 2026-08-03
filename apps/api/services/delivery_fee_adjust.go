@@ -87,8 +87,8 @@ func AdjustDeliveryFeeAtAccept(ctx context.Context, order *models.Order, chefFee
 func NotifyDeliveryFeeRefund(order models.Order, finalFee, refunded float64) {
 	title := "Delivery fee reduced"
 	body := fmt.Sprintf(
-		"Your chef set delivery to ₹%.0f for order %s — ₹%.0f is being refunded to your original payment method.",
-		finalFee, order.OrderNumber, refunded)
+		"Your chef set delivery to %s for order %s — %s is being refunded to your original payment method.",
+		FormatMoney(finalFee), order.OrderNumber, FormatMoney(refunded))
 	if err := SendPushNotification(order.CustomerID, title, body, map[string]string{
 		"type":     "delivery_fee_refund",
 		"orderId":  order.ID.String(),

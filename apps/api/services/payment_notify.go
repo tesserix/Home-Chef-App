@@ -27,16 +27,23 @@ import (
 // replay from notifying twice.
 func NotifyPaymentSucceeded(db *gorm.DB, orderID uuid.UUID) {
 	var order models.Order
-	if err := db.Select("id, order_number, customer_id, total, refund_amount, payment_method").
+	if err := db.Select("id, order_number, customer_id, total, wallet_applied, loyalty_applied, refund_amount, payment_method").
 		First(&order, "id = ?", orderID).Error; err != nil {
 		log.Printf("payment-notify: load order %s: %v", orderID, err)
 		return
 	}
+	// `amount` is what the customer PAID — the gateway capture, not the order
+	// total. An order part-funded with wallet credit or loyalty only ever charges
+	// (Total − credits), so publishing Total told a customer who paid ₹303.48 that
+	// ₹306 had been taken (#934). The gap is the credit applied, so it is widest
+	// exactly when someone is most likely to check against their bank.
+	// orderTotal rides along for any surface that wants to state the order value.
 	publishPaymentEvent(db, SubjectPaymentSuccess, "payment_success", order.CustomerID, map[string]any{
 		"type":        "payment_success",
 		"orderId":     order.ID.String(),
 		"orderNumber": order.OrderNumber,
-		"amount":      models.RoundAmount(order.Total),
+		"amount":      OrderCaptureAmount(&order),
+		"orderTotal":  models.RoundAmount(order.Total),
 		"method":      order.PaymentMethod,
 	})
 }
@@ -46,16 +53,19 @@ func NotifyPaymentSucceeded(db *gorm.DB, orderID uuid.UUID) {
 // discovering it when the kitchen never starts cooking.
 func NotifyPaymentFailed(db *gorm.DB, orderID uuid.UUID, reason string) {
 	var order models.Order
-	if err := db.Select("id, order_number, customer_id, total").
+	if err := db.Select("id, order_number, customer_id, total, wallet_applied, loyalty_applied").
 		First(&order, "id = ?", orderID).Error; err != nil {
 		log.Printf("payment-notify: load order %s: %v", orderID, err)
 		return
 	}
+	// The attempted charge, for the same reason as the success path: it is the
+	// figure the customer would have seen on the gateway sheet.
 	publishPaymentEvent(db, SubjectPaymentFailed, "payment_failed", order.CustomerID, map[string]any{
 		"type":        "payment_failed",
 		"orderId":     order.ID.String(),
 		"orderNumber": order.OrderNumber,
-		"amount":      models.RoundAmount(order.Total),
+		"amount":      OrderCaptureAmount(&order),
+		"orderTotal":  models.RoundAmount(order.Total),
 		"reason":      reason,
 	})
 }
