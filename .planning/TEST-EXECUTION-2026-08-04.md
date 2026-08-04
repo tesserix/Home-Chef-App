@@ -87,6 +87,7 @@ The UI's Cashfree sandbox flow strands payments (gotcha 3). The reliable loop is
 | 🟥 **D-01** "Free delivery" advertised, ₹39.12 charged | open |
 | 🟥 **D-10** retry offered on an already-cancelled order | open, **reproduced 4 Aug** on `HC26080405111133` (cancelled, ₹393.05 already refunded) |
 | 🟥 **D-17** raw enum shown to the customer: "this order was cancelled out_of_ingredient" | open, found 4 Aug |
+| 🟥 **D-18** post-delivery tipping is dead for **every** chef — the flow is hardwired to Razorpay Route, the platform is on Cashfree | open, found 4 Aug |
 | ✅ **D-04** "Minimum order is $199.00" on an INR marketplace | fixed #990, **verified live** |
 | ✅ **D-16** NOT_ATTEMPTED read as a live payment (regression in #989) | fixed #990, deployed |
 | 🟨 **D-12** order detail shows Total ₹393.05 while the customer was charged ₹391.45 — the loyalty credit shown at checkout is missing from the receipt | open, found 4 Aug |
@@ -244,6 +245,45 @@ Measured on the simulators against prod, both apps signed in, per 45s:
 `#892`, `#909`, `#910` and `#928` were four previous attempts, all tuning the
 backoff curve. None could have worked: the socket failed at TLS before any of
 that logic ran. The close code named the cause the whole time.
+
+### 🟥 D-18 · new · post-delivery tipping cannot work for any chef on the platform
+
+TIP-01, driven end to end for the first time (previous runs recorded it blocked
+on a tap that would not land — it turns out the screen was reachable and the
+feature behind it is broken).
+
+Delivered + confirmed order `HC26080405191298`, ₹50 chef tip → **"Could not start
+tip — This chef can't receive tips right now"**. No `tips` row is created.
+
+**Root cause: the tip flow is hardwired to Razorpay Route.** `handlers/tips.go`:
+
+```go
+rz := services.GetRazorpayFor(order.Mode)          // :88  requires a Razorpay client
+acct := order.Chef.RazorpayAccountID               // :98  requires a Route account
+if acct == "" { 409 "This chef can't receive tips right now" }
+```
+
+The rider leg (`:113`) has the same dependency on
+`DeliveryPartner.RazorpayAccountID`.
+
+**Blast radius is every chef.** In production:
+
+| | |
+|---|---|
+| Chefs with `razorpay_account_id` | **0** |
+| Chefs with `cashfree_vendor_id` | 1 (of 2 profiles) |
+
+The platform moved payouts to Cashfree; the tip path was never moved with it. So
+the entire post-delivery tip surface — a full screen promising *"100% goes
+straight to your chef and rider, with no platform cut"* — is unreachable, and
+returns a 409 to anyone who tries.
+
+**This does not contradict the 3 Aug TIP-01 pass.** That verified the
+**checkout-time** tip, which is just `orders.chef_tip` settled through the normal
+payout and needs no per-tip transfer. It is the **post-delivery** tip, which
+moves money on its own, that is dead. INV-6 (tip in gross, never commissioned)
+therefore still holds for the path that works and cannot be exercised at all on
+the path that does not.
 
 ### 🟥 D-17 · new · the cancellation reason is shown to the customer as a raw enum
 
@@ -531,7 +571,7 @@ on. The wallet leg is shown on other orders; loyalty is not.
 | LOY-01 | 🟩 pass | 0.1 × subtotal | **+32 points** at delivery (0.1 × 320) |
 | LOY-05 | 🟩 pass | loyalty returned as wallet rupees | Confirmed in `wallet_txns`: `refund-loyalty:cancel:…` credited as wallet |
 | LOY-02/03/04/06 | ⬜ not run | | |
-| TIP-01 | 🟨 blocked | tip in gross, no commission | Could not reach the tip screen — three CTAs overlap at the same y with adjacent x, tap did not navigate |
+| **TIP-01** | 🟥 **fail** | tip in gross, no commission | Screen reached and driven on `HC26080405191298`. ₹50 chef tip → **409 "This chef can't receive tips right now"**, no `tips` row. **D-18** — the flow needs a Razorpay Route account and **no chef on the platform has one** |
 | POU-01 | 🟩 pass | hold created | Stamped at **delivery**, not capture — matches the July run's own correction to this criterion |
 | POU-02 | 🟥 fail | commission/GST/TDS per §3 | **D-09** and **D-03** |
 | POU-03 | 🟩 pass | released after confirm | Confirm ⇒ **release_eligible**, `customer_confirmed_at` stamped |
