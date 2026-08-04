@@ -54,45 +54,31 @@
 
 ## Remaining scenarios
 
-**CAN-02 is done and passed** (4 Aug, `HC26080403544039`) — see Results. Remaining,
-money-critical, in the order worth running:
+Done and passed on 4 Aug: **CAN-02, CAN-03, CHF-02, ORD-04, PAY-05, POU-04,
+LOY-05, LOY-06, REF-04, WAL-05** — see Results. Still to run:
 
 | ID | Scenario | Why it matters |
 |---|---|---|
-| CAN-03/04/06 | other cancellation tiers | same splitter, other percentages |
-| CHF-02 | chef rejects → full refund | |
-| REF-02/03/05 | partial refund via report-issue; reconciliation | REF-03 was mid-flight when the run paused |
-| WAL-03/04/05 | wallet top-up, expiry, insufficient balance | |
-| LOY-02/04/06 | loyalty expiry, reversal, cap | earn/redeem already pass |
-| TIP-01 | tip in gross, no commission | previously mis-marked blocked — retestable |
-| REFR-01 | referral credit | no payment needed |
-| GRP-01/02 | group orders | |
-| MPL-01/02/03 | meal plans | |
+| CAN-04/06 | cancel after capture; cancel a delivery order | same splitter, other paths |
+| REF-02/03/05 | partial refund via report-issue; repeated partials | REF-03 was mid-flight when the July run paused |
+| TIP-01 | tip in gross, no commission | needs a **delivered + confirmed** order |
+| WAL-03/04 | full-wallet order; over-application clamp | wallet balance is currently **₹0** — needs a top-up or a refund first |
+| LOY-02/03/04 | redeem at checkout; 10%/order and ₹300/30-day caps | caps can't bind without seeding a large balance (see 3 Aug note) |
+| REFR-01 | referral credit | needs a **fresh GIP signup** with customer01's code |
+| GRP-01/02 | group orders | needs a second customer account |
+| MPL-01/02/03 | meal plans | D-08 (8% GST / ₹2.99 delivery) is still open |
 
-Owner-only (cannot run unattended): **CAN-05**, **POU-06** (admin auth), and the
-**POU-03 auto-path** (k8s CronJob).
+Owner-only: **CAN-05**, **POU-06** (admin auth), **POU-03 auto-path** (CronJob).
 
-### CAN-02 — prediction already recorded, assert against it
+### How to fund an order fast
 
-₹320 food + ₹39.12 delivery + ₹13.53 fee, tax 20.40 (food 16.00 / svc 2.44 /
-dlv 1.96), total 393.05, at the `materials_purchased` **40%** tier:
+The UI's Cashfree sandbox flow strands payments (gotcha 3). The reliable loop is:
 
-| | paise | ₹ |
-|---|---|---|
-| Food refund | 32000 × 40% | 128.00 |
-| Delivery refund (not dispatched) | 3912 | 39.12 |
-| Tax refund | 1600×12800/32000 + 196 | **8.36** |
-| **Customer receives** | 17548 | **175.48** |
-| Vendor keeps | 19200 | 192.00 |
-| Platform keeps | 2557 | 25.57 |
-
-Platform-keep decomposes as fee 13.53 + svc GST 2.44 + unrefunded food GST 9.60.
-**The old proportional model would refund ₹9.15 of tax** — handing back ₹0.79 of
-GST on a fee that was kept. That ₹0.79 is what this release fixed; it is the
-number to watch.
-
-Flow: customer requests cancellation → **vendor approves and picks the reason**
-(the reason selects the tier) → refund executes.
+1. place the order in the app, tap the saved-card **Pay Now** tile
+2. read `razorpay_order_id` off the order row
+3. `GET /pg/orders/<that>/payments` → take `cf_payment_id`
+4. POST the simulate call in gotcha 3 with `payment_status: SUCCESS`
+5. the order settles in ~10s (client verify) or by the next 5-min reconcile tick
 
 ## Open defects
 
