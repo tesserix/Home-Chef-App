@@ -90,12 +90,41 @@ cancelled order can never be paid — and returns to the same screen. Infinite d
 No money at risk (nothing is captured). Either suppress the CTA once cancelled, or have
 retry mint a fresh order.
 
+### ✅ D-11 · RESOLVED · real-time was dead on mobile, root cause found and fixed
+
+Filed as #982, fixed in #983 + #984, deployed. Three independent defects stacked:
+
+1. **Auth** — `useOrderTrackingWS` opened a socket with no credential at all; the
+   sibling hook's fix was never applied to it. Every other client dialled
+   `/api/v1/**`, the BFF path, which cannot carry a WS upgrade.
+2. **Transport** — the one that actually mattered on device. React Native's
+   WebSocket does TLS through SocketRocket/CFStream, and that handshake **fails
+   outright** against our edge: close `1006`, `OSStatus -9836` (errSSLProtocol).
+   No HTTP request is ever issued, which is why these attempts appear nowhere in
+   the API logs. Mobile now uses SSE — same NATS stream, over NSURLSession.
+3. **Render churn** — every caller passed `getToken` as an inline arrow, so
+   `connect`'s `useCallback` was rebuilt each render and the effect tore the
+   stream down and reopened it. ~19 stream opens per minute for one idle user.
+
+Measured on the simulators against prod, both apps signed in, per 45s:
+
+| | before | after |
+|---|---|---|
+| stream opens | 19 | **2** (one per app) |
+| ticket mints | 14 | **0** |
+| steady state | constant storm | **zero traffic** — streams held open |
+
+`#892`, `#909`, `#910` and `#928` were four previous attempts, all tuning the
+backoff curve. None could have worked: the socket failed at TLS before any of
+that logic ran. The close code named the cause the whole time.
+
 ### 🟨 Observations (not filed)
 
 | | |
 |---|---|
 | **`[tracking-ws]` failed 33 consecutive times** on one order before falling back to polling, and kept retrying in the background. `[order-ws]` and `[notif-ws]` likewise. 48 console errors accumulated in one session. | Order tracking silently degrades to polling. Verified from the in-app error log, not inferred. May be a simulator-to-prod networking artefact rather than a product defect — **confirm on a real device before filing**. Source: `useOrderTrackingWS.ts:92`. |
 | Home header briefly showed a stale wallet balance (₹248.60 vs ₹237.66) | Corrects on navigation. Cosmetic. |
+| **Vendor app cannot persist its session on this simulator build.** SecureStore/keychain access fails ("A required entitlement isn't present"), so the chef is signed out on every relaunch. | Simulator entitlement limitation, not a product defect — but it blocks unattended vendor-side test automation, which needs a manual sign-in per launch. |
 | Terms checkbox is exposed to accessibility as `Slider` | Blocks assistive tech and UI automation; likely a missing `accessibilityRole` on the RN component. |
 
 ---
@@ -169,6 +198,11 @@ D-10) — not in the pricing engine.
   reported centre, while adjacent controls did. Where a control did not respond I have marked
   the scenario **blocked**, not failed — I cannot distinguish an inert control from a tap that
   did not register, and it would be wrong to file the former on the evidence for the latter.
+- **The earlier "blocked" verdicts were a harness fault, not the app.** `idb`
+  reports off-screen elements with their content coordinates, so taps landed on
+  whatever was at that pixel. Adding `--duration` to the swipe fixed scrolling
+  and the terms checkbox then reported `checkbox, checked` first try. TIP-01 and
+  REF-03 are retestable, not blocked.
 - The dev error overlay stacked 48 console errors and intercepted taps; it had to be cleared
   repeatedly. This is a development-build artefact and does not affect release builds.
 
