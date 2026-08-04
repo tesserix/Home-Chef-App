@@ -6,6 +6,7 @@ import type { Order } from '../../types/customer';
 import { useConfirmOrderReceived } from '../../hooks/useConfirmReceived';
 import { canConfirmReceipt } from '../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../lib/errors';
+import { formatOrderDateTime } from '@homechef/mobile-shared/utils';
 import { useAlert } from '@homechef/mobile-shared/ui';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
@@ -101,14 +102,6 @@ function getStatusChip(order: Order): ChipStyle {
 }
 
 // Tabular date for order row (e.g. "12 Jun 2026")
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
 
 export function OrderCard({ order }: OrderCardProps) {
   const { showAlert } = useAlert();
@@ -198,7 +191,7 @@ export function OrderCard({ order }: OrderCardProps) {
               <Text style={styles.meta}>
                 {itemCount} {itemCount === 1 ? 'item' : 'items'}
                 {'  ·  '}
-                {formatDate(order.createdAt)}
+                {formatOrderDateTime(order.createdAt)}
               </Text>
               <Text style={styles.total}>{formatMoney(order.totalAmount)}</Text>
             </View>

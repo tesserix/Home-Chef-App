@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { formatOrderTimeShort } from '@homechef/mobile-shared/utils';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
 import { useDockClearance } from '../../components/navigation/Dock';
@@ -506,7 +507,7 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
                   {order.customerName}
                 </Text>
                 <Text style={historyRowStyles.meta}>
-                  {formatMinutesAgo(order.createdAt)}
+                  {formatOrderTimeShort(order.createdAt)}
                 </Text>
               </View>
               <Text style={historyRowStyles.total}>
