@@ -132,6 +132,9 @@ export const VENDOR_COST_POINTS = [
   { figure: '₹0', label: 'to join and list' },
   { figure: '₹100', label: 'FSSAI registration, a year' },
   { figure: '6%', label: 'commission, only on what you sell' },
+  // The delivery fee is the chef's, because the chef is who delivers — the
+  // platform arranges no courier today. Stated as an earning, not a cost.
+  { figure: '100%', label: 'of the delivery fee when you deliver' },
 ] as const;
 
 // Canonical legal-document values — kept identical across landing + both apps.

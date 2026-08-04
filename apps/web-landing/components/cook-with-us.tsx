@@ -28,20 +28,25 @@ export function CookWithUs() {
               Your kitchen.
               <span className="block text-white/55">Your menu. Your price.</span>
             </h2>
+            {/* Fe3dr does NOT carry the food: fulfilment today is pickup from the
+                kitchen or the chef's own delivery. Promising "and the delivery"
+                sold a courier network that does not exist, to the very people who
+                would find out first. */}
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-white/75">
               If you cook well, you already have everything you need. Cook when
-              it suits you — Fe3dr brings the orders, the payments, and the
-              delivery.
+              it suits you — Fe3dr brings the orders and handles the payments.
+              Customers collect from your kitchen, or you deliver yourself and
+              keep the delivery fee.
             </p>
           </Reveal>
 
           {/* The costs, up front. A chef's first question is what this will run
               them, and burying it is how you lose the good ones. */}
           <Reveal delay={80}>
-            <dl className="mt-9 grid gap-6 sm:grid-cols-3 sm:gap-8">
+            <dl className="mt-9 grid grid-cols-2 gap-6 sm:grid-cols-4 sm:gap-6">
               {VENDOR_COST_POINTS.map((point) => (
                 <div key={point.label}>
-                  <dt className="font-display text-3xl font-bold tabular-nums">
+                  <dt className="font-display text-2xl font-bold tabular-nums sm:text-3xl">
                     {point.figure}
                   </dt>
                   <dd className="mt-1 text-sm leading-relaxed text-white/65">
