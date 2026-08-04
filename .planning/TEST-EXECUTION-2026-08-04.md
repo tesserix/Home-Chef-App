@@ -508,7 +508,9 @@ on. The wallet leg is shown on other orders; loyalty is not.
 | PAY-04 | 🟥 fail | exactly one capture and one hold | **D-10** |
 | **PAY-05** | 🟩 **pass** | no money stranded outside the pending window (INV-7) | Proved on a real lost callback, not by inspection. `HC26080404499485` was captured at the gateway (`5114933580135`) with the client no longer polling — nobody ever called verify. `order-payment-reconcile` settled it at **10:30:03 IST**, 11 min after the 10:19:00 order and one tick after the capture: `payment_status=completed`, method `card`, one capture, `refund_amount 0`. Matches the documented grace+interval ≤ 10 min worst case |
 | CHF-01 | 🟩 pass | hold persists, no payout | `accepted`, no hold, commission frozen at **0.06** |
-| CHF-02 | ⬜ not run | reject ⇒ full refund | |
+| **CHF-02** | 🟩 **pass** | reject ⇒ full customer refund, chef earns nothing | `HC26080404499485` → `rejected` / `refunded`, `refund_amount` **393.05 = the whole total including the platform fee**. No payout hold, **no `chef_bonuses` row** — the chef earns nothing. Confirms the policy contrast: chef-fault returns the fee, customer-cancel retains it (CAN-01/02) |
+| **REF-04** (2nd) | 🟩 **pass** | split sums exactly (INV-2) | Gateway refund `67892b7f` **SUCCESS ₹392.00** + loyalty leg **₹1.05** returned as wallet credit = **₹393.05**, the full total. The gateway figure alone looks ₹1.05 short — it is not; `loyalty_applied` was 1.05 and each rail is refunded on its own |
+| **LOY-05** (2nd) | 🟩 **pass** | loyalty returned as wallet rupees | `wallet_txns` credit ₹1.05, key `refund-loyalty:refund:f195a5e8…:full` |
 | CHF-03 | 🟩 pass | no money on status alone | preparing → ready → picked_up, total **393.05** unchanged, no hold. Mark-ready required a photo (stored) |
 | CHF-04 | 🟩 pass | delivered ⇒ releasable | hold **awaiting_customer_confirmation** stamped at delivery |
 | CAN-01 | 🟩 pass | 100% refund, chef ₹0 | Verified earlier: `HC26080316029688` refunded **1301.08**, retained **59.88**, conserves to 1360.96 |
