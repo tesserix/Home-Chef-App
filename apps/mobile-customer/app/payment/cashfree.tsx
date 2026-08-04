@@ -42,6 +42,8 @@ interface CashfreeCheckoutParams {
   mealPlanId?: string;
   groupId?: string;
   cateringId?: string;
+  /** 'tip' settles a post-delivery tip against its own row, not the order. */
+  tipId?: string;
 }
 
 type BridgeMessage =
@@ -130,8 +132,9 @@ export default function CashfreeCheckoutScreen() {
   // — Cashfree gives the client no payment id or signature, so the server reads the
   // capture from the gateway and binds it by the order id, which is the row's uuid.
   const kind = String(params.kind ?? '');
-  const chargeId = String(params.mealPlanId ?? params.groupId ?? params.cateringId ?? '');
-  const isCharge = kind === 'mealplan' || kind === 'group' || kind === 'catering';
+  const chargeId = String(params.mealPlanId ?? params.groupId ?? params.cateringId ?? params.tipId ?? '');
+  const isCharge =
+    kind === 'mealplan' || kind === 'group' || kind === 'catering' || kind === 'tip';
   const { verifyPath, doneRoute } =
     kind === 'mealplan'
       ? {
@@ -148,6 +151,11 @@ export default function CashfreeCheckoutScreen() {
               verifyPath: `/v1/catering/requests/${chargeId}/deposit/verify`,
               doneRoute: `/catering/${chargeId}`,
             }
+          : kind === 'tip'
+            ? {
+                verifyPath: `/v1/payments/tip/${chargeId}/verify`,
+                doneRoute: `/order/${orderId}`,
+              }
           : {
               verifyPath: `/v1/payments/order/${orderId}/verify`,
               doneRoute: `/payment/result?order_id=${orderId}`,
