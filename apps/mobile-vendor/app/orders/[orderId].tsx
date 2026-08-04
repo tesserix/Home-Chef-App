@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, ChevronLeft } from 'lucide-react-native';
+import { formatOrderDateTime } from '@homechef/mobile-shared/utils';
 import { theme } from '@homechef/mobile-shared/theme';
 import {
   KeyboardAwareScrollView,
@@ -205,6 +206,8 @@ function formatAddressLines(addr: OrderDetail['deliveryAddress']): string[] {
 
 interface CommandBarProps {
   orderNumber?: string;
+  /** When the customer placed it — a chef reconciling a day needs the clock. */
+  createdAt?: string;
   status?: OrderDetailStatus;
   fulfillmentType?: FulfillmentType;
   onBack: () => void;
@@ -212,6 +215,7 @@ interface CommandBarProps {
 
 function CommandBar({
   orderNumber,
+  createdAt,
   status,
   fulfillmentType = 'delivery',
   onBack,
@@ -236,6 +240,11 @@ function CommandBar({
         <Text style={styles.commandTitle} numberOfLines={1}>
           {orderNumber ? `#${orderNumber}` : 'Order'}
         </Text>
+        {createdAt ? (
+          <Text style={styles.commandPlacedAt} numberOfLines={1}>
+            Placed {formatOrderDateTime(createdAt)}
+          </Text>
+        ) : null}
         {status && chip ? (
           <View style={styles.commandStatusRow}>
             <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
@@ -1291,6 +1300,7 @@ export default function OrderDetailScreen() {
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <CommandBar
         orderNumber={order.orderNumber}
+        createdAt={order.timing.orderedAt}
         status={order.status}
         fulfillmentType={order.fulfillmentType}
         onBack={handleBack}
@@ -1954,6 +1964,11 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     letterSpacing: -0.3,
     color: theme.colors.ink.DEFAULT,
+  },
+  commandPlacedAt: {
+    fontSize: 12,
+    color: theme.colors.ink.soft,
+    marginTop: 2,
   },
   commandStatusRow: {
     flexDirection: 'row',
