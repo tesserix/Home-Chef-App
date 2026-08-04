@@ -95,6 +95,8 @@ Flow: customer requests cancellation → **vendor approves and picks the reason*
 | ✅ D-03 GST head on unknown state | fixed #988 |
 | ✅ D-11 real-time dead on mobile | fixed #983/#984, verified |
 | 🟨 PAY-03 auto-cancel contradicts the written criterion | needs a product call |
+| ✅ **D-13** analytics/dashboard revenue ≠ earnings | fixed, `fix/chef-revenue-reconciliation` |
+| ✅ **D-14** order cancelled under a live gateway payment | fixed, same branch |
 
 Everything above is deployed. API was on `main-1a98c35` at handoff.
 
@@ -242,6 +244,119 @@ Measured on the simulators against prod, both apps signed in, per 45s:
 `#892`, `#909`, `#910` and `#928` were four previous attempts, all tuning the
 backoff curve. None could have worked: the socket failed at TLS before any of
 that logic ran. The close code named the cause the whole time.
+
+### ✅ D-14 · new · CRITICAL · an order is cancelled out from under a live charge — FIXED
+
+Found while three consecutive CAN-02 attempts stranded at `pending`. It looked
+like a harness problem. It was not.
+
+**What the gateway actually said.** Querying Cashfree directly for
+`HC26080403544039`:
+
+```
+cf_payment_id 5114933571626 | PENDING | debit_card | ₹393.05 | is_captured: false
+```
+
+The API was right to answer 400 — there was no captured payment. The defect is
+what happens next.
+
+**The hole.** `stale_order_cron.go` asked the gateway one question — *is there a
+CAPTURED payment?* — via `SuccessfulPayment`, which returns `nil` for PENDING
+exactly as it does for "no attempt was ever made". Two opposite answers, one
+value, and the sweep cancels on both. The same hole existed on the Razorpay leg,
+where `capturedPaymentFor` returns `""` for **`authorized`** — money already held
+on the customer's card.
+
+PENDING is not a sandbox curiosity. It is where a card sits while the bank's
+OTP/3DS page is open and where a UPI collect sits while the payer decides.
+
+**Why it reaches money.** `order_payment_reconcile_cron.go` is forward-only *by
+design* — its own header documents that it must never touch the set the stale
+cron wrongly cancelled, because those need a **refund**, not a settle. So the
+sequence is:
+
+1. payment goes PENDING at the gateway
+2. 30 min passes, the sweep reads "not captured", cancels the order
+3. the payment resolves to SUCCESS
+4. nothing recovers it — customer charged, order cancelled, `refund_amount = 0`
+
+Both of today's earlier stranded orders (`…00184814`, `…00303019`) were cancelled
+in exactly this state.
+
+**Fix.** The probe is now tri-state — captured / in-flight / dead — and only
+*dead* cancels. Any status neither gateway has shipped yet reads as in-flight:
+the two mistakes are not symmetric, and waiting one more tick on a genuinely dead
+attempt is free.
+
+**Hardening on top (Temporal + NATS).** Whether an order got settled depended on
+which of two sweeps happened to look at it and when. Added
+`PaymentResolutionWorkflow`: a durable per-order poll that asks the gateway on a
+backoff until the answer is terminal, settles through the *same* shared core, and
+expires only on the gateway's own "dead". Its horizon is deliberately longer than
+the stale cron's threshold and running out of it hands the order back **still
+pending** — a timer must never be what cancels an order. Gated behind
+`PAYMENT_RESOLUTION_ENABLED`, default off; the sweeps stay authoritative until
+ops enables it. A payment unresolved past 10 min raises `payments.stalled` on the
+transactional outbox (ops signal, not a customer notification — staged rather
+than published direct so an activity retry cannot double-publish).
+
+11 tests, verified to fail against the pre-fix code.
+
+**Harness note.** The Cashfree sandbox leaves card payments PENDING until the
+simulated bank page resolves, and the "Pay Now" favourite tile closes the WebView
+before that happens. Force the outcome instead of fighting the UI:
+
+```
+POST https://sandbox.cashfree.com/pg/simulate
+{"entity":"PAYMENTS","entity_id":"<cf_payment_id>","entity_simulation":{"payment_status":"SUCCESS"}}
+```
+
+### ✅ D-13 · new · the chef's own screens report three different numbers — FIXED
+
+Found by asking the obvious question the run had not yet asked: does the vendor
+Analytics screen agree with the Earnings screen? It does not, and the gap is
+structural, not a rounding artefact.
+
+**The dashboard hero is labelled "Total earnings" and taps through to payouts,
+but it summed `total − refund_amount` — the CUSTOMER's order value.** That carries
+the delivery fee (the driver's), the platform fee, and the platform's own GST on
+both. On the order this run already reconciled to the paisa:
+
+| | |
+|---|---|
+| Customer charged (`total`) | ₹393.05 |
+| Chef's gross earnings | **₹336.00** (320 food + 16.00 food GST) |
+| Hero reported | ₹393.05 |
+
+Three independent causes, all now fixed:
+
+1. **Wrong basis.** `chefCountedRevenueExpr` is now the SQL twin of
+   `ComputeOrderEarnings`' gross — food revenue net of chef-funded discount, plus
+   `ChefTaxOf` (food GST only, with the pre-split fallback), plus the tip.
+2. **Cancelled orders paid the chef the platform's kept share.** `total − refund`
+   on the observed 40%-tier cancellation is ₹217.57, which is the chef's ₹192.00
+   *plus the platform's ₹25.57*. The expression now reads `vendor_kept_paise` —
+   the share epic #475 already persists and `ComputeCancellationEntitlement`
+   already pays out — capped at what the platform still holds for the order. That
+   cap is the same solvency test, and it matters: production carries a
+   fully-refunded order whose snapshot still claims ₹40.53 for the vendor.
+3. **Advanced analytics bypassed the shared scope entirely** — `SUM(total)` over
+   `chef_id` alone, so sandbox orders and soft-deleted rows fed revenue-per-customer
+   and best-day.
+
+**And the Earnings screen itself was missing two guards the weekly statement has
+always had:** it was unscoped by `mode` (a sandbox order counted toward a live
+chef's earnings) and counted refunded orders (`status` stays `delivered` on the
+order-issue refund path — filtering on status alone does not catch it, the same
+trap #927 fixed in `statement.go`).
+
+Effect on the test kitchen, measured in Postgres: lifetime hero **₹8,706.92 →
+₹7,491.38**. This week's earnings gross is unchanged at **₹955.40** — the figure
+already reconciled against the statement when D-09 was verified, which is the
+point: the fix moves the wrong number onto the right one, not the other way.
+
+Nine tests added to `chef_counted_orders_test.go`, each pinned to an order this
+run actually observed.
 
 ### 🟨 D-12 · new · receipt cannot be reconciled against the charge
 
