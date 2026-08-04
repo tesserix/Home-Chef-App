@@ -49,8 +49,17 @@ export function Hero() {
               the path that works today sat below it as a text link. Ordering
               now leads; the badges stay for people who want the app, demoted to
               what they are until the listings are live. */}
+          {/* The wrapper's `relative z-30` below is load-bearing, not decoration.
+              `fade-up` animates transform/opacity, which creates a stacking
+              context — so the suggestion menu's own z-index only applies INSIDE
+              that wrapper. Without a z-index here the later fade-up siblings (the
+              FSSAI line, the store badges) are sibling stacking contexts that
+              paint after it in DOM order, straight through the open menu. */}
           {WEB_APP_LIVE ? (
-            <div className="fade-up mt-8" style={{ animationDelay: '440ms' }}>
+            <div
+              className="fade-up relative z-30 mt-8"
+              style={{ animationDelay: '440ms' }}
+            >
               <AddressSearch />
             </div>
           ) : null}
