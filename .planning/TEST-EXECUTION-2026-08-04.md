@@ -65,7 +65,6 @@ money-critical, in the order worth running:
 | WAL-03/04/05 | wallet top-up, expiry, insufficient balance | |
 | LOY-02/04/06 | loyalty expiry, reversal, cap | earn/redeem already pass |
 | TIP-01 | tip in gross, no commission | previously mis-marked blocked — retestable |
-| ORD-04 | order below ₹199 rejected | no payment needed |
 | REFR-01 | referral credit | no payment needed |
 | GRP-01/02 | group orders | |
 | MPL-01/02/03 | meal plans | |
@@ -101,8 +100,8 @@ Flow: customer requests cancellation → **vendor approves and picks the reason*
 |---|---|
 | 🟥 **D-01** "Free delivery" advertised, ₹39.12 charged | open |
 | 🟥 **D-10** retry offered on an already-cancelled order | open |
-| ✅ **D-04** "Minimum order is $199.00" on an INR marketplace | fixed, PR #990 |
-| ✅ **D-16** NOT_ATTEMPTED read as a live payment (regression in #989) | fixed, PR #990 |
+| ✅ **D-04** "Minimum order is $199.00" on an INR marketplace | fixed #990, **verified live** |
+| ✅ **D-16** NOT_ATTEMPTED read as a live payment (regression in #989) | fixed #990, deployed |
 | 🟨 **D-12** order detail shows Total ₹393.05 while the customer was charged ₹391.45 — the loyalty credit shown at checkout is missing from the receipt | open, found 4 Aug |
 | ✅ D-09 chef GST over-credit | fixed #987, **verified live** (₹955.40) |
 | ✅ D-03 GST head on unknown state | fixed #988 |
@@ -500,7 +499,7 @@ on. The wallet leg is shown on other orders; loyalty is not.
 | ORD-01 | 🟩 pass | pickup: no delivery fee | `HC26080316331487` sub 320 · delivery **0** · fee 13.53 · tax 18.44 (food 16.00 + svc 2.44 + dlv **0**) · total 351.97. Pickup drops the fee *and* its ₹1.96 tax |
 | ORD-02 | 🟩 pass | ₹39 + ₹8/km beyond 2 km | `HC26080323440359` delivery **39.12** = 39 + 8 × 0.015 km |
 | ORD-03 | 🟩 pass | subtotal = Σ(price×qty) | Verified on the 4-item ₹1200 order earlier in the session |
-| ORD-04 | ⬜ not run | below ₹199 rejected | |
+| **ORD-04** | 🟩 **pass** | order rejected; nothing captured | ₹80 cart against a ₹199 minimum: rejected at the API, **no order row created**, nothing captured. The message now reads **"Minimum order is ₹199.00"** — D-04 verified live on `main-91eea7e` |
 | ORD-05 | 🟥 fail | advertised == charged | **D-01** |
 | PAY-01 | 🟩 pass | funded once | `payment_status=completed`; gateway asked for **₹114.31** = total − wallet, exactly |
 | PAY-02 | 🟩 pass | no funding, no hold, no leak | Failed payment ⇒ `cancelled/failed`, no hold, **no wallet debit**, balance unchanged |
