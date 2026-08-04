@@ -21,3 +21,26 @@ import { backoffMs } from '../support/outbox';
 export function socketReconnectDelayMs(consecutiveFailures: number): number {
   return backoffMs(consecutiveFailures);
 }
+
+/** Proportion of the base delay that jitter may subtract (#982). */
+const JITTER_FRACTION = 0.3;
+
+/**
+ * The same curve with decorrelating jitter. Without it every client that lost
+ * the socket to one server-side event retries in the same millisecond, and the
+ * synchronised herd is itself capable of knocking the endpoint back over — the
+ * dropped connections stay in lockstep because the backoff is deterministic.
+ *
+ * Jitter only ever subtracts (up to 30%), so the ceiling still holds and the
+ * delay can never collapse toward a hot loop.
+ *
+ * `random` is injectable so the spread can be asserted at its bounds rather
+ * than probabilistically.
+ */
+export function socketReconnectDelayWithJitterMs(
+  consecutiveFailures: number,
+  random: () => number = Math.random,
+): number {
+  const base = socketReconnectDelayMs(consecutiveFailures);
+  return Math.round(base * (1 - JITTER_FRACTION * random()));
+}

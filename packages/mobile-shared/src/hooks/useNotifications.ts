@@ -16,7 +16,11 @@ import {
 } from '@tanstack/react-query';
 import type { AxiosInstance } from 'axios';
 
-import { socketReconnectDelayMs } from '../utils/socket-backoff';
+import {
+  socketReconnectDelayMs,
+  socketReconnectDelayWithJitterMs,
+} from '../utils/socket-backoff';
+import { fetchWSTicket, wsEndpointUrl } from '../realtime/ws-ticket';
 
 export interface AppNotification {
   id: string;
@@ -171,14 +175,6 @@ export function useMarkAllNotificationsRead(api: AxiosInstance) {
   });
 }
 
-type WSCtor = {
-  new (
-    url: string,
-    protocols?: string | string[],
-    options?: { headers?: Record<string, string> },
-  ): WebSocket;
-};
-
 /**
  * Fixes #909; mirrors #892's fix already applied to the other three sockets
  * (`useOrderStatusWS`, `useOrderTrackingWS`, vendor `useLiveUpdates`).
@@ -202,6 +198,18 @@ export function notificationSocketReconnectDelayMs(
   consecutiveFailures: number,
 ): number {
   return socketReconnectDelayMs(consecutiveFailures);
+}
+
+/**
+ * The scheduled delay: the curve above, decorrelated by jitter (#982).
+ *
+ * The curve itself stays deterministic so the escalation behaviour proven in
+ * #928 remains exactly assertable; jitter is applied only where the timer is
+ * actually armed, so clients that all dropped on one server-side event do not
+ * retry in the same millisecond.
+ */
+function scheduledReconnectDelayMs(consecutiveFailures: number): number {
+  return socketReconnectDelayWithJitterMs(consecutiveFailures);
 }
 
 /** How long a connection must survive to count as healthy rather than a flap. */
@@ -240,65 +248,80 @@ export function nextConsecutiveFailures(
  * `/v1/notifications/ws`. `getToken` returns the current Bearer token.
  */
 export function useNotificationSocket(opts: {
+  /** Axios instance for the app — used to mint the WS ticket over the
+   * authenticated REST path, so the socket needs no credential of its own. */
+  api: AxiosInstance;
   apiBaseUrl: string | undefined;
-  getToken: () => string | null | undefined;
   enabled?: boolean;
 }): void {
-  const { apiBaseUrl, getToken, enabled = true } = opts;
+  const { api, apiBaseUrl, enabled = true } = opts;
   const qc = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
   const failures = useRef(0);
   const openedAt = useRef<number | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guards the async gap between asking for a ticket and the socket existing:
+  // without it, an unmount (or a second connect) during that await leaves an
+  // orphan socket nothing will ever close.
+  const generation = useRef(0);
 
   const connect = useCallback(() => {
-    if (!enabled) return;
-    const token = getToken();
-    if (!token || !apiBaseUrl) return;
+    if (!enabled || !apiBaseUrl) return;
+    const myGeneration = ++generation.current;
 
-    const wsBase = apiBaseUrl.replace(/^https?:\/\//, (m: string) =>
-      m.startsWith('https') ? 'wss://' : 'ws://',
-    );
-    const url = `${wsBase}${versionPrefix(apiBaseUrl)}/notifications/ws`;
+    void (async () => {
+      const ticket = await fetchWSTicket(api);
+      // Signed out, or the mint failed — treat exactly like a socket failure so
+      // the same backoff applies instead of silently never retrying.
+      if (!ticket) {
+        if (myGeneration !== generation.current || !enabled) return;
+        failures.current = nextConsecutiveFailures(failures.current, null);
+        reconnectTimer.current = setTimeout(
+          connect,
+          scheduledReconnectDelayMs(failures.current),
+        );
+        return;
+      }
+      // Superseded or unmounted while we were awaiting the ticket.
+      if (myGeneration !== generation.current || !enabled) return;
 
-    const ws = new (WebSocket as unknown as WSCtor)(url, undefined, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    wsRef.current = ws;
+      const url = wsEndpointUrl(apiBaseUrl, 'notifications', ticket);
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
 
-    ws.onopen = () => {
-      // Deliberately does NOT clear `failures` — see nextConsecutiveFailures.
-      openedAt.current = Date.now();
-      console.info(`[notif-ws] connected ${url}`);
-    };
-    ws.onmessage = () => {
-      // The socket signals "something changed" (a new notification, or the
-      // initial count). Refetch the two feed queries — cheap, and avoids
-      // hand-patching the list/count from a message whose shape varies by event.
-      qc.invalidateQueries({ queryKey: NOTIFICATION_LIST_KEY });
-      qc.invalidateQueries({ queryKey: NOTIFICATION_UNREAD_KEY });
-    };
-    ws.onerror = () => {
-      console.warn('[notif-ws] error');
-    };
-    ws.onclose = () => {
-      wsRef.current = null;
-      const openForMs =
-        openedAt.current === null ? null : Date.now() - openedAt.current;
-      openedAt.current = null;
-      failures.current = nextConsecutiveFailures(failures.current, openForMs);
-      if (!shouldReconnectNotificationSocket(enabled, failures.current)) return;
-      const delay = notificationSocketReconnectDelayMs(failures.current);
-      console.warn(
-        `[notif-ws] closed after ${openForMs ?? 0}ms, reconnecting in ${delay}ms (${failures.current} consecutive failures)`,
-      );
-      reconnectTimer.current = setTimeout(connect, delay);
-    };
-  }, [apiBaseUrl, getToken, enabled, qc]);
+      ws.onopen = () => {
+        // Deliberately does NOT clear `failures` — see nextConsecutiveFailures.
+        openedAt.current = Date.now();
+      };
+      ws.onmessage = () => {
+        // The socket signals "something changed" (a new notification, or the
+        // initial count). Refetch the two feed queries — cheap, and avoids
+        // hand-patching the list/count from a message whose shape varies by event.
+        qc.invalidateQueries({ queryKey: NOTIFICATION_LIST_KEY });
+        qc.invalidateQueries({ queryKey: NOTIFICATION_UNREAD_KEY });
+      };
+      ws.onclose = () => {
+        if (myGeneration !== generation.current) return; // superseded
+        wsRef.current = null;
+        const openForMs =
+          openedAt.current === null ? null : Date.now() - openedAt.current;
+        openedAt.current = null;
+        failures.current = nextConsecutiveFailures(failures.current, openForMs);
+        if (!shouldReconnectNotificationSocket(enabled, failures.current)) return;
+        reconnectTimer.current = setTimeout(
+          connect,
+          scheduledReconnectDelayMs(failures.current),
+        );
+      };
+    })();
+  }, [api, apiBaseUrl, enabled, qc]);
 
   useEffect(() => {
     connect();
     return () => {
+      // Bump the generation so an in-flight ticket request cannot open a socket
+      // after unmount, and so a pending onclose stops rescheduling.
+      generation.current += 1;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
       wsRef.current = null;

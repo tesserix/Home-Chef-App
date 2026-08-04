@@ -1,7 +1,9 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
-import { socketReconnectDelayMs } from '@homechef/mobile-shared/utils';
+import { socketReconnectDelayWithJitterMs } from '@homechef/mobile-shared/utils';
+import { fetchWSTicket, wsEndpointUrl } from '@homechef/mobile-shared/realtime';
+import { api } from '../lib/api';
 
 import { useAuthStore } from '../store/auth-store';
 import { invalidationsFor, parseLiveFrame } from '../lib/live-updates';
@@ -10,14 +12,6 @@ const MAX_WS_FAILURES = 4;
 
 // React Native's WebSocket takes a headers option as a 3rd argument that the DOM type
 // omits. The stream is user-scoped and authenticates with the Bearer token.
-type WSCtor = {
-  new (
-    url: string,
-    protocols?: string | string[],
-    options?: { headers?: Record<string, string> },
-  ): WebSocket;
-};
-
 /**
  * The `/v1` base, over http and ws.
  *
@@ -57,6 +51,8 @@ export function useLiveUpdates(enabled: boolean = true): void {
   const sseRef = useRef<{ close: () => void } | null>(null);
   const failureCount = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guards the async ticket fetch against unmount / supersession.
+  const generation = useRef(0);
 
   const applyFrame = useCallback(
     (raw: string) => {
@@ -75,10 +71,26 @@ export function useLiveUpdates(enabled: boolean = true): void {
     if (!token) return;
 
     const base = streamBase();
+    const myGeneration = ++generation.current;
 
-    const ws = new (WebSocket as unknown as WSCtor)(`${base.ws}/notifications/ws`, undefined, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    void (async () => {
+    // Ticket auth on a top-level `/ws/*` URL. The `Authorization` header this
+    // used to send never authenticated the upgrade — it 401'd every time, so
+    // this socket has always been carried by its SSE fallback (#982).
+    const ticket = await fetchWSTicket(api);
+    if (myGeneration !== generation.current || !enabled) return;
+    if (!ticket) {
+      failureCount.current += 1;
+      reconnectTimer.current = setTimeout(
+        connect,
+        socketReconnectDelayWithJitterMs(failureCount.current),
+      );
+      return;
+    }
+
+    const ws = new WebSocket(
+      wsEndpointUrl(process.env.EXPO_PUBLIC_API_URL ?? 'https://vendors.fe3dr.com/api/v1', 'notifications', ticket),
+    );
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -97,34 +109,31 @@ export function useLiveUpdates(enabled: boolean = true): void {
       failureCount.current = 0;
       applyFrame(event.data as string);
     };
-    ws.onerror = () => {
+    // `onerror` is not counted separately: it is always followed by `onclose`,
+    // and counting both double-incremented the failure budget so SSE took over
+    // after 2 real failures rather than 3, and halved the effective backoff.
+    ws.onclose = () => {
+      // Always reschedule while enabled: SSE (activated below once the budget is
+      // hit) covers the gap, but WS must never permanently give up or it can
+      // never recover real-time updates (#892).
+      if (myGeneration !== generation.current || !enabled) return;
+      wsRef.current = null;
       failureCount.current += 1;
-      console.warn(
-        `[live-ws] error (${failureCount.current}/${MAX_WS_FAILURES} failures)`,
-      );
-      // Past the WS failure budget, hold the door open with SSE instead. A blocked
-      // upgrade is a property of the network, not the request, so parking on SSE is
-      // correct — but the WS itself keeps retrying below so it can take back over.
+      // Past the WS failure budget, hold the door open with SSE instead — but the
+      // WS itself keeps retrying below so it can take back over.
       if (failureCount.current >= MAX_WS_FAILURES && !sseRef.current) {
-        console.warn(
-          `[live-ws] falling back to SSE after ${failureCount.current} WS failures — still retrying WS in the background`,
-        );
         sseRef.current = openEventStream(
           `${base.http}/notifications/sse`,
           token,
           applyFrame,
         );
       }
+      reconnectTimer.current = setTimeout(
+        connect,
+        socketReconnectDelayWithJitterMs(failureCount.current),
+      );
     };
-    ws.onclose = () => {
-      // Always reschedule while enabled: SSE (activated above once the budget is hit)
-      // covers the gap, but WS must never permanently give up or it can never recover
-      // real-time updates (#892).
-      if (!enabled) return;
-      const delay = socketReconnectDelayMs(failureCount.current);
-      console.warn(`[live-ws] closed, reconnecting in ${delay}ms`);
-      reconnectTimer.current = setTimeout(connect, delay);
-    };
+    })();
   }, [enabled, applyFrame]);
 
   useEffect(() => {

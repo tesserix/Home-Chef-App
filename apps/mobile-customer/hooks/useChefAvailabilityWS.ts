@@ -9,16 +9,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { useAuthStore } from '@homechef/mobile-shared/hooks';
-
-// React Native's WebSocket accepts a headers option that the DOM lib doesn't.
-type WSCtor = new (
-  url: string,
-  protocols?: string | string[],
-  options?: { headers?: Record<string, string> },
-) => WebSocket;
-
-const MAX_BACKOFF_MS = 30_000;
+import { fetchWSTicket, wsEndpointUrl } from '@homechef/mobile-shared/realtime';
+import { socketReconnectDelayWithJitterMs } from '@homechef/mobile-shared/utils';
+import { api } from '../lib/api';
 
 export function useChefAvailabilityWS(chefId?: string | null): void {
   const queryClient = useQueryClient();
@@ -26,25 +19,24 @@ export function useChefAvailabilityWS(chefId?: string | null): void {
   const failureCount = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedByUs = useRef(false);
+  // Guards the async ticket fetch against unmount / supersession.
+  const generation = useRef(0);
 
   const connect = useCallback(() => {
     if (!chefId) return;
 
-    // EXPO_PUBLIC_API_URL ends in `/api`, so the WS path is `/v1/...` — a
-    // `/api/v1/...` here would double the prefix.
+    // Ticket auth on a top-level `/ws/*` URL (#982). Browsing is guest-friendly
+    // and the payload is public, so the route authenticates optionally: a
+    // signed-out visitor has no session to mint from and connects without one.
     const apiBase = process.env.EXPO_PUBLIC_API_URL ?? 'https://fe3dr.com/api';
-    const wsBase = apiBase.replace(/^https?:\/\//, (m: string) =>
-      m.startsWith('https') ? 'wss://' : 'ws://',
-    );
-    const url = `${wsBase}/v1/chefs/${chefId}/availability/ws`;
+    const myGeneration = ++generation.current;
 
-    // Browsing is guest-friendly, so the token is optional here.
-    const token = useAuthStore.getState().accessToken;
-    const ws = new (WebSocket as unknown as WSCtor)(
-      url,
-      undefined,
-      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-    );
+    void (async () => {
+    const ticket = await fetchWSTicket(api);
+    if (myGeneration !== generation.current) return;
+
+    const url = wsEndpointUrl(apiBase, `chefs/${chefId}/availability`, ticket);
+    const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -72,14 +64,15 @@ export function useChefAvailabilityWS(chefId?: string | null): void {
     };
 
     ws.onclose = () => {
-      if (closedByUs.current) return;
+      if (closedByUs.current || myGeneration !== generation.current) return;
+      wsRef.current = null;
       failureCount.current += 1;
-      const delay = Math.min(
-        1000 * 2 ** (failureCount.current - 1),
-        MAX_BACKOFF_MS,
+      reconnectTimer.current = setTimeout(
+        connect,
+        socketReconnectDelayWithJitterMs(failureCount.current),
       );
-      reconnectTimer.current = setTimeout(connect, delay);
     };
+    })();
   }, [chefId, queryClient]);
 
   useEffect(() => {
@@ -87,6 +80,7 @@ export function useChefAvailabilityWS(chefId?: string | null): void {
     connect();
     return () => {
       closedByUs.current = true;
+      generation.current += 1;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
       wsRef.current = null;

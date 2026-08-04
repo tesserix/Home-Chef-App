@@ -177,8 +177,8 @@ export default function DashboardScreen() {
     enabled: isAuthenticated,
   });
   useNotificationSocket({
+    api,
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL,
-    getToken: () => useAuthStore.getState().accessToken,
   });
 
   const { data: pendingResp, refetch: refetchPending } =

@@ -1,20 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
-import { socketReconnectDelayMs } from '@homechef/mobile-shared/utils';
-import { useAuthStore } from '../store/auth-store';
+import { socketReconnectDelayWithJitterMs } from '@homechef/mobile-shared/utils';
+import { fetchWSTicket, wsEndpointUrl } from '@homechef/mobile-shared/realtime';
+import { api } from '../lib/api';
 import type { Order } from '../types/customer';
-
-// React Native's WebSocket accepts a headers option (a 3rd constructor arg) that
-// the DOM type omits — the notification stream is user-scoped and authenticates
-// with the mobile Bearer token via bffAuth's verifyBearer fallback.
-type WSCtor = {
-  new (
-    url: string,
-    protocols?: string | string[],
-    options?: { headers?: Record<string, string> },
-  ): WebSocket;
-};
 
 interface NotificationWSMessage {
   type?: string;
@@ -45,23 +35,31 @@ export function useOrderStatusWS(
   const wsRef = useRef<WebSocket | null>(null);
   const failureCount = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guards the async ticket fetch against unmount / supersession.
+  const generation = useRef(0);
 
   const connect = useCallback(() => {
     if (!enabled) return;
-    const token = useAuthStore.getState().accessToken;
-    if (!token) return;
-
-    // EXPO_PUBLIC_API_URL ends in `/api`, so the WS path is `/v1/...` (mirrors
-    // useOrderTrackingWS — a `/api/v1/...` here would double the prefix).
+    // Authenticated with a short-lived ticket on a top-level `/ws/*` URL. The
+    // previous `Authorization` header on `/api/v1/...` never authenticated the
+    // upgrade — it 401'd on every attempt (#982).
     const apiBase = process.env.EXPO_PUBLIC_API_URL ?? 'https://fe3dr.com/api';
-    const wsBase = apiBase.replace(/^https?:\/\//, (match: string) =>
-      match.startsWith('https') ? 'wss://' : 'ws://',
-    );
-    const url = `${wsBase}/v1/notifications/ws`;
+    const myGeneration = ++generation.current;
 
-    const ws = new (WebSocket as unknown as WSCtor)(url, undefined, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    void (async () => {
+    const ticket = await fetchWSTicket(api);
+    if (myGeneration !== generation.current || !enabled) return;
+    if (!ticket) {
+      failureCount.current += 1;
+      reconnectTimer.current = setTimeout(
+        connect,
+        socketReconnectDelayWithJitterMs(failureCount.current),
+      );
+      return;
+    }
+
+    const url = wsEndpointUrl(apiBase, 'notifications', ticket);
+    const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -112,21 +110,22 @@ export function useOrderStatusWS(
       }
     };
 
-    ws.onerror = () => {
-      failureCount.current += 1;
-      console.warn(`[order-ws] error (${failureCount.current} consecutive failures)`);
-    };
-
     // This stream has no fallback (unlike order-tracking's polling or the
     // vendor app's SSE), so giving up permanently here is the worst case of
     // #892 — a customer could go a whole session with no live updates.
     // Retry indefinitely with backoff instead; there is no cap to hit.
+    // `onerror` is not counted separately: it is always followed by `onclose`,
+    // and counting both double-incremented the count and halved the backoff.
     ws.onclose = () => {
-      if (!enabled) return;
-      const delay = socketReconnectDelayMs(failureCount.current);
-      console.warn(`[order-ws] closed, reconnecting in ${delay}ms`);
-      reconnectTimer.current = setTimeout(connect, delay);
+      if (myGeneration !== generation.current || !enabled) return;
+      wsRef.current = null;
+      failureCount.current += 1;
+      reconnectTimer.current = setTimeout(
+        connect,
+        socketReconnectDelayWithJitterMs(failureCount.current),
+      );
     };
+    })();
   }, [orderId, enabled, queryClient]);
 
   useEffect(() => {
