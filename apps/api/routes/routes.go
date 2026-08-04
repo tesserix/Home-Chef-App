@@ -243,8 +243,15 @@ func SetupRouter() *gin.Engine {
 	// bypassing the auth-bff which can't proxy WS upgrades. The BFF still
 	// signs the upgrade request via its mesh path; we verify the same HMAC
 	// here so a hijacked browser session can't open a socket directly.
+	// Either credential authenticates the upgrade: the BFF's HMAC (browser
+	// portals) or a short-lived `?ticket=` minted at /v1/realtime/ws-ticket
+	// (mobile, which holds a Bearer session and cannot be BFF-signed — #982).
 	wsGroup := r.Group("/ws")
-	wsGroup.Use(bffAuth(bffKey, bffWindow))
+	wsGroup.Use(middleware.BFFAuthOrTicket(middleware.BFFAuthConfig{
+		HMACKey:       bffKey,
+		Window:        bffWindow,
+		BFFSessionURL: config.AppConfig.BFFSessionURL,
+	}))
 	{
 		wsGroup.GET("/notifications", notificationHandler.StreamNotificationsWS)
 		wsGroup.GET("/orders/:id/track", orderHandler.TrackOrderWS)
@@ -1486,6 +1493,13 @@ func SetupRouter() *gin.Engine {
 			favorites.GET("/dishes/ids", favoriteHandler.ListFavoriteDishIDs)
 			favorites.POST("/dishes", favoriteHandler.AddFavoriteDish)
 			favorites.DELETE("/dishes/:menuItemId", favoriteHandler.RemoveFavoriteDish)
+		}
+
+		// Realtime — mints the ticket a client spends on a /ws/* upgrade.
+		realtime := v1.Group("/realtime")
+		realtime.Use(bffAuth(bffKey, bffWindow))
+		{
+			realtime.POST("/ws-ticket", handlers.NewWSTicketHandler(bffKey).Mint)
 		}
 
 		// Notifications

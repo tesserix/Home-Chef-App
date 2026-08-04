@@ -17,7 +17,8 @@
     "./screens": "./src/screens/index.ts",
     "./support": "./src/support/index.ts",
     "./ui": "./src/ui/index.ts",
-    "./mfa": "./src/mfa/index.ts"
+    "./mfa": "./src/mfa/index.ts",
+    "./realtime": "./src/realtime/index.ts"
   },
   "scripts": {
     "test": "vitest run",
