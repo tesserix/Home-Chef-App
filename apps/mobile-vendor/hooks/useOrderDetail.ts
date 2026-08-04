@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import type { ChefPayout } from '../lib/chefPayout';
 
 // ---- API contract types -------------------------------------------------------
 // Shape returned by GET /chef/orders/:orderId.
@@ -52,17 +53,9 @@ export interface OrderDetailTaxLine {
   amount: number;
 }
 
-export interface ChefPayout {
-  foodAmount: number;
-  /** 0 unless the chef carried the leg and it was charged; the UI then omits the row. */
-  deliveryFee: number;
-  chefTip: number;
-  penalty: number;
-  /** The exact sum of the lines above, to the paise. Render this, never a local sum. */
-  netPayout: number;
-  currency: string;
-  status: string;
-}
+// ChefPayout lives in lib/ — the list cards and the dashboard queue render it
+// too, so it can't belong to the detail hook. Re-exported for existing callers.
+export type { ChefPayout } from '../lib/chefPayout';
 
 export interface OrderDetailPricing {
   subtotal: number;

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { formatMoney } from '../../lib/format';
+import { chefPayoutAmount } from '../../lib/chefPayout';
 import {
   ActivityIndicator,
   FlatList,
@@ -511,8 +512,10 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
                   {formatOrderTimeShort(order.createdAt)}
                 </Text>
               </View>
+              {/* What the chef earned on it — the history list has to agree
+                  with the payout the detail screen and the statement show. */}
               <Text style={historyRowStyles.total}>
-                {formatMoney(order.total)}
+                {formatMoney(chefPayoutAmount(order.chefPayout, order.total))}
               </Text>
             </View>
           )}

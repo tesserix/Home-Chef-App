@@ -160,3 +160,96 @@ func GetChefPayout(db *gorm.DB, orderID uuid.UUID) (*models.OrderChefPayout, err
 	}
 	return &row, nil
 }
+
+// estimateFrom projects a payout for an order with no row yet — the same
+// ComputeChefPayout, marked `estimated` so a caller can tell a projection from a
+// settled figure.
+func estimateFrom(order *models.Order, penalty float64) *models.ChefPayoutResponse {
+	b := ComputeChefPayout(order, penalty)
+	currency := order.Currency
+	if currency == "" {
+		currency = "INR"
+	}
+	return &models.ChefPayoutResponse{
+		FoodAmount: b.FoodAmount, DeliveryFee: b.DeliveryFee, ChefTip: b.ChefTip,
+		Penalty: b.Penalty, NetPayout: b.NetPayout,
+		Currency: currency, Status: models.ChefPayoutEstimated, ComputedAt: time.Now().UTC(),
+	}
+}
+
+// ChefPayoutFor is what every chef- and admin-facing surface renders: the
+// persisted row when the order has been delivered, otherwise the same formula
+// computed from the live order and marked `estimated`.
+//
+// A chef decides whether to take an order when it ARRIVES, so gating the figure
+// on the delivery-time write left every pending order showing the customer's
+// total — the number this whole feature exists to stop showing a kitchen. One
+// function, one formula: the row written at delivery just freezes what the chef
+// was already looking at.
+//
+// Never nil, so a surface always has a figure to render.
+func ChefPayoutFor(db *gorm.DB, order *models.Order) *models.ChefPayoutResponse {
+	if row, err := GetChefPayout(db, order.ID); err == nil && row != nil {
+		return row.ToResponse()
+	}
+	return estimateFrom(order, ChefOrderPenalty(db, order.ID))
+}
+
+// ChefPayoutsFor is ChefPayoutFor for a page of orders, in two queries rather
+// than two per order — the chef order list and the dashboard queue both render
+// every row's payout.
+func ChefPayoutsFor(db *gorm.DB, orders []models.Order) map[uuid.UUID]*models.ChefPayoutResponse {
+	out := make(map[uuid.UUID]*models.ChefPayoutResponse, len(orders))
+	if len(orders) == 0 {
+		return out
+	}
+	ids := make([]uuid.UUID, len(orders))
+	for i := range orders {
+		ids[i] = orders[i].ID
+	}
+
+	var rows []models.OrderChefPayout
+	db.Where("order_id IN ?", ids).Find(&rows)
+	settled := make(map[uuid.UUID]*models.OrderChefPayout, len(rows))
+	for i := range rows {
+		settled[rows[i].OrderID] = &rows[i]
+	}
+
+	penalties := chefOrderPenalties(db, ids)
+	for i := range orders {
+		id := orders[i].ID
+		if row, ok := settled[id]; ok {
+			out[id] = row.ToResponse()
+			continue
+		}
+		out[id] = estimateFrom(&orders[i], penalties[id])
+	}
+	return out
+}
+
+// chefOrderPenalties is the batched ChefOrderPenalty — the levy attributed to
+// each of the given orders, absent meaning none. Waived levies are excluded (an
+// admin cancelled them, so they were never owed).
+func chefOrderPenalties(db *gorm.DB, orderIDs []uuid.UUID) map[uuid.UUID]float64 {
+	out := make(map[uuid.UUID]float64, len(orderIDs))
+	if len(orderIDs) == 0 {
+		return out
+	}
+	keys := make([]string, len(orderIDs))
+	byKey := make(map[string]uuid.UUID, len(orderIDs))
+	for i, id := range orderIDs {
+		keys[i] = ChefCancelPenaltySourceKey(id)
+		byKey[keys[i]] = id
+	}
+	var levies []models.ChefPenalty
+	if err := db.Where("source_key IN ? AND status <> ?", keys, models.ChefPenaltyWaived).
+		Find(&levies).Error; err != nil {
+		return out
+	}
+	for _, p := range levies {
+		if id, ok := byKey[p.SourceKey]; ok {
+			out[id] = p.Amount
+		}
+	}
+	return out
+}

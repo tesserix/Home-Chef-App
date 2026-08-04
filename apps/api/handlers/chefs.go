@@ -958,8 +958,8 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		Limit(200).
 		Find(&active)
 
-	recentOrdersResp := chefDashboardOrderRows(recent)
-	activeOrdersResp := chefDashboardOrderRows(active)
+	recentOrdersResp := chefDashboardOrderRows(database.DB, recent)
+	activeOrdersResp := chefDashboardOrderRows(database.DB, active)
 
 	c.JSON(http.StatusOK, gin.H{
 		"todayOrders":  todayOrders,
@@ -999,7 +999,10 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 // chefDashboardOrderRows shapes orders for the chef dashboard. Shared by
 // recentOrders and activeOrders so the two can never drift into different
 // contracts for the same row.
-func chefDashboardOrderRows(orders []models.Order) []gin.H {
+func chefDashboardOrderRows(db *gorm.DB, orders []models.Order) []gin.H {
+	// What the chef is paid per row (D-21), batched. The dashboard cards render
+	// this, not `total` — see the OrderResponse.ChefPayout doc comment.
+	payouts := services.ChefPayoutsFor(db, orders)
 	rows := make([]gin.H, len(orders))
 	for i, o := range orders {
 		fulfillment := o.FulfillmentType
@@ -1011,8 +1014,11 @@ func chefDashboardOrderRows(orders []models.Order) []gin.H {
 			// First name only for the chef view (privacy; matches ToChefResponse).
 			"customerName": o.Customer.FirstName,
 			"total":        o.Total,
-			"status":       o.Status,
-			"createdAt":    o.CreatedAt,
+			// What the CHEF is paid for it. `total` stays on the row for older
+			// app builds, which fall back to it when this is absent.
+			"chefPayout": payouts[o.ID],
+			"status":     o.Status,
+			"createdAt":  o.CreatedAt,
 			// Drives the dashboard in-flight card's pickup-vs-delivery stepper
 			// + the chef's "Mark handed over" action on pickup orders.
 			"fulfillmentType": fulfillment,
@@ -1271,6 +1277,11 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 	offersSelfDelivery := chef.OffersSelfDelivery
 	riderDispatchAvailable := services.ThirdPartyDeliveryEnabled()
 
+	// What the chef is paid per row (D-21), batched. The list cards render this
+	// and never order.total — a chef triaging an incoming order needs the figure
+	// the kitchen earns, not the customer's bill.
+	payouts := services.ChefPayoutsFor(database.DB, orders)
+
 	responses := make([]models.OrderResponse, len(orders))
 	for i, order := range orders {
 		// Chef view: area-only address, no phone, first name only (privacy).
@@ -1281,6 +1292,7 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 		responses[i].DeliveryFailureReported = underReview[order.ID]
 		responses[i].OffersSelfDelivery = offersSelfDelivery
 		responses[i].RiderDispatchAvailable = riderDispatchAvailable
+		responses[i].ChefPayout = payouts[order.ID]
 	}
 
 	// Mobile (`useVendorPendingOrders`, `useVendorOrderHistory`) consumes the
@@ -2086,10 +2098,9 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 
 	// Chef view: area-only address, no phone, first name only (privacy).
 	resp := order.ToChefResponse()
-	// What the chef is paid for it (D-21). Absent until delivered.
-	if p, err := services.GetChefPayout(database.DB, order.ID); err == nil {
-		resp.ChefPayout = p.ToResponse()
-	}
+	// What the chef is paid for it (D-21) — the persisted row once delivered,
+	// the same formula estimated from the live order before that.
+	resp.ChefPayout = services.ChefPayoutFor(database.DB, &order)
 
 	// Enrich items with isVeg from the live MenuItem and surfacespecialInstructions
 	for i, item := range order.Items {

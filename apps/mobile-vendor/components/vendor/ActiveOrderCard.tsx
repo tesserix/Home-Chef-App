@@ -11,6 +11,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { theme } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../hooks/useVendorOrders';
+import { chefPayoutAmount, type ChefPayout } from '../../lib/chefPayout';
 
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
@@ -226,7 +227,10 @@ function LifecycleStepper({ currentStep, steps }: LifecycleStepperProps) {
 export interface ActiveOrderCardOrder {
   id: string;
   customerName: string;
+  /** The CUSTOMER's bill — kept only as the fallback for an older API. */
   total: number;
+  /** What the CHEF is paid for this order. Rendered in place of `total`. */
+  chefPayout?: ChefPayout;
   status: Order['status'];
   createdAt: string;
   items?: Order['items'];
@@ -352,7 +356,15 @@ export function ActiveOrderCard({
                   </Text>
                 </View>
               </View>
-              <Text style={styles.total}>{formatMoney(order.total)}</Text>
+              {/* What the KITCHEN earns, not the customer's bill — a chef
+                  cannot reconcile a payout against a total that carries the
+                  platform's fee and GST. */}
+              <View style={styles.earningBlock}>
+                <Text style={styles.total}>
+                  {formatMoney(chefPayoutAmount(order.chefPayout, order.total))}
+                </Text>
+                <Text style={styles.earningLabel}>you earn</Text>
+              </View>
             </View>
             {/* Items summary + age — items may be absent on dashboard RecentOrder */}
             <Text style={styles.meta} numberOfLines={1}>
@@ -518,6 +530,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 0.2,
+  },
+  earningBlock: {
+    alignItems: 'flex-end',
+  },
+  earningLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
   },
   total: {
     fontFamily: 'Geist-Bold',

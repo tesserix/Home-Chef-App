@@ -3,6 +3,7 @@ import { useRef, useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../lib/api';
+import type { ChefPayout } from '../lib/chefPayout';
 import type { DashboardData, RecentOrder } from './useVendorDashboard';
 import type { OrderDetail } from './useOrderDetail';
 
@@ -66,7 +67,13 @@ export interface Order {
   id: string;
   customerName: string;
   items: OrderItem[];
+  /** The CUSTOMER's bill. Never shown to the chef — render `chefPayout` instead
+   *  (via chefPayoutAmount, which falls back to this on an older API). */
   total: number;
+  /** What the CHEF is paid for this order: food + delivery (only when they
+   *  carried it) + tip − penalty. Served on every chef-facing row, `estimated`
+   *  until the order is delivered and the row is frozen. */
+  chefPayout?: ChefPayout;
   status: 'pending' | 'accepted' | 'rejected' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
   /** Order origin for the unified feed badge (#435). */
   source?: OrderSource;
@@ -292,6 +299,9 @@ export function useOrderAction() {
           id: accepted.id,
           customerName: accepted.customerName,
           total: accepted.total,
+          // Carry the payout across the optimistic hand-off or the card would
+          // fall back to the customer total for the whole undo window.
+          chefPayout: accepted.chefPayout,
           status: 'accepted',
           createdAt: accepted.createdAt,
           fulfillmentType: accepted.fulfillmentType,

@@ -994,12 +994,9 @@ func (h *AdminHandler) GetOrderDetails(c *gin.Context) {
 
 	// What the chef is paid for this order (D-21) — the SAME serialised shape the
 	// vendor app renders, so staff verify a payout against the figure the chef was
-	// shown rather than a second, independently-derived number. Absent until
-	// delivered.
-	var chefPayout *models.ChefPayoutResponse
-	if p, err := services.GetChefPayout(database.DB, order.ID); err == nil {
-		chefPayout = p.ToResponse()
-	}
+	// shown rather than a second, independently-derived number. Before delivery
+	// its status is `estimated` — the same formula on a live order, not yet frozen.
+	chefPayout := services.ChefPayoutFor(database.DB, &order)
 
 	c.JSON(http.StatusOK, gin.H{
 		"order":      order,
