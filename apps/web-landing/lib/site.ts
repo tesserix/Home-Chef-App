@@ -117,6 +117,26 @@ export const LAUNCH_CITY = 'Pune';
 export const CONTACT_EMAIL = 'hello@fe3dr.com';
 export const CHEFS_EMAIL = 'chef-onboarding@fe3dr.com';
 
+// Where a home chef actually signs up. This page is the customer front door, so
+// it is the one place a chef arriving at fe3dr.com can be told their side of the
+// platform is elsewhere — and it used to answer with a mailto: while the portal
+// was already live.
+export const VENDOR_PORTAL_URL = 'https://vendors.fe3dr.com';
+
+// What it costs to start, in figures we can stand behind. Nothing to join and
+// nothing monthly; the one real upfront cost is the FSSAI Basic Registration
+// every home kitchen in India needs by law, paid to FSSAI rather than to us. The
+// commission is named too — a pitch implying a chef keeps every rupee is the kind
+// of claim this platform gets held to later. Mirrors services.DefaultCommissionRate.
+export const VENDOR_COST_POINTS = [
+  { figure: '₹0', label: 'to join and list' },
+  { figure: '₹100', label: 'FSSAI registration, a year' },
+  { figure: '6%', label: 'commission, only on what you sell' },
+  // The delivery fee is the chef's, because the chef is who delivers — the
+  // platform arranges no courier today. Stated as an earning, not a cost.
+  { figure: '100%', label: 'of the delivery fee when you deliver' },
+] as const;
+
 // Canonical legal-document values — kept identical across landing + both apps.
 // LEGAL_SUPPORT_EMAIL is the general legal/support contact (distinct from the
 // general CONTACT_EMAIL above). Do NOT repurpose CONTACT_EMAIL for legal copy.

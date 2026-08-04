@@ -204,7 +204,7 @@ export function ChefCard({ chef }: ChefCardProps) {
                   {[
                     chef.cuisine,
                     chef.deliveryTime,
-                    deliveryFeeLabel(chef.deliveryFee, chef.deliveryFeeFlat),
+                    deliveryFeeLabel(chef.deliveryFee, chef.deliveryFeeFlat, chef.offersDelivery),
                   ]
                     .filter(Boolean)
                     .join(' · ')}

@@ -1,4 +1,4 @@
-import { CHEFS_EMAIL, IMAGES } from '@/lib/site';
+import { CHEFS_EMAIL, IMAGES, VENDOR_COST_POINTS, VENDOR_PORTAL_URL } from '@/lib/site';
 import { Parallax } from '@/components/parallax';
 import { Reveal } from '@/components/reveal';
 
@@ -28,24 +28,53 @@ export function CookWithUs() {
               Your kitchen.
               <span className="block text-white/55">Your menu. Your price.</span>
             </h2>
+            {/* Fe3dr does NOT carry the food: fulfilment today is pickup from the
+                kitchen or the chef's own delivery. Promising "and the delivery"
+                sold a courier network that does not exist, to the very people who
+                would find out first. */}
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-white/75">
               If you cook well, you already have everything you need. Cook when
-              it suits you — Fe3dr brings the orders, the payments, and the
-              delivery.
+              it suits you — Fe3dr brings the orders and handles the payments.
+              Customers collect from your kitchen, or you deliver yourself and
+              keep the delivery fee.
             </p>
           </Reveal>
+
+          {/* The costs, up front. A chef's first question is what this will run
+              them, and burying it is how you lose the good ones. */}
+          <Reveal delay={80}>
+            <dl className="mt-9 grid grid-cols-2 gap-6 sm:grid-cols-4 sm:gap-6">
+              {VENDOR_COST_POINTS.map((point) => (
+                <div key={point.label}>
+                  <dt className="font-display text-2xl font-bold tabular-nums sm:text-3xl">
+                    {point.figure}
+                  </dt>
+                  <dd className="mt-1 text-sm leading-relaxed text-white/65">
+                    {point.label}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Reveal>
+
           <Reveal delay={120}>
             <div className="mt-9 flex flex-wrap items-center gap-5">
-              {/* TODO(owner): point at the chef onboarding flow / vendor app
-                  listing once it's live; mailto is the interim channel. */}
+              {/* The portal is live, so this goes there rather than to a mailbox. */}
               <a
-                href={`mailto:${CHEFS_EMAIL}?subject=I want to cook on Fe3dr`}
+                href={VENDOR_PORTAL_URL}
                 className="inline-flex h-12 items-center rounded-full bg-white px-7 text-[15px] font-semibold text-charcoal transition-opacity duration-micro ease-state hover:opacity-90"
               >
-                Become a home chef
+                Add your kitchen
               </a>
               <p className="text-sm text-white/60">
-                The Fe3dr vendor app arrives with our launch.
+                Takes you to vendors.fe3dr.com — about 10 minutes to set up. Questions?{' '}
+                <a
+                  href={`mailto:${CHEFS_EMAIL}?subject=I want to cook on Fe3dr`}
+                  className="underline underline-offset-4 hover:text-white/80"
+                >
+                  Talk to us first
+                </a>
+                .
               </p>
             </div>
           </Reveal>

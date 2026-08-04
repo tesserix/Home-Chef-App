@@ -27,8 +27,8 @@ export function SiteFooter() {
           <div className="lg:col-span-5">
             <Wordmark />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-charcoal-soft">
-              Real home-cooked food from verified kitchens near you, delivered
-              to your door.
+              Real home-cooked food from verified kitchens near you. Collect it
+              yourself, or have your chef bring it over.
             </p>
             <StoreBadges height={40} className="mt-6" />
           </div>
