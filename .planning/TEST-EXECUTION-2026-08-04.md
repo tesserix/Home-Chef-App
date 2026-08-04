@@ -1,5 +1,105 @@
 # Test execution — 4 Aug 2026, post per-supply-GST release
 
+> ## ▶ RESUME HERE (new session)
+>
+> **This file is the log. Record every finding here — do not open a second doc.**
+> Plan/scenario definitions live in `.planning/TEST-EXECUTION-PLAN.md`.
+>
+> Standing instruction from the user: **record findings, do not fix them mid-run**
+> unless asked. Money is asserted in Postgres, never read off a screen.
+
+## Environment
+
+| | |
+|---|---|
+| Customer sim | `226082A0-856A-4FE0-B000-B4DD891CA6E6` (right) |
+| Vendor sim | `43FCB3B9-54C2-4A61-BB76-CB8667DE011E` (left) |
+| Metro | customer **8082**, vendor **8081** — `npx expo start --port <p>` from each app dir |
+| API | prod, `https://fe3dr.com/api` (vendor: `https://vendors.fe3dr.com/api/v1`) |
+| DB | `kubectl exec -n homechef homechef-postgres-26 -c postgres -- psql -U postgres -d homechef_db` |
+| Harness | `/tmp/hctest/snap.sh` (money snapshot), `/tmp/hctest/ui.sh` (`tap`/`text`/`shot`) |
+| Test accounts | `customer01@fe3dr.com`, `vendor@fe3dr.com`. Email OTP is **111000**. |
+
+**Postgres primary is `homechef-postgres-26`.** `snap.sh` still points at `-29`
+(a replica — same data, but fix it if writes ever need verifying).
+
+## Harness gotchas that cost time before
+
+1. **`idb` reports off-screen elements with content coordinates.** Tapping their
+   reported centre hits whatever is actually at that pixel. Scroll first, then
+   re-read the tree. Swipe needs `--duration`: `idb ui swipe --udid X --duration 0.4 220 700 220 250`.
+   A control that "does nothing" is almost always off-screen, not inert.
+2. **`describe-all` can return a stale tree** right after a tap. Re-read before
+   concluding a navigation failed.
+3. **Cashfree saved-card flow has an OTP step.** Skipping it leaves the order
+   `pending` forever and it auto-cancels. Screenshot the sheet and complete it.
+4. **The vendor app loses its session on relaunch** and needs a manual sign-in
+   (cause unverified — both builds are unsigned with no keychain entitlement, so
+   it is NOT the entitlement difference I first assumed). **Do not terminate the
+   vendor app.** All current code is hot-reloadable through Metro.
+5. Dev error overlay intercepts taps. Dismiss it before driving the UI.
+
+## Remaining scenarios
+
+Money-critical, in the order worth running:
+
+| ID | Scenario | Why it matters |
+|---|---|---|
+| **CAN-02** | customer cancels post-accept → policy % refund | **Highest value.** The partial tier is the one path this release changed that has never run on a real order. |
+| CAN-03/04/06 | other cancellation tiers | same splitter, other percentages |
+| CHF-02 | chef rejects → full refund | |
+| REF-02/03/05 | partial refund via report-issue; reconciliation | REF-03 was mid-flight when the run paused |
+| WAL-03/04/05 | wallet top-up, expiry, insufficient balance | |
+| LOY-02/04/06 | loyalty expiry, reversal, cap | earn/redeem already pass |
+| TIP-01 | tip in gross, no commission | previously mis-marked blocked — retestable |
+| POU-04/05 | payout release + reversal | |
+| ORD-04 | order below ₹199 rejected | no payment needed |
+| REFR-01 | referral credit | no payment needed |
+| GRP-01/02 | group orders | |
+| MPL-01/02/03 | meal plans | |
+| PAY-05 | payment reconciliation | needs the CRON |
+
+Owner-only (cannot run unattended): **CAN-05**, **POU-06** (admin auth), and the
+**POU-03 auto-path** (k8s CronJob).
+
+### CAN-02 — prediction already recorded, assert against it
+
+₹320 food + ₹39.12 delivery + ₹13.53 fee, tax 20.40 (food 16.00 / svc 2.44 /
+dlv 1.96), total 393.05, at the `materials_purchased` **40%** tier:
+
+| | paise | ₹ |
+|---|---|---|
+| Food refund | 32000 × 40% | 128.00 |
+| Delivery refund (not dispatched) | 3912 | 39.12 |
+| Tax refund | 1600×12800/32000 + 196 | **8.36** |
+| **Customer receives** | 17548 | **175.48** |
+| Vendor keeps | 19200 | 192.00 |
+| Platform keeps | 2557 | 25.57 |
+
+Platform-keep decomposes as fee 13.53 + svc GST 2.44 + unrefunded food GST 9.60.
+**The old proportional model would refund ₹9.15 of tax** — handing back ₹0.79 of
+GST on a fee that was kept. That ₹0.79 is what this release fixed; it is the
+number to watch.
+
+Flow: customer requests cancellation → **vendor approves and picks the reason**
+(the reason selects the tier) → refund executes.
+
+## Open defects
+
+| | Status |
+|---|---|
+| 🟥 **D-01** "Free delivery" advertised, ₹39.12 charged | open |
+| 🟥 **D-10** retry offered on an already-cancelled order | open |
+| 🟨 **D-12** order detail shows Total ₹393.05 while the customer was charged ₹391.45 — the loyalty credit shown at checkout is missing from the receipt | open, found 4 Aug |
+| ✅ D-09 chef GST over-credit | fixed #987, **verified live** (₹955.40) |
+| ✅ D-03 GST head on unknown state | fixed #988 |
+| ✅ D-11 real-time dead on mobile | fixed #983/#984, verified |
+| 🟨 PAY-03 auto-cancel contradicts the written criterion | needs a product call |
+
+Everything above is deployed. API was on `main-1a98c35` at handoff.
+
+---
+
 Driven on the **iOS simulators** (HC-Customer / HC-Vendor, iOS 26.5) against the **prod API**
 `main-c8504d1`, Cashfree **test** environment. Scenarios from `TEST-EXECUTION-PLAN.md`.
 
@@ -142,6 +242,18 @@ Measured on the simulators against prod, both apps signed in, per 45s:
 `#892`, `#909`, `#910` and `#928` were four previous attempts, all tuning the
 backoff curve. None could have worked: the socket failed at TLS before any of
 that logic ran. The close code named the cause the whole time.
+
+### 🟨 D-12 · new · receipt cannot be reconciled against the charge
+
+Order `HC26080400184814`: checkout displayed **Credits applied −₹1.60** and the
+gateway correctly asked for **₹391.45**. The order detail's Price Breakdown then
+shows **Total ₹393.05** with no loyalty line at all.
+
+A customer comparing their bank charge to the receipt cannot make them agree.
+The money is right everywhere — 32 loyalty points at ₹0.05 = ₹1.60, applied as a
+payment RAIL rather than a discount (`loyalty_applied` is its own column, and
+`total` is deliberately pre-rail) — but the receipt omits the rail it was paid
+on. The wallet leg is shown on other orders; loyalty is not.
 
 ### 🟨 Observations (not filed)
 
