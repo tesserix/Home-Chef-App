@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { socketReconnectDelayWithJitterMs } from '@homechef/mobile-shared/utils';
-import { fetchWSTicket, wsEndpointUrl } from '@homechef/mobile-shared/realtime';
-import { api } from '../lib/api';
+import { openEventStream, type EventStreamHandle } from '@homechef/mobile-shared/realtime';
+import { useAuthStore } from '../store/auth-store';
 import { useOrderTracking } from './useOrderTracking';
 
-const MAX_WS_FAILURES = 3;
+const MAX_STREAM_FAILURES = 3;
 
 interface DriverLocation {
   latitude: number;
@@ -13,121 +13,94 @@ interface DriverLocation {
   timestamp: string;
 }
 
-interface WSLocationMessage {
+interface LocationFrame {
   latitude: number;
   longitude: number;
   timestamp: string;
 }
 
 /**
- * WebSocket-based order tracking hook that subscribes to real-time driver
- * location updates. Falls back to polling via useOrderTracking after 3
- * consecutive WebSocket failures (T-04-10: no unbounded-frequency retry —
- * the polling fallback keeps location fresh while the socket is down).
+ * Live driver location for one order, falling back to REST polling after 3
+ * consecutive stream failures (T-04-10: no unbounded-frequency retry — the
+ * polling fallback keeps location fresh while the stream is down).
  *
- * The socket keeps retrying with capped backoff even while the polling
- * fallback is active, so a connectivity blip can recover to real-time
- * updates instead of being stuck on REST polling for the rest of the
- * session (#892).
+ * SSE, not WebSocket. React Native does TLS through SocketRocket/CFStream and
+ * that handshake fails outright against our edge (close 1006 / OSStatus -9836),
+ * so no HTTP request is ever issued — which is why those attempts appear nowhere
+ * in the API logs. Notifications and order status moved to SSE when that was
+ * found (#982/#983); this hook did not, so live tracking spent its budget on
+ * calls that could never land and every order ran on polling. The 4 Aug test run
+ * measured 33 consecutive failures on a single order.
  *
- * Authentication is a short-lived ticket minted over the authenticated REST
- * path and spent in the query string of a top-level `/ws/*` URL. This hook
- * previously opened a bare socket against `/api/v1/.../track/ws` with no
- * credential at all, so every attempt 401'd and live tracking has in practice
- * always run on the polling fallback (#982).
+ * The stream keeps retrying with capped backoff even while the polling fallback
+ * is active, so a connectivity blip recovers to real-time instead of leaving the
+ * session stuck on REST (#892).
  */
 export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
-  const wsRef = useRef<WebSocket | null>(null);
+  const streamRef = useRef<EventStreamHandle | null>(null);
   const failureCount = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Distinguishes the connect attempt that owns wsRef from one superseded
-  // while it was awaiting a ticket — without it an unmount during that await
-  // leaves an orphan socket that nothing closes.
+  // Distinguishes the connect attempt that owns streamRef from one superseded
+  // while it was starting — without it an unmount leaves an orphan stream.
   const generation = useRef(0);
   const [useFallback, setUseFallback] = useState(false);
   const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null);
 
-  // Polling fallback — only active when WS has failed MAX_WS_FAILURES times
+  // Polling fallback — only active once the stream has failed MAX_STREAM_FAILURES times.
   const pollingResult = useOrderTracking(orderId, enabled && useFallback);
 
   const connect = useCallback(() => {
     if (!orderId || !enabled) return;
+    const token = useAuthStore.getState().accessToken;
+    if (!token) return;
     const apiBase = process.env.EXPO_PUBLIC_API_URL ?? 'https://fe3dr.com/api';
     const myGeneration = ++generation.current;
 
-    // Past the budget, stop dialling. React Native's WebSocket cannot complete
-    // the TLS handshake against our edge at all (close 1006 / OSStatus -9836,
-    // #982), so on native this budget is always spent and further attempts are
-    // pure waste — they never reach the server. Polling carries the screen, and
-    // the foreground effect below re-probes, so a device or network where the
-    // socket does work still recovers. This is the one case #892's "never give
-    // up" does not cover: the transport is unavailable, not flaky.
     const fail = () => {
+      if (myGeneration !== generation.current || !enabled) return;
+      streamRef.current = null;
       failureCount.current += 1;
-      if (failureCount.current >= MAX_WS_FAILURES) {
-        setUseFallback(true);
-        return;
-      }
+      // Past the budget the screen runs on polling — but keep dialling, so a
+      // stream that recovers takes over again (#892).
+      if (failureCount.current >= MAX_STREAM_FAILURES) setUseFallback(true);
       reconnectTimer.current = setTimeout(
         connect,
         socketReconnectDelayWithJitterMs(failureCount.current),
       );
     };
 
-    void (async () => {
-      const ticket = await fetchWSTicket(api);
-      if (myGeneration !== generation.current || !enabled) return;
-      // A failed mint is a failure like any other: same backoff, same fallback,
-      // never a silent dead end.
-      if (!ticket) {
-        fail();
-        return;
+    const onFrame = (raw: string) => {
+      failureCount.current = 0;
+      // A frame arriving proves the stream works: drop the polling fallback if
+      // it was active, rather than paying for both for the rest of the trip.
+      setUseFallback(false);
+      try {
+        const data = JSON.parse(raw) as LocationFrame;
+        if (typeof data.latitude !== 'number' || typeof data.longitude !== 'number') return;
+        setDriverLocation({
+          latitude: data.latitude,
+          longitude: data.longitude,
+          timestamp: data.timestamp,
+        });
+      } catch {
+        // Ignore malformed frames.
       }
+    };
 
-      const url = wsEndpointUrl(apiBase, `orders/${orderId}/track`, ticket);
-      const ws = new WebSocket(url);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        failureCount.current = 0; // Reset on successful connect
-        // Real-time recovered: drop the polling fallback if it was active
-        // (#892 — a socket that only fails once must be able to come back).
-        setUseFallback(false);
-      };
-
-      ws.onmessage = (event: WebSocketMessageEvent) => {
-        failureCount.current = 0;
-        try {
-          const data = JSON.parse(event.data as string) as WSLocationMessage;
-          setDriverLocation({
-            latitude: data.latitude,
-            longitude: data.longitude,
-            timestamp: data.timestamp,
-          });
-        } catch {
-          // Ignore malformed messages
-        }
-      };
-
-      // Always reschedule while enabled — the polling fallback covers the gap,
-      // but the socket itself must never permanently give up or it can never
-      // recover to real-time (#892). `onerror` is deliberately not counted
-      // separately: it is always followed by `onclose`, and counting both
-      // double-incremented the failure count and halved the real backoff.
-      ws.onclose = () => {
-        if (myGeneration !== generation.current || !enabled) return;
-        wsRef.current = null;
-        fail();
-      };
-    })();
+    streamRef.current = openEventStream(
+      `${apiBase}/v1/orders/${orderId}/track/sse`,
+      token,
+      onFrame,
+      fail,
+    );
   }, [orderId, enabled]);
 
   useEffect(() => {
     connect();
     return () => {
       generation.current += 1;
-      wsRef.current?.close();
-      wsRef.current = null;
+      streamRef.current?.close();
+      streamRef.current = null;
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
@@ -146,17 +119,15 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
         reconnectTimer.current = null;
       }
       failureCount.current = 0;
-      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
-        connect();
-      }
+      if (!streamRef.current) connect();
     });
     return () => sub.remove();
   }, [enabled, connect]);
 
   return {
-    /** Real-time driver location from WebSocket (null until first message) */
+    /** Real-time driver location from the stream (null until the first frame) */
     driverLocation,
-    /** True when WS failed 3 times and hook fell back to REST polling */
+    /** True once the stream failed MAX_STREAM_FAILURES times and REST polling took over */
     isPollingFallback: useFallback,
     /** Polling result — populated only when isPollingFallback is true */
     pollingResult,

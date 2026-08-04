@@ -743,6 +743,10 @@ func SetupRouter() *gin.Engine {
 			orders.POST("/:id/confirm-received", payoutHoldHandler.ConfirmOrderReceived) // #387
 			orders.GET("/:id/track", orderHandler.TrackOrder)
 			orders.GET("/:id/track/ws", orderHandler.TrackOrderWS)
+			// Same stream over SSE. React Native cannot complete the WS TLS
+			// handshake against our edge (#982), so this is the transport the
+			// mobile apps actually use.
+			orders.GET("/:id/track/sse", orderHandler.TrackOrderSSE)
 			orders.GET("/:id/invoice", orderHandler.GetOrderInvoice)
 			// PDF tax invoice — customer-facing. Streams directly back as
 			// application/pdf with Content-Disposition: attachment.

@@ -1194,25 +1194,10 @@ func (h *OrderHandler) GetOrderInvoicePDF(c *gin.Context) {
 // Security: verifies the authenticated customer owns the order before upgrading (T-04-03).
 func (h *OrderHandler) TrackOrderWS(c *gin.Context) {
 	orderID := c.Param("id")
-	userID, ok := middleware.GetUserID(c)
+	deliveryID, ok := resolveTrackedDeliveryID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-
-	// Verify customer owns this order and load the delivery relationship.
-	var order models.Order
-	if err := database.DB.Preload("Delivery").
-		Where("id = ? AND customer_id = ?", orderID, userID).
-		First(&order).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "order_not_found", "message": "Order not found"})
-		return
-	}
-	if order.Delivery == nil || order.Delivery.ID == uuid.Nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no_active_delivery", "message": "No active delivery for this order"})
-		return
-	}
-	deliveryID := order.Delivery.ID.String()
 
 	// Upgrade HTTP → WebSocket.
 	conn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
