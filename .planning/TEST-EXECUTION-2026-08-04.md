@@ -85,7 +85,8 @@ The UI's Cashfree sandbox flow strands payments (gotcha 3). The reliable loop is
 | | Status |
 |---|---|
 | 🟥 **D-01** "Free delivery" advertised, ₹39.12 charged | open |
-| 🟥 **D-10** retry offered on an already-cancelled order | open |
+| 🟥 **D-10** retry offered on an already-cancelled order | open, **reproduced 4 Aug** on `HC26080405111133` (cancelled, ₹393.05 already refunded) |
+| 🟥 **D-17** raw enum shown to the customer: "this order was cancelled out_of_ingredient" | open, found 4 Aug |
 | ✅ **D-04** "Minimum order is $199.00" on an INR marketplace | fixed #990, **verified live** |
 | ✅ **D-16** NOT_ATTEMPTED read as a live payment (regression in #989) | fixed #990, deployed |
 | 🟨 **D-12** order detail shows Total ₹393.05 while the customer was charged ₹391.45 — the loyalty credit shown at checkout is missing from the receipt | open, found 4 Aug |
@@ -243,6 +244,22 @@ Measured on the simulators against prod, both apps signed in, per 45s:
 `#892`, `#909`, `#910` and `#928` were four previous attempts, all tuning the
 backoff curve. None could have worked: the socket failed at TLS before any of
 that logic ran. The close code named the cause the whole time.
+
+### 🟥 D-17 · new · the cancellation reason is shown to the customer as a raw enum
+
+Order `HC26080405111133`, customer order detail:
+
+> We're sorry — this order was cancelled **out_of_ingredient**. ₹393.05 has been
+> refunded to your original payment method.
+
+The chef picked "I'm out of an ingredient" from a labelled list; the customer is
+shown the database value. The vendor app already has the human string — it is the
+label on the button the chef tapped — so this is a missing mapping on the customer
+side, not missing copy.
+
+Same screen also reproduced **D-10**: the app offered **"Retry payment"** for this
+order, which is `cancelled` / `refunded` with ₹393.05 already returned. The retry
+cannot succeed.
 
 ### 🟥 D-15 · new · ₹25 on a frozen statement that can never reach the chef
 
