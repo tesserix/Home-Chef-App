@@ -87,7 +87,8 @@ The UI's Cashfree sandbox flow strands payments (gotcha 3). The reliable loop is
 | 🟥 **D-01** "Free delivery" advertised, ₹39.12 charged | open |
 | 🟥 **D-10** retry offered on an already-cancelled order | open, **reproduced 4 Aug** on `HC26080405111133` (cancelled, ₹393.05 already refunded) |
 | 🟥 **D-17** raw enum shown to the customer: "this order was cancelled out_of_ingredient" | open, found 4 Aug |
-| ✅ **D-18** post-delivery tipping dead for **every** chef (Razorpay Route vs Cashfree) | fixed, PR #991 |
+| ✅ **D-18** post-delivery tipping dead for **every** chef (Razorpay Route vs Cashfree) | fixed #991, merged |
+| 🟥 **D-19** report-issue asks for the platform's GST on the fee and delivery (D-09 all over again, and it can AUTO-refund) | open, found 4 Aug |
 | ✅ **D-04** "Minimum order is $199.00" on an INR marketplace | fixed #990, **verified live** |
 | ✅ **D-16** NOT_ATTEMPTED read as a live payment (regression in #989) | fixed #990, deployed |
 | 🟨 **D-12** order detail shows Total ₹393.05 while the customer was charged ₹391.45 — the loyalty credit shown at checkout is missing from the receipt | open, found 4 Aug |
@@ -245,6 +246,48 @@ Measured on the simulators against prod, both apps signed in, per 45s:
 `#892`, `#909`, `#910` and `#928` were four previous attempts, all tuning the
 backoff curve. None could have worked: the socket failed at TLS before any of
 that logic ran. The close code named the cause the whole time.
+
+### 🟥 D-19 · new · a food complaint asks for the platform's GST — and can auto-refund it
+
+The D-09 pattern, still live in a path the D-09 fix never touched.
+
+Reported a missing item on `HC26080405191298` (whole order, ₹320 of food):
+
+| | |
+|---|---|
+| `requested_amount` | **₹340.40** |
+| Correct — food + its own GST | ₹336.00 |
+| Over-request | **₹4.40** = `tax_service` 2.44 + `tax_delivery` 1.96 |
+
+`handlers/order_issue.go:177`:
+
+```go
+requested := services.ComputeIssueRefund(order.Subtotal, order.Tax, ...)
+                                                         ^^^^^^^^^^
+```
+
+`order.Tax` is the WHOLE order tax. A claim about **food** therefore asks for the
+GST on the platform fee and the delivery fee as well — money the platform has
+already remitted and the customer never had a claim on. It should read
+`ChefTaxOf(order.Tax, order.TaxFood, order.TaxService)`, the helper D-09 added for
+exactly this, or `TaxFood` directly.
+
+**Why this is worse than a display bug.** Twenty lines below, at
+`order_issue.go:252`:
+
+```go
+if services.ShouldAutoRefund(cfg, requested) && riskDecision.AutoRefundAllowed {
+    services.RefundIssueToWallet(database.DB, &issue, requested, "system", nil)
+```
+
+There is an **automatic** refund path keyed on this same figure. Where it
+triggers, the over-request is paid out with no human in the loop. The issue I
+filed stayed `pending` (auto-refund did not fire for it), and an older row on the
+same table shows `auto_refunded` — so the path is live, not theoretical.
+
+Not fixed in this session: it is a money path and three PRs were already in
+flight. The fix is one argument, but it needs its own tests over
+`ComputeIssueRefund`'s apportionment, not a one-line edit.
 
 ### 🟥 D-18 · new · post-delivery tipping cannot work for any chef on the platform
 
@@ -567,7 +610,8 @@ on. The wallet leg is shown on other orders; loyalty is not.
 | CAN-04/06 | ⬜ not run | | re-run of the 3 Aug passes, post-release |
 | REF-01 | 🟩 pass | refund == captured | Cashfree partial refund **₹1,063.42** = the card leg exactly |
 | REF-04 | 🟩 pass | split sums exactly (INV-2) | card 1063.42 + wallet 237.66 = **1301.08** ✓ |
-| REF-02/03/05 | ⬜ not run | | |
+| **REF-03** | 🟩 **pass** (behaviour) / 🟥 **D-19** (amount) | issue held for review, no automatic money movement | `HC26080405191298`: `order_issues` row `missing_item` / **`pending`**, `refund_amount 0`, no `refund_txn_id`. Order `refund_amount` still 0 and the payout hold untouched at `release_eligible` — manual-first, exactly as designed. **But `requested_amount` is ₹340.40 where it should be ₹336.00** — see D-19 |
+| REF-02/05 | ⬜ not run | | |
 | WAL-01 | 🟩 pass | wallet delta == refund slice | wallet credited **237.66** |
 | WAL-02 | 🟩 pass | capture == total − wallet | 393.05 − 237.66; wallet 237.66 → **0**, one debit txn with idempotency key |
 | WAL-03..05 | ⬜ not run | | |
