@@ -102,12 +102,14 @@ Flow: customer requests cancellation → **vendor approves and picks the reason*
 |---|---|
 | 🟥 **D-01** "Free delivery" advertised, ₹39.12 charged | open |
 | 🟥 **D-10** retry offered on an already-cancelled order | open |
+| ✅ **D-04** "Minimum order is $199.00" on an INR marketplace | fixed, PR #990 |
+| ✅ **D-16** NOT_ATTEMPTED read as a live payment (regression in #989) | fixed, PR #990 |
 | 🟨 **D-12** order detail shows Total ₹393.05 while the customer was charged ₹391.45 — the loyalty credit shown at checkout is missing from the receipt | open, found 4 Aug |
 | ✅ D-09 chef GST over-credit | fixed #987, **verified live** (₹955.40) |
 | ✅ D-03 GST head on unknown state | fixed #988 |
 | ✅ D-11 real-time dead on mobile | fixed #983/#984, verified |
 | 🟨 PAY-03 auto-cancel contradicts the written criterion | needs a product call |
-| ✅ **D-13** analytics/dashboard revenue ≠ earnings | fixed, `fix/chef-revenue-reconciliation` |
+| ✅ **D-13** analytics/dashboard revenue ≠ earnings | fixed #989, **verified live** (₹7,683.38) |
 | ✅ **D-14** order cancelled under a live gateway payment | fixed, merged #989 |
 | 🟥 **D-15** ₹25 tip on a frozen statement, unreachable by the catch-up | open, found 4 Aug |
 
@@ -300,6 +302,35 @@ any column write moves that timestamp. Two candidates remain:
 Both are real defects and the ₹25 is missing either way. Distinguishing them
 needs the tip's own write timestamp, which the schema does not keep — which is
 itself worth fixing.
+
+### ✅ D-16 · new · my own D-14 fix held abandoned checkouts open — FIXED
+
+Found by a **production canary**, not by review, which is the only reason it was
+found at all.
+
+After #989 deployed I deliberately left a checkout unpaid to watch the sweep
+correctly decline to cancel it. Cashfree reported the attempt as
+**`NOT_ATTEMPTED`** — a session created, never started.
+
+#989's probe routes any status it does not recognise to **in-flight**, on the
+argument that the two mistakes are not symmetric. That argument is right, but the
+classification was incomplete: `NOT_ATTEMPTED` is the ordinary abandoned
+checkout, and the sweep must still cancel it to release the chef's reserved daily
+capacity. Under #989 alone that capacity was held until the gateway session
+expired — and `order_expiry_time` is defined on our request struct and **never
+populated**, so that is Cashfree's 30-day default.
+
+`NOT_ATTEMPTED`, `VOID` and `CANCELLED` now join `SUCCESS`/`FAILED`/`USER_DROPPED`
+as terminal. `PENDING` is the only in-flight state; an unrecognised status still
+reads as in-flight.
+
+**Still open, deliberately.** Setting `order_expiry_time` would bound the
+unknown-status case *structurally* — the gateway terminates its own session, the
+status becomes terminal, and we stop depending on having enumerated every state
+Cashfree will ever ship. Not done here because it shortens the customer's payment
+window, which is a product call.
+
+Canary order: `HC26080404499485`.
 
 ### ✅ D-14 · new · CRITICAL · an order is cancelled out from under a live charge — FIXED
 
