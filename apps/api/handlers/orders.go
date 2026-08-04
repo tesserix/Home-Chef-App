@@ -414,7 +414,9 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// Check minimum order
 	if subtotal < chef.MinimumOrder {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error":        fmt.Sprintf("Minimum order is $%.2f", chef.MinimumOrder),
+			// The marketplace prices in rupees everywhere else; a hardcoded "$"
+			// here told the customer "Minimum order is $199.00".
+			"error":        fmt.Sprintf("Minimum order is %s%.2f", getCurrencySymbol(services.EarningsCurrency), chef.MinimumOrder),
 			"minimumOrder": chef.MinimumOrder,
 		})
 		return
