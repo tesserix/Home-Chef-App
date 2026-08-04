@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatMoney } from '../../lib/format';
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
@@ -113,7 +114,7 @@ export function PendingOrderCard({
             </View>
           ) : null}
         </View>
-        <Text style={styles.total}>₹{order.total.toFixed(0)}</Text>
+        <Text style={styles.total}>{formatMoney(order.total)}</Text>
       </View>
       <View style={styles.metaRow}>
         <Text style={styles.meta} numberOfLines={1}>
@@ -143,7 +144,7 @@ export function PendingOrderCard({
         onPress={onOpenDetail}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel={`Review order from ${order.customerName}, ₹${order.total.toFixed(0)}`}
+        accessibilityLabel={`Review order from ${order.customerName}, ${formatMoney(order.total)}`}
         accessibilityHint="Opens the order to review and respond"
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >

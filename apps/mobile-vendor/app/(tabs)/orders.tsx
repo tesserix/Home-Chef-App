@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { formatMoney } from '../../lib/format';
 import {
   ActivityIndicator,
   FlatList,
@@ -511,7 +512,7 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
                 </Text>
               </View>
               <Text style={historyRowStyles.total}>
-                ₹{order.total.toFixed(0)}
+                {formatMoney(order.total)}
               </Text>
             </View>
           )}

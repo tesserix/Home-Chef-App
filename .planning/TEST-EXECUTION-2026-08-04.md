@@ -678,3 +678,80 @@ D-10) — not in the pricing engine.
 
 Unrelated but still open from earlier: `GatewayFeeLevyEnabled` is off, and the §9(5) invoice
 attribution still names the chef as supplier of record for the food.
+
+---
+
+## Run 2 — 4 Aug evening, post delivery-intelligence release (`main-8ebf43d`)
+
+Environment unchanged. Order driven: `HC26080411237391` (Saffron Home Kitchen,
+Butter Chicken ₹320, drop **Indiranagar 560008 — inside the chef's 2 km free radius**).
+
+### ✅ ORD-05 / D-01 — CLOSED
+
+The defect was "Free delivery" advertised, ₹39.12 charged. Both halves now hold:
+
+| | |
+|---|---|
+| chef card | "Free delivery **nearby**" (qualified — it can rise past the radius) |
+| checkout | Delivery fee breakdown → **Free**, Base fee **Waived** |
+| charged | `delivery_fee 0`, `tax_delivery 0`, total 351.97 = 320 + 0 + 13.53 + 18.44 |
+| outside the radius | same order re-quoted at Domlur → "up to ₹39.16", charged 39.16 |
+
+A *delivery* order in the free zone now prices identically to the ORD-01 pickup
+baseline, which is the correct outcome. `tax_delivery` correctly followed the fee
+to 0 — no orphaned GST on a fee that no longer exists.
+
+### Lifecycle — all transitions clean
+
+`pending → accepted → preparing → ready → picked_up → delivered`, driven from the
+vendor app. At **Ready** the chef chose "I'll deliver": `fulfillment_type` flipped
+`delivery → chef_delivery` and the chef's view correctly gained the full address
++ phone (`ToChefResponse` exposes contact only for chef_delivery). `delivery_fee`
+stayed 0 through the switch, so no invoice restatement. `delivery_fee_final` NULL
+(chef never adjusted). No `earnings_ledgers` / `payout_ledger_entries` row at
+`delivered` — expected, those are written at confirm/release.
+
+### 🟥 D-20 · new · vendor app rounded every money figure to whole rupees — FIXED
+
+`PendingOrderCard` showed **₹352** for an order the customer's receipt called
+**₹351.97**. 18 sites used `toFixed(0)`; the vendor app had no money formatter at
+all (the customer app has `lib/format.ts`).
+
+Worst case was on the money path, not cosmetic: the delivery-fee field used
+`placeholder={chargedDeliveryFee.toFixed(0)}`, so a ₹39.16 fee pre-filled as
+"39" — a chef accepting the value shown to them would refund ₹0.16 they never
+intended, and the hint text stated the wrong charged amount outright.
+
+Fixed: added `mobile-vendor/lib/format.ts` mirroring the customer's, converted all
+18 sites. Card now reads ₹351.97.
+
+### 🟥 D-21 · new · the chef is shown the customer's total, not their payout
+
+Vendor order detail PRICING renders: Subtotal, **Platform fee ₹13.53**, CGST
+₹9.22, SGST ₹9.22, **Total ₹351.97**. Three problems:
+
+1. **Platform fee is the product owner's cut** — the chef should never see it.
+2. **Total is the customer's number.** The chef reconciles payouts against it and
+   it can never match.
+3. **The GST shown is the customer's combined GST.** ₹9.22 + ₹9.22 = ₹18.44 =
+   food ₹16.00 **+ the platform's service GST ₹2.44**. The chef's attributable
+   share is ₹16.00. This is the **D-09 pattern surviving in the display layer** —
+   D-09 was fixed in the earnings/statement path (`ChefTaxOf`), but this screen
+   still renders the combined figure.
+
+`services.ChefNetPayoutFor()` already computes the correct figure server-side.
+The fix is to surface that one authority to the vendor app **and** tesserix-home
+so payouts have a single source per chef per order, not to recompute in clients.
+
+Agreed design (owner decisions, this session):
+- **include** the chef's food GST (matches `ChefTaxOf` / the D-09 fix)
+- **exclude** platform fee, service GST and the customer total
+- include the chef's delivery fee when they carried the leg, plus their tip
+- **penalties shown on the order that caused them** (`chefcancel:<orderID>`),
+  while still deducting at the weekly settlement
+
+Not yet implemented — deliberately deferred so the test round finishes first.
+
+### Still to run this round
+
+MPL-01/02/03 (meal plans), REF-02/03/05, CAN-04/06.
