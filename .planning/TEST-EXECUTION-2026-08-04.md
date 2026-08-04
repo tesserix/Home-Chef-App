@@ -65,7 +65,6 @@ money-critical, in the order worth running:
 | WAL-03/04/05 | wallet top-up, expiry, insufficient balance | |
 | LOY-02/04/06 | loyalty expiry, reversal, cap | earn/redeem already pass |
 | TIP-01 | tip in gross, no commission | previously mis-marked blocked — retestable |
-| POU-04/05 | payout release + reversal | |
 | ORD-04 | order below ₹199 rejected | no payment needed |
 | REFR-01 | referral credit | no payment needed |
 | GRP-01/02 | group orders | |
@@ -109,7 +108,8 @@ Flow: customer requests cancellation → **vendor approves and picks the reason*
 | ✅ D-11 real-time dead on mobile | fixed #983/#984, verified |
 | 🟨 PAY-03 auto-cancel contradicts the written criterion | needs a product call |
 | ✅ **D-13** analytics/dashboard revenue ≠ earnings | fixed, `fix/chef-revenue-reconciliation` |
-| ✅ **D-14** order cancelled under a live gateway payment | fixed, same branch |
+| ✅ **D-14** order cancelled under a live gateway payment | fixed, merged #989 |
+| 🟥 **D-15** ₹25 tip on a frozen statement, unreachable by the catch-up | open, found 4 Aug |
 
 Everything above is deployed. API was on `main-1a98c35` at handoff.
 
@@ -257,6 +257,49 @@ Measured on the simulators against prod, both apps signed in, per 45s:
 `#892`, `#909`, `#910` and `#928` were four previous attempts, all tuning the
 backoff curve. None could have worked: the socket failed at TLS before any of
 that logic ran. The close code named the cause the whole time.
+
+### 🟥 D-15 · new · ₹25 on a frozen statement that can never reach the chef
+
+Found running POU-05 as a real reconciliation rather than an arithmetic check.
+
+**The population half passes exactly.** Statement `6aa26c7c` (27 Jul – 2 Aug IST)
+bills **10** orders; recomputing the payable set for that window — delivered,
+`refunded_at IS NULL`, `gateway_split_paise = 0`, hold in
+`('', release_eligible, released)` — also gives **10**. The statement and the
+hold machine describe one population, which is the #927 property.
+
+**The money half is ₹25.02 short.** Statement gross **₹4,493.57**; the same set
+recomputed today gives **₹4,518.59**. The gap sits on one order:
+
+| | |
+|---|---|
+| `HC26073009441276` | subtotal 440 · tax 25.05 · **chef_tip 25.00** |
+| Statement created | 3 Aug **00:00:06** |
+| Order last updated | 3 Aug **03:50:46** |
+
+₹25.02 ≈ the ₹25.00 tip (the 2 paise is per-row vs total rounding).
+
+**Why it is unrecoverable.** The order is stamped
+`billed_statement_id = 6aa26c7c…`, and `reconcileStatementCatchup` selects
+`WHERE o.billed_statement_id IS NULL`. The catch-up exists precisely to settle
+what a closed week missed — but it can only see orders that were never billed,
+not an order billed for **less than it is now worth**. `upsertWeeklyStatement`
+freezes each (chef, week) exactly once, so no later statement revisits it either.
+The ₹25 is the chef's money under INV-6 and nothing will ever pay it.
+
+**Not yet root-caused.** The `tips` table is empty, so this is the checkout-time
+`chef_tip` column, not the post-delivery tip flow. `updated_at` moving after the
+statement froze is consistent with the tip landing late but does not prove it —
+any column write moves that timestamp. Two candidates remain:
+
+1. the tip was added after the statement froze → the freeze/catch-up pair has a
+   hole for value added to an already-billed order;
+2. the tip was present all along and the statement builder dropped it → a second
+   missing-column bug in the same query family as D-09.
+
+Both are real defects and the ₹25 is missing either way. Distinguishing them
+needs the tip's own write timestamp, which the schema does not keep — which is
+itself worth fixing.
 
 ### ✅ D-14 · new · CRITICAL · an order is cancelled out from under a live charge — FIXED
 
