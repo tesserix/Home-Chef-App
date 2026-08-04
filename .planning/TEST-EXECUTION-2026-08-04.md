@@ -315,6 +315,32 @@ than published direct so an activity retry cannot double-publish).
 
 11 tests, verified to fail against the pre-fix code.
 
+**It has already happened — twice.** I ran the audit rather than leaving it as a
+follow-up. Of 31 orders matching the wrongly-cancelled shape (`cancelled` /
+`failed` / `cancel_reason='payment not completed'` / gateway order id present /
+`refund_amount = 0`), 25 are Cashfree. Asking Cashfree about each:
+
+| Order | Gateway says | Our side |
+|---|---|---|
+| `HC26073102484828` | **SUCCESS ₹757.63** (credit_card, 31 Jul 08:19) | cancelled · failed · refund **0** |
+| `HC26073113579923` | **SUCCESS ₹600.00** (debit_card, 31 Jul 19:28) | cancelled · failed · refund **0** |
+
+The other 23 are genuine — `NONE` (no attempt) or `USER_DROPPED`. So the sweep
+was right 23 times and wrong twice: **8% of cancellations landed on a payment
+the gateway had taken.**
+
+**No real customer money is involved.** Both rows are `mode=live`, but the live
+Cashfree slot currently holds a **TEST** key (app id `TEST11…`), so these are
+sandbox captures. That is the only reason this is a test-run finding rather than
+an incident. Under production credentials the identical code path takes real
+money and leaves it unrefunded, and the reconcile cron will not touch these rows
+by design.
+
+Today's two stranded orders (`…00184814`, `…00303019`) show `USER_DROPPED` — I
+abandoned those sheets, so cancelling them was correct. The live one was
+`HC26080403544039`, which sat at PENDING and would have been cancelled at the
+30-minute mark had I not resolved it first.
+
 **Harness note.** The Cashfree sandbox leaves card payments PENDING until the
 simulated bank page resolves, and the "Pay Now" favourite tile closes the WebView
 before that happens. Force the outcome instead of fighting the UI:
