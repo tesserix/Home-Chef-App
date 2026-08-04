@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, ShoppingCart, User, Menu } from 'lucide-react';
+import { Search, ShoppingCart, User, Menu, Store, ExternalLink } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '@/app/providers/AuthProvider';
@@ -12,6 +12,7 @@ import { Button } from '@/shared/components/ui';
 import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
 import { CookieBanner } from '../cookie-banner/CookieBanner';
 import { CATERING_ENABLED } from '@/shared/config/features';
+import { VENDOR_CTA_LABEL, VENDOR_PORTAL_URL } from '@/shared/config/partner-sites';
 import { AppSidebar } from './AppSidebar';
 import { AccountDrawer } from './AccountDrawer';
 
@@ -61,6 +62,21 @@ export function MainLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-1 sm:gap-2">
+            {/* A chef arriving on the customer storefront had no way to reach
+                their own side of the platform without scrolling to a marketing
+                block or opening the account drawer. This is the standing signpost.
+                Hidden on mobile, where the bottom nav owns the space — the drawer's
+                PARTNER_NAV carries it there. */}
+            <a
+              href={VENDOR_PORTAL_URL}
+              className="hidden items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted transition-colors hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40 md:inline-flex"
+            >
+              <Store aria-hidden="true" className="h-4 w-4" />
+              {VENDOR_CTA_LABEL}
+              <ExternalLink aria-hidden="true" className="h-3 w-3 opacity-60" />
+              <span className="sr-only">(opens the chef portal)</span>
+            </a>
+
             <CurrencySelector />
             <ThemeToggleCompact />
 
@@ -207,10 +223,10 @@ export function MainLayout() {
                   <ul className="mt-4 space-y-2 text-sm">
                     <li>
                       <a
-                        href="https://vendors.fe3dr.com"
+                        href={VENDOR_PORTAL_URL}
                         className="text-ink-muted hover:text-ink"
                       >
-                        Become a Chef
+                        {VENDOR_CTA_LABEL}
                       </a>
                     </li>
                   </ul>
