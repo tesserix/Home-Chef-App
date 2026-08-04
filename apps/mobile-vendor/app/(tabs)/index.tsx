@@ -1077,27 +1077,30 @@ export default function DashboardScreen() {
                 key={m.dayId}
                 onPress={() => router.push(`/meal-plans/${m.planId}`)}
                 disabled={!m.planId}
-                style={({ pressed }) => [
-                  styles.upcomingRow,
-                  pressed && styles.upcomingRowPressed,
-                ]}
+                style={styles.upcomingRow}
                 accessibilityRole="button"
                 accessibilityLabel={`${m.dishName || 'Meal'}, ${m.slot} at ${upcomingClock(
                   m.startsAt,
                 )} for ${m.customerName}. Open plan ${m.planNumber}.`}
                 android_ripple={{ color: `${theme.colors.ink}11`, borderless: false }}
               >
-                <View style={styles.upcomingMain}>
-                  <Text style={styles.upcomingDish} numberOfLines={1}>
-                    {m.dishName || 'Meal'}
-                  </Text>
-                  <Text style={styles.upcomingMeta} numberOfLines={1}>
-                    {m.slot} · {upcomingClock(m.startsAt)} · {m.customerName}
-                  </Text>
-                </View>
-                <Text style={styles.upcomingWhen}>
-                  {m.status === 'prepared' ? 'Prepared' : upcomingCountdown(m.startsAt)}
-                </Text>
+                {/* Children-as-function, not style-as-function: the interop
+                    runtime drops styles from the latter (#976). */}
+                {({ pressed }) => (
+                  <View style={[styles.upcomingInner, pressed && styles.upcomingRowPressed]}>
+                    <View style={styles.upcomingMain}>
+                      <Text style={styles.upcomingDish} numberOfLines={1}>
+                        {m.dishName || 'Meal'}
+                      </Text>
+                      <Text style={styles.upcomingMeta} numberOfLines={1}>
+                        {m.slot} · {upcomingClock(m.startsAt)} · {m.customerName}
+                      </Text>
+                    </View>
+                    <Text style={styles.upcomingWhen}>
+                      {m.status === 'prepared' ? 'Prepared' : upcomingCountdown(m.startsAt)}
+                    </Text>
+                  </View>
+                )}
               </Pressable>
             ))}
           </View>
@@ -1170,6 +1173,12 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.mist.DEFAULT,
+  },
+  upcomingInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
   },
   upcomingRowPressed: { opacity: 0.6 },
   upcomingMain: { flex: 1, minWidth: 0 },
