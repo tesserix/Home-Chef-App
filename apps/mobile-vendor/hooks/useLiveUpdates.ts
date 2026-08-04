@@ -2,13 +2,11 @@ import { useEffect, useRef, useCallback } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { socketReconnectDelayWithJitterMs } from '@homechef/mobile-shared/utils';
-import { fetchWSTicket, wsEndpointUrl } from '@homechef/mobile-shared/realtime';
-import { api } from '../lib/api';
+import { openEventStream } from '@homechef/mobile-shared/realtime';
 
 import { useAuthStore } from '../store/auth-store';
 import { invalidationsFor, parseLiveFrame } from '../lib/live-updates';
 
-const MAX_WS_FAILURES = 4;
 
 // React Native's WebSocket takes a headers option as a 3rd argument that the DOM type
 // omits. The stream is user-scoped and authenticates with the Bearer token.
@@ -47,7 +45,6 @@ export function streamBase(base?: string): { ws: string; http: string } {
  */
 export function useLiveUpdates(enabled: boolean = true): void {
   const queryClient = useQueryClient();
-  const wsRef = useRef<WebSocket | null>(null);
   const sseRef = useRef<{ close: () => void } | null>(null);
   const failureCount = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,74 +70,30 @@ export function useLiveUpdates(enabled: boolean = true): void {
     const base = streamBase();
     const myGeneration = ++generation.current;
 
-    void (async () => {
-    // Ticket auth on a top-level `/ws/*` URL. The `Authorization` header this
-    // used to send never authenticated the upgrade — it 401'd every time, so
-    // this socket has always been carried by its SSE fallback (#982).
-    const ticket = await fetchWSTicket(api);
-    if (myGeneration !== generation.current || !enabled) return;
-    if (!ticket) {
-      failureCount.current += 1;
-      reconnectTimer.current = setTimeout(
-        connect,
-        socketReconnectDelayWithJitterMs(failureCount.current),
-      );
-      return;
-    }
-
-    const ws = new WebSocket(
-      wsEndpointUrl(process.env.EXPO_PUBLIC_API_URL ?? 'https://vendors.fe3dr.com/api/v1', 'notifications', ticket),
-    );
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      failureCount.current = 0;
-      // Real-time recovered — drop the SSE fallback if it was active, so we
-      // don't keep two live transports open (#892).
-      if (sseRef.current) {
-        sseRef.current.close();
+    // SSE is the primary transport, not a fallback. React Native's WebSocket
+    // cannot complete the TLS handshake against our edge (close 1006 /
+    // OSStatus -9836, #982) — it never issued a request, so this app has in
+    // practice always run on this stream. Dialling the socket first only
+    // bought three guaranteed failures and a ticket mint per attempt.
+    sseRef.current = openEventStream(
+      `${base.http}/notifications/sse`,
+      token,
+      applyFrame,
+      () => {
+        if (myGeneration !== generation.current || !enabled) return;
         sseRef.current = null;
-        console.info('[live-ws] reconnected — dropping SSE fallback');
-      } else {
-        console.info('[live-ws] connected');
-      }
-    };
-    ws.onmessage = (event: WebSocketMessageEvent) => {
-      failureCount.current = 0;
-      applyFrame(event.data as string);
-    };
-    // `onerror` is not counted separately: it is always followed by `onclose`,
-    // and counting both double-incremented the failure budget so SSE took over
-    // after 2 real failures rather than 3, and halved the effective backoff.
-    ws.onclose = () => {
-      // Always reschedule while enabled: SSE (activated below once the budget is
-      // hit) covers the gap, but WS must never permanently give up or it can
-      // never recover real-time updates (#892).
-      if (myGeneration !== generation.current || !enabled) return;
-      wsRef.current = null;
-      failureCount.current += 1;
-      // Past the WS failure budget, hold the door open with SSE instead — but the
-      // WS itself keeps retrying below so it can take back over.
-      if (failureCount.current >= MAX_WS_FAILURES && !sseRef.current) {
-        sseRef.current = openEventStream(
-          `${base.http}/notifications/sse`,
-          token,
-          applyFrame,
+        failureCount.current += 1;
+        reconnectTimer.current = setTimeout(
+          connect,
+          socketReconnectDelayWithJitterMs(failureCount.current),
         );
-      }
-      reconnectTimer.current = setTimeout(
-        connect,
-        socketReconnectDelayWithJitterMs(failureCount.current),
-      );
-    };
-    })();
+      },
+    );
   }, [enabled, applyFrame]);
 
   useEffect(() => {
     connect();
     return () => {
-      wsRef.current?.close();
-      wsRef.current = null;
       sseRef.current?.close();
       sseRef.current = null;
       if (reconnectTimer.current) {
@@ -161,7 +114,7 @@ export function useLiveUpdates(enabled: boolean = true): void {
         reconnectTimer.current = null;
       }
       failureCount.current = 0;
-      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+      if (!sseRef.current) {
         connect();
       }
     });
@@ -180,41 +133,3 @@ export function useLiveUpdates(enabled: boolean = true): void {
  * There is no EventSource in RN either, and the server sends one shape (single-line
  * `data:` frames plus `:` heartbeats), so a full spec parser would be dead weight.
  */
-function openEventStream(
-  url: string,
-  token: string,
-  onFrame: (raw: string) => void,
-): { close: () => void } {
-  const xhr = new XMLHttpRequest();
-  // How much of responseText has already been turned into frames. XHR keeps the whole
-  // response in memory and grows it, so we parse only the tail each time.
-  let consumed = 0;
-
-  const drain = () => {
-    const text = xhr.responseText ?? '';
-    // Only complete frames (terminated by a blank line) are safe to parse — the tail may
-    // be half a frame still in flight.
-    const lastBreak = text.lastIndexOf('\n\n');
-    if (lastBreak < consumed) return;
-    const chunk = text.slice(consumed, lastBreak);
-    consumed = lastBreak + 2;
-    for (const frame of chunk.split('\n\n')) {
-      for (const line of frame.split('\n')) {
-        // `:` lines are comments (our heartbeat) — ignore them.
-        if (line.startsWith('data:')) onFrame(line.slice(5).trim());
-      }
-    }
-  };
-
-  xhr.open('GET', url);
-  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-  xhr.setRequestHeader('Accept', 'text/event-stream');
-  xhr.onreadystatechange = () => {
-    // 3 = LOADING: body is arriving. Parsing here rather than on completion is the whole
-    // point — this response never completes.
-    if (xhr.readyState >= 3) drain();
-  };
-  xhr.send();
-
-  return { close: () => xhr.abort() };
-}

@@ -55,9 +55,19 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
     const apiBase = process.env.EXPO_PUBLIC_API_URL ?? 'https://fe3dr.com/api';
     const myGeneration = ++generation.current;
 
+    // Past the budget, stop dialling. React Native's WebSocket cannot complete
+    // the TLS handshake against our edge at all (close 1006 / OSStatus -9836,
+    // #982), so on native this budget is always spent and further attempts are
+    // pure waste — they never reach the server. Polling carries the screen, and
+    // the foreground effect below re-probes, so a device or network where the
+    // socket does work still recovers. This is the one case #892's "never give
+    // up" does not cover: the transport is unavailable, not flaky.
     const fail = () => {
       failureCount.current += 1;
-      if (failureCount.current >= MAX_WS_FAILURES) setUseFallback(true);
+      if (failureCount.current >= MAX_WS_FAILURES) {
+        setUseFallback(true);
+        return;
+      }
       reconnectTimer.current = setTimeout(
         connect,
         socketReconnectDelayWithJitterMs(failureCount.current),
