@@ -278,6 +278,10 @@ export interface Order {
   // refundAmount alone cannot say where the money went.
   walletRefunded?: number;
   loyaltyRefunded?: number;
+  // And the rails that PAID for it. totalAmount is the order's value, not the
+  // card charge: gateway charge = totalAmount − walletApplied − loyaltyApplied.
+  walletApplied?: number;
+  loyaltyApplied?: number;
 }
 
 export interface TrackingResponse {

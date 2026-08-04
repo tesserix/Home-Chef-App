@@ -562,6 +562,14 @@ type OrderResponse struct {
 	// card" when ₹132.22 reached the card and ₹244.85 the wallet.
 	WalletRefunded  float64 `json:"walletRefunded,omitempty"`
 	LoyaltyRefunded float64 `json:"loyaltyRefunded,omitempty"`
+
+	// And which rails PAID for it. Total is deliberately pre-rail — it is the
+	// order's value, not the card charge — so a receipt showing Total alone cannot
+	// be reconciled against the customer's bank statement (D-12: Total 393.05
+	// against a 391.45 charge, with the 1.60 of loyalty applied at checkout
+	// appearing nowhere). Gateway charge = Total − WalletApplied − LoyaltyApplied.
+	WalletApplied  float64 `json:"walletApplied,omitempty"`
+	LoyaltyApplied float64 `json:"loyaltyApplied,omitempty"`
 }
 
 // OrderChefResponse is the minimal chef identity the customer order
@@ -820,6 +828,8 @@ func (o *Order) ToResponse() OrderResponse {
 		RefundedAt:             o.RefundedAt,
 		WalletRefunded:         o.WalletRefunded,
 		LoyaltyRefunded:        o.LoyaltyRefunded,
+		WalletApplied:          o.WalletApplied,
+		LoyaltyApplied:         o.LoyaltyApplied,
 	}
 }
 
