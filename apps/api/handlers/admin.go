@@ -992,10 +992,20 @@ func (h *AdminHandler) GetOrderDetails(c *gin.Context) {
 		"city":         order.Chef.City,
 	}
 
+	// What the chef is paid for this order (D-21) — the SAME serialised shape the
+	// vendor app renders, so staff verify a payout against the figure the chef was
+	// shown rather than a second, independently-derived number. Absent until
+	// delivered.
+	var chefPayout *models.ChefPayoutResponse
+	if p, err := services.GetChefPayout(database.DB, order.ID); err == nil {
+		chefPayout = p.ToResponse()
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"order":    order,
-		"customer": customer,
-		"chef":     chef,
+		"order":      order,
+		"customer":   customer,
+		"chef":       chef,
+		"chefPayout": chefPayout,
 	})
 }
 

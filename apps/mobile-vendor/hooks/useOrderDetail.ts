@@ -52,6 +52,18 @@ export interface OrderDetailTaxLine {
   amount: number;
 }
 
+export interface ChefPayout {
+  foodAmount: number;
+  /** 0 unless the chef carried the leg and it was charged; the UI then omits the row. */
+  deliveryFee: number;
+  chefTip: number;
+  penalty: number;
+  /** The exact sum of the lines above, to the paise. Render this, never a local sum. */
+  netPayout: number;
+  currency: string;
+  status: string;
+}
+
 export interface OrderDetailPricing {
   subtotal: number;
   deliveryFee: number;
@@ -93,6 +105,10 @@ export interface OrderDetail {
   deliveryInstructions?: string;
   timing: OrderDetailTiming;
   pricing: OrderDetailPricing;
+  /** What the CHEF is paid: food + delivery (only when they carried it) + tip −
+   *  penalty. Served from one persisted row the admin view reads too — never
+   *  recomputed here. Absent until the order is delivered. */
+  chefPayout?: ChefPayout;
   // Authoritative self-delivery CAPABILITY (the chef's "I deliver myself"
   // toggle). The Mark-Ready carrier choice is gated on THIS — not on the
   // distance fields below, which are 0 when the chef set no radius / coords are
@@ -149,6 +165,7 @@ interface RawOrderItemResponse {
 }
 
 interface RawChefOrderDetailResponse {
+  chefPayout?: ChefPayout;
   id: string;
   orderNumber: string;
   status: OrderDetailStatus;
@@ -222,6 +239,7 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
       confirmedFulfillmentAt: raw.confirmedFulfillmentAt ?? null,
       fulfillmentTimeStatus: raw.fulfillmentTimeStatus ?? null,
     },
+    chefPayout: raw.chefPayout ?? undefined,
     pricing: {
       subtotal: raw.subtotal ?? 0,
       deliveryFee: raw.deliveryFee ?? 0,

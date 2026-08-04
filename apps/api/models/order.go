@@ -497,7 +497,12 @@ type OrderResponse struct {
 	// DeliveryFeeFinal is the chef's chosen fee at accept (#703) when they reduced
 	// it; the difference vs DeliveryFee was refunded. Nil = charged as-is.
 	DeliveryFeeFinal *float64            `json:"deliveryFeeFinal,omitempty"`
-	PlatformFee      float64             `json:"platformFee"`
+	// ChefPayout is what the CHEF is paid for this order — food + delivery (only
+	// when they carried it) + tip − penalty. Absent until the order is delivered.
+	// The chef's screens render this and never the customer-facing figures below,
+	// which carry the platform's fee and GST (D-21).
+	ChefPayout  *ChefPayoutResponse `json:"chefPayout,omitempty"`
+	PlatformFee float64             `json:"platformFee"`
 	Tax              float64             `json:"tax"`
 	TaxRate          float64             `json:"taxRate"`
 	TaxName          string              `json:"taxName,omitempty"`
