@@ -534,10 +534,18 @@ type CashfreePayment struct {
 
 // Cashfree payment_status values.
 const (
-	CashfreePaymentSuccess     = "SUCCESS"
-	CashfreePaymentFailed      = "FAILED"
-	CashfreePaymentPending     = "PENDING"
+	CashfreePaymentSuccess = "SUCCESS"
+	CashfreePaymentFailed  = "FAILED"
+	CashfreePaymentPending = "PENDING"
+	// CashfreePaymentUserDropped — the customer abandoned an attempt in progress.
 	CashfreePaymentUserDropped = "USER_DROPPED"
+	// CashfreePaymentNotAttempted — a session was created and the customer never
+	// started paying. The ordinary abandoned checkout.
+	CashfreePaymentNotAttempted = "NOT_ATTEMPTED"
+	// CashfreePaymentVoid / Cancelled — the attempt was reversed or called off
+	// before it took anything.
+	CashfreePaymentVoid      = "VOID"
+	CashfreePaymentCancelled = "CANCELLED"
 )
 
 // IsCaptured reports whether this payment actually took the money. Named to
@@ -554,16 +562,26 @@ func (p *CashfreePayment) IsCaptured() bool {
 // payment", and treating it as such is how an order gets cancelled out from
 // under a charge that then succeeds.
 //
-// Only the three states that can never move money again are terminal. Anything
-// Cashfree adds later reads as in-flight, because the cost of the two mistakes
-// is not symmetric: waiting one more tick on a genuinely dead attempt is free,
-// while cancelling a live one strands a real charge on a cancelled order.
+// Every state that can never move money again is terminal, and that deliberately
+// includes NOT_ATTEMPTED: a session the customer never started is the ordinary
+// abandoned checkout, and the sweep must still be able to release the chef's
+// reserved capacity for it. Reading it as in-flight — as an earlier version of
+// this did, via the default branch — held that capacity until the gateway
+// session expired, which is Cashfree's 30-day default because we never set
+// order_expiry_time.
+//
+// Anything Cashfree adds LATER still reads as in-flight, because the cost of the
+// two mistakes is not symmetric: waiting on a dead attempt costs a held capacity
+// slot, while cancelling a live one strands a real charge on a cancelled order.
+// That asymmetry is only safe while the unknown set stays small — see the
+// order-expiry note in payment_cashfree.go.
 func (p *CashfreePayment) IsInFlight() bool {
 	if p == nil {
 		return false
 	}
 	switch p.PaymentStatus {
-	case CashfreePaymentSuccess, CashfreePaymentFailed, CashfreePaymentUserDropped:
+	case CashfreePaymentSuccess, CashfreePaymentFailed, CashfreePaymentUserDropped,
+		CashfreePaymentNotAttempted, CashfreePaymentVoid, CashfreePaymentCancelled:
 		return false
 	default:
 		return true

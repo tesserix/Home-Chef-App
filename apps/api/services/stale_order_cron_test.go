@@ -347,7 +347,6 @@ func TestStaleOrderSweep_CashfreePendingPayment_NeverCancels(t *testing.T) {
 }
 
 // A dead attempt still cancels — the fix must not turn the sweep into a no-op.
-// USER_DROPPED and FAILED are the two states that can never move money again.
 func TestStaleOrderSweep_CashfreeAllAttemptsDead_StillCancels(t *testing.T) {
 	db := setupStaleOrderDB(t)
 	now := time.Now()
@@ -430,4 +429,49 @@ func TestStaleOrderSweep_UnknownGatewayStatus_TreatedAsInFlight(t *testing.T) {
 	expired, _, skippedInFlight, _ := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 0, expired)
 	require.Equal(t, 1, skippedInFlight)
+}
+
+// NOT_ATTEMPTED is the ordinary abandoned checkout: a session was created and the
+// customer never started. It MUST still cancel, or the chef's reserved capacity is
+// held until the gateway session expires — Cashfree's 30-day default, since
+// order_expiry_time is never set. Caught by a production canary
+// (HC26080404499485) after the first version of the D-14 fix swept NOT_ATTEMPTED
+// into the "unknown, therefore in flight" default.
+func TestStaleOrderSweep_CashfreeNotAttempted_StillCancels(t *testing.T) {
+	db := setupStaleOrderDB(t)
+	now := time.Now()
+	o := seedStaleOrder(t, db, "cashfree", "cf_order_unstarted", models.ChefModeLive, now.Add(-staleOrderGrace))
+
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"cf_payment_id":5114933580135,"order_id":"cf_order_unstarted",
+			"payment_status":"NOT_ATTEMPTED","payment_amount":393.05,"is_captured":false}]`))
+	})
+
+	expired, _, skippedInFlight, _ := runStaleOrderScanWithDB(context.Background(), db, now)
+	require.Equal(t, 1, expired, "an unstarted session is an abandoned checkout, not a live payment")
+	require.Equal(t, 0, skippedInFlight)
+
+	status, _, cancelReason, _ := staleOrderRow(t, db, o.ID)
+	require.Equal(t, string(models.OrderStatusCancelled), status)
+	require.Equal(t, "payment not completed", cancelReason)
+}
+
+// VOID and CANCELLED are likewise terminal — nothing can move money again.
+func TestStaleOrderSweep_CashfreeVoidAndCancelled_StillCancel(t *testing.T) {
+	for _, st := range []string{"VOID", "CANCELLED"} {
+		t.Run(st, func(t *testing.T) {
+			db := setupStaleOrderDB(t)
+			now := time.Now()
+			seedStaleOrder(t, db, "cashfree", "cf_order_"+st, models.ChefModeLive, now.Add(-staleOrderGrace))
+
+			withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(`[{"cf_payment_id":1,"order_id":"cf_order_` + st + `",
+					"payment_status":"` + st + `","payment_amount":393.05}]`))
+			})
+
+			expired, _, skippedInFlight, _ := runStaleOrderScanWithDB(context.Background(), db, now)
+			require.Equal(t, 1, expired)
+			require.Equal(t, 0, skippedInFlight)
+		})
+	}
 }

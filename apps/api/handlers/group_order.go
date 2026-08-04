@@ -480,7 +480,8 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 		subByParticipant[it.ParticipantID] += it.Subtotal
 	}
 	if g.Chef != nil && subtotal < g.Chef.MinimumOrder {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Minimum order is %.0f", g.Chef.MinimumOrder)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Minimum order is %s%.2f",
+			getCurrencySymbol(services.EarningsCurrency), g.Chef.MinimumOrder)})
 		return
 	}
 
