@@ -243,6 +243,11 @@ type Config struct {
 	// saga end-to-end on the cluster; the saga's activities are idempotent so
 	// enabling it never double-acts alongside residual handler logic.
 	OrderSagaEnabled bool
+
+	// PaymentResolutionEnabled gates the durable per-order payment poll
+	// (temporal/workflows/payment_resolution.go). Default OFF: with it off the
+	// reconcile + stale sweeps are unchanged and authoritative.
+	PaymentResolutionEnabled bool
 	// ConfirmReceiptFlowEnabled gates running the auto-confirm-delivery reminder
 	// flow as a durable Temporal workflow: up to 3 reminders (10 min apart) after
 	// a delivery, then auto-confirms on the customer's behalf via the existing
@@ -360,6 +365,7 @@ func Load() {
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
 	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
 	orderSaga, _ := strconv.ParseBool(getEnv("ORDER_SAGA_ENABLED", "false"))
+	paymentResolution, _ := strconv.ParseBool(getEnv("PAYMENT_RESOLUTION_ENABLED", "false"))
 	confirmReceiptFlow, _ := strconv.ParseBool(getEnv("CONFIRM_RECEIPT_FLOW_ENABLED", "true"))
 	pickupReadyFlow, _ := strconv.ParseBool(getEnv("PICKUP_READY_FLOW_ENABLED", "true"))
 	deferredRefundFlow, _ := strconv.ParseBool(getEnv("DEFERRED_REFUND_FLOW_ENABLED", "true"))
@@ -555,6 +561,7 @@ func Load() {
 		OrderPayoutAutoReleaseEnabled:   orderPayoutAutoRelease,
 		CateringDepositEnabled:          cateringDeposit,
 		OrderSagaEnabled:                orderSaga,
+		PaymentResolutionEnabled:        paymentResolution,
 		ConfirmReceiptFlowEnabled:       confirmReceiptFlow,
 		PickupReadyFlowEnabled:          pickupReadyFlow,
 		DeferredRefundFlowEnabled:       deferredRefundFlow,

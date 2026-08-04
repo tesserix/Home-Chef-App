@@ -66,6 +66,13 @@ const (
 	SubjectDeliveryLocation    = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
 	SubjectPaymentSuccess = "payments.success"
 	SubjectPaymentFailed  = "payments.failed"
+	// SubjectPaymentStalled — a gateway payment has been live but unresolved for
+	// longer than any customer would wait (bank OTP page left open, a UPI collect
+	// nobody approved). Deliberately an OPS signal, not a customer notification:
+	// there is nothing to tell the customer that the order screen does not
+	// already say, and the value is in seeing a run of these when a gateway or a
+	// bank rail degrades. No notification handler subscribes to it.
+	SubjectPaymentStalled = "payments.stalled"
 	// There is deliberately NO payments.refunded subject: every refund path
 	// already reaches the customer through orders.cancelled, orders.voided or
 	// orders.cancellation_resolved (and the chef's fee reduction through its own
@@ -195,6 +202,10 @@ type OrderEvent struct {
 	// events decoding cleanly — an absent value reads as delivery, the server's
 	// own default.
 	FulfillmentType string `json:"fulfillment_type,omitempty"`
+	// Reason is free text for the diagnostic subjects (payments.stalled) that
+	// carry a "why" no status enum captures. Omitempty — every existing producer
+	// and consumer is unaffected.
+	Reason string `json:"reason,omitempty"`
 }
 
 // NotificationEvent represents a notification to be sent

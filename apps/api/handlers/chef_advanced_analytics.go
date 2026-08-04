@@ -44,10 +44,14 @@ func (h *ChefHandler) GetAdvancedAnalytics(c *gin.Context) {
 		Orders int64
 		Spend  float64
 	}
+	// Scoped and valued exactly like every other vendor money surface: SUM(total) over
+	// chef_id alone counted sandbox orders and the platform's own fee as the chef's
+	// revenue-per-customer, so this card disagreed with the Analytics screen beside it.
 	var aggs []custAgg
 	database.DB.Model(&models.Order{}).
-		Select("COUNT(*) AS orders, COALESCE(SUM(total),0) AS spend").
-		Where("chef_id = ? AND status = ? AND created_at >= ?", chef.ID, "delivered", since).
+		Select("COUNT(*) AS orders, "+chefCountedRevenueExpr("orders")+" AS spend").
+		Where(chefCountedOrdersSQL("orders"), chef.ID, chef.ID).
+		Where("orders.status = ? AND orders.created_at >= ?", "delivered", since).
 		Group("customer_id").Scan(&aggs)
 
 	totalCustomers := len(aggs)
@@ -82,8 +86,9 @@ func (h *ChefHandler) GetAdvancedAnalytics(c *gin.Context) {
 		// In the business zone, not UTC: "your best day is Tuesday" must mean the
 		// chef's Tuesday. Its sibling forecast query has always offset for IST,
 		// so leaving this one on UTC made the two screens name different days.
-		Select("EXTRACT(DOW FROM created_at AT TIME ZONE ?)::int AS dow, COUNT(*) AS orders", services.BusinessTZName()).
-		Where("chef_id = ? AND status = ? AND created_at >= ?", chef.ID, "delivered", since).
+		Select("EXTRACT(DOW FROM orders.created_at AT TIME ZONE ?)::int AS dow, COUNT(*) AS orders", services.BusinessTZName()).
+		Where(chefCountedOrdersSQL("orders"), chef.ID, chef.ID).
+		Where("orders.status = ? AND orders.created_at >= ?", "delivered", since).
 		Group("dow").Order("orders DESC").Scan(&days)
 	bestDay := ""
 	var bestDayOrders int64

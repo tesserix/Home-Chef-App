@@ -244,6 +244,11 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 	order.PaymentProvider = models.PaymentProviderCashfree
 	order.GatewaySplitPaise = splitPaise
 
+	// From here the order's fate stops depending on the client coming back:
+	// the durable poll asks the gateway itself until the answer is terminal.
+	// No-op unless PAYMENT_RESOLUTION_ENABLED is on.
+	services.StartPaymentResolution(order.ID)
+
 	h.respondCashfreeSession(c, order, cf, cfOrder, plan.CapturePaise, walletApplied, loyaltyApplied, quote)
 }
 

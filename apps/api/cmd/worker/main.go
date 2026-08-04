@@ -77,6 +77,10 @@ func main() {
 	// Order lifecycle saga activities (#122).
 	workflows.NotifyChefFunc = services.NotifyChefNewOrder
 	workflows.OrderSettleFunc = services.SettleOrderPayouts
+	// Durable payment resolution — poll the gateway to a terminal answer.
+	workflows.ResolvePaymentFunc = services.ResolveOrderPayment
+	workflows.ExpireUnpaidOrderFunc = services.ExpireUnpaidOrder
+	workflows.PaymentStalledFunc = services.PublishPaymentStalled
 	workflows.OrderRefundFunc = services.CompensateOrderRefund
 	// Onboarding activation (#126).
 	workflows.ActivateChefFunc = services.ActivateChefOnboardingFromActivity
@@ -181,10 +185,13 @@ func main() {
 		// deferred chef-cancel gateway-refund retry (fires immediately on a
 		// deferred cancel; RetryDeferredCancelRefunds cron remains the backstop).
 		temporal.Queue(temporal.TaskQueuePayments).
-			Workflows(workflows.WalletPaymentWorkflow, workflows.DeferredRefundWorkflow).
+			Workflows(workflows.WalletPaymentWorkflow, workflows.DeferredRefundWorkflow,
+				workflows.PaymentResolutionWorkflow).
 			Activities(workflows.PlaceWalletHoldActivity, workflows.CaptureWalletHoldActivity,
 				workflows.ReleaseWalletHoldActivity, workflows.GatewayRefundActivity,
-				workflows.PersistRefundIDActivity),
+				workflows.PersistRefundIDActivity,
+				workflows.ResolvePaymentActivity, workflows.ExpireUnpaidOrderActivity,
+				workflows.PaymentStalledActivity),
 		// Scheduled jobs (statements, reconciliation, FSSAI, availability, audit).
 		services.RegisterCronWorker(),
 	); err != nil {
