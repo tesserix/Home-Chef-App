@@ -423,8 +423,6 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 
 	// Calculate fees from the platform policy (Settings → Platform).
-	// Defaults match the prior hardcoded values (10% service, 8% tax, $2.99
-	// delivery) so behavior doesn't change until an admin edits the policy.
 	// deliveryFee starts at the flat policy fee and is replaced below with a
 	// live 3PL quote once the delivery address (and its coords) is resolved.
 	policy := services.GetPlatformPolicy()
