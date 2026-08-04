@@ -1073,7 +1073,20 @@ export default function DashboardScreen() {
           <View style={styles.upcomingSection}>
             <Text style={styles.sectionLabel}>Next 24 hours</Text>
             {upcomingMeals.map((m) => (
-              <View key={m.dayId} style={styles.upcomingRow}>
+              <Pressable
+                key={m.dayId}
+                onPress={() => router.push(`/meal-plans/${m.planId}`)}
+                disabled={!m.planId}
+                style={({ pressed }) => [
+                  styles.upcomingRow,
+                  pressed && styles.upcomingRowPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`${m.dishName || 'Meal'}, ${m.slot} at ${upcomingClock(
+                  m.startsAt,
+                )} for ${m.customerName}. Open plan ${m.planNumber}.`}
+                android_ripple={{ color: `${theme.colors.ink}11`, borderless: false }}
+              >
                 <View style={styles.upcomingMain}>
                   <Text style={styles.upcomingDish} numberOfLines={1}>
                     {m.dishName || 'Meal'}
@@ -1085,7 +1098,7 @@ export default function DashboardScreen() {
                 <Text style={styles.upcomingWhen}>
                   {m.status === 'prepared' ? 'Prepared' : upcomingCountdown(m.startsAt)}
                 </Text>
-              </View>
+              </Pressable>
             ))}
           </View>
         )}
@@ -1153,9 +1166,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 12,
+    // 44px floor: this is a touch target now, not a label.
+    minHeight: 44,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.mist.DEFAULT,
   },
+  upcomingRowPressed: { opacity: 0.6 },
   upcomingMain: { flex: 1, minWidth: 0 },
   upcomingDish: { fontSize: 15, fontWeight: '600', color: theme.colors.ink.DEFAULT },
   upcomingMeta: { fontSize: 13, color: theme.colors.ink.soft, marginTop: 2, textTransform: 'capitalize' },
