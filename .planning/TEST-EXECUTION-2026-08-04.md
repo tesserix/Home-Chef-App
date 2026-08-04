@@ -69,7 +69,6 @@ money-critical, in the order worth running:
 | REFR-01 | referral credit | no payment needed |
 | GRP-01/02 | group orders | |
 | MPL-01/02/03 | meal plans | |
-| PAY-05 | payment reconciliation | needs the CRON |
 
 Owner-only (cannot run unattended): **CAN-05**, **POU-06** (admin auth), and the
 **POU-03 auto-path** (k8s CronJob).
@@ -507,7 +506,7 @@ on. The wallet leg is shown on other orders; loyalty is not.
 | PAY-02 | 🟩 pass | no funding, no hold, no leak | Failed payment ⇒ `cancelled/failed`, no hold, **no wallet debit**, balance unchanged |
 | PAY-03 | 🟨 deviation | "order stays **pending**" | Order **auto-cancelled** instead. Nothing captured. Arguably better than the plan states; flagged because it contradicts the written criterion |
 | PAY-04 | 🟥 fail | exactly one capture and one hold | **D-10** |
-| PAY-05 | ⬜ not run | reconciliation | Needs the CRON |
+| **PAY-05** | 🟩 **pass** | no money stranded outside the pending window (INV-7) | Proved on a real lost callback, not by inspection. `HC26080404499485` was captured at the gateway (`5114933580135`) with the client no longer polling — nobody ever called verify. `order-payment-reconcile` settled it at **10:30:03 IST**, 11 min after the 10:19:00 order and one tick after the capture: `payment_status=completed`, method `card`, one capture, `refund_amount 0`. Matches the documented grace+interval ≤ 10 min worst case |
 | CHF-01 | 🟩 pass | hold persists, no payout | `accepted`, no hold, commission frozen at **0.06** |
 | CHF-02 | ⬜ not run | reject ⇒ full refund | |
 | CHF-03 | 🟩 pass | no money on status alone | preparing → ready → picked_up, total **393.05** unchanged, no hold. Mark-ready required a photo (stored) |
