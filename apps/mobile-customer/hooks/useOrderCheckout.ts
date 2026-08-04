@@ -35,6 +35,9 @@ interface CreateOrderPayload {
   // 'delivery' (default) | 'chef_delivery' | 'pickup'. Omit → server defaults
   // to delivery.
   fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
+  // Signed surge multiplier from the delivery quote, so the order is charged the
+  // conditions the customer was shown rather than whatever they are at order time.
+  surgePin?: string;
 }
 
 export function useCreateOrder() {

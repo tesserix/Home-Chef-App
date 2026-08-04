@@ -50,6 +50,43 @@ export interface CreditQuote {
   loyaltyEnabled: boolean;
 }
 
+/** Live delivery conditions behind a quote. Each factor is ≥1 (1 = neutral). */
+export interface SurgeFactors {
+  /** Pump-price index vs the baseline the chef's per-km rate assumes. */
+  fuel: number;
+  /** Congestion on the kitchen→drop route (live vs free-flow drive time). */
+  traffic: number;
+  /** Weather at the drop. */
+  weather: number;
+  /** Product of the three, clamped. */
+  combined: number;
+}
+
+/**
+ * Itemised self-delivery fee, present only when the chef delivers themselves.
+ * `fee` is the approx MAX: at accept the chef can only bring it down, never up.
+ */
+export interface SelfDeliveryBreakdown {
+  baseFee: number;
+  distanceKnown: boolean;
+  /** ROAD distance chef→drop, not straight line. */
+  distanceKm: number;
+  freeRadiusKm: number;
+  billableKm: number;
+  perKm: number;
+  distanceComponent: number;
+  /** Drop is inside the chef's free radius — the whole delivery is free. */
+  withinFreeZone: boolean;
+  maxFee: number;
+  capped: boolean;
+  fuelSurge: number;
+  weatherSurge: number;
+  trafficSurge: number;
+  /** Combined multiplier actually applied to the distance component (≥1). */
+  surgeMultiplier: number;
+  fee: number;
+}
+
 export interface DeliveryQuote {
   /**
    * The gateway that will actually process this order, resolved server-side.
@@ -102,6 +139,16 @@ export interface DeliveryQuote {
   /** Server-allocated wallet + loyalty credit for this cart. Absent when the
    *  request was unauthenticated. */
   credit?: CreditQuote;
+  /** Approx-max self-delivery fee (₹), present only when the chef self-delivers. */
+  selfDeliveryFee?: number;
+  selfDeliveryBreakdown?: SelfDeliveryBreakdown;
+  /** The live conditions behind the fee, so checkout can say WHY delivery costs
+   *  more today rather than showing an unexplained number. */
+  surge?: SurgeFactors;
+  /** Signed multiplier this quote was priced at. Send it back on order creation so
+   *  the order is charged the conditions the customer saw — traffic and weather
+   *  move between the checkout screen and payment. Empty when there is no surge. */
+  surgePin?: string;
 }
 
 /** The customer's credit intent. Amounts are omitted while a rail is on "auto",
