@@ -69,6 +69,10 @@ func setupExpenseDB(t *testing.T) *gorm.DB {
 			delivered_at           DATETIME,
 			subtotal               REAL DEFAULT 0,
 			tax                    REAL DEFAULT 0,
+			-- Per-supply split. The FY statement reads these to credit the chef the
+			-- FOOD GST only; without them the query cannot run at all.
+			tax_food               REAL DEFAULT 0,
+			tax_service            REAL DEFAULT 0,
 			chef_funded_discount   REAL DEFAULT 0,
 			delivery_fee           REAL DEFAULT 0,
 			chef_tip               REAL DEFAULT 0,

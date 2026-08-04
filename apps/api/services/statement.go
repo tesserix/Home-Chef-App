@@ -146,7 +146,12 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, error) {
 	var rows []statementOrderRow
 	err := database.DB.Raw(`
-		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax, o.chef_funded_discount,
+		-- tax_food/tax_service are NOT optional here: ChefTaxOf falls back to the
+		-- whole order tax when both scan as zero, which credits the chef the
+		-- platform's own GST on the fee and delivery. Omitting them from this
+		-- list is invisible to a test that exercises the helper directly.
+		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax,
+		       o.tax_food, o.tax_service, o.chef_funded_discount,
 		       o.delivery_fee, o.chef_tip, o.delivery_address_state, o.commission_rate,
 		       o.chef_id, c.user_id, c.state AS chef_state
 		FROM   orders o

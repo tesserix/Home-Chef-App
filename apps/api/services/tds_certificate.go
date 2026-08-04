@@ -64,7 +64,8 @@ func GenerateTDSCertificatePDF(chefID uuid.UUID, fyStartYear int) ([]byte, strin
 
 	var rows []statementOrderRow
 	err := database.DB.Raw(`
-		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax, o.chef_funded_discount,
+		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax,
+		       o.tax_food, o.tax_service, o.chef_funded_discount,
 		       o.delivery_fee, o.chef_tip, o.delivery_address_state, o.commission_rate,
 		       o.chef_id, c.user_id, c.state AS chef_state
 		FROM   orders o

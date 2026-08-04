@@ -136,3 +136,61 @@ func TestLoadStatementOrderRows_ExcludesAlreadySettledOrders(t *testing.T) {
 	require.Len(t, rows, 1)
 	assert.Equal(t, "UNSETTLED", rows[0].OrderNumber)
 }
+
+// The chef is entitled to the GST on their FOOD only. The platform fee's GST
+// and the delivery's GST belong to the platform — that is what ChefTaxOf
+// enforces, and what the per-supply columns exist to carry.
+//
+// This test goes through the QUERY, not the helper. #983 added TaxFood/TaxService
+// to the scan struct and routed them through ChefTaxOf, but the raw SQL never
+// selected the columns, so they scanned as 0, the helper hit its legacy fallback,
+// and every chef was credited the platform's tax. A helper-level test cannot see
+// that: the defect lives entirely in the SELECT list.
+func TestLoadStatementOrderRows_SelectsPerSupplyTax(t *testing.T) {
+	db := setupStatementRowsDB(t)
+	chefID := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, business_name, state) VALUES (?,?,?,?)`,
+		chefID.String(), uuid.New().String(), "Saffron Home Kitchen", "KA").Error)
+
+	weekStart := time.Date(2026, 7, 27, 0, 0, 0, 0, time.UTC)
+	weekEnd := weekStart.AddDate(0, 0, 7)
+	delivered := weekStart.Add(36 * time.Hour)
+
+	// The order observed in production: tax 20.40 = food 16.00 + service 2.44 + delivery 1.96.
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, order_number, chef_id, status, delivered_at, subtotal, tax,
+		   tax_food, tax_service, total, payout_hold_status, commission_rate)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		uuid.NewString(), "HC-PER-SUPPLY", chefID.String(), "delivered", delivered,
+		320.0, 20.40, 16.00, 2.44, 393.05, "release_eligible", 0.06).Error)
+
+	// A legacy order priced before the split: no per-supply snapshot at all.
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, order_number, chef_id, status, delivered_at, subtotal, tax,
+		   tax_food, tax_service, total, payout_hold_status, commission_rate)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		uuid.NewString(), "HC-LEGACY", chefID.String(), "delivered", delivered,
+		320.0, 16.00, 0, 0, 336.00, "release_eligible", 0.06).Error)
+
+	rows, err := loadStatementOrderRows(weekStart, weekEnd)
+	require.NoError(t, err)
+
+	byNumber := map[string]statementOrderRow{}
+	for _, r := range rows {
+		byNumber[r.OrderNumber] = r
+	}
+
+	split, ok := byNumber["HC-PER-SUPPLY"]
+	require.True(t, ok, "the split-tax order must be on the statement")
+	assert.Equal(t, 16.00, split.TaxFood, "tax_food must be SELECTed, not left at zero")
+	assert.Equal(t, 2.44, split.TaxService, "tax_service must be SELECTed, not left at zero")
+	assert.Equal(t, 16.00, ChefTaxOf(split.Tax, split.TaxFood, split.TaxService),
+		"the chef is owed the food GST only — crediting 20.40 hands them the platform's 4.40")
+
+	// Legacy rows must still fall back to the whole tax: before the split every
+	// supply shared one rate, so the order tax WAS the food tax.
+	legacy, ok := byNumber["HC-LEGACY"]
+	require.True(t, ok)
+	assert.Equal(t, 16.00, ChefTaxOf(legacy.Tax, legacy.TaxFood, legacy.TaxService),
+		"an order with no per-supply snapshot must keep the legacy whole-tax behaviour")
+}
