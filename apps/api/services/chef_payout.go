@@ -130,6 +130,23 @@ func RecordChefPayout(db *gorm.DB, order *models.Order, penalty float64) (*model
 	return &row, nil
 }
 
+// ChefOrderPenalty is the levy attributed to one order, for display on its
+// payout. Reads the penalty ledger rather than copying it: the ledger stays the
+// authority for whether and when the money is actually taken (it is netted off a
+// weekly settlement, not this order).
+//
+// Waived levies count 0 — an admin cancelled them, so they were never owed.
+// Best-effort: a read failure yields 0 rather than blocking a delivery.
+func ChefOrderPenalty(db *gorm.DB, orderID uuid.UUID) float64 {
+	var p models.ChefPenalty
+	err := db.Where("source_key = ? AND status <> ?",
+		ChefCancelPenaltySourceKey(orderID), models.ChefPenaltyWaived).First(&p).Error
+	if err != nil {
+		return 0
+	}
+	return p.Amount
+}
+
 // GetChefPayout returns an order's payout row, or nil when none exists yet
 // (the order has not reached delivery).
 func GetChefPayout(db *gorm.DB, orderID uuid.UUID) (*models.OrderChefPayout, error) {

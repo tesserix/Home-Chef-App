@@ -1656,6 +1656,16 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		if res.RowsAffected == 0 {
 			return errOrderStatusRaced
 		}
+		// What the chef is paid for this order, recorded once it is delivered
+		// (D-21). Inside the guarded tx so it cannot be written for an order a
+		// concurrent cancel just took: RowsAffected==0 aborts before reaching here.
+		// Idempotent on order_id, so a re-submitted `delivered` re-stamps rather
+		// than duplicating.
+		if order.Status == models.OrderStatusDelivered {
+			if _, err := services.RecordChefPayout(tx, &order, services.ChefOrderPenalty(tx, order.ID)); err != nil {
+				return err
+			}
+		}
 		if releaseCap {
 			capDay := services.CapacityDay(order.CreatedAt)
 			for _, it := range order.Items {

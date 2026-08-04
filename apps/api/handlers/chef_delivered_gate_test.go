@@ -100,6 +100,19 @@ const outboxDDL = `CREATE TABLE outbox_events (
 	status text, attempts integer DEFAULT 0, last_error text, next_retry_at datetime,
 	created_at datetime, updated_at datetime, published_at datetime)`
 
+// Delivered writes the chef's payout row (D-21) inside the same guarded tx, so
+// the harness needs both it and the penalty ledger it reads the levy from.
+const chefPayoutsDDL = `CREATE TABLE order_chef_payouts (
+	id text PRIMARY KEY, order_id text UNIQUE, chef_id text, currency text DEFAULT 'INR',
+	food_amount real DEFAULT 0, delivery_fee real DEFAULT 0, chef_tip real DEFAULT 0,
+	penalty real DEFAULT 0, net_payout real DEFAULT 0,
+	status text DEFAULT 'pending', computed_at datetime, created_at datetime, updated_at datetime)`
+
+const chefPenaltiesDDL = `CREATE TABLE chef_penalties (
+	id text PRIMARY KEY, chef_id text, user_id text, kind text, status text,
+	source_key text UNIQUE, order_id text, basis_amount real DEFAULT 0, amount real DEFAULT 0,
+	created_at datetime, updated_at datetime)`
+
 const auditDDL = `CREATE TABLE audit_logs (
 	id text DEFAULT '00000000-0000-0000-0000-000000000000',
 	user_id text, action text, entity_type text, entity_id text,
@@ -112,7 +125,7 @@ func setupChefOrderDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text, business_name text, is_active integer DEFAULT 1)`,
-		ordersDDL, orderItemsDDL, outboxDDL, auditDDL,
+		ordersDDL, orderItemsDDL, outboxDDL, auditDDL, chefPayoutsDDL, chefPenaltiesDDL,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
