@@ -427,8 +427,6 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 
 	// Calculate fees from the platform policy (Settings → Platform).
-	// Defaults match the prior hardcoded values (10% service, 8% tax, $2.99
-	// delivery) so behavior doesn't change until an admin edits the policy.
 	// deliveryFee starts at the flat policy fee and is replaced below with a
 	// live 3PL quote once the delivery address (and its coords) is resolved.
 	policy := services.GetPlatformPolicy()
@@ -653,6 +651,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		// sends a single `tip` and offers no rider split at checkout. If a split is
 		// ever introduced, take it from the request rather than re-dividing here.
 		ChefTip:                   tip,
+		ChefTipAt:                 tipWrittenAt(tip),
 		Discount:                  discount,
 		ChefFundedDiscount:        chefFundedDiscount,
 		Total:                     total,
@@ -1205,25 +1204,10 @@ func (h *OrderHandler) GetOrderInvoicePDF(c *gin.Context) {
 // Security: verifies the authenticated customer owns the order before upgrading (T-04-03).
 func (h *OrderHandler) TrackOrderWS(c *gin.Context) {
 	orderID := c.Param("id")
-	userID, ok := middleware.GetUserID(c)
+	deliveryID, ok := resolveTrackedDeliveryID(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-
-	// Verify customer owns this order and load the delivery relationship.
-	var order models.Order
-	if err := database.DB.Preload("Delivery").
-		Where("id = ? AND customer_id = ?", orderID, userID).
-		First(&order).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "order_not_found", "message": "Order not found"})
-		return
-	}
-	if order.Delivery == nil || order.Delivery.ID == uuid.Nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no_active_delivery", "message": "No active delivery for this order"})
-		return
-	}
-	deliveryID := order.Delivery.ID.String()
 
 	// Upgrade HTTP → WebSocket.
 	conn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)

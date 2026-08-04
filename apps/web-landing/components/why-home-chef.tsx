@@ -12,8 +12,10 @@ const VALUES = [
     copy: 'Every chef on Fe3dr holds a valid FSSAI registration. We verify documents before a kitchen goes live — no exceptions.',
   },
   {
-    title: 'Live delivery tracking',
-    copy: 'Watch your order move: accepted, cooking, picked up, at your door. Minute-by-minute, from the first tap to the handoff.',
+    // No platform courier exists today, so the honest promise is the order's own
+    // progress — which is live either way — not a rider crossing town.
+    title: 'Live order tracking',
+    copy: 'Watch your order move: accepted, cooking, ready. You’ll know exactly when to collect it, or when your chef is on the way.',
   },
   {
     title: 'Fair to chefs',

@@ -15,6 +15,7 @@ import {
   type LucideIcon,
   BookOpen,
 } from 'lucide-react';
+import { VENDOR_CTA_LABEL, VENDOR_PORTAL_URL } from '@/shared/config/partner-sites';
 import {
   CATERING_ENABLED,
   TIFFIN_ENABLED,
@@ -103,7 +104,7 @@ export const ACCOUNT_SECONDARY_NAV: NavItem[] = [...LEGAL_NAV];
  * so driver signup is deliberately absent rather than linked into a dead end.
  */
 export const PARTNER_NAV: NavItem[] = [
-  { name: 'Add your kitchen', href: 'https://vendors.fe3dr.com', icon: Store, external: true },
+  { name: VENDOR_CTA_LABEL, href: VENDOR_PORTAL_URL, icon: Store, external: true },
 ];
 
 /**

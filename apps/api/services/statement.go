@@ -77,9 +77,11 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 		chefState      string
 		commissionRate float64
 		totals         EarningsTotals
-		// orderIDs are the orders this statement bills, stamped onto them when it
-		// is created so the catch-up can tell settled orders from skipped ones (#927).
-		orderIDs []uuid.UUID
+		// billed are the orders this statement bills and the net payout each is
+		// billed for, stamped onto them when it is created so the catch-up can tell
+		// settled orders from skipped ones (#927) and under-billed ones from orders
+		// billed in full (D-15).
+		billed []billedOrder
 	}
 	buckets := make(map[uuid.UUID]*chefBucket)
 	for _, r := range rows {
@@ -88,8 +90,7 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			b = &chefBucket{userID: r.UserID, chefState: r.ChefState, commissionRate: flatRate}
 			buckets[r.ChefID] = b
 		}
-		b.orderIDs = append(b.orderIDs, r.OrderID)
-		b.totals.Add(ComputeOrderEarnings(EarningsInput{
+		earnings := ComputeOrderEarnings(EarningsInput{
 			OrderID:            r.OrderID,
 			OrderNumber:        r.OrderNumber,
 			CompletedAt:        r.CompletedAt,
@@ -102,7 +103,9 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			// Per-row frozen rate (#390); the once-resolved flatRate is the legacy
 			// fallback for orders placed before commission_rate was stamped.
 			CommissionRate: rowRate(r.CommissionRate, flatRate),
-		}, b.chefState))
+		}, b.chefState)
+		b.billed = append(b.billed, billedOrder{ID: r.OrderID, Net: earnings.NetPayout})
+		b.totals.Add(earnings)
 	}
 
 	issued := 0
@@ -111,7 +114,7 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			continue
 		}
 		b.totals.Round()
-		created, stmt, err := upsertWeeklyStatement(chefID, b.userID, weekStart, weekEnd, b.totals, b.orderIDs)
+		created, stmt, err := upsertWeeklyStatement(chefID, b.userID, weekStart, weekEnd, b.totals, b.billed)
 		if err != nil {
 			log.Printf("weekly-statement: persist failed for chef=%s week=%s: %v",
 				chefID, weekStart.Format("2006-01-02"), err)
@@ -200,7 +203,7 @@ func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, 
 // the authoritative race-winner across pods. The created row is returned so the
 // caller can apply post-creation adjustments (penalty deductions, #834).
 func upsertWeeklyStatement(
-	chefID, userID uuid.UUID, weekStart, weekEnd time.Time, t EarningsTotals, orderIDs []uuid.UUID,
+	chefID, userID uuid.UUID, weekStart, weekEnd time.Time, t EarningsTotals, billed []billedOrder,
 ) (bool, *models.WeeklyStatement, error) {
 	var existing models.WeeklyStatement
 	err := database.DB.
@@ -237,7 +240,7 @@ func upsertWeeklyStatement(
 		if cErr := tx.Create(&stmt).Error; cErr != nil {
 			return cErr
 		}
-		return stampBilledOrders(tx, stmt.ID, orderIDs)
+		return stampBilledOrders(tx, stmt.ID, billed)
 	})
 	if err != nil {
 		// Lost the race to a concurrent pod — treat as "already issued".

@@ -23,6 +23,10 @@ export interface EventStreamHandle {
  *
  * XHR rather than EventSource: RN has no EventSource, and EventSource cannot
  * set an Authorization header anyway.
+ *
+ * `token` may be empty for a stream whose route authenticates optionally (a
+ * kitchen's open/closed state is public, and browsing is guest-friendly) — the
+ * header is then omitted rather than sent as "Bearer ".
  */
 export function openEventStream(
   url: string,
@@ -53,7 +57,7 @@ export function openEventStream(
   };
 
   xhr.open('GET', url);
-  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+  if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
   xhr.setRequestHeader('Accept', 'text/event-stream');
   xhr.onreadystatechange = () => {
     // 3 = LOADING: body is arriving. Parsing here rather than on completion is

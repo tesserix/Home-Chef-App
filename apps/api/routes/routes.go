@@ -485,6 +485,8 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id/fulfillment-times", chefHandler.GetChefFulfillmentTimes) // #709 home-tiffin suggested times
 			// Live kitchen open/close for customers on this chef's page (#970).
 			chefs.GET("/:id/availability/ws", chefAvailabilityHandler.StreamChefAvailabilityWS)
+			// Same stream over SSE — the transport React Native can actually use (#982).
+			chefs.GET("/:id/availability/sse", chefAvailabilityHandler.StreamChefAvailabilitySSE)
 			// Per-mode delivery-fee preview so checkout can show the real fee +
 			// pickup's saving. Same computation CreateOrder charges.
 			chefs.POST("/:id/delivery-quote", orderHandler.QuoteDeliveryFee)
@@ -743,6 +745,10 @@ func SetupRouter() *gin.Engine {
 			orders.POST("/:id/confirm-received", payoutHoldHandler.ConfirmOrderReceived) // #387
 			orders.GET("/:id/track", orderHandler.TrackOrder)
 			orders.GET("/:id/track/ws", orderHandler.TrackOrderWS)
+			// Same stream over SSE. React Native cannot complete the WS TLS
+			// handshake against our edge (#982), so this is the transport the
+			// mobile apps actually use.
+			orders.GET("/:id/track/sse", orderHandler.TrackOrderSSE)
 			orders.GET("/:id/invoice", orderHandler.GetOrderInvoice)
 			// PDF tax invoice — customer-facing. Streams directly back as
 			// application/pdf with Content-Disposition: attachment.

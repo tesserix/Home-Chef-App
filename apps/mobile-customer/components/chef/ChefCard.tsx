@@ -13,6 +13,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import { useRequireAccount } from '../../hooks/useRequireAccount';
 import type { Chef } from '../../types/customer';
+import { deliveryFeeLabel } from '../../lib/delivery-fee-label';
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the primitive Button's `withAlpha`
@@ -203,11 +204,7 @@ export function ChefCard({ chef }: ChefCardProps) {
                   {[
                     chef.cuisine,
                     chef.deliveryTime,
-                    chef.deliveryFee != null
-                      ? chef.deliveryFee === 0
-                        ? 'Free delivery'
-                        : `₹${chef.deliveryFee} delivery`
-                      : undefined,
+                    deliveryFeeLabel(chef.deliveryFee, chef.deliveryFeeFlat, chef.offersDelivery),
                   ]
                     .filter(Boolean)
                     .join(' · ')}

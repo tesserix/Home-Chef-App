@@ -1,9 +1,23 @@
 package handlers
 
 import (
+	"time"
+
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 )
+
+// tipWrittenAt stamps when a chef tip was recorded, and nothing when there is no
+// tip. A tip appearing on an order after its statement froze is a different defect
+// from one the statement builder dropped, and without this the two are
+// indistinguishable after the fact (D-15).
+func tipWrittenAt(tip float64) *time.Time {
+	if tip <= 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	return &now
+}
 
 // chef_order_totals.go — pure money-math helpers for order cancellation and
 // partial refunds. Extracted from the cancel handlers so the recompute logic
@@ -11,15 +25,16 @@ import (
 // pulled) is unit-testable without a DB or the Razorpay gateway.
 
 // lineRefundAmount returns the refund owed for cancelling a single order line:
-// the line's subtotal plus its proportional share of the order tax
-// (orderTax * lineSubtotal/orderSubtotal). The tax share is computed against
+// the line's subtotal plus its proportional share of the order's FOOD GST
+// (orderFoodTax * lineSubtotal/orderSubtotal). The tax share is computed against
 // the order subtotal captured at refund time so concurrent per-line cancels
 // split the original tax consistently. A zero/negative order subtotal yields
-// just the line subtotal (no tax share).
-func lineRefundAmount(lineSubtotal, orderSubtotal, orderTax float64) float64 {
+// just the line subtotal (no tax share). Callers pass orderFoodTax, not
+// Order.Tax — see services.LineRefundAmount (D-19).
+func lineRefundAmount(lineSubtotal, orderSubtotal, orderFoodTax float64) float64 {
 	// Canonical math lives in services so chef per-line cancels and order-issue
 	// refunds (#37) settle identically — no duplicated formula.
-	return services.LineRefundAmount(lineSubtotal, orderSubtotal, orderTax)
+	return services.LineRefundAmount(lineSubtotal, orderSubtotal, orderFoodTax)
 }
 
 // recomputeOrderTotals returns the order subtotal, tax, and total after

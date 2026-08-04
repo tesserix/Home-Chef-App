@@ -261,6 +261,11 @@ export interface Order {
   discount: number;
   tip: number;
   total: number;
+  /** The rails that paid the order. `total` is the order's value, not the card
+   *  charge: gateway charge = total − walletApplied − loyaltyApplied. Without
+   *  them the receipt cannot be reconciled against a bank statement (D-12). */
+  walletApplied?: number;
+  loyaltyApplied?: number;
   promoCode?: string;
   specialInstructions?: string;
   scheduledFor?: string;

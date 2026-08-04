@@ -114,9 +114,19 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		// Customer-facing platform fee: a nominal 4.99% of subtotal — enough to
 		// cover the payment gateway (~2%) + a small margin, without over-charging
 		// customers. Runtime-tunable via the admin (SavePlatformPolicy).
-		PlatformFeePercent:  4.99,
-		TaxPercent:          8.0,
-		BaseDeliveryFee:     2.99,
+		PlatformFeePercent: 4.99,
+		// TaxPercent no longer prices anything. Tax is resolved per supply from
+		// tax_rates (CreateOrder, MealPlanFeeTotals, the simulator), so this is a
+		// display-only leftover the admin console still round-trips. Do not wire a
+		// price back onto it — an 8% flat rate is what a tiffin plan was charged
+		// while the same meal à la carte was charged 5% (D-08).
+		TaxPercent: 8.0,
+		// The flat fallback delivery fee, in RUPEES. It was 2.99 — a figure carried
+		// over from a dollar-denominated template, on a marketplace that has only
+		// ever charged in INR and whose own delivery pricing starts at 39. A meal
+		// plan bills this per day, so a week of tiffin was charged 20.93 of
+		// delivery (the other half of D-08).
+		BaseDeliveryFee: 39.0,
 		PerKmDeliveryFee:    0.0,
 		ChefPayoutPercent:   80.0,
 		DriverPayoutPercent: 80.0,

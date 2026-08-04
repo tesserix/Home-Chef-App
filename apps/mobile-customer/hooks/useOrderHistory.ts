@@ -79,6 +79,13 @@ interface ApiOrder {
   customerConfirmedAt?: string;
   cancelReason?: string;
   refundAmount?: number;
+  // The rails that funded the order and the rails a refund went back on. Total
+  // is pre-rail, so without walletApplied/loyaltyApplied a receipt cannot be
+  // reconciled against the customer's bank charge (D-12).
+  walletApplied?: number;
+  loyaltyApplied?: number;
+  walletRefunded?: number;
+  loyaltyRefunded?: number;
   refundedAt?: string;
 }
 
@@ -119,6 +126,10 @@ function mapOrder(raw: ApiOrder): Order {
     paymentStatus: raw.paymentStatus,
     cancelReason: raw.cancelReason,
     refundAmount: raw.refundAmount,
+    walletApplied: raw.walletApplied,
+    loyaltyApplied: raw.loyaltyApplied,
+    walletRefunded: raw.walletRefunded,
+    loyaltyRefunded: raw.loyaltyRefunded,
     refundedAt: raw.refundedAt,
     // Chef is now sent by the order API (OrderChefResponse: id/name/imageUrl).
     // Fill the rest of the Chef shape with neutral defaults — the order

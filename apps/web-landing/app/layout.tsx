@@ -18,10 +18,11 @@ const inter = Inter({
   display: 'swap',
 });
 
-const TITLE = 'Fe3dr — Real home-cooked food, delivered';
+const TITLE = 'Fe3dr — Real home-cooked food from kitchens near you';
 const DESCRIPTION =
   'Order real home-cooked meals from FSSAI-verified home chefs near you. ' +
-  'Browse local kitchens, order in a few taps, and track delivery live. ' +
+  'Browse local kitchens, order in a few taps, and track your order live. ' +
+  'Collect it yourself or have your chef bring it. ' +
   'Get the Fe3dr app for iOS and Android.';
 
 export const metadata: Metadata = {

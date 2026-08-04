@@ -46,6 +46,7 @@ import { MenuCategorySheet } from '../../components/chef/MenuCategorySheet';
 import { ChefWeeklyPlanTab } from '../../components/chef/ChefWeeklyPlanTab';
 import { ChefReviewList } from '../../components/chef/ChefReviewList';
 import { TIFFIN_ENABLED } from '../../lib/features';
+import { deliveryFeeLabel } from '../../lib/delivery-fee-label';
 import { useAlert } from '@homechef/mobile-shared/ui';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec (§3.5).
@@ -153,6 +154,8 @@ export default function ChefDetailScreen() {
   }
 
   const chef = chefData?.data;
+  // A floor, not a quote — see lib/delivery-fee-label (D-01).
+  const deliveryLabel = deliveryFeeLabel(chef?.deliveryFee, chef?.deliveryFeeFlat, chef?.offersDelivery);
   const menuItems = menuData?.data ?? [];
 
   // Derive unique categories preserving order of first appearance.
@@ -553,14 +556,10 @@ export default function ChefDetailScreen() {
                 </>
               ) : null}
 
-              {chef.deliveryFee != null ? (
+              {deliveryLabel ? (
                 <>
                   <View style={styles.metaDot} />
-                  <Text style={styles.metaText}>
-                    {chef.deliveryFee === 0
-                      ? 'Free delivery'
-                      : `₹${chef.deliveryFee} delivery`}
-                  </Text>
+                  <Text style={styles.metaText}>{deliveryLabel}</Text>
                 </>
               ) : null}
             </View>

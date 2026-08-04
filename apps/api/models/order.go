@@ -318,6 +318,25 @@ type Order struct {
 	// fact is what lets an order be paid at most once across both paths.
 	BilledStatementID *uuid.UUID `gorm:"type:uuid;index" json:"-"`
 
+	// SettledNetPayout is how much of this order's net payout the chef has actually
+	// been credited, across the statement that billed it and any later catch-up.
+	//
+	// BilledStatementID answers "has this order paid the chef?" but not "for how
+	// much" — so an order billed for LESS than it is now worth was indistinguishable
+	// from one billed in full, and the catch-up (which selects on an unset stamp)
+	// could never see it. That is D-15: a tip landed on an order after its week had
+	// frozen and nothing would ever pay it.
+	//
+	// NULL means "not recorded" — orders stamped by BackfillBilledStatementIDs, whose
+	// statements predate this column. The under-billed sweep skips them rather than
+	// guessing, because a wrong guess pays twice.
+	SettledNetPayout *float64 `gorm:"" json:"-"`
+
+	// ChefTipAt is when the chef's tip was written. Without it, a tip that appears on
+	// an already-billed order cannot be told apart from one the statement builder
+	// dropped — the two have opposite fixes (D-15).
+	ChefTipAt *time.Time `gorm:"" json:"-"`
+
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
@@ -386,6 +405,30 @@ const (
 	CancelReasonCustomerRequest  CancelReason = "customer_request"
 	CancelReasonOther            CancelReason = "other"
 )
+
+// customerCancelReason is what each reason reads as to the customer. The chef
+// picked a labelled button; showing them the database value behind it is D-17.
+// Deliberately not the chef's own wording — "I'm out of an ingredient" is the
+// chef's first person and makes no sense on the customer's screen.
+var customerCancelReason = map[CancelReason]string{
+	CancelReasonOutOfIngredient:  "The chef ran out of an ingredient",
+	CancelReasonEquipmentFailure: "The chef had an equipment problem",
+	CancelReasonCustomerRequest:  "You asked for this order to be cancelled",
+	CancelReasonOther:            "The chef wasn't able to complete this order",
+}
+
+// CustomerCancelReason renders a stored cancel reason for the customer.
+//
+// The column holds two different things: one of the four chef-picked enum values,
+// and free apology text written by the platform's own void paths ("payment not
+// completed"). Anything not in the enum is already prose and passes through
+// unchanged, so this can be applied to the column without knowing which wrote it.
+func CustomerCancelReason(raw string) string {
+	if label, ok := customerCancelReason[CancelReason(raw)]; ok {
+		return label
+	}
+	return raw
+}
 
 // IsValid reports whether r is one of the four allowed cancel reasons.
 // Handlers should reject anything else with 400 so the column stays
@@ -519,6 +562,14 @@ type OrderResponse struct {
 	// card" when ₹132.22 reached the card and ₹244.85 the wallet.
 	WalletRefunded  float64 `json:"walletRefunded,omitempty"`
 	LoyaltyRefunded float64 `json:"loyaltyRefunded,omitempty"`
+
+	// And which rails PAID for it. Total is deliberately pre-rail — it is the
+	// order's value, not the card charge — so a receipt showing Total alone cannot
+	// be reconciled against the customer's bank statement (D-12: Total 393.05
+	// against a 391.45 charge, with the 1.60 of loyalty applied at checkout
+	// appearing nowhere). Gateway charge = Total − WalletApplied − LoyaltyApplied.
+	WalletApplied  float64 `json:"walletApplied,omitempty"`
+	LoyaltyApplied float64 `json:"loyaltyApplied,omitempty"`
 }
 
 // OrderChefResponse is the minimal chef identity the customer order
@@ -770,11 +821,15 @@ func (o *Order) ToResponse() OrderResponse {
 		CreatedAt:              o.CreatedAt,
 		PayoutHoldStatus:       o.PayoutHoldStatus,
 		CustomerConfirmedAt:    o.CustomerConfirmedAt,
-		CancelReason:           o.CancelReason,
+		// Resolved here, on the wire, so every customer surface reads the same
+		// sentence — and builds already in customers' hands stop showing the enum.
+		CancelReason:           CustomerCancelReason(o.CancelReason),
 		RefundAmount:           o.RefundAmount,
 		RefundedAt:             o.RefundedAt,
 		WalletRefunded:         o.WalletRefunded,
 		LoyaltyRefunded:        o.LoyaltyRefunded,
+		WalletApplied:          o.WalletApplied,
+		LoyaltyApplied:         o.LoyaltyApplied,
 	}
 }
 

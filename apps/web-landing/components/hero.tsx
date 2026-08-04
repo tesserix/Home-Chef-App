@@ -39,8 +39,8 @@ export function Hero() {
             style={{ animationDelay: '320ms' }}
           >
             Real home cooks in your neighbourhood, cooking what they make
-            best. Browse their kitchens, order today&rsquo;s menu, and watch
-            dinner travel from their stove to your door.
+            best. Browse their kitchens, order today&rsquo;s menu, and collect it
+            when it&rsquo;s ready &mdash; or have your chef bring it over.
           </p>
 
           {/* The primary action is ordering, not installing.

@@ -13,8 +13,10 @@ const STEPS = [
   },
   {
     number: '03',
-    title: 'Track it to your door',
-    copy: 'Follow your order live — from the chef’s stove to your doorstep.',
+    // Fulfilment is pickup or the chef's own delivery — the platform arranges no
+    // courier — so "to your doorstep" is only ever half the story.
+    title: 'Collect it, or have it brought',
+    copy: 'Follow your order live from the chef’s stove. Pick it up when it’s ready, or have your chef bring it over.',
   },
 ] as const;
 

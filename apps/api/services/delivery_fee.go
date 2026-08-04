@@ -82,3 +82,24 @@ func QuoteOrderDeliveryFeeCtx(chef models.ChefProfile, fulfillment models.Fulfil
 		return GetPlatformPolicy().BaseDeliveryFee
 	}
 }
+
+// DeliveryFeeFrom is the lowest delivery fee this chef's delivery can cost — the
+// fee at zero distance — and whether that floor is also the ceiling.
+//
+// A chef card cannot state the actual fee: it is distance-based and the customer's
+// address is not known until checkout. But it must not state a fee that is WRONG,
+// which is what a hardcoded zero did — every kitchen advertised "Free delivery"
+// while the order charged 39.12 (D-01). A floor the quote can only go up from is
+// the strongest claim that is true for every customer.
+//
+// `flat` is what earns the unqualified "Free delivery": the fee has no distance
+// component, so the floor holds however far away the customer is. Under a live 3PL
+// the carrier prices the leg and no floor is knowable, so the platform's own base
+// fee is quoted and flat is false.
+func DeliveryFeeFrom(chef models.ChefProfile) (fee float64, flat bool) {
+	if chef.OffersSelfDelivery {
+		return chef.SelfDeliveryBaseFee, chef.SelfDeliveryPerKm <= 0
+	}
+	base := GetPlatformPolicy().BaseDeliveryFee
+	return base, false
+}
