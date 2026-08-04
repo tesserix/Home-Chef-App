@@ -172,6 +172,8 @@ func Migrate() error {
 
 		// Orders
 		&models.Order{},
+		// One row per order: what the chef is paid for it (D-21).
+		&models.OrderChefPayout{},
 		&models.OrderItem{},
 
 		// Cart
