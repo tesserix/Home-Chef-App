@@ -33,9 +33,12 @@ exemption was withdrawn with effect from 18 July 2022**, so FSSAI's fee now
 carries 18% GST. The 18% rate applies to both legs: FSSAI's fee and our service
 fee.
 
-⚠ **Two items for the CA, both of which move the margin:**
-- The ₹18 GST on the FSSAI fee should be claimable as **input credit** if Zivana
-  is GST-registered → margin ≈ ₹45.82 rather than ₹27.82.
+**Zivana is GST-registered** (confirmed by the owner, 5 Aug 2026), so the ₹18
+GST on the FSSAI fee is claimable as **input credit** — the working margin is
+therefore **≈ ₹45.82**, not ₹27.82. The ₹27.82 figure in the table above is the
+cash position before that credit is claimed.
+
+⚠ **Items for the CA:**
 - **Pure agent (CGST Rule 33)** may allow the government fee to be excluded from
   the value of our supply, which would change what we charge GST on. Not
   assumed here: we currently charge 18% on the full ₹150.

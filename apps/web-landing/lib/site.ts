@@ -146,6 +146,12 @@ export const VENDOR_COST_POINTS = [
 // A home kitchen is NOT the ₹7,500-a-year Central Licence column of the same
 // table; publishing that would tell a chef to pay 75× what they owe.
 export const FSSAI_REGISTRATION_FEE_PER_YEAR = 100;
+// FSSAI's own fee carries 18% GST. It used to be exempt under Entry 47 of
+// Notification 12/2017 (government services for a registration required by
+// law); that exemption was WITHDRAWN with effect from 18 July 2022, so the
+// government fee is ₹100 + ₹18 per year. Publishing ₹100 flat understated what
+// a chef actually pays at the portal.
+export const FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR = 118;
 // What we charge to file it for a chef. One-off per application, whatever term
 // they choose — it is one form either way. Plus GST, because it is a service we
 // supply: 18% is the same rate the platform fee carries (services/pricing.go).

@@ -3,7 +3,9 @@
 // Every figure and every click on this page is taken from FSSAI's own pages,
 // not from a summary site, because a chef acts on it with their own money:
 //
-//  • the ₹100-a-year fee is the "Registration" column of the FoSCoS fee table;
+//  • the ₹100-a-year fee is the "Registration" column of the FoSCoS fee table,
+//    plus 18% GST — FSSAI licensing lost its Entry 47 exemption on 18 July 2022,
+//    so publishing ₹100 flat understated what a chef actually pays;
 //  • the ₹1.5 crore ceiling and the "Home Based Canteens / Dabba Wallas"
 //    wording are what the FoSCoS eligibility checker returns for that kind of
 //    business;
@@ -29,6 +31,7 @@ import {
   FSSAI_ASSIST_FEE_INC_GST,
   FSSAI_ASSIST_GST_RATE,
   FSSAI_KIND_OF_BUSINESS,
+  FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR,
   FSSAI_REGISTRATION_FEE_PER_YEAR,
   FSSAI_REGISTRATION_TURNOVER_CEILING,
 } from '@/lib/site';
@@ -36,24 +39,25 @@ import {
 export const metadata: Metadata = {
   title: 'FSSAI registration for home chefs',
   description:
-    'What an FSSAI registration costs a home kitchen in India (₹100 a year), the documents you need, and how to apply on the government FoSCoS portal step by step.',
+    'What an FSSAI registration costs a home kitchen in India (₹118 a year including GST), the documents you need, and how to apply on the government FoSCoS portal step by step — or have Fe3dr file it for you.',
   alternates: { canonical: '/fssai/' },
 };
 
 const SUMMARY =
-  `Every home kitchen selling food in India needs an FSSAI registration by law, and you need one before you can list a menu on Fe3dr. For a home kitchen it is the cheapest tier: ₹${FSSAI_REGISTRATION_FEE_PER_YEAR} a year, paid to the government, not to us. You apply yourself on FSSAI's own portal and it takes about twenty minutes. If you would rather not deal with the form, we will file it for you for ₹${FSSAI_ASSIST_FEE} + GST on top of the government fee.`;
+  `Every home kitchen selling food in India needs an FSSAI registration by law, and you need one before you can list a menu on Fe3dr. For a home kitchen it is the cheapest tier: ₹${FSSAI_REGISTRATION_FEE_PER_YEAR} a year plus 18% GST — ₹${FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR} — paid to the government, not to us. You apply yourself on FSSAI's own portal and it takes about twenty minutes. If you would rather not deal with the form, we will file it for you for ₹${FSSAI_ASSIST_FEE} + GST, and you can pay the whole thing in one go inside the chef app.`;
 
 const SECTIONS: LegalSection[] = [
   {
     heading: 'What it costs',
     paragraphs: [
-      `A home kitchen falls under Registration — the first of FSSAI's three tiers — which is ₹${FSSAI_REGISTRATION_FEE_PER_YEAR} per year. You choose the term when you apply, up to five years, and pay for all of it upfront:`,
-      '• 1 year — ₹100',
-      '• 2 years — ₹200',
-      '• 3 years — ₹300',
-      '• 4 years — ₹400',
-      '• 5 years — ₹500',
-      `That is the whole government fee. Registration applies while your annual turnover is up to ${FSSAI_REGISTRATION_TURNOVER_CEILING} — which is every home kitchen we have ever onboarded. Above that ceiling you would need a State Licence instead, whose fee varies by state.`,
+      `A home kitchen falls under Registration — the first of FSSAI's three tiers — which is ₹${FSSAI_REGISTRATION_FEE_PER_YEAR} per year plus 18% GST, so ₹${FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR} a year in total. You choose the term when you apply, up to five years, and pay for all of it upfront:`,
+      '• 1 year — ₹100 + ₹18 GST = ₹118',
+      '• 2 years — ₹200 + ₹36 GST = ₹236',
+      '• 3 years — ₹300 + ₹54 GST = ₹354',
+      '• 4 years — ₹400 + ₹72 GST = ₹472',
+      '• 5 years — ₹500 + ₹90 GST = ₹590',
+      "FSSAI's fee page publishes the ₹100 without the tax. GST on FSSAI licensing and registration was exempt until 18 July 2022 and is not any more, so 18% is added — the portal shows you the exact amount before you pay.",
+      `That is the whole government fee, and it goes to FSSAI, not to us. Registration applies while your annual turnover is up to ${FSSAI_REGISTRATION_TURNOVER_CEILING} — which is every home kitchen we have ever onboarded. Above that ceiling you would need a State Licence instead, whose fee varies by state.`,
       "You may see a ₹7,500-a-year figure on FSSAI's fee page. That is the Central Licence column, for national operations of a very different size. It is not what a home kitchen pays, and you should not apply for it.",
       'Longer terms are worth taking. The fee per year is the same either way, and a five-year registration is four fewer renewals to remember — and a lapsed registration means we have to hide your menu until it is current again.',
     ],
@@ -98,9 +102,18 @@ const SECTIONS: LegalSection[] = [
   {
     heading: `Or we will do it for you — ₹${FSSAI_ASSIST_FEE} + GST`,
     paragraphs: [
-      `If the form is not how you want to spend your evening, send us your documents and we will complete the application for you. We charge ₹${FSSAI_ASSIST_FEE} + ${FSSAI_ASSIST_GST_RATE}% GST — ₹${FSSAI_ASSIST_FEE_INC_GST} in total — once per application, whatever term you choose. It is one form either way, so it does not go up for a five-year registration.`,
-      'The government fee is separate and unchanged. You pay FSSAI their ₹100 a year; our fee is only for doing the paperwork. A five-year registration filed by us is ₹500 to FSSAI plus ₹59 to us.',
-      'Email us these and we will take it from there:',
+      `If the form is not how you want to spend your evening, we will complete it for you. We charge ₹${FSSAI_ASSIST_FEE} + ${FSSAI_ASSIST_GST_RATE}% GST — ₹${FSSAI_ASSIST_FEE_INC_GST} — once per application, whatever term you choose. It is one form either way, so it does not go up for a five-year registration.`,
+      'You can do this two ways, and the fee is the same in both:',
+      `• In the Fe3dr for Chefs app — one payment, and we pay FSSAI for you. For one year that is ₹${FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR + FSSAI_ASSIST_FEE_INC_GST}: the ₹${FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR} government fee plus our ₹${FSSAI_ASSIST_FEE_INC_GST}. You upload your documents in the app and track the application there.`,
+      `• By email — you pay FSSAI yourself at the portal and pay us the ₹${FSSAI_ASSIST_FEE_INC_GST} separately.`,
+      'Every rupee, for a one-year registration filed by us:',
+      `• ₹${FSSAI_REGISTRATION_FEE_PER_YEAR} — FSSAI's registration fee, paid to the government.`,
+      '• ₹18 — 18% GST on that government fee.',
+      `• ₹${FSSAI_ASSIST_FEE} — our fee for preparing and filing the application.`,
+      '• ₹9 — 18% GST on our fee.',
+      `• ₹${FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR + FSSAI_ASSIST_FEE_INC_GST} — total. Add ₹${FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR} for each additional year; our ₹${FSSAI_ASSIST_FEE_INC_GST} never repeats.`,
+      'Nothing is added at the end and there is no subscription. If you would rather keep the ₹59, the step-by-step above is the whole job — we would honestly rather you did it yourself than felt sold to.',
+      'If you are emailing rather than using the app, send us these:',
       '• A passport-style photo of yourself.',
       '• A photo or scan of your Aadhaar, PAN or Voter ID.',
       '• Proof of the kitchen address, if you cook somewhere other than the address on that ID — a recent electricity bill, rent agreement or property document.',
@@ -154,7 +167,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: `Is the ₹${FSSAI_REGISTRATION_FEE_PER_YEAR} paid to Fe3dr?`,
     paragraphs: [
-      `No. It goes to FSSAI through the government portal. The only thing you would ever pay us is the ₹${FSSAI_ASSIST_FEE} + GST filing fee, and only if you ask us to file for you.`,
+      `No. It goes to FSSAI. The only thing you ever pay us is the ₹${FSSAI_ASSIST_FEE} + GST filing fee, and only if you ask us to file for you. If you pay us through the app we forward the government fee to FSSAI on your behalf — it passes through us, it is not ours.`,
     ],
   },
   {
