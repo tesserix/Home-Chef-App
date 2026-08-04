@@ -179,6 +179,7 @@ export default function DashboardScreen() {
   useNotificationSocket({
     api,
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL,
+    getToken: () => useAuthStore.getState().accessToken,
   });
 
   const { data: pendingResp, refetch: refetchPending } =

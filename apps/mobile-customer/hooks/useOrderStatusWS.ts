@@ -2,8 +2,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { socketReconnectDelayWithJitterMs } from '@homechef/mobile-shared/utils';
-import { fetchWSTicket, wsEndpointUrl } from '@homechef/mobile-shared/realtime';
-import { api } from '../lib/api';
+import { openEventStream, type EventStreamHandle } from '@homechef/mobile-shared/realtime';
+import { useAuthStore } from '../store/auth-store';
 import type { Order } from '../types/customer';
 
 interface NotificationWSMessage {
@@ -32,7 +32,7 @@ export function useOrderStatusWS(
   enabled: boolean = true,
 ): void {
   const queryClient = useQueryClient();
-  const wsRef = useRef<WebSocket | null>(null);
+  const streamRef = useRef<EventStreamHandle | null>(null);
   const failureCount = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guards the async ticket fetch against unmount / supersession.
@@ -40,39 +40,18 @@ export function useOrderStatusWS(
 
   const connect = useCallback(() => {
     if (!enabled) return;
-    // Authenticated with a short-lived ticket on a top-level `/ws/*` URL. The
-    // previous `Authorization` header on `/api/v1/...` never authenticated the
-    // upgrade — it 401'd on every attempt (#982).
+    const token = useAuthStore.getState().accessToken;
+    if (!token) return;
+    // SSE, not WebSocket: RN's socket fails the TLS handshake against our edge
+    // (close 1006 / OSStatus -9836) and never issues a request at all. Same
+    // user-scoped stream, over a transport that works (#982).
     const apiBase = process.env.EXPO_PUBLIC_API_URL ?? 'https://fe3dr.com/api';
     const myGeneration = ++generation.current;
 
-    void (async () => {
-    const ticket = await fetchWSTicket(api);
-    if (myGeneration !== generation.current || !enabled) return;
-    if (!ticket) {
-      failureCount.current += 1;
-      reconnectTimer.current = setTimeout(
-        connect,
-        socketReconnectDelayWithJitterMs(failureCount.current),
-      );
-      return;
-    }
-
-    const url = wsEndpointUrl(apiBase, 'notifications', ticket);
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      failureCount.current = 0;
-      console.info(
-        `[order-ws] connected (${orderId ? 'single-order' : 'any-order'} mode)`,
-      );
-    };
-
-    ws.onmessage = (event: WebSocketMessageEvent) => {
+    const onFrame = (raw: string) => {
       failureCount.current = 0;
       try {
-        const msg = JSON.parse(event.data as string) as NotificationWSMessage;
+        const msg = JSON.parse(raw) as NotificationWSMessage;
         if (msg.type !== 'new_notification' || !msg.data) return;
         const payload = JSON.parse(msg.data) as {
           order_id?: string;
@@ -110,29 +89,30 @@ export function useOrderStatusWS(
       }
     };
 
-    // This stream has no fallback (unlike order-tracking's polling or the
-    // vendor app's SSE), so giving up permanently here is the worst case of
-    // #892 — a customer could go a whole session with no live updates.
-    // Retry indefinitely with backoff instead; there is no cap to hit.
-    // `onerror` is not counted separately: it is always followed by `onclose`,
-    // and counting both double-incremented the count and halved the backoff.
-    ws.onclose = () => {
-      if (myGeneration !== generation.current || !enabled) return;
-      wsRef.current = null;
-      failureCount.current += 1;
-      reconnectTimer.current = setTimeout(
-        connect,
-        socketReconnectDelayWithJitterMs(failureCount.current),
-      );
-    };
-    })();
+    // This stream has no polling fallback (unlike order-tracking's), so giving
+    // up permanently would leave a customer with no live updates for a whole
+    // session (#892). Retry indefinitely with jittered backoff instead.
+    streamRef.current = openEventStream(
+      `${apiBase}/v1/notifications/sse`,
+      token,
+      onFrame,
+      () => {
+        if (myGeneration !== generation.current || !enabled) return;
+        streamRef.current = null;
+        failureCount.current += 1;
+        reconnectTimer.current = setTimeout(
+          connect,
+          socketReconnectDelayWithJitterMs(failureCount.current),
+        );
+      },
+    );
   }, [orderId, enabled, queryClient]);
 
   useEffect(() => {
     connect();
     return () => {
-      wsRef.current?.close();
-      wsRef.current = null;
+      streamRef.current?.close();
+      streamRef.current = null;
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
@@ -151,7 +131,7 @@ export function useOrderStatusWS(
         reconnectTimer.current = null;
       }
       failureCount.current = 0;
-      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+      if (!streamRef.current) {
         connect();
       }
     });
