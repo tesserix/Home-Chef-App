@@ -27,6 +27,18 @@ allocation and hold transition matched prediction to the paisa.
 
 ## Defects
 
+### ✅ D-09 · FIXED AND VERIFIED IN PRODUCTION (#987)
+
+The vendor earnings screen now reads **Gross revenue ₹955.40** on the same
+period that showed ₹959.80. The ₹4.40 over-credit is gone.
+
+Six raw queries were affected, not the two I identified by hand — a static
+guard (`TestRawOrderSelectsCarryPerSupplyTax`) found `fy_statement.go`,
+`tds_certificate.go` and `chef_profit_loss.go`, which I had wrongly assumed
+shared the statement loader.
+
+Original finding below.
+
 ### 🟥 D-09 · CRITICAL · chefs credited the platform's GST (regression, this release)
 
 Proved on the vendor earnings screen, THIS WEEK, 3 delivered orders:
@@ -69,6 +81,19 @@ every delivered order — currently ~1.4% of a typical order's gross.
 **Why the tests missed it:** `observed_orders_test.go` exercises `ChefAttributableTax` directly,
 never through a query. Adding a field to a scan struct is invisible to a test that never runs
 the SQL.
+
+### ✅ D-03 · ROOT-CAUSED AND FIXED (#988)
+
+The head selection was a bare string equality, so an order with a **blank**
+`delivery_address_state` never matched the chef's state and fell through to
+IGST. Two of the three orders on the observed statement had no delivery state
+at all. Verified in the DB: chef Karnataka; orders Karnataka, blank, blank.
+
+No money moves — the total is 18% either way — but the head is what gets
+reported and filed. Unknown now means intra, which is the right default for a
+hyper-local service where the customer is near the kitchen by construction.
+
+Original finding below.
 
 ### 🟥 D-03 · recurrence · intra-state supply labelled IGST
 
