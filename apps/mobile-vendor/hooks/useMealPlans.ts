@@ -327,6 +327,8 @@ export function useChefRefundDecision() {
 /** One meal the kitchen owes soon, whether or not it has become an order yet. */
 export interface UpcomingMeal {
   dayId: string;
+  /** The plan this meal belongs to — what the dashboard row opens. */
+  planId: string;
   planNumber: string;
   startsAt: string;
   slot: string;

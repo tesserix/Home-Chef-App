@@ -1073,19 +1073,35 @@ export default function DashboardScreen() {
           <View style={styles.upcomingSection}>
             <Text style={styles.sectionLabel}>Next 24 hours</Text>
             {upcomingMeals.map((m) => (
-              <View key={m.dayId} style={styles.upcomingRow}>
-                <View style={styles.upcomingMain}>
-                  <Text style={styles.upcomingDish} numberOfLines={1}>
-                    {m.dishName || 'Meal'}
-                  </Text>
-                  <Text style={styles.upcomingMeta} numberOfLines={1}>
-                    {m.slot} · {upcomingClock(m.startsAt)} · {m.customerName}
-                  </Text>
-                </View>
-                <Text style={styles.upcomingWhen}>
-                  {m.status === 'prepared' ? 'Prepared' : upcomingCountdown(m.startsAt)}
-                </Text>
-              </View>
+              <Pressable
+                key={m.dayId}
+                onPress={() => router.push(`/meal-plans/${m.planId}`)}
+                disabled={!m.planId}
+                style={styles.upcomingRow}
+                accessibilityRole="button"
+                accessibilityLabel={`${m.dishName || 'Meal'}, ${m.slot} at ${upcomingClock(
+                  m.startsAt,
+                )} for ${m.customerName}. Open plan ${m.planNumber}.`}
+                android_ripple={{ color: `${theme.colors.ink}11`, borderless: false }}
+              >
+                {/* Children-as-function, not style-as-function: the interop
+                    runtime drops styles from the latter (#976). */}
+                {({ pressed }) => (
+                  <View style={[styles.upcomingInner, pressed && styles.upcomingRowPressed]}>
+                    <View style={styles.upcomingMain}>
+                      <Text style={styles.upcomingDish} numberOfLines={1}>
+                        {m.dishName || 'Meal'}
+                      </Text>
+                      <Text style={styles.upcomingMeta} numberOfLines={1}>
+                        {m.slot} · {upcomingClock(m.startsAt)} · {m.customerName}
+                      </Text>
+                    </View>
+                    <Text style={styles.upcomingWhen}>
+                      {m.status === 'prepared' ? 'Prepared' : upcomingCountdown(m.startsAt)}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
             ))}
           </View>
         )}
@@ -1153,9 +1169,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 12,
+    // 44px floor: this is a touch target now, not a label.
+    minHeight: 44,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.mist.DEFAULT,
   },
+  upcomingInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  upcomingRowPressed: { opacity: 0.6 },
   upcomingMain: { flex: 1, minWidth: 0 },
   upcomingDish: { fontSize: 15, fontWeight: '600', color: theme.colors.ink.DEFAULT },
   upcomingMeta: { fontSize: 13, color: theme.colors.ink.soft, marginTop: 2, textTransform: 'capitalize' },

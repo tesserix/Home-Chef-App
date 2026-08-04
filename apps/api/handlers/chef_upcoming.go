@@ -35,7 +35,10 @@ const upcomingMaxHours = 24 * 14
 
 // upcomingMeal is one meal the chef owes inside the window.
 type upcomingMeal struct {
-	DayID      uuid.UUID `json:"dayId"`
+	DayID uuid.UUID `json:"dayId"`
+	// PlanID is what the client needs to open the plan; PlanNumber is only for
+	// display. Without it the dashboard row had nothing to navigate to.
+	PlanID     uuid.UUID `json:"planId"`
 	PlanNumber string    `json:"planNumber"`
 	Date       time.Time `json:"date"`
 	// StartsAt is the cook-start this meal is measured against, so the client can
@@ -96,6 +99,7 @@ func (h *MealPlanHandler) GetChefUpcoming(c *gin.Context) {
 	// since it is indistinguishable from "nothing to cook".
 	var rows []struct {
 		ID            uuid.UUID
+		MealPlanID    uuid.UUID
 		Date          time.Time
 		Slot          string
 		Variant       string
@@ -153,6 +157,7 @@ func (h *MealPlanHandler) GetChefUpcoming(c *gin.Context) {
 		}
 		resp.Meals = append(resp.Meals, upcomingMeal{
 			DayID:        r.ID,
+			PlanID:       r.MealPlanID,
 			PlanNumber:   r.PlanNumber,
 			Date:         r.Date,
 			StartsAt:     startsAt,
