@@ -155,7 +155,7 @@ export default function ChefDetailScreen() {
 
   const chef = chefData?.data;
   // A floor, not a quote — see lib/delivery-fee-label (D-01).
-  const deliveryLabel = deliveryFeeLabel(chef?.deliveryFee, chef?.deliveryFeeFlat);
+  const deliveryLabel = deliveryFeeLabel(chef?.deliveryFee, chef?.deliveryFeeFlat, chef?.offersDelivery);
   const menuItems = menuData?.data ?? [];
 
   // Derive unique categories preserving order of first appearance.
