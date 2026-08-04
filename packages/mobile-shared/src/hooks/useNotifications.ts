@@ -20,7 +20,7 @@ import {
   socketReconnectDelayMs,
   socketReconnectDelayWithJitterMs,
 } from '../utils/socket-backoff';
-import { fetchWSTicket, wsEndpointUrl } from '../realtime/ws-ticket';
+import { openEventStream, type EventStreamHandle } from '../realtime/event-stream';
 
 export interface AppNotification {
   id: string;
@@ -244,87 +244,77 @@ export function nextConsecutiveFailures(
  * handful of failures, so REST polling only has to cover the gap while the
  * socket is reconnecting, not stand in forever after a one-time give-up.
  *
- * `apiBaseUrl` is the app's EXPO_PUBLIC_API_URL (ends in `/api`); the WS path is
- * `/v1/notifications/ws`. `getToken` returns the current Bearer token.
+ * Transport is SSE, not WebSocket: React Native's WebSocket fails the TLS
+ * handshake against our edge outright (close 1006, OSStatus -9836), so it never
+ * even issues a request. SSE carries the identical NATS-backed stream over
+ * NSURLSession, which works. See realtime/event-stream.ts.
  */
 export function useNotificationSocket(opts: {
-  /** Axios instance for the app — used to mint the WS ticket over the
-   * authenticated REST path, so the socket needs no credential of its own. */
+  /** Axios instance for the app — supplies the base URL and the Bearer token. */
   api: AxiosInstance;
   apiBaseUrl: string | undefined;
+  /** Current Bearer token; the stream re-opens when it changes. */
+  getToken: () => string | null | undefined;
   enabled?: boolean;
 }): void {
-  const { api, apiBaseUrl, enabled = true } = opts;
+  const { api, apiBaseUrl, getToken, enabled = true } = opts;
   const qc = useQueryClient();
-  const wsRef = useRef<WebSocket | null>(null);
+  // Callers pass `getToken` as an inline arrow, so its identity changes every
+  // render. Holding it in a ref keeps `connect` stable — otherwise the effect
+  // re-ran on each render and tore the stream down and back up, which is what
+  // produced ~19 reconnects a minute against one user.
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+  const streamRef = useRef<EventStreamHandle | null>(null);
   const failures = useRef(0);
   const openedAt = useRef<number | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Guards the async gap between asking for a ticket and the socket existing:
-  // without it, an unmount (or a second connect) during that await leaves an
-  // orphan socket nothing will ever close.
   const generation = useRef(0);
 
   const connect = useCallback(() => {
     if (!enabled || !apiBaseUrl) return;
+    const token = getTokenRef.current();
+    if (!token) return;
     const myGeneration = ++generation.current;
 
-    void (async () => {
-      const ticket = await fetchWSTicket(api);
-      // Signed out, or the mint failed — treat exactly like a socket failure so
-      // the same backoff applies instead of silently never retrying.
-      if (!ticket) {
-        if (myGeneration !== generation.current || !enabled) return;
-        failures.current = nextConsecutiveFailures(failures.current, null);
-        reconnectTimer.current = setTimeout(
-          connect,
-          scheduledReconnectDelayMs(failures.current),
-        );
-        return;
-      }
-      // Superseded or unmounted while we were awaiting the ticket.
+    const reschedule = () => {
       if (myGeneration !== generation.current || !enabled) return;
+      const openForMs =
+        openedAt.current === null ? null : Date.now() - openedAt.current;
+      openedAt.current = null;
+      failures.current = nextConsecutiveFailures(failures.current, openForMs);
+      if (!shouldReconnectNotificationSocket(enabled, failures.current)) return;
+      reconnectTimer.current = setTimeout(
+        connect,
+        scheduledReconnectDelayMs(failures.current),
+      );
+    };
 
-      const url = wsEndpointUrl(apiBaseUrl, 'notifications', ticket);
-      const ws = new WebSocket(url);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        // Deliberately does NOT clear `failures` — see nextConsecutiveFailures.
-        openedAt.current = Date.now();
-      };
-      ws.onmessage = () => {
-        // The socket signals "something changed" (a new notification, or the
+    openedAt.current = Date.now();
+    streamRef.current = openEventStream(
+      `${apiBaseUrl}${versionPrefix(apiBaseUrl)}/notifications/sse`,
+      token,
+      () => {
+        // The stream signals "something changed" (a new notification, or the
         // initial count). Refetch the two feed queries — cheap, and avoids
-        // hand-patching the list/count from a message whose shape varies by event.
+        // hand-patching from a message whose shape varies by event.
         qc.invalidateQueries({ queryKey: NOTIFICATION_LIST_KEY });
         qc.invalidateQueries({ queryKey: NOTIFICATION_UNREAD_KEY });
-      };
-      ws.onclose = () => {
-        if (myGeneration !== generation.current) return; // superseded
-        wsRef.current = null;
-        const openForMs =
-          openedAt.current === null ? null : Date.now() - openedAt.current;
-        openedAt.current = null;
-        failures.current = nextConsecutiveFailures(failures.current, openForMs);
-        if (!shouldReconnectNotificationSocket(enabled, failures.current)) return;
-        reconnectTimer.current = setTimeout(
-          connect,
-          scheduledReconnectDelayMs(failures.current),
-        );
-      };
-    })();
+      },
+      reschedule,
+    );
+    // `getToken` is deliberately absent: it is read through a ref so a new
+    // inline arrow on every render cannot restart the stream.
   }, [api, apiBaseUrl, enabled, qc]);
 
   useEffect(() => {
     connect();
     return () => {
-      // Bump the generation so an in-flight ticket request cannot open a socket
-      // after unmount, and so a pending onclose stops rescheduling.
+      // Bump the generation so a pending error callback stops rescheduling.
       generation.current += 1;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      wsRef.current?.close();
-      wsRef.current = null;
+      streamRef.current?.close();
+      streamRef.current = null;
     };
   }, [connect]);
 }

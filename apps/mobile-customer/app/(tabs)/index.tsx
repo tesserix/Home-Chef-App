@@ -171,6 +171,7 @@ export default function HomeScreen() {
   useNotificationSocket({
     api,
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL,
+    getToken: () => useAuthStore.getState().accessToken,
   });
 
   // Header wallet chip (only when the wallet surface is enabled) — glanceable

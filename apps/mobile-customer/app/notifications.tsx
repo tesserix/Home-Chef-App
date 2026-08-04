@@ -94,6 +94,7 @@ export default function NotificationsScreen() {
   useNotificationSocket({
     api,
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL,
+    getToken: () => useAuthStore.getState().accessToken,
   });
 
   const hasUnread = notifications.some((n) => !n.isRead);
