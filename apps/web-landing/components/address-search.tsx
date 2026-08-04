@@ -216,7 +216,10 @@ export function AddressSearch() {
           id={listId}
           role="listbox"
           aria-label="Address suggestions"
-          className="absolute left-0 right-0 top-[3.75rem] z-20 overflow-hidden rounded-xl border border-hairline bg-canvas py-1 shadow-3"
+          // max-h + scroll: Mappls returns up to ten matches, and an unbounded
+          // list ran past the fold on a laptop — the results furthest from what
+          // you typed were the ones covering the rest of the hero.
+          className="absolute left-0 right-0 top-[3.75rem] z-50 max-h-[19rem] overflow-y-auto overscroll-contain rounded-xl border border-hairline bg-canvas py-1 shadow-3"
         >
           {items.map((s, i) => (
             <li
