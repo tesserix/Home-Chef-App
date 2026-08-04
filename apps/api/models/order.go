@@ -406,6 +406,30 @@ const (
 	CancelReasonOther            CancelReason = "other"
 )
 
+// customerCancelReason is what each reason reads as to the customer. The chef
+// picked a labelled button; showing them the database value behind it is D-17.
+// Deliberately not the chef's own wording — "I'm out of an ingredient" is the
+// chef's first person and makes no sense on the customer's screen.
+var customerCancelReason = map[CancelReason]string{
+	CancelReasonOutOfIngredient:  "The chef ran out of an ingredient",
+	CancelReasonEquipmentFailure: "The chef had an equipment problem",
+	CancelReasonCustomerRequest:  "You asked for this order to be cancelled",
+	CancelReasonOther:            "The chef wasn't able to complete this order",
+}
+
+// CustomerCancelReason renders a stored cancel reason for the customer.
+//
+// The column holds two different things: one of the four chef-picked enum values,
+// and free apology text written by the platform's own void paths ("payment not
+// completed"). Anything not in the enum is already prose and passes through
+// unchanged, so this can be applied to the column without knowing which wrote it.
+func CustomerCancelReason(raw string) string {
+	if label, ok := customerCancelReason[CancelReason(raw)]; ok {
+		return label
+	}
+	return raw
+}
+
 // IsValid reports whether r is one of the four allowed cancel reasons.
 // Handlers should reject anything else with 400 so the column stays
 // queryable for ops dashboards.
@@ -789,7 +813,9 @@ func (o *Order) ToResponse() OrderResponse {
 		CreatedAt:              o.CreatedAt,
 		PayoutHoldStatus:       o.PayoutHoldStatus,
 		CustomerConfirmedAt:    o.CustomerConfirmedAt,
-		CancelReason:           o.CancelReason,
+		// Resolved here, on the wire, so every customer surface reads the same
+		// sentence — and builds already in customers' hands stop showing the enum.
+		CancelReason:           CustomerCancelReason(o.CancelReason),
 		RefundAmount:           o.RefundAmount,
 		RefundedAt:             o.RefundedAt,
 		WalletRefunded:         o.WalletRefunded,

@@ -542,7 +542,9 @@ export default function OrderDetailScreen() {
             <Text style={styles.voidTitle}>
               We&apos;re sorry — this order was cancelled
             </Text>
-            <Text style={styles.voidBody}>{order.cancelReason}.</Text>
+            {/* The API resolves the chef's reason to a customer-facing sentence
+                (D-17), so it is rendered as-is rather than appended to. */}
+            <Text style={styles.voidBody}>{order.cancelReason}</Text>
             {order.refundAmount && order.refundAmount > 0 ? (
               <Text style={styles.voidRefund}>
                 {formatMoney(order.refundAmount)} has been refunded to your original

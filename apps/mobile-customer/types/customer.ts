@@ -209,6 +209,9 @@ export interface Order {
     | 'delivering'
     | 'delivered'
     | 'cancelled'
+    // A chef declining an order is its own terminal status, distinct from a
+    // cancellation — and it was missing here while the API has always sent it.
+    | 'rejected'
     | 'refunded';
   // Payment lifecycle — distinct from `status` (order lifecycle). A paid order
   // can still sit at status='pending' until the chef accepts, so this is the

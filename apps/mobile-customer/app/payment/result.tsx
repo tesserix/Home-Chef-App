@@ -77,6 +77,19 @@ export default function PaymentResult() {
     pollIntervalMs: pastGrace ? SLOW_POLL_MS : undefined,
   });
   const paymentStatus = data?.data?.paymentStatus;
+  const orderStatus = data?.data?.status;
+
+  // A cancelled order can never be paid, so retrying it is a dead end that
+  // returns to this same screen (D-10). The platform auto-cancels an order whose
+  // payment never completed, which is exactly the state this screen shows — so
+  // "payment failed" and "retry is possible" are different questions and only
+  // the order's own status answers the second. No order id means nothing to
+  // retry against either.
+  const canRetry =
+    Boolean(orderId) &&
+    orderStatus !== 'cancelled' &&
+    orderStatus !== 'rejected' &&
+    orderStatus !== 'refunded';
 
   useEffect(() => {
     // Always arm the grace timer — even with no orderId. Without this, a result
@@ -320,45 +333,59 @@ export default function PaymentResult() {
         </View>
         <Text style={styles.failureTitle}>Payment not completed</Text>
         <Text style={styles.failureBody}>
-          We couldn't confirm your payment. If money was deducted it will be refunded automatically.
-          You can retry the payment for this order.
+          {canRetry
+            ? "We couldn't confirm your payment. If money was deducted it will be refunded automatically. You can retry the payment for this order."
+            : "We couldn't confirm your payment, so this order was cancelled. Anything that was deducted is refunded automatically — place a new order whenever you're ready."}
         </Text>
-        <Pressable
-          onPress={handleRetry}
-          disabled={retrying}
-          accessibilityRole="button"
-          accessibilityLabel="Retry payment"
-          style={styles.ctaWrapper}
-          android_ripple={retrying ? undefined : { color: PRIMARY_RIPPLE, borderless: false }}
-        >
-          {({ pressed }) => (
-            <View
-              style={[
-                styles.ctaPrimary,
-                (retrying || (pressed && Platform.OS === 'ios')) && styles.ctaPressed,
-              ]}
-            >
-              {retrying ? (
-                <ActivityIndicator color={customerColors.canvas} />
-              ) : (
-                <Text style={styles.ctaPrimaryLabel}>Retry payment</Text>
-              )}
-            </View>
-          )}
-        </Pressable>
+        {canRetry ? (
+          <Pressable
+            onPress={handleRetry}
+            disabled={retrying}
+            accessibilityRole="button"
+            accessibilityLabel="Retry payment"
+            style={styles.ctaWrapper}
+            android_ripple={retrying ? undefined : { color: PRIMARY_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.ctaPrimary,
+                  (retrying || (pressed && Platform.OS === 'ios')) && styles.ctaPressed,
+                ]}
+              >
+                {retrying ? (
+                  <ActivityIndicator color={customerColors.canvas} />
+                ) : (
+                  <Text style={styles.ctaPrimaryLabel}>Retry payment</Text>
+                )}
+              </View>
+            )}
+          </Pressable>
+        ) : null}
+        {/* With no retry to offer, this is the screen's only way forward and
+            carries the primary weight rather than sitting as a ghost. */}
         <Pressable
           onPress={handleViewOrder}
           accessibilityRole="button"
           accessibilityLabel="Go to the order"
-          android_ripple={{ color: GHOST_RIPPLE, borderless: false }}
+          style={canRetry ? undefined : styles.ctaWrapper}
+          android_ripple={{ color: canRetry ? GHOST_RIPPLE : PRIMARY_RIPPLE, borderless: false }}
         >
-          {({ pressed }) => (
-            <View
-              style={[styles.ctaGhost, pressed && Platform.OS === 'ios' && styles.ctaGhostPressed]}
-            >
-              <Text style={styles.ctaGhostLabel}>{orderId ? 'View order' : 'My orders'}</Text>
-            </View>
-          )}
+          {({ pressed }) =>
+            canRetry ? (
+              <View
+                style={[styles.ctaGhost, pressed && Platform.OS === 'ios' && styles.ctaGhostPressed]}
+              >
+                <Text style={styles.ctaGhostLabel}>{orderId ? 'View order' : 'My orders'}</Text>
+              </View>
+            ) : (
+              <View
+                style={[styles.ctaPrimary, pressed && Platform.OS === 'ios' && styles.ctaPressed]}
+              >
+                <Text style={styles.ctaPrimaryLabel}>{orderId ? 'View order' : 'My orders'}</Text>
+              </View>
+            )
+          }
         </Pressable>
       </View>
     </SafeAreaView>
