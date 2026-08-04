@@ -8,6 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { theme } from "@homechef/mobile-shared/theme";
 import type { Order } from "../../hooks/useVendorOrders";
+import { chefPayoutAmount } from "../../lib/chefPayout";
 import { orderSourceBadge } from "../../lib/orderSource";
 
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -90,6 +91,10 @@ export function PendingOrderCard({
         : theme.colors.ink.soft;
 
   const sourceBadge = orderSourceBadge(order.source);
+  // The decision variable on this card is what the KITCHEN earns, not what the
+  // customer was billed — the chef is deciding whether the order is worth
+  // cooking. Served by the API; never recomputed here.
+  const earning = chefPayoutAmount(order.chefPayout, order.total);
 
   const topRowContent = (
     <View style={styles.headerBlock}>
@@ -114,7 +119,12 @@ export function PendingOrderCard({
             </View>
           ) : null}
         </View>
-        <Text style={styles.total}>{formatMoney(order.total)}</Text>
+        {/* Labelled, because the figure changed meaning: this is the chef's
+            earning, not the customer's bill it used to show. */}
+        <View style={styles.earningBlock}>
+          <Text style={styles.total}>{formatMoney(earning)}</Text>
+          <Text style={styles.earningLabel}>you earn</Text>
+        </View>
       </View>
       <View style={styles.metaRow}>
         <Text style={styles.meta} numberOfLines={1}>
@@ -144,7 +154,7 @@ export function PendingOrderCard({
         onPress={onOpenDetail}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel={`Review order from ${order.customerName}, ${formatMoney(order.total)}`}
+        accessibilityLabel={`Review order from ${order.customerName}, you earn ${formatMoney(earning)}`}
         accessibilityHint="Opens the order to review and respond"
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >
@@ -241,12 +251,20 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.caption.size,
     fontVariant: ["tabular-nums"],
   },
+  earningBlock: {
+    alignItems: "flex-end",
+  },
   total: {
     fontFamily: "Geist-Bold",
     fontSize: 22,
     color: theme.colors.ink.DEFAULT,
     fontVariant: ["tabular-nums"],
     letterSpacing: -0.3,
+  },
+  earningLabel: {
+    fontFamily: "Inter",
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
   },
   instructionsPill: {
     backgroundColor: theme.colors.amber.tint,

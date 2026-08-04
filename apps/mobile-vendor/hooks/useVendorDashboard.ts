@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import type { ChefPayout } from '../lib/chefPayout';
 
 export interface DashboardData {
   todayOrders: number;
@@ -49,7 +50,10 @@ export type PauseMinutes = 15 | 30 | 60;
 export interface RecentOrder {
   id: string;
   customerName: string;
+  /** The CUSTOMER's bill — never rendered on a chef surface; see `chefPayout`. */
   total: number;
+  /** What the CHEF is paid for this order. `estimated` until delivery. */
+  chefPayout?: ChefPayout;
   status: string;
   createdAt: string;
   // 'pickup' orders show a pickup stepper + chef handover action on the

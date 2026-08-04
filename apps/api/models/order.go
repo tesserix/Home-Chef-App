@@ -253,11 +253,11 @@ type Order struct {
 	// chase an order nobody has taken, these chase one somebody took and dropped.
 	StaleReminderCount  int        `gorm:"not null;default:0" json:"staleReminderCount"`
 	LastStaleReminderAt *time.Time `gorm:"" json:"lastStaleReminderAt,omitempty"`
-	PreparedAt           *time.Time `gorm:"" json:"preparedAt,omitempty"`
-	PickedUpAt           *time.Time `gorm:"" json:"pickedUpAt,omitempty"`
-	DeliveredAt          *time.Time `gorm:"" json:"deliveredAt,omitempty"`
-	CancelledAt          *time.Time `gorm:"" json:"cancelledAt,omitempty"`
-	CancelReason         string     `gorm:"" json:"cancelReason,omitempty"`
+	PreparedAt          *time.Time `gorm:"" json:"preparedAt,omitempty"`
+	PickedUpAt          *time.Time `gorm:"" json:"pickedUpAt,omitempty"`
+	DeliveredAt         *time.Time `gorm:"" json:"deliveredAt,omitempty"`
+	CancelledAt         *time.Time `gorm:"" json:"cancelledAt,omitempty"`
+	CancelReason        string     `gorm:"" json:"cancelReason,omitempty"`
 
 	// Special Instructions
 	SpecialInstructions string `gorm:"type:text" json:"specialInstructions"`
@@ -496,16 +496,21 @@ type OrderResponse struct {
 	DeliveryFee   float64 `json:"deliveryFee"`
 	// DeliveryFeeFinal is the chef's chosen fee at accept (#703) when they reduced
 	// it; the difference vs DeliveryFee was refunded. Nil = charged as-is.
-	DeliveryFeeFinal *float64            `json:"deliveryFeeFinal,omitempty"`
+	DeliveryFeeFinal *float64 `json:"deliveryFeeFinal,omitempty"`
 	// ChefPayout is what the CHEF is paid for this order — food + delivery (only
-	// when they carried it) + tip − penalty. Absent until the order is delivered.
+	// when they carried it) + tip − penalty. Status `pending` once the row is
+	// written at delivery, `estimated` before that: a chef decides whether to take
+	// an order when it arrives, so the figure has to exist from the moment they
+	// first see it. Same formula either way.
+	//
 	// The chef's screens render this and never the customer-facing figures below,
-	// which carry the platform's fee and GST (D-21).
+	// which carry the platform's fee and GST (D-21). Set by the chef-facing and
+	// admin handlers; absent from the base DTO so customer endpoints never carry it.
 	ChefPayout  *ChefPayoutResponse `json:"chefPayout,omitempty"`
 	PlatformFee float64             `json:"platformFee"`
-	Tax              float64             `json:"tax"`
-	TaxRate          float64             `json:"taxRate"`
-	TaxName          string              `json:"taxName,omitempty"`
+	Tax         float64             `json:"tax"`
+	TaxRate     float64             `json:"taxRate"`
+	TaxName     string              `json:"taxName,omitempty"`
 	// TaxLines is the statutory split every surface renders — CGST+SGST, IGST, or
 	// a single foreign tax line. Built here so the app, the web page and the PDF
 	// cannot each reach a different answer; clients print Label and Amount as-is.
@@ -516,14 +521,14 @@ type OrderResponse struct {
 	TaxBreakdown []TaxLine `json:"taxBreakdown,omitempty"`
 	// Rounding is the paise needed to make the lines above sum to Total. Non-zero
 	// only for orders placed before the money was rounded at creation.
-	Rounding float64 `json:"rounding,omitempty"`
-	Tip      float64 `json:"tip"`
-	ChefTip          float64             `json:"chefTip,omitempty"`
-	DriverTip        float64             `json:"driverTip,omitempty"`
-	Discount         float64             `json:"discount"`
-	Total            float64             `json:"total"`
-	Items            []OrderItemResponse `json:"items"`
-	DeliveryAddress  AddressResponse     `json:"deliveryAddress"`
+	Rounding        float64             `json:"rounding,omitempty"`
+	Tip             float64             `json:"tip"`
+	ChefTip         float64             `json:"chefTip,omitempty"`
+	DriverTip       float64             `json:"driverTip,omitempty"`
+	Discount        float64             `json:"discount"`
+	Total           float64             `json:"total"`
+	Items           []OrderItemResponse `json:"items"`
+	DeliveryAddress AddressResponse     `json:"deliveryAddress"`
 	// Chef is populated when the handler preloads the Chef relation
 	// (customer order list/detail). Omitted otherwise so chef-facing
 	// endpoints don't carry a redundant self-reference.
@@ -706,9 +711,9 @@ func (o *Order) SnapshotRates() TaxRates {
 		return o.TaxRate
 	}
 	return TaxRates{
-		Name:             o.TaxName,
-		Food:             or(o.TaxRateFood),
-		FoodInclusive:    o.TaxInclusive,
+		Name:               o.TaxName,
+		Food:               or(o.TaxRateFood),
+		FoodInclusive:      o.TaxInclusive,
 		Service:            or(o.TaxRateService),
 		ServiceInclusive:   o.TaxServiceInclusive,
 		Delivery:           or(o.TaxRateDelivery),
@@ -828,13 +833,13 @@ func (o *Order) ToResponse() OrderResponse {
 		CustomerConfirmedAt:    o.CustomerConfirmedAt,
 		// Resolved here, on the wire, so every customer surface reads the same
 		// sentence — and builds already in customers' hands stop showing the enum.
-		CancelReason:           CustomerCancelReason(o.CancelReason),
-		RefundAmount:           o.RefundAmount,
-		RefundedAt:             o.RefundedAt,
-		WalletRefunded:         o.WalletRefunded,
-		LoyaltyRefunded:        o.LoyaltyRefunded,
-		WalletApplied:          o.WalletApplied,
-		LoyaltyApplied:         o.LoyaltyApplied,
+		CancelReason:    CustomerCancelReason(o.CancelReason),
+		RefundAmount:    o.RefundAmount,
+		RefundedAt:      o.RefundedAt,
+		WalletRefunded:  o.WalletRefunded,
+		LoyaltyRefunded: o.LoyaltyRefunded,
+		WalletApplied:   o.WalletApplied,
+		LoyaltyApplied:  o.LoyaltyApplied,
 	}
 }
 

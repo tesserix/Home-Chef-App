@@ -36,6 +36,7 @@ import {
   type OrderDetailStatus,
   type FulfillmentType,
 } from '../../hooks/useOrderDetail';
+import { isPayoutEstimated, payoutHeadlineLabel } from '../../lib/chefPayout';
 import {
   useOrderAction,
   useUpdateOrderStatus,
@@ -393,7 +394,9 @@ interface FooterActionsProps {
   fulfillmentType: FulfillmentType;
   orderId: string;
   customerName: string;
-  total: number;
+  /** What the CHEF earns on the order — announced on Accept. Never the
+   *  customer's bill: a chef deciding by ear must hear the kitchen's figure. */
+  chefEarning: number;
   disabled: boolean;
   /** An open delivery-failure review — closes the order off (no actions, an
    *  "under review" caption) until an admin confirms fault (#393). */
@@ -438,7 +441,7 @@ function FooterActions({
   fulfillmentType,
   orderId,
   customerName,
-  total,
+  chefEarning,
   disabled: busy,
   cancellationPending,
   updatedAt,
@@ -576,7 +579,7 @@ function FooterActions({
           disabled={disabled}
           style={styles.flex1}
           accessibilityRole="button"
-          accessibilityLabel={`Accept ₹${total.toFixed(0)} order from ${customerName}`}
+          accessibilityLabel={`Accept order from ${customerName}, you earn ₹${chefEarning.toFixed(0)}`}
           android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
         >
           {({ pressed }) => (
@@ -1247,8 +1250,10 @@ export default function OrderDetailScreen() {
   }
 
   const { timing, pricing } = order;
-  // Served by the API from the persisted payout row; undefined until delivered.
+  // Served by the API: the persisted row once delivered, the same formula
+  // estimated from the live order before that. Never recomputed here.
   const payout = order.chefPayout;
+  const payoutIsEstimate = isPayoutEstimated(payout);
   const isPickup = order.fulfillmentType === 'pickup';
   const isChefDelivery = order.fulfillmentType === 'chef_delivery';
 
@@ -1269,6 +1274,20 @@ export default function OrderDetailScreen() {
     ? (typedDeliveryFee ?? chargedDeliveryFee)
     : (pricing.deliveryFeeFinal ?? chargedDeliveryFee);
   const deliveryFeeRefund = round2(chargedDeliveryFee - effectiveDeliveryFee);
+
+  // While the chef is typing a lower fee at accept (#703) the server's estimate
+  // still carries the charged one — so YOUR EARNINGS has to follow the keyboard,
+  // or the chef commits to a figure they never saw. Applies only to a leg the
+  // chef carries (payout.deliveryFee > 0); on a platform-carried order the fee
+  // was never theirs and lowering it changes nothing they earn. The server
+  // re-serves the authoritative payout the moment the accept lands.
+  const payoutDeliveryFee =
+    payout && canEditDeliveryFee && payout.deliveryFee > 0
+      ? round2(effectiveDeliveryFee)
+      : (payout?.deliveryFee ?? 0);
+  const payoutNet = payout
+    ? round2(payout.netPayout - (payout.deliveryFee - payoutDeliveryFee))
+    : 0;
   // Total stays the frozen billed amount server-side; what the customer
   // effectively pays is that minus the refunded delivery difference.
   const effectiveTotal = round2(pricing.total - deliveryFeeRefund);
@@ -1691,8 +1710,8 @@ export default function OrderDetailScreen() {
           {/* Delivery shows ONLY when the chef carried the leg and it was charged
               — a free-zone or platform-carried order omits the line rather than
               stating a ₹0 the chef has to interpret. */}
-          {payout && payout.deliveryFee > 0 ? (
-            <TotalRow label="Delivery you charged" value={payout.deliveryFee} />
+          {payoutDeliveryFee > 0 ? (
+            <TotalRow label="Delivery you charged" value={payoutDeliveryFee} />
           ) : null}
           {payout && payout.chefTip > 0 ? (
             <TotalRow label="Tip" value={payout.chefTip} />
@@ -1702,17 +1721,22 @@ export default function OrderDetailScreen() {
           ) : null}
           {payout ? (
             <TotalRow
-              label="You'll be paid"
-              value={payout.netPayout}
+              label={payoutHeadlineLabel(payout)}
+              value={payoutNet}
               emphasis
               hasBorderBottom={false}
             />
           ) : (
             <Text style={styles.deliveryHint}>
-              Your final earnings are confirmed once this order is delivered.
+              Your earnings are confirmed once this order is delivered.
             </Text>
           )}
         </View>
+        {payoutIsEstimate ? (
+          <Text style={styles.deliveryHint}>
+            Confirmed when the order is delivered.
+          </Text>
+        ) : null}
         {deliveryFeeRefund > 0 ? (
           <Text style={styles.deliveryHint}>
             Was ₹{pricing.total.toLocaleString('en-IN', { minimumFractionDigits: 0 })} —
@@ -1737,7 +1761,7 @@ export default function OrderDetailScreen() {
         fulfillmentType={order.fulfillmentType}
         orderId={order.id}
         customerName={order.customerName || 'this customer'}
-        total={effectiveTotal}
+        chefEarning={payout ? payoutNet : effectiveTotal}
         disabled={
           // isActioning covers the 3s undo window that actionLoading cannot see
           // — without it Accept stayed tappable for seconds after the tap.

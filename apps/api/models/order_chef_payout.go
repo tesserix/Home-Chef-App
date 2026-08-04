@@ -48,6 +48,12 @@ type OrderChefPayout struct {
 
 // Chef payout lifecycle.
 const (
+	// ChefPayoutEstimated — computed from the live order, NOT persisted. What a
+	// chef sees before delivery, when there is no row yet. Never written to the
+	// table: it is a projection of an order still in flight, and the figures can
+	// still move (the chef may lower the delivery fee at accept, a penalty may be
+	// raised). The row written at delivery is what freezes them.
+	ChefPayoutEstimated = "estimated"
 	// ChefPayoutPending — computed and owed, not yet released.
 	ChefPayoutPending = "pending"
 	// ChefPayoutReleased — settled to the chef.
