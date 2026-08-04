@@ -20,13 +20,38 @@ const BFF_URL = (() => {
 // WebSockets go to same-origin /ws/notifications, which the Istio
 // VirtualService forwards directly to homechef-api with a 3600s upgrade
 // timeout. /bff/ can't proxy WS upgrades (Node/Express limitation).
-function getWSUrl(accessToken: string | null): string {
+function getWSUrl(ticket: string): string {
   const origin =
     typeof window !== 'undefined' && window.location.hostname !== 'localhost'
       ? window.location.origin.replace(/^http/, 'ws')
       : 'ws://localhost:8080';
-  const qs = accessToken ? `?token=${encodeURIComponent(accessToken)}` : '';
-  return `${origin}/ws/notifications${qs}`;
+  return `${origin}/ws/notifications?ticket=${encodeURIComponent(ticket)}`;
+}
+
+/**
+ * Mints a short-lived WebSocket ticket over the authenticated BFF path.
+ *
+ * This used to pass the raw access token as `?token=`, which the server never
+ * read — the upgrade was rejected on every attempt and the bell has always run
+ * on its polling fallback (#982). A browser cannot set a handshake header, so
+ * the credential must ride in the query string; a 60s ticket is the narrow,
+ * expiring stand-in for a session token that should never appear in a URL.
+ */
+async function mintWSTicket(accessToken: string | null): Promise<string | null> {
+  try {
+    const headers: Record<string, string> = {};
+    if (accessToken) headers['X-Auth-Token'] = accessToken;
+    const res = await fetch(`${BFF_URL}/api/v1/realtime/ws-ticket`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { ticket?: string };
+    return data.ticket ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function readAccessToken(): Promise<string | null> {
@@ -69,7 +94,11 @@ export function useNotificationsWS(enabled = true) {
 
     try {
       const accessToken = await readAccessToken();
-      const ws = new WebSocket(getWSUrl(accessToken));
+      const ticket = await mintWSTicket(accessToken);
+      // Signed out or the mint failed — stay on polling; the reconnect
+      // schedule will try again.
+      if (!ticket) return;
+      const ws = new WebSocket(getWSUrl(ticket));
       wsRef.current = ws;
 
       ws.onopen = () => {

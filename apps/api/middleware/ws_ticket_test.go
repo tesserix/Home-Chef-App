@@ -186,3 +186,65 @@ func TestBFFAuthOrTicketFallsBackToHMACWhenNoTicket(t *testing.T) {
 		t.Fatal("handler must not run without any credential")
 	}
 }
+
+// Chef availability is public and the customer app subscribes while browsing
+// signed out, so no credential at all must pass through.
+func TestBFFAuthOrTicketOptionalAllowsAnonymous(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	reached := false
+	r.GET("/ws/chefs/:id/availability",
+		BFFAuthOrTicketOptional(BFFAuthConfig{HMACKey: wsTestKey}),
+		func(c *gin.Context) { reached = true; c.Status(http.StatusOK) })
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ws/chefs/abc/availability", nil))
+
+	if w.Code != http.StatusOK || !reached {
+		t.Fatalf("anonymous must be allowed on the optional gate, got %d", w.Code)
+	}
+}
+
+func TestBFFAuthOrTicketOptionalAppliesIdentityWhenTicketed(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ticket, _ := MintWSTicket(wsTestKey, wsTestIdentity(), time.Now())
+	r := gin.New()
+	r.GET("/ws/chefs/:id/availability",
+		BFFAuthOrTicketOptional(BFFAuthConfig{HMACKey: wsTestKey}),
+		func(c *gin.Context) {
+			uid, ok := GetUserID(c)
+			if !ok {
+				c.String(http.StatusOK, "anonymous")
+				return
+			}
+			c.String(http.StatusOK, uid.String())
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ws/chefs/abc/availability?ticket="+ticket, nil))
+
+	if w.Body.String() != wsTestIdentity().UserID {
+		t.Fatalf("a supplied ticket must still identify the caller, got %q", w.Body.String())
+	}
+}
+
+// An INVALID credential is not the same as none: a forged ticket must not buy
+// anonymous access to a socket that may later carry a user-scoped payload.
+func TestBFFAuthOrTicketOptionalRejectsBadTicket(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	reached := false
+	r.GET("/ws/chefs/:id/availability",
+		BFFAuthOrTicketOptional(BFFAuthConfig{HMACKey: wsTestKey}),
+		func(c *gin.Context) { reached = true; c.Status(http.StatusOK) })
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ws/chefs/abc/availability?ticket=forged.sig", nil))
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("a forged ticket must 401 rather than degrade to anonymous, got %d", w.Code)
+	}
+	if reached {
+		t.Fatal("handler must not run for a forged ticket")
+	}
+}

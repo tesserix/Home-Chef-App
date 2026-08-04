@@ -145,3 +145,19 @@ describe('socketReconnectDelayWithJitterMs', () => {
     expect(delays.size).toBeGreaterThan(10);
   });
 });
+
+describe('wsEndpointUrl with an optional ticket', () => {
+  // An empty `?ticket=` is a REJECTED credential, not an absent one — the
+  // server distinguishes them, so a guest must send no query at all.
+  it('omits the query entirely when there is no ticket', () => {
+    expect(wsEndpointUrl('https://fe3dr.com/api', 'chefs/c1/availability', null)).toBe(
+      'wss://fe3dr.com/ws/chefs/c1/availability',
+    );
+  });
+
+  it('never emits a bare ticket= for a guest', () => {
+    expect(wsEndpointUrl('https://fe3dr.com/api', 'chefs/c1/availability', null)).not.toContain(
+      'ticket=',
+    );
+  });
+});

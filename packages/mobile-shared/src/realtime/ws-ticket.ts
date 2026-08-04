@@ -36,15 +36,21 @@ export function wsOriginFrom(apiBaseUrl: string): string {
 /**
  * Builds a fully-formed socket URL: `wss://host/ws/<path>?ticket=<t>`.
  * `path` is the route below `/ws` with no leading slash (e.g. `notifications`).
+ *
+ * A null ticket omits the query entirely, for the optionally-authenticated
+ * sockets a signed-out visitor must still be able to open (chef availability).
+ * An empty `?ticket=` would be a *rejected* credential rather than none, and
+ * the server distinguishes the two deliberately.
  */
 export function wsEndpointUrl(
   apiBaseUrl: string,
   path: string,
-  ticket: string,
+  ticket: string | null,
 ): string {
   const origin = wsOriginFrom(apiBaseUrl);
   const clean = path.replace(/^\/+/, '');
-  return `${origin}/ws/${clean}?ticket=${encodeURIComponent(ticket)}`;
+  const query = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
+  return `${origin}/ws/${clean}${query}`;
 }
 
 function ticketPrefix(api: AxiosInstance): string {

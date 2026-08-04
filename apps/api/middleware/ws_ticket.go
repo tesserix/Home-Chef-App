@@ -146,3 +146,23 @@ func BFFAuthOrTicket(cfg BFFAuthConfig) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// BFFAuthOrTicketOptional is the optional-auth counterpart, for sockets whose
+// payload is public and which a signed-out visitor must still be able to open
+// — chef open/close, which the customer app subscribes to while browsing as a
+// guest. A credential is honoured when supplied and the identity applied; its
+// absence is not an error.
+//
+// An INVALID credential still 401s. Anonymous means none at all, never a
+// rejected one, so a forged ticket cannot buy anonymous access to a socket
+// that later grows a user-scoped payload.
+func BFFAuthOrTicketOptional(cfg BFFAuthConfig) gin.HandlerFunc {
+	strict := BFFAuthOrTicket(cfg)
+	return func(c *gin.Context) {
+		if c.Query("ticket") == "" && c.Request.Header.Get(HdrSignature) == "" {
+			c.Next()
+			return
+		}
+		strict(c)
+	}
+}

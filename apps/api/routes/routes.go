@@ -255,8 +255,20 @@ func SetupRouter() *gin.Engine {
 	{
 		wsGroup.GET("/notifications", notificationHandler.StreamNotificationsWS)
 		wsGroup.GET("/orders/:id/track", orderHandler.TrackOrderWS)
-		// Kitchen open/close, pushed to customers viewing that chef (#970).
-		wsGroup.GET("/chefs/:id/availability", chefAvailabilityHandler.StreamChefAvailabilityWS)
+	}
+
+	// Kitchen open/close, pushed to customers viewing that chef (#970). The
+	// payload is public and the customer app subscribes while browsing as a
+	// guest, so this one authenticates optionally — a guest has no session and
+	// therefore no ticket to mint.
+	wsPublic := r.Group("/ws")
+	wsPublic.Use(middleware.BFFAuthOrTicketOptional(middleware.BFFAuthConfig{
+		HMACKey:       bffKey,
+		Window:        bffWindow,
+		BFFSessionURL: config.AppConfig.BFFSessionURL,
+	}))
+	{
+		wsPublic.GET("/chefs/:id/availability", chefAvailabilityHandler.StreamChefAvailabilityWS)
 	}
 
 	// Internal endpoints — invoked by apps/auth-bff to materialize user
