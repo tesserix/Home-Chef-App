@@ -40,6 +40,26 @@ func TestDeliveryFeeFrom(t *testing.T) {
 		assert.False(t, flat)
 	})
 
+	t.Run("a free radius makes the floor zero, not the base", func(t *testing.T) {
+		// Inside the radius the base is waived too, so quoting it would overstate
+		// the cheapest this kitchen can be — the card must say "Free delivery
+		// nearby", not "Delivery from ₹40".
+		fee, flat := DeliveryFeeFrom(models.ChefProfile{
+			OffersSelfDelivery: true, SelfDeliveryBaseFee: 40,
+			SelfDeliveryPerKm: 8, SelfDeliveryFreeRadiusKm: 3,
+		})
+		assert.Zero(t, fee)
+		assert.False(t, flat, "beyond the radius it rises, so it is a floor not a promise")
+	})
+
+	t.Run("a free radius on a chef who charges nothing is still flatly free", func(t *testing.T) {
+		fee, flat := DeliveryFeeFrom(models.ChefProfile{
+			OffersSelfDelivery: true, SelfDeliveryFreeRadiusKm: 3,
+		})
+		assert.Zero(t, fee)
+		assert.True(t, flat)
+	})
+
 	t.Run("platform-carried delivery quotes the platform base", func(t *testing.T) {
 		fee, flat := DeliveryFeeFrom(models.ChefProfile{OffersSelfDelivery: false})
 		assert.Equal(t, GetPlatformPolicy().BaseDeliveryFee, fee)

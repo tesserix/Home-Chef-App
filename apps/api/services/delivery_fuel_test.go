@@ -1,6 +1,7 @@
 package services
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/homechef/api/config"
@@ -66,6 +67,33 @@ func TestParseFuelFromMarkup(t *testing.T) {
 	}
 	if got != 103.44 {
 		t.Fatalf("price = %v, want 103.44", got)
+	}
+}
+
+// TestParseFuelFromMarkup_RealSourceShape uses the actual shape of the configured
+// source (bankbazaar's city petrol table), so a markup change that breaks the
+// regex is caught here rather than degrading the fuel factor to neutral in silence.
+func TestParseFuelFromMarkup_RealSourceShape(t *testing.T) {
+	page := `<div><h2>Petrol Price in Indian Cities today</h2>
+	<table><tr><th>City</th><th>Petrol Price</th></tr>
+	<tr><td>Agra</td><td>&#8377; 101.54 (0)</td></tr>
+	<tr><td>Ahmedabad</td><td>&#8377; 101.83 (0)</td></tr>
+	<tr><td>Aligarh</td><td>&#8377; 98 ( 4.02 &#9660; )</td></tr>
+	</table></div>`
+	got, ok := parseFuelFromMarkup(strings.ReplaceAll(page, "&#8377;", "₹"))
+	if !ok {
+		t.Fatal("expected a price from the source's table markup")
+	}
+	if got != 101.54 {
+		t.Fatalf("price = %v, want the first city's petrol price 101.54", got)
+	}
+}
+
+// The day-over-day change column ("( 4.02 ▼ )") sits right beside the price and
+// must never be mistaken for one — it would collapse the fuel index to nothing.
+func TestParseFuelFromMarkup_IgnoresChangeColumn(t *testing.T) {
+	if price, ok := parseFuelFromMarkup(`<td>Aligarh</td><td>( 4.02 ▼ )</td>`); ok {
+		t.Fatalf("parsed the change column as a price: %v", price)
 	}
 }
 

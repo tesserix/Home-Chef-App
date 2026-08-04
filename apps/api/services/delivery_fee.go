@@ -98,6 +98,12 @@ func QuoteOrderDeliveryFeeCtx(chef models.ChefProfile, fulfillment models.Fulfil
 // fee is quoted and flat is false.
 func DeliveryFeeFrom(chef models.ChefProfile) (fee float64, flat bool) {
 	if chef.OffersSelfDelivery {
+		// Inside the chef's free radius the whole fee is waived — the flat base
+		// included — so for anyone close enough the floor is zero, not the base.
+		// Quoting the base here would overstate the cheapest this kitchen can be.
+		if chef.SelfDeliveryFreeRadiusKm > 0 && (chef.SelfDeliveryBaseFee > 0 || chef.SelfDeliveryPerKm > 0) {
+			return 0, false // beyond the radius it rises, so it is a floor not a promise
+		}
 		return chef.SelfDeliveryBaseFee, chef.SelfDeliveryPerKm <= 0
 	}
 	base := GetPlatformPolicy().BaseDeliveryFee
