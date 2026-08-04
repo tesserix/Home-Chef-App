@@ -55,6 +55,7 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'pending',
 		payment_method TEXT DEFAULT '', payment_provider TEXT DEFAULT 'razorpay',
 		subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, total REAL DEFAULT 0,
+		tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0, tax_delivery REAL DEFAULT 0,
 		chef_tip REAL DEFAULT 0, driver_tip REAL DEFAULT 0, delivery_fee REAL DEFAULT 0,
 		chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 		delivery_address_state TEXT DEFAULT '',

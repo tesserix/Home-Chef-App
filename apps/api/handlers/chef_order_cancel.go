@@ -444,10 +444,10 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 		return
 	}
 
-	// Tax share for this line = order.Tax * (line.Subtotal / order.Subtotal),
-	// computed against the ORIGINAL subtotal/tax so concurrent partial cancels
-	// can't drift the proportional split. (see lineRefundAmount)
-	lineRefund := lineRefundAmount(target.Subtotal, order.Subtotal, order.Tax)
+	// Tax share for this line = foodTax * (line.Subtotal / order.Subtotal), computed
+	// against the ORIGINAL subtotal/food tax so concurrent partial cancels can't drift
+	// the proportional split. (see lineRefundAmount)
+	lineRefund := lineRefundAmount(target.Subtotal, order.Subtotal, services.ChefTaxOf(order.Tax, order.TaxFood, order.TaxService))
 	amountPaise := int(roundPaise(lineRefund))
 	if amountPaise <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "computed refund amount is zero; nothing to do"})
@@ -853,7 +853,7 @@ func reserveOrderItemForCancel(tx *gorm.DB, orderID, itemID uuid.UUID, reason st
 		lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
 	var o models.Order
-	if e := lockTx.Select("id", "subtotal", "tax", "total", "refund_amount", "payment_status", "refunded_at").
+	if e := lockTx.Select("id", "subtotal", "tax", "tax_food", "tax_service", "total", "refund_amount", "payment_status", "refunded_at").
 		First(&o, "id = ?", orderID).Error; e != nil {
 		return 0, false, e
 	}
@@ -888,7 +888,7 @@ func reserveOrderItemForCancel(tx *gorm.DB, orderID, itemID uuid.UUID, reason st
 	if item.IsCancelled {
 		return 0, false, nil
 	}
-	lineRefund = lineRefundAmount(item.Subtotal, o.Subtotal, o.Tax)
+	lineRefund = lineRefundAmount(item.Subtotal, o.Subtotal, services.ChefTaxOf(o.Tax, o.TaxFood, o.TaxService))
 
 	// Guarded CAS: flip the line AND record its refund together. RowsAffected!=1 ⇒ a concurrent
 	// duplicate won → won=false, no ledger change.
@@ -912,12 +912,20 @@ func reserveOrderItemForCancel(tx *gorm.DB, orderID, itemID uuid.UUID, reason st
 	// subtotal by the line subtotal, tax by the line's proportional share — so the fees/tip/
 	// discount need not be read, and the effective tax rate is preserved. refund_amount is the
 	// same increment the old txn3 applied. All three RemainingRefundable inputs move together.
-	taxShare := lineRefund - item.Subtotal // = o.Tax * item.Subtotal / o.Subtotal
+	//
+	// D-19: the share is of the FOOD GST only, so tax_food carries the whole reduction and the
+	// GST on the surviving fee/delivery supplies stays on the order. The delta must mirror the
+	// refund exactly or Total stops equalling the sum of its parts. Pre-split orders have no
+	// tax_food to move (their basis is the whole Tax, which is how they were charged).
+	taxShare := lineRefund - item.Subtotal // = foodTax * item.Subtotal / o.Subtotal
 	orderUpdates := map[string]interface{}{
 		"subtotal":      o.Subtotal - item.Subtotal,
 		"tax":           o.Tax - taxShare,
 		"total":         o.Total - lineRefund,
 		"refund_amount": o.RefundAmount + lineRefund,
+	}
+	if o.TaxFood > 0 {
+		orderUpdates["tax_food"] = o.TaxFood - taxShare
 	}
 	if e := tx.Model(&models.Order{}).Where("id = ?", orderID).Updates(orderUpdates).Error; e != nil {
 		return 0, false, e
@@ -958,7 +966,7 @@ func releaseOrderItemCancelReservation(db *gorm.DB, orderID, itemID uuid.UUID, l
 			lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
 		}
 		var o models.Order
-		if e := lockTx.Select("id", "subtotal", "tax", "total", "refund_amount", "payment_status", "refunded_at").
+		if e := lockTx.Select("id", "subtotal", "tax", "tax_food", "tax_service", "tax_delivery", "total", "refund_amount", "payment_status", "refunded_at").
 			First(&o, "id = ?", orderID).Error; e != nil {
 			return e
 		}
@@ -987,13 +995,21 @@ func releaseOrderItemCancelReservation(db *gorm.DB, orderID, itemID uuid.UUID, l
 			}).Error; e != nil {
 			return e
 		}
+		// Exact inverse of the reserve's delta, tax_food included — the share is derived
+		// from the reserved refund, so it stays symmetric without re-deriving the basis.
 		taxShare := lineRefund - item.Subtotal
-		return tx.Model(&models.Order{}).Where("id = ?", orderID).Updates(map[string]interface{}{
+		restore := map[string]interface{}{
 			"subtotal":      o.Subtotal + item.Subtotal,
 			"tax":           o.Tax + taxShare,
 			"total":         o.Total + lineRefund,
 			"refund_amount": o.RefundAmount - lineRefund,
-		}).Error
+		}
+		// The reserve moved tax_food iff the order carries a per-supply snapshot; a
+		// snapshot whose every component is now zero has no split left to restore.
+		if taxShare > 0 && (o.TaxFood > 0 || o.TaxService > 0 || o.TaxDelivery > 0) {
+			restore["tax_food"] = o.TaxFood + taxShare
+		}
+		return tx.Model(&models.Order{}).Where("id = ?", orderID).Updates(restore).Error
 	}); err != nil {
 		log.Printf("failed to release per-line cancel reservation for item %s: %v", itemID, err)
 	}
