@@ -14,6 +14,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Declared as `supportUrl` on both App Store listings, so it must stay
     // reachable and crawlable — a 404 there is an App Review 1.5 rejection.
     { url: `${SITE_URL}/support/`, lastModified, changeFrequency: 'monthly', priority: 0.5 },
+    // Chef-acquisition content: the question every prospective home chef asks
+    // before signing up, and the only page on the site that answers it.
+    { url: `${SITE_URL}/fssai/`, lastModified, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${SITE_URL}/privacy/`, lastModified, changeFrequency: 'monthly', priority: 0.3 },
     { url: `${SITE_URL}/terms/`, lastModified, changeFrequency: 'monthly', priority: 0.3 },
     { url: `${SITE_URL}/refund/`, lastModified, changeFrequency: 'monthly', priority: 0.3 },

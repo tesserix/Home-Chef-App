@@ -137,6 +137,41 @@ export const VENDOR_COST_POINTS = [
   { figure: '100%', label: 'of the delivery fee when you deliver' },
 ] as const;
 
+// FSSAI registration — the one real upfront cost a home chef carries, and the
+// figures on /fssai/. Sourced from FSSAI's own pages, not from a summary site:
+// the fee ladder is the "Registration" column of FOSCOS_FEE_URL, and the tier
+// rule is what the eligibility checker returns for Home Based Canteens / Dabba
+// Wallas — Registration up to ₹1.5 Cr of annual turnover, State Licence above.
+//
+// A home kitchen is NOT the ₹7,500-a-year Central Licence column of the same
+// table; publishing that would tell a chef to pay 75× what they owe.
+export const FSSAI_REGISTRATION_FEE_PER_YEAR = 100;
+// What we charge to file it for a chef. One-off per application, whatever term
+// they choose — it is one form either way. Plus GST, because it is a service we
+// supply: 18% is the same rate the platform fee carries (services/pricing.go).
+// Quoted ex-GST with the inclusive figure alongside, never ex-GST alone — a fee
+// that grows at checkout is how a chef stops trusting the rest of the page.
+export const FSSAI_ASSIST_FEE = 50;
+export const FSSAI_ASSIST_GST_RATE = 18;
+export const FSSAI_ASSIST_FEE_INC_GST = 59;
+// The turnover ceiling for Registration on this kind of business. Above it the
+// chef needs a State Licence, whose fee varies by state.
+export const FSSAI_REGISTRATION_TURNOVER_CEILING = '₹1.5 crore';
+// FSSAI's exact classification for a home kitchen selling packed meals. Printed
+// verbatim so a chef ticks the same box we tell them to.
+export const FSSAI_KIND_OF_BUSINESS = 'Home Based Canteens / Dabba Wallas';
+
+export const FOSCOS_APPLY_URL = 'https://foscos.fssai.gov.in/apply-for-lic-and-reg';
+export const FOSCOS_ELIGIBILITY_URL =
+  'https://foscos.fssai.gov.in/public/fbo/open-eligibility/N';
+export const FOSCOS_FEE_URL = 'https://foscos.fssai.gov.in/fee/SL';
+export const FOSCOS_DOCUMENTS_URL =
+  'https://foscos.fssai.gov.in/assets/docs/DocumentsrequiredforRegistrationCertificate.pdf';
+export const FOSCOS_SIGNUP_GUIDE_URL =
+  'https://foscos.fssai.gov.in/assets/docs/Login&Signup.pdf';
+export const FOSCOS_HELPDESK_EMAIL = 'helpdesk-foscos@fssai.gov.in';
+export const FOSCOS_HELPDESK_PHONE = '1800-11-2100';
+
 // Canonical legal-document values — kept identical across landing + both apps.
 // LEGAL_SUPPORT_EMAIL is the general legal/support contact (distinct from the
 // general CONTACT_EMAIL above). Do NOT repurpose CONTACT_EMAIL for legal copy.

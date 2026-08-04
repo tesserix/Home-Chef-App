@@ -78,6 +78,24 @@ export function CookWithUs() {
               </p>
             </div>
           </Reveal>
+
+          {/* The ₹100 figure above is the only cost a chef pays before earning
+              anything, and "FSSAI registration" means nothing to most people
+              until someone explains it. Sits under the CTA rather than in the
+              cost grid: it answers the second question, not the first. */}
+          <Reveal delay={160}>
+            <p className="mt-6 text-sm leading-relaxed text-white/60">
+              New to FSSAI registration?{' '}
+              <a
+                href="/fssai/"
+                className="font-medium text-white underline underline-offset-4 hover:text-white/80"
+              >
+                What it costs and how to apply
+              </a>{' '}
+              — ₹100 a year to the government, the three documents you need, and
+              the form step by step. We can file it for you for ₹50 + GST.
+            </p>
+          </Reveal>
         </div>
 
         <div className="lg:col-span-5">
