@@ -99,17 +99,18 @@ func TestDecideStaleOrderAction_DecisionTable(t *testing.T) {
 	for _, tc := range []struct {
 		name              string
 		hasGatewayOrderID bool
-		capturedPaymentID string
+		state             gatewayPaymentState
 		gatewayErr        error
 		want              staleOrderAction
 	}{
-		{"no gateway order id ever stamped -> cancel, unasked", false, "", nil, staleOrderCancel},
-		{"gateway error -> never cancel, skip", true, "", context.DeadlineExceeded, staleOrderSkipError},
-		{"captured payment found -> skip, do not settle", true, "pay_captured", nil, staleOrderSkipCaptured},
-		{"gateway confirms not captured -> cancel", true, "", nil, staleOrderCancel},
+		{"no gateway order id ever stamped -> cancel, unasked", false, gatewayNoPayment, nil, staleOrderCancel},
+		{"gateway error -> never cancel, skip", true, gatewayNoPayment, context.DeadlineExceeded, staleOrderSkipError},
+		{"captured payment found -> skip, do not settle", true, gatewayCaptured, nil, staleOrderSkipCaptured},
+		{"attempt still in flight -> skip, never cancel under a live charge", true, gatewayInFlight, nil, staleOrderSkipInFlight},
+		{"gateway confirms every attempt is dead -> cancel", true, gatewayNoPayment, nil, staleOrderCancel},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := decideStaleOrderAction(tc.hasGatewayOrderID, tc.capturedPaymentID, tc.gatewayErr)
+			got := decideStaleOrderAction(tc.hasGatewayOrderID, tc.state, tc.gatewayErr)
 			require.Equal(t, tc.want, got)
 		})
 	}
@@ -126,7 +127,7 @@ func TestStaleOrderSweep_CapturedPayment_StaysPendingAndIsNotSettled(t *testing.
 		_, _ = w.Write([]byte(`[{"cf_payment_id":555,"order_id":"cf_order_captured","payment_status":"SUCCESS","payment_amount":300.00,"payment_group":"upi"}]`))
 	})
 
-	expired, skippedCaptured, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
+	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 0, expired)
 	require.Equal(t, 1, skippedCaptured)
 	require.Equal(t, 0, skippedError)
@@ -149,7 +150,7 @@ func TestStaleOrderSweep_NotCaptured_CancelsExactlyAsBefore(t *testing.T) {
 		_, _ = w.Write([]byte(`{"items":[]}`))
 	})
 
-	expired, skippedCaptured, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
+	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 1, expired)
 	require.Equal(t, 0, skippedCaptured)
 	require.Equal(t, 0, skippedError)
@@ -173,7 +174,7 @@ func TestStaleOrderSweep_GatewayError_NeverCancelsAndIsRetried(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":{"description":"boom"}}`))
 	})
 
-	expired, skippedCaptured, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
+	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 0, expired)
 	require.Equal(t, 0, skippedCaptured)
 	require.Equal(t, 1, skippedError)
@@ -185,7 +186,7 @@ func TestStaleOrderSweep_GatewayError_NeverCancelsAndIsRetried(t *testing.T) {
 	require.Nil(t, cancelledAt)
 
 	// The still-failing gateway must not cancel it on a second tick either.
-	expired, skippedCaptured, skippedError = runStaleOrderScanWithDB(context.Background(), db, now)
+	expired, skippedCaptured, _, skippedError = runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 0, expired)
 	require.Equal(t, 0, skippedCaptured)
 	require.Equal(t, 1, skippedError)
@@ -208,7 +209,7 @@ func TestStaleOrderSweep_GatewayNotConfiguredForMode_NeverCancels(t *testing.T) 
 	SetRazorpayClientFor(models.ChefModeTest, nil)
 	t.Cleanup(func() { SetRazorpayClientFor(models.ChefModeTest, prev) })
 
-	expired, skippedCaptured, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
+	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 0, expired)
 	require.Equal(t, 0, skippedCaptured)
 	require.Equal(t, 1, skippedError)
@@ -237,7 +238,7 @@ func TestStaleOrderSweep_NoGatewayOrderID_CancelsWithZeroGatewayCalls(t *testing
 		_, _ = w.Write([]byte(`{"items":[]}`))
 	})
 
-	expired, skippedCaptured, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
+	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 1, expired)
 	require.Equal(t, 0, skippedCaptured)
 	require.Equal(t, 0, skippedError)
@@ -270,7 +271,7 @@ func TestStaleOrderSweep_CashfreeOrder_NeverRoutedToRazorpay(t *testing.T) {
 		_, _ = w.Write([]byte(`[{"cf_payment_id":9,"order_id":"cf_order_routing","payment_status":"SUCCESS","payment_amount":300.00,"payment_group":"upi"}]`))
 	})
 
-	expired, skippedCaptured, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
+	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 0, expired)
 	require.Equal(t, 1, skippedCaptured)
 	require.Equal(t, 0, skippedError)
@@ -298,7 +299,7 @@ func TestStaleOrderSweep_RazorpayOrder_NeverRoutedToCashfree(t *testing.T) {
 		_, _ = w.Write([]byte(`{"items":[{"id":"pay_routing","order_id":"order_rzp_routing","status":"captured"}]}`))
 	})
 
-	expired, skippedCaptured, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
+	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 0, expired)
 	require.Equal(t, 1, skippedCaptured)
 	require.Equal(t, 0, skippedError)
@@ -307,4 +308,126 @@ func TestStaleOrderSweep_RazorpayOrder_NeverRoutedToCashfree(t *testing.T) {
 
 	status, _, _, _ := staleOrderRow(t, db, o.ID)
 	require.Equal(t, string(models.OrderStatusPending), status)
+}
+
+// ── Scenario 7: an attempt still in flight -> never cancel ─────────────────
+//
+// The defect this pins, observed on production sandbox orders HC26080400184814
+// and HC26080400303019 on 4 Aug 2026: Cashfree held payment 5114933571626 at
+// PENDING (bank OTP page open, is_captured false). SuccessfulPayment returns nil
+// for PENDING exactly as it does for "no attempt at all", so the sweep read
+// "nothing was captured" and cancelled. When that payment later resolves to
+// SUCCESS the customer has been charged for a cancelled order — and the
+// order-payment reconcile cron is forward-only by design (it excludes
+// status=cancelled rows), so nothing recovers it.
+
+func TestStaleOrderSweep_CashfreePendingPayment_NeverCancels(t *testing.T) {
+	db := setupStaleOrderDB(t)
+	now := time.Now()
+	o := seedStaleOrder(t, db, "cashfree", "cf_order_pending", models.ChefModeLive, now.Add(-staleOrderGrace))
+
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+		// The exact shape Cashfree returned for the stranded order.
+		_, _ = w.Write([]byte(`[{"cf_payment_id":5114933571626,"order_id":"cf_order_pending",
+			"payment_status":"PENDING","payment_amount":393.05,"payment_group":"debit_card",
+			"is_captured":false,"payment_message":"Simulated response message"}]`))
+	})
+
+	expired, skippedCaptured, skippedInFlight, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
+	require.Equal(t, 0, expired, "a live attempt must never be cancelled")
+	require.Equal(t, 0, skippedCaptured)
+	require.Equal(t, 1, skippedInFlight)
+	require.Equal(t, 0, skippedError)
+
+	status, paymentStatus, cancelReason, cancelledAt := staleOrderRow(t, db, o.ID)
+	require.Equal(t, string(models.OrderStatusPending), status)
+	require.Equal(t, string(models.PaymentPending), paymentStatus)
+	require.Empty(t, cancelReason)
+	require.Nil(t, cancelledAt)
+}
+
+// A dead attempt still cancels — the fix must not turn the sweep into a no-op.
+// USER_DROPPED and FAILED are the two states that can never move money again.
+func TestStaleOrderSweep_CashfreeAllAttemptsDead_StillCancels(t *testing.T) {
+	db := setupStaleOrderDB(t)
+	now := time.Now()
+	o := seedStaleOrder(t, db, "cashfree", "cf_order_dead", models.ChefModeLive, now.Add(-staleOrderGrace))
+
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[
+			{"cf_payment_id":1,"order_id":"cf_order_dead","payment_status":"FAILED","payment_amount":393.05},
+			{"cf_payment_id":2,"order_id":"cf_order_dead","payment_status":"USER_DROPPED","payment_amount":393.05}
+		]`))
+	})
+
+	expired, _, skippedInFlight, _ := runStaleOrderScanWithDB(context.Background(), db, now)
+	require.Equal(t, 1, expired)
+	require.Equal(t, 0, skippedInFlight)
+
+	status, paymentStatus, cancelReason, _ := staleOrderRow(t, db, o.ID)
+	require.Equal(t, string(models.OrderStatusCancelled), status)
+	require.Equal(t, string(models.PaymentFailed), paymentStatus)
+	require.Equal(t, "payment not completed", cancelReason)
+}
+
+// A mixed list — one dead attempt, one live retry — is in flight, not dead. The
+// customer who failed once and is mid-way through a second attempt is precisely
+// who must not have their order cancelled under them.
+func TestStaleOrderSweep_CashfreeFailedThenPending_IsInFlight(t *testing.T) {
+	db := setupStaleOrderDB(t)
+	now := time.Now()
+	o := seedStaleOrder(t, db, "cashfree", "cf_order_retry", models.ChefModeLive, now.Add(-staleOrderGrace))
+
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[
+			{"cf_payment_id":1,"order_id":"cf_order_retry","payment_status":"FAILED","payment_amount":393.05},
+			{"cf_payment_id":2,"order_id":"cf_order_retry","payment_status":"PENDING","payment_amount":393.05}
+		]`))
+	})
+
+	expired, _, skippedInFlight, _ := runStaleOrderScanWithDB(context.Background(), db, now)
+	require.Equal(t, 0, expired)
+	require.Equal(t, 1, skippedInFlight)
+
+	status, _, _, _ := staleOrderRow(t, db, o.ID)
+	require.Equal(t, string(models.OrderStatusPending), status)
+}
+
+// Razorpay's `authorized` is money already held on the customer's card. It is
+// not `captured`, so the old probe returned "" for it and cancelled — the worst
+// version of this bug, since the hold is real money.
+func TestStaleOrderSweep_RazorpayAuthorized_NeverCancels(t *testing.T) {
+	db := setupStaleOrderDB(t)
+	now := time.Now()
+	o := seedStaleOrder(t, db, "razorpay", "order_rzp_authorized", models.ChefModeLive, now.Add(-staleOrderGrace))
+
+	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"entity":"collection","count":1,"items":[
+			{"id":"pay_authorized","order_id":"order_rzp_authorized","status":"authorized","amount":39305}
+		]}`))
+	})
+
+	expired, _, skippedInFlight, _ := runStaleOrderScanWithDB(context.Background(), db, now)
+	require.Equal(t, 0, expired)
+	require.Equal(t, 1, skippedInFlight)
+
+	status, _, _, _ := staleOrderRow(t, db, o.ID)
+	require.Equal(t, string(models.OrderStatusPending), status)
+}
+
+// An unrecognised gateway state reads as in-flight, never as dead. A status
+// neither gateway has shipped yet must not be able to cancel an order.
+func TestStaleOrderSweep_UnknownGatewayStatus_TreatedAsInFlight(t *testing.T) {
+	db := setupStaleOrderDB(t)
+	now := time.Now()
+	seedStaleOrder(t, db, "cashfree", "cf_order_novel", models.ChefModeLive, now.Add(-staleOrderGrace))
+
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"cf_payment_id":9,"order_id":"cf_order_novel",
+			"payment_status":"AWAITING_MANDATE_APPROVAL","payment_amount":393.05}]`))
+	})
+
+	expired, _, skippedInFlight, _ := runStaleOrderScanWithDB(context.Background(), db, now)
+	require.Equal(t, 0, expired)
+	require.Equal(t, 1, skippedInFlight)
 }

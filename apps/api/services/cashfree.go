@@ -548,6 +548,28 @@ func (p *CashfreePayment) IsCaptured() bool {
 	return p != nil && p.PaymentStatus == CashfreePaymentSuccess
 }
 
+// IsInFlight reports whether this attempt could still go on to take the money.
+// PENDING is the state a card sits in while the bank's OTP/3DS page is open and
+// the state a UPI collect sits in while the payer decides — it is NOT "no
+// payment", and treating it as such is how an order gets cancelled out from
+// under a charge that then succeeds.
+//
+// Only the three states that can never move money again are terminal. Anything
+// Cashfree adds later reads as in-flight, because the cost of the two mistakes
+// is not symmetric: waiting one more tick on a genuinely dead attempt is free,
+// while cancelling a live one strands a real charge on a cancelled order.
+func (p *CashfreePayment) IsInFlight() bool {
+	if p == nil {
+		return false
+	}
+	switch p.PaymentStatus {
+	case CashfreePaymentSuccess, CashfreePaymentFailed, CashfreePaymentUserDropped:
+		return false
+	default:
+		return true
+	}
+}
+
 // MethodLabel maps Cashfree's payment_group onto the short method vocabulary the
 // platform already stores in Order.PaymentMethod ("upi", "card", "netbanking",
 // "wallet"), so a receipt or an admin screen reads identically no matter which
