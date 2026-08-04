@@ -218,6 +218,9 @@ func main() {
 	services.InitWeatherProvider()
 	// Traffic surge provider (#705) — reuses the Routes key, else neutral.
 	services.InitTrafficProvider()
+	// Fuel surge provider (#704) — reads the cron-refreshed pump price, so it
+	// makes no network call on the checkout path.
+	services.InitFuelProvider()
 
 	// Connect to MongoDB (in-app chat + document uploads, #53). Optional: a
 	// failure leaves the Mongo-backed features disabled without affecting the

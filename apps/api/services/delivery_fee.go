@@ -3,48 +3,81 @@ package services
 // delivery_fee.go — the ONE delivery-fee computation (#pickup-incentive).
 //
 // The fee a customer sees at checkout MUST equal the fee CreateOrder charges. If
-// the checkout preview and the order-create path each compute it their own way,
-// they WILL drift, and the customer gets charged a different number than the one
-// they agreed to — a trust and money-correctness failure. So both call this.
-//
-// Before this, CreateOrder computed the fee inline (handlers/orders.go) and there
-// was no preview at all — the app just showed "Free" for everything, hiding both
-// the real delivery fee and pickup's saving. Extracting the logic here lets the
-// checkout quote endpoint reuse the exact same code.
+// the preview and the order-create path each compute it their own way, they WILL
+// drift and the customer is billed a number they never agreed to. So both call
+// QuoteOrderDeliveryFeeCtx with the SAME surge — the quote signs the multiplier
+// it used (delivery_quote_pin.go) and CreateOrder replays it.
 
 import (
+	"context"
+
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/models"
 )
 
-// QuoteOrderDeliveryFee returns the delivery fee for one order, by fulfillment
-// mode. This is authoritative — CreateOrder charges exactly this.
+// SurgeChargeEnabled reports whether live conditions may move the CHARGED fee.
+// When false, surge still shows in the estimate breakdown but the charge stays
+// on the deterministic basis — the pre-#704 behaviour.
 //
-//   - pickup        → 0 (the customer collects; no delivery leg). This is the
-//     saving the pickup incentive advertises.
-//   - chef_delivery → the chef's own distance-based self-delivery fee.
-//   - delivery      → a live 3PL quote, falling back to the flat platform fee
-//     when no coordinates are known yet or no provider can serve
-//     the leg — so checkout never blocks on a quote.
-//
-// dropLat/dropLng may be 0 (address not yet chosen / no coords): the 3PL quote is
-// skipped and the flat policy fee is returned, matching CreateOrder's fallback.
+// Requires a pin key as well as the flag: without one a quoted multiplier can't
+// be signed, so the charge could not be held to the number the customer saw.
+func SurgeChargeEnabled() bool {
+	return config.AppConfig != nil &&
+		config.AppConfig.DeliverySurgeChargeEnabled &&
+		config.AppConfig.DeliverySurgePinKey != ""
+}
+
+// ResolveChargeSurge returns the multiplier to CHARGE with. It prefers a valid
+// pin (the multiplier the customer was quoted), falls back to live conditions,
+// and is always 1.0 while surge-charging is off.
+func ResolveChargeSurge(ctx context.Context, pin string, chef models.ChefProfile, dropLat, dropLng float64, country string) float64 {
+	if !SurgeChargeEnabled() {
+		return 1.0
+	}
+	if surge, ok := VerifySurgePin(pin, chef.ID, dropLat, dropLng); ok {
+		return surge
+	}
+	// No usable pin (expired, or an older app build that doesn't send one): price
+	// on current conditions rather than refusing the order.
+	return CurrentSurge(ctx, country, chef.Latitude, chef.Longitude, dropLat, dropLng).Combined
+}
+
+// QuoteOrderDeliveryFee returns the delivery fee on the neutral basis (no surge).
+// Retained for callers that price outside a customer quote — meal-plan and group
+// paths, and tests — where there is no quoted multiplier to honour.
 func QuoteOrderDeliveryFee(chef models.ChefProfile, fulfillment models.FulfillmentType, dropLat, dropLng float64, city, country string) float64 {
+	return QuoteOrderDeliveryFeeCtx(chef, fulfillment, dropLat, dropLng, city, country, 1.0)
+}
+
+// QuoteOrderDeliveryFeeCtx returns the delivery fee for one order at a given
+// surge. This is authoritative — CreateOrder charges exactly this.
+//
+//   - pickup        → 0 (the customer collects; no delivery leg)
+//   - chef_delivery → the chef's distance-based self-delivery fee, surged
+//   - delivery      → a live 3PL quote, else the chef's surged self-delivery fee,
+//     else the flat platform fee
+//
+// Surge scales only the distance component (the flat base isn't a driving cost)
+// and the chef's max-fee cap still bites, so a bad signal cannot run away.
+// dropLat/dropLng may be 0: the distance component is then unknown and only the
+// base applies, matching CreateOrder's fallback.
+func QuoteOrderDeliveryFeeCtx(chef models.ChefProfile, fulfillment models.FulfillmentType, dropLat, dropLng float64, city, country string, surge float64) float64 {
 	switch fulfillment {
 	case models.FulfillmentPickup:
 		return 0
 	case models.FulfillmentChefDelivery:
-		return ComputeSelfDeliveryFee(chef, dropLat, dropLng)
+		return computeSelfDeliveryBreakdown(chef, dropLat, dropLng, surge).Fee
 	default: // FulfillmentDelivery
-		// A live 3PL provider quotes the leg it will carry.
+		// A live 3PL provider quotes the leg it will carry — their price already
+		// reflects their own conditions, so platform surge must not double-count it.
 		if fee, ok := QuoteCheckoutDeliveryFee(chef, city, country, dropLat, dropLng); ok {
 			return fee
 		}
-		// 3PL dark → the chef self-delivers this order, so charge the SELF-DELIVERY
-		// fee (the recommended amount by distance, capped at the chef's max — #703).
+		// 3PL dark → the chef self-delivers, so charge the self-delivery fee (#703).
 		// This is the "approx max" taken upfront; the chef can bring it DOWN at
-		// accept and the difference is refunded to the customer.
+		// accept and the difference is refunded.
 		if chef.OffersSelfDelivery {
-			return ComputeSelfDeliveryFee(chef, dropLat, dropLng)
+			return computeSelfDeliveryBreakdown(chef, dropLat, dropLng, surge).Fee
 		}
 		return GetPlatformPolicy().BaseDeliveryFee
 	}

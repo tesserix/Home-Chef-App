@@ -1,46 +1,58 @@
 package services
 
-// delivery_surge.go — the surge layer for the self-delivery ESTIMATE (#704 fuel;
-// #705 traffic and #706 weather slot in here later).
+// delivery_surge.go — the live surge layer for the self-delivery fee (#704 fuel,
+// #705 traffic, #706 weather).
 //
-// Surge only affects the "approx max" ESTIMATE shown to the customer, never the
-// amount an order is actually charged (that stays ComputeSelfDeliveryFee, the
-// deterministic charge basis). The estimate is the worst-case ceiling the chef
-// can only bring DOWN at accept, so factoring current conditions into it is
-// exactly right: a high-fuel day quotes a higher max, and the chef still chooses
-// the final fee within it.
+// Each factor is ≥ 1.0 and comes from a provider that may be absent, slow or
+// wrong; every one degrades to a neutral 1.0 rather than blocking, because this
+// sits on the checkout path.
 //
-// Every factor defaults to 1.0 (neutral) when its provider isn't configured, and
-// a provider that can't answer degrades to neutral — the estimate never blocks or
-// errors on an external signal.
+// Whether surge reaches the CHARGED fee (not just the displayed estimate) is
+// gated by DELIVERY_SURGE_CHARGE_ENABLED — see delivery_fee.go.
 
 import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 )
 
 // maxSurgeMultiplier caps any single factor (and the combined multiplier) so a
-// bad signal can't produce a runaway estimate. 2× is already an extreme day.
+// bad signal can't produce a runaway fee. 2× is already an extreme day.
 const maxSurgeMultiplier = 2.0
 
-// fuelSurgeCacheTTL — fuel prices move at most daily, so a day-long cache keeps
-// the (already cheap) fuel lookup near-free and stable within a day.
-const fuelSurgeCacheTTL = 24 * time.Hour
+// surgeBudget bounds the WHOLE resolution. The factors run concurrently, so a
+// checkout waits for the slowest provider rather than their sum, and a blown
+// budget yields neutral instead of stalling a customer at payment.
+const surgeBudget = 2500 * time.Millisecond
 
-// weatherSurgeCacheTTL — weather is a LIVE signal (a storm rolls in within the
-// hour), so it's only briefly cached per location: fresh enough to be honest,
-// still cheap enough not to hit the weather API on every quote for the same area.
-const weatherSurgeCacheTTL = 20 * time.Minute
+const (
+	// Fuel prices move at most daily and are refreshed by cron.
+	fuelSurgeCacheTTL = 24 * time.Hour
+	// Weather is live but regional — a storm doesn't stop at a street corner.
+	weatherSurgeCacheTTL = 20 * time.Minute
+	// Traffic shifts within minutes; cached only enough to dedupe a burst.
+	trafficSurgeCacheTTL = 5 * time.Minute
+	// A failed lookup is cached as neutral so an outage costs one call per cell
+	// per minute instead of one per checkout.
+	surgeFailureCacheTTL = 60 * time.Second
+)
 
-// trafficSurgeCacheTTL — traffic shifts within minutes, so it's cached only very
-// briefly, just to dedupe a burst of quotes for the same area.
-const trafficSurgeCacheTTL = 5 * time.Minute
+// Cache-cell precision. Traffic is genuinely local (~1 km); weather is regional,
+// so a coarser ~11 km cell cuts weather calls sharply with no real loss.
+const (
+	trafficCellFormat = "surge:traffic:%.2f,%.2f>%.2f,%.2f"
+	weatherCellFormat = "surge:weather:%.1f,%.1f"
+)
 
-// FuelIndexProvider returns the current fuel-cost multiplier for a country,
-// relative to the chef's baseline per-km rate (1.0 = baseline). Implemented over
-// a real fuel-price source (#700 provider choice); nil disables fuel surge.
+// trafficProbeOffset builds a short synthetic origin when the real one is
+// unknown — enough for the router to return a congestion-weighted duration for
+// the drop's area. Only a fallback; a known kitchen is always preferred.
+const trafficProbeOffset = 0.01
+
+// FuelIndexProvider returns the fuel-cost multiplier for a country, relative to
+// the baseline the chef's per-km rate assumes (1.0 = baseline).
 type FuelIndexProvider interface {
 	FuelMultiplier(ctx context.Context, country string) (float64, bool)
 }
@@ -50,9 +62,8 @@ var fuelIndexProvider FuelIndexProvider
 // SetFuelIndexProvider installs (or clears, with nil) the fuel-price source.
 func SetFuelIndexProvider(p FuelIndexProvider) { fuelIndexProvider = p }
 
-// WeatherProvider returns the current weather-condition multiplier at a drop
-// location (1.0 = clear; higher = rain/storm slows and complicates the drive).
-// Implemented over a weather API (#700 provider choice); nil disables it.
+// WeatherProvider returns the weather-condition multiplier at a drop location
+// (1.0 = clear; higher = rain/storm slows the drive).
 type WeatherProvider interface {
 	WeatherMultiplier(ctx context.Context, lat, lng float64) (float64, bool)
 }
@@ -62,11 +73,11 @@ var weatherProvider WeatherProvider
 // SetWeatherProvider installs (or clears, with nil) the weather source.
 func SetWeatherProvider(p WeatherProvider) { weatherProvider = p }
 
-// TrafficProvider returns the current traffic-congestion multiplier for a drop
-// location (1.0 = free-flowing; higher = the drive takes longer at peak/gridlock).
-// Implemented over a traffic-aware routing/traffic API (#700); nil disables it.
+// TrafficProvider returns the traffic-congestion multiplier for the ACTUAL leg
+// (1.0 = free-flowing; higher = the drive takes longer at peak). It takes both
+// endpoints because congestion is a property of the route driven, not of a point.
 type TrafficProvider interface {
-	TrafficMultiplier(ctx context.Context, lat, lng float64) (float64, bool)
+	TrafficMultiplier(ctx context.Context, fromLat, fromLng, toLat, toLng float64) (float64, bool)
 }
 
 var trafficProvider TrafficProvider
@@ -74,8 +85,7 @@ var trafficProvider TrafficProvider
 // SetTrafficProvider installs (or clears, with nil) the traffic source.
 func SetTrafficProvider(p TrafficProvider) { trafficProvider = p }
 
-// SurgeFactors is the breakdown of the current surge multipliers. Each is ≥ 1.0.
-// Traffic and Weather stay 1.0 until #705/#706 wire their providers.
+// SurgeFactors is the breakdown of the current surge multipliers, each ≥ 1.0.
 type SurgeFactors struct {
 	Fuel     float64 `json:"fuel"`
 	Traffic  float64 `json:"traffic"`
@@ -83,101 +93,107 @@ type SurgeFactors struct {
 	Combined float64 `json:"combined"`
 }
 
-// CurrentSurge resolves the live surge factors for a country + drop location.
-// Never fails — a missing/erroring provider yields a neutral 1.0. The combined
-// multiplier is the product of the factors, clamped to [1.0, maxSurgeMultiplier].
-func CurrentSurge(ctx context.Context, country string, dropLat, dropLng float64) SurgeFactors {
-	f := SurgeFactors{
-		Fuel:    fuelMultiplier(ctx, country),
-		Traffic: trafficMultiplier(ctx, dropLat, dropLng),
-		Weather: weatherMultiplier(ctx, dropLat, dropLng),
+// NeutralSurge is the no-signal result: every factor 1.0.
+func NeutralSurge() SurgeFactors {
+	return SurgeFactors{Fuel: 1, Traffic: 1, Weather: 1, Combined: 1}
+}
+
+// CurrentSurge resolves the live surge factors for the leg origin→drop. Never
+// fails: a missing, erroring or slow provider yields a neutral 1.0. The combined
+// multiplier is the product, clamped to [1.0, maxSurgeMultiplier].
+//
+// The origin is the chef's kitchen: traffic is measured on the road actually
+// driven, and weather at the drop the driver has to reach.
+func CurrentSurge(ctx context.Context, country string, originLat, originLng, dropLat, dropLng float64) SurgeFactors {
+	ctx, cancel := context.WithTimeout(ctx, surgeBudget)
+	defer cancel()
+
+	f := NeutralSurge()
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	run := func(assign func(float64), resolve func() float64) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v := resolve()
+			mu.Lock()
+			assign(v)
+			mu.Unlock()
+		}()
 	}
+
+	run(func(v float64) { f.Fuel = v }, func() float64 { return fuelMultiplier(ctx, country) })
+	run(func(v float64) { f.Traffic = v }, func() float64 { return trafficMultiplier(ctx, originLat, originLng, dropLat, dropLng) })
+	run(func(v float64) { f.Weather = v }, func() float64 { return weatherMultiplier(ctx, dropLat, dropLng) })
+	wg.Wait()
+
 	f.Combined = clampSurge(f.Fuel * f.Traffic * f.Weather)
 	return f
 }
 
-// fuelMultiplier returns the clamped fuel surge, cached for a day so we hit the
-// provider at most once per country per day. Neutral (1.0) without a provider.
+// cachedSurgeFactor is the shared resolve-with-cache path for every factor: hot
+// cache, then the provider, then a negative entry so a failing provider isn't
+// retried on every checkout. Always returns a usable multiplier.
+func cachedSurgeFactor(ctx context.Context, key string, ttl time.Duration, record func(), fetch func() (float64, bool)) float64 {
+	hot := redisKV{}
+	if v, ok := hot.Get(ctx, key); ok {
+		if m, err := strconv.ParseFloat(v, 64); err == nil {
+			return clampSurge(m)
+		}
+	}
+	m, ok := fetch()
+	if !ok {
+		hot.Set(ctx, key, "1.0", surgeFailureCacheTTL)
+		return 1.0
+	}
+	if record != nil {
+		record()
+	}
+	m = clampSurge(m)
+	hot.Set(ctx, key, strconv.FormatFloat(m, 'f', 4, 64), ttl)
+	return m
+}
+
+// fuelMultiplier returns the clamped fuel surge. The provider reads a
+// cron-refreshed stored price, so this makes no network call.
 func fuelMultiplier(ctx context.Context, country string) float64 {
 	if fuelIndexProvider == nil {
 		return 1.0
 	}
-	key := "surge:fuel:" + country
-	hot := redisKV{}
-	if v, ok := hot.Get(ctx, key); ok {
-		if m, err := strconv.ParseFloat(v, 64); err == nil {
-			return clampSurge(m)
-		}
-	}
-	m, ok := fuelIndexProvider.FuelMultiplier(ctx, country)
-	if !ok {
-		return 1.0
-	}
-	recordFuelProviderCall()
-	m = clampSurge(m)
-	hot.Set(ctx, key, strconv.FormatFloat(m, 'f', 4, 64), fuelSurgeCacheTTL)
-	return m
+	return cachedSurgeFactor(ctx, "surge:fuel:"+country, fuelSurgeCacheTTL, recordFuelProviderCall,
+		func() (float64, bool) { return fuelIndexProvider.FuelMultiplier(ctx, country) })
 }
 
-// weatherMultiplier returns the clamped weather surge at a drop location, briefly
-// cached per ~1 km cell so a burst of quotes for the same area shares one live
-// reading. Neutral (1.0) without a provider or on any error.
+// weatherMultiplier returns the clamped weather surge, cached per regional cell.
 func weatherMultiplier(ctx context.Context, lat, lng float64) float64 {
-	if weatherProvider == nil {
+	if weatherProvider == nil || (lat == 0 && lng == 0) {
 		return 1.0
 	}
-	// Coords missing → no location to check → neutral.
-	if lat == 0 && lng == 0 {
-		return 1.0
-	}
-	key := fmt.Sprintf("surge:weather:%.2f,%.2f", lat, lng) // ~1 km cell
-	hot := redisKV{}
-	if v, ok := hot.Get(ctx, key); ok {
-		if m, err := strconv.ParseFloat(v, 64); err == nil {
-			return clampSurge(m)
-		}
-	}
-	m, ok := weatherProvider.WeatherMultiplier(ctx, lat, lng)
-	if !ok {
-		return 1.0
-	}
-	RecordWeatherProviderCall()
-	m = clampSurge(m)
-	hot.Set(ctx, key, strconv.FormatFloat(m, 'f', 4, 64), weatherSurgeCacheTTL)
-	return m
+	return cachedSurgeFactor(ctx, fmt.Sprintf(weatherCellFormat, lat, lng), weatherSurgeCacheTTL, RecordWeatherProviderCall,
+		func() (float64, bool) { return weatherProvider.WeatherMultiplier(ctx, lat, lng) })
 }
 
-// trafficMultiplier returns the clamped traffic surge at a drop location. Traffic
-// shifts fast (a jam clears in minutes), so it's cached even more briefly than
-// weather — just long enough to share a reading across a burst of quotes for the
-// same area. Neutral (1.0) without a provider or on any error.
-func trafficMultiplier(ctx context.Context, lat, lng float64) float64 {
-	if trafficProvider == nil {
+// trafficMultiplier returns the clamped traffic surge for the origin→drop leg,
+// cached per ~1 km cell PAIR: congestion on a route is shared by nearby orders
+// out of the same kitchen, but not by a different kitchen serving the same drop.
+// A missing origin falls back to probing at the drop alone.
+func trafficMultiplier(ctx context.Context, originLat, originLng, dropLat, dropLng float64) float64 {
+	if trafficProvider == nil || (dropLat == 0 && dropLng == 0) {
 		return 1.0
 	}
-	if lat == 0 && lng == 0 {
-		return 1.0
+	if originLat == 0 && originLng == 0 {
+		originLat, originLng = dropLat-trafficProbeOffset, dropLng-trafficProbeOffset
 	}
-	key := fmt.Sprintf("surge:traffic:%.2f,%.2f", lat, lng) // ~1 km cell
-	hot := redisKV{}
-	if v, ok := hot.Get(ctx, key); ok {
-		if m, err := strconv.ParseFloat(v, 64); err == nil {
-			return clampSurge(m)
-		}
-	}
-	m, ok := trafficProvider.TrafficMultiplier(ctx, lat, lng)
-	if !ok {
-		return 1.0
-	}
-	recordTrafficProviderCall()
-	m = clampSurge(m)
-	hot.Set(ctx, key, strconv.FormatFloat(m, 'f', 4, 64), trafficSurgeCacheTTL)
-	return m
+	key := fmt.Sprintf(trafficCellFormat, originLat, originLng, dropLat, dropLng)
+	return cachedSurgeFactor(ctx, key, trafficSurgeCacheTTL, recordTrafficProviderCall,
+		func() (float64, bool) {
+			return trafficProvider.TrafficMultiplier(ctx, originLat, originLng, dropLat, dropLng)
+		})
 }
 
 // clampSurge keeps a multiplier in [1.0, maxSurgeMultiplier]: surge only ever
-// raises the estimate (a cheaper-than-baseline signal doesn't discount the chef),
-// and never past the cap.
+// raises the fee (a cheap-fuel day doesn't discount the chef), never past the cap.
 func clampSurge(m float64) float64 {
 	if m < 1.0 {
 		return 1.0

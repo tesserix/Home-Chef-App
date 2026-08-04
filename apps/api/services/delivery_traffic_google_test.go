@@ -18,7 +18,7 @@ func TestGoogleTrafficProvider_FreeFlowIsNeutral(t *testing.T) {
 	defer srv.Close()
 
 	p := newGoogleTrafficProviderWithEndpoint("k", srv.URL, srv.Client())
-	m, ok := p.TrafficMultiplier(context.Background(), 12.97, 77.59)
+	m, ok := p.TrafficMultiplier(context.Background(), 12.90, 77.50, 12.97, 77.59)
 	require.True(t, ok)
 	require.InDelta(t, 1.0, m, 1e-9)
 }
@@ -36,7 +36,7 @@ func TestGoogleTrafficProvider_CongestionSurges(t *testing.T) {
 	defer srv.Close()
 
 	p := newGoogleTrafficProviderWithEndpoint("k", srv.URL, srv.Client())
-	m, ok := p.TrafficMultiplier(context.Background(), 12.97, 77.59)
+	m, ok := p.TrafficMultiplier(context.Background(), 12.90, 77.50, 12.97, 77.59)
 	require.True(t, ok)
 	require.InDelta(t, 1.5, m, 1e-9)
 }
@@ -49,7 +49,7 @@ func TestGoogleTrafficProvider_NoStaticFallsThrough(t *testing.T) {
 	defer srv.Close()
 
 	p := newGoogleTrafficProviderWithEndpoint("k", srv.URL, srv.Client())
-	_, ok := p.TrafficMultiplier(context.Background(), 1, 2)
+	_, ok := p.TrafficMultiplier(context.Background(), 1, 2, 3, 4)
 	require.False(t, ok)
 }
 
@@ -60,7 +60,7 @@ func TestGoogleTrafficProvider_HTTPErrorFallsThrough(t *testing.T) {
 	defer srv.Close()
 
 	p := newGoogleTrafficProviderWithEndpoint("k", srv.URL, srv.Client())
-	_, ok := p.TrafficMultiplier(context.Background(), 1, 2)
+	_, ok := p.TrafficMultiplier(context.Background(), 1, 2, 3, 4)
 	require.False(t, ok)
 }
 

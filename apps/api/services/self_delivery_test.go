@@ -28,9 +28,13 @@ func TestComputeSelfDeliveryFee(t *testing.T) {
 			want: 30, tol: 0,
 		},
 		{
-			name: "free radius covers the whole trip",
+			// Inside the chef's free-delivery radius the whole delivery is free —
+			// the flat base fee is waived too. A free zone that still bills the base
+			// is not free, and the app would show a charge on an order advertised
+			// as free delivery.
+			name: "free radius covers the whole trip → nothing to pay",
 			chef: models.ChefProfile{Latitude: chefLat, Longitude: chefLng, SelfDeliveryBaseFee: 20, SelfDeliveryFreeRadiusKm: 50, SelfDeliveryPerKm: 10},
-			want: 20, tol: 0,
+			want: 0, tol: 0,
 		},
 		{
 			name: "distance-based beyond free radius (ROAD distance, #701)",

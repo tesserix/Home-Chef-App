@@ -71,14 +71,12 @@ func InitTrafficProvider() {
 // TrafficMultiplier returns liveDuration / staticDuration (congestion factor), or
 // (0, false) on any failure so the factor degrades to neutral. The surge layer
 // applies the global clamp.
-func (p *googleTrafficProvider) TrafficMultiplier(ctx context.Context, lat, lng float64) (float64, bool) {
-	// Traffic is directional and needs both endpoints; we treat the chef→drop leg
-	// as a short representative hop from just-south-west of the drop to the drop.
-	// In practice the surge layer only has the drop location, so we probe traffic
-	// AT the drop with a tiny synthetic origin offset — enough for the API to
-	// return a congestion-weighted duration for that area.
-	from := waypoint(lat-0.01, lng-0.01)
-	to := waypoint(lat, lng)
+func (p *googleTrafficProvider) TrafficMultiplier(ctx context.Context, fromLat, fromLng, toLat, toLng float64) (float64, bool) {
+	// The real kitchen→drop leg: congestion is a property of the road actually
+	// driven, so probing a synthetic hop near the drop measured a route the
+	// driver never takes.
+	from := waypoint(fromLat, fromLng)
+	to := waypoint(toLat, toLng)
 
 	body, err := json.Marshal(trafficRoutesRequest{
 		Origin:            from,
