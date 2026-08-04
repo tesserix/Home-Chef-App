@@ -301,3 +301,44 @@ func TestMostRecentClosedWeek(t *testing.T) {
 		})
 	}
 }
+
+// A blank delivery state must bill CGST+SGST, not IGST.
+//
+// The comparison was a bare string equality, so an unknown state never matched
+// the chef's and fell through to the inter-state branch. Observed in production:
+// a Karnataka chef with Karnataka orders shown "GST (IGST) (18.0%)". The total
+// is the same 18% either way — it is the HEAD that was misreported, and the head
+// is what appears on the statement.
+func TestComputeOrderEarnings_UnknownDeliveryStateIsIntraState(t *testing.T) {
+	in := EarningsInput{
+		OrderNumber:    "HC-BLANK-STATE",
+		ItemRevenue:    1000,
+		Tax:            50,
+		CommissionRate: 0.06,
+	}
+
+	blank := ComputeOrderEarnings(in, "Karnataka")
+	if blank.IGST != 0 {
+		t.Fatalf("a blank delivery state must not be billed IGST, got %.2f", blank.IGST)
+	}
+	if blank.CGST <= 0 || blank.SGST <= 0 {
+		t.Fatalf("a blank delivery state must split CGST+SGST, got cgst=%.2f sgst=%.2f",
+			blank.CGST, blank.SGST)
+	}
+
+	// Same total either way — only the head changes.
+	in.DeliveryState = "Kerala"
+	inter := ComputeOrderEarnings(in, "Karnataka")
+	if inter.IGST <= 0 {
+		t.Fatalf("a genuinely different state must still be billed IGST, got %.2f", inter.IGST)
+	}
+	if got, want := blank.CGST+blank.SGST, inter.IGST; got != want {
+		t.Fatalf("the GST total must not depend on the head: intra %.2f vs inter %.2f", got, want)
+	}
+
+	// An explicit same-state order is unchanged.
+	in.DeliveryState = "Karnataka"
+	if intra := ComputeOrderEarnings(in, "Karnataka"); intra.IGST != 0 {
+		t.Fatalf("an explicit same-state order must stay intra, got IGST %.2f", intra.IGST)
+	}
+}

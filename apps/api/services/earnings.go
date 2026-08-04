@@ -110,6 +110,25 @@ type EarningsTotals struct {
 //	inter-state (order.state != chef.state): IGST 18% on commission
 //	tds        = RateTDS × gross
 //	netPayout  = gross − commission − tds   (GST is not deducted from chef)
+// isIntraState decides which GST head the commission is billed under.
+//
+// An UNKNOWN delivery state counts as intra-state, not inter. The comparison
+// used to be a bare string equality, so a blank delivery_address_state never
+// matched the chef's and every such order was billed IGST — a Karnataka chef
+// cooking for a Karnataka customer saw "GST (IGST) 18%" on their statement.
+//
+// The total is the same 18% either way, so no money moves; the HEAD is what is
+// wrong, and the head is what gets reported. Intra is the right default for a
+// hyper-local home-tiffin service, where the customer is near the kitchen by
+// construction and inter-state is the rare exception, not the fallback.
+func isIntraState(deliveryState, chefState string) bool {
+	delivery := NormaliseState(deliveryState)
+	if delivery == "" {
+		return true
+	}
+	return delivery == NormaliseState(chefState)
+}
+
 func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 	// The flat commission rate is injected per order; 0/unset (or out of range)
 	// falls back to the flat DefaultCommissionRate.
@@ -135,7 +154,7 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 	// total (the old cgst=sgst=Round2(GST/2*commission) could sum ±1 paise off).
 	var cgst, sgst, igst float64
 	fullGST := Round2(RateGST * commission)
-	if NormaliseState(in.DeliveryState) == NormaliseState(chefState) {
+	if isIntraState(in.DeliveryState, chefState) {
 		cgst = Round2(fullGST / 2)
 		sgst = Round2(fullGST - cgst)
 	} else {
