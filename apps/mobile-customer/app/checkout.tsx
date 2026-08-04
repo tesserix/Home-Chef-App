@@ -70,6 +70,7 @@ import { AddressLabelSelect } from '../components/address/AddressLabelSelect';
 import type { Address } from '../types/customer';
 import { useAlert, useDialog } from '@homechef/mobile-shared/ui';
 import { formatMoney } from '../lib/format';
+import { surgeReasonText } from '../lib/surge';
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the ChefCard/MenuItemCard convention.
@@ -486,6 +487,10 @@ export default function CheckoutScreen() {
         promoCode: appliedPromo?.code,
         // Omit a zero tip rather than posting 0 — the server default is already 0.
         tip: tip > 0 ? tip : undefined,
+        // The surge this checkout was quoted at. Traffic and weather move while the
+        // customer picks an address and pays; without this the server would re-read
+        // them and could charge a delivery fee the screen never displayed.
+        surgePin: quote?.surgePin || undefined,
       });
 
       const orderId = orderResult.data.id;
@@ -619,6 +624,8 @@ export default function CheckoutScreen() {
   // doesn't retain narrowing of an object PROPERTY like `selfDeliveryBreakdown`
   // across a closure boundary, even though `quote` itself is const.
   const selfDeliveryBreakdown = quote?.selfDeliveryBreakdown;
+  // Why delivery costs more today, in words. null when conditions are normal.
+  const surgeReason = surgeReasonText(quote?.surge);
 
   async function applyPromo() {
     const code = promoInput.trim();
@@ -1353,7 +1360,11 @@ export default function CheckoutScreen() {
                         className="text-xs text-charcoal-soft"
                         style={{ fontVariant: ['tabular-nums'] }}
                       >
-                        ₹{selfDeliveryBreakdown.baseFee.toFixed(2)}
+                        {/* Inside the free radius the base fee is waived too, so
+                            showing its raw value would contradict the "Free" total. */}
+                        {selfDeliveryBreakdown.withinFreeZone
+                          ? 'Waived'
+                          : `₹${selfDeliveryBreakdown.baseFee.toFixed(2)}`}
                       </Text>
                     </View>
                     {selfDeliveryBreakdown.distanceKnown &&
@@ -1372,16 +1383,16 @@ export default function CheckoutScreen() {
                         </Text>
                       </View>
                     ) : null}
-                    {selfDeliveryBreakdown.surgeMultiplier > 1 &&
-                    selfDeliveryBreakdown.distanceComponent > 0 ? (
+                    {/* Name the actual conditions rather than a bare multiplier —
+                        "×1.28 surge" explains nothing to a hungry customer. */}
+                    {surgeReason && selfDeliveryBreakdown.distanceComponent > 0 ? (
                       <Text className="text-xs text-charcoal-soft leading-4">
-                        Includes ×{selfDeliveryBreakdown.surgeMultiplier.toFixed(2)} surge
-                        (fuel/peak conditions)
+                        {surgeReason}
                       </Text>
                     ) : null}
                     {selfDeliveryBreakdown.withinFreeZone ? (
                       <Text className="text-xs text-success leading-4">
-                        Within the chef's free-delivery radius
+                        Within the chef's free-delivery radius — no delivery charge
                       </Text>
                     ) : null}
                     {selfDeliveryBreakdown.capped ? (

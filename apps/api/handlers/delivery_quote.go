@@ -89,11 +89,20 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		country = "IN"
 	}
 
+	// Live conditions, resolved ONCE per quote: the headline fee, the itemised
+	// breakdown and the pin below must all come from the same reading, or the
+	// customer sees two different numbers for the same order.
+	surge := services.CurrentSurge(c.Request.Context(), country, chef.Latitude, chef.Longitude, req.Latitude, req.Longitude)
+	chargeSurge := 1.0
+	if services.SurgeChargeEnabled() {
+		chargeSurge = surge.Combined
+	}
+
 	// A customer's "delivery" request is always created as plain delivery (the
 	// chef picks the carrier later at Mark Ready), so the fee it will be charged
 	// is the delivery-mode fee — NOT chef_delivery. Quoting chef_delivery here
 	// would show a number the order never uses.
-	deliveryFee := services.QuoteOrderDeliveryFee(chef, models.FulfillmentDelivery, req.Latitude, req.Longitude, req.City, country)
+	deliveryFee := services.QuoteOrderDeliveryFeeCtx(chef, models.FulfillmentDelivery, req.Latitude, req.Longitude, req.City, country, chargeSurge)
 	// Pickup is always free — this zero is the saving the app advertises.
 	const pickupFee = 0.0
 
@@ -173,6 +182,13 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		"distanceKm":  models.RoundAmount(reach.DistanceKm),
 		"maxRadiusKm": reach.MaxRadiusKm,
 		"rangeKnown":  reach.Known,
+		// The conditions behind the fee, so the app can say WHY delivery costs more
+		// today rather than showing an unexplained number.
+		"surge": surge,
+		// surgePin lets CreateOrder charge the multiplier quoted here instead of
+		// re-reading conditions that may have moved since. Empty when there is no
+		// surge to pin; an order without one is priced live.
+		"surgePin": services.SignSurgePin(chef.ID, req.Latitude, req.Longitude, chargeSurge),
 	}
 
 	// Credit preview. The checkout screen renders the wallet/loyalty card BEFORE an
@@ -211,10 +227,9 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 	// chef can only bring it DOWN at accept (#703), never above it. Only computed
 	// when the chef offers self-delivery, so plain-delivery chefs are unaffected.
 	if chef.OffersSelfDelivery {
-		// Estimate (not charge basis): folds current surge — fuel now (#704),
-		// traffic/weather later — into the distance component, still capped at the
-		// chef's max. Degrades to neutral when no surge signal is configured.
-		b := services.EstimateSelfDeliveryFeeBreakdown(c.Request.Context(), chef, req.Latitude, req.Longitude, country)
+		// Built from the SAME surge reading as deliveryFee above, so the itemised
+		// breakdown always explains the number the order will actually charge.
+		b := services.SelfDeliveryBreakdownAt(chef, req.Latitude, req.Longitude, surge, chargeSurge)
 		resp["selfDeliveryFee"] = models.RoundAmount(b.Fee)
 		resp["selfDeliveryBreakdown"] = b
 	}

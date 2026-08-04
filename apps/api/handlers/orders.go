@@ -97,6 +97,10 @@ type CreateOrderRequest struct {
 	// FulfillmentType is "delivery" (default, 3PL), "pickup" (customer collects),
 	// or "chef_delivery" (reserved for Phase 2). Empty defaults to delivery.
 	FulfillmentType string `json:"fulfillmentType"`
+	// SurgePin is the signed multiplier from the checkout quote, replayed here so
+	// the order charges the conditions the customer saw. Optional: older app builds
+	// omit it and are priced on current conditions instead.
+	SurgePin string `json:"surgePin"`
 }
 
 type CreateOrderItem struct {
@@ -497,7 +501,13 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// number charged here — they cannot drift (services/delivery_fee.go). Pickup is
 	// 0, chef_delivery is the self-delivery fee, delivery is a 3PL quote falling
 	// back to the flat policy fee.
-	deliveryFee = services.QuoteOrderDeliveryFee(chef, fulfillment, deliveryAddr.Latitude, deliveryAddr.Longitude, deliveryAddr.City, deliveryCountry)
+	//
+	// The surge is the one the quote PINNED, not a fresh reading: conditions move
+	// between the checkout screen and this call, and re-resolving them here would
+	// bill a multiplier the customer never saw.
+	chargeSurge := services.ResolveChargeSurge(c.Request.Context(), req.SurgePin, chef,
+		deliveryAddr.Latitude, deliveryAddr.Longitude, deliveryCountry)
+	deliveryFee = services.QuoteOrderDeliveryFeeCtx(chef, fulfillment, deliveryAddr.Latitude, deliveryAddr.Longitude, deliveryAddr.City, deliveryCountry, chargeSurge)
 
 	taxRule := services.ResolveTaxRate(deliveryCountry, deliveryAddr.State)
 	// One pricing function for the whole platform (models/pricing.go). It rounds

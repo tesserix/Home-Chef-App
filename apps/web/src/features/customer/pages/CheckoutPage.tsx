@@ -26,6 +26,7 @@ import { resolveCssVarColor } from "@/shared/utils/css-color";
 import { Button } from "@/shared/components/ui";
 import type { Order, Address } from "@/shared/types";
 import { useDeliveryQuote, type CreditIntent } from "../hooks/useDeliveryQuote";
+import { surgeReasonText } from "../lib/surge";
 import {
   useFulfillmentTimes,
   groupFulfillmentTimes,
@@ -283,6 +284,9 @@ export default function CheckoutPage() {
 
   // Pickup is always free — the customer carries it. Delivery is the quoted fee.
   const deliveryFee = isPickup ? 0 : (quote?.deliveryFee ?? 0);
+  const selfDeliveryBreakdown = quote?.selfDeliveryBreakdown;
+  // Why delivery costs more today, in words. null when conditions are normal.
+  const surgeReason = surgeReasonText(quote?.surge);
   // What switching to pickup would save. Only real when delivery actually costs
   // something; 0 means show no incentive rather than a fake one.
   const pickupSaving = quote?.pickupSaving ?? 0;
@@ -445,6 +449,10 @@ export default function CheckoutPage() {
         requestedFulfillmentAt: requestedTime?.at,
         // Applied promo (#39) — server re-validates + recomputes the discount.
         promoCode: cart.promoCode || undefined,
+        // The surge this checkout was quoted at. Traffic and weather move while the
+        // customer picks an address and pays; without this the server would re-read
+        // them and could charge a delivery fee this page never displayed.
+        surgePin: quote?.surgePin || undefined,
       });
 
       // Step 2: Ask the backend to prepare a payment. The response shape
@@ -1565,6 +1573,17 @@ export default function CheckoutPage() {
                     </span>
                   )}
                 </div>
+                {/* Why the fee is what it is. The free-zone line explains a ₹0
+                    delivery, and the surge line names the actual conditions —
+                    a bare multiplier explains nothing to a hungry customer. */}
+                {!isPickup && selfDeliveryBreakdown?.withinFreeZone ? (
+                  <p className="text-xs text-herb">
+                    Within the chef's free-delivery radius — no delivery charge.
+                  </p>
+                ) : null}
+                {!isPickup && surgeReason && deliveryFee > 0 ? (
+                  <p className="text-xs text-ink-soft">{surgeReason}</p>
+                ) : null}
                 <div className="flex justify-between text-ink-soft">
                   <span>Platform fee</span>
                   <span>{fp(platformFee, { currency: orderCurrency })}</span>

@@ -343,6 +343,34 @@ type Config struct {
 	// at checkout (Delivery hidden beyond it) and hard at order creation (rejected).
 	// Default 10 km; override with DELIVERY_DEFAULT_MAX_RADIUS_KM.
 	DeliveryDefaultMaxRadiusKm float64
+
+	// DeliverySurgeChargeEnabled makes the live fuel/traffic/weather surge apply to
+	// the CHARGED delivery fee, not just the displayed estimate (#704-706). Off by
+	// default: turning it on reprices every self-delivery order, so it is a
+	// deliberate operator action rather than a side effect of deploying.
+	DeliverySurgeChargeEnabled bool
+
+	// DeliverySurgePinKey signs the quoted-surge pin (delivery_quote_pin.go). It
+	// must be stable across replicas and restarts, or a pin signed by one pod is
+	// rejected by another. Empty disables surge-charging outright: charging a live
+	// multiplier without being able to pin it is exactly the quote/charge drift
+	// this feature must not introduce.
+	DeliverySurgePinKey string
+
+	// DeliveryFuelSourceURL is the page the fuel cron reads the pump price from.
+	// Empty disables the refresh and the fuel factor stays neutral 1.0.
+	DeliveryFuelSourceURL string
+
+	// DeliveryFuelBaselinePerLitre is the ₹/litre the chefs' per-km rates assume.
+	// The fuel multiplier is currentPrice / baseline, so this is what "no surge"
+	// means. Overridable at runtime via the delivery.fuel_baseline_per_litre setting.
+	DeliveryFuelBaselinePerLitre float64
+
+	// SLMInferenceURL / SLMInferenceModel point at the support-platform SLM, used
+	// ONLY by the fuel cron to read a price off a page when the regex finds nothing.
+	// Empty disables that fallback; the model never touches the checkout path.
+	SLMInferenceURL   string
+	SLMInferenceModel string
 }
 
 var AppConfig *Config
@@ -378,6 +406,8 @@ func Load() {
 	distancePricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_DISTANCE_PRICE_PER_CALL_USD", "0.005"), 64)
 	weatherPricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_WEATHER_PRICE_PER_CALL_USD", "0.001"), 64)
 	deliveryMaxRadiusKm, _ := strconv.ParseFloat(getEnv("DELIVERY_DEFAULT_MAX_RADIUS_KM", "10"), 64)
+	surgeChargeEnabled, _ := strconv.ParseBool(getEnv("DELIVERY_SURGE_CHARGE_ENABLED", "false"))
+	fuelBaselinePerLitre, _ := strconv.ParseFloat(getEnv("DELIVERY_FUEL_BASELINE_PER_LITRE", "100"), 64)
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -558,6 +588,12 @@ func Load() {
 		DeliveryDistancePricePerCallUSD: distancePricePerCall,
 		DeliveryWeatherPricePerCallUSD:  weatherPricePerCall,
 		DeliveryDefaultMaxRadiusKm:      deliveryMaxRadiusKm,
+		DeliverySurgeChargeEnabled:      surgeChargeEnabled,
+		DeliverySurgePinKey:             getEnv("DELIVERY_SURGE_PIN_KEY", ""),
+		DeliveryFuelSourceURL:           getEnv("DELIVERY_FUEL_SOURCE_URL", ""),
+		DeliveryFuelBaselinePerLitre:    fuelBaselinePerLitre,
+		SLMInferenceURL:                 getEnv("SLM_INFERENCE_URL", ""),
+		SLMInferenceModel:               getEnv("SLM_INFERENCE_MODEL", "qwen2.5-1.5b-instruct"),
 		OrderPayoutAutoReleaseEnabled:   orderPayoutAutoRelease,
 		CateringDepositEnabled:          cateringDeposit,
 		OrderSagaEnabled:                orderSaga,

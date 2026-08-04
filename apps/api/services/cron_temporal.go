@@ -31,6 +31,8 @@ func cronJobs() []cronJob {
 		{"reconciliation", reconciliationInterval, runReconciliationScan, StartReconciliationCron},
 		{"fssai-reminder", fssaiReminderInterval, runFSSAIReminderScan, StartFSSAIReminderCron},
 		{"availability-resume", availabilityResumeInterval, runAvailabilityResumeScan, StartAvailabilityResumeCron},
+		// #704 — refresh the pump price the delivery fuel surge is computed from.
+		{"fuel-price", fuelRefreshInterval, runFuelPriceRefresh, StartFuelPriceCron},
 		// Schedule-driven auto open/close: flip AcceptingOrders to match the chef's
 		// operating hours for opted-in kitchens (AutoScheduleEnabled).
 		{"kitchen-schedule", kitchenScheduleInterval, runKitchenScheduleScan, StartKitchenScheduleCron},

@@ -36,6 +36,18 @@ export interface SelfDeliveryBreakdown {
   fee: number;
 }
 
+/** Live delivery conditions behind a quote. Each factor is ≥1 (1 = neutral). */
+export interface SurgeFactors {
+  /** Pump-price index vs the baseline the chef's per-km rate assumes. */
+  fuel: number;
+  /** Congestion on the kitchen→drop route (live vs free-flow drive time). */
+  traffic: number;
+  /** Weather at the drop. */
+  weather: number;
+  /** Product of the three, clamped. */
+  combined: number;
+}
+
 export interface DeliveryQuote {
   deliveryFee: number;
   pickupFee: number;
@@ -74,6 +86,14 @@ export interface DeliveryQuote {
    *  from here — the screen does no money arithmetic of its own, which is what
    *  keeps what the customer sees and what they are charged in agreement. */
   credit?: CreditQuote;
+  /** The live conditions behind the fee, so the screen can say WHY delivery costs
+   *  more today instead of showing an unexplained number. Each is ≥1; 1 = neutral. */
+  surge?: SurgeFactors;
+  /** Signed multiplier this quote was priced at. Send it back on CreateOrder so the
+   *  order is charged the conditions the customer saw — traffic and weather move
+   *  between the checkout screen and payment, and re-reading them at order time
+   *  would bill a number that was never shown. Empty when there is no surge. */
+  surgePin?: string;
   /** The gateway that will actually take this payment, as RESOLVED by the server
    *  (`SelectCheckoutGateway`) — not the chef's stored column, which the selection
    *  may override. The RBI Payment Aggregator disclosure on checkout must name the

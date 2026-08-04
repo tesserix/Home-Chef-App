@@ -85,14 +85,23 @@ func computeSelfDeliveryBreakdown(chef models.ChefProfile, dropLat, dropLng, sur
 		// per-km fee should reflect the driven distance. RoadDistanceKm uses a real
 		// router when configured, else a winding-factor fallback — never blocks.
 		b.DistanceKm = RoadDistanceKm(chef.Latitude, chef.Longitude, dropLat, dropLng)
-		if extra := b.DistanceKm - chef.SelfDeliveryFreeRadiusKm; extra > 0 {
-			b.BillableKm = extra
-			// Surge scales the distance cost — a high-fuel day costs more to drive.
-			b.DistanceComponent = extra * chef.SelfDeliveryPerKm * surge
-			fee += b.DistanceComponent
+		extra := b.DistanceKm - chef.SelfDeliveryFreeRadiusKm
+		// A chef who set no free radius has no free zone, so a zero-distance drop
+		// is not "inside" one — it just has nothing to bill for distance.
+		if extra > 0 || chef.SelfDeliveryFreeRadiusKm <= 0 {
+			if extra > 0 {
+				b.BillableKm = extra
+				// Surge scales the distance cost — a high-fuel day costs more to drive.
+				b.DistanceComponent = extra * chef.SelfDeliveryPerKm * surge
+				fee += b.DistanceComponent
+			}
 		} else {
-			// Drop sits inside the free radius — no distance charge.
+			// Inside the chef's free-delivery radius the delivery is FREE — the flat
+			// base fee is waived too, not just the distance component. A "free zone"
+			// that still bills the base fee is not one, and the app would show a
+			// delivery charge on an order the chef advertised as free.
 			b.WithinFreeZone = true
+			fee = 0
 		}
 	}
 
@@ -113,11 +122,24 @@ func computeSelfDeliveryBreakdown(chef models.ChefProfile, dropLat, dropLng, sur
 // "approx max" shown at checkout — the chef can only bring it down at accept.
 // Never blocks: surge degrades to neutral when no signal is available.
 func EstimateSelfDeliveryFeeBreakdown(ctx context.Context, chef models.ChefProfile, dropLat, dropLng float64, country string) SelfDeliveryFeeBreakdown {
-	surge := CurrentSurge(ctx, country, dropLat, dropLng)
-	b := computeSelfDeliveryBreakdown(chef, dropLat, dropLng, surge.Combined)
-	b.FuelSurge = surge.Fuel
-	b.WeatherSurge = surge.Weather
-	b.TrafficSurge = surge.Traffic
+	surge := CurrentSurge(ctx, country, chef.Latitude, chef.Longitude, dropLat, dropLng)
+	return SelfDeliveryBreakdownAt(chef, dropLat, dropLng, surge, surge.Combined)
+}
+
+// SelfDeliveryBreakdownAt builds the itemised breakdown at an ALREADY-resolved
+// surge. The checkout quote needs both the headline fee and this breakdown, and
+// they must agree; taking the multiplier as an argument means the live signals
+// are resolved once per quote and both numbers come from that one reading.
+//
+// `applied` is the multiplier actually folded into the distance component, which
+// is 1.0 while surge-charging is off; `factors` are the observed conditions,
+// reported either way so the breakdown explains itself.
+func SelfDeliveryBreakdownAt(chef models.ChefProfile, dropLat, dropLng float64, factors SurgeFactors, applied float64) SelfDeliveryFeeBreakdown {
+	b := computeSelfDeliveryBreakdown(chef, dropLat, dropLng, applied)
+	b.FuelSurge = factors.Fuel
+	b.WeatherSurge = factors.Weather
+	b.TrafficSurge = factors.Traffic
+	b.SurgeMultiplier = applied
 	return b
 }
 
