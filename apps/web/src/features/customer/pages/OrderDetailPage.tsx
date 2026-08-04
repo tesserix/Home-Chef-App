@@ -316,6 +316,11 @@ export default function OrderDetailPage() {
 
   const status = STATUS_CONFIG[order.status];
   const StatusIcon = status.icon;
+  // Payment rails, not discounts: they shrink the gateway capture, never the
+  // order's value or the chef's share (D-12).
+  const walletApplied = order.walletApplied ?? 0;
+  const loyaltyApplied = order.loyaltyApplied ?? 0;
+  const creditApplied = walletApplied + loyaltyApplied;
   const isActive = !['delivered', 'cancelled', 'refunded'].includes(order.status);
   // Fulfilment drives every piece of wording below. Orders placed before the
   // field existed have it undefined, which isPickupFulfillment reads as delivery
@@ -592,6 +597,30 @@ export default function OrderDetailPage() {
             <span>Total</span>
             <span>{fp(order.total)}</span>
           </div>
+
+          {/* The rails that paid it. Total is the order's value, not the card
+              charge, so without these a customer cannot reconcile this receipt
+              against their bank statement (D-12). */}
+          {creditApplied > 0.005 && (
+            <div className="mt-3 space-y-2 border-t pt-3 text-sm">
+              {walletApplied > 0.005 && (
+                <div className="flex justify-between text-herb">
+                  <span>Wallet credit</span>
+                  <span>-{fp(walletApplied)}</span>
+                </div>
+              )}
+              {loyaltyApplied > 0.005 && (
+                <div className="flex justify-between text-herb">
+                  <span>Loyalty points</span>
+                  <span>-{fp(loyaltyApplied)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-medium">
+                <span>Charged to your payment method</span>
+                <span>{fp(Math.max(order.total - creditApplied, 0))}</span>
+              </div>
+            </div>
+          )}
 
           <div className="mt-4 flex items-center gap-2 text-sm text-ink-muted">
             <CheckCircle className="h-4 w-4 text-herb"  aria-hidden="true" />

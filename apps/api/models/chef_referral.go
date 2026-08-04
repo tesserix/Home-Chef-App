@@ -98,6 +98,12 @@ const (
 	// delivered_at, so no later statement would ever pick it up; this credit is
 	// what makes excluding a transient hold state safe rather than a silent loss.
 	ChefBonusStatementCatchup ChefBonusKind = "statement_catchup"
+	// ChefBonusStatementAdjust — an order billed on a frozen statement for LESS than
+	// it is now worth (D-15: a tip written after the week closed). Distinct from
+	// ChefBonusStatementCatchup, which settles an order no statement billed at all;
+	// this one pays only the DIFFERENCE between the order's current net payout and
+	// what was already credited for it.
+	ChefBonusStatementAdjust ChefBonusKind = "statement_adjust"
 )
 
 // ChefBonus is a rupee credit owed to a chef, added onto their next weekly

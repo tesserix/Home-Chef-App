@@ -12,10 +12,17 @@ import {
   Shield,
   Star,
   Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/shared/utils/cn';
+import {
+  VENDOR_COST_POINTS,
+  VENDOR_CTA_BLURB,
+  VENDOR_CTA_LABEL,
+  VENDOR_PORTAL_URL,
+} from '@/shared/config/partner-sites';
 import { apiClient } from '@/shared/services/api-client';
 import { useFavoritesStore } from '@/app/store/favorites-store';
 import { useAuth } from '@/app/providers/AuthProvider';
@@ -477,23 +484,46 @@ export default function HomePage() {
             <Card variant="ghost" padding="none" className="overflow-hidden bg-ink rounded-3xl">
               <div className="flex flex-col md:flex-row">
                 <div className="flex-1 p-8 md:p-12">
-                  <Badge variant="brand" className="mb-4">Join Our Community</Badge>
+                  <Badge variant="brand" className="mb-4">For home chefs</Badge>
                   <h2 className="font-display text-3xl font-semibold tabular-nums text-paper">
-                    Love Cooking? Share Your Talent
+                    Your kitchen is already open.
+                    <br />
+                    Start taking orders from it.
                   </h2>
-                  <p className="mt-4 text-ink-muted max-w-lg">
-                    Turn your passion into income. Join our community of home chefs
-                    and start earning by sharing your delicious homemade food.
+                  <p className="mt-4 max-w-lg text-ink-muted">
+                    {VENDOR_CTA_BLURB} No storefront, no staff, no stock to buy —
+                    cook what you already cook, for people a few streets away.
                   </p>
-                  {/* Both CTAs used to point at /become-chef and
-                      /chef-resources — neither is a route in this app, so the
-                      catch-all bounced people back to this same page. Chef
-                      signup lives on the vendor portal; there is no separate
-                      resources page to send them to. */}
-                  <div className="mt-8 flex flex-wrap gap-4">
+
+                  {/* The costs, up front. A chef's first question is what this
+                      will run them, and burying it is how you lose the good ones. */}
+                  <dl className="mt-8 grid gap-5 sm:grid-cols-3">
+                    {VENDOR_COST_POINTS.map((point) => (
+                      <div key={point.label}>
+                        <dt className="font-display text-2xl font-semibold tabular-nums text-paper">
+                          {point.figure}
+                        </dt>
+                        <dd className="mt-1 text-sm font-medium text-paper/80">{point.label}</dd>
+                        <dd className="mt-1 text-xs leading-relaxed text-ink-muted">
+                          {point.detail}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+
+                  {/* Chef signup lives on the vendor portal — the old /become-chef
+                      and /chef-resources links were routes this app never had. */}
+                  <div className="mt-8 flex flex-wrap items-center gap-4">
                     <Button asChild variant="primary" size="lg">
-                      <a href="https://vendors.fe3dr.com">Become a Chef</a>
+                      <a href={VENDOR_PORTAL_URL}>
+                        {VENDOR_CTA_LABEL}
+                        <ExternalLink aria-hidden="true" className="ml-2 h-4 w-4" />
+                        <span className="sr-only">(opens the chef portal)</span>
+                      </a>
                     </Button>
+                    <p className="text-xs text-ink-muted">
+                      Takes you to vendors.fe3dr.com — about 10 minutes to set up.
+                    </p>
                   </div>
                 </div>
                 <div className="hidden md:block md:w-2/5 relative aspect-[6/5]">

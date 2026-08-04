@@ -32,13 +32,19 @@ var ErrGoodwillFullRefund = errors.New("platform goodwill applies to partial ref
 // is a plain in-tx credit — no Temporal.
 
 // LineRefundAmount is the refundable amount for one order line: its subtotal
-// plus its proportional share of the order tax (computed against the ORIGINAL
-// order subtotal/tax so concurrent partial refunds can't drift the split). This
-// is the single source of truth shared by chef per-line cancels and issue refunds.
-func LineRefundAmount(lineSubtotal, orderSubtotal, orderTax float64) float64 {
+// plus its proportional share of the order's FOOD GST (computed against the
+// ORIGINAL order subtotal/food tax so concurrent partial refunds can't drift the
+// split). This is the single source of truth shared by chef per-line cancels and
+// issue refunds.
+//
+// `orderFoodTax` must be ChefTaxOf(Tax, TaxFood, TaxService), never Order.Tax:
+// a claim about FOOD may not reclaim the GST on the platform fee or the delivery
+// fee — supplies the customer still received and whose tax the platform has
+// already remitted (D-19, the refund-side twin of the D-09 over-credit).
+func LineRefundAmount(lineSubtotal, orderSubtotal, orderFoodTax float64) float64 {
 	refund := lineSubtotal
 	if orderSubtotal > 0 {
-		refund += orderTax * (lineSubtotal / orderSubtotal)
+		refund += orderFoodTax * (lineSubtotal / orderSubtotal)
 	}
 	return refund
 }
@@ -46,11 +52,12 @@ func LineRefundAmount(lineSubtotal, orderSubtotal, orderTax float64) float64 {
 // ComputeIssueRefund sums the per-line refunds for the affected items, capped at
 // the order's remaining refundable amount (Total − alreadyRefunded). With no
 // affected items it returns 0 — the report then goes to assisted review where an
-// admin sets the amount.
-func ComputeIssueRefund(orderSubtotal, orderTax, orderTotal, alreadyRefunded float64, affectedSubtotals []float64) float64 {
+// admin sets the amount. `orderFoodTax` carries the same contract as
+// LineRefundAmount's.
+func ComputeIssueRefund(orderSubtotal, orderFoodTax, orderTotal, alreadyRefunded float64, affectedSubtotals []float64) float64 {
 	var total float64
 	for _, s := range affectedSubtotals {
-		total += LineRefundAmount(s, orderSubtotal, orderTax)
+		total += LineRefundAmount(s, orderSubtotal, orderFoodTax)
 	}
 	remaining := orderTotal - alreadyRefunded
 	if remaining < 0 {

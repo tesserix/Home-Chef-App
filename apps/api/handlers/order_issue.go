@@ -174,7 +174,11 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 		}
 	}
 
-	requested := services.ComputeIssueRefund(order.Subtotal, order.Tax, order.Total, order.RefundAmount, affectedSubtotals)
+	// D-19: the basis is the FOOD GST alone, never order.Tax. The whole-order figure
+	// would hand back the platform's GST on the fee and on delivery too — and the
+	// auto-refund below settles this number with nobody in the loop.
+	requested := services.ComputeIssueRefund(order.Subtotal, services.ChefTaxOf(order.Tax, order.TaxFood, order.TaxService),
+		order.Total, order.RefundAmount, affectedSubtotals)
 
 	// #618 slice 2: a quality issue on a delivered meal-plan DAY is reported against the
 	// day's per-day fulfilment SHELL order. Link the issue to the day so the admin queue

@@ -31,6 +31,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -95,9 +96,11 @@ func BackfillChefTips() {
 	for i := range rows {
 		r := rows[i]
 		// Conditional so a concurrent run (or a re-drive) cannot double-apply.
+		// chef_tip_at records that this write is the backfill's, not checkout's — the
+		// distinction D-15 needed and could not make.
 		res := db.Model(&models.Order{}).
 			Where("id = ? AND COALESCE(chef_tip, 0) = 0", r.ID).
-			Update("chef_tip", r.Tip)
+			Updates(map[string]any{"chef_tip": r.Tip, "chef_tip_at": time.Now().UTC()})
 		if res.Error != nil {
 			log.Printf("chef-tip-backfill: set chef_tip on order %s failed: %v", r.ID, res.Error)
 			continue

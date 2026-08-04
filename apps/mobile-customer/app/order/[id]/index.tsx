@@ -348,6 +348,11 @@ export default function OrderDetailScreen() {
   const tip = order.tip ?? 0;
   const rounding = order.rounding ?? 0;
   const discount = order.discount ?? 0;
+  // Payment rails, not discounts: they shrink the gateway capture, never the
+  // order's value or the chef's share (D-12).
+  const walletApplied = order.walletApplied ?? 0;
+  const loyaltyApplied = order.loyaltyApplied ?? 0;
+  const creditApplied = walletApplied + loyaltyApplied;
   // Chef pickup address comes from TrackOrder (only populated for pickup orders).
   const pickupAddress = tracking?.chef?.address?.trim();
 
@@ -542,7 +547,9 @@ export default function OrderDetailScreen() {
             <Text style={styles.voidTitle}>
               We&apos;re sorry — this order was cancelled
             </Text>
-            <Text style={styles.voidBody}>{order.cancelReason}.</Text>
+            {/* The API resolves the chef's reason to a customer-facing sentence
+                (D-17), so it is rendered as-is rather than appended to. */}
+            <Text style={styles.voidBody}>{order.cancelReason}</Text>
             {order.refundAmount && order.refundAmount > 0 ? (
               <Text style={styles.voidRefund}>
                 {formatMoney(order.refundAmount)} has been refunded to your original
@@ -1008,6 +1015,37 @@ export default function OrderDetailScreen() {
               ₹{order.totalAmount.toFixed(2)}
             </Text>
           </View>
+
+          {/* The rails that paid it (D-12). Total is the order's value, not the
+              card charge — a customer holding their bank statement next to this
+              receipt could not make the two agree while the credit they spent at
+              checkout appeared nowhere on it. */}
+          {creditApplied > 0.005 ? (
+            <>
+              {walletApplied > 0.005 ? (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Wallet credit</Text>
+                  <Text style={[styles.priceValue, styles.refundValue]}>
+                    −₹{walletApplied.toFixed(2)}
+                  </Text>
+                </View>
+              ) : null}
+              {loyaltyApplied > 0.005 ? (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Loyalty points</Text>
+                  <Text style={[styles.priceValue, styles.refundValue]}>
+                    −₹{loyaltyApplied.toFixed(2)}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={styles.priceRow}>
+                <Text style={styles.priceLabel}>Charged to your payment method</Text>
+                <Text style={styles.priceValue}>
+                  ₹{Math.max(order.totalAmount - creditApplied, 0).toFixed(2)}
+                </Text>
+              </View>
+            </>
+          ) : null}
 
           {/* Refund transparency (#refund) — on a cancelled/refunded order, show
               what came back and what the policy retained so the math reconciles

@@ -47,7 +47,11 @@ export interface Chef {
   longitude?: number;
   deliveryTime?: string;
   minimumOrder?: number;
+  // The LOWEST this kitchen's delivery can cost, not a quote — the real fee is
+  // distance-based and settled at checkout. `deliveryFeeFlat` marks a fee with no
+  // distance component; only a flat 0 may be called free outright (D-01).
   deliveryFee?: number;
+  deliveryFeeFlat?: boolean;
   /** "test" marks a sandbox kitchen. Only accounts on the test-mode allowlist
    *  ever receive one from the API, so the TEST badge renders for nobody else —
    *  but a tester needs to tell it apart from a real kitchen at a glance. */
@@ -209,6 +213,9 @@ export interface Order {
     | 'delivering'
     | 'delivered'
     | 'cancelled'
+    // A chef declining an order is its own terminal status, distinct from a
+    // cancellation — and it was missing here while the API has always sent it.
+    | 'rejected'
     | 'refunded';
   // Payment lifecycle — distinct from `status` (order lifecycle). A paid order
   // can still sit at status='pending' until the chef accepts, so this is the
@@ -275,6 +282,10 @@ export interface Order {
   // refundAmount alone cannot say where the money went.
   walletRefunded?: number;
   loyaltyRefunded?: number;
+  // And the rails that PAID for it. totalAmount is the order's value, not the
+  // card charge: gateway charge = totalAmount − walletApplied − loyaltyApplied.
+  walletApplied?: number;
+  loyaltyApplied?: number;
 }
 
 export interface TrackingResponse {

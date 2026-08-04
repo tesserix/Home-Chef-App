@@ -251,6 +251,9 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	responses := make([]models.ChefProfileResponse, len(chefs))
 	for i, chef := range chefs {
 		responses[i] = chef.ToResponse()
+		// The lowest this kitchen's delivery can cost, so the card states a floor
+		// the checkout quote can only rise from rather than a flat "Free" (D-01).
+		responses[i].DeliveryFee, responses[i].DeliveryFeeFlat = services.DeliveryFeeFrom(chef)
 		// Delivery capability: the chef opted into self-delivery OR a 3PL is live.
 		// Mirrors GetChef so cards and the detail screen agree.
 		responses[i].OffersDelivery = chef.OffersSelfDelivery || tplEnabled
@@ -438,6 +441,8 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 	// as the list so the detail screen and card agree, and both agree with checkout.
 	av := services.ChefAvailabilityOne(&chef, schedules, time.Now())
 	resp.Availability = &av
+	// Same delivery-fee floor the list shows, so card and detail agree (D-01).
+	resp.DeliveryFee, resp.DeliveryFeeFlat = services.DeliveryFeeFrom(chef)
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -1204,7 +1209,9 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, chef.ToResponse())
+	chefResp := chef.ToResponse()
+	chefResp.DeliveryFee, chefResp.DeliveryFeeFlat = services.DeliveryFeeFrom(chef)
+	c.JSON(http.StatusOK, chefResp)
 }
 
 // GetChefOrders returns orders for the chef

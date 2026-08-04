@@ -141,12 +141,7 @@ func (h *ChefAvailabilityHandler) StreamChefAvailabilityWS(c *gin.Context) {
 	// is correct immediately rather than waiting for the next one.
 	var chef models.ChefProfile
 	if err := database.DB.Select("id", "accepting_orders").First(&chef, "id = ?", chefID).Error; err == nil {
-		initial, _ := json.Marshal(map[string]any{
-			"type":            "availability",
-			"chefId":          chefID.String(),
-			"acceptingOrders": chef.AcceptingOrders,
-		})
-		conn.WriteMessage(websocket.TextMessage, initial)
+		conn.WriteMessage(websocket.TextMessage, availabilityFrame(chefID, chef.AcceptingOrders))
 	}
 
 	writeCh := make(chan []byte, 16)
@@ -165,13 +160,8 @@ func (h *ChefAvailabilityHandler) StreamChefAvailabilityWS(c *gin.Context) {
 		if jerr := json.Unmarshal(msg.Data, &ev); jerr != nil || ev.ChefID != chefID {
 			return
 		}
-		payload, _ := json.Marshal(map[string]any{
-			"type":            "availability",
-			"chefId":          ev.ChefID.String(),
-			"acceptingOrders": ev.AcceptingOrders,
-		})
 		select {
-		case writeCh <- payload:
+		case writeCh <- availabilityFrame(ev.ChefID, ev.AcceptingOrders):
 		default:
 		}
 	})
