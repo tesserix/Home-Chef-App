@@ -45,6 +45,7 @@ interface ApiChefProfile {
   prepTime?: string;
   minimumOrder?: number;
   deliveryFee?: number;
+  deliveryFeeFlat?: boolean;
   rating?: number;
   totalReviews?: number;
   isOnline?: boolean;
@@ -117,6 +118,7 @@ export function mapChef(c: ApiChefProfile): Chef {
     deliveryTime: c.prepTime,
     minimumOrder: c.minimumOrder,
     deliveryFee: c.deliveryFee,
+    deliveryFeeFlat: c.deliveryFeeFlat,
     mode: c.mode === 'test' ? 'test' : 'live',
     foodSafetyBadge: Boolean(c.foodSafetyBadge),
     offersPickup: c.offersPickup,

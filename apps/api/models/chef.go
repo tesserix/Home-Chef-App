@@ -343,7 +343,15 @@ type ChefProfileResponse struct {
 	Specialties   []string  `json:"specialties"`
 	PrepTime      string    `json:"prepTime"`
 	MinimumOrder  float64   `json:"minimumOrder"`
-	DeliveryFee   float64   `json:"deliveryFee"`
+	// DeliveryFee is the LOWEST this chef's delivery can cost (the fee at zero
+	// distance), not a quote — the real fee is distance-based and settled at
+	// checkout. Server-computed per response by services.DeliveryFeeFrom; it was
+	// hardcoded to 0, so every kitchen advertised "Free delivery" while the order
+	// charged a real fee (D-01).
+	DeliveryFee float64 `json:"deliveryFee"`
+	// DeliveryFeeFlat marks a fee with no distance component, so DeliveryFee holds
+	// however far away the customer is. Only a flat 0 may be called free outright.
+	DeliveryFeeFlat bool `json:"deliveryFeeFlat"`
 	PriceRange    string    `json:"priceRange"`
 	ServiceRadius float64   `json:"serviceRadius"`
 	OffersPickup  bool      `json:"offersPickup"`
@@ -486,7 +494,8 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		Specialties:               specialties,
 		PrepTime:                  c.PrepTime,
 		MinimumOrder:              c.MinimumOrder,
-		DeliveryFee:               0, // TODO: populate when delivery fee model is added
+		// DeliveryFee/DeliveryFeeFlat are filled by the handler (services.DeliveryFeeFrom
+		// reads platform policy, which models must not import).
 		PriceRange:                priceRangeFromMinOrder(c.MinimumOrder),
 		ServiceRadius:             c.ServiceRadius,
 		OffersPickup:              c.OffersPickup,

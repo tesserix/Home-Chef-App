@@ -47,7 +47,11 @@ export interface Chef {
   longitude?: number;
   deliveryTime?: string;
   minimumOrder?: number;
+  // The LOWEST this kitchen's delivery can cost, not a quote — the real fee is
+  // distance-based and settled at checkout. `deliveryFeeFlat` marks a fee with no
+  // distance component; only a flat 0 may be called free outright (D-01).
   deliveryFee?: number;
+  deliveryFeeFlat?: boolean;
   /** "test" marks a sandbox kitchen. Only accounts on the test-mode allowlist
    *  ever receive one from the API, so the TEST badge renders for nobody else —
    *  but a tester needs to tell it apart from a real kitchen at a glance. */
