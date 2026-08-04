@@ -50,6 +50,21 @@ func StatementCatchupSourceKey(orderID uuid.UUID) string {
 	return statementCatchupKeyPrefix + orderID.String()
 }
 
+// statementAdjustKeyPrefix namespaces the under-billed adjustment source key.
+const statementAdjustKeyPrefix = "stmtadjust:"
+
+// StatementAdjustSourceKey is the natural key of one under-billed settlement
+// adjustment. The settled-to figure is part of the key, so re-running against an
+// unchanged order dedups to the credit already raised, while a genuine further
+// increase mints a new one.
+func StatementAdjustSourceKey(orderID uuid.UUID, settledToPaise int) string {
+	return fmt.Sprintf("%s%s:%d", statementAdjustKeyPrefix, orderID, settledToPaise)
+}
+
+// underbilledEpsilon is the smallest gap worth a settlement line. Below half a
+// rupee the difference is per-row rounding, not money owed.
+const underbilledEpsilon = 0.50
+
 // payableHoldStates are the hold states a chef is genuinely owed on: no hold was
 // ever set (non-gateway order), or the hold has been confirmed/cleared. Kept in
 // lockstep with the predicate in loadStatementOrderRows.
@@ -57,19 +72,29 @@ func payableHoldStates() []string {
 	return []string{"", string(models.PayoutHoldReleaseEligible), string(models.PayoutHoldReleased)}
 }
 
-// stampBilledOrders records which orders a statement settled, inside the caller's
-// transaction so the stamp and the statement commit together. Conditional on
-// billed_statement_id IS NULL so a re-drive can never re-attribute an order that
-// some other statement already settled.
-func stampBilledOrders(tx *gorm.DB, statementID uuid.UUID, orderIDs []uuid.UUID) error {
-	if len(orderIDs) == 0 {
-		return nil
-	}
-	res := tx.Model(&models.Order{}).
-		Where("id IN ? AND billed_statement_id IS NULL", orderIDs).
-		Update("billed_statement_id", statementID)
-	if res.Error != nil {
-		return fmt.Errorf("statement-catchup: stamp billed orders for %s: %w", statementID, res.Error)
+// billedOrder is one order a statement bills, with the net payout it was billed
+// for. The amount is recorded alongside the stamp so a later increase in the
+// order's value is detectable (D-15) rather than silently unpayable.
+type billedOrder struct {
+	ID  uuid.UUID
+	Net float64
+}
+
+// stampBilledOrders records which orders a statement settled and for how much,
+// inside the caller's transaction so the stamps and the statement commit together.
+// Conditional on billed_statement_id IS NULL so a re-drive can never re-attribute
+// an order that some other statement already settled.
+func stampBilledOrders(tx *gorm.DB, statementID uuid.UUID, orders []billedOrder) error {
+	for _, o := range orders {
+		res := tx.Model(&models.Order{}).
+			Where("id = ? AND billed_statement_id IS NULL", o.ID).
+			Updates(map[string]any{
+				"billed_statement_id": statementID,
+				"settled_net_payout":  Round2(o.Net),
+			})
+		if res.Error != nil {
+			return fmt.Errorf("statement-catchup: stamp billed order %s for %s: %w", o.ID, statementID, res.Error)
+		}
 	}
 	return nil
 }
@@ -140,6 +165,10 @@ type catchupRow struct {
 	CommissionRate     float64
 	ChefState          string
 	DeliveryState      string
+	// SettledNetPayout is how much has already been credited for this order.
+	// Selected only by loadUnderbilledOrders; the catch-up path deals in orders
+	// nothing has been credited for yet, and leaves it zero.
+	SettledNetPayout float64
 }
 
 // loadCatchupOrders finds delivered, payable, unsettled orders whose week already
@@ -166,6 +195,99 @@ func loadCatchupOrders(db *gorm.DB, limit int) ([]catchupRow, error) {
 		Limit(limit).
 		Scan(&rows).Error
 	return rows, err
+}
+
+// loadUnderbilledOrders finds SETTLED orders whose current net payout exceeds what
+// was actually credited for them (D-15). The statement that billed them is frozen
+// and each (chef, week) is generated exactly once, so nothing else will ever revisit
+// the difference.
+//
+// settled_net_payout IS NOT NULL is the safety predicate, not an optimisation: an
+// order stamped by BackfillBilledStatementIDs has no recorded figure, so "what is
+// still owed" is unknowable for it and any answer risks paying twice.
+//
+// The tip-catchup exclusion is defence in depth. BackfillChefTips only matches the
+// pre-#964 shape (tip > 0 AND chef_tip = 0), which no order billed since this column
+// existed can have — but it credits the same money on its own key, so the two paths
+// are kept explicitly disjoint rather than by argument.
+func loadUnderbilledOrders(db *gorm.DB, limit int) ([]catchupRow, error) {
+	var rows []catchupRow
+	err := db.Table("orders o").
+		Select(`o.id, o.order_number, o.chef_id, o.billed_statement_id AS statement_id,
+			o.subtotal, o.tax, o.tax_food, o.tax_service, o.chef_tip, o.chef_funded_discount, o.commission_rate,
+			o.settled_net_payout, c.state AS chef_state, o.delivery_address_state AS delivery_state`).
+		Joins("JOIN chef_profiles c ON c.id = o.chef_id").
+		Where("o.status = ?", models.OrderStatusDelivered).
+		Where("o.deleted_at IS NULL").
+		Where("o.billed_statement_id IS NOT NULL").
+		Where("o.settled_net_payout IS NOT NULL").
+		Where("o.refunded_at IS NULL").
+		Where("COALESCE(o.gateway_split_paise, 0) = 0").
+		Where("NOT EXISTS (SELECT 1 FROM chef_bonuses b WHERE b.source_key = ?)",
+			gorm.Expr("? || o.id", chefTipCatchupKeyPrefix)).
+		Limit(limit).
+		Scan(&rows).Error
+	return rows, err
+}
+
+// reconcileUnderbilledOrders pays the difference on orders whose value grew after
+// their statement froze. Safe to run repeatedly: the credit is unique on a source
+// key carrying the settled-to figure, and the order's settled_net_payout is advanced
+// to match, so an unchanged order stops matching on the next pass.
+func reconcileUnderbilledOrders(db *gorm.DB) {
+	rows, err := loadUnderbilledOrders(db, 500)
+	if err != nil {
+		log.Printf("statement-catchup: query under-billed orders failed: %v", err)
+		return
+	}
+	adjusted := 0.0
+	for i := range rows {
+		r := rows[i]
+		net := ComputeOrderEarnings(EarningsInput{
+			ItemRevenue:        r.Subtotal,
+			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
+			ChefTip:            r.ChefTip,
+			ChefFundedDiscount: r.ChefFundedDiscount,
+			CommissionRate:     r.CommissionRate,
+			DeliveryState:      r.DeliveryState,
+		}, r.ChefState).NetPayout
+		delta := Round2(net - r.SettledNetPayout)
+		if delta < underbilledEpsilon {
+			// Never negative: a settlement is not clawed back here. An order whose value
+			// FELL was refunded or adjusted, and those paths have their own machinery.
+			continue
+		}
+		if err := raiseStatementAdjust(db, r, net, delta); err != nil {
+			log.Printf("statement-catchup: adjustment for order %s failed (will retry): %v", r.ID, err)
+			continue
+		}
+		adjusted += delta
+	}
+	if adjusted > 0 {
+		log.Printf("statement-catchup: credited ₹%.2f owed on order(s) billed for less than they are now worth", adjusted)
+	}
+}
+
+// raiseStatementAdjust credits one order's shortfall and advances its settled
+// figure, so the order leaves the candidate set once the credit exists.
+func raiseStatementAdjust(db *gorm.DB, r catchupRow, net, delta float64) error {
+	var chef models.ChefProfile
+	if err := db.Select("id", "user_id").First(&chef, "id = ?", r.ChefID).Error; err != nil {
+		return fmt.Errorf("load chef %s: %w", r.ChefID, err)
+	}
+	if chef.UserID == uuid.Nil {
+		return fmt.Errorf("chef %s has no user", r.ChefID)
+	}
+	reason := fmt.Sprintf("Order %s — value added after its statement closed", r.OrderNumber)
+	if err := raiseChefBonus(db, r.ChefID, chef.UserID, models.ChefBonusStatementAdjust,
+		StatementAdjustSourceKey(r.ID, ToPaise(net)), delta, nil, reason); err != nil {
+		return err
+	}
+	// Advance only from the figure this credit was computed against, so a concurrent
+	// run that already advanced it cannot be walked backwards.
+	return db.Model(&models.Order{}).
+		Where("id = ? AND settled_net_payout = ?", r.ID, r.SettledNetPayout).
+		Update("settled_net_payout", Round2(net)).Error
 }
 
 // reconcileStatementCatchup settles orders whose statement week closed while they
@@ -212,6 +334,10 @@ func reconcileStatementCatchup() {
 	if credited > 0 {
 		log.Printf("statement-catchup: credited ₹%.2f for order(s) held past their statement week", credited)
 	}
+	// The other half of "paid at least once": an order billed for LESS than it is
+	// now worth. Runs after the catch-up so an order settled above leaves with its
+	// settled figure already recorded and does not also read as under-billed.
+	reconcileUnderbilledOrders(db)
 }
 
 // raiseStatementCatchup credits one order's net payout onto the chef's next
@@ -235,9 +361,14 @@ func raiseStatementCatchup(db *gorm.DB, r catchupRow, net float64) error {
 	// Attribute the settlement to the statement whose week it belonged to. The
 	// money rides a LATER statement as a bonus line, but this records that the
 	// order's own period is now settled — and takes it out of the candidate set.
+	// The credited figure is recorded alongside so a later increase in the order's
+	// value is still detectable (D-15).
 	return db.Model(&models.Order{}).
 		Where("id = ? AND billed_statement_id IS NULL", r.ID).
-		Update("billed_statement_id", r.StatementID).Error
+		Updates(map[string]any{
+			"billed_statement_id": r.StatementID,
+			"settled_net_payout":  Round2(net),
+		}).Error
 }
 
 // statementCatchupInterval is deliberately slower than the money-critical sweeps:

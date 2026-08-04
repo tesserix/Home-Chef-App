@@ -318,6 +318,25 @@ type Order struct {
 	// fact is what lets an order be paid at most once across both paths.
 	BilledStatementID *uuid.UUID `gorm:"type:uuid;index" json:"-"`
 
+	// SettledNetPayout is how much of this order's net payout the chef has actually
+	// been credited, across the statement that billed it and any later catch-up.
+	//
+	// BilledStatementID answers "has this order paid the chef?" but not "for how
+	// much" — so an order billed for LESS than it is now worth was indistinguishable
+	// from one billed in full, and the catch-up (which selects on an unset stamp)
+	// could never see it. That is D-15: a tip landed on an order after its week had
+	// frozen and nothing would ever pay it.
+	//
+	// NULL means "not recorded" — orders stamped by BackfillBilledStatementIDs, whose
+	// statements predate this column. The under-billed sweep skips them rather than
+	// guessing, because a wrong guess pays twice.
+	SettledNetPayout *float64 `gorm:"" json:"-"`
+
+	// ChefTipAt is when the chef's tip was written. Without it, a tip that appears on
+	// an already-billed order cannot be told apart from one the statement builder
+	// dropped — the two have opposite fixes (D-15).
+	ChefTipAt *time.Time `gorm:"" json:"-"`
+
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

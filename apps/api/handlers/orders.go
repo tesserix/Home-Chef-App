@@ -643,6 +643,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		// sends a single `tip` and offers no rider split at checkout. If a split is
 		// ever introduced, take it from the request rather than re-dividing here.
 		ChefTip:                   tip,
+		ChefTipAt:                 tipWrittenAt(tip),
 		Discount:                  discount,
 		ChefFundedDiscount:        chefFundedDiscount,
 		Total:                     total,

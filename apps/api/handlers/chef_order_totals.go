@@ -1,9 +1,23 @@
 package handlers
 
 import (
+	"time"
+
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 )
+
+// tipWrittenAt stamps when a chef tip was recorded, and nothing when there is no
+// tip. A tip appearing on an order after its statement froze is a different defect
+// from one the statement builder dropped, and without this the two are
+// indistinguishable after the fact (D-15).
+func tipWrittenAt(tip float64) *time.Time {
+	if tip <= 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	return &now
+}
 
 // chef_order_totals.go — pure money-math helpers for order cancellation and
 // partial refunds. Extracted from the cancel handlers so the recompute logic
