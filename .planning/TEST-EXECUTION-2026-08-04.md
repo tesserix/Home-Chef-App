@@ -85,7 +85,9 @@ The UI's Cashfree sandbox flow strands payments (gotcha 3). The reliable loop is
 | | Status |
 |---|---|
 | 🟥 **D-01** "Free delivery" advertised, ₹39.12 charged | open |
-| 🟥 **D-10** retry offered on an already-cancelled order | open |
+| 🟥 **D-10** retry offered on an already-cancelled order | open, **reproduced 4 Aug** on `HC26080405111133` (cancelled, ₹393.05 already refunded) |
+| 🟥 **D-17** raw enum shown to the customer: "this order was cancelled out_of_ingredient" | open, found 4 Aug |
+| ✅ **D-18** post-delivery tipping dead for **every** chef (Razorpay Route vs Cashfree) | fixed, PR #991 |
 | ✅ **D-04** "Minimum order is $199.00" on an INR marketplace | fixed #990, **verified live** |
 | ✅ **D-16** NOT_ATTEMPTED read as a live payment (regression in #989) | fixed #990, deployed |
 | 🟨 **D-12** order detail shows Total ₹393.05 while the customer was charged ₹391.45 — the loyalty credit shown at checkout is missing from the receipt | open, found 4 Aug |
@@ -243,6 +245,61 @@ Measured on the simulators against prod, both apps signed in, per 45s:
 `#892`, `#909`, `#910` and `#928` were four previous attempts, all tuning the
 backoff curve. None could have worked: the socket failed at TLS before any of
 that logic ran. The close code named the cause the whole time.
+
+### 🟥 D-18 · new · post-delivery tipping cannot work for any chef on the platform
+
+TIP-01, driven end to end for the first time (previous runs recorded it blocked
+on a tap that would not land — it turns out the screen was reachable and the
+feature behind it is broken).
+
+Delivered + confirmed order `HC26080405191298`, ₹50 chef tip → **"Could not start
+tip — This chef can't receive tips right now"**. No `tips` row is created.
+
+**Root cause: the tip flow is hardwired to Razorpay Route.** `handlers/tips.go`:
+
+```go
+rz := services.GetRazorpayFor(order.Mode)          // :88  requires a Razorpay client
+acct := order.Chef.RazorpayAccountID               // :98  requires a Route account
+if acct == "" { 409 "This chef can't receive tips right now" }
+```
+
+The rider leg (`:113`) has the same dependency on
+`DeliveryPartner.RazorpayAccountID`.
+
+**Blast radius is every chef.** In production:
+
+| | |
+|---|---|
+| Chefs with `razorpay_account_id` | **0** |
+| Chefs with `cashfree_vendor_id` | 1 (of 2 profiles) |
+
+The platform moved payouts to Cashfree; the tip path was never moved with it. So
+the entire post-delivery tip surface — a full screen promising *"100% goes
+straight to your chef and rider, with no platform cut"* — is unreachable, and
+returns a 409 to anyone who tries.
+
+**This does not contradict the 3 Aug TIP-01 pass.** That verified the
+**checkout-time** tip, which is just `orders.chef_tip` settled through the normal
+payout and needs no per-tip transfer. It is the **post-delivery** tip, which
+moves money on its own, that is dead. INV-6 (tip in gross, never commissioned)
+therefore still holds for the path that works and cannot be exercised at all on
+the path that does not.
+
+### 🟥 D-17 · new · the cancellation reason is shown to the customer as a raw enum
+
+Order `HC26080405111133`, customer order detail:
+
+> We're sorry — this order was cancelled **out_of_ingredient**. ₹393.05 has been
+> refunded to your original payment method.
+
+The chef picked "I'm out of an ingredient" from a labelled list; the customer is
+shown the database value. The vendor app already has the human string — it is the
+label on the button the chef tapped — so this is a missing mapping on the customer
+side, not missing copy.
+
+Same screen also reproduced **D-10**: the app offered **"Retry payment"** for this
+order, which is `cancelled` / `refunded` with ₹393.05 already returned. The retry
+cannot succeed.
 
 ### 🟥 D-15 · new · ₹25 on a frozen statement that can never reach the chef
 
@@ -504,6 +561,9 @@ on. The wallet leg is shown on other orders; loyalty is not.
 | **POU-04** | 🟩 **pass** | entitlement matches the snapshot | `chef_bonuses`: `cancellation_retained` **₹192**, `pending`, `source_key=cancelkept:38dd64e1…` — equals `vendor_kept_paise` exactly, paid via the statement, not by relaxing a payout-hold guard |
 | **CAN-03** | 🟩 **pass** | full customer refund; penalty on `chef_penalties`, not the payout ledger | `HC26080405111133`: chef cancelled an **accepted** order (`out_of_ingredient`). `refund_amount` **393.05 = the whole total including the platform fee**, `refund_initiated_by=chef`, gateway refund id present, no payout hold. `chef_penalties`: **`cancel_late` ₹23.58 pending** — "Cancelled 0.0h before service (less than the 4h notice window)". ₹23.58 = 6% × 393.05, the platform's lost commission |
 | **CAN-03 contrast** | 🟩 **pass** | pre-accept reject ≠ post-accept cancel | The 3 Aug run proved a pre-accept **reject** raises **no** penalty. This is the post-accept **cancel** and it does. The distinction is real and correctly implemented: declining a new order is not abandoning one you took |
+| **REV-01** | 🟩 **pass** | review stored, rolled into the chef rating | `HC26080405191298`: all six dimensions (overall/food/delivery/value/packaging/hygiene) stored as 5, `is_approved=t`, `is_hidden=f`, `mode=live`. Chef rating rolled **4.8 (5 reviews) → 4.8333 (6)** — exactly (24+5)/6, so the rollup is a real average, not a cached approximation |
+| **POU-01/03, CHF-03/04** (re-run) | 🟩 **pass** | hold lifecycle | preparing → ready (photo required, self-delivery chosen) → picked_up → delivered ⇒ `awaiting_customer_confirmation`; customer confirm ⇒ **`release_eligible`** + `customer_confirmed_at`. `tax_delivery_by_platform=f` held correctly through the chef's self-delivery choice |
+| **WAL-02** (re-run) | 🟩 **pass** | capture == total − wallet | Gateway asked **₹392.05** = 393.05 − wallet 1.00, exactly |
 | CAN-04/06 | ⬜ not run | | re-run of the 3 Aug passes, post-release |
 | REF-01 | 🟩 pass | refund == captured | Cashfree partial refund **₹1,063.42** = the card leg exactly |
 | REF-04 | 🟩 pass | split sums exactly (INV-2) | card 1063.42 + wallet 237.66 = **1301.08** ✓ |
@@ -514,7 +574,7 @@ on. The wallet leg is shown on other orders; loyalty is not.
 | LOY-01 | 🟩 pass | 0.1 × subtotal | **+32 points** at delivery (0.1 × 320) |
 | LOY-05 | 🟩 pass | loyalty returned as wallet rupees | Confirmed in `wallet_txns`: `refund-loyalty:cancel:…` credited as wallet |
 | LOY-02/03/04/06 | ⬜ not run | | |
-| TIP-01 | 🟨 blocked | tip in gross, no commission | Could not reach the tip screen — three CTAs overlap at the same y with adjacent x, tap did not navigate |
+| **TIP-01** | 🟥 **fail** | tip in gross, no commission | Screen reached and driven on `HC26080405191298`. ₹50 chef tip → **409 "This chef can't receive tips right now"**, no `tips` row. **D-18** — the flow needs a Razorpay Route account and **no chef on the platform has one** |
 | POU-01 | 🟩 pass | hold created | Stamped at **delivery**, not capture — matches the July run's own correction to this criterion |
 | POU-02 | 🟥 fail | commission/GST/TDS per §3 | **D-09** and **D-03** |
 | POU-03 | 🟩 pass | released after confirm | Confirm ⇒ **release_eligible**, `customer_confirmed_at` stamped |

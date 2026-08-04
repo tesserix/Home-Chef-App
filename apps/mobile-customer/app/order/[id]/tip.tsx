@@ -40,6 +40,23 @@ export default function TipScreen() {
       { orderId: id, chefAmount, riderAmount },
       {
         onSuccess: (data) => {
+          // A tip rides the same gateway as the order it thanks, so the server
+          // may hand back either shape. Cashfree gives a payment session and no
+          // key id; Razorpay the reverse.
+          if (data.cashfreePaymentSessionId) {
+            router.replace({
+              pathname: '/payment/cashfree',
+              params: {
+                kind: 'tip',
+                tipId: data.tipId,
+                orderId: id,
+                paymentSessionId: data.cashfreePaymentSessionId,
+                cashfreeOrderId: data.cashfreeOrderId ?? '',
+                env: data.mode ?? '',
+              },
+            });
+            return;
+          }
           router.replace({
             pathname: '/payment/checkout',
             params: {
