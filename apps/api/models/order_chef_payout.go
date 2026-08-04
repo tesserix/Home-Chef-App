@@ -57,3 +57,32 @@ const (
 )
 
 func (OrderChefPayout) TableName() string { return "order_chef_payouts" }
+
+// ChefPayoutResponse is the ONE serialised payout shape. The vendor app and the
+// tesserix-home admin view both render this — neither recomputes, so the figure
+// a chef sees and the figure staff verify a payout against cannot diverge.
+type ChefPayoutResponse struct {
+	FoodAmount float64 `json:"foodAmount"`
+	// DeliveryFee is 0 unless the chef carried the leg and it was charged; the UI
+	// omits the line entirely rather than showing ₹0.
+	DeliveryFee float64 `json:"deliveryFee"`
+	ChefTip     float64 `json:"chefTip"`
+	Penalty     float64 `json:"penalty"`
+	// NetPayout is the exact sum of the lines above, to the paise.
+	NetPayout  float64   `json:"netPayout"`
+	Currency   string    `json:"currency"`
+	Status     string    `json:"status"`
+	ComputedAt time.Time `json:"computedAt"`
+}
+
+// ToResponse serialises a stored payout for both surfaces.
+func (p *OrderChefPayout) ToResponse() *ChefPayoutResponse {
+	if p == nil {
+		return nil
+	}
+	return &ChefPayoutResponse{
+		FoodAmount: p.FoodAmount, DeliveryFee: p.DeliveryFee, ChefTip: p.ChefTip,
+		Penalty: p.Penalty, NetPayout: p.NetPayout,
+		Currency: p.Currency, Status: p.Status, ComputedAt: p.ComputedAt,
+	}
+}

@@ -1247,6 +1247,8 @@ export default function OrderDetailScreen() {
   }
 
   const { timing, pricing } = order;
+  // Served by the API from the persisted payout row; undefined until delivered.
+  const payout = order.chefPayout;
   const isPickup = order.fulfillmentType === 'pickup';
   const isChefDelivery = order.fulfillmentType === 'chef_delivery';
 
@@ -1675,36 +1677,41 @@ export default function OrderDetailScreen() {
           />
         </View>
 
-        {/* PRICING section */}
-        <SectionLabel>PRICING</SectionLabel>
+        {/* YOUR EARNINGS (D-21) — what the CHEF is paid, never the customer's
+            numbers. The platform fee is the product owner's cut and the GST is
+            the platform's to account for (CGST s.9(5)), so neither belongs on a
+            kitchen's screen: a chef reconciling a payout against a ₹351.97 total
+            on an order they earn ₹320 for can never make it match.
+
+            Every figure is served by the API from one persisted row that the
+            tesserix-home admin view reads too. Nothing here is recomputed. */}
+        <SectionLabel>YOUR EARNINGS</SectionLabel>
         <View style={styles.card}>
-          <TotalRow label="Subtotal" value={pricing.subtotal} />
-          {/* Delivery fee + Total track the chef's own figure (#703) — live while
-              they type at accept, settled afterwards — so the block never states
-              a total the customer isn't actually left paying. */}
-          {chargedDeliveryFee > 0 ? (
-            <TotalRow label="Delivery fee" value={effectiveDeliveryFee} />
+          <TotalRow label="Food" value={payout ? payout.foodAmount : pricing.subtotal} />
+          {/* Delivery shows ONLY when the chef carried the leg and it was charged
+              — a free-zone or platform-carried order omits the line rather than
+              stating a ₹0 the chef has to interpret. */}
+          {payout && payout.deliveryFee > 0 ? (
+            <TotalRow label="Delivery you charged" value={payout.deliveryFee} />
           ) : null}
-          {pricing.platformFee > 0 ? (
-            <TotalRow label="Platform fee" value={pricing.platformFee} />
+          {payout && payout.chefTip > 0 ? (
+            <TotalRow label="Tip" value={payout.chefTip} />
           ) : null}
-          {/* Split by the API — the chef sees the rows the customer's receipt
-              carries, not a single "Tax" the two documents disagree on. */}
-          {pricing.taxLines.map((t) => (
-            <TotalRow key={t.code} label={t.label} value={t.amount} />
-          ))}
-          {pricing.chefTip > 0 ? (
-            <TotalRow label="Tip" value={pricing.chefTip} />
+          {payout && payout.penalty > 0 ? (
+            <TotalRow label="Penalty" value={-payout.penalty} />
           ) : null}
-          {pricing.rounding !== 0 ? (
-            <TotalRow label="Rounding" value={pricing.rounding} />
-          ) : null}
-          <TotalRow
-            label="Total"
-            value={effectiveTotal}
-            emphasis
-            hasBorderBottom={false}
-          />
+          {payout ? (
+            <TotalRow
+              label="You'll be paid"
+              value={payout.netPayout}
+              emphasis
+              hasBorderBottom={false}
+            />
+          ) : (
+            <Text style={styles.deliveryHint}>
+              Your final earnings are confirmed once this order is delivered.
+            </Text>
+          )}
         </View>
         {deliveryFeeRefund > 0 ? (
           <Text style={styles.deliveryHint}>

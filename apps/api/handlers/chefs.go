@@ -2086,6 +2086,10 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 
 	// Chef view: area-only address, no phone, first name only (privacy).
 	resp := order.ToChefResponse()
+	// What the chef is paid for it (D-21). Absent until delivered.
+	if p, err := services.GetChefPayout(database.DB, order.ID); err == nil {
+		resp.ChefPayout = p.ToResponse()
+	}
 
 	// Enrich items with isVeg from the live MenuItem and surfacespecialInstructions
 	for i, item := range order.Items {
