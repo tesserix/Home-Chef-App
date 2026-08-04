@@ -758,12 +758,56 @@ func chefCountedOrdersSQL(alias string) string {
 		alias, models.PaymentCompleted, models.PaymentRefunded, models.ChefModeLive)
 }
 
-// chefCountedRevenueExpr is the matching money expression: gross order value less whatever
-// has been refunded. A refunded order keeps its place in the counts (it happened) and
-// contributes only the money the kitchen actually kept, so counts and revenue can never
-// describe different populations.
+// chefGrossExpr is the chef's income on one order, in SQL: food revenue net of any
+// discount the chef funded, plus the food GST that is theirs, plus the tip. It is the
+// SQL twin of services.ComputeOrderEarnings' `gross` and must not drift from it.
+//
+// The tax term is services.ChefTaxOf inlined: a non-zero tax_food/tax_service proves the
+// per-supply snapshot exists and only tax_food is the chef's; rows predating the split
+// keep the whole order tax, which is the figure they were settled against. The delivery
+// fee is the driver's and the platform fee (with its own GST) is the platform's — neither
+// is the chef's income, so neither appears here (#390).
+func chefGrossExpr(alias string) string {
+	return fmt.Sprintf(`(%[1]s.subtotal - COALESCE(%[1]s.chef_funded_discount, 0)
+		+ CASE WHEN COALESCE(%[1]s.tax_food, 0) > 0 OR COALESCE(%[1]s.tax_service, 0) > 0
+			THEN COALESCE(%[1]s.tax_food, 0) ELSE COALESCE(%[1]s.tax, 0) END
+		+ COALESCE(%[1]s.chef_tip, 0))`, alias)
+}
+
+// chefCountedRevenueExpr is the matching money expression: what the kitchen actually
+// earned on the orders that count, so the dashboard hero and the Analytics screen can be
+// reconciled against the Earnings screen and the weekly statement.
+//
+// It used to be `total − refund_amount` — the CUSTOMER's gross order value. That is not
+// the chef's money: it carries the delivery fee (the driver's), the platform fee, and the
+// platform's own GST on both. A ₹393.05 order earns the chef ₹336.00, and on a cancelled
+// order `total − refund` also hands the chef the share the PLATFORM retained. The hero is
+// labelled "Total earnings" and taps through to payouts, so a chef read it as money owed
+// to them and it disagreed with every settlement surface.
+//
+// Two clamps, both mirroring rules that already exist:
+//
+//   - a cancelled order earns the chef `vendor_kept_paise` — the retained share epic #475
+//     persists and ComputeCancellationEntitlement pays out — NOT their full gross.
+//   - never more than the platform still holds for the order (`total − refund_amount`).
+//     This is the solvency cap from ComputeCancellationEntitlement, applied here for the
+//     same reason: a snapshot can over-attribute to the vendor, and a partial refund on a
+//     delivered order reduces what is left to settle from.
+//
+// CASE rather than LEAST/GREATEST: the tests run on sqlite, which has neither.
 func chefCountedRevenueExpr(alias string) string {
-	return fmt.Sprintf("COALESCE(SUM(%[1]s.total - COALESCE(%[1]s.refund_amount, 0)), 0)", alias)
+	gross := chefGrossExpr(alias)
+	kept := fmt.Sprintf(`COALESCE((SELECT MAX(cr.vendor_kept_paise) FROM cancellation_requests cr
+		WHERE cr.order_id = %[1]s.id) / 100.0, %[2]s)`, alias, gross)
+	ceiling := fmt.Sprintf("(%[1]s.total - COALESCE(%[1]s.refund_amount, 0))", alias)
+
+	return fmt.Sprintf(`COALESCE(SUM(
+		CASE
+			WHEN %[1]s <= 0 THEN 0
+			WHEN %[2]s < 0 THEN 0
+			WHEN %[2]s > %[1]s THEN %[1]s
+			ELSE %[2]s
+		END), 0)`, ceiling, kept)
 }
 
 func chefVisibleOrders(chefID uuid.UUID) *gorm.DB {
@@ -844,9 +888,9 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	// chefs with live orders). Count and money share chefVisibleOrders, so all three
 	// periods and both metrics describe one population.
 	//
-	// NOTE this is gross order value (food + delivery + tax + platform fee), NOT the
-	// chef's payout — which is why it is larger than Net earnings on the P&L. The label
-	// on the hero is a product decision, not a bug in this query.
+	// This is the chef's GROSS earnings (food + food GST + tip), the same basis as the
+	// Earnings screen's grossRevenue — not the customer's order value, and not the net
+	// payout, which is this less commission and TDS.
 	var totalEarnings float64
 	chefVisibleOrders(chef.ID).Select(chefCountedRevenueExpr("orders")).Scan(&totalEarnings)
 	var totalOrdersCount int64

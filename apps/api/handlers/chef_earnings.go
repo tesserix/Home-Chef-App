@@ -134,8 +134,16 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 		AND    delivered_at >= ?
 		AND    delivered_at <= ?
 		AND    deleted_at    IS NULL
+		-- Same two guards the weekly statement applies (services/statement.go), so the
+		-- screen shows the chef what they will actually be paid. Without them a sandbox
+		-- order counted toward a live chef's earnings, and a refunded order — which the
+		-- statement and the payout-release path both exclude — was billed here as if it
+		-- had settled. Status stays 'delivered' on the order-issue refund path, so
+		-- filtering on status alone does not catch it.
+		AND    refunded_at   IS NULL
+		AND    mode = COALESCE((SELECT mode FROM chef_profiles WHERE id = ?), 'live')
 		ORDER  BY delivered_at ASC
-	`, chef.ID, cycleStart, cycleEnd).Scan(&rows).Error; err != nil {
+	`, chef.ID, cycleStart, cycleEnd, chef.ID).Scan(&rows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch orders"})
 		return
 	}
