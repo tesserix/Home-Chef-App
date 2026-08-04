@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { formatMoney, moneyValue } from '../../lib/format';
 import {
   ActionSheetIOS,
   Platform,
@@ -1612,7 +1613,7 @@ export default function OrderDetailScreen() {
                     value={deliveryFeeInput}
                     onChangeText={setDeliveryFeeInput}
                     keyboardType="decimal-pad"
-                    placeholder={chargedDeliveryFee.toFixed(0)}
+                    placeholder={moneyValue(chargedDeliveryFee)}
                     placeholderTextColor={theme.colors.ink.muted}
                     style={styles.deliveryFeeInput}
                     accessibilityLabel="Delivery fee you'll charge"
@@ -1626,7 +1627,7 @@ export default function OrderDetailScreen() {
                 <View style={styles.deliveryFeeRefundRow}>
                   <Text style={styles.timingLabel}>Refunded to customer</Text>
                   <Text style={styles.deliveryFeeRefundValue}>
-                    −₹{deliveryFeeRefund.toFixed(0)}
+                    −{formatMoney(deliveryFeeRefund)}
                   </Text>
                 </View>
               ) : null}

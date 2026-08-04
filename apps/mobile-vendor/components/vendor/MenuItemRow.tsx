@@ -1,4 +1,5 @@
 import { Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { formatMoney } from '../../lib/format';
 import { Image } from "expo-image";
 import { UtensilsCrossed } from "lucide-react-native";
 import { theme } from "@homechef/mobile-shared/theme";
@@ -87,7 +88,7 @@ export function MenuItemRow({ item, onPress }: MenuItemRowProps) {
                   {item.name}
                 </Text>
               </View>
-              <Text style={styles.price}>₹{item.price.toFixed(0)}</Text>
+              <Text style={styles.price}>{formatMoney(item.price)}</Text>
               {isDimmed && (
                 <Text style={styles.hiddenLabel}>Hidden from customers</Text>
               )}

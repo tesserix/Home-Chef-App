@@ -1,4 +1,5 @@
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { formatMoney } from '../../lib/format';
 import Animated, {
   Easing,
   FadeInDown,
@@ -351,7 +352,7 @@ export function ActiveOrderCard({
                   </Text>
                 </View>
               </View>
-              <Text style={styles.total}>₹{order.total.toFixed(0)}</Text>
+              <Text style={styles.total}>{formatMoney(order.total)}</Text>
             </View>
             {/* Items summary + age — items may be absent on dashboard RecentOrder */}
             <Text style={styles.meta} numberOfLines={1}>

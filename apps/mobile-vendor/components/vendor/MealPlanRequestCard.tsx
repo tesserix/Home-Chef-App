@@ -1,4 +1,5 @@
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { formatMoney } from '../../lib/format';
 import { CalendarDays, ChevronRight } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import type { MealPlan } from '../../hooks/useMealPlans';
@@ -33,7 +34,7 @@ export function MealPlanRequestCard({ plan, onPress }: Props) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Review meal plan from ${customerName(plan)}, ₹${plan.total.toFixed(0)}`}
+      accessibilityLabel={`Review meal plan from ${customerName(plan)}, ${formatMoney(plan.total)}`}
       android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
     >
       {({ pressed }) => (
@@ -42,7 +43,7 @@ export function MealPlanRequestCard({ plan, onPress }: Props) {
             <Text style={styles.name} numberOfLines={1}>
               {customerName(plan)}
             </Text>
-            <Text style={styles.total}>₹{plan.total.toFixed(0)}</Text>
+            <Text style={styles.total}>{formatMoney(plan.total)}</Text>
           </View>
 
           <View style={styles.metaRow}>
