@@ -516,7 +516,9 @@ on. The wallet leg is shown on other orders; loyalty is not.
 | **CAN-02** | 🟩 **pass** | policy % refund, sum reconciles | `HC26080403544039`, `materials_purchased` 40% tier. **Exact match to the prediction recorded before the run**: refund **17548** · vendor kept **19200** · platform kept **2557**. Σ = 39305 = the order total. `refund_executed=t`, order `cancelled/refunded`, `refund_amount 175.48` |
 | **CAN-02 tax** | 🟩 **pass** | per-supply, not proportional | Refund 175.48 = food 128.00 (40% × 320) + delivery 39.12 + tax **8.36**. The old proportional model refunds ₹9.15 — **the ₹0.79 of GST on a retained fee is the thing this release fixed, and it is fixed** |
 | **POU-04** | 🟩 **pass** | entitlement matches the snapshot | `chef_bonuses`: `cancellation_retained` **₹192**, `pending`, `source_key=cancelkept:38dd64e1…` — equals `vendor_kept_paise` exactly, paid via the statement, not by relaxing a payout-hold guard |
-| CAN-03/04/06 | ⬜ not run | | re-run of the 3 Aug passes, post-release |
+| **CAN-03** | 🟩 **pass** | full customer refund; penalty on `chef_penalties`, not the payout ledger | `HC26080405111133`: chef cancelled an **accepted** order (`out_of_ingredient`). `refund_amount` **393.05 = the whole total including the platform fee**, `refund_initiated_by=chef`, gateway refund id present, no payout hold. `chef_penalties`: **`cancel_late` ₹23.58 pending** — "Cancelled 0.0h before service (less than the 4h notice window)". ₹23.58 = 6% × 393.05, the platform's lost commission |
+| **CAN-03 contrast** | 🟩 **pass** | pre-accept reject ≠ post-accept cancel | The 3 Aug run proved a pre-accept **reject** raises **no** penalty. This is the post-accept **cancel** and it does. The distinction is real and correctly implemented: declining a new order is not abandoning one you took |
+| CAN-04/06 | ⬜ not run | | re-run of the 3 Aug passes, post-release |
 | REF-01 | 🟩 pass | refund == captured | Cashfree partial refund **₹1,063.42** = the card leg exactly |
 | REF-04 | 🟩 pass | split sums exactly (INV-2) | card 1063.42 + wallet 237.66 = **1301.08** ✓ |
 | REF-02/03/05 | ⬜ not run | | |
