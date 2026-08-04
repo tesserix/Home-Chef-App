@@ -31,8 +31,21 @@
    A control that "does nothing" is almost always off-screen, not inert.
 2. **`describe-all` can return a stale tree** right after a tap. Re-read before
    concluding a navigation failed.
-3. **Cashfree saved-card flow has an OTP step.** Skipping it leaves the order
-   `pending` forever and it auto-cancels. Screenshot the sheet and complete it.
+3. **Cashfree sandbox parks card payments at `PENDING`** until the simulated bank
+   page resolves, and the "Pay Now" favourite tile closes the WebView before that
+   happens — so the order sits `pending` and used to auto-cancel (that auto-cancel
+   was D-14, now fixed). **Do not fight the OTP page.** Force the outcome:
+   ```bash
+   APP=$(gcloud secrets versions access latest --secret=prod-homechef-cashfree-app-id --project=tesseracthub-480811)
+   SEC=$(gcloud secrets versions access latest --secret=prod-homechef-cashfree-secret-key --project=tesseracthub-480811)
+   # cf_payment_id from: GET https://sandbox.cashfree.com/pg/orders/<razorpay_order_id>/payments
+   curl -s -X POST https://sandbox.cashfree.com/pg/simulate \
+     -H "x-api-version: 2023-08-01" -H "Content-Type: application/json" \
+     -H "x-client-id: $APP" -H "x-client-secret: $SEC" \
+     -d '{"entity":"PAYMENTS","entity_id":"<cf_payment_id>","entity_simulation":{"payment_status":"SUCCESS"}}'
+   ```
+   The order settles within ~10s. Note the `entity_simulation` **nesting** — the
+   flat form is rejected, and `entity` must be `PAYMENTS`, not `PAYMENT`.
 4. **The vendor app loses its session on relaunch** and needs a manual sign-in
    (cause unverified — both builds are unsigned with no keychain entitlement, so
    it is NOT the entitlement difference I first assumed). **Do not terminate the
