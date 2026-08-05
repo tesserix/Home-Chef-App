@@ -74,7 +74,9 @@ func QuoteFssaiFiling(years int) FssaiQuote {
 }
 
 // FssaiFilingEnabled reports whether the in-app filing request is open for
-// business. Default off: the flow takes money and identity documents.
+// business. Default ON, per the owner — switchable off at runtime from
+// Settings → Platform without a deploy, because the flow takes money and
+// identity documents and may need stopping at short notice.
 func FssaiFilingEnabled() bool { return GetPlatformPolicy().FssaiFilingEnabled }
 
 // ApplyQuote stamps a priced quote onto a request. The figures are FROZEN on
