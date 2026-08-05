@@ -82,6 +82,43 @@ export function useReplaceDocument() {
   });
 }
 
+// What onboarding asks every chef for. A chef who skipped the step arrives with
+// nothing on file, so the page has to show what is still owed — an empty list
+// reads as "nothing to do".
+export const EXPECTED_DOCS: { type: string; why: string }[] = [
+  { type: 'id_proof', why: 'Aadhaar, PAN or passport — proves who you are.' },
+  { type: 'address_proof', why: 'Shows where your kitchen operates from.' },
+  { type: 'fssai_license', why: 'Required by law before your menu can go live.' },
+];
+
+interface AddInput {
+  type: string;
+  file: File;
+  expiryDate?: string;
+}
+
+/**
+ * Upload a document the chef does not have on file yet.
+ *
+ * Distinct from useReplaceDocument only in the endpoint: there is no record to
+ * replace, so the type has to travel with the file.
+ */
+export function useAddDocument() {
+  const qc = useQueryClient();
+  return useMutation<unknown, unknown, AddInput>({
+    mutationFn: ({ type, file, expiryDate }) => {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('type', type);
+      if (expiryDate) form.append('expiryDate', expiryDate);
+      return apiClient.postForm('/chef/documents', form);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['chef', 'documents'] });
+    },
+  });
+}
+
 /** Human label for a document type code. */
 export function documentLabel(type: string): string {
   const map: Record<string, string> = {
