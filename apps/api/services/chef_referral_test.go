@@ -294,6 +294,34 @@ func TestEarnChefLoyaltyForOrder(t *testing.T) {
 	assert.Equal(t, 450.0, acct.Points)
 }
 
+// The cap has to bind on the real conversion path, not just parse from config:
+// a chef at the ceiling is refused, and their points are kept rather than burnt.
+func TestConvertChefLoyalty_MonthlyCapBlocksAndKeepsThePoints(t *testing.T) {
+	db := setupChefReferralDB(t)
+	chef := seedRefChef(t, db, true)
+	cfg := GetChefLoyaltyConfig(db)
+
+	// Already at the ceiling for this window.
+	require.NoError(t, db.Create(&models.ChefBonus{
+		ChefID: chef.chefID, UserID: chef.userID,
+		Kind:   models.ChefBonusLoyaltyCashback,
+		Status: models.ChefBonusPending,
+		Amount: cfg.MonthlyConvertCap,
+	}).Error)
+	require.NoError(t, db.Create(&models.ChefLoyaltyAccount{
+		ChefID: chef.chefID, UserID: chef.userID,
+		Points: 20000, LifetimePoints: 20000,
+	}).Error)
+
+	_, _, err := ConvertChefLoyalty(db, chef.chefID, chef.userID)
+	assert.ErrorIs(t, err, ErrChefLoyaltyMonthlyCap)
+
+	// Refused, not spent — the chef converts once the window moves on.
+	var acct models.ChefLoyaltyAccount
+	require.NoError(t, db.Where("chef_id = ?", chef.chefID).First(&acct).Error)
+	assert.Equal(t, 20000.0, acct.Points, "a refused conversion must not burn points")
+}
+
 func TestConvertChefLoyalty(t *testing.T) {
 	db := setupChefReferralDB(t)
 	chef := seedRefChef(t, db, true)
