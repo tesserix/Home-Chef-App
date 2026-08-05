@@ -606,6 +606,7 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.POST("/fssai/requests/:id/confirm", fssaiHandler.ConfirmFssaiPayment)
 			chefDashboard.POST("/fssai/requests/:id/documents", fssaiHandler.AttachFssaiDocument)
 			chefDashboard.DELETE("/fssai/requests/:id", fssaiHandler.CancelFssaiRequest)
+			chefDashboard.POST("/fssai/requests/:id/upload", fssaiHandler.UploadFssaiDocument)
 			// Rewards: referral code + progress, loyalty points, cashback conversion.
 			chefRewardsHandler := handlers.NewChefRewardsHandler()
 			chefDashboard.GET("/rewards", chefRewardsHandler.GetChefRewards)

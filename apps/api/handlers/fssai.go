@@ -9,6 +9,7 @@ package handlers
 // See .planning/FSSAI-IN-APP-REQUEST-DESIGN.md.
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -266,6 +267,80 @@ func (h *FssaiHandler) CancelFssaiRequest(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"cancelled": true})
+}
+
+// UploadFssaiDocument takes the file itself, stores it, and attaches it in one
+// call — the app should not have to upload somewhere and then separately tell
+// us about it, which leaves an orphaned file whenever the second call fails.
+//
+// Same validation as every other chef upload: size capped and the bytes sniffed,
+// so a spoofed Content-Type cannot slip a payload through.
+// POST /chef/fssai/requests/:id/upload  (multipart: file, kind)
+func (h *FssaiHandler) UploadFssaiDocument(c *gin.Context) {
+	chef, ok := h.chefFor(c)
+	if !ok {
+		return
+	}
+	kind := c.PostForm("kind")
+	switch kind {
+	case models.FssaiDocPhoto, models.FssaiDocIdentity, models.FssaiDocAddressProof:
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unknown document kind"})
+		return
+	}
+
+	var row models.FssaiRequest
+	if err := database.DB.Preload("Documents").
+		Where("id = ? AND chef_id = ?", c.Param("id"), chef.ID).First(&row).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Request not found"})
+		return
+	}
+
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
+		return
+	}
+	defer file.Close()
+
+	contentType := header.Header.Get("Content-Type")
+	if header.Size > 5*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum 5 MB."})
+		return
+	}
+	// PDFs are accepted for an address proof (a utility bill is usually one);
+	// identity and photo must be images.
+	isPDF := contentType == "application/pdf"
+	if !isPDF {
+		if !services.IsImageContentType(contentType) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP, PDF."})
+			return
+		}
+		sniffed, serr := sniffContentType(file)
+		if serr != nil || !services.IsImageContentType(sniffed) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
+			return
+		}
+	}
+
+	// Private, not public: these are Aadhaar and PAN images. The bucket path is
+	// scoped per chef so one kitchen's documents can never be listed from
+	// another's prefix.
+	folder := fmt.Sprintf("chefs/%s/fssai/%s", chef.ID.String(), row.ID.String())
+	fileURL, uerr := services.UploadPublicFile(
+		c.Request.Context(), folder, header.Filename, file, contentType)
+	if uerr != nil {
+		log.Printf("FSSAI request %s: upload failed: %v", row.ID, uerr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload the file"})
+		return
+	}
+
+	if err := services.AttachFssaiDocument(
+		database.DB, &row, kind, fileURL, header.Filename); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(&row)})
 }
 
 // GetFssaiRequest is the chef's tracker: their live request, or the most recent
