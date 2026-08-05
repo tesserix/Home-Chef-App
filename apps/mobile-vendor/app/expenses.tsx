@@ -12,7 +12,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ChevronLeft, FileDown, Paperclip, Receipt, Trash2 } from 'lucide-react-native';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronUp,
+  FileDown,
+  Paperclip,
+  Receipt,
+  Trash2,
+} from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
 import { downloadAndSharePdf } from '../lib/download-pdf';
@@ -45,6 +53,7 @@ export default function ExpensesScreen() {
   const { data: stmt } = useFYStatement(fy);
   const { remove } = useExpenseMutations();
   const [downloading, setDownloading] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const expenses = data?.expenses ?? [];
   const fyEndShort = String((fy + 1) % 100).padStart(2, '0');
@@ -129,6 +138,74 @@ export default function ExpensesScreen() {
                 Income from {stmt.ordersCount} delivered orders minus your recorded expenses.
                 Download the PDF for GST / income-tax filing.
               </Text>
+
+              {/* Itemised breakdown, matching the vendor portal's annual
+                  statement. The three headline figures above answer "how much",
+                  but a chef reconciling with their accountant needs to see which
+                  line the commission and TDS came off — otherwise the only way
+                  to check the maths is to open the PDF. */}
+              <Pressable
+                onPress={() => setShowBreakdown((v) => !v)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showBreakdown }}
+                accessibilityLabel={
+                  showBreakdown ? 'Hide statement breakdown' : 'Show statement breakdown'
+                }
+              >
+                {({ pressed }) => (
+                  <View style={[styles.disclosureRow, pressed && { opacity: 0.7 }]}>
+                    <Text style={styles.disclosureText}>
+                      {showBreakdown ? 'Hide breakdown' : 'Show full breakdown'}
+                    </Text>
+                    {showBreakdown ? (
+                      <ChevronUp size={16} color={theme.colors.ink.muted} />
+                    ) : (
+                      <ChevronDown size={16} color={theme.colors.ink.muted} />
+                    )}
+                  </View>
+                )}
+              </Pressable>
+
+              {showBreakdown ? (
+                <View style={styles.breakdown}>
+                  <Text style={styles.breakdownLabel}>
+                    INCOME · {stmt.ordersCount} DELIVERED ORDERS
+                  </Text>
+                  <Line label="Food revenue" amount={stmt.foodRevenue} />
+                  <Line label="GST collected from customers" amount={stmt.gstCollected} />
+                  <Line label="Customer tips" amount={stmt.tips} />
+                  <Line label="Gross receipts" amount={stmt.grossReceipts} strong />
+                  <Line label="Platform commission" amount={stmt.platformCommission} negative />
+                  <Line
+                    label="GST on commission (ITC eligible)"
+                    amount={
+                      stmt.commissionCgst + stmt.commissionSgst + stmt.commissionIgst
+                    }
+                  />
+                  <Line label="TDS withheld (194-O)" amount={stmt.tdsWithheld} negative />
+                  <Line label="Net earnings from platform" amount={stmt.netEarnings} strong />
+
+                  <Text style={[styles.breakdownLabel, { marginTop: theme.spacing[3] }]}>
+                    EXPENSES · SELF-DECLARED
+                  </Text>
+                  {stmt.expenses.byCategory.length === 0 ? (
+                    <Text style={styles.body}>
+                      No expenses recorded in this financial year yet.
+                    </Text>
+                  ) : (
+                    stmt.expenses.byCategory.map((c) => (
+                      <Line
+                        key={c.category}
+                        label={`${expenseCategoryLabel(c.category)} (${c.count})`}
+                        amount={c.amount}
+                        negative
+                      />
+                    ))
+                  )}
+                  <Line label="Total expenses" amount={stmt.totalExpenses} strong />
+                  <Line label="Net income (pre-tax)" amount={stmt.netIncome} strong highlight />
+                </View>
+              ) : null}
             </>
           ) : (
             <Skeleton style={{ height: 56, borderRadius: theme.radius.md }} />
@@ -230,6 +307,44 @@ export default function ExpensesScreen() {
   );
 }
 
+/**
+ * One labelled money line on the annual statement.
+ *
+ * `negative` prefixes a minus rather than colouring the figure red: these are
+ * ordinary deductions on a statement, not errors, and red would read as alarm.
+ */
+function Line({
+  label,
+  amount,
+  strong,
+  negative,
+  highlight,
+}: {
+  label: string;
+  amount: number;
+  strong?: boolean;
+  negative?: boolean;
+  highlight?: boolean;
+}) {
+  return (
+    <View style={styles.lineRow}>
+      <Text style={[styles.lineLabel, strong && styles.lineLabelStrong]} numberOfLines={2}>
+        {label}
+      </Text>
+      <Text
+        style={[
+          styles.lineAmount,
+          strong && styles.lineAmountStrong,
+          highlight && { color: theme.colors.herb.DEFAULT },
+        ]}
+      >
+        {negative ? '−' : ''}
+        {fmtInr(amount)}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.paper },
   header: {
@@ -277,6 +392,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[5],
   },
   primaryBtnDisabled: { backgroundColor: theme.colors.mist.strong },
+  disclosureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 32,
+  },
+  disclosureText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: theme.colors.ink.DEFAULT,
+  },
+  breakdown: { gap: 0 },
+  breakdownLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.8,
+    color: theme.colors.ink.muted,
+    paddingBottom: theme.spacing[1],
+  },
+  lineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+  },
+  lineLabel: { flex: 1, fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft },
+  lineLabelStrong: { fontFamily: 'Inter-SemiBold', color: theme.colors.ink.DEFAULT },
+  lineAmount: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  lineAmountStrong: { fontFamily: 'Inter-SemiBold', fontSize: 14 },
   primaryBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.paper },
   expenseRow: {
     flexDirection: 'row',
