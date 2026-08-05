@@ -113,6 +113,14 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		// durable so the fan-out is independent of the chef-facing notifications.
 		{Stream: "CHEF", Durable: "notify-daily-menu", Handler: h,
 			Subjects: []string{SubjectDailyMenuPublished}},
+		// Subscriber fan-out for open/close, price drops and ChefBook posts.
+		// Own durable so a large subscriber list cannot stall the chef-facing
+		// notifications above.
+		{Stream: "CHEF", Durable: "notify-chef-audience", Handler: h,
+			Subjects: []string{
+				SubjectChefAvailabilityChanged, SubjectChefPriceChanged,
+				SubjectChefArticlePublished,
+			}},
 		// New review on a chef's order → notify the chef (#422).
 		{Stream: "REVIEWS", Durable: "notify-reviews", Handler: h,
 			Subjects: []string{SubjectReviewPosted}},
@@ -199,6 +207,12 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleWeeklyMenuPublished)
 	case SubjectDailyMenuPublished:
 		return decodeThen(data, s.handleDailyMenuPublished)
+	case SubjectChefAvailabilityChanged:
+		return decodeThen(data, s.handleChefAvailabilityChanged)
+	case SubjectChefPriceChanged:
+		return decodeThen(data, s.handleChefPriceChanged)
+	case SubjectChefArticlePublished:
+		return decodeThen(data, s.handleChefArticlePublished)
 	case SubjectReviewPosted:
 		return decodeThen(data, s.handleReviewPosted)
 	case SubjectMealPlanDaySkippedChef:
@@ -986,7 +1000,7 @@ func (s *NotificationService) handleWeeklyMenuPublished(event Event) error {
 	if err != nil {
 		return err
 	}
-	return s.fanOutToFollowers(chefID, "weekly_menu_published",
+	return s.fanOutToAudience(chefID, models.ChefNotifyMenu, "weekly_menu_published",
 		"New menu just dropped",
 		fmt.Sprintf("%s published a new weekly menu — take a look!", chefName),
 		map[string]any{"type": "weekly_menu_published", "chefId": chefID.String()})
@@ -1005,10 +1019,79 @@ func (s *NotificationService) handleDailyMenuPublished(event Event) error {
 	if date != "" {
 		msg = fmt.Sprintf("%s published the menu for %s — book your tiffin!", chefName, date)
 	}
-	return s.fanOutToFollowers(chefID, "daily_menu_published",
+	return s.fanOutToAudience(chefID, models.ChefNotifyMenu, "daily_menu_published",
 		"A new menu is up",
 		msg,
 		map[string]any{"type": "daily_menu_published", "chefId": chefID.String(), "date": date})
+}
+
+// handleChefAvailabilityChanged tells subscribers a kitchen just opened or
+// closed. Only the OPEN direction is pushed: "we're cooking" is useful, while a
+// close notice is an interruption that sells nothing, and a kitchen toggling
+// around a busy service would spam the whole subscriber list.
+// The payload is ChefAvailabilityEvent's camelCase shape, not the menu-drop
+// shape — two SSE consumers already depend on it, so the name is resolved here
+// instead of widening the event.
+func (s *NotificationService) handleChefAvailabilityChanged(event Event) error {
+	accepting, ok := event.Data["acceptingOrders"].(bool)
+	if !ok || !accepting {
+		return nil
+	}
+	chefIDStr, _ := event.Data["chefId"].(string)
+	chefID, err := uuid.Parse(chefIDStr)
+	if err != nil {
+		return fmt.Errorf("chef_availability_changed: bad chefId %q: %w", chefIDStr, err)
+	}
+	chefName := chefDisplayName(chefID)
+	return s.fanOutToAudience(chefID, models.ChefNotifyAvailability, "chef_open",
+		fmt.Sprintf("%s is open", chefName),
+		fmt.Sprintf("%s is taking orders now — see what's cooking.", chefName),
+		map[string]any{"type": "chef_open", "chefId": chefID.String()})
+}
+
+// handleChefPriceChanged tells subscribers a dish changed price. Only DROPS are
+// pushed: a price rise is not news a customer asked to be interrupted for, and
+// announcing it would make the notification itself a reason not to order.
+func (s *NotificationService) handleChefPriceChanged(event Event) error {
+	chefID, chefName, err := followerEventChef(event, "chef_price_changed")
+	if err != nil {
+		return err
+	}
+	itemName, _ := event.Data["item_name"].(string)
+	oldPrice, oldOK := event.Data["old_price"].(float64)
+	newPrice, newOK := event.Data["new_price"].(float64)
+	if itemName == "" || !oldOK || !newOK || newPrice >= oldPrice {
+		return nil
+	}
+	return s.fanOutToAudience(chefID, models.ChefNotifyPriceChange, "chef_price_drop",
+		fmt.Sprintf("%s is cheaper today", itemName),
+		fmt.Sprintf("%s dropped %s from %s to %s.", chefName, itemName,
+			FormatMoney(oldPrice), FormatMoney(newPrice)),
+		map[string]any{
+			"type": "chef_price_drop", "chefId": chefID.String(),
+			"itemName": itemName, "oldPrice": oldPrice, "newPrice": newPrice,
+		})
+}
+
+// handleChefArticlePublished tells subscribers the kitchen posted a ChefBook
+// article.
+func (s *NotificationService) handleChefArticlePublished(event Event) error {
+	chefID, chefName, err := followerEventChef(event, "chef_article_published")
+	if err != nil {
+		return err
+	}
+	title, _ := event.Data["title"].(string)
+	slug, _ := event.Data["slug"].(string)
+	if title == "" {
+		return nil
+	}
+	return s.fanOutToAudience(chefID, models.ChefNotifyArticles, "chef_article_published",
+		fmt.Sprintf("%s posted a new story", chefName),
+		title,
+		map[string]any{
+			"type": "chef_article_published", "chefId": chefID.String(),
+			"title": title, "slug": slug,
+		})
 }
 
 // followerEventChef extracts + validates the chef id/name from a menu-drop event.
@@ -1025,30 +1108,33 @@ func followerEventChef(event Event, kind string) (uuid.UUID, string, error) {
 	return chefID, chefName, nil
 }
 
-// fanOutToFollowers sends an in-app feed entry (+ real-time bell) and a push to
-// every customer who has favorited the chef, gated by their "favorites"
-// preference (checked downstream in the push path). One follower's failure is
-// logged and skipped so the whole batch isn't redelivered. Shared by the weekly
-// and daily menu-drop handlers (#239/#419).
-func (s *NotificationService) fanOutToFollowers(chefID uuid.UUID, notifType, title, message string, data map[string]any) error {
-	var favorites []models.FavoriteChef
-	if err := database.DB.Where("chef_id = ?", chefID).Find(&favorites).Error; err != nil {
-		return fmt.Errorf("%s: load followers: %w", notifType, err)
+// fanOutToAudience sends an in-app feed entry (+ real-time bell) and a push to
+// every customer listening to the chef for this kind, gated by their global
+// notification preference (checked downstream in the push path). One recipient's
+// failure is logged and skipped so the whole batch isn't redelivered.
+//
+// Who "listening" means is ChefAudienceUserIDs' call: menu drops keep reaching
+// people who merely favorited the chef (#239/#419), while the kinds added since
+// go to subscribers only.
+func (s *NotificationService) fanOutToAudience(chefID uuid.UUID, kind, notifType, title, message string, data map[string]any) error {
+	userIDs, err := ChefAudienceUserIDs(chefID, kind)
+	if err != nil {
+		return fmt.Errorf("%s: load audience: %w", notifType, err)
 	}
 	inAppData, _ := json.Marshal(data)
-	for _, fav := range favorites {
+	for _, userID := range userIDs {
 		if err := s.saveNotification(&models.Notification{
-			UserID:  fav.UserID,
+			UserID:  userID,
 			Type:    notifType,
 			Title:   title,
 			Message: message,
 			Data:    string(inAppData),
 		}); err != nil {
-			log.Printf("%s: save notification for %s: %v", notifType, fav.UserID, err)
+			log.Printf("%s: save notification for %s: %v", notifType, userID, err)
 			continue
 		}
 		PublishNotification(NotificationEvent{
-			UserID:  fav.UserID,
+			UserID:  userID,
 			Type:    "push",
 			Title:   title,
 			Message: message,

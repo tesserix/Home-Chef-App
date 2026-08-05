@@ -235,6 +235,16 @@ func (h *ChefBookHandler) CreateArticle(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save article"})
 		return
 	}
+	// Only a published article is news — creating a draft must notify nobody.
+	if article.Status == models.ArticleStatusPublished {
+		if err := services.EnqueueEvent(database.DB, services.SubjectChefArticlePublished, "chef.article_published", chef.UserID, map[string]any{
+			"chef_id": chef.ID.String(), "chef_name": chef.BusinessName,
+			"title": article.Title, "slug": article.Slug,
+		}); err != nil {
+			log.Printf("chefbook: enqueue article_published: %v", err)
+		}
+	}
+
 	c.JSON(http.StatusCreated, gin.H{"data": article.ToResponse("", true)})
 }
 

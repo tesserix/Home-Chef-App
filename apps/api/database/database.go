@@ -267,6 +267,11 @@ func Migrate() error {
 		// Favorites
 		&models.FavoriteChef{},
 		&models.FavoriteDish{},
+
+		// Likes + subscriptions (discovery ranking, notification audience)
+		&models.ChefLike{},
+		&models.ChefSubscription{},
+
 		&models.ReferralCode{},
 		&models.Referral{},
 		&models.OrderIssue{},

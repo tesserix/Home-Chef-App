@@ -48,6 +48,8 @@ interface ApiChefProfile {
   deliveryFeeFlat?: boolean;
   rating?: number;
   totalReviews?: number;
+  likeCount?: number;
+  subscriberCount?: number;
   isOnline?: boolean;
   acceptingOrders?: boolean;
   // Real-time availability computed server-side (mirrors the exact gates the order
@@ -103,6 +105,8 @@ export function mapChef(c: ApiChefProfile): Chef {
     cuisine: (c.cuisines ?? []).filter(Boolean).join(' · '),
     rating: c.rating ?? 0,
     reviewCount: c.totalReviews ?? 0,
+    likeCount: c.likeCount ?? 0,
+    subscriberCount: c.subscriberCount ?? 0,
     // Server-computed availability is authoritative when present (it accounts for
     // the daily cutoff + platform hours the flags miss); fall back to the flags for
     // older API responses.
