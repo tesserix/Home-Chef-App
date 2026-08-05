@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -15,10 +15,18 @@ import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Button, useAlert } from '@homechef/mobile-shared/ui';
 import {
-  useChefMealPlanRequests,
+  useChefMealPlan,
   useRespondMealPlan,
+  type MealPlanChefEarnings,
   type MealPlanDay,
 } from '../../hooks/useMealPlans';
+import {
+  chefEarningLines,
+  customerChargeLines,
+  planRespondable,
+  planStatusLabel,
+  type BreakdownLine,
+} from '../../lib/meal-plan-breakdown';
 
 function dayLabel(d: MealPlanDay): string {
   return new Date(d.date).toLocaleDateString(undefined, {
@@ -28,19 +36,25 @@ function dayLabel(d: MealPlanDay): string {
   });
 }
 
-// Chef respond screen (#195): accept every day, or cherry-pick the days the chef
-// can cook (the rest are declined). A trim routes the plan back to the customer
-// for approval; accept-all confirms immediately. Mirrors RespondMealPlan (API).
-export default function MealPlanRespondScreen() {
+function money(n: number): string {
+  const sign = n < 0 ? '−' : '';
+  return `${sign}₹${Math.abs(n).toFixed(2)}`;
+}
+
+// Chef plan screen (#195/#1029). While the plan awaits the chef it is the respond
+// flow: accept every day, or cherry-pick the days they can cook (a trim routes back
+// to the customer, accept-all confirms). Once answered it becomes the read-only
+// record of the booking, with the same tax/commission/payout breakdown an à la carte
+// order shows — the plan used to be unreachable the moment it was accepted.
+export default function MealPlanDetailScreen() {
   const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data, isLoading } = useChefMealPlanRequests('pending_chef');
+  const { data, isLoading } = useChefMealPlan(id);
   const respond = useRespondMealPlan();
 
-  const plan = useMemo(
-    () => data?.data.find((p) => p.id === id),
-    [data, id],
-  );
+  const plan = data?.data;
+  const earnings = data?.earnings;
+  const respondable = planRespondable(plan?.status);
 
   // Days the chef will NOT cook (excluded). Default: cook everything.
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
@@ -56,14 +70,18 @@ export default function MealPlanRespondScreen() {
   if (!plan) {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <Header />
+        <Header title="Meal plan" />
         <View style={styles.centered}>
           <Text style={styles.muted}>
-            This request is no longer pending — it may already be handled.
+            We couldn&apos;t load this plan. Pull back and try again.
           </Text>
         </View>
       </SafeAreaView>
     );
+  }
+
+  if (!respondable) {
+    return <PlanRecord plan={plan} earnings={earnings} />;
   }
 
   const days = plan.days ?? [];
@@ -124,7 +142,7 @@ export default function MealPlanRespondScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      <Header />
+      <Header title="Review request" />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.planNo}>{plan.mealPlanNumber}</Text>
         <Text style={styles.summary}>
@@ -215,7 +233,120 @@ export default function MealPlanRespondScreen() {
   );
 }
 
-function Header() {
+// The plan once it is no longer the chef's to answer: the days as booked, and the
+// money — the customer's side and the kitchen's, both served by the API so they
+// reconcile with the à la carte receipt to the paise.
+function PlanRecord({
+  plan,
+  earnings,
+}: {
+  plan: NonNullable<ReturnType<typeof useChefMealPlan>['data']>['data'];
+  earnings?: MealPlanChefEarnings;
+}) {
+  const days = plan.days ?? [];
+  const cooking = days.filter((d) => d.status !== 'declined');
+  return (
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <Header title="Meal plan" />
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <Text style={styles.planNo}>{plan.mealPlanNumber}</Text>
+        <Text style={styles.summary}>
+          {cooking.length} day{cooking.length === 1 ? '' : 's'} to cook
+        </Text>
+        <View style={styles.statusPill}>
+          <Text style={styles.statusText}>{planStatusLabel(plan.status)}</Text>
+        </View>
+
+        <Text style={styles.sectionTitle}>Days</Text>
+        <View style={styles.card}>
+          {days.map((d, i) => (
+            <View
+              key={d.id}
+              style={[styles.dayRow, i < days.length - 1 && styles.dayDivider]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    styles.dayDate,
+                    d.status === 'declined' && styles.dimmed,
+                  ]}
+                >
+                  {dayLabel(d)}
+                </Text>
+                <View style={styles.dayMeta}>
+                  <Text style={styles.slot}>
+                    {d.slot === 'lunch' ? 'Lunch' : 'Dinner'}
+                  </Text>
+                  <Text style={styles.dish} numberOfLines={1}>
+                    {d.dishName ?? '—'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.dayRight}>
+                <Text style={styles.price}>₹{(d.price ?? 0).toFixed(0)}</Text>
+                <Text style={styles.dayStatus}>{d.status}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {earnings ? (
+          <>
+            <Text style={styles.sectionTitle}>What the customer paid</Text>
+            <LineCard
+              lines={customerChargeLines(earnings)}
+              totalLabel="Customer total"
+              total={earnings.customerTotal - earnings.refundedToCustomer}
+            />
+
+            <Text style={styles.sectionTitle}>What you earn</Text>
+            <LineCard
+              lines={chefEarningLines(earnings)}
+              totalLabel="Your payout"
+              total={earnings.netPayout}
+              emphasise
+            />
+            <Text style={styles.hint}>
+              Delivery and the platform fee are not part of your payout. Each
+              day is released as it is delivered.
+            </Text>
+          </>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function LineCard({
+  lines,
+  totalLabel,
+  total,
+  emphasise,
+}: {
+  lines: BreakdownLine[];
+  totalLabel: string;
+  total: number;
+  emphasise?: boolean;
+}) {
+  return (
+    <View style={styles.card}>
+      {lines.map((l) => (
+        <View key={l.label} style={styles.lineRow}>
+          <Text style={styles.lineLabel}>{l.label}</Text>
+          <Text style={styles.lineAmount}>{money(l.amount)}</Text>
+        </View>
+      ))}
+      <View style={[styles.lineRow, styles.totalRow]}>
+        <Text style={styles.totalLabel}>{totalLabel}</Text>
+        <Text style={[styles.totalAmount, emphasise && styles.totalAccent]}>
+          {money(total)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function Header({ title }: { title: string }) {
   return (
     <View style={styles.header}>
       <Pressable
@@ -231,7 +362,7 @@ function Header() {
           </View>
         )}
       </Pressable>
-      <Text style={styles.title}>Review request</Text>
+      <Text style={styles.title}>{title}</Text>
       <View style={{ width: 24 }} />
     </View>
   );
@@ -335,6 +466,69 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   switch: { marginLeft: theme.spacing[1] },
+  dayRight: { alignItems: 'flex-end' },
+  dayStatus: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: theme.colors.ink.muted,
+    marginTop: 2,
+  },
+  statusPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 4,
+    marginTop: theme.spacing[2],
+  },
+  statusText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: theme.colors.ink.soft,
+  },
+  sectionTitle: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 15,
+    color: theme.colors.ink.DEFAULT,
+    marginTop: theme.spacing[5],
+    marginBottom: theme.spacing[2],
+  },
+  lineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: theme.spacing[2],
+  },
+  lineLabel: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: theme.colors.ink.soft,
+  },
+  lineAmount: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  totalRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+    marginTop: theme.spacing[1],
+  },
+  totalLabel: {
+    flex: 1,
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: theme.colors.ink.DEFAULT,
+  },
+  totalAmount: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 17,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  totalAccent: { color: theme.colors.herb.DEFAULT },
   dimmed: { color: theme.colors.ink.muted, textDecorationLine: 'line-through' },
   footer: {
     paddingHorizontal: theme.spacing[4],

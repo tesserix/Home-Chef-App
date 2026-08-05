@@ -55,10 +55,61 @@ export interface MealPlan {
   startDate: string;
   endDate: string;
   subtotal: number;
+  platformFee?: number;
+  tax?: number;
+  taxFood?: number;
+  taxService?: number;
+  taxDelivery?: number;
   total: number;
   currency?: string;
   days: MealPlanDay[];
   customer?: { firstName?: string; lastName?: string; email?: string } | null;
+}
+
+/** One payable day's settlement row, as the escrow holds it. */
+export interface MealPlanDayEarnings {
+  dayId: string;
+  date: string;
+  slot: MealSlot;
+  dishName?: string;
+  status: string;
+  foodPrice: number;
+  foodGst: number;
+  gross: number;
+  platformCommission: number;
+  tds: number;
+  netPayout: number;
+}
+
+/**
+ * The chef's settlement for a plan, plus the customer-side totals it was billed
+ * at. Computed server-side by the same engine that breaks down an à la carte
+ * order, so both surfaces show identical tax, commission and payout figures.
+ */
+export interface MealPlanChefEarnings {
+  currency: string;
+  commissionRate: number;
+  tdsRate: number;
+  payableDays: number;
+  excludedDays: number;
+  foodSubtotal: number;
+  foodGst: number;
+  gross: number;
+  platformCommission: number;
+  cgst: number;
+  sgst: number;
+  tds: number;
+  netPayout: number;
+  customerSubtotal: number;
+  customerPlatformFee: number;
+  customerDelivery: number;
+  customerTaxFood: number;
+  customerTaxService: number;
+  customerTaxDelivery: number;
+  customerTax: number;
+  customerTotal: number;
+  refundedToCustomer: number;
+  days: MealPlanDayEarnings[];
 }
 
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -181,6 +232,27 @@ export function useChefMealPlanRequests(status: string = 'pending_chef') {
         .get<{ data: MealPlan[] }>(`/chef/meal-plans?status=${encodeURIComponent(status)}`)
         .then((r) => r.data),
     refetchInterval: 30_000, // requests are time-boxed (24h) — keep the inbox fresh
+    staleTime: 10_000,
+  });
+}
+
+/**
+ * ONE plan in any status, with its settlement breakdown (#1029).
+ *
+ * The detail screen used to pick the plan out of the pending_chef list, so every
+ * plan the chef had already accepted opened onto "no longer pending" — a booked
+ * week was unreadable to the kitchen cooking it.
+ */
+export function useChefMealPlan(id: string | undefined) {
+  return useQuery<{ data: MealPlan; earnings: MealPlanChefEarnings }>({
+    queryKey: ['chef', 'meal-plan', id],
+    enabled: !!id,
+    queryFn: () =>
+      api
+        .get<{ data: MealPlan; earnings: MealPlanChefEarnings }>(
+          `/chef/meal-plans/${id}`,
+        )
+        .then((r) => r.data),
     staleTime: 10_000,
   });
 }

@@ -207,15 +207,17 @@ func perDaySkipRefund(plan *models.MealPlan, day *models.MealPlanDay, rate float
 // A plan with no snapshotted subtotal falls back to food-only gross (no GST). This
 // closes the leak where HoldChefPayouts paid the GROSS food price with no commission
 // or TDS, unlike the order path (#390).
+//
+// It DELEGATES to ComputeOrderEarnings rather than restating the arithmetic: rounding
+// each component once, as an order does, is what keeps the held transfer equal to the
+// figure the chef's plan breakdown and settlement statement report (a re-derivation
+// off unrounded intermediates drifted a paise on odd prices).
 func perDayNetPayout(plan *models.MealPlan, day *models.MealPlanDay, rate float64) float64 {
-	if rate <= 0 || rate >= 1 {
-		rate = DefaultCommissionRate
-	}
-	dayFoodGST := perDayFoodGST(plan, day)
-	gross := day.Price + dayFoodGST
-	commission := rate * day.Price
-	tds := RateTDS * gross
-	return Round2(gross - commission - tds)
+	return ComputeOrderEarnings(EarningsInput{
+		ItemRevenue:    day.Price,
+		Tax:            perDayFoodGST(plan, day),
+		CommissionRate: rate,
+	}, "").NetPayout
 }
 
 // mealPlanAdvanceProvider resolves which gateway should take this plan's advance.
