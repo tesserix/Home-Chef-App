@@ -158,6 +158,9 @@ func Migrate() error {
 		&models.ChefNotificationPreferences{},
 		// Test-chef mode: sandbox sessions and per-mode aggregates.
 		&models.ChefTestSession{},
+		// FSSAI filing requests — a chef paying us to obtain their registration.
+		&models.FssaiRequest{},
+		&models.FssaiRequestDocument{},
 		&models.ChefModeStats{},
 
 		// Menu
