@@ -18,7 +18,8 @@
     "./support": "./src/support/index.ts",
     "./ui": "./src/ui/index.ts",
     "./mfa": "./src/mfa/index.ts",
-    "./realtime": "./src/realtime/index.ts"
+    "./realtime": "./src/realtime/index.ts",
+    "./payments": "./src/payments/index.ts"
   },
   "scripts": {
     "test": "vitest run",

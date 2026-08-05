@@ -24,6 +24,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { formatMoney } from '../../lib/format';
+import { hasInAppWebView } from '../../lib/webview-support';
 import {
   buildCashfreeCheckoutUrl,
   fssaiStepIndex,
@@ -49,8 +50,6 @@ import {
   useStartFssaiPayment,
   useUploadFssaiDocument,
 } from '../../hooks/useFssai';
-
-const RETURN_URL = 'homechef-vendor://fssai';
 
 interface FssaiForm {
   kitchenName: string;
@@ -197,38 +196,42 @@ export default function FssaiScreen() {
     }
   }
 
-  // Opens the hosted Cashfree page and, whatever the browser reports back, asks
-  // the SERVER whether the money arrived. The browser's answer is a UX hint
-  // only — Cashfree hands the client nothing it could prove a payment with.
+  // Opens the same in-app Cashfree sheet an order opens, rather than handing the
+  // chef to an external browser — which showed an iOS "wants to use fe3dr.com to
+  // sign in" prompt no order checkout shows. The sheet screen asks the SERVER
+  // whether the money arrived; Cashfree hands the client nothing it could prove
+  // a payment with.
   const handlePay = useCallback(async () => {
     if (!draft) return;
     try {
       const session = await startPayment.mutateAsync(draft.id);
+      // The sheet needs a native module. On a build that predates it, fall back
+      // to the hosted page rather than crashing on an import that isn't there.
+      if (hasInAppWebView()) {
+        router.push(
+          `/payment/cashfree?requestId=${encodeURIComponent(draft.id)}` +
+            `&paymentSessionId=${encodeURIComponent(session.cashfreePaymentSessionId)}` +
+            `&env=${encodeURIComponent(session.cashfreeEnv ?? '')}` as never,
+        );
+        return;
+      }
       try {
         await WebBrowser.openAuthSessionAsync(
           buildCashfreeCheckoutUrl({
             paymentSessionId: session.cashfreePaymentSessionId,
             env: session.cashfreeEnv,
-            returnUrl: RETURN_URL,
+            returnUrl: 'homechef-vendor://fssai',
           }),
-          RETURN_URL,
+          'homechef-vendor://fssai',
         );
       } catch {
-        // A browser error is not proof of failure — fall through and let the
-        // server adjudicate rather than telling a chef who paid that they did not.
+        // A browser error is not proof of failure — let the server adjudicate.
       }
-      const updated = await confirmPayment.mutateAsync(draft.id);
-      const paid = isFssaiPaid(updated.status);
-      showToast({
-        message: paid
-          ? 'Payment received. Your request is with our team.'
-          : "We haven't seen the payment yet. Pull to refresh in a moment.",
-        tone: paid ? 'success' : 'error',
-      });
+      await confirmPayment.mutateAsync(draft.id);
     } catch (err) {
-      reportError(err, "We couldn't complete the payment. Nothing has been charged.");
+      reportError(err, "We couldn't start the payment. Nothing has been charged.");
     }
-  }, [draft, startPayment, confirmPayment, showToast, reportError]);
+  }, [draft, startPayment, confirmPayment, reportError]);
 
   function handleCancel() {
     if (!draft) return;
