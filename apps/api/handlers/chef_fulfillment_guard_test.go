@@ -43,6 +43,7 @@ const chefProfilesGuardDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'liv
 	prep_time text DEFAULT '', minimum_order real DEFAULT 0,
 	delivery_radius real DEFAULT 10, service_radius real DEFAULT 10,
 	offers_pickup integer DEFAULT 0, offers_self_delivery integer DEFAULT 0,
+	self_delivery_tiers text DEFAULT '[]',
 	self_delivery_base_fee real DEFAULT 0, self_delivery_free_radius_km real DEFAULT 0,
 	self_delivery_per_km real DEFAULT 0, self_delivery_max_fee real DEFAULT 0,
 	self_delivery_max_distance_km real DEFAULT 0,

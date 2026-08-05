@@ -11,6 +11,14 @@ import { Input, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui'
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
+import { DeliveryTierEditor } from '../../components/vendor/DeliveryTierEditor';
+import {
+  DEFAULT_DELIVERY_FEE_CAP,
+  type TierRow,
+  rowsFromTiers,
+  tiersFromRows,
+  validateTierRows,
+} from '../../lib/deliveryTiers';
 
 type DayHours = { open: string; close: string; closed: boolean };
 type HoursMap = Record<string, DayHours>;
@@ -53,6 +61,9 @@ export default function OperationsScreen() {
   const [offersSelfDelivery, setOffersSelfDelivery] = useState<boolean>(
     operations.offersSelfDelivery,
   );
+  const [tierRows, setTierRows] = useState<TierRow[]>(
+    rowsFromTiers(operations.selfDeliveryTiers),
+  );
 
   // R14 — scroll the section with the validation problem into view instead
   // of leaving the alert as the only signal. OnboardingScaffold owns the
@@ -90,12 +101,21 @@ export default function OperationsScreen() {
       showAlert(t('onboarding.validationError'), t('onboarding.radiusError'));
       return;
     }
+    // The ladder is the price customers pay, so a band the server would reject
+    // has to be caught before the chef walks on to the next step.
+    const tierError = validateTierRows(tierRows, DEFAULT_DELIVERY_FEE_CAP);
+    if (offersSelfDelivery && tierError) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, radiusFieldY.current - 16), animated: true });
+      showAlert(t('onboarding.validationError'), tierError);
+      return;
+    }
     updateOperations({
       operatingHours: hours,
       prepTime,
       serviceRadius: Number.isNaN(radius) ? operations.serviceRadius : radius,
       offersPickup,
       offersSelfDelivery,
+      selfDeliveryTiers: offersSelfDelivery ? tiersFromRows(tierRows) : [],
     });
     setStep(4);
     router.push('/(onboarding)/documents');
@@ -300,6 +320,20 @@ export default function OperationsScreen() {
               keyboardType="number-pad"
               maxLength={2}
               helper={t('onboarding.serviceRadiusHelper')}
+            />
+          </View>
+
+          <View style={styles.sectionLabel}>
+            <MapPin size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+            <Text style={styles.sectionLabelText}>
+              {t('onboarding.deliveryPricingLabel')}
+            </Text>
+          </View>
+          <View style={styles.fieldCard}>
+            <DeliveryTierEditor
+              rows={tierRows}
+              cap={DEFAULT_DELIVERY_FEE_CAP}
+              onChange={setTierRows}
             />
           </View>
         </>

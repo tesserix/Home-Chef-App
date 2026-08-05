@@ -94,6 +94,7 @@ const payoutRaceChefProfilesDDL = `CREATE TABLE IF NOT EXISTS chef_profiles (mod
 	prep_time text DEFAULT '', minimum_order double precision DEFAULT 0,
 	delivery_radius double precision DEFAULT 10, service_radius double precision DEFAULT 10,
 	offers_pickup boolean DEFAULT false, offers_self_delivery boolean DEFAULT false,
+	self_delivery_tiers text DEFAULT '[]',
 	self_delivery_base_fee double precision DEFAULT 0, self_delivery_free_radius_km double precision DEFAULT 0,
 	self_delivery_per_km double precision DEFAULT 0, self_delivery_max_fee double precision DEFAULT 0,
 	self_delivery_max_distance_km double precision DEFAULT 0,

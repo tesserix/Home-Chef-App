@@ -722,6 +722,12 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		}
 	}
 
+	tiers := req.SelfDeliveryTiers.Normalized()
+	if err := services.ValidateChefDeliveryTiers(tiers); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "field": "selfDeliveryTiers"})
+		return
+	}
+
 	chef := models.ChefProfile{
 		UserID: userID,
 		// Cashfree-preferred; see DefaultChefPaymentProvider for why this degrades
@@ -737,6 +743,7 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		ServiceRadius:      req.ServiceRadius,
 		OffersPickup:       req.OffersPickup,
 		OffersSelfDelivery: req.OffersSelfDelivery,
+		SelfDeliveryTiers:  tiers.JSON(),
 		AddressLine1:       req.KitchenAddress.Line1,
 		AddressLine2:       req.KitchenAddress.Line2,
 		City:               req.KitchenAddress.City,
@@ -913,6 +920,15 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 	chef.ServiceRadius = req.ServiceRadius
 	chef.OffersPickup = req.OffersPickup
 	chef.OffersSelfDelivery = req.OffersSelfDelivery
+	// Absent = this step didn't carry pricing, so leave the published ladder alone.
+	if len(req.SelfDeliveryTiers) > 0 {
+		tiers := req.SelfDeliveryTiers.Normalized()
+		if err := services.ValidateChefDeliveryTiers(tiers); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "field": "selfDeliveryTiers"})
+			return
+		}
+		chef.SelfDeliveryTiers = tiers.JSON()
+	}
 	chef.AddressLine1 = req.KitchenAddress.Line1
 	chef.AddressLine2 = req.KitchenAddress.Line2
 	chef.City = req.KitchenAddress.City
@@ -1219,11 +1235,15 @@ type OnboardingRequest struct {
 	// kitchen can't be activated (the admin verify gate rejects it). The onboarding
 	// wizard requires the chef to pick at least one, so a completed application
 	// always satisfies the gate.
-	OffersPickup       bool                    `json:"offersPickup"`
-	OffersSelfDelivery bool                    `json:"offersSelfDelivery"`
-	OperatingHours     map[string]*DayHoursReq `json:"operatingHours"`
-	PanNumber          string                  `json:"panNumber"`
-	FSSAINumber        string                  `json:"fssaiLicenseNumber"`
+	OffersPickup       bool `json:"offersPickup"`
+	OffersSelfDelivery bool `json:"offersSelfDelivery"`
+	// SelfDeliveryTiers is the chef's published distance→fee ladder. Set here or
+	// later from the profile screen; either way it is the fee the customer pays
+	// and is bounded by the platform ceiling.
+	SelfDeliveryTiers models.DeliveryFeeTiers `json:"selfDeliveryTiers"`
+	OperatingHours    map[string]*DayHoursReq `json:"operatingHours"`
+	PanNumber         string                  `json:"panNumber"`
+	FSSAINumber       string                  `json:"fssaiLicenseNumber"`
 	// GSTIN is optional — chefs below the GST threshold don't need one.
 	// When provided, persisted to chef_profiles.gstin and printed on
 	// customer invoices alongside the FSSAI number.

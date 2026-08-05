@@ -431,6 +431,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// live 3PL quote once the delivery address (and its coords) is resolved.
 	policy := services.GetPlatformPolicy()
 	deliveryFee := policy.BaseDeliveryFee
+	deliveryFeeSource := models.DeliveryFeeSourcePlatform
 	platformFee := subtotal * (policy.PlatformFeePercent / 100.0)
 
 	// Tax is resolved per customer country (and state/region when known)
@@ -507,7 +508,11 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// bill a multiplier the customer never saw.
 	chargeSurge := services.ResolveChargeSurge(c.Request.Context(), req.SurgePin, chef,
 		deliveryAddr.Latitude, deliveryAddr.Longitude, deliveryCountry)
-	deliveryFee = services.QuoteOrderDeliveryFeeCtx(chef, fulfillment, deliveryAddr.Latitude, deliveryAddr.Longitude, deliveryAddr.City, deliveryCountry, chargeSurge)
+	// The source is frozen with the fee: a `delivery` order has no carrier until
+	// Mark Ready, so only whose rates priced it says whether the fee is the
+	// kitchen's to earn (services/chef_payout.go).
+	deliveryQuote := services.QuoteOrderDelivery(chef, fulfillment, deliveryAddr.Latitude, deliveryAddr.Longitude, deliveryAddr.City, deliveryCountry, chargeSurge)
+	deliveryFee, deliveryFeeSource = deliveryQuote.Fee, deliveryQuote.Source
 
 	taxRule := services.ResolveTaxRate(deliveryCountry, deliveryAddr.State)
 	// One pricing function for the whole platform (models/pricing.go). It rounds
@@ -612,32 +617,33 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		// Snapshot the kitchen's mode onto the order. From here on every gateway
 		// operation for this order reads order.Mode — never the chef's current
 		// mode, which an admin may flip at any time.
-		ModePartition:   services.PartitionForChef(&chef),
-		OrderNumber:     orderNumber,
-		CustomerID:      userID,
-		ChefID:          chef.ID,
-		PaymentProvider: orderProvider,
-		Currency:        orderCurrency,
-		Status:          models.OrderStatusPending,
-		PaymentStatus:   models.PaymentPending,
-		Subtotal:        subtotal,
-		DeliveryFee:     deliveryFee,
-		PlatformFee:     platformFee,
-		Tax:             tax,
-		TaxRate:         taxRule.Rate,
-		TaxName:         taxRule.TaxName,
-		TaxInclusive:    taxRule.Inclusive,
+		ModePartition:     services.PartitionForChef(&chef),
+		OrderNumber:       orderNumber,
+		CustomerID:        userID,
+		ChefID:            chef.ID,
+		PaymentProvider:   orderProvider,
+		Currency:          orderCurrency,
+		Status:            models.OrderStatusPending,
+		PaymentStatus:     models.PaymentPending,
+		Subtotal:          subtotal,
+		DeliveryFee:       deliveryFee,
+		DeliveryFeeSource: deliveryFeeSource,
+		PlatformFee:       platformFee,
+		Tax:               tax,
+		TaxRate:           taxRule.Rate,
+		TaxName:           taxRule.TaxName,
+		TaxInclusive:      taxRule.Inclusive,
 		// Freeze the rule per supply, so a rate the admin edits tomorrow cannot
 		// restate this invoice or misprice its refund.
-		TaxFood:         pricing.TaxFood,
-		TaxService:      pricing.TaxService,
-		TaxDelivery:     pricing.TaxDelivery,
+		TaxFood:               pricing.TaxFood,
+		TaxService:            pricing.TaxService,
+		TaxDelivery:           pricing.TaxDelivery,
 		TaxRateFood:           rates.Food,
 		TaxRateService:        rates.Service,
 		TaxRateDelivery:       rates.Delivery,
 		TaxServiceInclusive:   rates.ServiceInclusive,
 		TaxDeliveryByPlatform: rates.DeliveryByPlatform,
-		Tip:             tip,
+		Tip:                   tip,
 		// #964: route the tip to the chef. `Tip` is the LEGACY total column
 		// (models/order.go) and nothing in the payout stack reads it — earnings,
 		// the weekly statement, the FY statement, the statement PDF, the TDS

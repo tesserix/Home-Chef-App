@@ -108,9 +108,12 @@ func TestParseFuelFromMarkup_IgnoresScriptNoise(t *testing.T) {
 // TestSurgeChargedOnlyWhenEnabled pins the money decision: the same conditions
 // must move the charged fee when surge-charging is on, and leave it alone when off.
 func TestSurgeChargedOnlyWhenEnabled(t *testing.T) {
+	// Rates kept modest so the surged fee stays under the platform's own ceiling
+	// (MaxChefDeliveryFee) — this test is about the surge arithmetic, and the
+	// ceiling is pinned separately.
 	chef := models.ChefProfile{
 		Latitude: 12.90, Longitude: 77.50,
-		SelfDeliveryBaseFee: 20, SelfDeliveryPerKm: 10, OffersSelfDelivery: true,
+		SelfDeliveryBaseFee: 20, SelfDeliveryPerKm: 3, OffersSelfDelivery: true,
 	}
 	dropLat, dropLng := 12.97, 77.59
 

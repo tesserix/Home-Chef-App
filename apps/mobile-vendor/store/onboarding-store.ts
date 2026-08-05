@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import type { DeliveryTier } from '../lib/deliveryTiers';
+
 type DayHours = { open: string; close: string; closed: boolean };
 
 interface PersonalInfo {
@@ -30,6 +32,8 @@ interface Operations {
   // (a kitchen offering neither can't be activated).
   offersPickup: boolean;
   offersSelfDelivery: boolean;
+  // Published distance→fee ladder. Empty = price delivery the platform's way.
+  selfDeliveryTiers: DeliveryTier[];
 }
 
 interface Documents {
@@ -128,6 +132,7 @@ const initialState = {
     serviceRadius: 10,
     offersPickup: true,
     offersSelfDelivery: false,
+    selfDeliveryTiers: [],
   },
   documents: {
     idProofUri: null,

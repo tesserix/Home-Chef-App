@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api';
-import type { TaxLine } from '../types/customer';
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../lib/api";
+import type { TaxLine } from "../types/customer";
 
 // Checkout delivery-fee preview (#pickup-incentive). The screen used to show
 // "Delivery fee — Free" for every mode, which both hid the real fee and made
@@ -9,9 +9,9 @@ import type { TaxLine } from '../types/customer';
 // total different from what CreateOrder bills.
 
 /**
- * Itemised, capped self-delivery estimate (#702). Present only when the chef
- * self-delivers. `fee` is the approx MAX the chef can charge — at accept the chef
- * can only bring it down (#703), never above it.
+ * Itemised, capped self-delivery fee (#702). Present only when the chef
+ * self-delivers. `fee` is FINAL — it is settled at checkout and accepting the
+ * order never re-prices it.
  */
 export interface SelfDeliveryBreakdown {
   baseFee: number;
@@ -33,6 +33,13 @@ export interface SelfDeliveryBreakdown {
   trafficSurge: number;
   /** Combined surge multiplier applied to the estimate (≥1). */
   surgeMultiplier: number;
+  /** The chef's published distance band priced this — a flat fee, not an estimate. */
+  tierApplied: boolean;
+  /** Upper distance of that band, in km. */
+  tierUpToKm: number;
+  /** Platform ceiling for this distance — the chef can never charge above it. */
+  platformMaxFee: number;
+  cappedByPlatform: boolean;
   fee: number;
 }
 
@@ -56,7 +63,7 @@ export interface DeliveryQuote {
   currency: string;
   offersPickup: boolean;
   offersSelfDelivery: boolean;
-  /** Approx-max self-delivery fee (₹). Present only when the chef self-delivers. */
+  /** Self-delivery fee (₹). Present only when the chef self-delivers. */
   selfDeliveryFee?: number;
   selfDeliveryBreakdown?: SelfDeliveryBreakdown;
   /** Serviceability for the drop coords (#709): whether this address is within the
@@ -106,11 +113,11 @@ export interface DeliveryQuote {
 /** Why the loyalty row is capped, so the UI can explain the limit rather than
  *  reimplementing the cap logic to guess at it. */
 export type LoyaltyLimit =
-  | 'balance'
-  | 'per_order_cap'
-  | 'monthly_cap'
-  | 'order_covered'
-  | 'disabled';
+  | "balance"
+  | "per_order_cap"
+  | "monthly_cap"
+  | "order_covered"
+  | "disabled";
 
 export interface CreditQuote {
   /** Ceiling credit may fund: food + delivery. Fees and tax are never included. */
@@ -173,14 +180,36 @@ export function useDeliveryQuote(
     credit?: CreditIntent;
   },
 ) {
-  const { latitude, longitude, city, country, state, subtotal, discount, fulfillment, tip, credit } = drop;
+  const {
+    latitude,
+    longitude,
+    city,
+    country,
+    state,
+    subtotal,
+    discount,
+    fulfillment,
+    tip,
+    credit,
+  } = drop;
   return useQuery<DeliveryQuote>({
     // Keyed on everything that moves the fee, the tax OR the credit allocation —
     // a stale credit block would put the screen back in the business of guessing.
     queryKey: [
-      'delivery-quote', chefId, latitude, longitude, city, state, subtotal,
-      discount, fulfillment, tip, credit?.useWallet, credit?.walletAmount,
-      credit?.useLoyalty, credit?.loyaltyPoints,
+      "delivery-quote",
+      chefId,
+      latitude,
+      longitude,
+      city,
+      state,
+      subtotal,
+      discount,
+      fulfillment,
+      tip,
+      credit?.useWallet,
+      credit?.walletAmount,
+      credit?.useLoyalty,
+      credit?.loyaltyPoints,
     ],
     queryFn: async () =>
       (
