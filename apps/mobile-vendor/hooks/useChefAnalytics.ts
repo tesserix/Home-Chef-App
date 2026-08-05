@@ -8,10 +8,21 @@ export type AnalyticsPeriod = '7d' | '30d' | '90d';
 
 export interface AnalyticsSummary {
   orders: number;
+  /** Orders that settled in the window — the ones `revenue` came from. */
+  settledOrders: number;
+  /** Net payout, on the same settlement basis as the Earnings screen (#1030). */
   revenue: number;
   aov: number;
   repeatRate: number; // %
   prevRevenue: number;
+}
+
+/** The calendar week and month the platform pays out on, so this screen and the
+ *  Earnings screen quote the same figure rather than two rolling windows. */
+export interface SettledEarnings {
+  currency: string;
+  week: number;
+  month: number;
 }
 export interface Trend {
   labels: string[];
@@ -24,6 +35,7 @@ export interface PopularItem {
 }
 export interface AnalyticsResponse {
   summary: AnalyticsSummary;
+  earnings: SettledEarnings;
   orderTrends: Trend;
   revenueTrends: Trend;
   popularItems: PopularItem[];

@@ -26,29 +26,35 @@ Product/route map: `.claude/skills/fe3dr/SKILL.md`.
 > If it reads `PRODUCTION`, the kitchen is live: **run no payment case**, mark
 > C1–C8 blocked, and tell the user.
 
-## Run status — paused 2026-08-06 00:19 IST
+## Run status — customer sweep 2026-08-06 02:50 IST
 
-Paused at the user's request for a round of fixes. State left behind:
+**Resume at B5** (§B kitchen-closed), then B2, B6–B12. E7 (reject with a reason) and
+E8 (item-level cancel) still need a fresh sandbox-UPI order — both vendor queues are empty.
 
-- **Saffron Home Kitchen is OPEN again** (closed for B1–B5, reopened at 00:17). No kitchen left shut.
-- **No open test orders.** `cc78cc0c-2112-42a7-8e98-351681978f44` was driven to Delivered; New and Active queues are both empty.
-- **Customer cart is empty**, checkout cancelled.
-- Both sims booted: Customer `1F8A41D0-F272-41E8-B712-CA096C86FFED`, Vendor `FEF2B288-CD88-418A-9787-FF6871E3A147`. Harness: `scratchpad/sim.sh <cust|vend> <shot|tap|text|swipe|key>`.
+**Environment as left:** Saffron Home Kitchen open, no open test orders, cart empty,
+ChefBook comment count back to 1 (test comment posted and deleted). Metro on 8082
+(customer) and 8081 (vendor); harness `sim.sh` in the session scratchpad.
 
-**Resume at B5** — reopen a closed-kitchen checkout and scroll to the top of the
-slot section to settle whether ASAP is offered. Then B2, B6–B12.
+**Covered this pass (customer only, no vendor cross-check):** rewards, order-detail
+money, receipt, meal plans, wallet, referral, subscriptions, ChefBook + comments.
 
-Also unrun and needing a fresh paid order: **E7** (reject with a reason) and
-**E8** (item-level cancel) — the queue is empty, so both need a new
-sandbox-UPI order placed first.
+**Blocker:** the receipt/tax-invoice screen cannot be opened at all (#1038), so #1027
+cannot be re-verified and D7 stays failed.
 
-**Issues filed so far:** #1027 (receipt total off by the wallet credit), #1028 (P&L expenses always ₹0).
+**Theme of this pass — charge transparency is inconsistent.** Order detail is exemplary
+and reconciles to the paise. Every other money surface falls short of it: meal plans hide
+27% of the charge (#1039), cancelled plans never state the refund (#1041), subscriptions
+never state the next charge (#1042).
 
-**Observed, not yet filed** (low severity, all copy):
-- Vendor dashboard: "**1 orders** awaiting acceptance" — no pluralisation.
-- Vendor Analytics: "~**1 meals**" in tomorrow's demand — same defect.
-- Chef delivery-fee copy: "You can't charge more than ₹39" against a ₹39.15 prefill.
-- Vendor order detail never stamps **Preparing** while the Active-list rail does (see E9).
+**Observed, not filed:**
+- Customer accent renders `#E00B41` / `#FF385C` (coral-rose), not persimmon `#C2410C`.
+  Deliberate long-standing tokens in `tailwind.config.js`; `.impeccable.md` documents the
+  migration as in progress, so this is a known gap rather than a regression.
+- ChefBook comment delete is destructive, immediate and unconfirmed.
+- Vendor copy: "1 orders awaiting acceptance", "~1 meals".
+- Vendor payout prefill: "You can't charge more than ₹39" against a ₹39.15 prefill.
+- Vendor order detail never stamps **Preparing** (the customer rail does render it).
+- Loyalty "Earn 500 more to redeem" governs points→wallet conversion only, not checkout.
 
 ## Fixtures
 
@@ -150,7 +156,8 @@ agree, and all three must read `availability`, never `acceptingOrders` alone.
 | D4 | UPI failure | New order → sandbox UPI failure path | Failure surfaced with a retry path; **no phantom paid order** | ⏳ | |
 | D5 | Payment hold | `/payment/hold` between order and gateway | Nothing charged and nothing committed until the gateway settles | ⏳ | |
 | D6 | Abandon payment | Open the sheet, back out | Order left unpaid; cart not silently emptied; no orphaned paid row | ⏳ | |
-| D7 | Receipt sanity | Order → Receipt | Line items, taxes, payment ref and total match checkout exactly | ❌ | Items/taxes match, but `Total ₹393.08` is the **pre-wallet gross** — ₹392.08 was charged. No wallet-credit line, no amount-paid line, no payment reference on a screen titled PAYMENT RECEIPT. → #1027 |
+| D7 | Receipt sanity | Order → Receipt | Line items, taxes, payment ref and total match checkout exactly | ❌ | **Re-test 6 Aug 02:26 — now unreachable.** Tapping *View receipt* redboxes `Cannot find native module 'ExpoSharing'` (`share-pdf.ts:2` ← `receipt.tsx:22`, a module-scope native import); dismissing leaves a blank white screen with no back affordance, and expo-router restores the dead route on relaunch. → #1038. #1027 (pre-wallet total) **cannot be re-verified** until #1038 is fixed. |
+| D8 | Order detail money | Order detail → Price breakdown | Every charge itemised and the lines sum to what was taken | ✅ | `#SAFFRON-HOME-KITCHEN-HC26080514338360`: Subtotal ₹320.00 + Delivery ₹39.14 + Platform fee ₹13.53 + CGST ₹10.20 + SGST ₹10.20 = **₹393.07 Total** ✓, then Wallet −₹0.60 and Loyalty −₹1.60 → **"Charged to your payment method ₹390.87"** ✓. Tax reconciles too: 5% food ₹16.00 + 5% self-delivery ₹1.96 + 18% platform fee ₹2.44 = ₹20.40 = CGST+SGST. This screen is the standard the receipt (#1027/#1038) and meal plans (#1039) should meet. |
 | D8 | Card path | — | Excluded by request | 🚫 | Sandbox card row dead-ends on a vault OTP |
 
 ## E · Chef receives & fulfils (vendor)
@@ -201,8 +208,8 @@ and the wallet ledger.
 
 | ID | Scenario | Steps | Expected | Status | Notes |
 |----|----------|-------|----------|--------|-------|
-| G1 | Browse plans | Plans tab → `/meal-plans` | Plans listed with price, duration, chef | ⏳ | |
-| G2 | Plan detail | Open a plan | Menu schedule, inclusions, price breakdown; `sum(days) + fees = plan total` | ⏳ | |
+| G1 | Browse plans | Plans tab → `/meal-plans` | Plans listed with price, duration, chef | ❌ | List renders with number, chef, range, count, price and a status chip (Confirmed / Cancelled / Expired / Completed). But the count labels **meals as days**: "7 Aug – 9 Aug · 5 days" for 5 meals over 3 dates, and "4 Aug – 4 Aug · 2 days". `MealPlanList.tsx:177` prints `{days.length} day(s)` where `days` is the booked-meal array. → #1040 |
+| G2 | Plan detail | Open a plan | Menu schedule, inclusions, price breakdown; `sum(days) + fees = plan total` | ❌ | `MP-3e1a2ecd`: 5 meal rows with date/slot/veg-marker/dish/price render correctly, but the money block is a bare **Total ₹1,513.63** against meals summing to **₹1,190** — **₹323.63 (27%) unexplained**, no delivery, fee or GST line. `mealPlanAdvanceBreakdown()` (`useMealPlans.ts:231`) already computes food/gst/delivery and is called only from `useMealPlanApproval.ts:79`, never here. Also `[id].tsx:271` shows food-only `acceptedTotal` under "If approved" — #402 reappearing. → #1039 |
 | G3 | Book a plan | Book → Cashfree sandbox UPI | Full advance charged into escrow; plan active; chef sees it | ⏳ | |
 | G4 | Escrow held per day | Vendor Earnings after G3 | Payout **held per day**, not released upfront | ⏳ | |
 | G5 | Chef prep view | Vendor → Meal plans → Prep / Daily menu | Booked plan appears in the prep list for the right dates | ⏳ | |
@@ -219,8 +226,8 @@ and the wallet ledger.
 | G16 | Whole-plan cancel | Cancel an active plan mid-way | Undelivered days refunded per lead-time; delivered days not | ⏳ | `RefundUndeliveredDays` |
 | G17 | Per-day arithmetic | After G16 | `refund = Σ refundableFood(undelivered days) × proportion`; served days untouched | ⏳ | Sanity |
 | G18 | Refund destination | Admin pays wallet vs source | Wallet instant; source flagged 5–7 business days | ⏳ | |
-| G19 | Plan refund in wallet | Wallet ledger | Entry names the plan and the day | ⏳ | |
-| G20 | Meal subscription | `/meal-subscription/[chefId]` | Subscribe completes; appears under `/subscriptions` | ⏳ | |
+| G19 | Plan refund in wallet | Wallet ledger | Entry names the plan and the day | ❌ | Ledger names the plan (`Tiffin SAFFRON-HOME-KITCHEN-MP-7b6bf84a — refund (75%) +₹162.89`) but **not the basis**: ₹162.89 is 67.8% of the ₹240.27 paid. The refund is almost certainly right (backend refunds food + delivery, withholds GST and platform fee — `meal_plan_escrow.go`), but the **plan detail shows no refund amount at all**, so the customer cannot reconcile it anywhere. → #1041 |
+| G20 | Meal subscription | `/meal-subscription/[chefId]` | Subscribe completes; appears under `/subscriptions` | ❌ | `/subscriptions` lists three rows (one **Trial** with Cancel, two Cancelled), each `Lunch · Veg · 5 days/week · Weekly · ₹900 · 0 delivered · 0 skipped · 0 missed`. Two omissions on a recurring charge: **no next-charge/trial-end date** (`currentPeriodEnd` is on the model, `useMealSubscription.ts:29`, and never rendered) and **no chef name** (`chefId` unused), so three identical cards give no way to tell which kitchen *Cancel* applies to. `creditBalance` is handled correctly at `subscriptions.tsx:251` — the pattern the other two need. → #1042 |
 | G21 | Subscription cancel | Cancel a subscription | Stops future charges; no orphaned upcoming days | ⏳ | |
 | G22 | Chef subscription config | Vendor `/subscriptions` | Config renders and saves | ⏳ | Uncommitted work in tree |
 
@@ -254,8 +261,8 @@ and the wallet ledger.
 |----|----------|-------|----------|--------|-------|
 | J1 | Chef writes a post | Vendor → More → ChefBook → title + blocks → publish | Published; empty title rejected with "Give your article a title" | ⏳ | |
 | J2 | Block types | Heading, paragraph, image URL, list | Each renders in the editor and the published post | ⏳ | |
-| J3 | Customer feed entry | Customer Home → **ChefBook** chip | Post listed with cover image and author | ⏳ | |
-| J4 | Post detail | `chefbook/[slug]` | Blocks in order; images load | ⏳ | |
+| J3 | Customer feed entry | Customer Home → **ChefBook** chip | Post listed with cover image and author | ✅ | Feed opens from the Home chip with the strapline "Recipes, methods and kitchen notes, written by the chefs who cook them." Card shows cover, chef avatar + "Saffron Home Kitchen", title, excerpt, "1 min read", comment count and reaction count. |
+| J4 | Post detail | `chefbook/[slug]` | Blocks in order; images load | ✅ | "Dalma, the Odia comfort classic": cover image, paragraph, H2, bulleted list and tag chips all render in order. Reaction row (Yum / Love / Want to try / Clever) shows own reaction selected with a count. **Comments verified end to end** — posted "E2E test comment…", count went 1→2, composer cleared, comment appeared attributed to Priya Sharma; deleted it again and the count returned to 1. Test data left clean. Note: delete fires immediately with **no confirmation**, and it is irreversible. |
 | J5 | Chef link-through | Post → chef | Routes to that kitchen | ⏳ | |
 | J6 | Edit / unpublish | Chef edits | Change reflected customer-side | ⏳ | |
 
@@ -276,11 +283,11 @@ and the wallet ledger.
 
 | ID | Scenario | Steps | Expected | Status | Notes |
 |----|----------|-------|----------|--------|-------|
-| L1 | Wallet balance | `/wallet` | Matches the header chip | ⏳ | |
-| L2 | Ledger entries | Wallet history | Each entry names its source order/refund | ⏳ | |
+| L1 | Wallet balance | `/wallet` | Matches the header chip | ✅ | ₹163.53 on both the Home header chip and the Wallet card. Splits Wallet credit ₹163.53 / Loyalty ₹0.00 (0 pts), and states the spend rule up front: "Usable on food & delivery. Fees and taxes are paid separately." |
+| L2 | Ledger entries | Wallet history | Each entry names its source order/refund | ✅ | Every row carries a type, a date and a source — refunds name the order or plan number, debits read "checkout". Credit/debit direction is shown by both sign and arrow glyph. Basis of the % is missing on plan refunds — see G19 / #1041. |
 | L3 | Ledger sums | Σ credits − Σ debits | Equals the displayed balance | ⏳ | Sanity |
-| L4 | Loyalty | `/loyalty` | Points/tier render; an order accrues points | ⏳ | |
-| L5 | Referral | `/referral` | Code + share sheet; copyable | ⏳ | |
+| L4 | Loyalty | `/loyalty` | Points/tier render; an order accrues points | ✅ | Balance 0, Bronze tier. Ledger shows matched +32/−32 pairs traceable to the delivered order (earn on delivery, burn on redemption). The "Earn 500 more to redeem" gate is the **points→wallet conversion** minimum (`loyalty.tsx:60`), not checkout redemption — checkout has no minimum, which is why 9–97-point redemptions appear in history. Copy is ambiguous but the behaviour is correct; not filed. |
+| L5 | Referral | `/referral` | Code + share sheet; copyable | ✅ | "Give ₹55, get ₹75" with the terms spelled out (friend gets ₹55 in points; you get ₹75 once they place their first order). Code `RJY85G8C`, WhatsApp / Message / Email + "More ways to share", counters (0 friends joined, ₹0 earned) and a 3-step HOW IT WORKS. Clearest money copy in the app. |
 
 ## M · Account, notifications & support (customer)
 

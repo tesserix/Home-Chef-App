@@ -118,12 +118,52 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	period := c.DefaultQuery("period", "week")
 	cycleStart, cycleEnd := resolvePeriod(period, userID)
 
-	// Query delivered orders within the period
+	commissionRate := services.GetCommissionRate(database.DB)
+	totals, orderItems, err := chefSettledEarnings(chef, cycleStart, cycleEnd, commissionRate)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch orders"})
+		return
+	}
+
+	// Surface the resolved runtime commission rate the chef is charged.
+	effectiveCommission := commissionRate
+
+	c.JSON(http.StatusOK, gin.H{
+		"cycleStart": cycleStart,
+		"cycleEnd":   cycleEnd,
+		"currency":   services.EarningsCurrency,
+		"rates": breakdownRates{
+			PlatformCommission: effectiveCommission,
+			GST:                services.RateGST,
+			TDS:                services.RateTDS,
+		},
+		"totals": totals,
+		"orders": orderItems,
+	})
+}
+
+// chefSettledEarnings is THE definition of a chef's earnings in a window, and the
+// only place the query lives.
+//
+// Settled means: delivered, not refunded, not soft-deleted, in the chef's current
+// mode — anchored on delivered_at, because money is earned when the food arrives,
+// not when the order was placed. The Earnings screen, the Analytics money figures
+// and the weekly statement all call this, so a chef cannot open two screens and be
+// told two different numbers for the same week (#1030).
+//
+// The vendor Analytics screen used to count anything PAID (any status, any age,
+// bucketed on created_at) as revenue, which is a demand metric — legitimate for
+// the orders chart, wrong under a heading the chef reads as "what I made".
+func chefSettledEarnings(
+	chef models.ChefProfile,
+	from, to time.Time,
+	commissionRate float64,
+) (earningsTotals, []earningsOrderResponse, error) {
 	var rows []earningsOrderRow
-	if err := database.DB.Raw(`
-		-- tax_food/tax_service are NOT optional: ChefTaxOf falls back to the whole
-		-- order tax when both scan as zero, which shows the chef the platform's
-		-- own GST on the fee and delivery as if it were theirs.
+	// tax_food/tax_service are NOT optional in the projection: ChefTaxOf falls back
+	// to the whole order tax when both scan as zero, which would show the chef the
+	// platform's own GST on the fee and delivery as if it were theirs.
+	err := database.DB.Raw(`
 		SELECT id, order_number, delivered_at, subtotal, tax,
 		       tax_food, tax_service, chef_funded_discount,
 		       delivery_fee, chef_tip, delivery_address_state, commission_rate,
@@ -134,30 +174,23 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 		AND    delivered_at >= ?
 		AND    delivered_at <= ?
 		AND    deleted_at    IS NULL
-		-- Same two guards the weekly statement applies (services/statement.go), so the
-		-- screen shows the chef what they will actually be paid. Without them a sandbox
-		-- order counted toward a live chef's earnings, and a refunded order — which the
-		-- statement and the payout-release path both exclude — was billed here as if it
-		-- had settled. Status stays 'delivered' on the order-issue refund path, so
-		-- filtering on status alone does not catch it.
+		-- Same two guards the weekly statement applies (services/statement.go). Without
+		-- them a sandbox order counts toward a live chef's earnings, and a refunded
+		-- order — which the statement and the payout-release path both exclude — is
+		-- billed as if it had settled. Status stays 'delivered' on the order-issue
+		-- refund path, so filtering on status alone does not catch it.
 		AND    refunded_at   IS NULL
 		AND    mode = COALESCE((SELECT mode FROM chef_profiles WHERE id = ?), 'live')
 		ORDER  BY delivered_at ASC
-	`, chef.ID, cycleStart, cycleEnd, chef.ID).Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch orders"})
-		return
+	`, chef.ID, from, to, chef.ID).Scan(&rows).Error
+	if err != nil {
+		return earningsTotals{}, nil, err
 	}
 
 	orderItems := make([]earningsOrderResponse, 0, len(rows))
 	var totals earningsTotals
-
-	// Flat platform commission (ADR-0001 / #390) — resolved once from
-	// PlatformSettings so the breakdown matches the rate the chef is charged.
-	commissionRate := services.GetCommissionRate(database.DB)
-
 	for _, row := range rows {
 		breakdown := computeOrderBreakdown(row, chef.State, commissionRate)
-
 		orderItems = append(orderItems, breakdown)
 
 		totals.GrossRevenue += breakdown.Gross
@@ -177,7 +210,6 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 		}
 	}
 
-	// Round totals to 2dp
 	totals.GrossRevenue = round2(totals.GrossRevenue)
 	totals.PlatformCommission = round2(totals.PlatformCommission)
 	totals.CGST = round2(totals.CGST)
@@ -187,22 +219,7 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	totals.NetPayout = round2(totals.NetPayout)
 	totals.Held = round2(totals.Held)
 	totals.Released = round2(totals.Released)
-
-	// Surface the resolved runtime commission rate the chef is charged.
-	effectiveCommission := commissionRate
-
-	c.JSON(http.StatusOK, gin.H{
-		"cycleStart": cycleStart,
-		"cycleEnd":   cycleEnd,
-		"currency":   services.EarningsCurrency,
-		"rates": breakdownRates{
-			PlatformCommission: effectiveCommission,
-			GST:                services.RateGST,
-			TDS:                services.RateTDS,
-		},
-		"totals": totals,
-		"orders": orderItems,
-	})
+	return totals, orderItems, nil
 }
 
 // computeOrderBreakdown applies the earnings rules to a single order row and

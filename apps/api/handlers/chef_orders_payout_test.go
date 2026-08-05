@@ -23,15 +23,11 @@ import (
 	"github.com/homechef/api/services"
 )
 
-// payoutMoneyColumns adds the order columns the payout formula reads — the
-// visibility harness carries only subtotal/tax/total, and a missing delivery_fee
-// scans as 0, which would silently pass a test asserting the chef is NOT paid
-// for a leg they carried.
+// payoutMoneyColumns adds the order columns the payout formula reads that the
+// visibility harness does not already carry.
 func payoutMoneyColumns(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN delivery_fee REAL DEFAULT 0`).Error)
 	require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN delivery_fee_final REAL`).Error)
-	require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN chef_tip REAL DEFAULT 0`).Error)
 }
 
 func payoutTables(t *testing.T, db *gorm.DB) {

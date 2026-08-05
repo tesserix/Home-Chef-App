@@ -18,7 +18,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Bell, BookOpen, ChevronLeft, Heart, Share2 } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
+import {
+  Bell,
+  BookOpen,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  Copy,
+  Heart,
+  Share2,
+} from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
@@ -31,6 +41,11 @@ import {
   shareToNetwork,
   type SocialNetwork,
 } from '../lib/social-share';
+import {
+  KITCHEN_SUBJECT,
+  resolveShareSubject,
+  shareSubjectOptions,
+} from '../lib/share-subject';
 
 interface PromoteProfile {
   businessName?: string;
@@ -40,17 +55,15 @@ interface PromoteProfile {
   articleReactionCount?: number;
 }
 
-// What the share buttons act on. 'kitchen' is the default; anything else is a
-// published article id.
-type ShareSubject = 'kitchen' | string;
-
 export default function PromoteScreen() {
   const { show: showToast } = useToast();
   const [pending, setPending] = useState<SocialNetwork | null>(null);
   // ChefBook sends the post the chef tapped Share on, so they land here with it
   // already chosen rather than picking it out of the list again.
   const { articleId } = useLocalSearchParams<{ articleId?: string }>();
-  const [subject, setSubject] = useState<ShareSubject>(articleId ?? 'kitchen');
+  const [subject, setSubject] = useState<string>(articleId ?? KITCHEN_SUBJECT);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [targetsOpen, setTargetsOpen] = useState(false);
 
   const { data, isLoading } = useQuery<PromoteProfile>({
     // Same key the Profile screen uses, so an edit there refreshes the name and
@@ -67,23 +80,22 @@ export default function PromoteScreen() {
   const slug = data?.slug ?? '';
   const url = slug ? chefPublicUrl(slug) : '';
 
-  // Only published posts. Sharing a draft would send readers to something that
-  // isn't there yet.
-  const posts = useMemo(
-    () => (articleData?.data ?? []).filter((a) => a.status === 'published'),
-    [articleData],
+  const options = useMemo(
+    () => shareSubjectOptions(articleData?.data ?? [], businessName),
+    [articleData, businessName],
   );
-
-  const selected = posts.find((p) => p.id === subject);
+  const selected = resolveShareSubject(options, subject);
+  const isKitchen = !selected || selected.id === KITCHEN_SUBJECT;
 
   const onShare = useCallback(
     async (network: SocialNetwork) => {
       if (!url) return;
       setPending(network);
       try {
-        const content = selected
-          ? articleShare(businessName, selected.title, url)
-          : kitchenShare(businessName, url);
+        const content =
+          selected && selected.id !== KITCHEN_SUBJECT
+            ? articleShare(businessName, selected.title, url)
+            : kitchenShare(businessName, url);
         const ok = await shareToNetwork(network, content);
         if (!ok) {
           showToast({ message: 'Could not open that app. Try another.', tone: 'error' });
@@ -94,6 +106,12 @@ export default function PromoteScreen() {
     },
     [businessName, url, selected, showToast],
   );
+
+  const onCopy = useCallback(async () => {
+    if (!url) return;
+    await Clipboard.setStringAsync(url);
+    showToast({ message: 'Link copied', tone: 'success' });
+  }, [url, showToast]);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -145,9 +163,36 @@ export default function PromoteScreen() {
           {url ? (
             <View style={styles.linkBox}>
               <Text style={styles.linkLabel}>Your public page</Text>
-              <Text style={styles.linkUrl} numberOfLines={1}>
-                {url}
-              </Text>
+              <View style={styles.linkRow}>
+                <Text style={styles.linkUrl} numberOfLines={1}>
+                  {url}
+                </Text>
+                <Pressable
+                  onPress={() => void onCopy()}
+                  hitSlop={8}
+                  style={styles.iconButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy your page link"
+                  android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+                >
+                  <Copy size={18} strokeWidth={2} color={theme.colors.ink.soft} />
+                </Pressable>
+                <Pressable
+                  onPress={() => setTargetsOpen((o) => !o)}
+                  hitSlop={8}
+                  style={styles.iconButton}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: targetsOpen }}
+                  accessibilityLabel={targetsOpen ? 'Hide share options' : 'Show share options'}
+                  android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+                >
+                  <Share2
+                    size={18}
+                    strokeWidth={2}
+                    color={targetsOpen ? theme.colors.herb.DEFAULT : theme.colors.ink.soft}
+                  />
+                </Pressable>
+              </View>
             </View>
           ) : (
             // No slug means the profile has no business name yet — sharing a
@@ -157,35 +202,62 @@ export default function PromoteScreen() {
             </Text>
           )}
 
-          {url && posts.length > 0 ? (
+          {url && options.length > 1 ? (
             <View style={styles.subjects}>
               <Text style={styles.sectionLabel}>What to share</Text>
-              {[{ id: 'kitchen', title: 'Your kitchen' }, ...posts].map((option) => {
-                const active = subject === option.id;
-                return (
-                  <Pressable
-                    key={option.id}
-                    onPress={() => setSubject(option.id)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={`Share ${option.title}`}
-                    android_ripple={{ color: `${theme.colors.ink.DEFAULT}14` }}
-                  >
-                    <View style={[styles.subjectRow, active && styles.subjectRowActive]}>
-                      <Text
-                        style={[styles.subjectLabel, active && styles.subjectLabelActive]}
-                        numberOfLines={1}
+              <Pressable
+                onPress={() => setPickerOpen((o) => !o)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: pickerOpen }}
+                accessibilityLabel={`Sharing ${selected?.title ?? 'your kitchen'}. Tap to change.`}
+                android_ripple={{ color: `${theme.colors.ink.DEFAULT}14` }}
+              >
+                <View style={styles.pickerRow}>
+                  <Text style={styles.pickerValue} numberOfLines={1}>
+                    {selected?.title ?? 'Your kitchen'}
+                  </Text>
+                  <ChevronDown
+                    size={18}
+                    strokeWidth={2}
+                    color={theme.colors.ink.soft}
+                    style={pickerOpen ? styles.chevronOpen : undefined}
+                  />
+                </View>
+              </Pressable>
+              {pickerOpen
+                ? options.map((option) => {
+                    const active = selected?.id === option.id;
+                    return (
+                      <Pressable
+                        key={option.id}
+                        onPress={() => {
+                          setSubject(option.id);
+                          setPickerOpen(false);
+                        }}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: active }}
+                        accessibilityLabel={`Share ${option.title}`}
+                        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14` }}
                       >
-                        {option.title}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
+                        <View style={styles.optionRow}>
+                          <Text
+                            style={[styles.subjectLabel, active && styles.subjectLabelActive]}
+                            numberOfLines={1}
+                          >
+                            {option.title}
+                          </Text>
+                          {active ? (
+                            <Check size={18} strokeWidth={2.5} color={theme.colors.herb.DEFAULT} />
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    );
+                  })
+                : null}
             </View>
           ) : null}
 
-          {url ? (
+          {url && targetsOpen ? (
             <View style={styles.targets}>
               {SHARE_TARGETS.map((target) => (
                 <Pressable
@@ -193,7 +265,7 @@ export default function PromoteScreen() {
                   onPress={() => void onShare(target.id)}
                   disabled={pending !== null}
                   accessibilityRole="button"
-                  accessibilityLabel={`Share ${selected ? selected.title : businessName} on ${target.label}`}
+                  accessibilityLabel={`Share ${isKitchen ? businessName : selected!.title} on ${target.label}`}
                   android_ripple={{ color: `${theme.colors.ink.DEFAULT}14` }}
                 >
                   {({ pressed }) => (
@@ -264,20 +336,38 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   linkLabel: { fontFamily: 'Inter', fontSize: 12, color: theme.colors.ink.soft },
-  linkUrl: { fontFamily: 'Inter', fontSize: 14, color: theme.colors.ink.DEFAULT },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
+  linkUrl: { flex: 1, fontFamily: 'Inter', fontSize: 14, color: theme.colors.ink.DEFAULT },
+  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 
   subjects: { gap: theme.spacing[2] },
   sectionLabel: { fontFamily: 'Inter', fontSize: 12, color: theme.colors.ink.soft },
-  subjectRow: {
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[2],
     minHeight: 44,
-    justifyContent: 'center',
     paddingHorizontal: theme.spacing[3],
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.ink.soft,
   },
-  subjectRowActive: { borderColor: theme.colors.ink.DEFAULT, borderWidth: 1.5 },
-  subjectLabel: { fontFamily: 'Inter', fontSize: 15, color: theme.colors.ink.soft },
+  pickerValue: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 15,
+    fontWeight: '500',
+    color: theme.colors.ink.DEFAULT,
+  },
+  chevronOpen: { transform: [{ rotate: '180deg' }] },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[2],
+    minHeight: 44,
+    paddingHorizontal: theme.spacing[3],
+  },
+  subjectLabel: { flex: 1, fontFamily: 'Inter', fontSize: 15, color: theme.colors.ink.soft },
   subjectLabelActive: { color: theme.colors.ink.DEFAULT, fontWeight: '500' },
 
   targets: { gap: theme.spacing[2] },

@@ -1154,6 +1154,36 @@ func (h *MealPlanHandler) GetChefMealPlanRequests(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": plans})
 }
 
+// GetChefMealPlan — GET /chef/meal-plans/:id. ONE plan in any status, plus the
+// chef's settlement breakdown for it.
+//
+// The vendor detail screen used to resolve a plan out of the pending_chef list, so
+// a plan the chef had already accepted opened onto "no longer pending" — a chef
+// with a confirmed week could not see a single day of it (#1029). The breakdown
+// comes from the same engine that prices an à la carte order, so a plan's tax,
+// platform commission and net payout read identically on both surfaces.
+func (h *MealPlanHandler) GetChefMealPlan(c *gin.Context) {
+	chef, ok := authedChef(c)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	plan, ok := loadScopedPlan(c.Param("id"), "chef_id", chef.ID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
+		return
+	}
+	sort.SliceStable(plan.Days, func(i, j int) bool {
+		if plan.Days[i].Date.Equal(plan.Days[j].Date) {
+			return plan.Days[i].Slot < plan.Days[j].Slot
+		}
+		return plan.Days[i].Date.Before(plan.Days[j].Date)
+	})
+	earnings := services.ComputeMealPlanChefEarnings(&plan, services.GetCommissionRate(database.DB))
+	plan.ProjectForChef()
+	c.JSON(http.StatusOK, gin.H{"data": plan, "earnings": earnings})
+}
+
 // splitStatuses parses the comma-separated `status` query into a validated list.
 //
 // Unknown names are DROPPED rather than passed to the query: a typo would

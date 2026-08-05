@@ -326,22 +326,27 @@ export default function AnalyticsScreen() {
             />
           }
         >
-          {/* Summary — 2×2 stat grid (#228): revenue, orders, AOV, repeat rate. */}
+          {/* Summary — 2×2 stat grid (#228). The money is the settled net payout,
+              the same basis as the Earnings screen, so the two agree (#1030). */}
           <View style={styles.statGrid}>
             <View style={styles.statRow}>
               <DashboardStatsCard
-                title="Revenue"
+                title="Earnings"
                 value={inr(summary?.revenue ?? 0)}
                 subtitle={
                   summary && summary.prevRevenue > 0
                     ? `${summary.revenue >= summary.prevRevenue ? '▲' : '▼'} vs last period`
-                    : undefined
+                    : 'after commission & TDS'
                 }
               />
               <DashboardStatsCard title="Orders" value={summary?.orders ?? 0} />
             </View>
             <View style={styles.statRow}>
-              <DashboardStatsCard title="Avg order" value={inr(summary?.aov ?? 0)} />
+              <DashboardStatsCard
+                title="Per order"
+                value={inr(summary?.aov ?? 0)}
+                subtitle="you keep"
+              />
               <DashboardStatsCard
                 title="Repeat customers"
                 value={`${summary?.repeatRate ?? 0}%`}
@@ -350,10 +355,26 @@ export default function AnalyticsScreen() {
             </View>
           </View>
 
+          {/* The calendar week and month the platform pays out on — the period
+              above is a rolling window, and a chef reconciling against a payout
+              needs the boundary the payout actually uses. */}
+          {data?.earnings && (
+            <View style={styles.settledRow}>
+              <View style={styles.settledCol}>
+                <Text style={styles.settledLabel}>THIS WEEK</Text>
+                <Text style={styles.settledValue}>{inr(data.earnings.week)}</Text>
+              </View>
+              <View style={styles.settledCol}>
+                <Text style={styles.settledLabel}>THIS MONTH</Text>
+                <Text style={styles.settledValue}>{inr(data.earnings.month)}</Text>
+              </View>
+            </View>
+          )}
+
           {/* Revenue trend (#228) — hand-rolled bars, no charting dependency. */}
           {(data?.revenueTrends?.data?.length ?? 0) > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>REVENUE TREND</Text>
+              <Text style={styles.sectionLabel}>EARNINGS TREND</Text>
               <View style={styles.chartCard}>
                 <TrendBars trend={data!.revenueTrends} />
               </View>
@@ -559,6 +580,29 @@ const styles = StyleSheet.create({
   // Summary 2×2 stat grid (#228)
   statGrid: { gap: theme.spacing[3] },
   statRow: { flexDirection: 'row', gap: theme.spacing[3] },
+
+  // Settled week/month strip — a hairline row, not a third pair of cards.
+  settledRow: {
+    flexDirection: 'row',
+    marginTop: theme.spacing[4],
+    paddingTop: theme.spacing[4],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+  },
+  settledCol: { flex: 1 },
+  settledLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 1.4,
+    color: theme.colors.ink.muted,
+    marginBottom: theme.spacing[1],
+  },
+  settledValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
 
   // Revenue trend bars (#228)
   chartCard: {

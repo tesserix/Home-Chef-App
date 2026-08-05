@@ -1006,6 +1006,10 @@ func SetupRouter() *gin.Engine {
 		chefMealPlans.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
 		{
 			chefMealPlans.GET("", mealPlanHandler.GetChefMealPlanRequests)
+			// One plan in ANY status + its settlement breakdown. The list is
+			// status-filtered, so without this the detail screen can only open a
+			// plan the chef has not yet responded to (#1029).
+			chefMealPlans.GET("/:id", mealPlanHandler.GetChefMealPlan)
 			chefMealPlans.POST("/:id/respond", mealPlanHandler.RespondMealPlan)
 		}
 
