@@ -50,6 +50,7 @@ import {
 } from '../../hooks/useExpiringDocuments';
 import { useFssaiRequest } from '../../hooks/useFssai';
 import { fssaiDashboardNotice } from '../../lib/fssai';
+import { useDismissedNotice } from '../../hooks/useDismissedNotice';
 import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
 import {
   useChefMealPlanRequests,
@@ -226,6 +227,17 @@ export default function DashboardScreen() {
   // Every live transition of a filing request earns a line here, the same way an
   // order does — the chef should not have to open a menu to learn where it is.
   const fssaiNotice = fssaiDashboardNotice(fssaiData?.request ?? null);
+  const fssaiRequest = fssaiData?.request ?? null;
+  // Keyed by request AND status, so clearing one update does not silence the
+  // next. An urgent card is not dismissible — hiding "we need your photo ID"
+  // would leave the chef with a request that never moves and no way to know why.
+  const fssaiNoticeKey =
+    fssaiRequest && fssaiNotice?.tone === 'calm'
+      ? `fssai:${fssaiRequest.id}:${fssaiRequest.status}`
+      : null;
+  const { dismissed: fssaiDismissed, dismiss: dismissFssai } =
+    useDismissedNotice(fssaiNoticeKey);
+  const showFssaiNotice = !!fssaiNotice && !(fssaiNoticeKey && fssaiDismissed);
   const pendingMealPlans = mealPlanResp?.data ?? [];
 
   const displayName = deriveDisplayName(
@@ -654,7 +666,7 @@ export default function DashboardScreen() {
         {/* Under the hero, not above it: the greeting and today's numbers are
             what a chef opens the app for, and a filing update is context on top
             of that rather than something to read first. */}
-        {fssaiNotice ? (
+        {showFssaiNotice && fssaiNotice ? (
           <Pressable
             style={[
               styles.fssaiCard,
@@ -668,7 +680,19 @@ export default function DashboardScreen() {
               <Text style={styles.fssaiCardTitle}>{fssaiNotice.title}</Text>
               <Text style={styles.fssaiCardBody}>{fssaiNotice.body}</Text>
             </View>
-            <Text style={styles.fssaiCardChevron}>›</Text>
+            {fssaiNoticeKey ? (
+              <Pressable
+                onPress={dismissFssai}
+                accessibilityRole="button"
+                accessibilityLabel="Clear this update"
+                hitSlop={12}
+                style={styles.fssaiCardClear}
+              >
+                <Text style={styles.fssaiCardClearText}>✕</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.fssaiCardChevron}>›</Text>
+            )}
           </Pressable>
         ) : null}
 
@@ -1398,6 +1422,8 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.soft,
   },
   fssaiCardChevron: { fontSize: 22, color: theme.colors.ink.soft },
+  fssaiCardClear: { paddingHorizontal: theme.spacing[1] },
+  fssaiCardClearText: { fontSize: 16, color: theme.colors.ink.muted },
 
   weekRow: {
     flexDirection: 'row',

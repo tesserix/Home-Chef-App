@@ -14,6 +14,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -406,11 +407,20 @@ func NotifyFssaiRequestStatus(db *gorm.DB, r *models.FssaiRequest) {
 			r.ID, r.Status)
 		return
 	}
+	// The id goes in Data because the live stream routes on it: the frame the
+	// chef's app receives is this notification, and without the id it invalidates
+	// the bell but not the request itself — the tracker would sit on a stale
+	// status until something else refetched.
+	data, _ := json.Marshal(map[string]string{
+		"fssai_request_id": r.ID.String(),
+		"status":           r.Status,
+	})
 	if err := svc.SaveUserNotification(&models.Notification{
 		UserID:  r.UserID,
 		Type:    "fssai_request_" + r.Status,
 		Title:   title,
 		Message: message,
+		Data:    string(data),
 	}); err != nil {
 		log.Printf("FSSAI request %s: chef notification FAILED for %s: %v", r.ID, r.Status, err)
 		return

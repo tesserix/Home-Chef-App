@@ -13,6 +13,7 @@ export interface LiveEventPayload {
   meal_plan_id?: string;
   meal_plan_day_id?: string;
   day_id?: string;
+  fssai_request_id?: string;
 }
 
 // The chef's own views. Grouped by what a change actually invalidates rather than by which
@@ -55,6 +56,11 @@ const NOTIFICATION_KEYS = [
  * unrecognised — an event we have no view for is not an error, and refetching the whole
  * app because a loyalty point moved would be worse than ignoring it.
  */
+// The filing request and the dashboard card that mirrors it. A status an admin
+// sets is meant to reach the chef "straight away" — the admin screen says so —
+// and without this it waited for a refetch.
+const FSSAI_KEYS = [['chef', 'fssai', 'request']];
+
 export function invalidationsFor(payload: LiveEventPayload): string[][] {
   const keys: string[][] = [...NOTIFICATION_KEYS];
   if (payload.order_id) {
@@ -66,6 +72,9 @@ export function invalidationsFor(payload: LiveEventPayload): string[][] {
   // A day carries its own refund lifecycle, and the chef has a queue for exactly that.
   if (payload.meal_plan_day_id || payload.day_id) {
     keys.push(...REFUND_KEYS);
+  }
+  if (payload.fssai_request_id) {
+    keys.push(...FSSAI_KEYS);
   }
   return keys;
 }
