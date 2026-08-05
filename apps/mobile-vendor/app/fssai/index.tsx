@@ -314,12 +314,24 @@ export default function FssaiScreen() {
   );
 }
 
+// Leaves the screen for wherever the chef came from — More, Profile, Documents
+// or the onboarding pending screen. Falls back to the dashboard when there is no
+// history to pop: a deep link, or a return from checkout, would otherwise leave
+// the back button doing nothing at all.
+function goBack() {
+  if (router.canGoBack()) {
+    router.back();
+    return;
+  }
+  router.replace('/(tabs)');
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={goBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
           hitSlop={12}
