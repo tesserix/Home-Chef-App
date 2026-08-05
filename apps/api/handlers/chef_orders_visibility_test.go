@@ -53,6 +53,13 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 		payment_method TEXT DEFAULT '', fulfillment_type TEXT DEFAULT '',
 		subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, total REAL DEFAULT 0,
 		currency TEXT DEFAULT 'INR',
+		-- The dashboard's money now comes from the settlement query (#1030), which
+		-- reads these; without them it errors and the hero silently reads zero.
+		tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0,
+		chef_funded_discount REAL DEFAULT 0, delivery_fee REAL DEFAULT 0,
+		chef_tip REAL DEFAULT 0, delivery_address_state TEXT DEFAULT '',
+		commission_rate REAL DEFAULT 0, payout_hold_status TEXT DEFAULT '',
+		delivered_at DATETIME, refunded_at DATETIME,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE order_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, 

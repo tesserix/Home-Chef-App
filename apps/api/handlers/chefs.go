@@ -878,13 +878,9 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	// left them unscoped by mode (sandbox money in a live total) and over a different
 	// population than the count sitting next to them.
 	var todayOrders int64
-	var todayRevenue float64
 	chefVisibleOrders(chef.ID).
 		Where("created_at >= ?", todayStart).
 		Count(&todayOrders)
-	chefVisibleOrders(chef.ID).
-		Where("created_at >= ?", todayStart).
-		Select(chefCountedRevenueExpr("orders")).Scan(&todayRevenue)
 
 	// Pending badge — same scope as the New tab, so the badge always equals the
 	// list the chef lands on.
@@ -893,26 +889,32 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		Where("status = ?", models.OrderStatusPending).
 		Count(&pendingOrders)
 
-	// This week's stats (IST week window)
-	var weekOrders int64
-	var weekRevenue float64
-	chefVisibleOrders(chef.ID).
-		Where("created_at >= ?", weekStart).
-		Count(&weekOrders)
-	chefVisibleOrders(chef.ID).
-		Where("created_at >= ?", weekStart).
-		Select(chefCountedRevenueExpr("orders")).Scan(&weekRevenue)
+	// This week's and lifetime money come from chefSettledEarnings — the same rows,
+	// rates and rounding the Earnings screen, the Analytics screen and the weekly
+	// statement use. They used to be a paid-order sum bucketed on created_at, so
+	// "Total earnings" on the hero (which taps through to Earnings) never equalled
+	// the screen it opened (#1030).
+	commissionRate := services.GetCommissionRate(database.DB)
+	now := time.Now()
+	todaySettled, _, todayErr := chefSettledEarnings(chef, todayStart, services.BusinessDayEnd(now), commissionRate)
+	weekSettled, _, weekErr := chefSettledEarnings(chef, weekStart, services.BusinessDayEnd(now), commissionRate)
+	lifetimeSettled, _, lifeErr := chefSettledEarnings(chef, time.Unix(0, 0), services.BusinessDayEnd(now), commissionRate)
+	// A zero here would read as "you earned nothing", so never let it pass unnoticed.
+	for _, err := range []error{todayErr, weekErr, lifeErr} {
+		if err != nil {
+			log.Printf("dashboard settled earnings failed for chef=%s: %v", chef.ID, err)
+		}
+	}
+	// GROSS (food + food GST + tip), matching the Earnings screen's grossRevenue —
+	// not the customer's order value, and not the net payout after commission/TDS.
+	todayRevenue := todaySettled.GrossRevenue
+	weekRevenue := weekSettled.GrossRevenue
+	totalEarnings := lifetimeSettled.GrossRevenue
 
-	// Lifetime totals for the dashboard hero — computed from the orders table, not the
-	// denormalized chef.TotalOrders/earnings counters (which drift: TotalOrders read 0 for
-	// chefs with live orders). Count and money share chefVisibleOrders, so all three
-	// periods and both metrics describe one population.
-	//
-	// This is the chef's GROSS earnings (food + food GST + tip), the same basis as the
-	// Earnings screen's grossRevenue — not the customer's order value, and not the net
-	// payout, which is this less commission and TDS.
-	var totalEarnings float64
-	chefVisibleOrders(chef.ID).Select(chefCountedRevenueExpr("orders")).Scan(&totalEarnings)
+	// Counts stay on the placed-order population: a counter beside a tab must equal
+	// the list that tab opens, even when some of those orders have not settled yet.
+	var weekOrders int64
+	chefVisibleOrders(chef.ID).Where("created_at >= ?", weekStart).Count(&weekOrders)
 	var totalOrdersCount int64
 	chefVisibleOrders(chef.ID).Count(&totalOrdersCount)
 
@@ -2850,18 +2852,39 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 	// and a chef's "today" is their calendar day, not UTC's.
 	database.DB.Raw(`
 		SELECT TO_CHAR(o.created_at AT TIME ZONE ?, 'YYYY-MM-DD') as date,
-		       COUNT(*) as orders,
-		       `+chefCountedRevenueExpr("o")+` as revenue
+		       COUNT(*) as orders
 		FROM orders o
 		WHERE `+chefCountedOrdersSQL("o")+` AND o.created_at >= ?
 		GROUP BY 1
 		ORDER BY 1
 	`, services.BusinessTZName(), chef.ID, chef.ID, since).Scan(&dailyStats)
 
+	// Money is settled earnings, NOT paid-order value: the same rows, rates and
+	// rounding the Earnings screen and the weekly statement use, bucketed here by
+	// the day the food was DELIVERED. Analytics used to sum anything captured,
+	// bucketed on created_at, so the two screens reported different money for the
+	// same week and neither matched the payout (#1030).
+	commissionRate := services.GetCommissionRate(database.DB)
+	periodEarnings, settledOrders, _ := chefSettledEarnings(chef, since, time.Now(), commissionRate)
+	revenueByDate := make(map[string]float64, len(settledOrders))
+	settledByDate := make(map[string]int, len(settledOrders))
+	for _, o := range settledOrders {
+		key := o.CompletedAt.In(services.BusinessLocation()).Format("2006-01-02")
+		revenueByDate[key] += o.NetPayout
+		settledByDate[key]++
+	}
+
 	// Build label→value maps for the full date range
 	dateMap := make(map[string]dailyStat)
 	for _, ds := range dailyStats {
+		ds.Revenue = revenueByDate[ds.Date]
 		dateMap[ds.Date] = ds
+	}
+	// A day with a delivery but no order PLACED that day still earned money.
+	for date, revenue := range revenueByDate {
+		if _, ok := dateMap[date]; !ok {
+			dateMap[date] = dailyStat{Date: date, Revenue: revenue}
+		}
 	}
 
 	var orderLabels []string
@@ -3000,31 +3023,44 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 
 	// ── Summary headline metrics (#228): orders, revenue, AOV, repeat-rate ──
 	totalOrders := 0
-	var totalRevenue float64
 	for i := range orderData {
 		totalOrders += orderData[i]
-		totalRevenue += revenueData[i]
 	}
+	// The headline is the settlement total, not the sum of the chart: a delivery
+	// on the window's first day belongs to the period even when the chart's label
+	// range clips it.
+	totalRevenue := periodEarnings.NetPayout
+	// Per SETTLED order — the orders that produced this money. Dividing settled
+	// earnings by placed orders (abandoned checkouts included) understates it.
 	aov := 0.0
-	if totalOrders > 0 {
-		aov = totalRevenue / float64(totalOrders)
+	if periodEarnings.OrdersCount > 0 {
+		aov = totalRevenue / float64(periodEarnings.OrdersCount)
 	}
 
-	// Prior period of equal length, for a trend delta.
+	// Prior period of equal length, for a trend delta — same definition, shifted.
 	prevSince := time.Now().AddDate(0, 0, -2*days)
-	var prevRevenue float64
-	database.DB.Raw(`
-		SELECT `+chefCountedRevenueExpr("o")+` FROM orders o
-		WHERE `+chefCountedOrdersSQL("o")+` AND o.created_at >= ? AND o.created_at < ?
-	`, chef.ID, chef.ID, prevSince, since).Scan(&prevRevenue)
+	prevEarnings, _, _ := chefSettledEarnings(chef, prevSince, since, commissionRate)
+
+	// The calendar week and month the Earnings screen reports, so the two screens
+	// are answering with the identical figure rather than two rolling windows.
+	now := time.Now()
+	weekEarnings, _, _ := chefSettledEarnings(chef, services.BusinessWeekStart(now), services.BusinessDayEnd(now), commissionRate)
+	monthEarnings, _, _ := chefSettledEarnings(chef, services.BusinessMonthStart(now), services.BusinessDayEnd(now), commissionRate)
 
 	c.JSON(http.StatusOK, gin.H{
 		"summary": gin.H{
-			"orders":      totalOrders,
-			"revenue":     math.Round(totalRevenue*100) / 100,
-			"aov":         math.Round(aov*100) / 100,
-			"repeatRate":  chefRepeatRate(chef.ID),
-			"prevRevenue": math.Round(prevRevenue*100) / 100,
+			"orders":        totalOrders,
+			"settledOrders": periodEarnings.OrdersCount,
+			"revenue":       math.Round(totalRevenue*100) / 100,
+			"aov":           math.Round(aov*100) / 100,
+			"repeatRate":    chefRepeatRate(chef.ID),
+			"prevRevenue":   math.Round(prevEarnings.NetPayout*100) / 100,
+		},
+		// Settled earnings on the calendar boundaries the platform pays out on.
+		"earnings": gin.H{
+			"currency": services.EarningsCurrency,
+			"week":     math.Round(weekEarnings.NetPayout*100) / 100,
+			"month":    math.Round(monthEarnings.NetPayout*100) / 100,
 		},
 		"orderTrends":       gin.H{"labels": orderLabels, "data": orderData},
 		"revenueTrends":     gin.H{"labels": revenueLabels, "data": revenueData},
