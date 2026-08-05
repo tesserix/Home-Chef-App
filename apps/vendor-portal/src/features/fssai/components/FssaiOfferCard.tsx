@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { BadgeCheck, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/shared/utils/format';
+import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { fssaiStatusLabel, isFssaiClosed, useFssaiQuote, useFssaiRequest } from '../hooks/useFssai';
 
 // The FSSAI filing offer, wherever a chef might realise they need one — the web
@@ -13,12 +14,19 @@ import { fssaiStatusLabel, isFssaiClosed, useFssaiQuote, useFssaiRequest } from 
 export function FssaiOfferCard() {
   const quoteQuery = useFssaiQuote();
   const requestQuery = useFssaiRequest();
+  // Shares the documents query key, so placing this on the Documents page
+  // costs no extra request.
+  const { data: docs } = useDocuments();
 
   const enabled = quoteQuery.data?.enabled ?? false;
   const request = requestQuery.data?.request ?? null;
   const live = request && !isFssaiClosed(request.status) ? request : null;
 
   if (!enabled && !live) return null;
+  // A chef who already holds a licence is not a candidate for the service. The
+  // check lives here so every placement behaves the same and no caller has to
+  // remember its own guard.
+  if (docs?.some((d) => d.type === 'fssai_license') && !live) return null;
 
   const total = quoteQuery.data?.quote.total;
 

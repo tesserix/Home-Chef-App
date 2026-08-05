@@ -439,12 +439,11 @@ export default function DocumentsRenewScreen() {
           ) : null}
 
           {/* A chef with no FSSAI licence cannot upload one. This is where they
-              hit that wall, so it is where the offer to obtain it belongs. */}
-          {missing.some((m) => m.type === 'fssai_license') ? (
-            <View style={styles.offerSlot}>
-              <FssaiOfferCard />
-            </View>
-          ) : null}
+              hit that wall, so it is where the offer belongs. The card hides
+              itself once a licence is on file. */}
+          <View style={styles.offerSlot}>
+            <FssaiOfferCard />
+          </View>
 
           {onFile.length > 0 ? (
             <Text style={styles.sectionLabel}>ON FILE</Text>

@@ -7,14 +7,28 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { theme } from '@homechef/mobile-shared/theme';
+import { api } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
 import { fssaiStatusLabel, isFssaiClosed } from '../../lib/fssai';
 import { useFssaiQuote, useFssaiRequest } from '../../hooks/useFssai';
 
+/** Whether a licence is already on file. Shares the documents query key, so
+ *  placing this on the Documents screen costs no extra request. */
+function useHasFssaiLicence(): boolean | undefined {
+  const { data } = useQuery<{ type: string }[]>({
+    queryKey: ['chef', 'documents'],
+    queryFn: () => api.get<{ type: string }[]>('/chef/documents').then((r) => r.data),
+    staleTime: 30_000,
+  });
+  return data?.some((d) => d.type === 'fssai_license');
+}
+
 export function FssaiOfferCard() {
   const quoteQuery = useFssaiQuote();
   const requestQuery = useFssaiRequest();
+  const hasLicence = useHasFssaiLicence();
 
   const enabled = quoteQuery.data?.enabled ?? false;
   const request = requestQuery.data?.request ?? null;
@@ -22,6 +36,10 @@ export function FssaiOfferCard() {
 
   // Nothing to offer and nothing to track — stay out of the way entirely.
   if (!enabled && !live) return null;
+  // A chef who already holds a licence is not a candidate for the service. The
+  // check lives here so every placement behaves the same and no caller has to
+  // remember its own guard.
+  if (hasLicence && !live) return null;
 
   const total = quoteQuery.data?.quote.total;
 

@@ -707,8 +707,9 @@ function DocumentsSection({ chefId }: { chefId?: string }) {
   return (
     <div className="space-y-3">
       {/* A chef who has no FSSAI licence cannot upload one. This is where they
-          hit that wall, so it is where the offer to obtain it belongs. */}
-      {!getDocByType('fssai_license') ? <FssaiOfferCard /> : null}
+          hit that wall, so it is where the offer to obtain it belongs. The card
+          hides itself once a licence is on file. */}
+      <FssaiOfferCard />
 
       {DOCUMENT_TYPES.map((docDef) => {
         const existingDoc = getDocByType(docDef.type);
