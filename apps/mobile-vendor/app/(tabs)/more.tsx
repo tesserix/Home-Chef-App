@@ -15,7 +15,9 @@ import {
   Landmark,
   Languages,
   LifeBuoy,
+  MessageSquarePlus,
   LogOut,
+  Repeat,
   Scale,
   Settings,
   Share2,
@@ -56,6 +58,7 @@ const ALL_SECTIONS: NavSection[] = [
     titleKey: 'kitchen',
     rows: [
       { labelKey: 'mealPlans', caption: 'Weekly menu and tiffin requests', route: '/meal-plans', Icon: CalendarDays },
+      { labelKey: 'subscriptions', caption: 'Recurring tiffin plans and pricing', route: '/subscriptions', Icon: Repeat },
       { labelKey: 'capacity', caption: 'Daily caps and order cutoffs', route: '/capacity', Icon: Gauge },
       { labelKey: 'catering', caption: 'Event requests, quotes, bookings', route: '/catering', Icon: ChefHat },
       { labelKey: 'reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
@@ -99,6 +102,7 @@ const ALL_SECTIONS: NavSection[] = [
       { labelKey: 'language', caption: 'English · हिन्दी', route: '/language', Icon: Languages },
       { labelKey: 'settings', caption: 'Account, auto-accept, advanced', route: '/settings', Icon: Settings },
       { labelKey: 'support', caption: 'Report an issue or request a feature', route: '/support', Icon: LifeBuoy },
+      { labelKey: 'feedback', caption: 'Tell us what to build next', route: '/feedback', Icon: MessageSquarePlus },
       // Legal docs are collapsed behind one row (rarely opened) — the /legal
       // hub screen lists Privacy, Terms, Chef agreement, and EULA.
       { labelKey: 'legal', caption: 'Privacy, terms, agreement, licence', route: '/legal', Icon: Scale },
