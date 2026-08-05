@@ -561,6 +561,19 @@ func (h *PaymentHandler) handleCashfreePaymentSuccess(payload json.RawMessage, s
 		}
 		if confirmed {
 			log.Printf("cashfree payment success: confirmed meal-plan advance for order %s (payment %s)", cfOrderID, cfPaymentID)
+			return nil
+		}
+		// Still nothing — try an FSSAI filing request, whose gateway order id
+		// also lives off `orders`. Same reason as the advance above: a chef who
+		// pays and never returns must not be left with money taken against a
+		// request that was never submitted.
+		fssaiConfirmed, fErr := h.confirmFssaiRequestFromWebhook(cfOrderID, cfPaymentID, mode)
+		if fErr != nil {
+			log.Printf("cashfree payment success: FSSAI confirm failed for order %s: %v", cfOrderID, fErr)
+			return fErr // transient → release the claim so a redelivery re-runs
+		}
+		if fssaiConfirmed {
+			log.Printf("cashfree payment success: submitted FSSAI request for order %s (payment %s)", cfOrderID, cfPaymentID)
 		} else {
 			log.Printf("cashfree payment success already processed for order %s (payment %s) — skipping", cfOrderID, cfPaymentID)
 		}
