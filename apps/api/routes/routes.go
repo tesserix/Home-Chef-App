@@ -597,6 +597,17 @@ func SetupRouter() *gin.Engine {
 		chefDashboard.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
 		{
 			chefDashboard.GET("/dashboard", chefHandler.GetChefDashboard)
+			// FSSAI filing request (#1005): the chef asks us to obtain their
+			// registration — draft, documents, then payment, then the tracker.
+			fssaiHandler := handlers.NewFssaiHandler()
+			chefDashboard.GET("/fssai/quote", fssaiHandler.GetFssaiQuote)
+			chefDashboard.GET("/fssai/request", fssaiHandler.GetFssaiRequest)
+			chefDashboard.POST("/fssai/requests", fssaiHandler.CreateFssaiRequest)
+			chefDashboard.POST("/fssai/requests/:id/upload", fssaiHandler.UploadFssaiDocument)
+			chefDashboard.DELETE("/fssai/requests/:id/documents/:kind", fssaiHandler.RemoveFssaiDocument)
+			chefDashboard.POST("/fssai/requests/:id/checkout", fssaiHandler.StartFssaiPayment)
+			chefDashboard.POST("/fssai/requests/:id/confirm", fssaiHandler.ConfirmFssaiPayment)
+			chefDashboard.DELETE("/fssai/requests/:id", fssaiHandler.CancelFssaiRequest)
 			// Rewards: referral code + progress, loyalty points, cashback conversion.
 			chefRewardsHandler := handlers.NewChefRewardsHandler()
 			chefDashboard.GET("/rewards", chefRewardsHandler.GetChefRewards)
@@ -1111,6 +1122,11 @@ func SetupRouter() *gin.Engine {
 			// Chef management
 			admin.GET("/chefs", adminHandler.GetChefs)
 			admin.GET("/chefs/fssai-locked", adminHandler.GetFSSAILockedChefs)
+			// FSSAI filing requests — the operator queue for the in-app service.
+			adminFssai := handlers.NewAdminFssaiHandler()
+			admin.GET("/fssai/requests", adminFssai.ListFssaiRequests)
+			admin.GET("/fssai/requests/:id", adminFssai.GetFssaiRequest)
+			admin.PATCH("/fssai/requests/:id", adminFssai.UpdateFssaiRequest)
 
 			// Test-chef mode: flip a kitchen between live and sandbox, browse
 			// and purge its debugging sessions, and manage who may see sandbox

@@ -82,6 +82,7 @@ const RefundDecisionsPage = lazyWithRetry(
 );
 const PlanRequestPage = lazyWithRetry(() => import('@/features/meal-plans/pages/PlanRequestPage'));
 const DocumentsPage = lazyWithRetry(() => import('@/features/documents/pages/DocumentsPage'));
+const FssaiPage = lazyWithRetry(() => import('@/features/fssai/pages/FssaiPage'));
 const SupportPage = lazyWithRetry(() => import('@/features/support/pages/SupportPage'));
 const SupportTicketPage = lazyWithRetry(
   () => import('@/features/support/pages/SupportTicketPage'),
@@ -174,6 +175,7 @@ export function AppRoutes() {
           <Route path="daily-menu" element={<DailyMenuPage />} />
           <Route path="refund-requests" element={<RefundDecisionsPage />} />
           <Route path="documents" element={<DocumentsPage />} />
+          <Route path="fssai" element={<FssaiPage />} />
           <Route path="support" element={<SupportPage />} />
           <Route path="support/:id" element={<SupportTicketPage />} />
           <Route path="catering" element={<CateringPage />} />

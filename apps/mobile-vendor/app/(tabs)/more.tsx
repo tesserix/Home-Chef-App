@@ -24,6 +24,7 @@ import {
   Wallet,
   XCircle,
   BookOpen,
+  BadgeCheck,
 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -81,6 +82,9 @@ const ALL_SECTIONS: NavSection[] = [
       { labelKey: 'cancellations', caption: 'Confirm customer cancellations', route: '/cancel-requests', Icon: XCircle },
       { labelKey: 'adminRequests', caption: 'Verification and info requests', route: '/admin-requests', Icon: ShieldCheck },
       { labelKey: 'documents', caption: 'Renew or re-upload expired docs', route: '/documents/renew', Icon: FileText },
+      // Optional service, so it sits in Requests rather than onboarding: a chef
+      // can ignore it entirely, or come back to it months later.
+      { labelKey: 'fssai', caption: 'Apply for your FSSAI registration', route: '/fssai', Icon: BadgeCheck },
     ],
   },
   {

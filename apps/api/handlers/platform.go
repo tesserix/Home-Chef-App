@@ -113,6 +113,21 @@ func (h *PlatformHandler) AdminUpdatePolicy(c *gin.Context) {
 	if v, ok := req["chefPayoutPercent"].(float64); ok {
 		current.ChefPayoutPercent = v
 	}
+	// FSSAI filing service. Every figure is editable at runtime because none of
+	// it is ours to fix: FSSAI sets its fee and the CA has yet to rule on the
+	// pure-agent question, which changes what we charge GST on.
+	if v, ok := req["fssaiFilingEnabled"].(bool); ok {
+		current.FssaiFilingEnabled = v
+	}
+	if v, ok := req["fssaiServiceFee"].(float64); ok {
+		current.FssaiServiceFee = v
+	}
+	if v, ok := req["fssaiGovernmentFeePerYear"].(float64); ok {
+		current.FssaiGovernmentFeePerYear = v
+	}
+	if v, ok := req["fssaiGstPercent"].(float64); ok {
+		current.FssaiGstPercent = v
+	}
 	if v, ok := req["driverPayoutPercent"].(float64); ok {
 		current.DriverPayoutPercent = v
 	}

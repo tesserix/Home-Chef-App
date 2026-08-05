@@ -642,6 +642,10 @@ export default function DocumentsScreen() {
         fssaiUpload,
       )}
 
+      {/* Deliberately text, not a link: the FSSAI request needs a chef profile,
+          which does not exist until this application is submitted. */}
+      <Text style={styles.fssaiHelpHint}>{t('onboarding.fssaiWeCanObtainIt')}</Text>
+
       {/* FSSAI license number + expiry — collected as structured fields
           alongside the photo so admin tooling can validate, FoSCoS API
           can verify, and Wave 3 invoicing can print them. Always

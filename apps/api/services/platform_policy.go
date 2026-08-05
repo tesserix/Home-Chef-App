@@ -30,6 +30,23 @@ type PlatformPolicy struct {
 	ChefPayoutPercent   float64 `json:"chefPayoutPercent"`   // of subtotal
 	DriverPayoutPercent float64 `json:"driverPayoutPercent"` // of deliveryFee
 
+	// FSSAI filing service (fe3dr.com/fssai/). A chef asks us to obtain their
+	// registration; they pay one amount and we pay FSSAI out of it.
+	//
+	// Configurable because none of it is ours to fix: FSSAI sets its fee, the
+	// government sets the rate, and the CA has yet to rule on whether the
+	// government fee is a pure-agent reimbursement (CGST Rule 33) — which would
+	// change what we charge GST on. Every figure must be correctable without a
+	// deploy.
+	FssaiFilingEnabled bool `json:"fssaiFilingEnabled"`
+	// What we keep for preparing and filing, per application — never per year.
+	FssaiServiceFee float64 `json:"fssaiServiceFee"`
+	// FSSAI's own Registration fee, per year, before tax.
+	FssaiGovernmentFeePerYear float64 `json:"fssaiGovernmentFeePerYear"`
+	// GST percent applied to both legs. 18 since FSSAI licensing lost its
+	// Entry 47 (Notification 12/2017) exemption on 18 July 2022.
+	FssaiGstPercent float64 `json:"fssaiGstPercent"`
+
 	// Operating hours enforced at checkout. "" / 0 disables the check.
 	Timezone      string `json:"timezone"`      // IANA, e.g. "Asia/Kolkata"
 	OpeningTime   string `json:"openingTime"`   // "HH:MM" 24h
@@ -126,15 +143,22 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		// ever charged in INR and whose own delivery pricing starts at 39. A meal
 		// plan bills this per day, so a week of tiffin was charged 20.93 of
 		// delivery (the other half of D-08).
-		BaseDeliveryFee: 39.0,
+		BaseDeliveryFee:     39.0,
 		PerKmDeliveryFee:    0.0,
 		ChefPayoutPercent:   80.0,
 		DriverPayoutPercent: 80.0,
-		Timezone:            "Asia/Kolkata",
-		OpeningTime:         "",
-		ClosingTime:         "",
-		OperatingDays:       nil,
-		ClosedMessage:       "We're currently closed. Please come back during our operating hours.",
+		// ON by owner's decision. It can still be switched off at runtime from
+		// Settings → Platform without a deploy, which is the control that matters
+		// for a flow handling money and identity documents.
+		FssaiFilingEnabled:        true,
+		FssaiServiceFee:           50.0,
+		FssaiGovernmentFeePerYear: 100.0,
+		FssaiGstPercent:           18.0,
+		Timezone:                  "Asia/Kolkata",
+		OpeningTime:               "",
+		ClosingTime:               "",
+		OperatingDays:             nil,
+		ClosedMessage:             "We're currently closed. Please come back during our operating hours.",
 		// Default off here — the env var (GROUP_ORDERS_ENABLED) provides the
 		// baseline; this policy field only adds a runtime override on top.
 		GroupOrdersEnabled: false,

@@ -52,33 +52,52 @@ repo's existing pricing convention — the service fee, the GST rate, the
 government fee per year, and whether the flow is enabled at all. No deploy is
 needed to correct any of them once the CA rules.
 
-## Payment first — and the hole it opens
+## Documents come with the payment
 
-**Owner's call: pay first, then upload.** The consequence is a chef who pays and
-never uploads, so it is designed for rather than discovered later:
+**Owner's call (revised 5 Aug 2026): the chef pays first *along with* the
+documents.** The chef assembles the whole request while it is unpaid, and paying
+is the last act. This removes the paid-but-incomplete hole the earlier
+pay-then-upload ordering created:
 
-- The row is created **at payment initiation** (`awaiting_payment`), so money is
-  never taken against a row that does not exist.
-- After capture the request sits in `awaiting_documents` — a first-class state
-  with its own admin queue and a refund path, not an edge case.
-- The onboarding email fires only at `submitted` (paid **and** documented),
-  because there is nothing to send before that.
+- The row is created as an **unpaid draft** (`awaiting_payment`) so documents
+  have something to attach to. Nothing is charged and nothing is owed.
+- `POST /checkout` **refuses to mint a Cashfree order** while
+  `NeedsDocuments()` — so is `MarkFssaiPaid`. The guard is on the money path,
+  not only in the UI.
+- Capture moves the request straight to `submitted` and fires the onboarding
+  email. There is no state in which we hold a chef's money without the documents
+  we need to file.
+
+This is what makes the fee safe to declare non-refundable: every paid request is
+one we can actually act on.
+
+## Non-refundable, and cancellable only before that
+
+The fee is non-refundable from the moment it is taken, and the chef is told so
+by the server (`nonRefundable` / `nonRefundableNotice` on the quote) *before*
+they pay. Until payment they may edit, replace documents, or discard the draft
+outright. After it, `DELETE /chef/fssai/requests/:id` answers 409.
+
+`refunded` survives as an **admin-only** terminal state — a chargeback or a
+refund we are obliged to make still has to be recordable — but no chef action
+reaches it.
 
 ## Lifecycle
 
 ```
-awaiting_payment → awaiting_documents → submitted → in_progress → filed → issued
-                                                                     └→ rejected → refunded
+awaiting_payment → submitted → in_progress → filed → issued
+                                              └→ rejected → refunded
 ```
 
-The chef's tracker shows five steps (Submitted · In progress · Filed · Issued,
-plus rejection); `awaiting_documents` renders as an "upload your documents"
-prompt rather than a status. Admin moves every state after `submitted` from
-tesserix-home. `filed` requires an `ApplicationRef` — the FoSCoS reference is
-the single most useful thing we hand back, because it lets the chef track their
-own application independently of us.
+The chef's tracker shows four steps (Submitted · In progress · Filed · Issued,
+plus rejection); `awaiting_payment` renders as the form, not a status. Admin
+moves every state after `submitted` from tesserix-home, and the admin queue
+excludes unpaid drafts — they are a chef mid-form, not work. `filed` requires an
+`ApplicationRef` — the FoSCoS reference is the single most useful thing we hand
+back, because it lets the chef track their own application independently of us.
 
-One open request per chef at a time (`FssaiRequestOpen`).
+One open request per chef at a time (`FssaiRequestOpen`); an abandoned unpaid
+draft is discarded when they start again rather than locking them out.
 
 ## Documents
 
@@ -110,24 +129,50 @@ rest of the chef's PII.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/chef/fssai/requests` | Create + mint the Cashfree order |
-| `POST` | `/chef/fssai/requests/:id/confirm` | Verify capture → `awaiting_documents` |
-| `POST` | `/chef/fssai/requests/:id/documents` | Attach a document; completes → `submitted` + email |
+| `POST` | `/chef/fssai/requests` | Create the unpaid draft |
+| `POST` | `/chef/fssai/requests/:id/upload` | Upload + attach a document (multipart) |
+| `DELETE` | `/chef/fssai/requests/:id/documents/:kind` | Drop an optional document |
+| `POST` | `/chef/fssai/requests/:id/checkout` | Mint the Cashfree order — refused while documents are missing |
+| `POST` | `/chef/fssai/requests/:id/confirm` | Verify capture → `submitted` + email |
+| `DELETE` | `/chef/fssai/requests/:id` | Discard an unpaid draft |
 | `GET` | `/chef/fssai/request` | The chef's current request, for the tracker |
-| `GET` | `/admin/fssai/requests` | Admin queue |
+| `GET` | `/admin/fssai/requests` | Admin queue (paid + open by default) |
 | `PATCH` | `/admin/fssai/requests/:id` | Status, ApplicationRef, RegistrationNo, notes |
+
+There is deliberately **no endpoint that accepts a file reference from the
+client.** The stored value is an object path that later gets signed, so a client
+able to choose it could read another chef's identity documents. Upload and
+attach are one call.
+
+## Where a chef finds it
+
+| Surface | Entry point |
+|---|---|
+| Vendor app | More → Requests → FSSAI registration |
+| Vendor app | Profile → Licensing (existing chefs) |
+| Vendor app | Onboarding → the pending screen, while under review |
+| Vendor app | Onboarding → documents step, as a note (no chef profile exists yet) |
+| Vendor web | Sidebar → FSSAI Registration |
+| Vendor web | Profile → Documents section, when no licence is on file |
+| Vendor web | Onboarding → documents step, as a note |
+
+The offer card is one self-hiding component per platform: it renders nothing
+when the service is switched off, and becomes a tracker link once a request
+exists.
 
 ## Build order
 
 1. Model + migration. ✅ `models/fssai_request.go`
-2. PlatformSettings pricing keys + the quote function.
-3. Service: create/confirm/attach/submit, with the money tests.
-4. Chef handlers + routes.
-5. Admin handlers + routes.
-6. Onboarding email template.
-7. Vendor app: request flow + tracker.
-8. tesserix-home admin queue (separate repo).
-9. Reconcile `fe3dr.com/fssai/` copy: the page currently describes the chef
-   paying FSSAI directly and us ₹50 + GST on top. The in-app flow is all-in at
-   ₹177. Two different offers for one product — the page must present both, or
-   the self-serve path must be restated.
+2. PlatformSettings pricing keys + the quote function. ✅
+3. Service: create/upload/checkout/confirm, with the money tests. ✅
+4. Chef handlers + routes. ✅
+5. Admin handlers + routes. ✅
+6. Onboarding email template. ✅
+7. Vendor app: request flow + tracker + entry points. ✅
+8. Vendor web (`vendors.fe3dr.com`): same flow, same entry points. ✅
+9. **tesserix-home admin queue — not done, separate repo.** The API is ready
+   (`/admin/fssai/requests`); the operator UI has to be built there.
+10. **Reconcile `fe3dr.com/fssai/` copy — not done.** The live page describes
+    the chef paying FSSAI directly with us charging ₹50 + GST on top. The in-app
+    flow is all-in at ₹177. Two different offers for one product: the page must
+    present both, or the self-serve path must be restated.
