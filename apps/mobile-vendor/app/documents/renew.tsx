@@ -22,6 +22,7 @@ import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { describeDocumentType } from '../../hooks/useExpiringDocuments';
 import { ocrDocument } from '../../lib/ocr';
+import { FssaiOfferCard } from '../../components/vendor/FssaiOfferCard';
 
 // Mirrors apps/api/models/document.go ChefDocumentResponse — the
 // camelCase JSON keys the handler emits, NOT the Go struct names.
@@ -81,27 +82,52 @@ function useChefDocuments() {
   });
 }
 
-interface ReplaceArgs {
-  docId: string;
+// What onboarding asks every chef for. A chef who skipped the step lands here
+// with nothing on file, so the screen has to show what is still owed — not an
+// empty list, which reads as "nothing to do".
+const EXPECTED_DOCS: { type: string; why: string }[] = [
+  { type: 'id_proof', why: 'Aadhaar, PAN or passport — proves who you are.' },
+  { type: 'address_proof', why: 'Shows where your kitchen operates from.' },
+  { type: 'fssai_license', why: 'Required by law before your menu can go live.' },
+];
+
+/** An upload either replaces a document on file or adds one that is missing.
+ *  Same picker, same expiry prompt — only the endpoint differs. */
+type UploadTarget =
+  | { mode: 'replace'; key: string; docId: string; type: string; expiryDate?: string | null }
+  | { mode: 'add'; key: string; type: string };
+
+function targetForDoc(doc: ChefDocument): UploadTarget {
+  return {
+    mode: 'replace',
+    key: doc.id,
+    docId: doc.id,
+    type: doc.type,
+    expiryDate: doc.expiryDate,
+  };
+}
+
+interface UploadArgs {
+  target: UploadTarget;
   uri: string;
   mimeType: string;
   filename: string;
   expiryDate?: string;
 }
 
-function useReplaceDocument() {
+function useUploadDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: ReplaceArgs) => {
+    mutationFn: async ({ target, uri, mimeType, filename, expiryDate }: UploadArgs) => {
       const form = new FormData();
-      form.append('file', {
-        uri: args.uri,
-        name: args.filename,
-        type: args.mimeType,
-      } as unknown as Blob);
-      if (args.expiryDate) form.append('expiryDate', args.expiryDate);
+      form.append('file', { uri, name: filename, type: mimeType } as unknown as Blob);
+      if (expiryDate) form.append('expiryDate', expiryDate);
+      if (target.mode === 'add') {
+        form.append('type', target.type);
+        return api.post('/chef/documents', form, multipartConfig());
+      }
       return api.post(
-        `/chef/documents/${args.docId}/replace`,
+        `/chef/documents/${target.docId}/replace`,
         form,
         multipartConfig(),
       );
@@ -145,14 +171,13 @@ function expiryHint(doc: ChefDocument): { text: string; isUrgent: boolean } | nu
 export default function DocumentsRenewScreen() {
   const { showAlert } = useAlert();
   const { data: docs, isLoading, isError, refetch } = useChefDocuments();
-  const replace = useReplaceDocument();
+  const upload = useUploadDocument();
   const { show: showToast } = useToast();
-  const [busyDocId, setBusyDocId] = useState<string | null>(null);
-  // When a doc that carries an expiry is replaced, we hold the picked file
-  // here and ask for the new expiry date before submitting.
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  // When a doc that carries an expiry is uploaded, we hold the picked file
+  // here and ask for the expiry date before submitting.
   const [expiryPrompt, setExpiryPrompt] = useState<{
-    docId: string;
-    docType: string;
+    target: UploadTarget;
     uri: string;
     mimeType: string;
     filename: string;
@@ -160,20 +185,25 @@ export default function DocumentsRenewScreen() {
   } | null>(null);
   const [expiryText, setExpiryText] = useState('');
 
-  // Submit a replacement (optionally with a new expiry date) + surface result.
-  async function submitReplace(
-    docId: string,
-    docType: string,
+  const onFile = docs ?? [];
+  // What onboarding wanted but never got. Drives the "still needed" section.
+  const missing = EXPECTED_DOCS.filter((e) => !onFile.some((d) => d.type === e.type));
+
+  // Submit an upload (optionally with an expiry date) + surface the result.
+  async function submitUpload(
+    target: UploadTarget,
     uri: string,
     mimeType: string,
     filename: string,
     expiryDate?: string,
   ): Promise<void> {
-    setBusyDocId(docId);
+    setBusyKey(target.key);
     try {
-      await replace.mutateAsync({ docId, uri, mimeType, filename, expiryDate });
+      await upload.mutateAsync({ target, uri, mimeType, filename, expiryDate });
       showToast({
-        message: `${describeDocumentType(docType)} re-uploaded for verification.`,
+        message: `${describeDocumentType(target.type)} ${
+          target.mode === 'add' ? 'uploaded' : 're-uploaded'
+        } for verification.`,
         tone: 'success',
       });
     } catch (err: unknown) {
@@ -182,7 +212,7 @@ export default function DocumentsRenewScreen() {
         (err instanceof Error ? err.message : 'Upload failed.');
       showToast({ message: msg, tone: 'error' });
     } finally {
-      setBusyDocId(null);
+      setBusyKey(null);
     }
   }
 
@@ -199,11 +229,14 @@ export default function DocumentsRenewScreen() {
     }
     const p = expiryPrompt;
     setExpiryPrompt(null);
-    void submitReplace(p.docId, p.docType, p.uri, p.mimeType, p.filename, iso);
+    void submitUpload(p.target, p.uri, p.mimeType, p.filename, iso);
   }
 
-  async function pickAndUpload(doc: ChefDocument, source: 'camera' | 'gallery' | 'pdf'): Promise<void> {
-    setBusyDocId(doc.id);
+  async function pickAndUpload(
+    target: UploadTarget,
+    source: 'camera' | 'gallery' | 'pdf',
+  ): Promise<void> {
+    setBusyKey(target.key);
     try {
       let uri = '';
       let mimeType = '';
@@ -253,7 +286,10 @@ export default function DocumentsRenewScreen() {
       // Docs that carry an expiry (e.g. FSSAI) need a fresh expiry date —
       // collect it before submitting so the new file isn't saved with the
       // stale date. Everything else submits immediately.
-      if (doc.expiryDate != null || doc.type === 'fssai_license') {
+      const carriesExpiry =
+        target.type === 'fssai_license' ||
+        (target.mode === 'replace' && target.expiryDate != null);
+      if (carriesExpiry) {
         // Try OCR on image uploads to pre-fill the expiry — best-effort, the
         // chef always confirms/edits. Skip for PDFs.
         let detected = '';
@@ -272,29 +308,22 @@ export default function DocumentsRenewScreen() {
           }
         }
         setExpiryText(detected);
-        setExpiryPrompt({
-          docId: doc.id,
-          docType: doc.type,
-          uri,
-          mimeType,
-          filename,
-          prefilled: wasDetected,
-        });
+        setExpiryPrompt({ target, uri, mimeType, filename, prefilled: wasDetected });
         return;
       }
-      await submitReplace(doc.id, doc.type, uri, mimeType, filename);
+      await submitUpload(target, uri, mimeType, filename);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } } | null)?.response?.data?.error ??
         (err instanceof Error ? err.message : 'Upload failed.');
       showToast({ message: msg, tone: 'error' });
     } finally {
-      setBusyDocId(null);
+      setBusyKey(null);
     }
   }
 
-  function openSourceSheet(doc: ChefDocument): void {
-    const photoOnly = isPhotoDoc(doc.type);
+  function openSourceSheet(target: UploadTarget): void {
+    const photoOnly = isPhotoDoc(target.type);
     const options = photoOnly
       ? ['Take photo', 'Choose from gallery', 'Cancel']
       : ['Take photo', 'Choose from gallery', 'Pick PDF', 'Cancel'];
@@ -304,19 +333,18 @@ export default function DocumentsRenewScreen() {
       ActionSheetIOS.showActionSheetWithOptions(
         { options, cancelButtonIndex: cancelIndex },
         (index) => {
-          if (index === 0) pickAndUpload(doc, 'camera');
-          else if (index === 1) pickAndUpload(doc, 'gallery');
-          else if (!photoOnly && index === 2) pickAndUpload(doc, 'pdf');
+          if (index === 0) pickAndUpload(target, 'camera');
+          else if (index === 1) pickAndUpload(target, 'gallery');
+          else if (!photoOnly && index === 2) pickAndUpload(target, 'pdf');
         },
       );
       return;
     }
-    showAlert('Replace document', `Pick a new file for ${describeDocumentType(doc.type)}.`, [
-      { text: 'Camera', onPress: () => pickAndUpload(doc, 'camera') },
-      { text: 'Gallery', onPress: () => pickAndUpload(doc, 'gallery') },
-      ...(photoOnly
-        ? []
-        : [{ text: 'PDF', onPress: () => pickAndUpload(doc, 'pdf') }]),
+    const title = target.mode === 'add' ? 'Upload document' : 'Replace document';
+    showAlert(title, `Pick a file for ${describeDocumentType(target.type)}.`, [
+      { text: 'Camera', onPress: () => pickAndUpload(target, 'camera') },
+      { text: 'Gallery', onPress: () => pickAndUpload(target, 'gallery') },
+      ...(photoOnly ? [] : [{ text: 'PDF', onPress: () => pickAndUpload(target, 'pdf') }]),
       { text: 'Cancel', style: 'cancel' as const },
     ]);
   }
@@ -354,23 +382,78 @@ export default function DocumentsRenewScreen() {
           ctaLabel="Retry"
           onCtaPress={() => refetch()}
         />
-      ) : (docs?.length ?? 0) === 0 ? (
-        <EmptyState
-          title="No documents yet"
-          body="You haven't uploaded any documents yet."
-        />
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <Text style={styles.helperText}>
-            Re-upload an expiring or expired document. The new file goes back to admins
-            for verification — your kitchen stays open while they review.
+            {onFile.length === 0
+              ? 'Upload the paperwork onboarding asked for. Admins verify each file — your kitchen stays open while they review.'
+              : 'Add anything still missing, or re-upload an expiring document. The new file goes back to admins for verification.'}
           </Text>
 
+          {missing.length > 0 ? (
+            <>
+              <Text style={styles.sectionLabel}>STILL NEEDED</Text>
+              <View style={styles.sectionGroup}>
+                {missing.map((item, idx) => {
+                  const key = `add:${item.type}`;
+                  const isBusy = busyKey === key;
+                  return (
+                    <View
+                      key={item.type}
+                      style={[styles.row, idx !== missing.length - 1 && styles.rowBorderBottom]}
+                    >
+                      <View style={styles.rowMain}>
+                        <Text style={styles.rowTitle}>{describeDocumentType(item.type)}</Text>
+                        <Text style={styles.rowExpiry}>{item.why}</Text>
+                      </View>
+                      <Pressable
+                        onPress={() => openSourceSheet({ mode: 'add', key, type: item.type })}
+                        disabled={isBusy}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Upload ${describeDocumentType(item.type)}`}
+                        android_ripple={
+                          isBusy
+                            ? undefined
+                            : { color: `${theme.colors.paper}30`, borderless: false }
+                        }
+                      >
+                        {({ pressed }) => (
+                          <View
+                            style={[
+                              styles.replaceBtn,
+                              pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                              isBusy && { opacity: 0.5 },
+                            ]}
+                          >
+                            <Text style={styles.replaceLabel}>
+                              {isBusy ? 'Uploading…' : 'Upload'}
+                            </Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
+
+          {/* A chef with no FSSAI licence cannot upload one. This is where they
+              hit that wall, so it is where the offer to obtain it belongs. */}
+          {missing.some((m) => m.type === 'fssai_license') ? (
+            <View style={styles.offerSlot}>
+              <FssaiOfferCard />
+            </View>
+          ) : null}
+
+          {onFile.length > 0 ? (
+            <Text style={styles.sectionLabel}>ON FILE</Text>
+          ) : null}
           <View style={styles.sectionGroup}>
-            {docs!.map((doc, idx) => {
+            {onFile.map((doc, idx) => {
               const hint = expiryHint(doc);
-              const isBusy = busyDocId === doc.id;
-              const isLast = idx === docs!.length - 1;
+              const isBusy = busyKey === doc.id;
+              const isLast = idx === onFile.length - 1;
               return (
                 <View
                   key={doc.id}
@@ -398,7 +481,7 @@ export default function DocumentsRenewScreen() {
                     ) : null}
                   </View>
                   <Pressable
-                    onPress={() => openSourceSheet(doc)}
+                    onPress={() => openSourceSheet(targetForDoc(doc))}
                     disabled={isBusy}
                     accessibilityRole="button"
                     accessibilityLabel={`Replace ${describeDocumentType(doc.type)}`}
@@ -441,7 +524,7 @@ export default function DocumentsRenewScreen() {
                 ? 'We read this from your document — please check it matches the date printed on it.'
                 : expiryPrompt
                   ? `Enter the expiry date printed on your new ${describeDocumentType(
-                      expiryPrompt.docType,
+                      expiryPrompt.target.type,
                     )}.`
                   : ''}
             </Text>
@@ -601,6 +684,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingBottom: theme.spacing[4],
   },
+
+  sectionLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.6,
+    color: theme.colors.ink.soft,
+    paddingBottom: theme.spacing[2],
+  },
+
+  offerSlot: { paddingVertical: theme.spacing[4] },
 
   sectionGroup: {
     borderTopWidth: StyleSheet.hairlineWidth,
