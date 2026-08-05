@@ -1869,6 +1869,13 @@ func (s *NotificationService) sendSMSNotification(notif NotificationEvent) error
 // saveNotification persists a notification and publishes it to the per-user NATS
 // subject so WebSocket clients update the bell in real time (fire-and-forget —
 // the durable record is the row, the WS push is a best-effort nicety).
+// SaveUserNotification is saveNotification for callers outside the NATS
+// consumers — a status change an admin made in-request, where routing it back
+// through a subject and a durable would buy nothing.
+func (s *NotificationService) SaveUserNotification(notification *models.Notification) error {
+	return s.saveNotification(notification)
+}
+
 func (s *NotificationService) saveNotification(notification *models.Notification) error {
 	notification.CreatedAt = time.Now()
 	if err := database.DB.Create(notification).Error; err != nil {

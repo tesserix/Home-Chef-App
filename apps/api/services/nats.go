@@ -121,6 +121,16 @@ const (
 	// Fans out to admins; the money paths never consume it.
 	SubjectRiskCustomerFlagged = "risk.customer_flagged"
 
+	// FSSAI filing requests (#1006) — a chef paying us to obtain their
+	// registration. `submitted` starts the SLA workflow; the rest drive the
+	// chef's notifications and let it complete.
+	SubjectFssaiRequestSubmitted  = "fssai.request.submitted"
+	SubjectFssaiRequestInProgress = "fssai.request.in_progress"
+	SubjectFssaiRequestInfoNeeded = "fssai.request.info_required"
+	SubjectFssaiRequestFiled      = "fssai.request.filed"
+	SubjectFssaiRequestIssued     = "fssai.request.issued"
+	SubjectFssaiRequestClosed     = "fssai.request.closed"
+
 	SubjectApprovalCreated       = "approvals.created"
 	SubjectApprovalApproved      = "approvals.approved"
 	SubjectApprovalRejected      = "approvals.rejected"
@@ -339,6 +349,10 @@ func (n *NATSClient) setupStreams() error {
 		// Customer refund-abuse flags (#937). Long retention: these drive an
 		// investigation an admin may not open for days.
 		{"RISK", "Customer refund-abuse risk events", []string{"risk.>"}, 30 * 24 * time.Hour, gib / 4},
+		// FSSAI filing requests (#1006). Long retention: a filing takes days of
+		// manual work on a government portal, and the SLA workflow is the only
+		// thing standing between a paid chef and silence.
+		{"FSSAI", "FSSAI filing-request lifecycle events", []string{"fssai.>"}, 90 * 24 * time.Hour, gib / 4},
 		// otto (support-platform) publishes these with a Nats-Msg-Id per
 		// transition, so the 2-minute dedup window absorbs the duplicate
 		// publishes from otto's replicated change-stream watchers.

@@ -161,6 +161,9 @@ func MarkFssaiPaid(db *gorm.DB, r *models.FssaiRequest, paymentRef string) error
 	if err := SendFssaiRequestToOnboarding(r); err != nil {
 		log.Printf("FSSAI request %s: onboarding email FAILED: %v", r.ID, err)
 	}
+	// Starts the SLA workflow. Published after the transition commits, so a
+	// consumer that reads the row back always finds it submitted.
+	PublishFssaiRequestEvent(r)
 	return nil
 }
 
@@ -262,14 +265,118 @@ them.</p>`,
 	return svc.Send(FssaiOnboardingRecipient, subject, body)
 }
 
+// fssaiEventSubjects maps a status to the subject announcing arrival at it.
+// Terminal states share one `closed` subject: a consumer that only needs to
+// stop watching should not have to enumerate every way a request can end.
+var fssaiEventSubjects = map[string]string{
+	models.FssaiSubmitted:        SubjectFssaiRequestSubmitted,
+	models.FssaiInProgress:       SubjectFssaiRequestInProgress,
+	models.FssaiMoreInfoRequired: SubjectFssaiRequestInfoNeeded,
+	models.FssaiFiled:            SubjectFssaiRequestFiled,
+	models.FssaiIssued:           SubjectFssaiRequestIssued,
+	models.FssaiRejected:         SubjectFssaiRequestClosed,
+	models.FssaiRefunded:         SubjectFssaiRequestClosed,
+}
+
+// PublishFssaiRequestEvent announces a status change.
+//
+// Best-effort by design: NATS being down must never roll back a transition an
+// admin has already made and a chef has already been shown. The payload carries
+// the status explicitly so a `closed` consumer can still tell rejected from
+// refunded without a second lookup.
+func PublishFssaiRequestEvent(r *models.FssaiRequest) {
+	subject, ok := fssaiEventSubjects[r.Status]
+	if !ok {
+		return // drafts and unknown states are not worth announcing
+	}
+	err := PublishEvent(subject, "fssai.request", r.UserID, map[string]any{
+		"requestId":      r.ID.String(),
+		"chefId":         r.ChefID.String(),
+		"status":         r.Status,
+		"kitchenName":    r.KitchenName,
+		"termYears":      r.TermYears,
+		"mode":           models.NormalizeMode(r.Mode),
+		"applicationRef": r.ApplicationRef,
+		"registrationNo": r.RegistrationNo,
+		"infoRequested":  r.InfoRequested,
+		"awaitingChef":   models.FssaiAwaitingChef(r.Status),
+	})
+	if err != nil {
+		log.Printf("FSSAI request %s: publish %s failed: %v", r.ID, subject, err)
+	}
+}
+
+// fssaiChefNotice is what the chef is told on arriving at a status. Statuses
+// absent from here are internal bookkeeping the chef does not need pinged about.
+func fssaiChefNotice(r *models.FssaiRequest) (title, message string) {
+	switch r.Status {
+	case models.FssaiInProgress:
+		return "We're preparing your FSSAI form",
+			"Your application is with our team. We'll tell you when it's filed."
+	case models.FssaiMoreInfoRequired:
+		// The admin's words, verbatim — a generic "action needed" would make the
+		// chef open the app to find out what, which is the whole cost of the state.
+		return "We need something from you", r.InfoRequested
+	case models.FssaiFiled:
+		return "Filed with FSSAI",
+			"Your application is lodged. Reference " + r.ApplicationRef +
+				" — you can track it on the government portal yourself."
+	case models.FssaiIssued:
+		return "Your FSSAI registration is ready",
+			"Registration " + r.RegistrationNo + ". Open the app to download your certificate."
+	case models.FssaiRejected:
+		return "We couldn't proceed with your FSSAI request", r.RejectedReason
+	}
+	return "", ""
+}
+
+// NotifyFssaiRequestStatus tells the chef what changed.
+//
+// Best-effort: a push service being down must not undo a transition an admin
+// has already made. The tracker is the source of truth either way.
+func NotifyFssaiRequestStatus(db *gorm.DB, r *models.FssaiRequest) {
+	title, message := fssaiChefNotice(r)
+	if title == "" {
+		return
+	}
+	svc := GetNotificationService()
+	if svc == nil {
+		return
+	}
+	if err := svc.SaveUserNotification(&models.Notification{
+		UserID:  r.UserID,
+		Type:    "fssai_request_" + r.Status,
+		Title:   title,
+		Message: message,
+	}); err != nil {
+		log.Printf("FSSAI request %s: chef notification failed: %v", r.ID, err)
+	}
+}
+
 // fssaiAdminTransitions is what an admin may move a request to. Forward-only
 // through the working states. Unpaid drafts are absent: they are the chef's,
 // and admin has nothing to move until money has been taken.
+// more_info_required is reachable from every working state and returns to
+// in_progress, because "we need something from you" can happen at any point up
+// to issue and does not undo the work already done.
 var fssaiAdminTransitions = map[string][]string{
-	models.FssaiSubmitted:  {models.FssaiInProgress, models.FssaiRejected, models.FssaiRefunded},
-	models.FssaiInProgress: {models.FssaiFiled, models.FssaiRejected, models.FssaiRefunded},
-	models.FssaiFiled:      {models.FssaiIssued, models.FssaiRejected, models.FssaiRefunded},
-	models.FssaiRejected:   {models.FssaiRefunded},
+	models.FssaiSubmitted: {
+		models.FssaiInProgress, models.FssaiMoreInfoRequired,
+		models.FssaiRejected, models.FssaiRefunded,
+	},
+	models.FssaiInProgress: {
+		models.FssaiFiled, models.FssaiMoreInfoRequired,
+		models.FssaiRejected, models.FssaiRefunded,
+	},
+	models.FssaiMoreInfoRequired: {
+		models.FssaiInProgress, models.FssaiFiled,
+		models.FssaiRejected, models.FssaiRefunded,
+	},
+	models.FssaiFiled: {
+		models.FssaiIssued, models.FssaiMoreInfoRequired,
+		models.FssaiRejected, models.FssaiRefunded,
+	},
+	models.FssaiRejected: {models.FssaiRefunded},
 }
 
 // FssaiAdminMayTransition reports whether an admin may move a request from one
@@ -294,6 +401,10 @@ func FssaiTransitionRequires(to string) string {
 		return "registrationNo"
 	case models.FssaiRejected:
 		return "rejectedReason"
+	case models.FssaiMoreInfoRequired:
+		// Parking a request without saying what is missing leaves the chef
+		// staring at a status they cannot act on.
+		return "infoRequested"
 	}
 	return ""
 }

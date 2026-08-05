@@ -32,7 +32,9 @@ func setupFssaiWebhookDB(t *testing.T) *gorm.DB {
 		fee_amount REAL DEFAULT 0, fee_tax REAL DEFAULT 0, fee_total REAL DEFAULT 0, currency TEXT DEFAULT 'INR',
 		payment_ref TEXT DEFAULT '', gateway_order TEXT DEFAULT '', paid_at DATETIME,
 		application_ref TEXT DEFAULT '', registration_no TEXT DEFAULT '', admin_notes TEXT DEFAULT '',
-		rejected_reason TEXT DEFAULT '', submitted_at DATETIME, filed_at DATETIME, issued_at DATETIME,
+		rejected_reason TEXT DEFAULT '', info_requested TEXT DEFAULT '', info_requested_at DATETIME,
+		license_file_url TEXT DEFAULT '', license_file_name TEXT DEFAULT '',
+		submitted_at DATETIME, filed_at DATETIME, issued_at DATETIME,
 		created_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE fssai_request_documents (id TEXT PRIMARY KEY, request_id TEXT,
 		kind TEXT, file_url TEXT, file_name TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`).Error)

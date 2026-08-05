@@ -31,7 +31,9 @@ func setupFssaiDB(t *testing.T) *gorm.DB {
 		fee_amount REAL DEFAULT 0, fee_tax REAL DEFAULT 0, fee_total REAL DEFAULT 0, currency TEXT DEFAULT 'INR',
 		payment_ref TEXT DEFAULT '', gateway_order TEXT DEFAULT '', paid_at DATETIME,
 		application_ref TEXT DEFAULT '', registration_no TEXT DEFAULT '', admin_notes TEXT DEFAULT '',
-		rejected_reason TEXT DEFAULT '', submitted_at DATETIME, filed_at DATETIME, issued_at DATETIME,
+		rejected_reason TEXT DEFAULT '', info_requested TEXT DEFAULT '', info_requested_at DATETIME,
+		license_file_url TEXT DEFAULT '', license_file_name TEXT DEFAULT '',
+		submitted_at DATETIME, filed_at DATETIME, issued_at DATETIME,
 		created_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE fssai_request_documents (id TEXT PRIMARY KEY, request_id TEXT,
 		kind TEXT, file_url TEXT, file_name TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`).Error)
@@ -352,4 +354,78 @@ func mustLatest(t *testing.T, db *gorm.DB, chefID uuid.UUID) *models.FssaiReques
 	r, err := LatestFssaiRequestFor(db, chefID)
 	require.NoError(t, err)
 	return r
+}
+
+// more_info_required is the state that hands the request back to the chef. It
+// must be reachable from every working state and must return to in_progress —
+// "we need something from you" can happen at any point and does not undo the
+// work already done.
+func TestFssaiAdminTransitions_MoreInfoRequired(t *testing.T) {
+	for _, from := range []string{
+		models.FssaiSubmitted, models.FssaiInProgress, models.FssaiFiled,
+	} {
+		require.True(t, FssaiAdminMayTransition(from, models.FssaiMoreInfoRequired),
+			"a chef can be asked for something from %s", from)
+	}
+	require.True(t, FssaiAdminMayTransition(models.FssaiMoreInfoRequired, models.FssaiInProgress))
+	require.True(t, FssaiAdminMayTransition(models.FssaiMoreInfoRequired, models.FssaiFiled))
+
+	require.False(t, FssaiAdminMayTransition(models.FssaiIssued, models.FssaiMoreInfoRequired),
+		"an issued registration is finished; there is nothing left to ask for")
+
+	// Parking a request without saying what is missing leaves the chef staring
+	// at a status they cannot act on.
+	require.Equal(t, "infoRequested", FssaiTransitionRequires(models.FssaiMoreInfoRequired))
+}
+
+// The chef still owes us something in exactly two states, and both the app's
+// call-to-action and the reminder workflow read this one rule.
+func TestFssaiAwaitingChef(t *testing.T) {
+	require.True(t, models.FssaiAwaitingChef(models.FssaiAwaitingPayment))
+	require.True(t, models.FssaiAwaitingChef(models.FssaiMoreInfoRequired))
+
+	for _, s := range []string{
+		models.FssaiSubmitted, models.FssaiInProgress, models.FssaiFiled,
+		models.FssaiIssued, models.FssaiRejected, models.FssaiRefunded,
+	} {
+		require.False(t, models.FssaiAwaitingChef(s), "%s is ours to move", s)
+	}
+}
+
+// A chef asked for more information must be able to send it — otherwise the
+// state is a dead end with their money already taken.
+func TestAcceptsDocuments_WhenMoreInfoIsRequired(t *testing.T) {
+	r := &models.FssaiRequest{Status: models.FssaiMoreInfoRequired}
+	require.True(t, r.AcceptsDocuments())
+
+	r.Status = models.FssaiIssued
+	require.False(t, r.AcceptsDocuments(), "the registration exists; nothing more is needed")
+}
+
+// Terminal states share one `closed` subject so a consumer that only needs to
+// stop watching does not have to enumerate every way a request can end.
+func TestFssaiEventSubjects(t *testing.T) {
+	require.Equal(t, SubjectFssaiRequestSubmitted, fssaiEventSubjects[models.FssaiSubmitted])
+	require.Equal(t, SubjectFssaiRequestInfoNeeded, fssaiEventSubjects[models.FssaiMoreInfoRequired])
+	require.Equal(t, SubjectFssaiRequestClosed, fssaiEventSubjects[models.FssaiRejected])
+	require.Equal(t, SubjectFssaiRequestClosed, fssaiEventSubjects[models.FssaiRefunded])
+
+	_, announced := fssaiEventSubjects[models.FssaiAwaitingPayment]
+	require.False(t, announced, "an unpaid draft is not worth announcing")
+}
+
+// The chef is shown the admin's own words. A generic "action needed" would make
+// them open the app just to find out what — the whole cost of the state.
+func TestFssaiChefNotice_QuotesTheAdmin(t *testing.T) {
+	r := &models.FssaiRequest{
+		Status:        models.FssaiMoreInfoRequired,
+		InfoRequested: "Your Aadhaar photo is cut off — send one showing all four corners.",
+	}
+	title, msg := fssaiChefNotice(r)
+	require.NotEmpty(t, title)
+	require.Equal(t, r.InfoRequested, msg)
+
+	// A draft is the chef's own unfinished business, not news.
+	_, msg = fssaiChefNotice(&models.FssaiRequest{Status: models.FssaiAwaitingPayment})
+	require.Empty(t, msg)
 }

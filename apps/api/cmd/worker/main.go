@@ -145,6 +145,10 @@ func main() {
 		return err
 	}
 
+	// FSSAI filing-request SLA (fssai.request.* NATS events). The chef has paid
+	// and cannot be refunded, so a request going quiet must not be possible.
+	workflows.FssaiNotifyFunc = services.SendFssaiSlaNotice
+
 	// Support-chat staff queue SLA (otto.support.* NATS events).
 	workflows.SupportQueueNotifyFunc = services.SendSupportQueueNotice
 	workflows.SupportQueueTicketFunc = services.RaiseSupportQueueTicket
@@ -169,8 +173,8 @@ func main() {
 				workflows.PickupUncollectedActivity),
 		// Durable chef-onboarding activation (#126).
 		temporal.Queue(temporal.TaskQueueOnboarding).
-			Workflows(workflows.OnboardingActivationWorkflow).
-			Activities(workflows.ActivateChefOnboardingActivity),
+			Workflows(workflows.OnboardingActivationWorkflow, workflows.FssaiRequestWorkflow).
+			Activities(workflows.ActivateChefOnboardingActivity, workflows.FssaiNotifyActivity),
 		// Admin-initiated two-factor reset, on the notifications queue since
 		// every step of it is a message to the user plus one state change.
 		temporal.Queue(temporal.TaskQueueNotifications).
