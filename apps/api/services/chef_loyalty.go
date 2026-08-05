@@ -23,15 +23,29 @@ type ChefLoyaltyConfig struct {
 	Enabled bool `json:"enabled"`
 	// EarnRate is points per ₹1 of delivered-order subtotal.
 	EarnRate float64 `json:"earnRate"`
-	// RedeemRate is ₹ per point at conversion (10,000 pts × 0.05 = ₹500).
+	// RedeemRate is ₹ per point at conversion (10,000 pts × 0.005 = ₹50).
 	RedeemRate float64 `json:"redeemRate"`
 	// MinConvertPoints is the balance a chef must reach before converting.
 	MinConvertPoints float64 `json:"minConvertPoints"`
 }
 
 // GetChefLoyaltyConfig reads the program config with working defaults.
+//
+// What the programme COSTS is earn × redeem, not either number alone. At 1 point
+// per ₹1 and ₹0.05 a point it was 5% of subtotal — against a 6% commission, so
+// it consumed five sixths of the platform's take on every delivered order and
+// lost money once the ~2% payment MDR is counted.
+//
+// The earn rate stays at 1 point per ₹1 deliberately: a ₹400 order showing 400
+// points is what makes the programme feel worth chasing, and it is the point
+// VALUE that decides the cost. At ₹0.005 the programme is 0.5% of subtotal —
+// the same giveaway the customer programme runs at, and one twelfth of
+// commission rather than five sixths.
+//
+// Every field is a PlatformSettings key, so the rate is an admin decision at
+// runtime and this is only where it starts.
 func GetChefLoyaltyConfig(db *gorm.DB) ChefLoyaltyConfig {
-	cfg := ChefLoyaltyConfig{Enabled: true, EarnRate: 1, RedeemRate: 0.05, MinConvertPoints: 10000}
+	cfg := ChefLoyaltyConfig{Enabled: true, EarnRate: 1, RedeemRate: 0.005, MinConvertPoints: 10000}
 	var settings []models.PlatformSettings
 	db.Where("key LIKE ?", "chef_loyalty.%").Find(&settings)
 	for _, s := range settings {

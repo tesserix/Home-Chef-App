@@ -305,14 +305,16 @@ func TestConvertChefLoyalty(t *testing.T) {
 	_, _, err := ConvertChefLoyalty(db, chef.chefID, chef.userID)
 	assert.ErrorIs(t, err, ErrChefLoyaltyBelowMinimum)
 
-	// Crossing it converts the FULL balance at the redeem rate (0.05 ₹/pt).
+	// Crossing it converts the FULL balance at the configured redeem rate.
+	// Asserted against the config rather than a literal, so a deliberate rate
+	// change does not read as a broken conversion.
 	require.NoError(t, db.Model(&models.ChefLoyaltyAccount{}).
 		Where("chef_id = ?", chef.chefID).
 		Updates(map[string]any{"points": 12000, "lifetime_points": 12000}).Error)
 	bonus, points, err := ConvertChefLoyalty(db, chef.chefID, chef.userID)
 	require.NoError(t, err)
 	assert.Equal(t, 12000.0, points)
-	assert.Equal(t, 600.0, bonus.Amount)
+	assert.Equal(t, Round2(12000.0*GetChefLoyaltyConfig(db).RedeemRate), bonus.Amount)
 	assert.Equal(t, models.ChefBonusLoyaltyCashback, bonus.Kind)
 	assert.Equal(t, models.ChefBonusPending, bonus.Status)
 
