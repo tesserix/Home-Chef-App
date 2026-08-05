@@ -21,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Bell, Heart } from 'lucide-react-native';
+import { Bell, Heart, Users } from 'lucide-react-native';
 import {
   useUnreadCount,
   useNotificationSocket,
@@ -604,7 +604,14 @@ export default function DashboardScreen() {
                 hitSlop={8}
                 style={styles.heroStatMain}
               >
-                <Text style={styles.heroEarnings} numberOfLines={1}>
+                {/* Scales rather than truncating: a lakh-plus earner would
+                    otherwise read "₹1,23,4…" now the row carries four stats. */}
+                <Text
+                  style={styles.heroEarnings}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                >
                   ₹{Math.round(dashboard?.totalEarnings ?? 0).toLocaleString('en-IN')}
                 </Text>
                 <Text style={styles.heroStatLabel} numberOfLines={1}>
@@ -649,49 +656,49 @@ export default function DashboardScreen() {
                   {t('dashboard.rating')}
                 </Text>
               </Pressable>
+              {/* The audience is a headline number like the rest, so it sits in
+                  the same row rather than on a strip of its own. */}
+              {showAudience && (
+                <Pressable
+                  onPress={() => router.push('/promote')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${likeCount} likes and ${subscriberCount} subscribers. Tap to promote your kitchen.`}
+                  hitSlop={8}
+                  style={styles.heroStatCol}
+                >
+                  {/* Icons rather than words: no "1 likes" plural to translate,
+                      and a people glyph for subscribers so it can't be read as
+                      the notification bell above it. */}
+                  <View style={styles.audienceCounts}>
+                    <Heart size={13} color={theme.colors.mist.DEFAULT} strokeWidth={2} />
+                    <Text style={styles.audienceValue}>{likeCount}</Text>
+                    <Users size={13} color={theme.colors.mist.DEFAULT} strokeWidth={2} />
+                    <Text style={[styles.audienceValue, styles.audienceValueLast]}>
+                      {subscriberCount}
+                    </Text>
+                  </View>
+                  <Text style={styles.heroStatLabel} numberOfLines={1}>
+                    {t('dashboard.audience')}
+                  </Text>
+                </Pressable>
+              )}
             </View>
           )}
         </Animated.View>
 
-        {/* Quiet context lines under the hero: the week's trend, then the
-            kitchen's audience. Both share one container so they keep the same
-            label/value alignment whichever of them renders. */}
-        {((dashboard?.weekOrders ?? 0) > 0 || showAudience) && (
-          <View style={styles.metaRows}>
-            {(dashboard?.weekOrders ?? 0) > 0 && (
-              <View style={styles.metaRow}>
-                <Text style={styles.weekLabel}>{t('dashboard.thisWeek')}</Text>
-                <Text style={styles.weekValue} numberOfLines={1}>
-                  {t('dashboard.weekSummary', {
-                    amount: Math.round(
-                      dashboard?.weekRevenue ?? 0,
-                    ).toLocaleString('en-IN'),
-                    count: dashboard?.weekOrders ?? 0,
-                  })}
-                </Text>
-              </View>
-            )}
-            {showAudience && (
-              <Pressable
-                onPress={() => router.push('/promote')}
-                accessibilityRole="button"
-                accessibilityLabel={`${likeCount} likes and ${subscriberCount} subscribers. Tap to promote your kitchen.`}
-                hitSlop={8}
-                style={styles.metaRow}
-              >
-                <Text style={styles.weekLabel}>{t('dashboard.audience')}</Text>
-                {/* Icons rather than words: the same heart and bell the
-                    customer taps, and no "1 likes" plural to translate. */}
-                <View style={styles.audienceCounts}>
-                  <Heart size={14} color={theme.colors.ink.soft} strokeWidth={2} />
-                  <Text style={styles.audienceValue}>{likeCount}</Text>
-                  <Bell size={14} color={theme.colors.ink.soft} strokeWidth={2} />
-                  <Text style={[styles.audienceValue, styles.audienceValueLast]}>
-                    {subscriberCount}
-                  </Text>
-                </View>
-              </Pressable>
-            )}
+        {/* This-week snapshot — one quiet line of trend context beyond today's
+            numbers, only when there's a week to show. */}
+        {(dashboard?.weekOrders ?? 0) > 0 && (
+          <View style={styles.weekRow}>
+            <Text style={styles.weekLabel}>{t('dashboard.thisWeek')}</Text>
+            <Text style={styles.weekValue} numberOfLines={1}>
+              {t('dashboard.weekSummary', {
+                amount: Math.round(
+                  dashboard?.weekRevenue ?? 0,
+                ).toLocaleString('en-IN'),
+                count: dashboard?.weekOrders ?? 0,
+              })}
+            </Text>
           </View>
         )}
 
@@ -1378,7 +1385,7 @@ const styles = StyleSheet.create({
   heroStatsRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: theme.spacing[5],
+    gap: theme.spacing[4],
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.colors.ink.soft,
     paddingTop: theme.spacing[4],
@@ -1457,31 +1464,28 @@ const styles = StyleSheet.create({
   fssaiCardClear: { paddingHorizontal: theme.spacing[1] },
   fssaiCardClearText: { fontSize: 16, color: theme.colors.ink.muted },
 
-  // Context lines under the hero. The container owns the spacing so the rows
-  // inside stay on one alignment however many of them render.
-  metaRows: {
-    marginTop: -theme.spacing[4],
-    marginBottom: theme.spacing[6],
-    paddingHorizontal: theme.spacing[1],
-    gap: theme.spacing[2],
-  },
-  metaRow: {
+  weekRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: -theme.spacing[4],
+    marginBottom: theme.spacing[6],
+    paddingHorizontal: theme.spacing[1],
   },
   audienceCounts: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[1],
-    marginLeft: theme.spacing[3],
   },
   // Same type as weekValue, without its left margin — the row's gap spaces
   // these, so each pair reads as one icon-and-number unit.
+  // Same type as the stat values above, so the banner reads as one column of
+  // numbers; the row's own gap spaces each icon-and-number pair.
   audienceValue: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
+    fontSize: 16,
+    lineHeight: 22,
+    color: theme.colors.paper,
     fontVariant: ['tabular-nums'],
     marginRight: theme.spacing[2],
   },
