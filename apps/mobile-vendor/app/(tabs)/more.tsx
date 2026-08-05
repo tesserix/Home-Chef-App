@@ -18,6 +18,7 @@ import {
   LogOut,
   Scale,
   Settings,
+  Share2,
   ShieldCheck,
   Star,
   User,
@@ -59,6 +60,9 @@ const ALL_SECTIONS: NavSection[] = [
       { labelKey: 'catering', caption: 'Event requests, quotes, bookings', route: '/catering', Icon: ChefHat },
       { labelKey: 'reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
       { labelKey: 'chefbook', caption: 'Write recipes customers can read', route: '/chefbook', Icon: BookOpen },
+      // Was reachable only from an unlabelled icon in the Profile header, so
+      // chefs never found it.
+      { labelKey: 'promote', caption: 'Share your kitchen and posts', route: '/promote', Icon: Share2 },
     ],
   },
   {

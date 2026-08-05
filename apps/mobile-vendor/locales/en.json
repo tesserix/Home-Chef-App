@@ -442,7 +442,8 @@
       "account": "Account"
     },
     "legal": "Legal",
-    "chefbook": "ChefBook"
+    "chefbook": "ChefBook",
+    "promote": "Promote"
   },
   "language": {
     "title": "Language",
