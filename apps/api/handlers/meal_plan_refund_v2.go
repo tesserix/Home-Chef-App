@@ -245,7 +245,7 @@ func (h *MealPlanHandler) CustomerChooseRefundMedium(c *gin.Context) {
 	instant := req.Medium == models.RefundDestinationWallet
 	msg := "We’ll refund your original payment method in 5–7 business days."
 	if instant {
-		msg = "Refunded to your HomeChef wallet — ready to use on your next order."
+		msg = "Refunded to your Fe3dr wallet — ready to use on your next order."
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "instant": instant, "message": msg})
 }

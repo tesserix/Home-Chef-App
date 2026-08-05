@@ -9,23 +9,17 @@
 // downloadable PDF never disagree about what the document is.
 
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { ChevronLeft, Download, Share2 } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder, fetchInvoiceDownloadUrl } from '../../../hooks/useOrderHistory';
 import { useAlert } from '@homechef/mobile-shared/ui';
+import { receiptFileName } from '../../../lib/receipt-file';
+import { shareReceiptPdf } from '../../../lib/share-pdf';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -52,6 +46,7 @@ export default function OrderReceiptScreen() {
   const { data, isLoading, isError } = useOrder(id ?? '');
   const order = data?.data;
   const [openingPdf, setOpeningPdf] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   // Open the official PDF (the same document web downloads) in the in-app
   // browser, via a short-lived signed URL — iOS then offers save/share/print.
@@ -75,6 +70,24 @@ export default function OrderReceiptScreen() {
   // Same rule as the backend PDF: a tax invoice is only for a completed sale.
   const isTaxInvoice = order?.status === 'delivered' && (order?.refundAmount ?? 0) <= 0;
   const docTitle = isTaxInvoice ? 'Tax Invoice' : 'Payment Receipt';
+
+  // Sharing sends the issued PDF, never a re-typed text copy: a plain-text
+  // summary can drift from the tax document it claims to be.
+  async function onShare() {
+    if (!order || sharing) return;
+    setSharing(true);
+    try {
+      const url = await fetchInvoiceDownloadUrl(order.id);
+      await shareReceiptPdf(url, receiptFileName(order.orderNumber, isTaxInvoice));
+    } catch {
+      showAlert(
+        "Couldn't share the PDF",
+        'The document could not be prepared right now. Please try again in a moment.',
+      );
+    } finally {
+      setSharing(false);
+    }
+  }
 
   // Robust deliver-to lines: skip empty fields so we never render a stray comma
   // (the old bug), and drop the whole block when no address is present.
@@ -104,48 +117,6 @@ export default function OrderReceiptScreen() {
   const discount = order?.discount ?? 0;
   const refund = order?.refundAmount ?? 0;
 
-  async function onShare() {
-    if (!order) return;
-    // No file-system/PDF export dep in this app, so share a plain-text receipt
-    // via the OS sheet — enough to forward or save the record. The formal PDF is
-    // served by the API for anyone who needs the tax document.
-    const lines = [
-      `${docTitle} — Home Chef`,
-      `Order ${order.orderNumber}`,
-      `Date: ${formatDateTime(order.createdAt)}`,
-      '',
-      'Sold by:',
-      order.chef?.businessName || order.chef?.name || '',
-      order.chef?.ownerName ? `Chef ${order.chef.ownerName}` : '',
-      order.chef?.fssaiLicenseNumber ? `FSSAI Lic. No. ${order.chef.fssaiLicenseNumber}` : '',
-      order.chef?.gstin ? `GSTIN ${order.chef.gstin}` : '',
-      order.fulfillmentType === 'pickup'
-        ? 'Fulfilment: Pickup from the kitchen'
-        : deliveryAddressLines.length > 0
-          ? `Deliver to: ${deliveryAddressLines.join(', ')}`
-          : '',
-      '',
-      ...(order.items ?? []).map((it) => `${it.quantity} × ${it.name}  ${money(it.price * it.quantity)}`),
-      '',
-      `Subtotal: ${money(subtotal)}`,
-      deliveryFee > 0 ? `Delivery: ${money(deliveryFee)}` : '',
-      platformFee > 0 ? `Platform fee: ${money(platformFee)}` : '',
-      // Same lines as the rendered receipt — a shared copy that summarised the
-      // GST as one "Tax" row disagreed with the document it was sharing.
-      ...taxLines.map((t) => `${t.label}: ${money(t.amount)}`),
-      discount > 0 ? `Discount: -${money(discount)}` : '',
-      tip > 0 ? `Tip: ${money(tip)}` : '',
-      rounding !== 0 ? `Rounding: ${money(rounding)}` : '',
-      `Total: ${money(order.totalAmount)}`,
-      refund > 0 ? `Refunded: -${money(refund)}` : '',
-    ].filter(Boolean);
-    try {
-      await Share.share({ message: lines.join('\n') });
-    } catch {
-      // User dismissed the share sheet — nothing to do.
-    }
-  }
-
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -166,16 +137,22 @@ export default function OrderReceiptScreen() {
         {order ? (
           <Pressable
             onPress={onShare}
+            disabled={sharing}
             hitSlop={10}
-            accessibilityLabel="Share receipt"
+            accessibilityLabel="Share receipt as PDF"
             accessibilityRole="button"
+            accessibilityState={{ disabled: sharing }}
             android_ripple={{ color: ICON_RIPPLE, borderless: true, radius: 20 }}
           >
-            {({ pressed }) => (
-              <View style={pressed && Platform.OS === 'ios' ? styles.iconPressed : undefined}>
-                <Share2 size={22} color={customerColors.charcoal.DEFAULT} />
-              </View>
-            )}
+            {({ pressed }) =>
+              sharing ? (
+                <ActivityIndicator size="small" color={customerColors.charcoal.DEFAULT} />
+              ) : (
+                <View style={pressed && Platform.OS === 'ios' ? styles.iconPressed : undefined}>
+                  <Share2 size={22} color={customerColors.charcoal.DEFAULT} />
+                </View>
+              )
+            }
           </Pressable>
         ) : (
           <View style={{ width: 22 }} />
@@ -189,13 +166,39 @@ export default function OrderReceiptScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.doc}>
-            {/* Masthead */}
+            {/* Masthead: brand lockup on the left, document type on the right,
+                both on one baseline so the two never fight for the eye. */}
             <View style={styles.masthead}>
+              <View style={styles.brandLockup}>
+                <Image
+                  source={require('../../../assets/icon.png')}
+                  style={styles.brandMark}
+                  contentFit="cover"
+                  accessibilityLabel="Fe3dr"
+                />
+                <Text style={styles.brand}>Fe3dr</Text>
+              </View>
               <Text style={styles.docTitle}>{docTitle.toUpperCase()}</Text>
-              <Text style={styles.brand}>Home Chef</Text>
             </View>
-            <Text style={styles.meta}>Order #{order.orderNumber}</Text>
-            <Text style={styles.meta}>{formatDateTime(order.createdAt)}</Text>
+
+            {/* The amount is what the document is FOR, so it leads — the order
+                number and date sit beside it as reference, not as the headline. */}
+            <View style={styles.amountBlock}>
+              <Text style={styles.amountLabel}>{refund > 0 ? 'Amount paid' : 'Total paid'}</Text>
+              <Text style={styles.amount}>{money(order.totalAmount)}</Text>
+            </View>
+
+            <View style={styles.metaGrid}>
+              <View style={styles.metaCell}>
+                <Text style={styles.metaLabel}>ORDER</Text>
+                <Text style={styles.metaValue}>#{order.orderNumber}</Text>
+              </View>
+              <View style={[styles.metaCell, styles.metaCellRight]}>
+                <Text style={styles.metaLabel}>DATE</Text>
+                <Text style={styles.metaValue}>{formatDateTime(order.createdAt)}</Text>
+              </View>
+            </View>
+
             {!isTaxInvoice ? (
               <Text style={styles.notTaxNote}>This is a payment receipt, not a tax invoice.</Text>
             ) : null}
@@ -205,7 +208,7 @@ export default function OrderReceiptScreen() {
             {/* Parties — official seller block: business, proprietor, FSSAI, GSTIN */}
             {order.chef ? (
               <View style={styles.party}>
-                <Text style={styles.partyLabel}>Sold by</Text>
+                <Text style={styles.partyLabel}>SOLD BY</Text>
                 <Text style={styles.sellerName}>
                   {order.chef.businessName || order.chef.name}
                 </Text>
@@ -224,12 +227,12 @@ export default function OrderReceiptScreen() {
             {/* Deliver to (delivery orders) / Pickup (collection orders) */}
             {order.fulfillmentType === 'pickup' ? (
               <View style={styles.party}>
-                <Text style={styles.partyLabel}>Fulfilment</Text>
+                <Text style={styles.partyLabel}>FULFILMENT</Text>
                 <Text style={styles.partyValue}>Pickup from the kitchen</Text>
               </View>
             ) : deliveryAddressLines.length > 0 ? (
               <View style={styles.party}>
-                <Text style={styles.partyLabel}>Deliver to</Text>
+                <Text style={styles.partyLabel}>DELIVER TO</Text>
                 {deliveryAddressLines.map((l, i) => (
                   <Text key={i} style={styles.partyValue}>
                     {l}
@@ -240,12 +243,20 @@ export default function OrderReceiptScreen() {
 
             <View style={styles.rule} />
 
-            {/* Items */}
+            {/* Items — the quantity sits in its own gutter so names start on one
+                left edge and the amounts stay a clean right-hand column. */}
+            <Text style={styles.sectionLabel}>ITEMS</Text>
             {(order.items ?? []).map((it, i) => (
               <View key={`${it.menuItemId}-${i}`} style={styles.itemRow}>
-                <Text style={styles.itemName} numberOfLines={2}>
-                  {it.quantity} × {it.name}
-                </Text>
+                <Text style={styles.itemQty}>{it.quantity}×</Text>
+                <View style={styles.itemBody}>
+                  <Text style={styles.itemName} numberOfLines={2}>
+                    {it.name}
+                  </Text>
+                  {it.quantity > 1 ? (
+                    <Text style={styles.itemUnit}>{money(it.price)} each</Text>
+                  ) : null}
+                </View>
                 <Text style={styles.itemAmount}>{money(it.price * it.quantity)}</Text>
               </View>
             ))}
@@ -262,6 +273,8 @@ export default function OrderReceiptScreen() {
             {discount > 0 ? <Line label="Discount" value={`-${money(discount)}`} /> : null}
             {tip > 0 ? <Line label="Tip" value={money(tip)} /> : null}
             {rounding !== 0 ? <Line label="Rounding" value={money(rounding)} /> : null}
+
+            <View style={styles.totalRule} />
             <Line label="Total" value={money(order.totalAmount)} bold />
             {refund > 0 ? (
               <Line label="Refunded" value={`-${money(refund)}`} refund />
@@ -272,6 +285,7 @@ export default function OrderReceiptScreen() {
               This is a computer-generated document and does not require a physical
               signature.
             </Text>
+            <Text style={styles.footerBrand}>Fe3dr Marketplace · www.fe3dr.com</Text>
           </View>
 
           {/* The official PDF — same document the web downloads. Opens in the
@@ -353,31 +367,116 @@ const styles = StyleSheet.create({
     borderColor: customerColors.hairline,
     padding: 20,
   },
-  masthead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  docTitle: { fontFamily: 'Geist-Bold', fontSize: 18, color: customerColors.charcoal.DEFAULT, letterSpacing: 0.5 },
-  brand: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT },
-  meta: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginTop: 2 },
+  masthead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandMark: { width: 28, height: 28, borderRadius: 8 },
+  docTitle: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 13,
+    color: customerColors.charcoal.soft,
+    letterSpacing: 0.8,
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  brand: { fontFamily: 'Geist-Bold', fontSize: 20, color: customerColors.charcoal.DEFAULT, letterSpacing: -0.2 },
+  amountBlock: { marginTop: 20 },
+  amountLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: customerColors.charcoal.soft,
+  },
+  amount: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 32,
+    lineHeight: 38,
+    marginTop: 2,
+    color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.5,
+  },
+  metaGrid: { flexDirection: 'row', gap: 16, marginTop: 16 },
+  metaCell: { flex: 1 },
+  metaCellRight: { alignItems: 'flex-end' },
+  metaLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    letterSpacing: 0.6,
+    color: customerColors.charcoal.soft,
+  },
+  metaValue: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: customerColors.charcoal.DEFAULT,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
   notTaxNote: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 12,
     color: customerColors.charcoal.soft,
-    marginTop: 8,
+    marginTop: 12,
   },
-  rule: { height: StyleSheet.hairlineWidth, backgroundColor: customerColors.hairline, marginVertical: 14 },
-  party: { marginBottom: 12 },
-  partyLabel: { fontFamily: 'Inter-SemiBold', fontSize: 11, color: customerColors.charcoal.soft, textTransform: 'uppercase', letterSpacing: 0.4 },
-  partyValue: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT, marginTop: 2, lineHeight: 20 },
-  sellerName: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT, marginTop: 3, lineHeight: 20 },
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: customerColors.hairline, marginVertical: 16 },
+  totalRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: customerColors.hairline,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  sectionLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    letterSpacing: 0.6,
+    color: customerColors.charcoal.soft,
+    marginBottom: 8,
+  },
+  party: { marginBottom: 16 },
+  partyLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    color: customerColors.charcoal.soft,
+    letterSpacing: 0.6,
+  },
+  partyValue: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT, marginTop: 3, lineHeight: 20 },
+  sellerName: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT, marginTop: 4, lineHeight: 20 },
   regLine: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft, marginTop: 3, letterSpacing: 0.2 },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 5 },
-  itemName: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT, flex: 1 },
-  itemAmount: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT, fontVariant: ['tabular-nums'] },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+  itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 6 },
+  itemQty: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.charcoal.soft,
+    minWidth: 28,
+    fontVariant: ['tabular-nums'],
+  },
+  itemBody: { flex: 1 },
+  itemName: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT, lineHeight: 20 },
+  itemUnit: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft, marginTop: 1 },
+  itemAmount: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 4 },
   totalLabel: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft },
   totalValue: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT, fontVariant: ['tabular-nums'] },
-  totalBold: { fontFamily: 'Inter-SemiBold', color: customerColors.charcoal.DEFAULT },
+  totalBold: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
   refundText: { color: customerColors.coral.pressed },
   footer: { fontFamily: 'Inter', fontSize: 11, color: customerColors.charcoal.soft, textAlign: 'center', lineHeight: 16 },
+  footerBrand: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    color: customerColors.charcoal.soft,
+    textAlign: 'center',
+    marginTop: 4,
+  },
   pdfBtn: {
     flexDirection: 'row',
     alignItems: 'center',

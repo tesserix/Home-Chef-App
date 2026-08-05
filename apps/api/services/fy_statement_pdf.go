@@ -84,8 +84,11 @@ func GenerateFYStatementPDF(chefID uuid.UUID, fyStartYear int) ([]byte, string, 
 
 func addFYHeader(m core.Maroto, stmt *FYStatement) {
 	m.AddRow(12,
-		col.New(8).Add(text.New("ANNUAL STATEMENT", props.Text{Top: 2, Size: 15, Style: fontstyle.Bold})),
-		col.New(4).Add(text.New("Home Chef", props.Text{Top: 2, Size: 14, Style: fontstyle.Bold, Align: align.Right})),
+		col.New(6).Add(
+			text.New(BrandName, props.Text{Top: 1, Size: 18, Style: fontstyle.Bold}),
+			text.New(BrandWebsite, props.Text{Top: 8, Size: 8, Color: &props.Color{Red: 90, Green: 90, Blue: 90}}),
+		),
+		col.New(6).Add(text.New("ANNUAL STATEMENT", props.Text{Top: 2, Size: 13, Style: fontstyle.Bold, Align: align.Right})),
 	)
 	m.AddRow(6,
 		col.New(12).Add(text.New(
@@ -99,7 +102,7 @@ func addFYHeader(m core.Maroto, stmt *FYStatement) {
 func addFYParties(m core.Maroto, chef *models.ChefProfile) {
 	left := []core.Component{
 		text.New("PLATFORM", props.Text{Size: 8, Style: fontstyle.Bold, Color: &props.Color{Red: 90, Green: 90, Blue: 90}}),
-		text.New("Home Chef Marketplace", props.Text{Top: 4, Size: 11, Style: fontstyle.Bold}),
+		text.New(BrandLegalName, props.Text{Top: 4, Size: 11, Style: fontstyle.Bold}),
 	}
 	right := []core.Component{
 		text.New("SELLER (You)", props.Text{Size: 8, Style: fontstyle.Bold, Color: &props.Color{Red: 90, Green: 90, Blue: 90}}),
@@ -212,13 +215,13 @@ func addFYNetIncome(m core.Maroto, stmt *FYStatement) {
 func addFYFooter(m core.Maroto) {
 	m.AddRow(12, col.New(12).Add(spacer()))
 	m.AddRow(5, col.New(12).Add(text.New(
-		"Expenses in this statement are self-declared by the seller and are not verified by Home Chef. "+
+		"Expenses in this statement are self-declared by the seller and are not verified by Fe3dr. "+
 			"This document is a working summary for GST and income-tax preparation — it is not a GST return, "+
 			"Form 16A, or audited financial statement. Please consult a tax professional before filing.",
 		props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}, Style: fontstyle.Italic},
 	)))
 	m.AddRow(4, col.New(12).Add(text.New(
-		fmt.Sprintf("Generated %s · Home Chef Marketplace", time.Now().In(istLoc).Format("02 Jan 2006 15:04 IST")),
+		fmt.Sprintf("Generated %s · "+BrandLegalName, time.Now().In(istLoc).Format("02 Jan 2006 15:04 IST")),
 		props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}},
 	)))
 }

@@ -76,7 +76,7 @@ export default function AccountLifecycleScreen() {
       onSuccess: async (data) => {
         try {
           await Share.share({
-            title: 'My Home Chef data',
+            title: 'My Fe3dr data',
             message: JSON.stringify(data, null, 2),
           });
         } catch {

@@ -67,7 +67,7 @@ func emailBase(title, preheader, body string) string {
           %s
         </div>
         <div class="footer">
-          <p>Fe3dr by HomeChef &middot; Authentic homemade food, delivered</p>
+          <p>Fe3dr &middot; Authentic homemade food, delivered</p>
           <p style="margin-top:8px;"><a href="https://fe3dr.com">fe3dr.com</a> &middot; <a href="https://fe3dr.com/privacy">Privacy</a> &middot; <a href="https://fe3dr.com/terms">Terms</a></p>
         </div>
       </div>
@@ -297,7 +297,7 @@ func orderInvoiceDetailsOrDefault(details *OrderInvoiceDetails) *OrderInvoiceDet
 	if details == nil {
 		return &OrderInvoiceDetails{
 			HSNCode:         "996331",
-			SupplierName:    "Fe3dr by HomeChef",
+			SupplierName:    "Fe3dr",
 			SupplierAddress: "Mumbai, India",
 			GSTRatePct:      5,
 		}
@@ -308,7 +308,7 @@ func orderInvoiceDetailsOrDefault(details *OrderInvoiceDetails) *OrderInvoiceDet
 		c.HSNCode = "996331" // SAC for prepared food supplied via e-commerce
 	}
 	if c.SupplierName == "" {
-		c.SupplierName = "Fe3dr by HomeChef"
+		c.SupplierName = "Fe3dr"
 	}
 	if c.SupplierAddress == "" {
 		c.SupplierAddress = "Mumbai, India"

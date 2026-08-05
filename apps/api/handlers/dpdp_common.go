@@ -34,7 +34,7 @@ func newExportEnvelope(user models.User) map[string]any {
 			"userId": user.ID.String(),
 			"email":  user.Email,
 		},
-		"notice": "This export contains all personal data Home Chef holds on your account per DPDP Act 2023 §11.",
+		"notice": "This export contains all personal data Fe3dr holds on your account per DPDP Act 2023 §11.",
 		"user":   sanitizeUserForExport(user),
 	}
 }

@@ -682,8 +682,8 @@ func emailDeliveredInvoice(db *gorm.DB, event OrderEvent) {
 func (s *NotificationService) handleUserRegistered(event Event) error {
 	PublishNotification(NotificationEvent{
 		UserID: event.UserID, Type: "email",
-		Title:   "Welcome to HomeChef!",
-		Message: "Thank you for joining HomeChef. Discover amazing home-cooked meals near you!",
+		Title:   "Welcome to Fe3dr!",
+		Message: "Thank you for joining Fe3dr. Discover amazing home-cooked meals near you!",
 		Data:    event.Data,
 	})
 	return nil
@@ -709,11 +709,11 @@ func (s *NotificationService) handleAccountDeleted(event Event) error {
 		days = RestoreWindow.Hours() / 24
 	}
 	body := fmt.Sprintf(
-		"<p>Your HomeChef account has been deleted and your sign-in no longer works.</p>"+
+		"<p>Your Fe3dr account has been deleted and your sign-in no longer works.</p>"+
 			"<p>If you change your mind, sign up again with this email address within "+
 			"<strong>%d days</strong> and your history will be restored. After that, "+
 			"everything is erased permanently.</p>", int(days))
-	if err := GetEmailService().Send(user.Email, "Your HomeChef account has been deleted", body); err != nil {
+	if err := GetEmailService().Send(user.Email, "Your Fe3dr account has been deleted", body); err != nil {
 		log.Printf("account_deleted: confirmation email to user %s failed: %v", event.UserID, err)
 	}
 	return nil
@@ -725,7 +725,7 @@ func (s *NotificationService) handleAccountDeleted(event Event) error {
 func (s *NotificationService) handleAccountRestored(event Event) error {
 	PublishNotification(NotificationEvent{
 		UserID: event.UserID, Type: "email",
-		Title:   "Welcome back to HomeChef",
+		Title:   "Welcome back to Fe3dr",
 		Message: "Your account has been restored and your history is back.",
 		Data:    event.Data,
 	})
@@ -1678,7 +1678,7 @@ func (s *NotificationService) handleMealPlanDayDelivered(event Event) error {
 func (s *NotificationService) handleMealPlanDayRefunded(event Event) error {
 	return s.notifyMealPlan(event, "meal_plan_day_refunded",
 		"Day refunded to your wallet",
-		"A meal-plan day was refunded to your HomeChef wallet.")
+		"A meal-plan day was refunded to your Fe3dr wallet.")
 }
 
 // handleMealPlanDaySkippedChef notifies the CHEF that a customer skipped a plan

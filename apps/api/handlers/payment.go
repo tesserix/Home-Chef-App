@@ -351,7 +351,7 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 		ReceiptEmail:        order.Customer.Email,
 		DestinationAccount:  order.Chef.StripeAccountID,
 		ApplicationFeeCents: applicationFee,
-		Description:         fmt.Sprintf("HomeChef order %s", order.OrderNumber),
+		Description:         fmt.Sprintf("Fe3dr order %s", order.OrderNumber),
 		Metadata: map[string]string{
 			"order_id":     order.ID.String(),
 			"order_number": order.OrderNumber,

@@ -5,7 +5,7 @@ package models
 // App Review guideline 1.2 requires that any app carrying user-generated
 // content ship four things: a way to filter objectionable content, a way for
 // users to report it, a way to block abusive users, and published contact
-// details. Home Chef carries three UGC surfaces — chef social posts and their
+// details. Fe3dr carries three UGC surfaces — chef social posts and their
 // comments, customer reviews of chefs, and order-scoped messaging — and until
 // now had none of the first three from a user's point of view. Admin-side
 // review hiding and message blocking existed, but a reviewer cannot see those,

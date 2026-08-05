@@ -173,7 +173,7 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 			"order_number": order.OrderNumber,
 			"customer_id":  userID.String(),
 		},
-		OrderNote: fmt.Sprintf("HomeChef order %s", order.OrderNumber),
+		OrderNote: fmt.Sprintf("Fe3dr order %s", order.OrderNumber),
 		Splits:    splits,
 		// Per (order, capture amount): a retry re-derives the same key so Cashfree
 		// dedups it, while a genuinely re-priced order gets a distinct one.

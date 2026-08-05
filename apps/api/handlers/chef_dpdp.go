@@ -53,7 +53,7 @@ func (h *ChefDPDPHandler) ExportMyData(c *gin.Context) {
 			"userId": user.ID.String(),
 			"email":  user.Email,
 		},
-		"notice": "This export contains all personal data Home Chef holds on your account per DPDP Act 2023 §11.",
+		"notice": "This export contains all personal data Fe3dr holds on your account per DPDP Act 2023 §11.",
 	}
 
 	dump["user"] = sanitizeUserForExport(user)

@@ -385,7 +385,7 @@ func ExecuteBatch(ctx context.Context, db *gorm.DB, batchID uuid.UUID, mode stri
 		IdempotencyKey: batch.IdempotencyKey,
 		BeneficiaryID:  method.RailBeneficiaryID,
 		Amount:         batch.Amount(),
-		Remarks:        "HomeChef weekly payout",
+		Remarks:        "Fe3dr weekly payout",
 		Kind:           method.Kind,
 	})
 	if err != nil {
