@@ -8,11 +8,14 @@ import { Badge } from '@/shared/components/ui/Badge';
 import { Skeleton } from '@/shared/components/ui/Skeleton';
 import {
   documentLabel,
+  EXPECTED_DOCS,
+  useAddDocument,
   useDocuments,
   useExpiringDocuments,
   useReplaceDocument,
   type ChefDocument,
 } from '../hooks/useDocuments';
+import { FssaiOfferCard } from '@/features/fssai/components/FssaiOfferCard';
 
 // Compliance documents — the web twin of
 // apps/mobile-vendor/app/documents/renew.tsx.
@@ -30,26 +33,40 @@ export function DocumentsPage() {
   const expiringIds = new Set(expiring.map((e) => e.id));
   const needsAction = docs.filter((d) => d.status === 'rejected' || expiringIds.has(d.id));
   const rest = docs.filter((d) => !needsAction.includes(d));
+  // What onboarding wanted but never got.
+  const missing = EXPECTED_DOCS.filter((e) => !docs.some((d) => d.type === e.type));
 
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">Documents</h1>
       <p className="mt-1 text-sm text-ink-soft">
-        Renew or re-upload the paperwork that keeps your kitchen trading. An expired licence stops
-        new orders.
+        Upload anything onboarding still needs, or renew what is about to lapse. An expired
+        licence stops new orders.
       </p>
 
       {isLoading ? (
         <Skeleton className="mt-8 h-40 w-full" />
-      ) : docs.length === 0 ? (
-        <Card className="mt-8 p-6 text-center">
-          <p className="font-semibold text-foreground">No documents on file</p>
-          <p className="mt-1 text-sm text-ink-soft">
-            Anything you uploaded during onboarding appears here.
-          </p>
-        </Card>
       ) : (
         <>
+          {missing.length > 0 && (
+            <section className="mt-6">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                Still needed
+              </h2>
+              <div className="mt-2 flex flex-col gap-3">
+                {missing.map((m) => (
+                  <MissingDocumentCard key={m.type} type={m.type} why={m.why} />
+                ))}
+              </div>
+              {/* A chef with no FSSAI licence cannot upload one. This is the
+                  screen where they find that out. */}
+              {missing.some((m) => m.type === 'fssai_license') && (
+                <div className="mt-3">
+                  <FssaiOfferCard />
+                </div>
+              )}
+            </section>
+          )}
           {needsAction.length > 0 && (
             <section className="mt-6">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
@@ -68,11 +85,9 @@ export function DocumentsPage() {
           )}
           {rest.length > 0 && (
             <section className="mt-8">
-              {needsAction.length > 0 && (
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                  On file
-                </h2>
-              )}
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                On file
+              </h2>
               <div className="mt-2 flex flex-col gap-3">
                 {rest.map((d) => (
                   <DocumentCard key={d.id} doc={d} />
@@ -83,6 +98,65 @@ export function DocumentsPage() {
         </>
       )}
     </div>
+  );
+}
+
+/** A document onboarding asked for that the chef never uploaded. */
+function MissingDocumentCard({ type, why }: { type: string; why: string }) {
+  const add = useAddDocument();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [expiry, setExpiry] = useState('');
+  const carriesExpiry = type === 'fssai_license';
+
+  function onPick(file?: File | null) {
+    if (!file) return;
+    add.mutate(
+      { type, file, expiryDate: expiry || undefined },
+      {
+        onSuccess: () => toast.success('Uploaded — it goes to admins for verification.'),
+        onError: () => toast.error('Could not upload that file. Please try again.'),
+      },
+    );
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start gap-3">
+        <FileText className="mt-0.5 h-5 w-5 shrink-0 text-ink-muted" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="font-medium text-foreground">{documentLabel(type)}</p>
+          <p className="text-xs text-ink-muted">{why}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        {carriesExpiry && (
+          <div>
+            <label htmlFor={`add-expiry-${type}`} className="block text-xs font-medium text-ink-soft">
+              Expiry date
+            </label>
+            <input
+              id={`add-expiry-${type}`}
+              type="date"
+              value={expiry}
+              onChange={(e) => setExpiry(e.target.value)}
+              className="input-base mt-1 w-44 tabular-nums"
+            />
+          </div>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,application/pdf"
+          className="hidden"
+          onChange={(e) => onPick(e.target.files?.[0])}
+        />
+        <Button size="sm" disabled={add.isPending} onClick={() => fileRef.current?.click()}>
+          <Upload className="mr-1 h-4 w-4" aria-hidden="true" />
+          {add.isPending ? 'Uploading…' : 'Upload'}
+        </Button>
+      </div>
+    </Card>
   );
 }
 
