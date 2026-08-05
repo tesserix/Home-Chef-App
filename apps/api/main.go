@@ -281,6 +281,11 @@ func main() {
 		if err := services.RegisterSupportQueueConsumers(eventCtx, consumerManager); err != nil {
 			log.Printf("Warning: Failed to register support queue consumers: %v", err)
 		}
+
+		// FSSAI filing-request status changes → the per-request SLA workflow.
+		if err := services.RegisterFssaiSlaConsumers(eventCtx, consumerManager); err != nil {
+			log.Printf("Warning: Failed to register FSSAI SLA consumers: %v", err)
+		}
 	}
 
 	// Background daily scan: ping chefs whose FSSAI license expires

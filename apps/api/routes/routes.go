@@ -1127,6 +1127,7 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/fssai/requests", adminFssai.ListFssaiRequests)
 			admin.GET("/fssai/requests/:id", adminFssai.GetFssaiRequest)
 			admin.PATCH("/fssai/requests/:id", adminFssai.UpdateFssaiRequest)
+			admin.POST("/fssai/requests/:id/license", adminFssai.UploadFssaiLicense)
 
 			// Test-chef mode: flip a kitchen between live and sandbox, browse
 			// and purge its debugging sessions, and manage who may see sandbox

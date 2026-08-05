@@ -52,9 +52,21 @@ type FssaiRequest struct {
 	ApplicationRef string `gorm:"type:varchar(120);not null;default:''" json:"applicationRef,omitempty"`
 	RegistrationNo string `gorm:"type:varchar(120);not null;default:''" json:"registrationNo,omitempty"`
 
+	// The issued certificate itself — an object path in the private bucket,
+	// surfaced to the chef as a short-lived signed URL. The registration number
+	// alone is not the licence; this is the document they can actually produce
+	// when someone asks to see it.
+	LicenseFileURL  string `gorm:"type:text;not null;default:''" json:"-"`
+	LicenseFileName string `gorm:"type:varchar(255);not null;default:''" json:"licenseFileName,omitempty"`
+
 	// Kept apart so an internal note can never surface on a chef's screen.
 	AdminNotes     string `gorm:"type:text;not null;default:''" json:"-"`
 	RejectedReason string `gorm:"type:text;not null;default:''" json:"rejectedReason,omitempty"`
+	// What we still need from the chef, written by an admin and shown verbatim
+	// on their tracker. A request parked without saying what is missing is a
+	// dead end for the chef, so reaching more_info_required requires this.
+	InfoRequested   string     `gorm:"type:text;not null;default:''" json:"infoRequested,omitempty"`
+	InfoRequestedAt *time.Time `json:"infoRequestedAt,omitempty"`
 
 	SubmittedAt *time.Time `json:"submittedAt,omitempty"`
 	FiledAt     *time.Time `json:"filedAt,omitempty"`
@@ -106,7 +118,8 @@ func IsFssaiDocKind(kind string) bool {
 // submits the request outright.
 //
 //	awaiting_payment → submitted → in_progress → filed → issued
-//	                                              └→ rejected → refunded
+//	                                   ⇅                   └→ rejected → refunded
+//	                          more_info_required
 const (
 	// FssaiAwaitingPayment — the chef's draft: details captured, documents
 	// being gathered, nothing charged and nothing owed.
@@ -115,6 +128,10 @@ const (
 	FssaiSubmitted = "submitted"
 	// FssaiInProgress — an admin has picked it up and is preparing the form.
 	FssaiInProgress = "in_progress"
+	// FssaiMoreInfoRequired — the ball is back with the chef: FoSCoS or the
+	// admin needs something before we can file. InfoRequested says what, and is
+	// shown to the chef verbatim.
+	FssaiMoreInfoRequired = "more_info_required"
 	// FssaiFiled — lodged with FoSCoS; ApplicationRef is set.
 	FssaiFiled = "filed"
 	// FssaiIssued — the registration exists; RegistrationNo is set.
@@ -147,10 +164,16 @@ func FssaiPaid(status string) bool {
 // they may still be asked to replace something unreadable.
 func (r *FssaiRequest) AcceptsDocuments() bool {
 	switch r.Status {
-	case FssaiAwaitingPayment, FssaiSubmitted, FssaiInProgress:
+	case FssaiAwaitingPayment, FssaiSubmitted, FssaiInProgress, FssaiMoreInfoRequired:
 		return true
 	}
 	return false
+}
+
+// FssaiAwaitingChef reports whether the chef owes us something. Drives the app's
+// single call-to-action and the reminder workflow, so both read one rule.
+func FssaiAwaitingChef(status string) bool {
+	return status == FssaiAwaitingPayment || status == FssaiMoreInfoRequired
 }
 
 // NeedsDocuments reports whether the request still lacks a document FSSAI

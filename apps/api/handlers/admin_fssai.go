@@ -8,6 +8,8 @@ package handlers
 // chef's tracker is a mirror of what an admin has done, never a guess.
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -92,6 +94,9 @@ type updateFssaiRequest struct {
 	RegistrationNo string `json:"registrationNo"`
 	RejectedReason string `json:"rejectedReason"`
 	AdminNotes     string `json:"adminNotes"`
+	// What we need from the chef. Shown to them verbatim, so it is written for
+	// a chef and not for the queue.
+	InfoRequested string `json:"infoRequested"`
 }
 
 // UpdateFssaiRequest moves a request and records what came back from FoSCoS.
@@ -128,6 +133,11 @@ func (h *AdminFssaiHandler) UpdateFssaiRequest(c *gin.Context) {
 		updates["rejected_reason"] = s
 		row.RejectedReason = s
 	}
+	if s := strings.TrimSpace(req.InfoRequested); s != "" {
+		updates["info_requested"] = s
+		updates["info_requested_at"] = now
+		row.InfoRequested = s
+	}
 	if req.AdminNotes != "" {
 		updates["admin_notes"] = req.AdminNotes
 	}
@@ -163,6 +173,14 @@ func (h *AdminFssaiHandler) UpdateFssaiRequest(c *gin.Context) {
 				})
 				return
 			}
+		case "infoRequested":
+			if row.InfoRequested == "" {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": "Say what you need from the chef — they are shown it, and " +
+						"a request parked without it is one they cannot act on",
+				})
+				return
+			}
 		}
 		updates["status"] = s
 		switch s {
@@ -173,13 +191,99 @@ func (h *AdminFssaiHandler) UpdateFssaiRequest(c *gin.Context) {
 		}
 	}
 
+	statusChanged := updates["status"] != nil
 	if err := database.DB.Model(&models.FssaiRequest{}).
 		Where("id = ?", row.ID).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update the request"})
 		return
 	}
 	_ = database.DB.Preload("Documents").First(&row, "id = ?", row.ID).Error
+
+	// After the write, so a consumer reading the row back sees the new status.
+	// Both are best-effort: the transition an admin made and a chef will see
+	// must not be undone by a broker or a push service being down.
+	if statusChanged {
+		services.PublishFssaiRequestEvent(&row)
+		services.NotifyFssaiRequestStatus(database.DB, &row)
+	}
 	c.JSON(http.StatusOK, gin.H{"request": adminFssaiRow(c, &row)})
+}
+
+// UploadFssaiLicense attaches the issued certificate to a request.
+//
+// The registration number alone is not the licence — this is the document the
+// chef produces when an inspector asks. Stored in the private bucket like every
+// other document here and handed out only as a short-lived signed URL.
+// POST /admin/fssai/requests/:id/license  (multipart: file)
+func (h *AdminFssaiHandler) UploadFssaiLicense(c *gin.Context) {
+	var row models.FssaiRequest
+	if err := database.DB.Preload("Documents").
+		Where("id = ?", c.Param("id")).First(&row).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Request not found"})
+		return
+	}
+	if !models.FssaiPaid(row.Status) && row.Status != models.FssaiIssued {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "A certificate can only be attached to a request that is being worked",
+		})
+		return
+	}
+
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
+		return
+	}
+	defer file.Close()
+	if header.Size > 10*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum 10 MB."})
+		return
+	}
+	// Sniffed, not declared — same rule as the chef's uploads.
+	contentType, serr := sniffContentType(file)
+	if serr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not read the file"})
+		return
+	}
+	if contentType != "application/pdf" && !services.IsImageContentType(contentType) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Allowed: PDF, JPEG, PNG or WebP."})
+		return
+	}
+
+	folder := fmt.Sprintf("chefs/%s/fssai/%s/license", row.ChefID.String(), row.ID.String())
+	objectPath, uerr := services.UploadPrivateFile(
+		c.Request.Context(), folder, fssaiFileExtension(contentType), file, contentType)
+	if uerr != nil {
+		log.Printf("FSSAI request %s: licence upload failed: %v", row.ID, uerr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload the certificate"})
+		return
+	}
+
+	now := time.Now().UTC()
+	if err := database.DB.Model(&models.FssaiRequest{}).Where("id = ?", row.ID).
+		Updates(map[string]any{
+			"license_file_url":  objectPath,
+			"license_file_name": sanitiseFileLabel(header.Filename),
+			"updated_at":        now,
+		}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record the certificate"})
+		return
+	}
+	_ = database.DB.Preload("Documents").First(&row, "id = ?", row.ID).Error
+	c.JSON(http.StatusOK, gin.H{"request": adminFssaiRow(c, &row)})
+}
+
+// fssaiLicenseView mints a short-lived link to the issued certificate, or "" if
+// there is none. Never a durable URL: it carries the chef's name and address.
+func fssaiLicenseView(c *gin.Context, r *models.FssaiRequest) string {
+	if r.LicenseFileURL == "" {
+		return ""
+	}
+	url, err := services.GenerateSignedURL(c.Request.Context(), r.LicenseFileURL, 15*time.Minute)
+	if err != nil {
+		return ""
+	}
+	return url
 }
 
 // adminFssaiRow is the operator shape: everything the chef sees plus the notes
