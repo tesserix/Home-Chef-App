@@ -41,7 +41,9 @@ export default function PromoteScreen() {
   const [pending, setPending] = useState<SocialNetwork | null>(null);
 
   const { data, isLoading } = useQuery<PromoteProfile>({
-    queryKey: ['chef-profile'],
+    // Same key the Profile screen uses, so an edit there refreshes the name and
+    // slug shown here instead of leaving a stale copy behind.
+    queryKey: ['chef', 'profile'],
     queryFn: () => api.get<PromoteProfile>('/chef/profile').then((r) => r.data),
   });
 
