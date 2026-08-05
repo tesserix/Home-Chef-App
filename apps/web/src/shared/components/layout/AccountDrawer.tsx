@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import { User, LogOut, X, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';

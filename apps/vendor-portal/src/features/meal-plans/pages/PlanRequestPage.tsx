@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Inbox } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/shared/components/ui/Card';

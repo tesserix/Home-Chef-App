@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { BadgeCheck, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/shared/utils/format';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';

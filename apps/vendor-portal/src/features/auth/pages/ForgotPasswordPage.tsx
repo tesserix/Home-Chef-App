@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { sendPasswordReset } from '@/features/auth/services/auth-service';
 
 /**

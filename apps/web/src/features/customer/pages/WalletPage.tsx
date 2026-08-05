@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Wallet as WalletIcon, ArrowDownLeft, ArrowUpRight, Loader2, Gift, ChevronRight } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { Card } from '@/shared/components/ui';

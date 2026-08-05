@@ -4,7 +4,7 @@ import { MapPin, Package, Clock } from 'lucide-react';
 import type { AvailableDelivery } from '@/shared/types';
 import { toast } from 'sonner';
 import { PageLoader } from '@/shared/components/LoadingScreen';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function AvailableDeliveriesPage() {

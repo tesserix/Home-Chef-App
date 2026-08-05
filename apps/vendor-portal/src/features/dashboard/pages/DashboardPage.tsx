@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import {
   Plus,
   ClipboardList,

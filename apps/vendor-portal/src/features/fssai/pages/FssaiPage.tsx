@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { BadgeCheck, Upload } from 'lucide-react';
 import { Card } from '@/shared/components/ui/Card';

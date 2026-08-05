@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router';
 
 // Registration is not available - redirect to login
 export default function RegisterPage() {

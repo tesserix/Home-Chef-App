@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 import { RAIL_NAV, isNavItemActive } from './nav-items';
 
 // The fixed navigation rail (desktop only). Sticky rather than `position:

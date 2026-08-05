@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { CalendarDays, Loader2 } from 'lucide-react';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { Button } from '@/shared/components/ui';

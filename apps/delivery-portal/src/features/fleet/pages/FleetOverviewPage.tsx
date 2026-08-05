@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import {
   Wifi,
   Truck,
