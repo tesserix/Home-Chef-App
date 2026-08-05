@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -27,6 +28,38 @@ type ChefLoyaltyConfig struct {
 	RedeemRate float64 `json:"redeemRate"`
 	// MinConvertPoints is the balance a chef must reach before converting.
 	MinConvertPoints float64 `json:"minConvertPoints"`
+	// MonthlyConvertCap is the most a chef can convert in a rolling 30 days,
+	// in rupees. 0 disables the cap.
+	//
+	// The customer programme has had one from the start; this side shipped with
+	// only a minimum, so the giveaway was bounded by nothing but order volume.
+	// A cap is what stops a single high-volume kitchen — or a pricing mistake —
+	// from converting an unbounded amount before anyone notices.
+	MonthlyConvertCap float64 `json:"monthlyConvertCap"`
+}
+
+// chefLoyaltyMonthlyWindow is the rolling period the cap is measured over.
+// Matches the customer programme so "monthly" means one thing on both sides.
+const chefLoyaltyMonthlyWindow = 30 * 24 * time.Hour
+
+// ErrChefLoyaltyMonthlyCap — converting now would cross the rolling cap. The
+// points are NOT lost; the chef converts once the window moves on.
+var ErrChefLoyaltyMonthlyCap = errors.New("monthly conversion cap reached")
+
+// ChefConvertedThisMonth sums the loyalty cashback a chef has already converted
+// in the window.
+//
+// Counts the BONUS rows rather than the points ledger: a bonus is what actually
+// costs money, and it survives the points being spent. Voided bonuses are
+// excluded — money an admin cancelled should not hold a chef's cap down.
+func ChefConvertedThisMonth(db *gorm.DB, chefID uuid.UUID) (float64, error) {
+	var total float64
+	err := db.Model(&models.ChefBonus{}).
+		Where("chef_id = ? AND kind = ? AND status <> ? AND created_at >= ?",
+			chefID, models.ChefBonusLoyaltyCashback, models.ChefBonusVoided,
+			time.Now().Add(-chefLoyaltyMonthlyWindow)).
+		Select("COALESCE(SUM(amount), 0)").Scan(&total).Error
+	return total, err
 }
 
 // GetChefLoyaltyConfig reads the program config with working defaults.
@@ -45,7 +78,10 @@ type ChefLoyaltyConfig struct {
 // Every field is a PlatformSettings key, so the rate is an admin decision at
 // runtime and this is only where it starts.
 func GetChefLoyaltyConfig(db *gorm.DB) ChefLoyaltyConfig {
-	cfg := ChefLoyaltyConfig{Enabled: true, EarnRate: 1, RedeemRate: 0.005, MinConvertPoints: 10000}
+	cfg := ChefLoyaltyConfig{
+		Enabled: true, EarnRate: 1, RedeemRate: 0.005,
+		MinConvertPoints: 10000, MonthlyConvertCap: 2000,
+	}
 	var settings []models.PlatformSettings
 	db.Where("key LIKE ?", "chef_loyalty.%").Find(&settings)
 	for _, s := range settings {
@@ -63,6 +99,12 @@ func GetChefLoyaltyConfig(db *gorm.DB) ChefLoyaltyConfig {
 		case "chef_loyalty.min_convert_points":
 			if v, err := strconv.ParseFloat(s.Value, 64); err == nil && v > 0 {
 				cfg.MinConvertPoints = v
+			}
+		case "chef_loyalty.monthly_convert_cap":
+			// >= 0 so an admin can switch the cap OFF with "0", which a >0 guard
+			// would silently ignore while appearing to accept.
+			if v, err := strconv.ParseFloat(s.Value, 64); err == nil && v >= 0 {
+				cfg.MonthlyConvertCap = v
 			}
 		}
 	}
@@ -178,6 +220,18 @@ func ConvertChefLoyalty(db *gorm.DB, chefID, userID uuid.UUID) (*models.ChefBonu
 
 	var bonus *models.ChefBonus
 	err := db.Transaction(func(tx *gorm.DB) error {
+		// Checked INSIDE the transaction: two conversions racing would each see
+		// the same "already converted" total outside it and both pass.
+		if cfg.MonthlyConvertCap > 0 {
+			converted, cerr := ChefConvertedThisMonth(tx, chefID)
+			if cerr != nil {
+				return cerr
+			}
+			if ToPaise(converted+amount) > ToPaise(cfg.MonthlyConvertCap) {
+				return ErrChefLoyaltyMonthlyCap
+			}
+		}
+
 		// Claim the points first: the balance guard loses cleanly if a
 		// concurrent conversion (or a fresher earn changing the sum) got there
 		// before us.

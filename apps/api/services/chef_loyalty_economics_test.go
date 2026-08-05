@@ -69,3 +69,29 @@ func TestChefLoyaltyThreshold_IsReachable(t *testing.T) {
 	require.LessOrEqual(t, orders, 40.0,
 		"first payout takes %.0f orders — too far away to motivate", orders)
 }
+
+// The cap is the backstop the customer programme has always had and this side
+// shipped without: a minimum tells a chef when they MAY convert, nothing told
+// them when to stop. A pricing mistake or one very high-volume kitchen could
+// convert without bound until someone noticed in the numbers.
+func TestChefLoyaltyMonthlyCap_IsSetByDefault(t *testing.T) {
+	cfg := GetChefLoyaltyConfig(setupEmptySettingsDB(t))
+	require.Greater(t, cfg.MonthlyConvertCap, 0.0,
+		"an uncapped giveaway is bounded only by order volume")
+
+	// A cap below the conversion threshold would make the programme unusable:
+	// the chef reaches the minimum and is refused every time.
+	minPayout := cfg.MinConvertPoints * cfg.RedeemRate
+	require.GreaterOrEqual(t, cfg.MonthlyConvertCap, minPayout,
+		"cap ₹%.2f is below the ₹%.2f minimum conversion — nobody could ever convert",
+		cfg.MonthlyConvertCap, minPayout)
+}
+
+// "0" must switch the cap off. A >0 guard would drop the value and leave the
+// default in place while the settings screen showed the admin's 0 back to them.
+func TestChefLoyaltyMonthlyCap_ZeroDisablesIt(t *testing.T) {
+	db := setupEmptySettingsDB(t)
+	require.NoError(t, db.Exec(
+		`INSERT INTO platform_settings (key, value) VALUES ('chef_loyalty.monthly_convert_cap', '0')`).Error)
+	require.Equal(t, 0.0, GetChefLoyaltyConfig(db).MonthlyConvertCap)
+}

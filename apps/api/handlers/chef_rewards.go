@@ -36,6 +36,17 @@ func chefFromContext(c *gin.Context) (*models.ChefProfile, bool) {
 
 // GetChefRewards returns everything the vendor Rewards screen needs: referral
 // code + link + progress, points balance + conversion terms, and totals.
+// chefLoyaltyCapReached reports whether converting the whole balance would cross
+// the rolling cap — the same test ConvertChefLoyalty applies, so the button and
+// the server cannot disagree.
+func chefLoyaltyCapReached(cfg services.ChefLoyaltyConfig, converted, points float64) bool {
+	if cfg.MonthlyConvertCap <= 0 {
+		return false
+	}
+	return services.ToPaise(converted+services.Round2(points*cfg.RedeemRate)) >
+		services.ToPaise(cfg.MonthlyConvertCap)
+}
+
 func (h *ChefRewardsHandler) GetChefRewards(c *gin.Context) {
 	chef, ok := chefFromContext(c)
 	if !ok {
@@ -68,6 +79,13 @@ func (h *ChefRewardsHandler) GetChefRewards(c *gin.Context) {
 		Where("chef_id = ? AND status = ?", chef.ID, models.ChefBonusPending).
 		Select("COALESCE(SUM(amount), 0)").Scan(&pendingBonus)
 
+	convertedThisMonth, cErr := services.ChefConvertedThisMonth(database.DB, chef.ID)
+	if cErr != nil {
+		// Not fatal: showing the button and letting the server refuse is better
+		// than hiding a conversion the chef is entitled to.
+		convertedThisMonth = 0
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"referral": gin.H{
 			"enabled":         refCfg.Enabled,
@@ -87,8 +105,13 @@ func (h *ChefRewardsHandler) GetChefRewards(c *gin.Context) {
 			"earnRate":         loyCfg.EarnRate,
 			"redeemRate":       loyCfg.RedeemRate,
 			"minConvertPoints": loyCfg.MinConvertPoints,
-			"canConvert":       loyCfg.Enabled && acct.Points >= loyCfg.MinConvertPoints,
-			"convertValue":     models.RoundAmount(acct.Points * loyCfg.RedeemRate),
+			// The cap counts here too, or the button offers a conversion the
+			// server is about to refuse — which reads as a broken button, not a
+			// limit the chef has already used up.
+			"canConvert": loyCfg.Enabled &&
+				acct.Points >= loyCfg.MinConvertPoints &&
+				!chefLoyaltyCapReached(loyCfg, convertedThisMonth, acct.Points),
+			"convertValue": models.RoundAmount(acct.Points * loyCfg.RedeemRate),
 		},
 		"pendingPayoutCredit": pendingBonus,
 	})
@@ -121,6 +144,16 @@ func (h *ChefRewardsHandler) ConvertChefRewards(c *gin.Context) {
 			cfg := services.GetChefLoyaltyConfig(database.DB)
 			c.JSON(http.StatusConflict, gin.H{
 				"error": fmt.Sprintf("You need at least %.0f points to convert.", cfg.MinConvertPoints),
+			})
+		case errors.Is(err, services.ErrChefLoyaltyMonthlyCap):
+			// A policy refusal, not a fault. Says what happened and that the
+			// points are safe — the default 500 would have read as "your
+			// cashback vanished".
+			cfg := services.GetChefLoyaltyConfig(database.DB)
+			c.JSON(http.StatusConflict, gin.H{
+				"error": fmt.Sprintf(
+					"You've converted the most we allow in a month (₹%.0f). Your points are safe — convert again once the month rolls on.",
+					cfg.MonthlyConvertCap),
 			})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not convert your points"})
