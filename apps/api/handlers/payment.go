@@ -1242,6 +1242,46 @@ func (h *PaymentHandler) confirmMealPlanAdvanceFromWebhook(orderID, paymentID st
 	return services.ConfirmMealPlanAdvance(database.DB, &plan, paymentID, "")
 }
 
+// confirmFssaiRequestFromWebhook is the payment-captured fallback for an FSSAI
+// filing request — its gateway order id lives on fssai_requests, so the order
+// UPDATE never matches it.
+//
+// Without this the request is confirmed ONLY when the chef returns from the
+// hosted checkout. A chef who pays and closes the browser leaves us holding
+// their money against a request that was never submitted, never emailed to
+// onboarding, and invisible in the admin queue (which hides unpaid drafts).
+//
+// Returns confirmed=true only for the transition it performed. Errors are
+// transient so the webhook layer redelivers.
+func (h *PaymentHandler) confirmFssaiRequestFromWebhook(orderID, paymentID, mode string) (bool, error) {
+	var req models.FssaiRequest
+	err := database.DB.Preload("Documents").
+		Where("gateway_order = ? AND status = ? AND mode = ?",
+			orderID, models.FssaiAwaitingPayment, mode).
+		First(&req).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil // not a pending FSSAI request — nothing to do
+	}
+	if err != nil {
+		return false, err
+	}
+	// Checkout refuses to mint an order until the documents are attached, so
+	// this should be unreachable. If it ever fires we are holding money for a
+	// request we cannot file, which is a person's problem to fix, not a retry's.
+	if req.NeedsDocuments() {
+		log.Printf("FSSAI request %s: PAID (payment %s) but documents are missing — needs manual follow-up",
+			req.ID, paymentID)
+		return false, nil
+	}
+	// Idempotent: the status guard lives in MarkFssaiPaid's WHERE clause, so a
+	// webhook racing the chef's own confirm settles on one submission and one
+	// onboarding email.
+	if err := services.MarkFssaiPaid(database.DB, &req, paymentID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // handlePaymentCaptured returns a non-nil error only for a TRANSIENT failure (a DB
 // error) so the webhook layer releases the dedup claim and a redelivery re-runs.
 // A parse failure is permanent (nil → keep the claim; a retry won't parse either).
