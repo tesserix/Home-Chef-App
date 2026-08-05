@@ -12,8 +12,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -146,7 +148,7 @@ func (h *FssaiHandler) CreateFssaiRequest(c *gin.Context) {
 	database.DB.Model(&row).Update("gateway_order", cfOrder.OrderID)
 
 	c.JSON(http.StatusOK, gin.H{
-		"request":                  fssaiRequestResponse(&row),
+		"request":                  fssaiRequestResponse(c, &row),
 		"cashfreeOrderId":          cfOrder.OrderID,
 		"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
 		// The app cannot infer sandbox vs production — the hosts differ and the
@@ -173,7 +175,7 @@ func (h *FssaiHandler) ConfirmFssaiPayment(c *gin.Context) {
 	// Already past payment — idempotent success, so a retried confirm or a
 	// double tap does not read as an error to the chef.
 	if row.Status != models.FssaiAwaitingPayment {
-		c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(&row)})
+		c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, &row)})
 		return
 	}
 
@@ -187,7 +189,7 @@ func (h *FssaiHandler) ConfirmFssaiPayment(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record the payment"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(&row)})
+	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, &row)})
 }
 
 type attachFssaiDocRequest struct {
@@ -227,7 +229,7 @@ func (h *FssaiHandler) AttachFssaiDocument(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(&row)})
+	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, &row)})
 }
 
 // CancelFssaiRequest lets a chef back out of a request they have not paid for.
@@ -308,39 +310,109 @@ func (h *FssaiHandler) UploadFssaiDocument(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum 5 MB."})
 		return
 	}
-	// PDFs are accepted for an address proof (a utility bill is usually one);
-	// identity and photo must be images.
-	isPDF := contentType == "application/pdf"
-	if !isPDF {
-		if !services.IsImageContentType(contentType) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP, PDF."})
-			return
-		}
-		sniffed, serr := sniffContentType(file)
-		if serr != nil || !services.IsImageContentType(sniffed) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
-			return
-		}
-	}
 
-	// Private, not public: these are Aadhaar and PAN images. The bucket path is
-	// scoped per chef so one kitchen's documents can never be listed from
-	// another's prefix.
+	// Sniff the BYTES for every accepted type, PDFs included. Trusting the
+	// declared Content-Type for one branch is the whole bypass: a caller simply
+	// declares application/pdf and uploads whatever they like.
+	sniffed, serr := sniffContentType(file)
+	if serr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not read the file"})
+		return
+	}
+	// A PDF is only acceptable as an address proof — a utility bill usually is
+	// one. A photo or an ID has to be an image we can actually look at.
+	isPDF := sniffed == "application/pdf"
+	switch {
+	case isPDF && kind == models.FssaiDocAddressProof:
+	case services.IsImageContentType(sniffed):
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Allowed: JPEG, PNG or WebP — or a PDF for an address proof.",
+		})
+		return
+	}
+	// Store the SNIFFED type, never the declared one, so the object cannot be
+	// served back as something it is not.
+	contentType = sniffed
+
+	// PRIVATE bucket. These are Aadhaar and PAN images: the public bucket hands
+	// out a permanent unauthenticated URL, which for identity documents is an
+	// exposure, not a convenience. What is stored is the object path; every
+	// surface that shows a document mints a short-lived signed URL for it.
+	//
+	// The stored object name is a UUID with an extension derived from the
+	// SNIFFED type — the uploader's filename is never used to build a path, so
+	// it cannot traverse out of the folder or choose its own extension.
 	folder := fmt.Sprintf("chefs/%s/fssai/%s", chef.ID.String(), row.ID.String())
-	fileURL, uerr := services.UploadPublicFile(
-		c.Request.Context(), folder, header.Filename, file, contentType)
+	objectPath, uerr := services.UploadPrivateFile(
+		c.Request.Context(), folder, fssaiFileExtension(contentType), file, contentType)
 	if uerr != nil {
 		log.Printf("FSSAI request %s: upload failed: %v", row.ID, uerr)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload the file"})
 		return
 	}
 
+	// The chef's own filename is kept only as a LABEL, sanitised, never as a path.
 	if err := services.AttachFssaiDocument(
-		database.DB, &row, kind, fileURL, header.Filename); err != nil {
+		database.DB, &row, kind, objectPath, sanitiseFileLabel(header.Filename)); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(&row)})
+	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, &row)})
+}
+
+// fssaiFileExtension maps a VERIFIED content type to the extension the stored
+// object gets. Derived from the sniffed bytes rather than the uploader's
+// filename, so the extension is never attacker-chosen.
+func fssaiFileExtension(contentType string) string {
+	switch contentType {
+	case "image/png":
+		return "f.png"
+	case "image/webp":
+		return "f.webp"
+	case "application/pdf":
+		return "f.pdf"
+	default:
+		return "f.jpg"
+	}
+}
+
+// sanitiseFileLabel keeps the chef's filename only as something to read in the
+// admin queue: no path separators, no traversal, length-capped. It never
+// reaches a filesystem or an object path.
+func sanitiseFileLabel(name string) string {
+	name = filepath.Base(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, "..", "")
+	name = strings.Map(func(r rune) rune {
+		if r < 32 || r == '/' || r == '\\' {
+			return -1
+		}
+		return r
+	}, name)
+	if len(name) > 80 {
+		name = name[:80]
+	}
+	if name == "" || name == "." {
+		return "document"
+	}
+	return name
+}
+
+// fssaiDocumentViews turns stored object paths into short-lived signed URLs.
+// Nothing that renders a document ever gets a durable link: the objects live in
+// the private bucket and a link that outlives the screen is a copy of someone's
+// Aadhaar loose in a log or a chat.
+func fssaiDocumentViews(c *gin.Context, docs []models.FssaiRequestDocument) []gin.H {
+	out := make([]gin.H, 0, len(docs))
+	for _, d := range docs {
+		row := gin.H{"kind": d.Kind, "fileName": d.FileName}
+		if url, err := services.GenerateSignedURL(
+			c.Request.Context(), d.FileURL, 15*time.Minute); err == nil {
+			row["fileUrl"] = url
+		}
+		out = append(out, row)
+	}
+	return out
 }
 
 // GetFssaiRequest is the chef's tracker: their live request, or the most recent
@@ -357,21 +429,18 @@ func (h *FssaiHandler) GetFssaiRequest(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"request": fssaiRequestResponse(row),
+		"request": fssaiRequestResponse(c, row),
 		"enabled": services.FssaiFilingEnabled(),
 	})
 }
 
 // fssaiRequestResponse is the chef-facing shape. AdminNotes are deliberately
 // absent — internal working notes must never reach a chef's screen.
-func fssaiRequestResponse(r *models.FssaiRequest) any {
+func fssaiRequestResponse(c *gin.Context, r *models.FssaiRequest) any {
 	if r == nil {
 		return nil
 	}
-	docs := make([]gin.H, 0, len(r.Documents))
-	for _, d := range r.Documents {
-		docs = append(docs, gin.H{"kind": d.Kind, "fileName": d.FileName, "fileUrl": d.FileURL})
-	}
+	docs := fssaiDocumentViews(c, r.Documents)
 	return gin.H{
 		"id": r.ID, "status": r.Status, "termYears": r.TermYears,
 		"kitchenName": r.KitchenName, "applicantName": r.ApplicantName,

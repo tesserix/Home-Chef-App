@@ -62,7 +62,7 @@ func (h *AdminFssaiHandler) ListFssaiRequests(c *gin.Context) {
 
 	out := make([]gin.H, 0, len(rows))
 	for i := range rows {
-		out = append(out, adminFssaiRow(&rows[i]))
+		out = append(out, adminFssaiRow(c, &rows[i]))
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"requests": out, "total": total, "page": page, "limit": limit,
@@ -81,7 +81,7 @@ func (h *AdminFssaiHandler) GetFssaiRequest(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Request not found"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"request": adminFssaiRow(&row)})
+	c.JSON(http.StatusOK, gin.H{"request": adminFssaiRow(c, &row)})
 }
 
 type updateFssaiRequest struct {
@@ -177,16 +177,15 @@ func (h *AdminFssaiHandler) UpdateFssaiRequest(c *gin.Context) {
 		return
 	}
 	_ = database.DB.Preload("Documents").First(&row, "id = ?", row.ID).Error
-	c.JSON(http.StatusOK, gin.H{"request": adminFssaiRow(&row)})
+	c.JSON(http.StatusOK, gin.H{"request": adminFssaiRow(c, &row)})
 }
 
 // adminFssaiRow is the operator shape: everything the chef sees plus the notes
 // and the money trail staff need to verify a payment against.
-func adminFssaiRow(r *models.FssaiRequest) gin.H {
-	docs := make([]gin.H, 0, len(r.Documents))
-	for _, d := range r.Documents {
-		docs = append(docs, gin.H{"kind": d.Kind, "fileName": d.FileName, "fileUrl": d.FileURL})
-	}
+func adminFssaiRow(c *gin.Context, r *models.FssaiRequest) gin.H {
+	// Signed, short-lived, same as every other admin document surface — the
+	// objects are in the private bucket and staff get a link that expires.
+	docs := fssaiDocumentViews(c, r.Documents)
 	return gin.H{
 		"id": r.ID, "chefId": r.ChefID, "status": r.Status,
 		"kitchenName": r.KitchenName, "applicantName": r.ApplicantName,

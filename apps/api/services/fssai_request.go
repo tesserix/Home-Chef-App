@@ -242,14 +242,17 @@ func SendFssaiRequestToOnboarding(r *models.FssaiRequest) error {
 		return errors.New("email service not configured")
 	}
 
+	// The documents are NAMED here but never linked. They are Aadhaar and PAN
+	// images in a private bucket, and a link mailed to an inbox outlives the
+	// screen it was minted for — staff open them from the admin queue, behind
+	// authentication, on a URL that expires in fifteen minutes.
 	var docs strings.Builder
 	for _, d := range r.Documents {
 		label := d.Kind
 		if d.FileName != "" {
 			label = d.Kind + " — " + d.FileName
 		}
-		docs.WriteString(fmt.Sprintf(
-			`<li><a href="%s">%s</a></li>`, html.EscapeString(d.FileURL), html.EscapeString(label)))
+		docs.WriteString(fmt.Sprintf(`<li>%s</li>`, html.EscapeString(label)))
 	}
 	if docs.Len() == 0 {
 		docs.WriteString("<li>none attached</li>")
@@ -277,8 +280,9 @@ func SendFssaiRequestToOnboarding(r *models.FssaiRequest) error {
 <p>Kind of business: <strong>Home Based Canteens / Dabba Wallas</strong>,
 turnover up to Rs. 1.5Cr [Registration]. File on FoSCoS, then set the
 application reference on the request in admin so the chef can track it.</p>
-<p>These links point at the chef's identity documents. Delete this mail once the
-application is filed.</p>`,
+<p>Open the documents from the admin queue — they are not attached or linked
+here, because they are identity documents and this mailbox is not the place for
+them.</p>`,
 		html.EscapeString(r.KitchenName), html.EscapeString(r.KitchenName),
 		html.EscapeString(r.ApplicantName), html.EscapeString(r.ContactPhone),
 		html.EscapeString(r.ContactEmail), html.EscapeString(addr),
