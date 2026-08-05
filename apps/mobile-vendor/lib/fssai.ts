@@ -44,6 +44,7 @@ export type FssaiStatus =
   | 'awaiting_payment'
   | 'submitted'
   | 'in_progress'
+  | 'more_info_required'
   | 'filed'
   | 'issued'
   | 'rejected'
@@ -65,6 +66,11 @@ export interface FssaiRequest {
   applicationRef?: string;
   registrationNo?: string;
   rejectedReason?: string;
+  /** What an admin has asked the chef for, in their words. Shown verbatim. */
+  infoRequested?: string;
+  /** The issued certificate, once uploaded. Short-lived signed URL. */
+  licenseFileName?: string;
+  licenseFileUrl?: string;
   submittedAt?: string | null;
   filedAt?: string | null;
   issuedAt?: string | null;
@@ -108,6 +114,9 @@ export function isFssaiPaid(status: FssaiStatus): boolean {
 /** What the chef must do next, or null when the ball is with us. Drives the
  *  single call-to-action on the screen, so the app never shows two. */
 export function fssaiChefAction(r: FssaiRequest | null): 'documents' | 'pay' | null {
+  // more_info_required is the ball being handed back mid-flight: paid, but we
+  // asked for something. The chef owes us a document either way.
+  if (r?.status === 'more_info_required') return 'documents';
   if (!r || r.status !== 'awaiting_payment') return null;
   return r.needsDocuments ? 'documents' : 'pay';
 }
@@ -120,6 +129,8 @@ export function fssaiStatusLabel(status: FssaiStatus): string {
       return 'With our team';
     case 'in_progress':
       return 'Being prepared';
+    case 'more_info_required':
+      return 'We need something from you';
     case 'filed':
       return 'Filed with FSSAI';
     case 'issued':
@@ -164,4 +175,75 @@ export function buildCashfreeCheckoutUrl(opts: {
     ret: opts.returnUrl,
   });
   return `https://fe3dr.com/pay/?${q.toString()}`;
+}
+
+/** What the dashboard says about a live filing request.
+ *
+ *  `urgent` means the chef has to do something; `calm` is progress they should
+ *  see but need not act on. null when there is nothing worth a banner — no
+ *  request, or one that finished long enough ago to stop being news.
+ *
+ *  Separate from the tracker's own copy because a banner has one line to land
+ *  in: it says where the request is and what, if anything, is owed.
+ */
+export function fssaiDashboardNotice(
+  r: FssaiRequest | null,
+): { tone: 'urgent' | 'calm'; title: string; body: string } | null {
+  if (!r) return null;
+  switch (r.status) {
+    case 'awaiting_payment':
+      return r.needsDocuments
+        ? {
+            tone: 'urgent',
+            title: 'Finish your FSSAI application',
+            body: 'Add your photo and photo ID — nothing is charged until they are in.',
+          }
+        : {
+            tone: 'urgent',
+            title: 'Your FSSAI application is ready to pay',
+            body: 'Your documents are in. Pay to send it to our team.',
+          };
+    case 'more_info_required':
+      return {
+        tone: 'urgent',
+        title: 'We need something for your FSSAI application',
+        body: r.infoRequested || 'Open your request to see what we need.',
+      };
+    case 'submitted':
+      return {
+        tone: 'calm',
+        title: 'FSSAI application received',
+        body: "It's with our team. We'll tell you when it's filed.",
+      };
+    case 'in_progress':
+      return {
+        tone: 'calm',
+        title: "We're preparing your FSSAI form",
+        body: 'No action needed from you right now.',
+      };
+    case 'filed':
+      return {
+        tone: 'calm',
+        title: 'FSSAI application filed',
+        body: r.applicationRef
+          ? `Reference ${r.applicationRef} — you can track it on the government portal.`
+          : 'Lodged with FSSAI.',
+      };
+    case 'issued':
+      return {
+        tone: 'calm',
+        title: 'Your FSSAI registration is ready',
+        body: r.registrationNo
+          ? `Registration ${r.registrationNo}. Tap to download your certificate.`
+          : 'Tap to download your certificate.',
+      };
+    case 'rejected':
+      return {
+        tone: 'urgent',
+        title: "We couldn't complete your FSSAI application",
+        body: r.rejectedReason || 'Tap to see what happened.',
+      };
+    default:
+      return null;
+  }
 }

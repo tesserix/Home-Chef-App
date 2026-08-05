@@ -48,6 +48,8 @@ import {
   useExpiringDocuments,
   describeDocumentType,
 } from '../../hooks/useExpiringDocuments';
+import { useFssaiRequest } from '../../hooks/useFssai';
+import { fssaiDashboardNotice } from '../../lib/fssai';
 import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
 import {
   useChefMealPlanRequests,
@@ -190,6 +192,7 @@ export default function DashboardScreen() {
   const resumeMutation = useResumeReceiving();
   const { triggerAction, isLoading: orderActionLoading } = useOrderAction();
   const { data: expiringDocsData } = useExpiringDocuments();
+  const { data: fssaiData } = useFssaiRequest();
   const { data: actionRequests } = useActionRequiredAdminRequests();
   const { data: mealPlanResp, refetch: refetchMealPlans } =
     useChefMealPlanRequests();
@@ -220,6 +223,9 @@ export default function DashboardScreen() {
   }
 
   const expiringDocs = expiringDocsData?.documents ?? [];
+  // Every live transition of a filing request earns a line here, the same way an
+  // order does — the chef should not have to open a menu to learn where it is.
+  const fssaiNotice = fssaiDashboardNotice(fssaiData?.request ?? null);
   const pendingMealPlans = mealPlanResp?.data ?? [];
 
   const displayName = deriveDisplayName(
@@ -387,7 +393,8 @@ export default function DashboardScreen() {
     pendingCancellations.length > 0 ||
     pendingMealPlans.length > 0 ||
     (actionRequests?.length ?? 0) > 0 ||
-    expiringDocs.length > 0;
+    expiringDocs.length > 0 ||
+    fssaiNotice?.tone === 'urgent';
 
   // Nothing to act on → fill the empty space with the status prompt instead of a
   // blank screen. Broadened from the old 120-min "quiet" rule: a closed or idle
@@ -643,6 +650,27 @@ export default function DashboardScreen() {
             </Text>
           </View>
         )}
+
+        {/* Under the hero, not above it: the greeting and today's numbers are
+            what a chef opens the app for, and a filing update is context on top
+            of that rather than something to read first. */}
+        {fssaiNotice ? (
+          <Pressable
+            style={[
+              styles.fssaiCard,
+              fssaiNotice.tone === 'urgent' && styles.fssaiCardUrgent,
+            ]}
+            onPress={() => router.push('/fssai')}
+            accessibilityRole="button"
+            accessibilityLabel={`${fssaiNotice.title}. ${fssaiNotice.body}`}
+          >
+            <View style={styles.fssaiCardText}>
+              <Text style={styles.fssaiCardTitle}>{fssaiNotice.title}</Text>
+              <Text style={styles.fssaiCardBody}>{fssaiNotice.body}</Text>
+            </View>
+            <Text style={styles.fssaiCardChevron}>›</Text>
+          </Pressable>
+        ) : null}
 
         {/* Sandbox banner. While an admin has this kitchen in a test session,
             every figure on this screen belongs to the sandbox — a chef must
@@ -1341,6 +1369,36 @@ const styles = StyleSheet.create({
   },
   // This-week snapshot — a quiet caption row under the hero. Pulled up close to
   // the banner (negative top) so it reads as part of the header, not a section.
+  fssaiCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    marginHorizontal: theme.spacing[4],
+    marginTop: theme.spacing[3],
+    padding: theme.spacing[4],
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.paper,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+  },
+  fssaiCardUrgent: {
+    backgroundColor: theme.colors.amber.tint,
+    borderColor: theme.colors.amber.DEFAULT,
+  },
+  fssaiCardText: { flex: 1, gap: 2 },
+  fssaiCardTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  fssaiCardBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    lineHeight: 18,
+    color: theme.colors.ink.soft,
+  },
+  fssaiCardChevron: { fontSize: 22, color: theme.colors.ink.soft },
+
   weekRow: {
     flexDirection: 'row',
     alignItems: 'center',

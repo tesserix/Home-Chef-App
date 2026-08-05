@@ -397,6 +397,13 @@ func NotifyFssaiRequestStatus(db *gorm.DB, r *models.FssaiRequest) {
 	}
 	svc := GetNotificationService()
 	if svc == nil {
+		log.Printf("FSSAI request %s: no notification service — chef not told about %s",
+			r.ID, r.Status)
+		return
+	}
+	if r.UserID == uuid.Nil {
+		log.Printf("FSSAI request %s: no user on the row — chef not told about %s",
+			r.ID, r.Status)
 		return
 	}
 	if err := svc.SaveUserNotification(&models.Notification{
@@ -405,8 +412,10 @@ func NotifyFssaiRequestStatus(db *gorm.DB, r *models.FssaiRequest) {
 		Title:   title,
 		Message: message,
 	}); err != nil {
-		log.Printf("FSSAI request %s: chef notification failed: %v", r.ID, err)
+		log.Printf("FSSAI request %s: chef notification FAILED for %s: %v", r.ID, r.Status, err)
+		return
 	}
+	log.Printf("FSSAI request %s: chef notified of %s", r.ID, r.Status)
 }
 
 // fssaiAdminTransitions is what an admin may move a request to. Forward-only
