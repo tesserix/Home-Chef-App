@@ -5,7 +5,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { useAuthStore } from '../store/auth-store';
 import { useFavoritesStore } from '../store/favorites-store';
 import { useCurrencyStore } from '../store/currency-store';

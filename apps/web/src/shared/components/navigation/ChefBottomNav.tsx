@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 import { LayoutDashboard, UtensilsCrossed, ClipboardList, DollarSign, User } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useHaptics } from '@/shared/hooks/useMobile';

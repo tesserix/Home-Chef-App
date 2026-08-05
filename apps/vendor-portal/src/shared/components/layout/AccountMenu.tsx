@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, LogOut, Settings, User } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';

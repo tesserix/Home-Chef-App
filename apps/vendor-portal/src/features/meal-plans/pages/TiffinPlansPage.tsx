@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { CalendarDays, ChefHat, Inbox, RotateCcw, UtensilsCrossed, ChevronRight } from 'lucide-react';
 import { Card } from '@/shared/components/ui/Card';
 import { Badge } from '@/shared/components/ui/Badge';

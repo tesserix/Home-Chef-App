@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChefHat, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';

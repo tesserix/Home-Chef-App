@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import { ChefHat, Loader2, MailCheck } from 'lucide-react';
 import { Button } from '@/shared/components/ui';

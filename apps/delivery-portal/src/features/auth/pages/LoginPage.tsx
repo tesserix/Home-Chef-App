@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { Truck, UserPlus, Loader2, Eye, EyeOff } from 'lucide-react';
 import { GoogleSignInButton } from '@/features/auth/components/GoogleSignInButton';

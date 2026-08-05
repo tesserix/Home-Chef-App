@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarClock, ChevronRight } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';

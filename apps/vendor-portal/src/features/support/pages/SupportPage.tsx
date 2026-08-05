@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ChevronRight, LifeBuoy, Plus } from 'lucide-react';

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Search, MapPin, ChefHat, Clock, Star } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { HERO_IMAGES } from '@/shared/constants/images';

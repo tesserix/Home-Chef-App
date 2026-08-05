@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { AlertTriangle, Cookie, Mail, ExternalLink } from 'lucide-react';
 import { Badge, Card } from '@/shared/components/ui';
 

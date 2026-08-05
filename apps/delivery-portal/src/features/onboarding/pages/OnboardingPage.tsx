@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Truck, Loader2 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { clearAllFormCache, clearStepCache, getCachedFormData } from '@/shared/utils/form-cache';

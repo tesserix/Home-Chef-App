@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Cookie, X } from 'lucide-react';
 
 const STORAGE_KEY = 'cookie-consent';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Loader2, Clock, Share2, Trash2 } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';

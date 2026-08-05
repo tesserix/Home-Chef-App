@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { Loader2, Clock, MessageCircle } from 'lucide-react';
 import { useChefBookFeed, REACTIONS, type Article } from '../api/useChefBook';
 

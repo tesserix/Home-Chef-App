@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router';
 import { MotionConfig } from 'framer-motion';
 import { AppRoutes } from './routes';
 import { AuthProvider } from './providers/AuthProvider';

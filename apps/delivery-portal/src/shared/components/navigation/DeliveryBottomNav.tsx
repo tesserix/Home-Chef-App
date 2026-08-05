@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 import { LayoutDashboard, Navigation, Package, DollarSign, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 

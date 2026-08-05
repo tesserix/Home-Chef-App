@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router';
 import { Suspense, lazy } from 'react';
 import { useAuth } from '../providers/AuthProvider';
 import { LoadingScreen } from '@/shared/components/LoadingScreen';

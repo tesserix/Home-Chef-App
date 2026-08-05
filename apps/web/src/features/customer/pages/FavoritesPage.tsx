@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Heart, Clock, MapPin, Trash2, Loader2, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
