@@ -167,6 +167,7 @@ func SetupRouter() *gin.Engine {
 	locationHandler := handlers.NewLocationHandler()
 	reviewHandler := handlers.NewReviewHandler()
 	favoriteHandler := handlers.NewFavoriteHandler()
+	chefAudienceHandler := handlers.NewChefAudienceHandler()
 	customerHandler := handlers.NewCustomerHandler()
 	addressHandler := handlers.NewAddressHandler()
 	preferenceHandler := handlers.NewPreferenceHandler()
@@ -490,6 +491,16 @@ func SetupRouter() *gin.Engine {
 			// Per-mode delivery-fee preview so checkout can show the real fee +
 			// pickup's saving. Same computation CreateOrder charges.
 			chefs.POST("/:id/delivery-quote", orderHandler.QuoteDeliveryFee)
+
+			// Likes + subscriptions. The totals are public, so this sits in the
+			// optional-auth group; the mutations 401 for themselves when the
+			// BFF sent no identity.
+			chefs.GET("/:id/audience", chefAudienceHandler.GetAudienceState)
+			chefs.POST("/:id/like", chefAudienceHandler.LikeChef)
+			chefs.DELETE("/:id/like", chefAudienceHandler.UnlikeChef)
+			chefs.POST("/:id/subscribe", chefAudienceHandler.Subscribe)
+			chefs.DELETE("/:id/subscribe", chefAudienceHandler.Unsubscribe)
+			chefs.PATCH("/:id/subscribe", chefAudienceHandler.UpdateNotifyPrefs)
 		}
 
 		// Dish search across chefs (#36) — its own path so it doesn't collide
@@ -1529,6 +1540,13 @@ func SetupRouter() *gin.Engine {
 			favorites.GET("/dishes/ids", favoriteHandler.ListFavoriteDishIDs)
 			favorites.POST("/dishes", favoriteHandler.AddFavoriteDish)
 			favorites.DELETE("/dishes/:menuItemId", favoriteHandler.RemoveFavoriteDish)
+		}
+
+		// Kitchens the customer subscribes to (uncapped, unlike favorites).
+		chefSubs := v1.Group("/me/chef-subscriptions")
+		chefSubs.Use(bffAuth(bffKey, bffWindow))
+		{
+			chefSubs.GET("", chefAudienceHandler.ListSubscriptions)
 		}
 
 		// Realtime — mints the ticket a client spends on a /ws/* upgrade.

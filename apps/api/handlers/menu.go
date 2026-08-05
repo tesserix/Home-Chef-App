@@ -420,6 +420,15 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 		}); err != nil {
 			log.Printf("failed to enqueue approval.created event: %v", err)
 		}
+
+		// Tell subscribers. The consumer drops anything that is not a price cut,
+		// so a rise stages an event and fans out to nobody.
+		if err := services.EnqueueEvent(database.DB, services.SubjectChefPriceChanged, "chef.price_changed", userID, map[string]any{
+			"chef_id": chef.ID.String(), "chef_name": chef.BusinessName,
+			"item_name": item.Name, "old_price": oldPrice, "new_price": *req.Price,
+		}); err != nil {
+			log.Printf("failed to enqueue chef price_changed event: %v", err)
+		}
 	}
 
 	// Reload to return the updated item

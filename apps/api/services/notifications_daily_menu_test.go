@@ -26,6 +26,10 @@ func setupNotifDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE favorite_chefs (id text PRIMARY KEY, user_id text, chef_id text, created_at datetime)`,
+		`CREATE TABLE chef_subscriptions (id text PRIMARY KEY, user_id text, chef_id text,
+			notify_menu integer DEFAULT 1, notify_price_change integer DEFAULT 1,
+			notify_availability integer DEFAULT 1, notify_articles integer DEFAULT 1,
+			created_at datetime, updated_at datetime, UNIQUE(user_id, chef_id))`,
 		`CREATE TABLE notifications (id text PRIMARY KEY, user_id text, type text, title text, message text,
 			data text, is_read integer DEFAULT 0, read_at datetime, created_at datetime)`,
 	} {

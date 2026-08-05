@@ -45,9 +45,14 @@ type ChefProfile struct {
 	TotalOrders               int     `gorm:"default:0" json:"totalOrders"`
 	// IssueCount is the number of customer-reported order issues (#37); the issue
 	// rate (issues/orders) feeds the chef's quality signal.
-	IssueCount int        `gorm:"default:0" json:"issueCount"`
-	IsVerified bool       `gorm:"default:false" json:"verified"`
-	VerifiedAt *time.Time `gorm:"" json:"verifiedAt"`
+	IssueCount int `gorm:"default:0" json:"issueCount"`
+
+	// Denormalised social counters. Kept in the same transaction as the like /
+	// subscription row so discovery can rank by them without a join per chef.
+	LikeCount       int        `gorm:"default:0;index" json:"likeCount"`
+	SubscriberCount int        `gorm:"default:0;index" json:"subscriberCount"`
+	IsVerified      bool       `gorm:"default:false" json:"verified"`
+	VerifiedAt      *time.Time `gorm:"" json:"verifiedAt"`
 
 	// Docs-deadline guardrail: OnboardedAt is stamped when the chef submits the
 	// onboarding application (documents may be skipped at that point). Required
@@ -332,17 +337,17 @@ func (c *ChefProfile) IsBornTest() bool { return c.FirstLiveAt == nil }
 
 // DTOs
 type ChefProfileResponse struct {
-	ID            uuid.UUID `json:"id"`
-	UserID        uuid.UUID `json:"userId"`
-	BusinessName  string    `json:"businessName"`
-	Slug          string    `json:"slug"`
-	Description   string    `json:"description"`
-	ProfileImage  string    `json:"profileImage"`
-	BannerImage   string    `json:"bannerImage"`
-	Cuisines      []string  `json:"cuisines"`
-	Specialties   []string  `json:"specialties"`
-	PrepTime      string    `json:"prepTime"`
-	MinimumOrder  float64   `json:"minimumOrder"`
+	ID           uuid.UUID `json:"id"`
+	UserID       uuid.UUID `json:"userId"`
+	BusinessName string    `json:"businessName"`
+	Slug         string    `json:"slug"`
+	Description  string    `json:"description"`
+	ProfileImage string    `json:"profileImage"`
+	BannerImage  string    `json:"bannerImage"`
+	Cuisines     []string  `json:"cuisines"`
+	Specialties  []string  `json:"specialties"`
+	PrepTime     string    `json:"prepTime"`
+	MinimumOrder float64   `json:"minimumOrder"`
 	// DeliveryFee is the LOWEST this chef's delivery can cost (the fee at zero
 	// distance), not a quote — the real fee is distance-based and settled at
 	// checkout. Server-computed per response by services.DeliveryFeeFrom; it was
@@ -351,10 +356,10 @@ type ChefProfileResponse struct {
 	DeliveryFee float64 `json:"deliveryFee"`
 	// DeliveryFeeFlat marks a fee with no distance component, so DeliveryFee holds
 	// however far away the customer is. Only a flat 0 may be called free outright.
-	DeliveryFeeFlat bool `json:"deliveryFeeFlat"`
-	PriceRange    string    `json:"priceRange"`
-	ServiceRadius float64   `json:"serviceRadius"`
-	OffersPickup  bool      `json:"offersPickup"`
+	DeliveryFeeFlat bool    `json:"deliveryFeeFlat"`
+	PriceRange      string  `json:"priceRange"`
+	ServiceRadius   float64 `json:"serviceRadius"`
+	OffersPickup    bool    `json:"offersPickup"`
 	// OffersDelivery is a COMPUTED capability (not persisted): whether this chef
 	// can fulfil a "delivery" order at all right now = the chef self-delivers OR a
 	// 3PL provider is currently enabled. It is the single flag the customer app
@@ -381,6 +386,8 @@ type ChefProfileResponse struct {
 	SelfDeliveryMaxDistanceKm float64 `json:"selfDeliveryMaxDistanceKm"`
 	Rating                    float64 `json:"rating"`
 	TotalReviews              int     `json:"totalReviews"`
+	LikeCount                 int     `json:"likeCount"`
+	SubscriberCount           int     `json:"subscriberCount"`
 	TotalOrders               int     `json:"totalOrders"`
 	IsVerified                bool    `json:"verified"`
 	// FoodSafetyBadge: chef holds a verified, non-expired FSSAI licence (#35).
@@ -483,17 +490,17 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 	currency := strings.ToUpper(currencyForCountryLocal(country))
 
 	return ChefProfileResponse{
-		ID:                        c.ID,
-		UserID:                    c.UserID,
-		BusinessName:              c.BusinessName,
-		Slug:                      c.EffectiveSlug(),
-		Description:               c.Description,
-		ProfileImage:              c.ProfileImage,
-		BannerImage:               c.BannerImage,
-		Cuisines:                  cuisines,
-		Specialties:               specialties,
-		PrepTime:                  c.PrepTime,
-		MinimumOrder:              c.MinimumOrder,
+		ID:           c.ID,
+		UserID:       c.UserID,
+		BusinessName: c.BusinessName,
+		Slug:         c.EffectiveSlug(),
+		Description:  c.Description,
+		ProfileImage: c.ProfileImage,
+		BannerImage:  c.BannerImage,
+		Cuisines:     cuisines,
+		Specialties:  specialties,
+		PrepTime:     c.PrepTime,
+		MinimumOrder: c.MinimumOrder,
 		// DeliveryFee/DeliveryFeeFlat are filled by the handler (services.DeliveryFeeFrom
 		// reads platform policy, which models must not import).
 		PriceRange:                priceRangeFromMinOrder(c.MinimumOrder),
@@ -507,6 +514,8 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		SelfDeliveryMaxDistanceKm: c.SelfDeliveryMaxDistanceKm,
 		Rating:                    c.Rating,
 		TotalReviews:              c.TotalReviews,
+		LikeCount:                 c.LikeCount,
+		SubscriberCount:           c.SubscriberCount,
 		TotalOrders:               c.TotalOrders,
 		IsVerified:                c.IsVerified,
 		IsFeatured:                c.IsFeatured && c.FeaturedUntil != nil && c.FeaturedUntil.After(time.Now()),

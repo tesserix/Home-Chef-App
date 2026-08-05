@@ -215,29 +215,39 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	featuredOrder := "CASE WHEN is_featured = true AND featured_until > NOW() THEN 0 ELSE 1 END ASC"
 	rankOrder := premiumOrder + ", " + featuredOrder
 
+	// Audience size, earned rather than bought: a kitchen customers subscribe to
+	// and like ranks above one they don't. A subscription weighs more than a
+	// like because it is a standing commitment, not a tap.
+	//
+	// Always DESC and always a TIEBREAKER, never the primary key — someone who
+	// asked to sort by price wants price order, so popularity only separates
+	// chefs the chosen sort ties. The one exception is the default sort, where
+	// no key was asked for and popularity leads.
+	socialOrder := "(subscriber_count * 3 + like_count) DESC"
+
 	switch sortBy {
 	case "rating":
-		query = query.Order(rankOrder + ", rating " + dir)
+		query = query.Order(rankOrder + ", rating " + dir + ", " + socialOrder)
 	case "orders":
-		query = query.Order(rankOrder + ", total_orders " + dir)
+		query = query.Order(rankOrder + ", total_orders " + dir + ", " + socialOrder)
 	case "newest":
-		query = query.Order(rankOrder + ", created_at " + dir)
+		query = query.Order(rankOrder + ", created_at " + dir + ", " + socialOrder)
 	case "price":
-		query = query.Order(rankOrder + ", minimum_order " + dir)
+		query = query.Order(rankOrder + ", minimum_order " + dir + ", " + socialOrder)
 	case "distance":
 		if hasGeo {
 			// Squared distance on lat/lng — a monotonic proxy for true distance
 			// at city scale; cheap (no trig) and orders nearby chefs correctly.
 			// Closest first.
 			query = query.Order(clause.Expr{
-				SQL:  rankOrder + ", ((latitude - ?) * (latitude - ?) + (longitude - ?) * (longitude - ?)) ASC",
+				SQL:  rankOrder + ", ((latitude - ?) * (latitude - ?) + (longitude - ?) * (longitude - ?)) ASC, " + socialOrder,
 				Vars: []interface{}{geoLat, geoLat, geoLng, geoLng},
 			})
 		} else {
-			query = query.Order(rankOrder + ", rating " + dir)
+			query = query.Order(rankOrder + ", rating " + dir + ", " + socialOrder)
 		}
 	default:
-		query = query.Order(rankOrder + ", rating " + dir)
+		query = query.Order(rankOrder + ", " + socialOrder + ", rating DESC")
 	}
 
 	// Get chefs

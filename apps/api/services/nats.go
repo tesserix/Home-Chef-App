@@ -29,8 +29,8 @@ const (
 	// SubjectOrderStale — an order the chef ACCEPTED and then never finished. Separate
 	// from accept_reminder, which chases an order nobody took: this one has an owner who
 	// stopped, so it goes to BOTH sides and ends in a refund rather than a void.
-	SubjectOrderStale = "orders.stale_reminder"
-	SubjectOrderDelivered      = "orders.delivered"
+	SubjectOrderStale     = "orders.stale_reminder"
+	SubjectOrderDelivered = "orders.delivered"
 	// SubjectOrderReadyForPickup — a PICKUP order is cooked and waiting to be
 	// collected. Distinct from orders.updated on purpose: for a delivery order
 	// `ready` is a passive milestone the customer does nothing about, but for a
@@ -64,8 +64,8 @@ const (
 	SubjectDeliveryPickedUp    = "delivery.picked_up"
 	SubjectDeliveryFailed      = "delivery.failed"   // → customer/chef: delivery failed, resolution pending (#393)
 	SubjectDeliveryLocation    = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
-	SubjectPaymentSuccess = "payments.success"
-	SubjectPaymentFailed  = "payments.failed"
+	SubjectPaymentSuccess      = "payments.success"
+	SubjectPaymentFailed       = "payments.failed"
 	// SubjectPaymentStalled — a gateway payment has been live but unresolved for
 	// longer than any customer would wait (bank OTP page left open, a UPI collect
 	// nobody approved). Deliberately an OPS signal, not a customer notification:
@@ -106,16 +106,20 @@ const (
 	SubjectChefAvailabilityChanged = "chef.availability_changed"
 	SubjectWeeklyMenuPublished     = "chef.weekly_menu.published" // → followers: a favorited chef dropped a new menu (#239)
 	SubjectDailyMenuPublished      = "chef.daily_menu.published"  // → followers: a favorited chef published a per-date menu (#405)
-	SubjectReferralRewarded        = "referral.reward.granted"    // → referrer: a referee placed their first paid order (#38)
-	SubjectLoyaltyEarned           = "loyalty.points_earned"      // → customer: earned points on a delivered order / streak (#40)
-	SubjectLoyaltyRedeemed         = "loyalty.redeemed"           // → customer: points converted to wallet credit (#40)
-	SubjectCampaignDispatch        = "campaigns.dispatch"         // → fan out a marketing campaign to its segment (#56)
-	SubjectReviewPosted            = "reviews.posted"
-	SubjectCateringRequest         = "catering.request"
-	SubjectCateringQuote           = "catering.quote"
-	SubjectNotificationEmail       = "notifications.email"
-	SubjectNotificationPush        = "notifications.push"
-	SubjectNotificationSMS         = "notifications.sms"
+	// → subscribers: a dish they follow changed price, and the kitchen posted a
+	// ChefBook article. Both fan out to subscribers only, never to favorites.
+	SubjectChefPriceChanged     = "chef.menu_item.price_changed"
+	SubjectChefArticlePublished = "chef.article.published"
+	SubjectReferralRewarded     = "referral.reward.granted" // → referrer: a referee placed their first paid order (#38)
+	SubjectLoyaltyEarned        = "loyalty.points_earned"   // → customer: earned points on a delivered order / streak (#40)
+	SubjectLoyaltyRedeemed      = "loyalty.redeemed"        // → customer: points converted to wallet credit (#40)
+	SubjectCampaignDispatch     = "campaigns.dispatch"      // → fan out a marketing campaign to its segment (#56)
+	SubjectReviewPosted         = "reviews.posted"
+	SubjectCateringRequest      = "catering.request"
+	SubjectCateringQuote        = "catering.quote"
+	SubjectNotificationEmail    = "notifications.email"
+	SubjectNotificationPush     = "notifications.push"
+	SubjectNotificationSMS      = "notifications.sms"
 
 	// SubjectRiskCustomerFlagged — a customer's refund-abuse score reached severe (#937).
 	// Fans out to admins; the money paths never consume it.
