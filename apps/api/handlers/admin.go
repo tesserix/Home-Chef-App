@@ -169,6 +169,23 @@ func (h *AdminHandler) GetFSSAILockedChefs(c *gin.Context) {
 	})
 }
 
+// SendFSSAIRenewalReminder pushes the expiry warning to one chef now, for an
+// admin working the expiring-soon list who does not want to wait for the
+// 30/15/7-day cron to reach them.
+// POST /admin/chefs/:id/fssai-reminder
+func (h *AdminHandler) SendFSSAIRenewalReminder(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	if err := services.SendFSSAIRenewalReminderNow(chefID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"sent": true})
+}
+
 type fssaiOverrideRequest struct {
 	Reason string `json:"reason" binding:"required,min=10,max=500"`
 	Days   int    `json:"days" binding:"required,min=1,max=30"`

@@ -104,7 +104,8 @@ const SECTIONS: LegalSection[] = [
     paragraphs: [
       `If the form is not how you want to spend your evening, we will complete it for you. We charge ₹${FSSAI_ASSIST_FEE} + ${FSSAI_ASSIST_GST_RATE}% GST — ₹${FSSAI_ASSIST_FEE_INC_GST} — once per application, whatever term you choose. It is one form either way, so it does not go up for a five-year registration.`,
       'You can do this two ways, and the fee is the same in both:',
-      `• In the Fe3dr for Chefs app — one payment, and we pay FSSAI for you. For one year that is ₹${FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR + FSSAI_ASSIST_FEE_INC_GST}: the ₹${FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR} government fee plus our ₹${FSSAI_ASSIST_FEE_INC_GST}. You upload your documents in the app and track the application there.`,
+      `• In the Fe3dr for Chefs app — one payment, and we pay FSSAI for you. For one year that is ₹${FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR + FSSAI_ASSIST_FEE_INC_GST}: the ₹${FSSAI_GOVERNMENT_FEE_INC_GST_PER_YEAR} government fee plus our ₹${FSSAI_ASSIST_FEE_INC_GST}. You fill in your details and upload your documents first — nothing is charged until they are in — and then you pay and track the application in the app.`,
+      'Once you pay, that fee is non-refundable and the request cannot be cancelled, because we start work on it. You can change anything, replace a document or walk away at any point before paying.',
       `• By email — you pay FSSAI yourself at the portal and pay us the ₹${FSSAI_ASSIST_FEE_INC_GST} separately.`,
       'Every rupee, for a one-year registration filed by us:',
       `• ₹${FSSAI_REGISTRATION_FEE_PER_YEAR} — FSSAI's registration fee, paid to the government.`,
