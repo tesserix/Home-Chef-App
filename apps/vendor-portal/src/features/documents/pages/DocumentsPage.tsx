@@ -59,12 +59,11 @@ export function DocumentsPage() {
                 ))}
               </div>
               {/* A chef with no FSSAI licence cannot upload one. This is the
-                  screen where they find that out. */}
-              {missing.some((m) => m.type === 'fssai_license') && (
-                <div className="mt-3">
-                  <FssaiOfferCard />
-                </div>
-              )}
+                  screen where they find that out. The card hides itself once a
+                  licence is on file. */}
+              <div className="mt-3">
+                <FssaiOfferCard />
+              </div>
             </section>
           )}
           {needsAction.length > 0 && (
