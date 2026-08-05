@@ -37,6 +37,9 @@ export interface Chef {
   cuisine: string;
   rating: number;
   reviewCount: number;
+  /** Public social counters — drive the like/subscribe row and discovery rank. */
+  likeCount?: number;
+  subscriberCount?: number;
   isOpen: boolean;
   /** Real-time availability (open/closed + opening/closing-soon), server-computed.
    *  When present, `isOpen` is derived from `availability.orderable`. Absent on

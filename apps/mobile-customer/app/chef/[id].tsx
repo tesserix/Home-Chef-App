@@ -27,6 +27,12 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, Heart, Share2, UtensilsCrossed, ShoppingCart } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
+import { ChefAudienceBar } from '../../components/chef/ChefAudienceBar';
+import {
+  useChefAudience,
+  useToggleChefLike,
+  useToggleChefSubscription,
+} from '../../hooks/useChefAudience';
 import { useChef, useChefMenu } from '../../hooks/useChefs';
 import { useCustomerCoords } from '../../hooks/useCustomerCoords';
 import { useChefAvailabilityWS } from '../../hooks/useChefAvailabilityWS';
@@ -121,6 +127,9 @@ export default function ChefDetailScreen() {
   useChefAvailabilityWS(chefData?.data?.id);
   const { data: favData } = useFavorites();
   const toggleFavorite = useToggleFavorite();
+  const { data: audience } = useChefAudience(id);
+  const toggleLike = useToggleChefLike(id);
+  const toggleSubscribe = useToggleChefSubscription(id);
   const createGroup = useCreateGroupOrder();
   // Chef's published fixed weekly menu (#1) — read-only preview below the CTAs.
   const { data: weeklyMenu } = useChefWeeklyMenu(chefData?.data?.id ?? id ?? '');
@@ -568,6 +577,20 @@ export default function ChefDetailScreen() {
             <Text style={styles.cuisine} numberOfLines={1}>
               {formatCuisines(chef.cuisine)}
             </Text>
+
+            {/* Like + Subscribe. Counts fall back to the chef payload so the
+                row renders its real totals on first paint, before the
+                per-viewer audience query resolves. */}
+            <ChefAudienceBar
+              chefName={chef.name}
+              liked={audience?.liked ?? false}
+              subscribed={audience?.subscribed ?? false}
+              likeCount={audience?.likeCount ?? chef.likeCount ?? 0}
+              subscriberCount={audience?.subscriberCount ?? chef.subscriberCount ?? 0}
+              busy={toggleLike.isPending || toggleSubscribe.isPending}
+              onToggleLike={() => toggleLike.mutate(audience?.liked ?? false)}
+              onToggleSubscribe={() => toggleSubscribe.mutate(audience?.subscribed ?? false)}
+            />
 
             {/* Unavailable kitchen (#794): the API sends ready-to-render copy
                 saying WHY it can't be ordered from. A bare "Closed" left a

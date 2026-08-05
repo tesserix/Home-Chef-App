@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { FlatList, Platform, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Heart, ChefHat } from 'lucide-react-native';
+import { Heart, ChefHat, Bell } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useFavorites, useFavoriteDishes } from '../../hooks/useFavorites';
+import { useChefSubscriptions } from '../../hooks/useChefAudience';
 import type { FavoriteDishEntry } from '../../hooks/useFavorites';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { ScreenTitle } from '../../components/shared/ScreenTitle';
@@ -159,24 +160,65 @@ function EmptyDishesState() {
   );
 }
 
-// ─── Segmented control (Chefs | Dishes) ──────────────────────────────────────
+function EmptyFollowingState() {
+  const router = useRouter();
+  return (
+    <View className="flex-1 items-center justify-center px-8 gap-4 pt-16">
+      <View className="w-20 h-20 rounded-full bg-surface-soft items-center justify-center">
+        <Bell size={34} color={customerColors.charcoal.soft} />
+      </View>
+      <View className="items-center gap-2">
+        <Text className="text-xl font-bold text-charcoal text-center font-display">
+          Not following anyone yet
+        </Text>
+        <Text className="text-sm text-charcoal-soft text-center leading-5">
+          Subscribe to a kitchen and we'll tell you when they publish a menu, drop a price or
+          open for the day.
+        </Text>
+      </View>
+      <Pressable
+        onPress={() => router.push('/(tabs)')}
+        accessibilityRole="button"
+        accessibilityLabel="Browse chefs"
+        android_ripple={{ color: `${customerColors.canvas}33`, borderless: false }}
+      >
+        {({ pressed }) => (
+          <View
+            className={`bg-coral rounded-lg px-8 py-3 min-h-[44px] items-center justify-center mt-2 ${
+              pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : ''
+            }`}
+          >
+            <Text className="text-canvas font-semibold text-base">Browse chefs</Text>
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
 
-type FavTab = 'chefs' | 'dishes';
+// ─── Segmented control (Chefs | Dishes | Following) ──────────────────────────
+
+type FavTab = 'chefs' | 'dishes' | 'following';
 
 function FavoriteTabs({
   tab,
   onChange,
   chefCount,
   dishCount,
+  followingCount,
 }: {
   tab: FavTab;
   onChange: (t: FavTab) => void;
   chefCount?: number;
   dishCount?: number;
+  followingCount?: number;
 }) {
   const segments: { key: FavTab; label: string; count?: number }[] = [
     { key: 'chefs', label: 'Chefs', count: chefCount },
     { key: 'dishes', label: 'Dishes', count: dishCount },
+    // Distinct from Chefs: that is the capped shortlist, this is every kitchen
+    // whose updates the customer subscribed to.
+    { key: 'following', label: 'Following', count: followingCount },
   ];
   return (
     <View className="flex-row gap-2 px-4 pb-2">
@@ -238,17 +280,26 @@ function FavoritesScreenBody() {
 
   const chefs = useFavorites();
   const dishes = useFavoriteDishes();
+  const following = useChefSubscriptions();
 
   const chefEntries = chefs.data?.data ?? [];
   const dishEntries = dishes.data?.data ?? [];
+  const followingEntries = following.data ?? [];
 
   // First-load skeleton only for the active tab's query.
-  const activeLoading = tab === 'chefs' ? chefs.isLoading : dishes.isLoading;
+  const activeLoading =
+    tab === 'chefs' ? chefs.isLoading : tab === 'dishes' ? dishes.isLoading : following.isLoading;
   if (activeLoading) {
     return (
       <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
         <Header />
-        <FavoriteTabs tab={tab} onChange={setTab} chefCount={chefs.data?.count} dishCount={dishes.data?.count} />
+        <FavoriteTabs
+          tab={tab}
+          onChange={setTab}
+          chefCount={chefs.data?.count}
+          dishCount={dishes.data?.count}
+          followingCount={following.data?.length}
+        />
         <LoadingGrid />
       </SafeAreaView>
     );
@@ -262,9 +313,23 @@ function FavoritesScreenBody() {
         onChange={setTab}
         chefCount={chefs.data?.count}
         dishCount={dishes.data?.count}
+        followingCount={following.data?.length}
       />
 
-      {tab === 'chefs' ? (
+      {tab === 'following' ? (
+        following.isError ? (
+          <ErrorState onRetry={() => void following.refetch()} />
+        ) : followingEntries.length === 0 ? (
+          <EmptyFollowingState />
+        ) : (
+          <ChefGrid
+            chefs={followingEntries.map((entry) => entry.chef)}
+            isLoading={false}
+            onRefresh={() => void following.refetch()}
+            isRefreshing={following.isRefetching}
+          />
+        )
+      ) : tab === 'chefs' ? (
         chefs.isError ? (
           <ErrorState onRetry={() => void chefs.refetch()} />
         ) : chefEntries.length === 0 ? (

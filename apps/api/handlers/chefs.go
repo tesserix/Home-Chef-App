@@ -706,7 +706,12 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		"serviceRadius": resp.ServiceRadius,
 		"rating":        resp.Rating,
 		"totalReviews":  resp.TotalReviews,
-		"totalOrders":   resp.TotalOrders,
+		// The chef's own audience + the slug their public page lives at, so the
+		// vendor app can show what it is worth sharing and where to share to.
+		"slug":            resp.Slug,
+		"likeCount":       resp.LikeCount,
+		"subscriberCount": resp.SubscriberCount,
+		"totalOrders":     resp.TotalOrders,
 		// issueCount feeds the chef's issue rate (#37) shown in vendor analytics.
 		"issueCount":      chef.IssueCount,
 		"verified":        resp.IsVerified,

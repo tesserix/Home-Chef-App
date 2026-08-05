@@ -17,7 +17,7 @@ import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, ChevronLeft, ImagePlus, Plus } from 'lucide-react-native';
+import { Camera, ChevronLeft, ImagePlus, Plus, Share2 } from 'lucide-react-native';
 import { multipartConfig, getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
 import { FssaiOfferCard } from '../components/vendor/FssaiOfferCard';
@@ -633,7 +633,26 @@ export default function ProfileScreen() {
             )}
           </Pressable>
           <Text style={styles.commandTitle}>Profile</Text>
-          <View style={styles.commandSpacer} />
+          {/* Share the kitchen's public page. Sits here because the page it
+              shares is the one this screen edits. */}
+          <Pressable
+            onPress={() => router.push('/promote')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Promote your kitchen"
+            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.backBtn,
+                  pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                ]}
+              >
+                <Share2 size={20} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
+              </View>
+            )}
+          </Pressable>
         </View>
 
         <ScrollView
