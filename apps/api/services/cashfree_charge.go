@@ -44,8 +44,19 @@ func CashfreeCustomerFor(u *models.User) CashfreeCustomerDetails {
 
 // CreateCashfreeCharge mints the Cashfree order for one charge row.
 //
-// idempotencyScope keys the request per (row, amount): a retry re-derives the same
-// key so Cashfree dedups it, while a genuinely re-priced row gets a distinct one.
+// The wire request is deliberately IDENTICAL in shape to the à la carte order
+// path (handlers/payment_cashfree.go): same fields, same omissions. That path is
+// the one proven against the live merchant account every day, and a charge that
+// sent a slightly different body was the difference between orders minting
+// happily and FSSAI filing failing with Cashfree's generic 500.
+//
+// Idempotency comes from the ORDER ID, which is the charge row's own UUID:
+// creating the same order twice returns 409 and CreateOrder reads the existing
+// order back. The separate x-idempotency-key header the order path never sends
+// bought nothing on top of that, so it is not sent here either.
+//
+// note and idempotencyScope are accepted and ignored — kept so the four call
+// sites read the same and nobody has to relearn the signature.
 func CreateCashfreeCharge(
 	mode string,
 	rowID uuid.UUID,
@@ -53,8 +64,8 @@ func CreateCashfreeCharge(
 	currency string,
 	cust CashfreeCustomerDetails,
 	tags map[string]string,
-	note string,
-	idempotencyScope string,
+	_ string,
+	_ string,
 ) (*CashfreeOrderResponse, error) {
 	cf := GetCashfreeFor(mode)
 	if cf == nil {
@@ -63,15 +74,12 @@ func CreateCashfreeCharge(
 	if currency == "" {
 		currency = "INR"
 	}
-	paise := ToPaise(amount)
 	return cf.CreateOrder(&CashfreeOrderRequest{
-		OrderID:        rowID.String(),
-		AmountPaise:    cashfreeAmount(paise),
-		Currency:       currency,
-		Customer:       cust,
-		Tags:           tags,
-		OrderNote:      note,
-		IdempotencyKey: fmt.Sprintf("cf-%s:%s:%d", idempotencyScope, rowID, paise),
+		OrderID:     rowID.String(),
+		AmountPaise: cashfreeAmount(ToPaise(amount)),
+		Currency:    currency,
+		Customer:    cust,
+		Tags:        tags,
 	})
 }
 
