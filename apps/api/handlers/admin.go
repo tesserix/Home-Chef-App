@@ -105,6 +105,47 @@ func (h *AdminHandler) GetFSSAILockedChefs(c *gin.Context) {
 		locked = append(locked, row)
 	}
 
+	// Expiring soon: a licence lapsing inside the window is a chef who has to
+	// renew — and if they want us to file it again, that is a fresh paid request
+	// at the same fee. Surfaced BEFORE it lapses so the reminder is useful rather
+	// than an apology: an expired licence takes their kitchen offline.
+	expiringWithin := 60
+	if n, err := strconv.Atoi(c.Query("expiringWithinDays")); err == nil && n > 0 && n <= 365 {
+		expiringWithin = n
+	}
+	horizon := time.Now().AddDate(0, 0, expiringWithin)
+	var soonIDs []uuid.UUID
+	database.DB.Model(&models.ChefDocument{}).
+		Distinct("chef_id").
+		Where("type = ? AND status = ? AND expiry_date IS NOT NULL AND expiry_date >= ? AND expiry_date <= ?",
+			models.DocFSSAILicense, models.DocStatusVerified, time.Now(), horizon).
+		Pluck("chef_id", &soonIDs)
+
+	expiringSoon := make([]lockedChef, 0, len(soonIDs))
+	for _, chefID := range soonIDs {
+		var chef models.ChefProfile
+		if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+			continue
+		}
+		var doc models.ChefDocument
+		database.DB.
+			Where("chef_id = ? AND type = ? AND status = ? AND expiry_date IS NOT NULL",
+				chefID, models.DocFSSAILicense, models.DocStatusVerified).
+			Order("expiry_date DESC").First(&doc)
+		if doc.ExpiryDate == nil || doc.ExpiryDate.Before(time.Now()) {
+			continue // already lapsed — it belongs in `locked`, not here
+		}
+		// Negative days-since reads as days REMAINING, so one field serves both
+		// lists and the UI does not need a second shape.
+		expiringSoon = append(expiringSoon, lockedChef{
+			ChefID:          chef.ID,
+			UserID:          chef.UserID,
+			BusinessName:    chef.BusinessName,
+			FSSAIExpiry:     doc.ExpiryDate,
+			DaysSinceExpiry: -int(time.Until(*doc.ExpiryDate).Hours() / 24),
+		})
+	}
+
 	// Backfill target: India chefs with a verified FSSAI doc but NULL expiry
 	// (legacy uploads from before expiry capture). Ops can prompt these chefs to
 	// confirm their licence via POST /admin/fssai-expiry-backfill.
@@ -122,6 +163,9 @@ func (h *AdminHandler) GetFSSAILockedChefs(c *gin.Context) {
 		"lockedCount":        len(locked),
 		"overriddenCount":    len(overridden),
 		"missingExpiryCount": missingExpiry,
+		"expiringSoon":       expiringSoon,
+		"expiringSoonCount":  len(expiringSoon),
+		"expiringWithinDays": expiringWithin,
 	})
 }
 
