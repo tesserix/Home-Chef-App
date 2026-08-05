@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { BookOpen, ChevronLeft, Plus, Trash2 } from 'lucide-react-native';
+import { BookOpen, ChevronLeft, Plus, Share2, Trash2 } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import {
   Button,
@@ -305,6 +305,19 @@ export default function ChefBookScreen() {
                       {a.reactionsTotal} reactions · {a.commentsCount} comments
                     </Text>
                   </View>
+                  {a.status === 'published' ? (
+                    <Pressable
+                      onPress={() =>
+                        router.push({ pathname: '/promote', params: { articleId: a.id } })
+                      }
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Share ${a.title}`}
+                      style={styles.rowAction}
+                    >
+                      <Share2 size={18} color={theme.colors.ink.soft} />
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     onPress={() =>
                       remove.mutate(a.id, {
@@ -330,6 +343,7 @@ export default function ChefBookScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.colors.paper },
+  rowAction: { marginRight: theme.spacing[3] },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

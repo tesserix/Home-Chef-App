@@ -126,6 +126,29 @@ func UpdateSubscriptionNotifyPrefs(userID, chefID uuid.UUID, prefs map[string]bo
 	return nil
 }
 
+// ArticleReactionDelta is how far a kitchen's reaction counter moves when a
+// reader goes from `had` to `now`.
+//
+// Switching reaction type scores nothing: the reader already counted once, and
+// a kitchen should not climb because someone changed their mind from Yum to
+// Love. Only arriving and leaving move the number.
+func ArticleReactionDelta(had, now models.ReactionType) int64 {
+	switch {
+	case had == "" && now != "":
+		return 1
+	case had != "" && now == "":
+		return -1
+	default:
+		return 0
+	}
+}
+
+// ApplyArticleReaction moves the kitchen's ChefBook reaction counter, clamped
+// at zero. A zero delta writes nothing.
+func ApplyArticleReaction(chefID uuid.UUID, delta int64) error {
+	return bumpChefCounter(database.DB, chefID, "article_reaction_count", delta)
+}
+
 // GetChefAudienceState returns the viewer's own like/subscribe state plus the
 // public totals. userID may be uuid.Nil for an anonymous viewer.
 func GetChefAudienceState(userID, chefID uuid.UUID) (models.ChefAudienceState, error) {

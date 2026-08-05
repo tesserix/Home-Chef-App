@@ -49,10 +49,15 @@ type ChefProfile struct {
 
 	// Denormalised social counters. Kept in the same transaction as the like /
 	// subscription row so discovery can rank by them without a join per chef.
-	LikeCount       int        `gorm:"default:0;index" json:"likeCount"`
-	SubscriberCount int        `gorm:"default:0;index" json:"subscriberCount"`
-	IsVerified      bool       `gorm:"default:false" json:"verified"`
-	VerifiedAt      *time.Time `gorm:"" json:"verifiedAt"`
+	LikeCount       int `gorm:"default:0;index" json:"likeCount"`
+	SubscriberCount int `gorm:"default:0;index" json:"subscriberCount"`
+	// Reactions across the kitchen's published ChefBook articles. Counted here
+	// because the articles live in Mongo and discovery ranks in Postgres; its
+	// contribution to ranking is capped, since a chef controls how many articles
+	// they post but not how many customers subscribe.
+	ArticleReactionCount int        `gorm:"default:0;index" json:"articleReactionCount"`
+	IsVerified           bool       `gorm:"default:false" json:"verified"`
+	VerifiedAt           *time.Time `gorm:"" json:"verifiedAt"`
 
 	// Docs-deadline guardrail: OnboardedAt is stamped when the chef submits the
 	// onboarding application (documents may be skipped at that point). Required
@@ -388,6 +393,7 @@ type ChefProfileResponse struct {
 	TotalReviews              int     `json:"totalReviews"`
 	LikeCount                 int     `json:"likeCount"`
 	SubscriberCount           int     `json:"subscriberCount"`
+	ArticleReactionCount      int     `json:"articleReactionCount"`
 	TotalOrders               int     `json:"totalOrders"`
 	IsVerified                bool    `json:"verified"`
 	// FoodSafetyBadge: chef holds a verified, non-expired FSSAI licence (#35).
@@ -516,6 +522,7 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		TotalReviews:              c.TotalReviews,
 		LikeCount:                 c.LikeCount,
 		SubscriberCount:           c.SubscriberCount,
+		ArticleReactionCount:      c.ArticleReactionCount,
 		TotalOrders:               c.TotalOrders,
 		IsVerified:                c.IsVerified,
 		IsFeatured:                c.IsFeatured && c.FeaturedUntil != nil && c.FeaturedUntil.After(time.Now()),

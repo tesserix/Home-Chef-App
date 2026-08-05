@@ -5,7 +5,7 @@
 // the kitchen up in customer search, so the number is the reason to share, not
 // a vanity stat bolted on afterwards.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -17,14 +17,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
-import { router } from 'expo-router';
-import { Bell, ChevronLeft, Heart, Share2 } from 'lucide-react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Bell, BookOpen, ChevronLeft, Heart, Share2 } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
+import { useMyArticles } from '../hooks/useChefBook';
 import {
   SHARE_TARGETS,
+  articleShare,
   chefPublicUrl,
+  kitchenShare,
   shareToNetwork,
   type SocialNetwork,
 } from '../lib/social-share';
@@ -34,11 +37,20 @@ interface PromoteProfile {
   slug?: string;
   likeCount?: number;
   subscriberCount?: number;
+  articleReactionCount?: number;
 }
+
+// What the share buttons act on. 'kitchen' is the default; anything else is a
+// published article id.
+type ShareSubject = 'kitchen' | string;
 
 export default function PromoteScreen() {
   const { show: showToast } = useToast();
   const [pending, setPending] = useState<SocialNetwork | null>(null);
+  // ChefBook sends the post the chef tapped Share on, so they land here with it
+  // already chosen rather than picking it out of the list again.
+  const { articleId } = useLocalSearchParams<{ articleId?: string }>();
+  const [subject, setSubject] = useState<ShareSubject>(articleId ?? 'kitchen');
 
   const { data, isLoading } = useQuery<PromoteProfile>({
     // Same key the Profile screen uses, so an edit there refreshes the name and
@@ -46,17 +58,30 @@ export default function PromoteScreen() {
     queryKey: ['chef', 'profile'],
     queryFn: () => api.get<PromoteProfile>('/chef/profile').then((r) => r.data),
   });
+  const { data: articleData } = useMyArticles();
 
   const businessName = data?.businessName ?? '';
   const slug = data?.slug ?? '';
   const url = slug ? chefPublicUrl(slug) : '';
+
+  // Only published posts. Sharing a draft would send readers to something that
+  // isn't there yet.
+  const posts = useMemo(
+    () => (articleData?.data ?? []).filter((a) => a.status === 'published'),
+    [articleData],
+  );
+
+  const selected = posts.find((p) => p.id === subject);
 
   const onShare = useCallback(
     async (network: SocialNetwork) => {
       if (!url) return;
       setPending(network);
       try {
-        const ok = await shareToNetwork(network, businessName, url);
+        const content = selected
+          ? articleShare(businessName, selected.title, url)
+          : kitchenShare(businessName, url);
+        const ok = await shareToNetwork(network, content);
         if (!ok) {
           showToast({ message: 'Could not open that app. Try another.', tone: 'error' });
         }
@@ -64,7 +89,7 @@ export default function PromoteScreen() {
         setPending(null);
       }
     },
-    [businessName, url, showToast],
+    [businessName, url, selected, showToast],
   );
 
   return (
@@ -100,11 +125,18 @@ export default function PromoteScreen() {
               <Text style={styles.statValue}>{data?.subscriberCount ?? 0}</Text>
               <Text style={styles.statLabel}>Subscribers</Text>
             </View>
+            <View style={styles.statDivider} />
+            <View style={styles.stat}>
+              <BookOpen size={18} strokeWidth={2} color={theme.colors.ink.soft} />
+              <Text style={styles.statValue}>{data?.articleReactionCount ?? 0}</Text>
+              <Text style={styles.statLabel}>Post reactions</Text>
+            </View>
           </View>
 
           <Text style={styles.explainer}>
             Subscribers get told when you publish a menu, drop a price, open your kitchen or
-            post to ChefBook. More likes and subscribers lift your kitchen in customer search.
+            post to ChefBook. Likes, subscribers and reactions to your posts all lift your
+            kitchen in customer search.
           </Text>
 
           {url ? (
@@ -122,6 +154,34 @@ export default function PromoteScreen() {
             </Text>
           )}
 
+          {url && posts.length > 0 ? (
+            <View style={styles.subjects}>
+              <Text style={styles.sectionLabel}>What to share</Text>
+              {[{ id: 'kitchen', title: 'Your kitchen' }, ...posts].map((option) => {
+                const active = subject === option.id;
+                return (
+                  <Pressable
+                    key={option.id}
+                    onPress={() => setSubject(option.id)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`Share ${option.title}`}
+                    android_ripple={{ color: `${theme.colors.ink.DEFAULT}14` }}
+                  >
+                    <View style={[styles.subjectRow, active && styles.subjectRowActive]}>
+                      <Text
+                        style={[styles.subjectLabel, active && styles.subjectLabelActive]}
+                        numberOfLines={1}
+                      >
+                        {option.title}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
           {url ? (
             <View style={styles.targets}>
               {SHARE_TARGETS.map((target) => (
@@ -130,7 +190,7 @@ export default function PromoteScreen() {
                   onPress={() => void onShare(target.id)}
                   disabled={pending !== null}
                   accessibilityRole="button"
-                  accessibilityLabel={`Share ${businessName} on ${target.label}`}
+                  accessibilityLabel={`Share ${selected ? selected.title : businessName} on ${target.label}`}
                   android_ripple={{ color: `${theme.colors.ink.DEFAULT}14` }}
                 >
                   {({ pressed }) => (
@@ -202,6 +262,20 @@ const styles = StyleSheet.create({
   },
   linkLabel: { fontFamily: 'Inter', fontSize: 12, color: theme.colors.ink.soft },
   linkUrl: { fontFamily: 'Inter', fontSize: 14, color: theme.colors.ink.DEFAULT },
+
+  subjects: { gap: theme.spacing[2] },
+  sectionLabel: { fontFamily: 'Inter', fontSize: 12, color: theme.colors.ink.soft },
+  subjectRow: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.ink.soft,
+  },
+  subjectRowActive: { borderColor: theme.colors.ink.DEFAULT, borderWidth: 1.5 },
+  subjectLabel: { fontFamily: 'Inter', fontSize: 15, color: theme.colors.ink.soft },
+  subjectLabelActive: { color: theme.colors.ink.DEFAULT, fontWeight: '500' },
 
   targets: { gap: theme.spacing[2] },
   targetRow: {

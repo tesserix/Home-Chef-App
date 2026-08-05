@@ -14,6 +14,8 @@ import { Linking, Share } from 'react-native';
 import {
   chefPublicUrl,
   shareMessage,
+  articleShare,
+  kitchenShare,
   shareToNetwork,
   SHARE_TARGETS,
 } from './social-share';
@@ -47,26 +49,46 @@ describe('shareMessage', () => {
   });
 });
 
+describe('articleShare', () => {
+  const url = 'https://fe3dr.com/chef/ammas-kitchen';
+
+  it('leads with the article title so the post is what gets read', () => {
+    const c = articleShare("Amma's Kitchen", 'Ten minute dal', url);
+    expect(c.title).toContain('Ten minute dal');
+    expect(c.message).toContain('Ten minute dal');
+    expect(c.message).toContain("Amma's Kitchen");
+  });
+
+  // There is no public per-article web page — the landing site is a static
+  // export, so a post published since the last build would 404. Article shares
+  // must land on the kitchen page, which always exists.
+  it('links to the kitchen page, not a per-article URL', () => {
+    const c = articleShare("Amma's Kitchen", 'Ten minute dal', url);
+    expect(c.url).toBe(url);
+    expect(c.message).toContain(url);
+  });
+});
+
 describe('shareToNetwork', () => {
   const url = 'https://fe3dr.com/chef/ammas-kitchen';
   const name = 'Ammas Kitchen';
 
   it('opens WhatsApp with the message pre-filled', async () => {
-    await shareToNetwork('whatsapp', name, url);
+    await shareToNetwork('whatsapp', kitchenShare(name, url));
     const opened = String(openURL.mock.calls[0]?.[0]);
     expect(opened.startsWith('whatsapp://send?text=')).toBe(true);
     expect(decodeURIComponent(opened)).toContain(url);
   });
 
   it('sends the URL to the Facebook sharer', async () => {
-    await shareToNetwork('facebook', name, url);
+    await shareToNetwork('facebook', kitchenShare(name, url));
     const opened = String(openURL.mock.calls[0]?.[0]);
     expect(opened).toContain('facebook.com/sharer/sharer.php');
     expect(decodeURIComponent(opened)).toContain(url);
   });
 
   it('posts to X with both text and url', async () => {
-    await shareToNetwork('x', name, url);
+    await shareToNetwork('x', kitchenShare(name, url));
     const opened = decodeURIComponent(String(openURL.mock.calls[0]?.[0]));
     expect(opened).toContain('twitter.com/intent/tweet');
     expect(opened).toContain(name);
@@ -74,7 +96,7 @@ describe('shareToNetwork', () => {
   });
 
   it('sends the URL to LinkedIn', async () => {
-    await shareToNetwork('linkedin', name, url);
+    await shareToNetwork('linkedin', kitchenShare(name, url));
     const opened = decodeURIComponent(String(openURL.mock.calls[0]?.[0]));
     expect(opened).toContain('linkedin.com/sharing/share-offsite');
     expect(opened).toContain(url);
@@ -82,13 +104,13 @@ describe('shareToNetwork', () => {
 
   // Instagram has no public share URL, so it must not pretend to deep-link.
   it('routes Instagram to the OS share sheet', async () => {
-    await shareToNetwork('instagram', name, url);
+    await shareToNetwork('instagram', kitchenShare(name, url));
     expect(openURL).not.toHaveBeenCalled();
     expect(share).toHaveBeenCalledTimes(1);
   });
 
   it('routes More to the OS share sheet', async () => {
-    await shareToNetwork('more', name, url);
+    await shareToNetwork('more', kitchenShare(name, url));
     expect(share).toHaveBeenCalledTimes(1);
   });
 
@@ -96,7 +118,7 @@ describe('shareToNetwork', () => {
   // nothing for an app that isn't installed and the button reads as broken.
   it('falls back to the share sheet when the app is not installed', async () => {
     canOpenURL.mockResolvedValue(false as never);
-    const ok = await shareToNetwork('whatsapp', name, url);
+    const ok = await shareToNetwork('whatsapp', kitchenShare(name, url));
     expect(openURL).not.toHaveBeenCalled();
     expect(share).toHaveBeenCalledTimes(1);
     expect(ok).toBe(true);
@@ -105,7 +127,7 @@ describe('shareToNetwork', () => {
   it('reports failure when even the sheet fails, so the caller can say so', async () => {
     canOpenURL.mockResolvedValue(false as never);
     share.mockRejectedValue(new Error('no sheet') as never);
-    expect(await shareToNetwork('whatsapp', name, url)).toBe(false);
+    expect(await shareToNetwork('whatsapp', kitchenShare(name, url))).toBe(false);
   });
 
   it('offers every network the screen lists', () => {

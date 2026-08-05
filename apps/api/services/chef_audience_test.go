@@ -23,7 +23,8 @@ func setupAudienceDB(t *testing.T) (*gorm.DB, uuid.UUID) {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE chef_profiles (id text PRIMARY KEY, business_name text,
-			like_count integer DEFAULT 0, subscriber_count integer DEFAULT 0)`,
+			like_count integer DEFAULT 0, subscriber_count integer DEFAULT 0,
+			article_reaction_count integer DEFAULT 0)`,
 		`CREATE TABLE chef_likes (id text PRIMARY KEY, user_id text, chef_id text, created_at datetime,
 			UNIQUE(user_id, chef_id))`,
 		`CREATE TABLE chef_subscriptions (id text PRIMARY KEY, user_id text, chef_id text,

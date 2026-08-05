@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
 
@@ -289,27 +292,65 @@ func SetReaction(ctx context.Context, id bson.ObjectID, userID string, r models.
 		return fmt.Errorf("unsupported reaction %q", r)
 	}
 
-	res, err := col.UpdateOne(ctx,
+	// FindOneAndUpdate rather than UpdateOne so the pull also hands back the
+	// pre-change document: whether this reader already had a reaction, and which
+	// kitchen to credit. Reading it separately would race a concurrent tap.
+	var before models.ChefBookArticle
+	err = col.FindOneAndUpdate(ctx,
 		bson.M{"_id": id},
-		bson.M{"$pull": bson.M{"reactions": bson.M{"userId": userID}}})
+		bson.M{"$pull": bson.M{"reactions": bson.M{"userId": userID}}},
+		options.FindOneAndUpdate().
+			SetReturnDocument(options.Before).
+			SetProjection(bson.M{"chefId": 1, "status": 1, "reactions": 1}),
+	).Decode(&before)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return ErrArticleNotFound
+	}
 	if err != nil {
 		return err
 	}
-	if res.MatchedCount == 0 {
-		return ErrArticleNotFound
-	}
-	if r == "" {
-		return nil
+
+	if r != "" {
+		if _, err := col.UpdateOne(ctx,
+			bson.M{"_id": id},
+			bson.M{"$push": bson.M{"reactions": models.ArticleReaction{
+				UserID:    userID,
+				Type:      r,
+				CreatedAt: time.Now().UTC(),
+			}}}); err != nil {
+			return err
+		}
 	}
 
-	_, err = col.UpdateOne(ctx,
-		bson.M{"_id": id},
-		bson.M{"$push": bson.M{"reactions": models.ArticleReaction{
-			UserID:    userID,
-			Type:      r,
-			CreatedAt: time.Now().UTC(),
-		}}})
-	return err
+	creditArticleReaction(before, userID, r)
+	return nil
+}
+
+// creditArticleReaction moves the kitchen's ranking counter for a reaction that
+// just changed. Best-effort by design: the reaction is already saved, and
+// failing the reader's request because a ranking counter would not budge is the
+// wrong trade.
+func creditArticleReaction(before models.ChefBookArticle, userID string, now models.ReactionType) {
+	// A draft is not published work, so reacting to one earns no ranking. Without
+	// this a chef could stack unlisted drafts and react to each.
+	if before.Status != models.ArticleStatusPublished {
+		return
+	}
+	delta := ArticleReactionDelta(before.ViewerReaction(userID), now)
+	if delta == 0 {
+		return
+	}
+	chefID, err := uuid.Parse(before.ChefID)
+	if err != nil {
+		return
+	}
+	// A chef reacting to their own article is not an endorsement by anyone else.
+	if owner, err := chefOwnerUserID(database.DB, chefID); err == nil && owner.String() == userID {
+		return
+	}
+	if err := ApplyArticleReaction(chefID, delta); err != nil {
+		log.Printf("chefbook: credit article reaction for chef %s: %v", chefID, err)
+	}
 }
 
 // AddComment appends a comment. Returns ErrCommentLimit once an article is past

@@ -45,6 +45,45 @@ export function shareMessage(businessName: string, url: string): string {
   return `Order home-cooked food from ${businessName} on Fe3dr — ${url}`;
 }
 
+/**
+ * One thing to share.
+ *
+ * `title` is the short line for networks that take text and URL separately;
+ * `message` is the full line for WhatsApp and the OS sheet, and already
+ * contains the URL.
+ */
+export interface ShareContent {
+  title: string;
+  message: string;
+  url: string;
+}
+
+/** Sharing the kitchen itself. */
+export function kitchenShare(businessName: string, url: string): ShareContent {
+  return {
+    title: `Order home-cooked food from ${businessName} on Fe3dr`,
+    message: shareMessage(businessName, url),
+    url,
+  };
+}
+
+/**
+ * Sharing one ChefBook post.
+ *
+ * The URL is the kitchen's page, not a per-article one: fe3dr.com is a static
+ * export, so an article page would only exist after the next site build and a
+ * chef sharing a post they published minutes ago would send people to a 404.
+ * The title carries the post; the link carries them to the kitchen.
+ */
+export function articleShare(
+  businessName: string,
+  articleTitle: string,
+  url: string,
+): ShareContent {
+  const title = `${articleTitle} — from ${businessName} on Fe3dr`;
+  return { title, message: `${title} — ${url}`, url };
+}
+
 /** Opens the OS share sheet. Resolves false only if the sheet itself failed. */
 async function openSheet(message: string, url: string): Promise<boolean> {
   try {
@@ -77,17 +116,16 @@ async function openOrFallback(url: string, message: string, shareUrl: string): P
 }
 
 /**
- * Shares the kitchen to one network.
+ * Shares one piece of content to one network.
  *
  * Returns false when nothing could be opened, so the caller can say so rather
  * than leaving the chef looking at an unchanged screen.
  */
 export async function shareToNetwork(
   network: SocialNetwork,
-  businessName: string,
-  url: string,
+  content: ShareContent,
 ): Promise<boolean> {
-  const message = shareMessage(businessName, url);
+  const { title, message, url } = content;
   const encodedUrl = encodeURIComponent(url);
   const encodedMessage = encodeURIComponent(message);
 
@@ -102,9 +140,7 @@ export async function shareToNetwork(
       );
     case 'x':
       return openOrFallback(
-        `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-          `Order home-cooked food from ${businessName} on Fe3dr`,
-        )}&url=${encodedUrl}`,
+        `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodedUrl}`,
         message,
         url,
       );
