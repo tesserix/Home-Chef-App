@@ -97,11 +97,12 @@ func GenerateWeeklyStatementPDF(statementID uuid.UUID) ([]byte, string, error) {
 func addStatementHeader(m core.Maroto, stmt *models.WeeklyStatement) {
 	periodEnd := stmt.WeekEnd.In(istLoc).AddDate(0, 0, -1)
 	m.AddRow(12,
-		col.New(8).Add(
-			text.New("WEEKLY SETTLEMENT STATEMENT", props.Text{Top: 2, Size: 15, Style: fontstyle.Bold}),
+		col.New(6).Add(
+			text.New(BrandName, props.Text{Top: 1, Size: 18, Style: fontstyle.Bold}),
+			text.New(BrandWebsite, props.Text{Top: 8, Size: 8, Color: &props.Color{Red: 90, Green: 90, Blue: 90}}),
 		),
-		col.New(4).Add(
-			text.New("Home Chef", props.Text{Top: 2, Size: 14, Style: fontstyle.Bold, Align: align.Right}),
+		col.New(6).Add(
+			text.New("WEEKLY SETTLEMENT STATEMENT", props.Text{Top: 2, Size: 13, Style: fontstyle.Bold, Align: align.Right}),
 		),
 	)
 	m.AddRow(6,
@@ -114,7 +115,7 @@ func addStatementHeader(m core.Maroto, stmt *models.WeeklyStatement) {
 				props.Text{Top: 4, Size: 9}),
 		),
 		col.New(4).Add(
-			text.New("www.homechef.app", props.Text{Size: 8, Align: align.Right, Color: &props.Color{Red: 90, Green: 90, Blue: 90}}),
+			text.New(BrandWebsite, props.Text{Size: 8, Align: align.Right, Color: &props.Color{Red: 90, Green: 90, Blue: 90}}),
 		),
 	)
 	m.AddRow(4, col.New(12).Add(spacer()))
@@ -210,7 +211,7 @@ func addStatementFooter(m core.Maroto) {
 		props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}, Style: fontstyle.Italic},
 	)))
 	m.AddRow(4, col.New(12).Add(text.New(
-		fmt.Sprintf("Generated %s · Home Chef Marketplace", time.Now().In(istLoc).Format("02 Jan 2006 15:04 IST")),
+		fmt.Sprintf("Generated %s · "+BrandLegalName, time.Now().In(istLoc).Format("02 Jan 2006 15:04 IST")),
 		props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}},
 	)))
 }

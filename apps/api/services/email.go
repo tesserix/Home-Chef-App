@@ -154,14 +154,14 @@ func (s *EmailService) SendOrderInvoice(to, firstName, orderNumber string, pdfBy
 	if name == "" {
 		name = "there"
 	}
-	subject := fmt.Sprintf("Your Home Chef invoice (%s)", orderNumber)
+	subject := fmt.Sprintf("Your Fe3dr invoice (%s)", orderNumber)
 	body := fmt.Sprintf(`
 		<p>Hi %s,</p>
-		<p>Thanks for ordering with Home Chef. Your tax invoice for order
+		<p>Thanks for ordering with Fe3dr. Your tax invoice for order
 		<strong>%s</strong> is attached as a PDF.</p>
 		<p>Save it for your records — if you need to claim GST input credit, your
 		accountant will want this.</p>
-		<p>— Home Chef</p>
+		<p>— Fe3dr</p>
 	`, name, orderNumber)
 
 	att := Attachment{
@@ -189,7 +189,7 @@ func (s *EmailService) SendApprovalInfoRequested(to, chefName, requestTitle, adm
 		<p style="white-space: pre-wrap; padding: 12px; background: #F4F2EC; border-left: 3px solid #C2410C;">%s</p>
 		<p>Please open the HomeChef Vendor app to respond — the request is
 		waiting under <strong>Action Required</strong> on your dashboard.</p>
-		<p>— Home Chef</p>
+		<p>— Fe3dr</p>
 	`, chefName, requestTitle, adminNotes)
 	return s.send(to, subject, html)
 }
@@ -253,13 +253,13 @@ func (s *EmailService) SendEmailOTP(to, firstName, code string) error {
 func (s *EmailService) SendAccountReminderEmail(to, firstName string) error {
 	loginURL := "https://fe3dr.com/login"
 	resetURL := "https://fe3dr.com/forgot-password"
-	subject := "You already have a Fe3dr HomeChef account"
+	subject := "You already have a Fe3dr account"
 	html := fmt.Sprintf(`<p>Hi %s,</p>
-<p>Someone (possibly you) just tried to create a Fe3dr HomeChef account with this email,
+<p>Someone (possibly you) just tried to create a Fe3dr account with this email,
 but you already have one. You can <a href="%s">sign in here</a>.</p>
 <p>If you've forgotten your password, <a href="%s">reset it here</a>.</p>
 <p>If this wasn't you, you can safely ignore this email — no changes were made.</p>
-<p>— Fe3dr HomeChef</p>`, firstName, loginURL, resetURL)
+<p>— Fe3dr</p>`, firstName, loginURL, resetURL)
 	return s.send(to, subject, html)
 }
 

@@ -71,7 +71,7 @@ func notifyCustomerRefundReady(plan *models.MealPlan, day *models.MealPlanDay) {
 	amount := MealPlanRefundAmountForDay(plan, day)
 	_ = SendPushNotification(plan.CustomerID,
 		"Choose where your refund goes",
-		fmt.Sprintf("Your %s refund for %s is ready. Send it to your HomeChef wallet (instant) or back to your original payment method (5–7 days).",
+		fmt.Sprintf("Your %s refund for %s is ready. Send it to your Fe3dr wallet (instant) or back to your original payment method (5–7 days).",
 			FormatMoney(amount), day.Date.Format("Mon 2 Jan")),
 		map[string]string{"type": "refund_choice", "day_id": day.ID.String(), "meal_plan_id": plan.ID.String()},
 	)

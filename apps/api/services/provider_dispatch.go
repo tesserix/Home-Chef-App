@@ -200,6 +200,10 @@ func QuoteCheckoutDeliveryFee(chef models.ChefProfile, city, country string, dro
 	if dropLat == 0 && dropLng == 0 {
 		return 0, false
 	}
+	// Pricing must never depend on the provider registry being reachable.
+	if database.DB == nil {
+		return 0, false
+	}
 	if country == "" {
 		country = "IN"
 	}

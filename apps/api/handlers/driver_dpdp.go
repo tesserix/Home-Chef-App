@@ -17,7 +17,7 @@ type DriverDPDPHandler struct{}
 
 func NewDriverDPDPHandler() *DriverDPDPHandler { return &DriverDPDPHandler{} }
 
-// ExportMyData returns every row Home Chef holds for the authenticated driver,
+// ExportMyData returns every row Fe3dr holds for the authenticated driver,
 // each table scoped by the token-derived id. The driver's own partner profile is
 // projected full (it's their data); deliveries are scoped to their partner id.
 //

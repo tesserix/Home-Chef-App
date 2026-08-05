@@ -5,7 +5,7 @@ package services
 // sees.
 //
 // Required by App Review guideline 1.2 for any app with user-generated content.
-// Home Chef's UGC surfaces are customer reviews of chefs and order-scoped
+// Fe3dr's UGC surfaces are customer reviews of chefs and order-scoped
 // messaging.
 //
 // Admin-side tooling (hide a review, block a message) already existed, but a

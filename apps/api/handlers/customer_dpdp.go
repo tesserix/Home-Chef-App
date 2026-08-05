@@ -18,7 +18,7 @@ type CustomerDPDPHandler struct{}
 
 func NewCustomerDPDPHandler() *CustomerDPDPHandler { return &CustomerDPDPHandler{} }
 
-// ExportMyData returns every row Home Chef holds for the authenticated customer,
+// ExportMyData returns every row Fe3dr holds for the authenticated customer,
 // each table scoped by the token-derived user/customer id so no other user's
 // data can leak. Orders are projected through ToResponse (the customer's own
 // view) rather than dumped raw.

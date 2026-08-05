@@ -103,7 +103,7 @@ var easySplitNameStrip = regexp.MustCompile(`[^a-zA-Z0-9 ./\-&]`)
 func easySplitName(name string) string {
 	clean := strings.TrimSpace(easySplitNameStrip.ReplaceAllString(name, " "))
 	if clean == "" {
-		return "HomeChef Kitchen"
+		return "Fe3dr Kitchen"
 	}
 	return clean
 }

@@ -6,7 +6,7 @@ import {
 } from '@tanstack/react-query';
 import { api } from '../lib/api';
 
-// Support ticketing — mirrors the Home Chef API at /api/v1/support/tickets
+// Support ticketing — mirrors the Fe3dr API at /api/v1/support/tickets
 // (apps/api/handlers/support.go). The vendor base URL already includes
 // `/api/v1`, so paths here are relative to that ("/support/tickets").
 //

@@ -416,6 +416,9 @@ importers:
       expo-device:
         specifier: ~56.0.4
         version: 56.0.4(expo@56.0.12)
+      expo-file-system:
+        specifier: ^56.0.8
+        version: 56.0.8(expo@56.0.12)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.7))
       expo-haptics:
         specifier: ~56.0.3
         version: 56.0.3(expo@56.0.12)
@@ -443,6 +446,9 @@ importers:
       expo-secure-store:
         specifier: ~56.0.4
         version: 56.0.4(expo@56.0.12)
+      expo-sharing:
+        specifier: ^56.0.18
+        version: 56.0.18(expo@56.0.12)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
       expo-splash-screen:
         specifier: ~56.0.10
         version: 56.0.10(expo@56.0.12)(typescript@6.0.3)

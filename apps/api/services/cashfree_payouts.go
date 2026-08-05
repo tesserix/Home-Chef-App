@@ -661,7 +661,7 @@ func sanitizeRemarks(s string) string {
 		out = out[:60]
 	}
 	if out == "" {
-		out = "HomeChef payout"
+		out = "Fe3dr payout"
 	}
 	return out
 }
