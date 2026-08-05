@@ -139,9 +139,26 @@ interface QuoteResponse {
   nonRefundableNotice: string;
 }
 
+/** What onboarding already told us, so the chef corrects a form rather than
+ *  retyping one. A starting point, not an authority — FSSAI wants the address
+ *  the food is actually cooked at, and only the chef knows if that still
+ *  matches what they registered with us. */
+export interface FssaiPrefill {
+  kitchenName: string;
+  applicantName: string;
+  contactPhone: string;
+  contactEmail: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+}
+
 interface RequestResponse {
   request: FssaiRequest | null;
   enabled: boolean;
+  prefill?: FssaiPrefill;
 }
 
 interface CheckoutResponse {

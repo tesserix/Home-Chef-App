@@ -356,11 +356,18 @@ func (h *FssaiHandler) RemoveFssaiDocument(c *gin.Context) {
 		})
 		return
 	}
+	// Capture the stored path before the row goes, so the file goes with it.
+	removed, err := services.FssaiDocumentsOfKind(database.DB, row.ID, models.FssaiDocAddressProof)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove the document"})
+		return
+	}
 	if err := database.DB.Where("request_id = ? AND kind = ?", row.ID, models.FssaiDocAddressProof).
 		Delete(&models.FssaiRequestDocument{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove the document"})
 		return
 	}
+	services.PurgeFssaiObjects(row.ID, removed)
 	_ = database.DB.Preload("Documents").First(row, "id = ?", row.ID).Error
 	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, row)})
 }
@@ -431,7 +438,44 @@ func (h *FssaiHandler) GetFssaiRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"request": fssaiRequestResponse(c, row),
 		"enabled": services.FssaiFilingEnabled(),
+		// What onboarding already told us, so the chef corrects a form rather
+		// than retyping one. Sent even when a request exists — the app only
+		// uses it for a NEW one, and a second round-trip to fetch it would be
+		// the thing standing between them and starting.
+		"prefill": fssaiPrefill(chef),
 	})
+}
+
+// fssaiPrefill seeds the request form from the kitchen details the chef gave at
+// onboarding. Deliberately a starting point, not an authority: FSSAI wants the
+// address the food is actually cooked at, and only the chef knows whether that
+// is still what they registered with us.
+func fssaiPrefill(chef *models.ChefProfile) gin.H {
+	var user models.User
+	_ = database.DB.First(&user, "id = ?", chef.UserID).Error
+
+	return gin.H{
+		"kitchenName":   chef.BusinessName,
+		"applicantName": strings.TrimSpace(user.FirstName + " " + user.LastName),
+		"contactPhone":  user.Phone,
+		"contactEmail":  user.Email,
+		"addressLine1":  firstNonEmpty(chef.AddressLine1, string(chef.AddressLine1Enc)),
+		"addressLine2":  firstNonEmpty(chef.AddressLine2, string(chef.AddressLine2Enc)),
+		"city":          chef.City,
+		"state":         chef.State,
+		"postalCode":    chef.PostalCode,
+	}
+}
+
+// firstNonEmpty prefers the plaintext column, falling back to its encrypted
+// companion for rows already migrated to ciphertext-only (#710).
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // fssaiRequestResponse is the chef-facing shape. AdminNotes are deliberately

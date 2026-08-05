@@ -13,6 +13,7 @@ package services
 // See .planning/FSSAI-IN-APP-REQUEST-DESIGN.md.
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html"
@@ -102,14 +103,25 @@ func CreateFssaiRequest(db *gorm.DB, chef *models.ChefProfile, r *models.FssaiRe
 	return db.Create(r).Error
 }
 
-// DiscardFssaiRequest removes an UNPAID draft and anything attached to it.
+// DiscardFssaiRequest removes an UNPAID draft, the documents attached to it,
+// and the FILES those documents point at.
+//
 // Hard delete: nothing was charged and nothing was filed, so there is no
-// history worth keeping and abandoned rows would bury the real work.
+// history worth keeping and abandoned rows would bury the real work. Deleting
+// the objects matters more than the rows — they are Aadhaar and PAN images, and
+// a file left behind after its row is gone outlives every record that it exists,
+// including the account-deletion purge that walks those rows.
 func DiscardFssaiRequest(db *gorm.DB, r *models.FssaiRequest) error {
 	if r.Status != models.FssaiAwaitingPayment {
 		return fmt.Errorf("a %s request cannot be discarded", r.Status)
 	}
-	return db.Transaction(func(tx *gorm.DB) error {
+	// Read the object paths BEFORE the rows go, or there is nothing left to
+	// tell us what to delete.
+	var docs []models.FssaiRequestDocument
+	if err := db.Where("request_id = ?", r.ID).Find(&docs).Error; err != nil {
+		return err
+	}
+	err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("request_id = ?", r.ID).
 			Delete(&models.FssaiRequestDocument{}).Error; err != nil {
 			return err
@@ -119,6 +131,41 @@ func DiscardFssaiRequest(db *gorm.DB, r *models.FssaiRequest) error {
 		return tx.Where("id = ? AND status = ?", r.ID, models.FssaiAwaitingPayment).
 			Delete(&models.FssaiRequest{}).Error
 	})
+	if err != nil {
+		return err
+	}
+	purgeFssaiObjects(r.ID, docs)
+	return nil
+}
+
+// FssaiDocumentsOfKind returns the rows about to be superseded or removed, so
+// their stored files can be purged once the rows are gone.
+func FssaiDocumentsOfKind(db *gorm.DB, requestID uuid.UUID, kind string) ([]models.FssaiRequestDocument, error) {
+	var docs []models.FssaiRequestDocument
+	err := db.Where("request_id = ? AND kind = ?", requestID, kind).Find(&docs).Error
+	return docs, err
+}
+
+// PurgeFssaiObjects is purgeFssaiObjects for callers outside this package —
+// the handler that removes an optional document.
+func PurgeFssaiObjects(requestID uuid.UUID, docs []models.FssaiRequestDocument) {
+	purgeFssaiObjects(requestID, docs)
+}
+
+// purgeFssaiObjects deletes the stored files for documents whose rows are gone.
+//
+// After the transaction, deliberately: object storage cannot participate in it,
+// and a delete that fails must not roll back a discard the chef has been told
+// happened. A failure is logged loudly because what is left behind is somebody's
+// identity document.
+func purgeFssaiObjects(requestID uuid.UUID, docs []models.FssaiRequestDocument) {
+	ctx := context.Background()
+	for _, d := range docs {
+		if err := DeletePrivateFile(ctx, d.FileURL); err != nil {
+			log.Printf("FSSAI request %s: ORPHANED %s document at %s: %v",
+				requestID, d.Kind, d.FileURL, err)
+		}
+	}
 }
 
 // MarkFssaiPaid records the capture and submits the request, because the
@@ -177,10 +224,19 @@ func AttachFssaiDocument(db *gorm.DB, r *models.FssaiRequest, kind, fileURL, fil
 	if !r.AcceptsDocuments() {
 		return fmt.Errorf("documents cannot be attached to a %s request", r.Status)
 	}
+	// The file being replaced has to go with its row. A chef re-photographing a
+	// blurry Aadhaar would otherwise leave the blurry one in the bucket with
+	// nothing pointing at it.
+	superseded, err := FssaiDocumentsOfKind(db, r.ID, kind)
+	if err != nil {
+		return err
+	}
 	if err := db.Where("request_id = ? AND kind = ?", r.ID, kind).
 		Delete(&models.FssaiRequestDocument{}).Error; err != nil {
 		return err
 	}
+	purgeFssaiObjects(r.ID, superseded)
+
 	doc := models.FssaiRequestDocument{
 		ID:        uuid.New(),
 		RequestID: r.ID, Kind: kind, FileURL: fileURL, FileName: fileName,

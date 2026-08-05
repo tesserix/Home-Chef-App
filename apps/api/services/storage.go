@@ -113,6 +113,16 @@ func DeleteFile(ctx context.Context, bucket, objectPath string) error {
 	return storageClient.Bucket(bucket).Object(objectPath).Delete(ctx)
 }
 
+// DeletePrivateFile removes an object from the private bucket by the path
+// UploadPrivateFile returned. Callers that drop the DB row pointing at a
+// document must call this too, or the file outlives every record of it.
+func DeletePrivateFile(ctx context.Context, objectPath string) error {
+	if objectPath == "" {
+		return nil
+	}
+	return DeleteFile(ctx, config.AppConfig.GCSPrivateBucket, objectPath)
+}
+
 // IsImageContentType checks if a content type is an allowed image type
 func IsImageContentType(ct string) bool {
 	ct = strings.ToLower(ct)
