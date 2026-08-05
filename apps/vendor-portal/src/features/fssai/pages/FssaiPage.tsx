@@ -91,6 +91,22 @@ export function FssaiPage() {
     [terms, termYears, quoteQuery.data],
   );
 
+  // Seed from onboarding once, and never over an edit the chef has already
+  // made — which is what assigning the prefill on every fetch would do.
+  const seeded = useRef(false);
+  const prefill = requestQuery.data?.prefill;
+  useEffect(() => {
+    if (seeded.current || !prefill || draft) return;
+    seeded.current = true;
+    setForm((prev) => {
+      const next = { ...prev };
+      (Object.keys(EMPTY_FORM) as FormKey[]).forEach((k) => {
+        next[k] = prev[k] || prefill[k] || '';
+      });
+      return next;
+    });
+  }, [prefill, draft]);
+
   // Coming back from the hosted checkout: ask the SERVER whether the capture
   // landed. Runs once — the flag is cleared immediately so a refresh or a
   // re-render cannot fire a second confirm.

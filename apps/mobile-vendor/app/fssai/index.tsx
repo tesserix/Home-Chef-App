@@ -6,7 +6,7 @@
 // The app never decides what comes next — `canPay` is the server's answer, so a
 // payment can never be offered against documents it has not received.
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -102,6 +102,10 @@ export default function FssaiScreen() {
   const [uploading, setUploading] = useState<FssaiDocumentKind | null>(null);
   const [termYears, setTermYears] = useState(1);
   const [form, setForm] = useState<FssaiForm>(EMPTY_FORM);
+  // Seed from onboarding once, and only while the chef has not typed: this must
+  // never overwrite an edit they have already made, which is what a plain
+  // `setForm(prefill)` on every fetch would do.
+  const seeded = useRef(false);
 
   const request = requestQuery.data?.request ?? null;
   const enabled = quoteQuery.data?.enabled ?? requestQuery.data?.enabled ?? false;
@@ -113,6 +117,23 @@ export default function FssaiScreen() {
     () => terms.find((t) => t.termYears === termYears) ?? quoteQuery.data?.quote,
     [terms, termYears, quoteQuery.data],
   );
+
+  const prefill = requestQuery.data?.prefill;
+  useEffect(() => {
+    if (seeded.current || !prefill || draft) return;
+    seeded.current = true;
+    setForm((prev) => ({
+      kitchenName: prev.kitchenName || prefill.kitchenName,
+      applicantName: prev.applicantName || prefill.applicantName,
+      contactPhone: prev.contactPhone || prefill.contactPhone,
+      contactEmail: prev.contactEmail || prefill.contactEmail,
+      addressLine1: prev.addressLine1 || prefill.addressLine1,
+      addressLine2: prev.addressLine2 || prefill.addressLine2,
+      city: prev.city || prefill.city,
+      state: prev.state || prefill.state,
+      postalCode: prev.postalCode || prefill.postalCode,
+    }));
+  }, [prefill, draft]);
 
   const reportError = useCallback(
     (err: unknown, fallback: string) => {
