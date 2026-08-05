@@ -195,7 +195,6 @@ export function useOrderAction() {
       action,
       reason,
       confirmedFulfillmentAt,
-      deliveryFee,
     }: {
       orderId: string;
       action: 'accepted' | 'rejected';
@@ -203,15 +202,11 @@ export function useOrderAction() {
       // Home-tiffin scheduling (#709): at accept, the chef confirms the customer's
       // requested time or proposes a different one (ISO). Absent = confirm as-is.
       confirmedFulfillmentAt?: string;
-      // Delivery fee the chef sets at accept (#703): 0 ≤ it ≤ the charged approx-max.
-      // A lower value refunds the difference to the customer. Absent = charge as-is.
-      deliveryFee?: number;
     }) =>
       api.put(`/chef/orders/${orderId}/status`, {
         status: action,
         reason,
         confirmedFulfillmentAt,
-        deliveryFee,
       }),
     onMutate: async ({ orderId }) => {
       await queryClient.cancelQueries({ queryKey: ['chef', 'orders', 'pending'] });
@@ -263,8 +258,6 @@ export function useOrderAction() {
     // Home-tiffin scheduling (#709): a proposed/confirmed fulfilment time (ISO)
     // the chef sets when accepting. Absent = confirm the customer's request as-is.
     confirmedFulfillmentAt?: string,
-    // Delivery fee the chef sets at accept (#703). Absent = charge as-is.
-    deliveryFee?: number,
   ) {
     // A repeat tap on an order already actioned is a NO-OP, not a re-arm. The
     // old code cleared and re-set this order's timer, so every impatient tap
@@ -332,7 +325,7 @@ export function useOrderAction() {
       orderId,
       setTimeout(() => {
         timersRef.current.delete(orderId);
-        mutation.mutate({ orderId, action, reason, confirmedFulfillmentAt, deliveryFee });
+        mutation.mutate({ orderId, action, reason, confirmedFulfillmentAt });
         // Only clear the snackbar if it is still showing THIS order — otherwise a
         // later action's undo bar would disappear when an earlier timer fired.
         setPendingUndo((cur) => (cur?.orderId === orderId ? null : cur));
