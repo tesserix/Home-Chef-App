@@ -26,9 +26,10 @@ func NewAdminFssaiHandler() *AdminFssaiHandler { return &AdminFssaiHandler{} }
 
 // ListFssaiRequests is the admin queue.
 //
-// Defaults to OPEN requests — the work — rather than everything, because a
-// queue that leads with hundreds of issued registrations hides the two that
-// need doing today. `?status=` narrows further; `?all=true` shows history.
+// Defaults to PAID, open requests — the actual work. Finished registrations
+// would bury the two that need doing today, and an unpaid draft is a chef
+// halfway through a form, not something staff can act on. `?status=` narrows
+// further; `?all=true` shows everything including drafts.
 // GET /admin/fssai/requests
 func (h *AdminFssaiHandler) ListFssaiRequests(c *gin.Context) {
 	q := database.DB.Model(&models.FssaiRequest{}).Preload("Documents")
@@ -37,6 +38,7 @@ func (h *AdminFssaiHandler) ListFssaiRequests(c *gin.Context) {
 		q = q.Where("status = ?", s)
 	} else if c.Query("all") != "true" {
 		q = q.Where("status NOT IN ?", []string{
+			models.FssaiAwaitingPayment,
 			models.FssaiIssued, models.FssaiRejected, models.FssaiRefunded,
 		})
 	}

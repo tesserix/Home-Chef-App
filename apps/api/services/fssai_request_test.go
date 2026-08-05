@@ -3,8 +3,9 @@ package services
 // fssai_request_test.go — the filing service a chef pays for.
 //
 // Every branch here either takes a chef's money or decides whether they can
-// have it back, so the arithmetic, the pay-first failure mode, the idempotency
-// of a retried capture, and the admin transition guards are all pinned.
+// have it back, so the arithmetic, the documents-before-payment guard, the
+// idempotency of a retried capture, and the admin transition guards are all
+// pinned.
 
 import (
 	"testing"
@@ -50,6 +51,14 @@ func fssaiPolicy(t *testing.T) {
 
 func fssaiChef() *models.ChefProfile {
 	return &models.ChefProfile{ID: uuid.New(), UserID: uuid.New()}
+}
+
+// attachRequired adds the two documents FSSAI insists on, which is what makes a
+// draft payable.
+func attachRequired(t *testing.T, db *gorm.DB, r *models.FssaiRequest) {
+	t.Helper()
+	require.NoError(t, AttachFssaiDocument(db, r, models.FssaiDocPhoto, "chefs/x/p.jpg", "p.jpg"))
+	require.NoError(t, AttachFssaiDocument(db, r, models.FssaiDocIdentity, "chefs/x/a.jpg", "a.jpg"))
 }
 
 // The figure a chef is actually charged for one year: ₹100 to FSSAI + ₹18 GST
@@ -157,6 +166,7 @@ func TestCreateFssaiRequest_PaidRequestBlocksASecond(t *testing.T) {
 
 	first := models.FssaiRequest{TermYears: 1}
 	require.NoError(t, CreateFssaiRequest(db, chef, &first))
+	attachRequired(t, db, &first)
 	require.NoError(t, MarkFssaiPaid(db, &first, "pay_1"))
 
 	second := models.FssaiRequest{TermYears: 1}
@@ -170,6 +180,7 @@ func TestDiscardFssaiRequest_RefusesAPaidRequest(t *testing.T) {
 	chef := fssaiChef()
 	r := models.FssaiRequest{TermYears: 1}
 	require.NoError(t, CreateFssaiRequest(db, chef, &r))
+	attachRequired(t, db, &r)
 	require.NoError(t, MarkFssaiPaid(db, &r, "pay_1"))
 
 	require.Error(t, DiscardFssaiRequest(db, &r))
@@ -186,32 +197,50 @@ func TestMarkFssaiPaid_IsIdempotent(t *testing.T) {
 	chef := fssaiChef()
 	r := models.FssaiRequest{TermYears: 1}
 	require.NoError(t, CreateFssaiRequest(db, chef, &r))
+	attachRequired(t, db, &r)
 
 	require.NoError(t, MarkFssaiPaid(db, &r, "pay_1"))
 	require.NoError(t, MarkFssaiPaid(db, &r, "pay_2"))
 
 	var stored models.FssaiRequest
 	require.NoError(t, db.First(&stored, "id = ?", r.ID).Error)
-	require.Equal(t, models.FssaiAwaitingDocuments, stored.Status)
+	require.Equal(t, models.FssaiSubmitted, stored.Status)
 	require.Equal(t, "pay_1", stored.PaymentRef, "the first capture stands")
 }
 
-// The request only reaches onboarding once it is paid AND has the documents
-// FSSAI requires — there is nothing to send before that.
-func TestAttachFssaiDocument_SubmitsOnlyWhenComplete(t *testing.T) {
+// Paying submits the request outright, because the documents were gathered
+// before the payment was possible. There is no paid-but-incomplete state.
+func TestMarkFssaiPaid_SubmitsTheRequest(t *testing.T) {
 	fssaiPolicy(t)
 	db := setupFssaiDB(t)
 	chef := fssaiChef()
 	r := models.FssaiRequest{TermYears: 1, KitchenName: "Saffron"}
 	require.NoError(t, CreateFssaiRequest(db, chef, &r))
+	attachRequired(t, db, &r)
+
 	require.NoError(t, MarkFssaiPaid(db, &r, "pay_1"))
-
-	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocPhoto, "https://x/p.jpg", "p.jpg"))
-	require.Equal(t, models.FssaiAwaitingDocuments, r.Status, "a photo alone is not a filing")
-
-	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocIdentity, "https://x/a.jpg", "a.jpg"))
 	require.Equal(t, models.FssaiSubmitted, r.Status)
+	require.NotNil(t, r.PaidAt)
 	require.NotNil(t, r.SubmittedAt)
+}
+
+// The money must not be recordable against a request we cannot file. This is
+// the guard that makes the fee safe to declare non-refundable.
+func TestMarkFssaiPaid_RefusesWithoutTheRequiredDocuments(t *testing.T) {
+	fssaiPolicy(t)
+	db := setupFssaiDB(t)
+	chef := fssaiChef()
+	r := models.FssaiRequest{TermYears: 1}
+	require.NoError(t, CreateFssaiRequest(db, chef, &r))
+
+	require.ErrorIs(t, MarkFssaiPaid(db, &r, "pay_1"), ErrFssaiDocumentsMissing)
+
+	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocPhoto, "chefs/x/p.jpg", ""))
+	require.ErrorIs(t, MarkFssaiPaid(db, &r, "pay_1"), ErrFssaiDocumentsMissing,
+		"a photo alone is not a filing")
+
+	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocIdentity, "chefs/x/a.jpg", ""))
+	require.NoError(t, MarkFssaiPaid(db, &r, "pay_1"))
 }
 
 // Address proof is conditional — required only when the kitchen address differs
@@ -222,9 +251,9 @@ func TestAttachFssaiDocument_AddressProofIsOptional(t *testing.T) {
 	chef := fssaiChef()
 	r := models.FssaiRequest{TermYears: 1}
 	require.NoError(t, CreateFssaiRequest(db, chef, &r))
+	attachRequired(t, db, &r)
+	require.False(t, r.NeedsDocuments())
 	require.NoError(t, MarkFssaiPaid(db, &r, "pay_1"))
-	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocPhoto, "https://x/p.jpg", ""))
-	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocIdentity, "https://x/a.jpg", ""))
 	require.Equal(t, models.FssaiSubmitted, r.Status)
 }
 
@@ -236,25 +265,47 @@ func TestAttachFssaiDocument_ReplacesTheSameKind(t *testing.T) {
 	chef := fssaiChef()
 	r := models.FssaiRequest{TermYears: 1}
 	require.NoError(t, CreateFssaiRequest(db, chef, &r))
-	require.NoError(t, MarkFssaiPaid(db, &r, "pay_1"))
-	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocPhoto, "https://x/blurry.jpg", ""))
-	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocPhoto, "https://x/clear.jpg", ""))
+	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocPhoto, "chefs/x/blurry.jpg", ""))
+	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocPhoto, "chefs/x/clear.jpg", ""))
 
 	var docs []models.FssaiRequestDocument
 	require.NoError(t, db.Where("request_id = ? AND kind = ?", r.ID, models.FssaiDocPhoto).Find(&docs).Error)
 	require.Len(t, docs, 1)
-	require.Equal(t, "https://x/clear.jpg", docs[0].FileURL)
+	require.Equal(t, "chefs/x/clear.jpg", docs[0].FileURL)
 }
 
-// Documents cannot be attached before the money clears — the pay-first ordering
-// must not be bypassable by uploading straight into an unpaid request.
-func TestAttachFssaiDocument_RefusesAnUnpaidRequest(t *testing.T) {
+// The chef assembles the request before paying, so an unpaid draft is exactly
+// where documents belong. A replacement is still accepted after submission —
+// staff do ask for a legible copy — but never once we have filed.
+func TestAttachFssaiDocument_AcceptedBeforePaymentAndUntilFiled(t *testing.T) {
 	fssaiPolicy(t)
 	db := setupFssaiDB(t)
 	chef := fssaiChef()
 	r := models.FssaiRequest{TermYears: 1}
 	require.NoError(t, CreateFssaiRequest(db, chef, &r))
-	require.Error(t, AttachFssaiDocument(db, &r, models.FssaiDocPhoto, "https://x/p.jpg", ""))
+
+	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocPhoto, "chefs/x/p.jpg", ""),
+		"an unpaid draft is where the chef gathers their documents")
+
+	attachRequired(t, db, &r)
+	require.NoError(t, MarkFssaiPaid(db, &r, "pay_1"))
+	require.NoError(t, AttachFssaiDocument(db, &r, models.FssaiDocIdentity, "chefs/x/better.jpg", ""),
+		"staff may ask for a legible replacement after submission")
+
+	r.Status = models.FssaiFiled
+	require.Error(t, AttachFssaiDocument(db, &r, models.FssaiDocPhoto, "chefs/x/late.jpg", ""),
+		"the application is already lodged; a swap here would not reach FSSAI")
+}
+
+// An unknown kind is rejected in the service, not only at the HTTP edge, so no
+// caller can write a document the completeness check cannot see.
+func TestAttachFssaiDocument_RejectsAnUnknownKind(t *testing.T) {
+	fssaiPolicy(t)
+	db := setupFssaiDB(t)
+	chef := fssaiChef()
+	r := models.FssaiRequest{TermYears: 1}
+	require.NoError(t, CreateFssaiRequest(db, chef, &r))
+	require.Error(t, AttachFssaiDocument(db, &r, "gst_certificate", "chefs/x/g.jpg", ""))
 }
 
 // Filed without a FoSCoS reference tells a chef we lodged their application

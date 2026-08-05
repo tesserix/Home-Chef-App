@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { theme } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
+import { FssaiOfferCard } from '../../components/vendor/FssaiOfferCard';
 
 interface OnboardingStatusResponse {
   status:
@@ -236,6 +237,11 @@ export default function PendingScreen() {
               <UnlockItem text={t('onboarding.unlockOrders')} />
               <UnlockItem text={t('onboarding.unlockPayouts')} />
             </View>
+
+            {/* Optional while they wait: a chef without a licence can start
+                the FSSAI request now rather than discovering later that their
+                kitchen cannot open without one. Hides itself if not relevant. */}
+            <FssaiOfferCard />
 
             {/* Manual refresh button. Pull-to-refresh still works, but a
                 visible CTA is the discoverable affordance — and it gives

@@ -20,11 +20,14 @@ const SDK_SRC = 'https://sdk.cashfree.com/js/v3/cashfree.js';
 // Only our own app schemes and our own origin may be returned to. Without this
 // the page would bounce a visitor anywhere a crafted `ret` pointed — a
 // redirector wearing our domain, on a page people arrive at mid-payment.
+// The trailing slash is load-bearing: without it `https://fe3dr.com.evil.com`
+// would pass the prefix test.
 const ALLOWED_RETURN_PREFIXES = [
   'homechef-vendor://',
   'homechef-customer://',
   'homechef-delivery://',
   'https://fe3dr.com/',
+  'https://vendors.fe3dr.com/',
 ];
 
 function safeReturnUrl(raw: string | null): string | null {

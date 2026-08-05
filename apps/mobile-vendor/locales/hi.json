@@ -296,6 +296,7 @@
     "expiryDatePlaceholder": "YYYY-MM-DD",
     "expiryDateError": "YYYY-MM-DD प्रारूप का उपयोग करें।",
     "expiryReminder": "हम आपको समाप्ति से 30, 15, और 7 दिन पहले याद दिलाएँगे।",
+    "fssaiWeCanObtainIt": "अभी लाइसेंस नहीं है? इसके बिना जमा करें — फिर 'और' में जाकर FSSAI पंजीकरण खोलें, हम सरकारी शुल्क सहित इसे आपके लिए बनवा देंगे।",
     "gstinOptional": "GSTIN (वैकल्पिक)",
     "gstinPlaceholder": "15-अक्षरों का GSTIN",
     "gstinError": "ठीक 15 अक्षरों का होना चाहिए।",

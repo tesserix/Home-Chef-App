@@ -1,14 +1,15 @@
 // FSSAI filing request — the chef asks us to obtain their registration.
 //
 // One screen, three states, driven entirely by the server's view of the
-// request: no request yet (the offer + form), a request that needs something
-// from the chef (pay or upload), and a request we are working on (the tracker).
-// The app never decides what comes next — `fssaiChefAction` reads the status
-// the server set, so a payment the server has not seen can never show as done.
+// request: no request yet (the offer + form), a draft still being assembled
+// (documents, then pay), and a paid request we are working on (the tracker).
+// The app never decides what comes next — `canPay` is the server's answer, so a
+// payment can never be offered against documents it has not received.
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,217 +23,34 @@ import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
-import { multipartConfig } from '@homechef/mobile-shared/api';
-import { api } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
 import {
   buildCashfreeCheckoutUrl,
-  fssaiChefAction,
   fssaiStepIndex,
+  FSSAI_DOCUMENT_HINTS,
+  FSSAI_DOCUMENT_KINDS,
   FSSAI_DOCUMENT_LABELS,
   FSSAI_TRACKER_STEPS,
   fssaiStatusLabel,
   isFssaiClosed,
+  isFssaiPaid,
+  type FssaiDocument,
   type FssaiDocumentKind,
   type FssaiQuote,
   type FssaiRequest,
 } from '../../lib/fssai';
 import {
+  useCancelFssaiRequest,
   useConfirmFssaiPayment,
   useCreateFssaiRequest,
   useFssaiQuote,
   useFssaiRequest,
+  useRemoveFssaiDocument,
+  useStartFssaiPayment,
+  useUploadFssaiDocument,
 } from '../../hooks/useFssai';
 
 const RETURN_URL = 'homechef-vendor://fssai';
-
-export default function FssaiScreen() {
-  const { show: showToast } = useToast();
-  const quoteQuery = useFssaiQuote();
-  const requestQuery = useFssaiRequest();
-  const createRequest = useCreateFssaiRequest();
-  const confirmPayment = useConfirmFssaiPayment();
-  const [uploading, setUploading] = useState<FssaiDocumentKind | null>(null);
-  const [termYears, setTermYears] = useState(1);
-  const [form, setForm] = useState<FssaiForm>({
-    kitchenName: '',
-    applicantName: '',
-    contactPhone: '',
-    contactEmail: '',
-    addressLine1: '',
-    addressLine2: '',
-    city: '',
-    state: '',
-    postalCode: '',
-  });
-
-  const request = requestQuery.data?.request ?? null;
-  const enabled = quoteQuery.data?.enabled ?? requestQuery.data?.enabled ?? false;
-  const terms = quoteQuery.data?.terms ?? [];
-  const quote = useMemo(
-    () => terms.find((t) => t.termYears === termYears) ?? quoteQuery.data?.quote,
-    [terms, termYears, quoteQuery.data],
-  );
-  const action = fssaiChefAction(request);
-
-  // Opens the hosted Cashfree page and, whatever the browser reports back, asks
-  // the SERVER whether the money arrived. The browser's answer is a UX hint
-  // only — Cashfree hands the client nothing it could prove a payment with.
-  const pay = useCallback(
-    async (requestId: string, paymentSessionId: string, env: string) => {
-      try {
-        await WebBrowser.openAuthSessionAsync(
-          buildCashfreeCheckoutUrl({ paymentSessionId, env, returnUrl: RETURN_URL }),
-          RETURN_URL,
-        );
-      } catch {
-        // Even a browser error is not proof of failure — fall through and let
-        // the server adjudicate rather than telling a chef who paid that they
-        // did not.
-      }
-      try {
-        await confirmPayment.mutateAsync(requestId);
-        showToast({ message: 'Payment received. Now add your documents.', tone: 'success' });
-      } catch {
-        showToast({
-          message: "We haven't seen the payment yet. If you paid, pull to refresh in a moment.",
-          tone: 'error',
-        });
-      }
-    },
-    [confirmPayment, showToast],
-  );
-
-  async function handleStart() {
-    const missing = Object.entries(form).find(
-      ([k, v]) => k !== 'addressLine2' && v.trim() === '',
-    );
-    if (missing) {
-      showToast({ message: 'Fill in every field so we can complete your form.', tone: 'error' });
-      return;
-    }
-    try {
-      const res = await createRequest.mutateAsync({ ...form, termYears });
-      await pay(res.request.id, res.cashfreePaymentSessionId, res.cashfreeEnv);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Could not start the request';
-      showToast({ message, tone: 'error' });
-    }
-  }
-
-  async function handleUpload(kind: FssaiDocumentKind) {
-    if (!request) return;
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      showToast({ message: 'Allow photo access to attach your documents.', tone: 'error' });
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-    });
-    if (result.canceled || !result.assets[0]) return;
-
-    setUploading(kind);
-    try {
-      const asset = result.assets[0];
-      const formData = new FormData();
-      const filename = asset.uri.split('/').pop() ?? `${kind}.jpg`;
-      formData.append('file', { uri: asset.uri, name: filename, type: 'image/jpeg' } as unknown as Blob);
-      formData.append('kind', kind);
-      await api.post(
-        `/chef/fssai/requests/${request.id}/upload`,
-        formData,
-        multipartConfig(),
-      );
-      await requestQuery.refetch();
-      showToast({ message: `${FSSAI_DOCUMENT_LABELS[kind]} added.`, tone: 'success' });
-    } catch {
-      showToast({ message: 'Upload failed. Try again.', tone: 'error' });
-    } finally {
-      setUploading(null);
-    }
-  }
-
-  if (quoteQuery.isLoading || requestQuery.isLoading) {
-    return (
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <Header />
-        <View style={styles.centered}>
-          <ActivityIndicator color={theme.colors.ink.DEFAULT} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!enabled && !request) {
-    return (
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <Header />
-        <View style={styles.centered}>
-          <Text style={styles.body}>
-            We aren't taking FSSAI applications at the moment. You can still apply
-            yourself on the government portal — see fe3dr.com/fssai for the steps.
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      <Header />
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {request && !isFssaiClosed(request.status) ? (
-          <ActiveRequest
-            request={request}
-            action={action}
-            uploading={uploading}
-            onUpload={handleUpload}
-            onPay={() => {
-              // Re-mint the session: a Cashfree order the chef abandoned may
-              // have expired, so the safe move is to ask the server again.
-              showToast({
-                message: 'Reopening your payment…',
-                tone: 'success',
-              });
-              void requestQuery.refetch();
-            }}
-          />
-        ) : (
-          <NewRequest
-            quote={quote}
-            terms={terms}
-            termYears={termYears}
-            setTermYears={setTermYears}
-            form={form}
-            setForm={setForm}
-            onStart={handleStart}
-            submitting={createRequest.isPending || confirmPayment.isPending}
-            nonRefundableNotice={quoteQuery.data?.nonRefundableNotice}
-            lastRequest={request && isFssaiClosed(request.status) ? request : null}
-          />
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function Header() {
-  return (
-    <View style={styles.header}>
-      <Pressable
-        onPress={() => router.back()}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-        hitSlop={12}
-      >
-        <Text style={styles.back}>‹</Text>
-      </Pressable>
-      <Text style={styles.title}>FSSAI registration</Text>
-    </View>
-  );
-}
 
 interface FssaiForm {
   kitchenName: string;
@@ -246,6 +64,251 @@ interface FssaiForm {
   postalCode: string;
 }
 
+const EMPTY_FORM: FssaiForm = {
+  kitchenName: '',
+  applicantName: '',
+  contactPhone: '',
+  contactEmail: '',
+  addressLine1: '',
+  addressLine2: '',
+  city: '',
+  state: '',
+  postalCode: '',
+};
+
+const FORM_FIELDS = [
+  ['kitchenName', 'Kitchen name'],
+  ['applicantName', 'Your full name'],
+  ['contactPhone', 'Phone'],
+  ['contactEmail', 'Email'],
+  ['addressLine1', 'Address line 1'],
+  ['addressLine2', 'Address line 2 (optional)'],
+  ['city', 'City'],
+  ['state', 'State'],
+  ['postalCode', 'PIN code'],
+] as const;
+
+export default function FssaiScreen() {
+  const { show: showToast } = useToast();
+  const quoteQuery = useFssaiQuote();
+  const requestQuery = useFssaiRequest();
+  const createRequest = useCreateFssaiRequest();
+  const uploadDocument = useUploadFssaiDocument();
+  const removeDocument = useRemoveFssaiDocument();
+  const startPayment = useStartFssaiPayment();
+  const confirmPayment = useConfirmFssaiPayment();
+  const cancelRequest = useCancelFssaiRequest();
+
+  const [uploading, setUploading] = useState<FssaiDocumentKind | null>(null);
+  const [termYears, setTermYears] = useState(1);
+  const [form, setForm] = useState<FssaiForm>(EMPTY_FORM);
+
+  const request = requestQuery.data?.request ?? null;
+  const enabled = quoteQuery.data?.enabled ?? requestQuery.data?.enabled ?? false;
+  const terms = quoteQuery.data?.terms ?? [];
+  // A live draft is priced by the row, not by the picker — the figure was
+  // frozen when it was created and a later policy change must not restate it.
+  const draft = request && !isFssaiPaid(request.status) ? request : null;
+  const quote = useMemo(
+    () => terms.find((t) => t.termYears === termYears) ?? quoteQuery.data?.quote,
+    [terms, termYears, quoteQuery.data],
+  );
+
+  const reportError = useCallback(
+    (err: unknown, fallback: string) => {
+      showToast({ message: err instanceof Error ? err.message : fallback, tone: 'error' });
+    },
+    [showToast],
+  );
+
+  async function handleCreateDraft() {
+    const missing = FORM_FIELDS.find(
+      ([key]) => key !== 'addressLine2' && form[key].trim() === '',
+    );
+    if (missing) {
+      showToast({ message: `${missing[1]} is needed to complete your form.`, tone: 'error' });
+      return;
+    }
+    try {
+      await createRequest.mutateAsync({ ...form, termYears });
+      showToast({ message: 'Now add your documents.', tone: 'success' });
+    } catch (err) {
+      reportError(err, 'Could not start the request');
+    }
+  }
+
+  async function handleUpload(kind: FssaiDocumentKind) {
+    if (!draft) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showToast({ message: 'Allow photo access to attach your documents.', tone: 'error' });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+    });
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset) return;
+
+    setUploading(kind);
+    try {
+      await uploadDocument.mutateAsync({
+        requestId: draft.id,
+        kind,
+        uri: asset.uri,
+        mimeType: asset.mimeType,
+      });
+      showToast({ message: `${FSSAI_DOCUMENT_LABELS[kind]} added.`, tone: 'success' });
+    } catch (err) {
+      reportError(err, 'Upload failed. Try again.');
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  async function handleRemove(kind: FssaiDocumentKind) {
+    if (!draft) return;
+    try {
+      await removeDocument.mutateAsync({ requestId: draft.id, kind });
+    } catch (err) {
+      reportError(err, 'Could not remove the document');
+    }
+  }
+
+  // Opens the hosted Cashfree page and, whatever the browser reports back, asks
+  // the SERVER whether the money arrived. The browser's answer is a UX hint
+  // only — Cashfree hands the client nothing it could prove a payment with.
+  const handlePay = useCallback(async () => {
+    if (!draft) return;
+    try {
+      const session = await startPayment.mutateAsync(draft.id);
+      try {
+        await WebBrowser.openAuthSessionAsync(
+          buildCashfreeCheckoutUrl({
+            paymentSessionId: session.cashfreePaymentSessionId,
+            env: session.cashfreeEnv,
+            returnUrl: RETURN_URL,
+          }),
+          RETURN_URL,
+        );
+      } catch {
+        // A browser error is not proof of failure — fall through and let the
+        // server adjudicate rather than telling a chef who paid that they did not.
+      }
+      const updated = await confirmPayment.mutateAsync(draft.id);
+      const paid = isFssaiPaid(updated.status);
+      showToast({
+        message: paid
+          ? 'Payment received. Your request is with our team.'
+          : "We haven't seen the payment yet. Pull to refresh in a moment.",
+        tone: paid ? 'success' : 'error',
+      });
+    } catch (err) {
+      reportError(err, "We couldn't complete the payment. Nothing has been charged.");
+    }
+  }, [draft, startPayment, confirmPayment, showToast, reportError]);
+
+  function handleCancel() {
+    if (!draft) return;
+    Alert.alert(
+      'Discard this request?',
+      'Nothing has been charged. Your details and documents will be removed.',
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelRequest.mutateAsync(draft.id);
+              setForm(EMPTY_FORM);
+              showToast({ message: 'Request discarded.', tone: 'success' });
+            } catch (err) {
+              reportError(err, 'Could not discard the request');
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  if (quoteQuery.isLoading || requestQuery.isLoading) {
+    return (
+      <Shell>
+        <View style={styles.centered}>
+          <ActivityIndicator color={theme.colors.ink.DEFAULT} />
+        </View>
+      </Shell>
+    );
+  }
+
+  if (!enabled && !request) {
+    return (
+      <Shell>
+        <View style={styles.centered}>
+          <Text style={styles.body}>
+            We aren't taking FSSAI applications at the moment. You can still apply
+            yourself on the government portal — see fe3dr.com/fssai for the steps.
+          </Text>
+        </View>
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {request && isFssaiPaid(request.status) ? (
+          <Tracker request={request} />
+        ) : draft ? (
+          <Draft
+            request={draft}
+            uploading={uploading}
+            onUpload={handleUpload}
+            onRemove={handleRemove}
+            onPay={handlePay}
+            onCancel={handleCancel}
+            paying={startPayment.isPending || confirmPayment.isPending}
+            notice={quoteQuery.data?.nonRefundableNotice}
+          />
+        ) : (
+          <NewRequest
+            quote={quote}
+            terms={terms}
+            termYears={termYears}
+            setTermYears={setTermYears}
+            form={form}
+            setForm={setForm}
+            onContinue={handleCreateDraft}
+            submitting={createRequest.isPending}
+            lastRequest={request && isFssaiClosed(request.status) ? request : null}
+          />
+        )}
+      </ScrollView>
+    </Shell>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <View style={styles.header}>
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={12}
+        >
+          <Text style={styles.back}>‹</Text>
+        </Pressable>
+        <Text style={styles.title}>FSSAI registration</Text>
+      </View>
+      {children}
+    </SafeAreaView>
+  );
+}
+
 interface NewRequestProps {
   quote?: FssaiQuote;
   terms: FssaiQuote[];
@@ -253,9 +316,8 @@ interface NewRequestProps {
   setTermYears: (n: number) => void;
   form: FssaiForm;
   setForm: React.Dispatch<React.SetStateAction<FssaiForm>>;
-  onStart: () => void;
+  onContinue: () => void;
   submitting: boolean;
-  nonRefundableNotice?: string;
   lastRequest: FssaiRequest | null;
 }
 
@@ -266,9 +328,8 @@ function NewRequest({
   setTermYears,
   form,
   setForm,
-  onStart,
+  onContinue,
   submitting,
-  nonRefundableNotice,
   lastRequest,
 }: NewRequestProps) {
   return (
@@ -277,7 +338,8 @@ function NewRequest({
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Your last registration</Text>
           <Text style={styles.body}>
-            {lastRequest.registrationNo} — obtained {new Date(lastRequest.issuedAt ?? '').toLocaleDateString('en-IN')}
+            {lastRequest.registrationNo} — obtained{' '}
+            {new Date(lastRequest.issuedAt ?? '').toLocaleDateString('en-IN')}
           </Text>
         </View>
       ) : null}
@@ -295,54 +357,30 @@ function NewRequest({
             key={t.termYears}
             onPress={() => setTermYears(t.termYears)}
             accessibilityRole="button"
+            accessibilityState={{ selected: termYears === t.termYears }}
             accessibilityLabel={`${t.termYears} year${t.termYears === 1 ? '' : 's'}, ${formatMoney(t.total)}`}
             style={[styles.termChip, termYears === t.termYears && styles.termChipOn]}
           >
-            <Text style={[styles.termChipText, termYears === t.termYears && styles.termChipTextOn]}>
+            <Text
+              style={[styles.termChipText, termYears === t.termYears && styles.termChipTextOn]}
+            >
               {t.termYears}y
             </Text>
           </Pressable>
         ))}
       </View>
 
-      {quote ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>What you pay</Text>
-          {/* Every line is the server's. The app renders them and never re-adds
-              the total — the figure a chef agrees to must be the figure charged. */}
-          <Row label="FSSAI registration fee" value={quote.governmentFee} />
-          <Row label={`GST on it (${quote.gstPercent}%)`} value={quote.governmentTax} />
-          <Row label="Our filing fee" value={quote.serviceFee} />
-          <Row label={`GST on our fee (${quote.gstPercent}%)`} value={quote.serviceTax} />
-          <Row label="Total" value={quote.total} emphasis />
-          <Text style={styles.fine}>
-            The registration is issued in your name and stays yours. We pay FSSAI
-            on your behalf out of this amount.
-          </Text>
-        </View>
-      ) : null}
+      {quote ? <QuoteCard quote={quote} /> : null}
 
       <Text style={styles.sectionLabel}>YOUR DETAILS</Text>
-      {(
-        [
-          ['kitchenName', 'Kitchen name'],
-          ['applicantName', 'Your full name'],
-          ['contactPhone', 'Phone'],
-          ['contactEmail', 'Email'],
-          ['addressLine1', 'Address line 1'],
-          ['addressLine2', 'Address line 2 (optional)'],
-          ['city', 'City'],
-          ['state', 'State'],
-          ['postalCode', 'PIN code'],
-        ] as const
-      ).map(([key, label]) => (
+      {FORM_FIELDS.map(([key, label]) => (
         <TextInput
           key={key}
           style={styles.input}
           placeholder={label}
           placeholderTextColor={theme.colors.ink.soft}
           value={form[key]}
-          onChangeText={(v) => setForm({ ...form, [key]: v })}
+          onChangeText={(v) => setForm((prev) => ({ ...prev, [key]: v }))}
           accessibilityLabel={label}
           autoCapitalize={key === 'contactEmail' ? 'none' : 'words'}
           keyboardType={
@@ -355,86 +393,153 @@ function NewRequest({
         />
       ))}
 
-      {nonRefundableNotice ? <Text style={styles.notice}>{nonRefundableNotice}</Text> : null}
+      <Text style={styles.fine}>
+        Next you'll add two documents. Nothing is charged until they are in and
+        you confirm the amount.
+      </Text>
+
+      <PrimaryButton
+        label={submitting ? 'Saving…' : 'Continue to documents'}
+        onPress={onContinue}
+        disabled={submitting}
+      />
+    </>
+  );
+}
+
+function QuoteCard({ quote }: { quote: FssaiQuote }) {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>What you pay</Text>
+      {/* Every line is the server's. The app renders them and never re-adds the
+          total — the figure a chef agrees to must be the figure charged. */}
+      <Row label="FSSAI registration fee" value={quote.governmentFee} />
+      <Row label={`GST on it (${quote.gstPercent}%)`} value={quote.governmentTax} />
+      <Row label="Our filing fee" value={quote.serviceFee} />
+      <Row label={`GST on our fee (${quote.gstPercent}%)`} value={quote.serviceTax} />
+      <Row label="Total" value={quote.total} emphasis />
+      <Text style={styles.fine}>
+        The registration is issued in your name and stays yours. We pay FSSAI on
+        your behalf out of this amount.
+      </Text>
+    </View>
+  );
+}
+
+interface DraftProps {
+  request: FssaiRequest;
+  uploading: FssaiDocumentKind | null;
+  onUpload: (kind: FssaiDocumentKind) => void;
+  onRemove: (kind: FssaiDocumentKind) => void;
+  onPay: () => void;
+  onCancel: () => void;
+  paying: boolean;
+  notice?: string;
+}
+
+function Draft({
+  request,
+  uploading,
+  onUpload,
+  onRemove,
+  onPay,
+  onCancel,
+  paying,
+  notice,
+}: DraftProps) {
+  const byKind = new Map<FssaiDocumentKind, FssaiDocument>(
+    request.documents.map((d) => [d.kind, d]),
+  );
+
+  return (
+    <>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{request.kitchenName}</Text>
+        <Text style={styles.body}>
+          {request.termYears} year{request.termYears === 1 ? '' : 's'} ·{' '}
+          {formatMoney(request.feeTotal)} · not sent yet
+        </Text>
+      </View>
+
+      <Text style={styles.sectionLabel}>YOUR DOCUMENTS</Text>
+      <Text style={styles.body}>
+        FSSAI needs a photo of you and a government photo ID. Add an address proof
+        only if your kitchen is somewhere other than the address on that ID.
+      </Text>
+      {FSSAI_DOCUMENT_KINDS.map((kind) => {
+        const doc = byKind.get(kind);
+        const optional = kind === 'address_proof';
+        return (
+          <View key={kind} style={styles.docRow}>
+            <Pressable
+              onPress={() => onUpload(kind)}
+              disabled={uploading !== null}
+              accessibilityRole="button"
+              accessibilityLabel={`${doc ? 'Replace' : 'Add'} ${FSSAI_DOCUMENT_LABELS[kind]}`}
+              style={styles.docMain}
+            >
+              <Text style={styles.docLabel}>
+                {FSSAI_DOCUMENT_LABELS[kind]}
+                {optional ? ' (only if needed)' : ''}
+              </Text>
+              <Text style={styles.fine}>{doc?.fileName || FSSAI_DOCUMENT_HINTS[kind]}</Text>
+            </Pressable>
+            <View style={styles.docActions}>
+              <Text style={styles.docState}>
+                {uploading === kind ? 'Uploading…' : doc ? 'Added ✓' : 'Add'}
+              </Text>
+              {doc && optional ? (
+                <Pressable
+                  onPress={() => onRemove(kind)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${FSSAI_DOCUMENT_LABELS[kind]}`}
+                  hitSlop={8}
+                >
+                  <Text style={styles.docRemove}>Remove</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        );
+      })}
+
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+
+      <PrimaryButton
+        label={
+          paying
+            ? 'Opening payment…'
+            : request.canPay
+              ? `Pay ${formatMoney(request.feeTotal)} and apply`
+              : 'Add your photo and photo ID to continue'
+        }
+        onPress={onPay}
+        disabled={!request.canPay || paying}
+      />
 
       <Pressable
-        onPress={onStart}
-        disabled={submitting}
+        onPress={onCancel}
         accessibilityRole="button"
-        accessibilityLabel={quote ? `Pay ${formatMoney(quote.total)} and apply` : 'Pay and apply'}
-        style={[styles.cta, submitting && { opacity: 0.6 }]}
+        accessibilityLabel="Discard this request"
+        style={styles.secondary}
       >
-        <Text style={styles.ctaText}>
-          {submitting ? 'Opening payment…' : quote ? `Pay ${formatMoney(quote.total)} and apply` : 'Continue'}
-        </Text>
+        <Text style={styles.secondaryText}>Discard this request</Text>
       </Pressable>
     </>
   );
 }
 
-interface ActiveRequestProps {
-  request: FssaiRequest;
-  action: 'pay' | 'upload' | null;
-  uploading: FssaiDocumentKind | null;
-  onUpload: (kind: FssaiDocumentKind) => void;
-  onPay: () => void;
-}
-
-function ActiveRequest({ request, action, uploading, onUpload, onPay }: ActiveRequestProps) {
+function Tracker({ request }: { request: FssaiRequest }) {
   const step = fssaiStepIndex(request.status);
-  const have = new Set(request.documents.map((d) => d.kind));
-
   return (
     <>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{fssaiStatusLabel(request.status)}</Text>
         <Text style={styles.body}>
           {request.kitchenName} · {request.termYears} year
-          {request.termYears === 1 ? '' : 's'} · {formatMoney(request.feeTotal)}
-          {request.paidAt ? ' paid' : ''}
+          {request.termYears === 1 ? '' : 's'} · {formatMoney(request.feeTotal)} paid
         </Text>
       </View>
-
-      {action === 'pay' ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Finish your payment</Text>
-          <Text style={styles.body}>
-            We haven't received the payment for this request yet.
-          </Text>
-          <Pressable onPress={onPay} accessibilityRole="button" style={styles.cta}>
-            <Text style={styles.ctaText}>Refresh</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {action === 'upload' ? (
-        <>
-          <Text style={styles.sectionLabel}>YOUR DOCUMENTS</Text>
-          <Text style={styles.body}>
-            FSSAI needs a photo of you and a government photo ID. Add an address
-            proof only if your kitchen is somewhere other than the address on
-            that ID.
-          </Text>
-          {(['photo', 'identity', 'address_proof'] as FssaiDocumentKind[]).map((kind) => (
-            <Pressable
-              key={kind}
-              onPress={() => onUpload(kind)}
-              disabled={uploading !== null}
-              accessibilityRole="button"
-              accessibilityLabel={`Add ${FSSAI_DOCUMENT_LABELS[kind]}`}
-              style={styles.docRow}
-            >
-              <Text style={styles.docLabel}>
-                {FSSAI_DOCUMENT_LABELS[kind]}
-                {kind === 'address_proof' ? ' (only if needed)' : ''}
-              </Text>
-              <Text style={styles.docState}>
-                {uploading === kind ? 'Uploading…' : have.has(kind) ? 'Added ✓' : 'Add'}
-              </Text>
-            </Pressable>
-          ))}
-        </>
-      ) : null}
 
       {step >= 0 ? (
         <>
@@ -445,7 +550,9 @@ function ActiveRequest({ request, action, uploading, onUpload, onPay }: ActiveRe
                 <Text style={[styles.stepDot, i <= step && styles.stepDotOn]}>
                   {i <= step ? '●' : '○'}
                 </Text>
-                <Text style={[styles.stepLabel, i <= step && styles.stepLabelOn]}>{s.label}</Text>
+                <Text style={[styles.stepLabel, i <= step && styles.stepLabelOn]}>
+                  {s.label}
+                </Text>
               </View>
             ))}
             {request.applicationRef ? (
@@ -468,6 +575,29 @@ function ActiveRequest({ request, action, uploading, onUpload, onPay }: ActiveRe
         </View>
       ) : null}
     </>
+  );
+}
+
+function PrimaryButton({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      style={[styles.cta, disabled && styles.ctaOff]}
+    >
+      <Text style={styles.ctaText}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -544,7 +674,12 @@ const styles = StyleSheet.create({
     padding: theme.spacing[3],
   },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacing[3] },
-  rowLabel: { flex: 1, fontFamily: 'Inter', fontSize: theme.typography.size.bodySm.size, color: theme.colors.ink.soft },
+  rowLabel: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
   rowValue: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
@@ -584,21 +719,30 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[4],
     alignItems: 'center',
   },
+  ctaOff: { opacity: 0.45 },
   ctaText: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.body.size,
     color: theme.colors.paper,
   },
+  secondary: { alignItems: 'center', paddingVertical: theme.spacing[3] },
+  secondaryText: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+    textDecorationLine: 'underline',
+  },
   docRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: theme.spacing[3],
     backgroundColor: theme.colors.paper,
     borderRadius: theme.radius.DEFAULT,
     padding: theme.spacing[4],
   },
+  docMain: { flex: 1, gap: theme.spacing[1] },
+  docActions: { alignItems: 'flex-end', gap: theme.spacing[1] },
   docLabel: {
-    flex: 1,
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
@@ -607,6 +751,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
+  },
+  docRemove: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+    textDecorationLine: 'underline',
   },
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] },
   stepDot: { fontSize: 12, color: theme.colors.ink.soft },

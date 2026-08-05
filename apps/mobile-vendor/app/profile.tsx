@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, ChevronLeft, ImagePlus, Plus } from 'lucide-react-native';
 import { multipartConfig, getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
+import { FssaiOfferCard } from '../components/vendor/FssaiOfferCard';
 import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
 import { useStates } from '../hooks/useLocations';
@@ -773,6 +774,11 @@ export default function ProfileScreen() {
               </View>
             </View>
           </View>
+
+          {/* Licensing — an existing chef's way into the FSSAI filing service,
+              which they otherwise only meet during onboarding. Self-hiding. */}
+          <Text style={styles.sectionLabel}>LICENSING</Text>
+          <FssaiOfferCard />
 
           {/* BUSINESS section — name + description, what customers see */}
           <Text style={styles.sectionLabel}>BUSINESS</Text>

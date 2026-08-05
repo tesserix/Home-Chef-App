@@ -3,14 +3,12 @@ package services
 // fssai_request.go — the lifecycle of a chef asking us to obtain their FSSAI
 // registration. THE one writer of fssai_requests.
 //
-//	awaiting_payment → awaiting_documents → submitted → in_progress → filed → issued
-//	                                                                     └→ rejected → refunded
+//	awaiting_payment → submitted → in_progress → filed → issued
+//	                                              └→ rejected → refunded
 //
-// Payment is taken FIRST, so the row exists from the moment money is asked for
-// rather than from the moment the request is complete. That ordering creates a
-// real failure mode — a chef who pays and never uploads — so awaiting_documents
-// is a first-class state with its own admin queue and refund path, not an edge
-// case discovered later in a reconciliation.
+// The chef assembles the request — details and documents — while it is unpaid,
+// and paying submits it. So there is no paid-but-incomplete state to reconcile,
+// and the fee is non-refundable from the moment it is taken.
 //
 // See .planning/FSSAI-IN-APP-REQUEST-DESIGN.md.
 
@@ -32,9 +30,12 @@ import (
 // would take a second payment for the same registration.
 var ErrFssaiRequestOpen = errors.New("an FSSAI request is already in progress")
 
-// OpenFssaiRequestFor returns the chef's live request, or nil when they have
-// none. Closed requests (issued/rejected/refunded) do not count — a chef whose
-// registration lapsed years later may legitimately ask again.
+// ErrFssaiDocumentsMissing — payment was asked for before FSSAI's required
+// documents were attached.
+var ErrFssaiDocumentsMissing = errors.New("attach your photo and photo ID before paying")
+
+// OpenFssaiRequestFor returns the chef's live request, or nil. Closed requests
+// do not count — a chef whose registration lapses may legitimately ask again.
 func OpenFssaiRequestFor(db *gorm.DB, chefID uuid.UUID) (*models.FssaiRequest, error) {
 	var rows []models.FssaiRequest
 	err := db.Preload("Documents").
@@ -52,9 +53,9 @@ func OpenFssaiRequestFor(db *gorm.DB, chefID uuid.UUID) (*models.FssaiRequest, e
 	return nil, nil
 }
 
-// LatestFssaiRequestFor is what the app's tracker renders: the live request if
-// there is one, else the most recent closed one so a chef can still see the
-// registration number we obtained for them.
+// LatestFssaiRequestFor is what the tracker renders: the live request if there
+// is one, else the most recent closed one so the registration number we
+// obtained stays visible.
 func LatestFssaiRequestFor(db *gorm.DB, chefID uuid.UUID) (*models.FssaiRequest, error) {
 	var row models.FssaiRequest
 	err := db.Preload("Documents").
@@ -69,35 +70,27 @@ func LatestFssaiRequestFor(db *gorm.DB, chefID uuid.UUID) (*models.FssaiRequest,
 	return &row, nil
 }
 
-// CreateFssaiRequest mints the row at its priced quote, refusing when the chef
-// already has one open. The Cashfree order is minted by the caller against the
-// row's own id, so a capture can never be attributed to the wrong request.
+// CreateFssaiRequest mints the draft at its priced quote, refusing when the
+// chef already has a PAID one in flight.
 func CreateFssaiRequest(db *gorm.DB, chef *models.ChefProfile, r *models.FssaiRequest) error {
 	open, err := OpenFssaiRequestFor(db, chef.ID)
 	if err != nil {
 		return err
 	}
 	if open != nil {
-		// An UNPAID request is not a commitment — the chef opened the form,
-		// thought better of it, and has come back. Nothing was charged, so the
-		// abandoned row is discarded and they start again, possibly with a
-		// different term or corrected details.
-		//
-		// Without this the guard below would lock a chef out of the service
-		// permanently on the strength of a form they never paid for.
-		if open.Status == models.FssaiAwaitingPayment {
-			if err := DiscardFssaiRequest(db, open); err != nil {
-				return err
-			}
-		} else {
+		// An unpaid draft is not a commitment — the chef opened the form, thought
+		// better of it, and has come back. Discard it rather than locking them out
+		// of the service on the strength of a form they never paid for.
+		if open.Status != models.FssaiAwaitingPayment {
 			return ErrFssaiRequestOpen
 		}
+		if err := DiscardFssaiRequest(db, open); err != nil {
+			return err
+		}
 	}
-	// Assign the id here rather than leaning on the column default. The default
-	// is gen_random_uuid(), which only exists on Postgres — so under any other
-	// engine the row is written with the nil UUID and every later
-	// `WHERE id = ?` silently misses. Generating it in Go makes the row
-	// addressable the moment it is created, on any database.
+	// Assign the id here rather than leaning on the column default: gen_random_uuid()
+	// is Postgres-only, so under any other engine the row is written with the nil
+	// UUID and every later `WHERE id = ?` silently misses.
 	if r.ID == uuid.Nil {
 		r.ID = uuid.New()
 	}
@@ -109,12 +102,9 @@ func CreateFssaiRequest(db *gorm.DB, chef *models.ChefProfile, r *models.FssaiRe
 	return db.Create(r).Error
 }
 
-// DiscardFssaiRequest removes an UNPAID request and anything attached to it.
-//
-// Hard delete, not a status: nothing was charged and nothing was filed, so
-// there is no history worth keeping — and leaving abandoned rows in the admin
-// queue would bury the requests that are real work. Refuses anything paid,
-// where the money makes the row a record.
+// DiscardFssaiRequest removes an UNPAID draft and anything attached to it.
+// Hard delete: nothing was charged and nothing was filed, so there is no
+// history worth keeping and abandoned rows would bury the real work.
 func DiscardFssaiRequest(db *gorm.DB, r *models.FssaiRequest) error {
 	if r.Status != models.FssaiAwaitingPayment {
 		return fmt.Errorf("a %s request cannot be discarded", r.Status)
@@ -131,44 +121,57 @@ func DiscardFssaiRequest(db *gorm.DB, r *models.FssaiRequest) error {
 	})
 }
 
-// MarkFssaiPaid moves a request out of awaiting_payment once the gateway
-// confirms the capture.
+// MarkFssaiPaid records the capture and submits the request, because the
+// documents were gathered before payment was possible.
 //
-// Idempotent: a retried confirm, a webhook arriving after the client already
-// confirmed, or two taps land on one row. The status guard is in the WHERE
-// clause rather than in Go, so two concurrent confirms cannot both apply.
+// Idempotent: a retried confirm, a webhook arriving after the client confirmed,
+// or two taps land on one row. The status guard is in the WHERE clause rather
+// than in Go, so two concurrent confirms cannot both apply — and only the one
+// that wins sends the email.
 func MarkFssaiPaid(db *gorm.DB, r *models.FssaiRequest, paymentRef string) error {
+	if r.NeedsDocuments() {
+		return ErrFssaiDocumentsMissing
+	}
 	now := time.Now().UTC()
 	res := db.Model(&models.FssaiRequest{}).
 		Where("id = ? AND status = ?", r.ID, models.FssaiAwaitingPayment).
 		Updates(map[string]any{
-			"status":      models.FssaiAwaitingDocuments,
-			"payment_ref": paymentRef,
-			"paid_at":     now,
-			"updated_at":  now,
+			"status":       models.FssaiSubmitted,
+			"payment_ref":  paymentRef,
+			"paid_at":      now,
+			"submitted_at": now,
+			"updated_at":   now,
 		})
 	if res.Error != nil {
 		return res.Error
 	}
 	// No row updated means it was already paid — the desired end state either
 	// way, so this is a success, not a conflict.
-	if res.RowsAffected == 1 {
-		r.Status = models.FssaiAwaitingDocuments
-		r.PaymentRef = paymentRef
-		r.PaidAt = &now
+	if res.RowsAffected == 0 {
+		return nil
+	}
+	r.Status = models.FssaiSubmitted
+	r.PaymentRef = paymentRef
+	r.PaidAt = &now
+	r.SubmittedAt = &now
+
+	// Best-effort: the request is real and paid whether or not the mail lands. A
+	// failure is logged loudly because it means work is sitting in the admin
+	// queue that nobody has been told about.
+	if err := SendFssaiRequestToOnboarding(r); err != nil {
+		log.Printf("FSSAI request %s: onboarding email FAILED: %v", r.ID, err)
 	}
 	return nil
 }
 
-// AttachFssaiDocument records one uploaded file and, when the request now has
-// everything FSSAI requires, advances it to submitted and sends it to
-// onboarding.
-//
-// Re-uploading a kind REPLACES it: a chef who photographed their Aadhaar badly
-// must be able to fix it, and two rows of the same kind would leave whoever
-// files the application guessing which is current.
+// AttachFssaiDocument records one uploaded file, replacing any earlier file of
+// the same kind — a chef who photographed their Aadhaar badly must be able to
+// fix it, and two rows of one kind leave the filer guessing which is current.
 func AttachFssaiDocument(db *gorm.DB, r *models.FssaiRequest, kind, fileURL, fileName string) error {
-	if r.Status != models.FssaiAwaitingDocuments && r.Status != models.FssaiSubmitted {
+	if !models.IsFssaiDocKind(kind) {
+		return fmt.Errorf("unknown document kind %q", kind)
+	}
+	if !r.AcceptsDocuments() {
 		return fmt.Errorf("documents cannot be attached to a %s request", r.Status)
 	}
 	if err := db.Where("request_id = ? AND kind = ?", r.ID, kind).
@@ -182,70 +185,33 @@ func AttachFssaiDocument(db *gorm.DB, r *models.FssaiRequest, kind, fileURL, fil
 	if err := db.Create(&doc).Error; err != nil {
 		return err
 	}
-
-	// Re-read the documents rather than mutating the in-memory slice: the caller
-	// may hold a stale copy, and "is this request complete" must be answered from
-	// the database that the onboarding email will be built from.
+	// Re-read rather than mutating the caller's slice: "is this request
+	// complete" must be answered from the database the payment will be checked
+	// against.
 	var docs []models.FssaiRequestDocument
 	if err := db.Where("request_id = ?", r.ID).Find(&docs).Error; err != nil {
 		return err
 	}
 	r.Documents = docs
-	if r.NeedsDocuments() || r.Status == models.FssaiSubmitted {
-		return nil
-	}
-	return submitFssaiRequest(db, r)
-}
-
-// submitFssaiRequest advances a complete, paid request and hands it to
-// onboarding. SubmittedAt is stamped only once, and the email is sent AFTER the
-// transition commits — a mail failure must not roll the request back to a state
-// the chef has already been told they are past.
-func submitFssaiRequest(db *gorm.DB, r *models.FssaiRequest) error {
-	now := time.Now().UTC()
-	res := db.Model(&models.FssaiRequest{}).
-		Where("id = ? AND status = ?", r.ID, models.FssaiAwaitingDocuments).
-		Updates(map[string]any{
-			"status": models.FssaiSubmitted, "submitted_at": now, "updated_at": now,
-		})
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return nil // already submitted by a concurrent upload
-	}
-	r.Status = models.FssaiSubmitted
-	r.SubmittedAt = &now
-
-	// Best-effort: the request is real and paid whether or not the mail lands.
-	// A failure is logged loudly because it means work is sitting in the admin
-	// queue that nobody has been told about.
-	if err := SendFssaiRequestToOnboarding(r); err != nil {
-		log.Printf("FSSAI request %s: onboarding email FAILED: %v", r.ID, err)
-	}
 	return nil
 }
 
-// FssaiOnboardingRecipient is where a completed request is sent. Deliberately a
-// constant and not configurable: it is an internal work queue, and an admin
-// able to redirect chefs' identity documents to an arbitrary address is a
-// bigger hole than any convenience it would buy.
+// FssaiOnboardingRecipient is where a submitted request is sent. Deliberately
+// constant and not configurable: an admin able to redirect chefs' identity
+// documents to an arbitrary address is a bigger hole than the convenience.
 const FssaiOnboardingRecipient = "chef-onboarding@fe3dr.com"
 
 // SendFssaiRequestToOnboarding emails a submitted request to the onboarding
-// team, with LINKS to the documents rather than attachments — these are Aadhaar
-// and PAN images, and a mailbox is outside every control the platform has over
-// PII at rest.
+// team. Documents are NAMED but never linked or attached: they are Aadhaar and
+// PAN images, and a link mailed to an inbox outlives the screen it was minted
+// for. Staff open them from the admin queue, behind authentication, on a URL
+// that expires in fifteen minutes.
 func SendFssaiRequestToOnboarding(r *models.FssaiRequest) error {
 	svc := GetEmailService()
 	if svc == nil {
 		return errors.New("email service not configured")
 	}
 
-	// The documents are NAMED here but never linked. They are Aadhaar and PAN
-	// images in a private bucket, and a link mailed to an inbox outlives the
-	// screen it was minted for — staff open them from the admin queue, behind
-	// authentication, on a URL that expires in fifteen minutes.
 	var docs strings.Builder
 	for _, d := range r.Documents {
 		label := d.Kind
@@ -297,15 +263,13 @@ them.</p>`,
 }
 
 // fssaiAdminTransitions is what an admin may move a request to. Forward-only
-// through the working states; `refunded` is reachable from anywhere money is
-// still held, because a request can be abandoned at any point before issue.
+// through the working states. Unpaid drafts are absent: they are the chef's,
+// and admin has nothing to move until money has been taken.
 var fssaiAdminTransitions = map[string][]string{
-	models.FssaiAwaitingPayment:   {models.FssaiRefunded},
-	models.FssaiAwaitingDocuments: {models.FssaiRejected, models.FssaiRefunded},
-	models.FssaiSubmitted:         {models.FssaiInProgress, models.FssaiRejected, models.FssaiRefunded},
-	models.FssaiInProgress:        {models.FssaiFiled, models.FssaiRejected, models.FssaiRefunded},
-	models.FssaiFiled:             {models.FssaiIssued, models.FssaiRejected, models.FssaiRefunded},
-	models.FssaiRejected:          {models.FssaiRefunded},
+	models.FssaiSubmitted:  {models.FssaiInProgress, models.FssaiRejected, models.FssaiRefunded},
+	models.FssaiInProgress: {models.FssaiFiled, models.FssaiRejected, models.FssaiRefunded},
+	models.FssaiFiled:      {models.FssaiIssued, models.FssaiRejected, models.FssaiRefunded},
+	models.FssaiRejected:   {models.FssaiRefunded},
 }
 
 // FssaiAdminMayTransition reports whether an admin may move a request from one
@@ -320,10 +284,8 @@ func FssaiAdminMayTransition(from, to string) bool {
 }
 
 // FssaiTransitionRequires reports the field an admin must supply to reach a
-// status, or "" when none is needed. `filed` without a FoSCoS reference is the
-// one that matters: the reference is the whole point of the status to a chef,
-// and a filed request without one leaves them unable to track their own
-// application.
+// status, or "" when none is needed. `filed` without a FoSCoS reference leaves
+// the chef unable to track their own application.
 func FssaiTransitionRequires(to string) string {
 	switch to {
 	case models.FssaiFiled:

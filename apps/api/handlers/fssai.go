@@ -2,9 +2,10 @@ package handlers
 
 // fssai.go — the chef's side of the FSSAI filing request.
 //
-// A chef asks us to obtain their FSSAI registration: they pay, upload their
-// documents, and track it. Payment comes first, so every endpoint here is
-// written to survive a chef who pays and stops.
+// The chef builds the request first — details, then documents — and only then
+// can pay for it. Payment is refused until FSSAI's required documents are
+// attached, so a paid request is always one we can actually file, and the fee
+// is non-refundable from the moment it is taken.
 //
 // See .planning/FSSAI-IN-APP-REQUEST-DESIGN.md.
 
@@ -40,6 +41,23 @@ func (h *FssaiHandler) chefFor(c *gin.Context) (*models.ChefProfile, bool) {
 	return &chef, true
 }
 
+// requestFor loads the :id request, scoped to the authenticated chef. Every
+// endpoint below goes through this, so one chef can never reach another's
+// request — or the identity documents attached to it.
+func (h *FssaiHandler) requestFor(c *gin.Context) (*models.ChefProfile, *models.FssaiRequest, bool) {
+	chef, ok := h.chefFor(c)
+	if !ok {
+		return nil, nil, false
+	}
+	var row models.FssaiRequest
+	if err := database.DB.Preload("Documents").
+		Where("id = ? AND chef_id = ?", c.Param("id"), chef.ID).First(&row).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Request not found"})
+		return nil, nil, false
+	}
+	return chef, &row, true
+}
+
 // GetFssaiQuote prices the filing before a chef commits to anything, and says
 // whether the service is open at all.
 // GET /chef/fssai/quote?years=1
@@ -57,8 +75,8 @@ func (h *FssaiHandler) GetFssaiQuote(c *gin.Context) {
 		// never drift apart: the app must show this before taking the payment.
 		"nonRefundable": true,
 		"nonRefundableNotice": "Once you pay, this fee is non-refundable and the " +
-			"request cannot be cancelled. You can decide not to go ahead at any " +
-			"point before paying.",
+			"request cannot be cancelled. You can change your details, replace your " +
+			"documents or cancel at any point before paying.",
 	})
 }
 
@@ -83,7 +101,9 @@ type createFssaiRequest struct {
 	TermYears     int    `json:"termYears" binding:"required"`
 }
 
-// CreateFssaiRequest mints the request and the Cashfree order that pays for it.
+// CreateFssaiRequest starts the chef's draft. Nothing is charged here: the
+// documents have to be attached to the row before it can be paid for, so the
+// row must exist first.
 // POST /chef/fssai/requests
 func (h *FssaiHandler) CreateFssaiRequest(c *gin.Context) {
 	if !services.FssaiFilingEnabled() {
@@ -127,6 +147,32 @@ func (h *FssaiHandler) CreateFssaiRequest(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create the request"})
 		return
 	}
+	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, &row)})
+}
+
+// StartFssaiPayment mints the Cashfree order for a completed draft.
+//
+// The document check is HERE rather than only in the app, because this is the
+// call that takes money: a request paid for without the documents FSSAI
+// requires is one we cannot file and will not refund.
+// POST /chef/fssai/requests/:id/checkout
+func (h *FssaiHandler) StartFssaiPayment(c *gin.Context) {
+	if !services.FssaiFilingEnabled() {
+		c.JSON(http.StatusForbidden, gin.H{"error": "FSSAI filing is not available right now"})
+		return
+	}
+	chef, row, ok := h.requestFor(c)
+	if !ok {
+		return
+	}
+	if row.Status != models.FssaiAwaitingPayment {
+		c.JSON(http.StatusConflict, gin.H{"error": "This request has already been paid for"})
+		return
+	}
+	if row.NeedsDocuments() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": services.ErrFssaiDocumentsMissing.Error()})
+		return
+	}
 
 	var payer models.User
 	_ = database.DB.First(&payer, "id = ?", chef.UserID).Error
@@ -139,16 +185,15 @@ func (h *FssaiHandler) CreateFssaiRequest(c *gin.Context) {
 		"Fe3dr FSSAI filing", "fssai",
 	)
 	if cerr != nil {
-		// The row stays in awaiting_payment with no gateway order. It is visible
-		// to admin and harmless: nothing was charged, and the chef can retry.
+		// The draft is untouched and the chef can retry — nothing was charged.
 		log.Printf("FSSAI request %s: cashfree order failed: %v", row.ID, cerr)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start the payment"})
 		return
 	}
-	database.DB.Model(&row).Update("gateway_order", cfOrder.OrderID)
+	database.DB.Model(row).Update("gateway_order", cfOrder.OrderID)
 
 	c.JSON(http.StatusOK, gin.H{
-		"request":                  fssaiRequestResponse(c, &row),
+		"request":                  fssaiRequestResponse(c, row),
 		"cashfreeOrderId":          cfOrder.OrderID,
 		"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
 		// The app cannot infer sandbox vs production — the hosts differ and the
@@ -157,25 +202,23 @@ func (h *FssaiHandler) CreateFssaiRequest(c *gin.Context) {
 	})
 }
 
-// ConfirmFssaiPayment verifies the capture with Cashfree and advances the
+// ConfirmFssaiPayment verifies the capture with Cashfree and submits the
 // request. The client is never trusted for this: it hands us nothing signed, so
 // the gateway fetch IS the verification.
 // POST /chef/fssai/requests/:id/confirm
 func (h *FssaiHandler) ConfirmFssaiPayment(c *gin.Context) {
-	chef, ok := h.chefFor(c)
+	chef, row, ok := h.requestFor(c)
 	if !ok {
-		return
-	}
-	var row models.FssaiRequest
-	if err := database.DB.Preload("Documents").
-		Where("id = ? AND chef_id = ?", c.Param("id"), chef.ID).First(&row).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Request not found"})
 		return
 	}
 	// Already past payment — idempotent success, so a retried confirm or a
 	// double tap does not read as an error to the chef.
 	if row.Status != models.FssaiAwaitingPayment {
-		c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, &row)})
+		c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, row)})
+		return
+	}
+	if row.GatewayOrder == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This request has no payment to confirm"})
 		return
 	}
 
@@ -184,87 +227,31 @@ func (h *FssaiHandler) ConfirmFssaiPayment(c *gin.Context) {
 		c.JSON(http.StatusPaymentRequired, gin.H{"error": "Payment not confirmed yet"})
 		return
 	}
-	if err := services.MarkFssaiPaid(database.DB, &row, pay.CFPaymentID.String()); err != nil {
+	if err := services.MarkFssaiPaid(database.DB, row, pay.CFPaymentID.String()); err != nil {
 		log.Printf("FSSAI request %s: mark paid failed: %v", row.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record the payment"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, &row)})
-}
-
-type attachFssaiDocRequest struct {
-	Kind     string `json:"kind" binding:"required"`
-	FileURL  string `json:"fileUrl" binding:"required"`
-	FileName string `json:"fileName"`
-}
-
-// AttachFssaiDocument records an uploaded document and, once the request has
-// everything FSSAI requires, submits it to onboarding.
-// POST /chef/fssai/requests/:id/documents
-func (h *FssaiHandler) AttachFssaiDocument(c *gin.Context) {
-	chef, ok := h.chefFor(c)
-	if !ok {
-		return
-	}
-	var req attachFssaiDocRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	switch req.Kind {
-	case models.FssaiDocPhoto, models.FssaiDocIdentity, models.FssaiDocAddressProof:
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Unknown document kind"})
-		return
-	}
-
-	var row models.FssaiRequest
-	if err := database.DB.Preload("Documents").
-		Where("id = ? AND chef_id = ?", c.Param("id"), chef.ID).First(&row).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Request not found"})
-		return
-	}
-	if err := services.AttachFssaiDocument(
-		database.DB, &row, req.Kind, req.FileURL, req.FileName); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, &row)})
+	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, row)})
 }
 
 // CancelFssaiRequest lets a chef back out of a request they have not paid for.
-//
-// The service is optional and a chef may change their mind: they can open the
-// form, see the price, and walk away — then come back weeks later and start
-// again. Without this, an abandoned unpaid row would sit in their tracker
-// forever and block a fresh request.
-//
-// A PAID request is not cancellable here: money has moved, so backing out is a
-// refund an admin has to make, not something the app does silently.
+// A PAID request is not cancellable: the fee is non-refundable and the chef is
+// told so before they pay.
 // DELETE /chef/fssai/requests/:id
 func (h *FssaiHandler) CancelFssaiRequest(c *gin.Context) {
-	chef, ok := h.chefFor(c)
+	_, row, ok := h.requestFor(c)
 	if !ok {
 		return
 	}
-	var row models.FssaiRequest
-	if err := database.DB.Where("id = ? AND chef_id = ?", c.Param("id"), chef.ID).
-		First(&row).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Request not found"})
-		return
-	}
 	if row.Status != models.FssaiAwaitingPayment {
-		// Owner policy: once paid, the filing fee is non-refundable and the
-		// request cannot be withdrawn. The chef is told this before they pay
-		// (see the quote endpoint's `nonRefundable`), so it is not a surprise
-		// discovered at the point they try to back out.
 		c.JSON(http.StatusConflict, gin.H{
 			"error": "This request has been paid for and cannot be cancelled. " +
 				"We have started work on your application.",
 		})
 		return
 	}
-	if err := services.DiscardFssaiRequest(database.DB, &row); err != nil {
+	if err := services.DiscardFssaiRequest(database.DB, row); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel the request"})
 		return
 	}
@@ -272,29 +259,25 @@ func (h *FssaiHandler) CancelFssaiRequest(c *gin.Context) {
 }
 
 // UploadFssaiDocument takes the file itself, stores it, and attaches it in one
-// call — the app should not have to upload somewhere and then separately tell
-// us about it, which leaves an orphaned file whenever the second call fails.
+// call. There is deliberately no endpoint that accepts a file reference from
+// the client: the stored value is an object path that later gets signed, so a
+// client able to choose it could read another chef's identity documents.
 //
-// Same validation as every other chef upload: size capped and the bytes sniffed,
-// so a spoofed Content-Type cannot slip a payload through.
 // POST /chef/fssai/requests/:id/upload  (multipart: file, kind)
 func (h *FssaiHandler) UploadFssaiDocument(c *gin.Context) {
-	chef, ok := h.chefFor(c)
-	if !ok {
-		return
-	}
 	kind := c.PostForm("kind")
-	switch kind {
-	case models.FssaiDocPhoto, models.FssaiDocIdentity, models.FssaiDocAddressProof:
-	default:
+	if !models.IsFssaiDocKind(kind) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unknown document kind"})
 		return
 	}
-
-	var row models.FssaiRequest
-	if err := database.DB.Preload("Documents").
-		Where("id = ? AND chef_id = ?", c.Param("id"), chef.ID).First(&row).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Request not found"})
+	chef, row, ok := h.requestFor(c)
+	if !ok {
+		return
+	}
+	if !row.AcceptsDocuments() {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Documents can no longer be changed on this request",
+		})
 		return
 	}
 
@@ -305,7 +288,6 @@ func (h *FssaiHandler) UploadFssaiDocument(c *gin.Context) {
 	}
 	defer file.Close()
 
-	contentType := header.Header.Get("Content-Type")
 	if header.Size > 5*1024*1024 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum 5 MB."})
 		return
@@ -314,35 +296,27 @@ func (h *FssaiHandler) UploadFssaiDocument(c *gin.Context) {
 	// Sniff the BYTES for every accepted type, PDFs included. Trusting the
 	// declared Content-Type for one branch is the whole bypass: a caller simply
 	// declares application/pdf and uploads whatever they like.
-	sniffed, serr := sniffContentType(file)
+	contentType, serr := sniffContentType(file)
 	if serr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not read the file"})
 		return
 	}
 	// A PDF is only acceptable as an address proof — a utility bill usually is
 	// one. A photo or an ID has to be an image we can actually look at.
-	isPDF := sniffed == "application/pdf"
 	switch {
-	case isPDF && kind == models.FssaiDocAddressProof:
-	case services.IsImageContentType(sniffed):
+	case contentType == "application/pdf" && kind == models.FssaiDocAddressProof:
+	case services.IsImageContentType(contentType):
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Allowed: JPEG, PNG or WebP — or a PDF for an address proof.",
 		})
 		return
 	}
-	// Store the SNIFFED type, never the declared one, so the object cannot be
-	// served back as something it is not.
-	contentType = sniffed
 
-	// PRIVATE bucket. These are Aadhaar and PAN images: the public bucket hands
-	// out a permanent unauthenticated URL, which for identity documents is an
-	// exposure, not a convenience. What is stored is the object path; every
-	// surface that shows a document mints a short-lived signed URL for it.
-	//
-	// The stored object name is a UUID with an extension derived from the
-	// SNIFFED type — the uploader's filename is never used to build a path, so
-	// it cannot traverse out of the folder or choose its own extension.
+	// PRIVATE bucket: these are Aadhaar and PAN images, and the public bucket
+	// hands out a permanent unauthenticated URL. The object name is a UUID with
+	// an extension derived from the SNIFFED type, so the uploader's filename
+	// never builds a path or chooses its own extension.
 	folder := fmt.Sprintf("chefs/%s/fssai/%s", chef.ID.String(), row.ID.String())
 	objectPath, uerr := services.UploadPrivateFile(
 		c.Request.Context(), folder, fssaiFileExtension(contentType), file, contentType)
@@ -354,16 +328,45 @@ func (h *FssaiHandler) UploadFssaiDocument(c *gin.Context) {
 
 	// The chef's own filename is kept only as a LABEL, sanitised, never as a path.
 	if err := services.AttachFssaiDocument(
-		database.DB, &row, kind, objectPath, sanitiseFileLabel(header.Filename)); err != nil {
+		database.DB, row, kind, objectPath, sanitiseFileLabel(header.Filename)); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, &row)})
+	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, row)})
+}
+
+// RemoveFssaiDocument drops an optional document the chef added by mistake.
+// Only address proof is removable: the photo and the ID are required, and
+// removing one would leave a request that cannot be filed.
+// DELETE /chef/fssai/requests/:id/documents/:kind
+func (h *FssaiHandler) RemoveFssaiDocument(c *gin.Context) {
+	_, row, ok := h.requestFor(c)
+	if !ok {
+		return
+	}
+	if c.Param("kind") != models.FssaiDocAddressProof {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Your photo and photo ID are required. Upload a replacement instead.",
+		})
+		return
+	}
+	if !row.AcceptsDocuments() {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Documents can no longer be changed on this request",
+		})
+		return
+	}
+	if err := database.DB.Where("request_id = ? AND kind = ?", row.ID, models.FssaiDocAddressProof).
+		Delete(&models.FssaiRequestDocument{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove the document"})
+		return
+	}
+	_ = database.DB.Preload("Documents").First(row, "id = ?", row.ID).Error
+	c.JSON(http.StatusOK, gin.H{"request": fssaiRequestResponse(c, row)})
 }
 
 // fssaiFileExtension maps a VERIFIED content type to the extension the stored
-// object gets. Derived from the sniffed bytes rather than the uploader's
-// filename, so the extension is never attacker-chosen.
+// object gets, so the extension is never attacker-chosen.
 func fssaiFileExtension(contentType string) string {
 	switch contentType {
 	case "image/png":
@@ -378,8 +381,7 @@ func fssaiFileExtension(contentType string) string {
 }
 
 // sanitiseFileLabel keeps the chef's filename only as something to read in the
-// admin queue: no path separators, no traversal, length-capped. It never
-// reaches a filesystem or an object path.
+// admin queue: no path separators, no traversal, length-capped.
 func sanitiseFileLabel(name string) string {
 	name = filepath.Base(strings.TrimSpace(name))
 	name = strings.ReplaceAll(name, "..", "")
@@ -398,10 +400,8 @@ func sanitiseFileLabel(name string) string {
 	return name
 }
 
-// fssaiDocumentViews turns stored object paths into short-lived signed URLs.
-// Nothing that renders a document ever gets a durable link: the objects live in
-// the private bucket and a link that outlives the screen is a copy of someone's
-// Aadhaar loose in a log or a chat.
+// fssaiDocumentViews turns stored object paths into short-lived signed URLs. A
+// link that outlives the screen is a copy of someone's Aadhaar loose in a log.
 func fssaiDocumentViews(c *gin.Context, docs []models.FssaiRequestDocument) []gin.H {
 	out := make([]gin.H, 0, len(docs))
 	for _, d := range docs {
@@ -440,7 +440,6 @@ func fssaiRequestResponse(c *gin.Context, r *models.FssaiRequest) any {
 	if r == nil {
 		return nil
 	}
-	docs := fssaiDocumentViews(c, r.Documents)
 	return gin.H{
 		"id": r.ID, "status": r.Status, "termYears": r.TermYears,
 		"kitchenName": r.KitchenName, "applicantName": r.ApplicantName,
@@ -449,10 +448,11 @@ func fssaiRequestResponse(c *gin.Context, r *models.FssaiRequest) any {
 		"applicationRef": r.ApplicationRef, "registrationNo": r.RegistrationNo,
 		"rejectedReason": r.RejectedReason,
 		"submittedAt":    r.SubmittedAt, "filedAt": r.FiledAt, "issuedAt": r.IssuedAt,
-		"documents": docs,
+		"documents": fssaiDocumentViews(c, r.Documents),
 		// What the app still needs from the chef, so the screen does not have to
 		// re-derive FSSAI's document rules.
 		"needsDocuments": r.NeedsDocuments(),
+		"canPay":         r.Status == models.FssaiAwaitingPayment && !r.NeedsDocuments(),
 		"createdAt":      r.CreatedAt,
 	}
 }

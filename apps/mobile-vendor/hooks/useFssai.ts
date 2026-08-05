@@ -2,10 +2,11 @@
 //
 // The request is the single source of truth for what the chef must do next
 // (`fssaiChefAction`), so every mutation refreshes it rather than reasoning
-// about the next state locally. A screen that guessed would show "upload your
-// documents" against a payment the server never saw.
+// about the next state locally. A screen that guessed would offer "Pay" against
+// documents the server never received.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../lib/api';
 import type { FssaiDocumentKind, FssaiQuote, FssaiRequest } from '../lib/fssai';
 
@@ -27,7 +28,7 @@ interface RequestResponse {
   enabled: boolean;
 }
 
-interface CreateResponse {
+interface CheckoutResponse {
   request: FssaiRequest;
   cashfreePaymentSessionId: string;
   cashfreeOrderId: string;
@@ -66,66 +67,108 @@ export function useFssaiRequest() {
   });
 }
 
-/** Creates the request and returns the Cashfree session that pays for it. The
- *  row exists before any money is asked for, so an abandoned payment is a
- *  visible row rather than a silent gap. */
-export function useCreateFssaiRequest() {
+/** Refreshes the request after any mutation. One helper so no call site can
+ *  forget and leave the screen showing a stale step. */
+function useRefreshRequest() {
   const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: REQUEST_KEY });
+  };
+}
+
+/** Starts the chef's draft. Nothing is charged: documents are attached to the
+ *  row before it can be paid for, so the row has to exist first. */
+export function useCreateFssaiRequest() {
+  const refresh = useRefreshRequest();
   return useMutation({
     mutationFn: (input: CreateFssaiRequestInput) =>
-      api.post<CreateResponse>('/chef/fssai/requests', input).then((r) => r.data),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: REQUEST_KEY });
+      api
+        .post<{ request: FssaiRequest }>('/chef/fssai/requests', input)
+        .then((r) => r.data.request),
+    onSuccess: refresh,
+  });
+}
+
+/** Uploads a document and attaches it in one call. The file never round-trips
+ *  through the client as a reference — the server names the stored object, so a
+ *  client cannot point a request at someone else's identity documents. */
+export function useUploadFssaiDocument() {
+  const refresh = useRefreshRequest();
+  return useMutation({
+    mutationFn: async (vars: {
+      requestId: string;
+      kind: FssaiDocumentKind;
+      uri: string;
+      mimeType?: string;
+    }) => {
+      const name = vars.uri.split('/').pop() ?? `${vars.kind}.jpg`;
+      const body = new FormData();
+      body.append('file', {
+        uri: vars.uri,
+        name,
+        type: vars.mimeType ?? 'image/jpeg',
+      } as unknown as Blob);
+      body.append('kind', vars.kind);
+      const res = await api.post<{ request: FssaiRequest }>(
+        `/chef/fssai/requests/${vars.requestId}/upload`,
+        body,
+        multipartConfig(),
+      );
+      return res.data.request;
     },
+    onSuccess: refresh,
+  });
+}
+
+/** Removes an optional document the chef added by mistake. The required two
+ *  are replaced by re-uploading, never removed. */
+export function useRemoveFssaiDocument() {
+  const refresh = useRefreshRequest();
+  return useMutation({
+    mutationFn: (vars: { requestId: string; kind: FssaiDocumentKind }) =>
+      api
+        .delete<{ request: FssaiRequest }>(
+          `/chef/fssai/requests/${vars.requestId}/documents/${vars.kind}`,
+        )
+        .then((r) => r.data.request),
+    onSuccess: refresh,
+  });
+}
+
+/** Mints the Cashfree session for a completed draft. The server refuses if the
+ *  documents are not in, so the money can never be taken against a request we
+ *  cannot file. */
+export function useStartFssaiPayment() {
+  const refresh = useRefreshRequest();
+  return useMutation({
+    mutationFn: (requestId: string) =>
+      api
+        .post<CheckoutResponse>(`/chef/fssai/requests/${requestId}/checkout`)
+        .then((r) => r.data),
+    onSettled: refresh,
   });
 }
 
 /** Asks the server to verify the capture with Cashfree. The app never decides
  *  that a payment succeeded — it has nothing signed to prove it. */
 export function useConfirmFssaiPayment() {
-  const qc = useQueryClient();
+  const refresh = useRefreshRequest();
   return useMutation({
     mutationFn: (requestId: string) =>
-      api.post(`/chef/fssai/requests/${requestId}/confirm`).then((r) => r.data),
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: REQUEST_KEY });
-    },
-  });
-}
-
-/** Attaches an uploaded document. The server decides when the request is
- *  complete and sends it to onboarding — the app does not. */
-export function useAttachFssaiDocument() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: {
-      requestId: string;
-      kind: FssaiDocumentKind;
-      fileUrl: string;
-      fileName: string;
-    }) =>
       api
-        .post(`/chef/fssai/requests/${vars.requestId}/documents`, {
-          kind: vars.kind,
-          fileUrl: vars.fileUrl,
-          fileName: vars.fileName,
-        })
-        .then((r) => r.data),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: REQUEST_KEY });
-    },
+        .post<{ request: FssaiRequest }>(`/chef/fssai/requests/${requestId}/confirm`)
+        .then((r) => r.data.request),
+    onSettled: refresh,
   });
 }
 
-/** Backs out of a request the chef has not paid for. The service is optional
- *  and they may change their mind — but only until the money moves. */
+/** Discards a draft the chef has not paid for. The service is optional and they
+ *  may change their mind — but only until the money moves. */
 export function useCancelFssaiRequest() {
-  const qc = useQueryClient();
+  const refresh = useRefreshRequest();
   return useMutation({
     mutationFn: (requestId: string) =>
       api.delete(`/chef/fssai/requests/${requestId}`).then((r) => r.data),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: REQUEST_KEY });
-    },
+    onSuccess: refresh,
   });
 }

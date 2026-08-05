@@ -26,15 +26,22 @@ export interface FssaiQuote {
  *  from the one on the submitted photo ID. */
 export type FssaiDocumentKind = 'photo' | 'identity' | 'address_proof';
 
+export const FSSAI_REQUIRED_DOCUMENTS: FssaiDocumentKind[] = ['photo', 'identity'];
+export const FSSAI_DOCUMENT_KINDS: FssaiDocumentKind[] = [
+  'photo',
+  'identity',
+  'address_proof',
+];
+
 export interface FssaiDocument {
   kind: FssaiDocumentKind;
   fileName: string;
-  fileUrl: string;
+  /** Short-lived signed URL, minted per response. Never store or share it. */
+  fileUrl?: string;
 }
 
 export type FssaiStatus =
   | 'awaiting_payment'
-  | 'awaiting_documents'
   | 'submitted'
   | 'in_progress'
   | 'filed'
@@ -65,11 +72,13 @@ export interface FssaiRequest {
   /** Server-computed: whether FSSAI's required documents are still missing. The
    *  app must not re-derive this — the rules are FSSAI's, not ours. */
   needsDocuments: boolean;
+  /** Server-computed: unpaid and complete, so the payment may be started. */
+  canPay: boolean;
   createdAt: string;
 }
 
-/** The five steps a chef sees. `awaiting_payment` and `awaiting_documents` are
- *  work the CHEF still has to do, so they are handled as prompts, not steps. */
+/** The four steps a chef sees once they have paid. `awaiting_payment` is the
+ *  draft they are still building, so it is a form rather than a step. */
 export const FSSAI_TRACKER_STEPS = [
   { key: 'submitted', label: 'Submitted' },
   { key: 'in_progress', label: 'We’re preparing your form' },
@@ -79,8 +88,8 @@ export const FSSAI_TRACKER_STEPS = [
 
 const STEP_ORDER: FssaiStatus[] = ['submitted', 'in_progress', 'filed', 'issued'];
 
-/** How many tracker steps are complete. -1 while the chef still owes us
- *  something (payment or documents), which the screen renders as a prompt. */
+/** How many tracker steps are complete. -1 while the request is still an unpaid
+ *  draft, which the screen renders as the form rather than a tracker. */
 export function fssaiStepIndex(status: FssaiStatus): number {
   return STEP_ORDER.indexOf(status);
 }
@@ -90,21 +99,23 @@ export function isFssaiClosed(status: FssaiStatus): boolean {
   return status === 'issued' || status === 'rejected' || status === 'refunded';
 }
 
+/** True once money has been taken. Past this the chef cannot cancel and the fee
+ *  is not refundable. */
+export function isFssaiPaid(status: FssaiStatus): boolean {
+  return status !== 'awaiting_payment';
+}
+
 /** What the chef must do next, or null when the ball is with us. Drives the
  *  single call-to-action on the screen, so the app never shows two. */
-export function fssaiChefAction(r: FssaiRequest | null): 'pay' | 'upload' | null {
-  if (!r) return null;
-  if (r.status === 'awaiting_payment') return 'pay';
-  if (r.status === 'awaiting_documents') return 'upload';
-  return null;
+export function fssaiChefAction(r: FssaiRequest | null): 'documents' | 'pay' | null {
+  if (!r || r.status !== 'awaiting_payment') return null;
+  return r.needsDocuments ? 'documents' : 'pay';
 }
 
 export function fssaiStatusLabel(status: FssaiStatus): string {
   switch (status) {
     case 'awaiting_payment':
-      return 'Payment needed';
-    case 'awaiting_documents':
-      return 'Documents needed';
+      return 'Not sent yet';
     case 'submitted':
       return 'With our team';
     case 'in_progress':
@@ -126,6 +137,12 @@ export const FSSAI_DOCUMENT_LABELS: Record<FssaiDocumentKind, string> = {
   photo: 'Passport-style photo',
   identity: 'Government photo ID',
   address_proof: 'Kitchen address proof',
+};
+
+export const FSSAI_DOCUMENT_HINTS: Record<FssaiDocumentKind, string> = {
+  photo: 'A clear photo of your face, like a passport photo.',
+  identity: 'Aadhaar, PAN or Voter ID — all four corners readable.',
+  address_proof: 'Only if your kitchen is not at the address on that ID.',
 };
 
 /** Hosted checkout on fe3dr.com, opened in a browser session.

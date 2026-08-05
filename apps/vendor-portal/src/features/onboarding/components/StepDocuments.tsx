@@ -267,6 +267,13 @@ export function StepDocuments({ errors }: Props) {
             hint="14-digit FSSAI number. You can add this later from Settings, before you publish your first menu item."
           />
           <DocUploadCard section={FSSAI_DOC} />
+          {/* Deliberately text, not a link: the FSSAI request needs a chef
+              profile, which does not exist until this application is submitted. */}
+          <p className="text-sm text-muted-foreground">
+            Don't have a licence yet? Submit without it — then open{' '}
+            <span className="font-medium text-foreground">FSSAI Registration</span> from the menu
+            and we'll obtain it for you, government fee included.
+          </p>
         </div>
       </Card>
 
