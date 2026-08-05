@@ -252,6 +252,7 @@
     "prepTime": "PREP TIME",
     "prepTimeHint": "Average time per order before it's ready.",
     "deliveryArea": "DELIVERY AREA",
+    "deliveryPricingLabel": "DELIVERY PRICE BY DISTANCE",
     "serviceRadius": "Service radius (km)",
     "serviceRadiusPlaceholder": "1–50 km",
     "serviceRadiusHelper": "Maximum distance from your kitchen to accept orders.",
@@ -415,6 +416,7 @@
     "title": "More",
     "profile": "Profile",
     "mealPlans": "Meal plans",
+    "subscriptions": "Subscriptions",
     "capacity": "Capacity & cutoffs",
     "catering": "Catering",
     "earnings": "Earnings",
@@ -444,7 +446,8 @@
     },
     "legal": "Legal",
     "chefbook": "ChefBook",
-    "promote": "Promote"
+    "promote": "Promote",
+    "feedback": "Feedback & ideas"
   },
   "language": {
     "title": "Language",
@@ -452,5 +455,25 @@
     "hindi": "हिन्दी",
     "system": "System default",
     "subtitle": "Choose the language for the app"
+  },
+  "feedback": {
+    "title": "Send feedback",
+    "subtitle": "Tell us what's working, what isn't, or what you'd like the app to do. A real person reads every one of these.",
+    "kindLabel": "What is this?",
+    "kindFeedback": "Feedback",
+    "kindFeedbackHint": "Something felt off, confusing or broken.",
+    "kindIdea": "Idea",
+    "kindIdeaHint": "Something you wish the app could do.",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Orders list is slow to load",
+    "detailsLabel": "Details",
+    "detailsPlaceholder": "What happened, or what would you like to see?",
+    "send": "Send",
+    "almostThere": "Almost there",
+    "sentTitle": "Thank you",
+    "sentBody": "We've logged this for the team as #{{reference}}. If we build it, you'll see it in an update.",
+    "failedTitle": "Couldn't send that",
+    "failedBody": "Your message could not be sent right now. Please check your connection and try again.",
+    "privacyNote": "We log your app version and device platform with this so we can reproduce issues. Your email address is never published."
   }
 }

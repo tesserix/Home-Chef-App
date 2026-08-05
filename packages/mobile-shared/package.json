@@ -19,7 +19,8 @@
     "./ui": "./src/ui/index.ts",
     "./mfa": "./src/mfa/index.ts",
     "./realtime": "./src/realtime/index.ts",
-    "./payments": "./src/payments/index.ts"
+    "./payments": "./src/payments/index.ts",
+    "./feedback": "./src/feedback/index.ts"
   },
   "scripts": {
     "test": "vitest run",

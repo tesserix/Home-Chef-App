@@ -201,6 +201,7 @@ func SetupRouter() *gin.Engine {
 	cancellationHandler := handlers.NewCancellationHandler()
 	supportHandler := handlers.NewSupportHandler()
 	supportChatHandler := handlers.NewSupportChatHandler()
+	feedbackHandler := handlers.NewFeedbackHandler()
 	promoHandler := handlers.NewPromoHandler()
 	chatHandler := handlers.NewChatHandler()
 	messagingHandler := handlers.NewMessagingHandler()
@@ -841,6 +842,14 @@ func SetupRouter() *gin.Engine {
 			support.GET("/tickets/:id", supportHandler.GetTicket)
 			support.POST("/tickets/:id/messages", supportLimit, supportHandler.AddMessage)
 			support.PUT("/tickets/:id/close", supportHandler.CloseTicket)
+		}
+
+		// In-app feedback / ideas → labelled GitHub issues on the backlog.
+		// Same throttle shape as ticket creation: this writes to an external API.
+		feedback := v1.Group("/feedback")
+		feedback.Use(bffAuth(bffKey, bffWindow))
+		{
+			feedback.POST("", middleware.RateLimitByUser(1, 3), feedbackHandler.SubmitFeedback)
 		}
 
 		// Otto support-chat proxy (Phase 5) — customer↔Tesserix support via the

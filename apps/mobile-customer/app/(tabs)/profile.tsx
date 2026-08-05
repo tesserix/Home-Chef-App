@@ -18,6 +18,7 @@ import {
   Receipt,
   Salad,
   LifeBuoy,
+  MessageSquarePlus,
   ShieldOff,
   BookOpen,
 } from 'lucide-react-native';
@@ -392,6 +393,12 @@ function ProfileScreenBody() {
           icon={<LifeBuoy size={18} color={customerColors.charcoal.soft} />}
           label="Help & support"
           onPress={() => router.push('/support-chat')}
+        />
+        <NavRowDivider />
+        <NavRow
+          icon={<MessageSquarePlus size={18} color={customerColors.charcoal.soft} />}
+          label="Send feedback or an idea"
+          onPress={() => router.push('/feedback')}
         />
         <NavRowDivider />
         <NavRow
