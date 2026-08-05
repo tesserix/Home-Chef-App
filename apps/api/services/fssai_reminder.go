@@ -171,6 +171,31 @@ func shouldSendExpiredNudge(ctx context.Context, chefID uuid.UUID, today time.Ti
 	return acquired
 }
 
+// saveFssaiNotice writes the bell-list row that goes with an FSSAI push.
+//
+// A push is a moment; the notification list is the record. Without this a chef
+// who had notifications off, or simply missed the banner, would never learn
+// their licence was lapsing until their kitchen went offline — and the warning
+// belongs alongside their orders, staying put until they clear it themselves.
+//
+// Best-effort: the push is the urgent half, and a write failure must not stop
+// the cron reaching the rest of the chefs in the window.
+func saveFssaiNotice(userID uuid.UUID, kind, title, body string) {
+	svc := GetNotificationService()
+	if svc == nil {
+		return
+	}
+	if err := svc.SaveUserNotification(&models.Notification{
+		UserID:  userID,
+		Type:    kind,
+		Title:   title,
+		Message: body,
+	}); err != nil {
+		log.Printf("fssai-reminder: notification row failed for user=%s kind=%s: %v",
+			userID, kind, err)
+	}
+}
+
 func sendFSSAIExpiredPush(userID uuid.UUID) error {
 	title := "FSSAI licence expired — orders paused"
 	body := "Your food-safety (FSSAI) licence has expired, so new orders are paused. Renew now to go back online."
@@ -178,6 +203,7 @@ func sendFSSAIExpiredPush(userID uuid.UUID) error {
 		"type":     "fssai_expired",
 		"deeplink": "homechef-vendor:///documents/renew",
 	}
+	saveFssaiNotice(userID, "fssai_expired", title, body)
 	return SendPushNotification(userID, title, body, data)
 }
 
@@ -188,6 +214,7 @@ func SendFSSAIBackOnlinePush(userID uuid.UUID) error {
 	title := "You're back online"
 	body := "Your FSSAI licence renewal is verified — your kitchen is live and accepting orders again."
 	data := map[string]string{"type": "fssai_back_online"}
+	saveFssaiNotice(userID, "fssai_back_online", title, body)
 	return SendPushNotification(userID, title, body, data)
 }
 
@@ -252,6 +279,7 @@ func sendFSSAIReminderPush(chefID uuid.UUID, expiryDate *time.Time, daysOut int)
 		data["expiryDate"] = expiryDate.Format("2006-01-02")
 	}
 
+	saveFssaiNotice(chef.UserID, "fssai_expiring", title, body)
 	return SendPushNotification(chef.UserID, title, body, data)
 }
 
@@ -317,4 +345,29 @@ func updateFSSAILockedGauge() {
 		}
 	}
 	fssaiLockedGauge.Set(float64(locked))
+}
+
+// SendFSSAIRenewalReminderNow pushes the expiry reminder on demand, for an admin
+// working the expiring-soon list who does not want to wait for the 30/15/7-day
+// cron — a chef three weeks out is between windows, and chasing them early is
+// the whole point of surfacing the list.
+//
+// Reuses the cron's push verbatim rather than writing a second message, so the
+// chef never gets two differently-worded warnings about one licence. Deliberately
+// NOT deduped: an admin choosing to send is the intent, and the cron's own
+// once-per-window guard is untouched.
+func SendFSSAIRenewalReminderNow(chefID uuid.UUID) error {
+	var doc models.ChefDocument
+	err := database.DB.
+		Where("chef_id = ? AND type = ? AND status = ? AND expiry_date IS NOT NULL",
+			chefID, models.DocFSSAILicense, models.DocStatusVerified).
+		Order("expiry_date DESC").First(&doc).Error
+	if err != nil {
+		return fmt.Errorf("no verified FSSAI licence with an expiry on record: %w", err)
+	}
+	daysOut := int(time.Until(*doc.ExpiryDate).Hours() / 24)
+	if daysOut < 0 {
+		daysOut = 0
+	}
+	return sendFSSAIReminderPush(chefID, doc.ExpiryDate, daysOut)
 }

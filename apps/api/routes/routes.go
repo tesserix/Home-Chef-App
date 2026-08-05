@@ -1206,6 +1206,7 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/reviews/:id/unhide", adminHandler.AdminUnhideReview)
 			admin.POST("/chefs/:id/fssai-override", adminHandler.OverrideFSSAILock)
 			admin.DELETE("/chefs/:id/fssai-override", adminHandler.ClearFSSAILockOverride)
+			admin.POST("/chefs/:id/fssai-reminder", adminHandler.SendFSSAIRenewalReminder)
 			admin.GET("/fssai-expiry-backfill", adminHandler.FSSAIExpiryBackfill)
 			admin.POST("/fssai-expiry-backfill", adminHandler.FSSAIExpiryBackfill)
 			admin.PUT("/chefs/:id/verify", adminHandler.VerifyChef)
