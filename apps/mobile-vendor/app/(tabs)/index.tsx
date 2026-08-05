@@ -61,6 +61,7 @@ import { useCancellationRequests } from '../../hooks/useCancellations';
 import { useAuthStore } from '../../store/auth-store';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
 import { orderSourceLabel } from '../../lib/orderSource';
+import { weekSummary } from '../../lib/week-summary';
 import { useDockClearance } from '../../components/navigation/Dock';
 import {
   ActiveOrderCard,
@@ -258,6 +259,16 @@ export default function DashboardScreen() {
       IN_FLIGHT_STATUSES.has(o.status as Order['status']),
     );
   }, [dashboard?.activeOrders, dashboard?.recentOrders]);
+
+  const week = useMemo(
+    () =>
+      weekSummary({
+        revenue: dashboard?.weekRevenue ?? 0,
+        settledOrders: dashboard?.weekSettledOrders,
+        orders: dashboard?.weekOrders ?? 0,
+      }),
+    [dashboard?.weekRevenue, dashboard?.weekSettledOrders, dashboard?.weekOrders],
+  );
 
   // Last order timestamp across pending + recent. Drives the dead-screen
   // reassurance copy: a chef staring at an empty screen at 3am needs to
@@ -688,16 +699,11 @@ export default function DashboardScreen() {
 
         {/* This-week snapshot — one quiet line of trend context beyond today's
             numbers, only when there's a week to show. */}
-        {(dashboard?.weekOrders ?? 0) > 0 && (
+        {week && (
           <View style={styles.weekRow}>
             <Text style={styles.weekLabel}>{t('dashboard.thisWeek')}</Text>
             <Text style={styles.weekValue} numberOfLines={1}>
-              {t('dashboard.weekSummary', {
-                amount: Math.round(
-                  dashboard?.weekRevenue ?? 0,
-                ).toLocaleString('en-IN'),
-                count: dashboard?.weekOrders ?? 0,
-              })}
+              {t(week.key, week.params)}
             </Text>
           </View>
         )}

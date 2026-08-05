@@ -986,7 +986,10 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"todayEarnings": todayRevenue,
 		"pendingOrders": pendingOrders,
 		"weekOrders":    weekOrders,
-		"weekRevenue":   weekRevenue,
+		// The count that produced weekRevenue. Read it wherever the two are shown
+		// together; weekOrders is for counters that must match the orders tab.
+		"weekSettledOrders": weekSettled.OrdersCount,
+		"weekRevenue":       weekRevenue,
 		// Lifetime totals — the hero shows these (all-time), with today/this-week
 		// as the recent breakdown.
 		"totalEarnings": totalEarnings,

@@ -190,6 +190,32 @@ func TestChefDashboardTotalEarnings_MatchesEarningsScreen(t *testing.T) {
 	require.InDelta(t, totals.GrossRevenue, dash["weekRevenue"], 0.005)
 }
 
+// The week line pairs money with a count in one sentence. The money settles on
+// delivery, so the count beside it has to be the delivered count — otherwise a
+// chef with 5 placed and 3 delivered reads "₹1,200 · 5 orders" and the arithmetic
+// does not work. weekOrders stays the placed count for the tab counters.
+func TestChefDashboard_SeparatesPlacedFromSettledWeekCounts(t *testing.T) {
+	db := setupChefVisDB(t)
+	userID, chefID := seedVisChef(t, db)
+
+	deliveredAt := services.CapacityDay(time.Now()).Add(13 * time.Hour)
+	for range 3 {
+		require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id,
+			status, payment_status, subtotal, tax, tax_food, total, created_at, delivered_at)
+			VALUES (?, 'ORD-D', ?, ?, 'delivered', 'completed', 400, 20, 20, 420, ?, ?)`,
+			uuid.NewString(), uuid.NewString(), chefID.String(), deliveredAt, deliveredAt).Error)
+	}
+	// Two more placed and paid this week, still in the kitchen.
+	seedVisOrder(t, db, chefID, "preparing", "completed")
+	seedVisOrder(t, db, chefID, "accepted", "completed")
+
+	dash := chefVisGET(t, chefVisRouter(userID), "/chef/dashboard")
+
+	require.EqualValues(t, 5, dash["weekOrders"], "the tab counter counts every paid order")
+	require.EqualValues(t, 3, dash["weekSettledOrders"], "the money line counts the ones that paid out")
+	require.InDelta(t, 1260.0, dash["weekRevenue"], 0.005, "3 × (400 food + 20 food GST)")
+}
+
 func TestChefSettledEarnings_EmptyWindow(t *testing.T) {
 	_, chef := setupSettledEarningsDB(t)
 	now := time.Now()
