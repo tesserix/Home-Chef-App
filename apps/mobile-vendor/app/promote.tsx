@@ -57,6 +57,9 @@ export default function PromoteScreen() {
     // slug shown here instead of leaving a stale copy behind.
     queryKey: ['chef', 'profile'],
     queryFn: () => api.get<PromoteProfile>('/chef/profile').then((r) => r.data),
+    // Likes and subscribers move while the chef is elsewhere in the app; the
+    // shared cache was serving counts from whenever Profile last loaded.
+    refetchOnMount: 'always',
   });
   const { data: articleData } = useMyArticles();
 

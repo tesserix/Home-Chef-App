@@ -987,8 +987,13 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"totalReviews":  chef.TotalReviews,
 		// Computed lifetime count, not chef.TotalOrders — that denormalized
 		// counter drifted to 0 for chefs with live orders.
-		"totalOrders":     totalOrdersCount,
-		"acceptingOrders": chef.AcceptingOrders,
+		"totalOrders": totalOrdersCount,
+		// The kitchen's audience, so the dashboard can show what Promote is
+		// earning without a second request.
+		"likeCount":            chef.LikeCount,
+		"subscriberCount":      chef.SubscriberCount,
+		"articleReactionCount": chef.ArticleReactionCount,
+		"acceptingOrders":      chef.AcceptingOrders,
 		"pausedUntil":     chef.PausedUntil,
 		// Test-chef mode: drives the vendor app's TEST MODE banner. A chef must
 		// never mistake sandbox figures for real earnings, and the numbers above

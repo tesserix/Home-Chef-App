@@ -35,6 +35,7 @@
     "totalOrders": "Total orders",
     "thisWeek": "THIS WEEK",
     "weekSummary": "₹{{amount}} · {{count}} orders",
+    "audience": "AUDIENCE",
     "today": "TODAY",
     "actionRequired": "ACTION REQUIRED",
     "inProgress": "IN PROGRESS",

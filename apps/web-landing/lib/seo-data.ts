@@ -27,6 +27,9 @@ export interface SeoChef {
   priceRange?: string;
   verified: boolean;
   foodSafety: boolean;
+  /** Social proof the chef earns from the app's Promote screen. */
+  likes: number;
+  subscribers: number;
 }
 
 export interface SeoGroup {
@@ -59,6 +62,8 @@ interface ApiChef {
   priceRange?: string;
   verified?: boolean;
   foodSafetyBadge?: boolean;
+  likeCount?: number;
+  subscriberCount?: number;
 }
 
 export function slugify(s: string): string {
@@ -87,6 +92,8 @@ function mapChef(c: ApiChef): SeoChef {
     priceRange: c.priceRange,
     verified: Boolean(c.verified),
     foodSafety: Boolean(c.foodSafetyBadge),
+    likes: c.likeCount ?? 0,
+    subscribers: c.subscriberCount ?? 0,
   };
 }
 

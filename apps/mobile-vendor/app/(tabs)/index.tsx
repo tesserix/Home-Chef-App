@@ -21,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Bell } from 'lucide-react-native';
+import { Bell, Heart } from 'lucide-react-native';
 import {
   useUnreadCount,
   useNotificationSocket,
@@ -430,6 +430,12 @@ export default function DashboardScreen() {
   // of a misleading "0.0★".
   const hasReviews = (dashboard?.totalReviews ?? 0) > 0;
 
+  // Audience line — hidden at zero rather than showing "0 · 0", which reads as
+  // a failure the chef can do nothing about on a kitchen nobody has found yet.
+  const likeCount = dashboard?.likeCount ?? 0;
+  const subscriberCount = dashboard?.subscriberCount ?? 0;
+  const showAudience = !isLoading && (likeCount > 0 || subscriberCount > 0);
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -647,19 +653,45 @@ export default function DashboardScreen() {
           )}
         </Animated.View>
 
-        {/* This-week snapshot — one quiet line of trend context beyond today's
-            numbers, only when there's a week to show. */}
-        {(dashboard?.weekOrders ?? 0) > 0 && (
-          <View style={styles.weekRow}>
-            <Text style={styles.weekLabel}>{t('dashboard.thisWeek')}</Text>
-            <Text style={styles.weekValue} numberOfLines={1}>
-              {t('dashboard.weekSummary', {
-                amount: Math.round(
-                  dashboard?.weekRevenue ?? 0,
-                ).toLocaleString('en-IN'),
-                count: dashboard?.weekOrders ?? 0,
-              })}
-            </Text>
+        {/* Quiet context lines under the hero: the week's trend, then the
+            kitchen's audience. Both share one container so they keep the same
+            label/value alignment whichever of them renders. */}
+        {((dashboard?.weekOrders ?? 0) > 0 || showAudience) && (
+          <View style={styles.metaRows}>
+            {(dashboard?.weekOrders ?? 0) > 0 && (
+              <View style={styles.metaRow}>
+                <Text style={styles.weekLabel}>{t('dashboard.thisWeek')}</Text>
+                <Text style={styles.weekValue} numberOfLines={1}>
+                  {t('dashboard.weekSummary', {
+                    amount: Math.round(
+                      dashboard?.weekRevenue ?? 0,
+                    ).toLocaleString('en-IN'),
+                    count: dashboard?.weekOrders ?? 0,
+                  })}
+                </Text>
+              </View>
+            )}
+            {showAudience && (
+              <Pressable
+                onPress={() => router.push('/promote')}
+                accessibilityRole="button"
+                accessibilityLabel={`${likeCount} likes and ${subscriberCount} subscribers. Tap to promote your kitchen.`}
+                hitSlop={8}
+                style={styles.metaRow}
+              >
+                <Text style={styles.weekLabel}>{t('dashboard.audience')}</Text>
+                {/* Icons rather than words: the same heart and bell the
+                    customer taps, and no "1 likes" plural to translate. */}
+                <View style={styles.audienceCounts}>
+                  <Heart size={14} color={theme.colors.ink.soft} strokeWidth={2} />
+                  <Text style={styles.audienceValue}>{likeCount}</Text>
+                  <Bell size={14} color={theme.colors.ink.soft} strokeWidth={2} />
+                  <Text style={[styles.audienceValue, styles.audienceValueLast]}>
+                    {subscriberCount}
+                  </Text>
+                </View>
+              </Pressable>
+            )}
           </View>
         )}
 
@@ -1425,14 +1457,35 @@ const styles = StyleSheet.create({
   fssaiCardClear: { paddingHorizontal: theme.spacing[1] },
   fssaiCardClearText: { fontSize: 16, color: theme.colors.ink.muted },
 
-  weekRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // Context lines under the hero. The container owns the spacing so the rows
+  // inside stay on one alignment however many of them render.
+  metaRows: {
     marginTop: -theme.spacing[4],
     marginBottom: theme.spacing[6],
     paddingHorizontal: theme.spacing[1],
+    gap: theme.spacing[2],
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  audienceCounts: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    marginLeft: theme.spacing[3],
+  },
+  // Same type as weekValue, without its left margin — the row's gap spaces
+  // these, so each pair reads as one icon-and-number unit.
+  audienceValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+    marginRight: theme.spacing[2],
+  },
+  audienceValueLast: { marginRight: 0 },
   weekLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,

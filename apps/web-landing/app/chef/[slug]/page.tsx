@@ -72,6 +72,12 @@ export default async function ChefPage({ params }: { params: Promise<{ slug: str
             {chef.city ? <span>{[chef.city, chef.state].filter(Boolean).join(', ')}</span> : null}
             {chef.foodSafety ? <span className="text-green-700">✓ Food-safety verified</span> : null}
             {chef.priceRange ? <span>{chef.priceRange}</span> : null}
+            {/* The shared link a chef promotes should carry the audience they
+                built. Hidden at zero rather than advertising an empty kitchen. */}
+            {chef.subscribers > 0 ? (
+              <span className="tabular-nums">{chef.subscribers} subscribers</span>
+            ) : null}
+            {chef.likes > 0 ? <span className="tabular-nums">{chef.likes} likes</span> : null}
           </div>
         </header>
 

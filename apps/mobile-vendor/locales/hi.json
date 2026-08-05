@@ -35,6 +35,7 @@
     "totalOrders": "कुल ऑर्डर",
     "thisWeek": "इस हफ़्ते",
     "weekSummary": "₹{{amount}} · {{count}} ऑर्डर",
+    "audience": "ऑडियंस",
     "today": "आज",
     "actionRequired": "कार्रवाई आवश्यक",
     "inProgress": "प्रगति पर",

@@ -15,6 +15,11 @@ export interface DashboardData {
   totalEarnings?: number;
   /** Lifetime order count (chef.TotalOrders). */
   totalOrders?: number;
+  /** Kitchen audience — what the Promote screen is earning. Optional: a client
+   * can outrun the API deploy that added them. */
+  likeCount?: number;
+  subscriberCount?: number;
+  articleReactionCount?: number;
   rating: number;
   totalReviews: number;
   acceptingOrders: boolean;
