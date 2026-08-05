@@ -62,24 +62,42 @@ func QuoteOrderDeliveryFee(chef models.ChefProfile, fulfillment models.Fulfillme
 // dropLat/dropLng may be 0: the distance component is then unknown and only the
 // base applies, matching CreateOrder's fallback.
 func QuoteOrderDeliveryFeeCtx(chef models.ChefProfile, fulfillment models.FulfillmentType, dropLat, dropLng float64, city, country string, surge float64) float64 {
+	return QuoteOrderDelivery(chef, fulfillment, dropLat, dropLng, city, country, surge).Fee
+}
+
+// OrderDeliveryQuote is a delivery fee together with whose price it is. The
+// source is persisted on the order (Order.DeliveryFeeSource) because a delivery
+// order is created before anyone picks a carrier, and only the source says
+// whether the money is the kitchen's.
+type OrderDeliveryQuote struct {
+	Fee    float64
+	Source string
+}
+
+// QuoteOrderDelivery is QuoteOrderDeliveryFeeCtx with the attribution kept.
+func QuoteOrderDelivery(chef models.ChefProfile, fulfillment models.FulfillmentType, dropLat, dropLng float64, city, country string, surge float64) OrderDeliveryQuote {
+	selfDelivery := func() OrderDeliveryQuote {
+		return OrderDeliveryQuote{
+			Fee:    computeSelfDeliveryBreakdown(chef, dropLat, dropLng, surge).Fee,
+			Source: models.DeliveryFeeSourceChef,
+		}
+	}
 	switch fulfillment {
 	case models.FulfillmentPickup:
-		return 0
+		return OrderDeliveryQuote{}
 	case models.FulfillmentChefDelivery:
-		return computeSelfDeliveryBreakdown(chef, dropLat, dropLng, surge).Fee
+		return selfDelivery()
 	default: // FulfillmentDelivery
 		// A live 3PL provider quotes the leg it will carry — their price already
 		// reflects their own conditions, so platform surge must not double-count it.
 		if fee, ok := QuoteCheckoutDeliveryFee(chef, city, country, dropLat, dropLng); ok {
-			return fee
+			return OrderDeliveryQuote{Fee: fee, Source: models.DeliveryFeeSourceProvider}
 		}
-		// 3PL dark → the chef self-delivers, so charge the self-delivery fee (#703).
-		// This is the "approx max" taken upfront; the chef can bring it DOWN at
-		// accept and the difference is refunded.
+		// 3PL dark → the chef will carry it, so charge the chef's own published price.
 		if chef.OffersSelfDelivery {
-			return computeSelfDeliveryBreakdown(chef, dropLat, dropLng, surge).Fee
+			return selfDelivery()
 		}
-		return GetPlatformPolicy().BaseDeliveryFee
+		return OrderDeliveryQuote{Fee: GetPlatformPolicy().BaseDeliveryFee, Source: models.DeliveryFeeSourcePlatform}
 	}
 }
 
@@ -98,6 +116,12 @@ func QuoteOrderDeliveryFeeCtx(chef models.ChefProfile, fulfillment models.Fulfil
 // fee is quoted and flat is false.
 func DeliveryFeeFrom(chef models.ChefProfile) (fee float64, flat bool) {
 	if chef.OffersSelfDelivery {
+		// A published ladder states the answer outright: the nearest band is the
+		// cheapest this kitchen delivers for, and a single band holds at any
+		// distance the chef covers.
+		if tiers := chef.DeliveryTiers(); len(tiers) > 0 {
+			return tiers[0].Fee, len(tiers) == 1
+		}
 		// Inside the chef's free radius the whole fee is waived — the flat base
 		// included — so for anyone close enough the floor is zero, not the base.
 		// Quoting the base here would overstate the cheapest this kitchen can be.

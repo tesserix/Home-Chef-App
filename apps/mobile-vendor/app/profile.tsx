@@ -25,6 +25,16 @@ import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
 import { useStates } from '../hooks/useLocations';
 import { ImageCropper } from '../components/ImageCropper';
+import { DeliveryTierEditor } from '../components/vendor/DeliveryTierEditor';
+import {
+  DEFAULT_DELIVERY_FEE_CAP,
+  type DeliveryFeeCap,
+  type DeliveryTier,
+  type TierRow,
+  rowsFromTiers,
+  tiersFromRows,
+  validateTierRows,
+} from '../lib/deliveryTiers';
 
 // ---- Data types -----------------------------------------------------------
 // Matches the backend GET /chef/profile response.
@@ -51,6 +61,10 @@ interface ChefProfile {
   selfDeliveryPerKm: number;
   selfDeliveryMaxFee: number;
   selfDeliveryMaxDistanceKm: number;
+  // The chef's published distance→fee ladder. When set it overrides the
+  // base/perKm formula above and is the exact fee the customer pays.
+  selfDeliveryTiers: DeliveryTier[];
+  deliveryFeeCap: DeliveryFeeCap;
   kitchenPhotos: string[];
   addressLine1: string;
   addressLine2: string;
@@ -79,6 +93,7 @@ interface UpdateChefProfilePayload {
   selfDeliveryPerKm?: number;
   selfDeliveryMaxFee?: number;
   selfDeliveryMaxDistanceKm?: number;
+  selfDeliveryTiers?: DeliveryTier[];
 }
 
 // Preset lists — chip selectors instead of free-text input wherever the
@@ -339,6 +354,10 @@ export default function ProfileScreen() {
   const [selfDeliveryPerKm, setSelfDeliveryPerKm] = useState('');
   const [selfDeliveryMaxFee, setSelfDeliveryMaxFee] = useState('');
   const [selfDeliveryMaxDistance, setSelfDeliveryMaxDistance] = useState('');
+  const [tierRows, setTierRows] = useState<TierRow[]>([]);
+  // The server's ceiling on chef delivery pricing, so the editor can state the
+  // limit rather than only rejecting a band after the chef types it.
+  const deliveryFeeCap: DeliveryFeeCap = data?.deliveryFeeCap ?? DEFAULT_DELIVERY_FEE_CAP;
 
   // Dirty against last-known server values — drives the disabled state of
   // the always-visible save button and the back-discard prompt.
@@ -365,7 +384,9 @@ export default function ProfileScreen() {
       parseNumber(selfDeliveryPerKm) !== (data.selfDeliveryPerKm ?? 0) ||
       parseNumber(selfDeliveryMaxFee) !== (data.selfDeliveryMaxFee ?? 0) ||
       parseNumber(selfDeliveryMaxDistance) !==
-        (data.selfDeliveryMaxDistanceKm ?? 0));
+        (data.selfDeliveryMaxDistanceKm ?? 0) ||
+      JSON.stringify(tiersFromRows(tierRows)) !==
+        JSON.stringify(data.selfDeliveryTiers ?? []));
 
   // Sync local form state when data loads (including after a successful save
   // which invalidates the query and re-fetches). Clear savedRef so that
@@ -408,6 +429,7 @@ export default function ProfileScreen() {
           ? String(data.selfDeliveryMaxDistanceKm)
           : '',
       );
+      setTierRows(rowsFromTiers(data.selfDeliveryTiers));
       savedRef.current = false;
     }
   }, [data]);
@@ -440,6 +462,7 @@ export default function ProfileScreen() {
       selfDeliveryPerKm: parseNumber(selfDeliveryPerKm),
       selfDeliveryMaxFee: parseNumber(selfDeliveryMaxFee),
       selfDeliveryMaxDistanceKm: parseNumber(selfDeliveryMaxDistance),
+      selfDeliveryTiers: tiersFromRows(tierRows),
     };
   }
 
@@ -449,6 +472,11 @@ export default function ProfileScreen() {
         'Business name required',
         'Enter the name customers will see on the storefront.',
       );
+      return;
+    }
+    const tierError = validateTierRows(tierRows, deliveryFeeCap);
+    if (tierError) {
+      showAlert('Check your delivery pricing', tierError);
       return;
     }
     const payload = buildPayload();
@@ -952,10 +980,18 @@ export default function ProfileScreen() {
           </View>
 
           {/* Self-delivery pricing + comfort radius — only relevant when the
-              chef delivers themselves. Fee = base + max(0, distance −
-              freeRadius) × perKm, capped at maxFee. All blank/0 = free. */}
+              chef delivers themselves. A published ladder overrides the
+              base/perKm formula entirely; without one, fee = base + max(0,
+              distance − freeRadius) × perKm, capped at maxFee. */}
           {offersSelfDelivery ? (
             <>
+              <Text style={styles.sectionLabel}>DELIVERY PRICE BY DISTANCE</Text>
+              <DeliveryTierEditor
+                rows={tierRows}
+                cap={deliveryFeeCap}
+                onChange={setTierRows}
+              />
+
               <Text style={styles.sectionLabel}>SELF-DELIVERY PRICING</Text>
               <View style={styles.hairlineGroup}>
                 <EditableField
@@ -989,8 +1025,8 @@ export default function ProfileScreen() {
                 />
               </View>
               <Text style={styles.fieldGroupHint}>
-                Customers see this fee at checkout. Leave everything blank to
-                deliver for free.
+                Used only when you haven't set distance bands above. Leave
+                everything blank to deliver for free.
               </Text>
 
               <Text style={styles.sectionLabel}>DELIVERY RANGE</Text>

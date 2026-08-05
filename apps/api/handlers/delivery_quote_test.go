@@ -30,6 +30,7 @@ func setupQuoteDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 		id text PRIMARY KEY, user_id text, business_name text, is_active integer DEFAULT 1,
 		offers_pickup integer DEFAULT 0, offers_self_delivery integer DEFAULT 0,
+		self_delivery_tiers text DEFAULT '[]',
 		self_delivery_base_fee real DEFAULT 0, self_delivery_free_radius_km real DEFAULT 0,
 		self_delivery_per_km real DEFAULT 0, self_delivery_max_fee real DEFAULT 0,
 		self_delivery_max_distance_km real DEFAULT 0,

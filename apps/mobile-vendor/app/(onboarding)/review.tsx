@@ -145,6 +145,7 @@ export default function ReviewScreen() {
         serviceRadius: operations.serviceRadius,
         offersPickup: operations.offersPickup,
         offersSelfDelivery: operations.offersSelfDelivery,
+        selfDeliveryTiers: operations.selfDeliveryTiers,
         operatingHours: operations.operatingHours,
         acceptedTerms: policies.acceptedTerms,
         cancellationPolicy: policies.cancellationPolicy,

@@ -728,8 +728,13 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		// they were omitted the toggles always re-read as OFF after a reload, and
 		// the next save echoed that stale OFF straight back into the DB, silently
 		// disabling pickup/self-delivery the chef had turned on.
-		"offersPickup":              chef.OffersPickup,
-		"offersSelfDelivery":        chef.OffersSelfDelivery,
+		"offersPickup":       chef.OffersPickup,
+		"offersSelfDelivery": chef.OffersSelfDelivery,
+		// The published ladder plus the ceiling it is validated against, so the
+		// vendor app can show the chef what each band is allowed to cost instead of
+		// discovering it from a 400.
+		"selfDeliveryTiers":         chef.DeliveryTiers(),
+		"deliveryFeeCap":            services.ChefDeliveryFeeCap(),
 		"selfDeliveryBaseFee":       chef.SelfDeliveryBaseFee,
 		"selfDeliveryFreeRadiusKm":  chef.SelfDeliveryFreeRadiusKm,
 		"selfDeliveryPerKm":         chef.SelfDeliveryPerKm,
@@ -994,7 +999,7 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"subscriberCount":      chef.SubscriberCount,
 		"articleReactionCount": chef.ArticleReactionCount,
 		"acceptingOrders":      chef.AcceptingOrders,
-		"pausedUntil":     chef.PausedUntil,
+		"pausedUntil":          chef.PausedUntil,
 		// Test-chef mode: drives the vendor app's TEST MODE banner. A chef must
 		// never mistake sandbox figures for real earnings, and the numbers above
 		// are the sandbox's own while the kitchen is in test.
@@ -1059,8 +1064,11 @@ type UpdateChefProfileRequest struct {
 	AcceptingOrders     *bool    `json:"acceptingOrders"`
 	AutoScheduleEnabled *bool    `json:"autoScheduleEnabled"`
 	OffersPickup        *bool    `json:"offersPickup"`
-	// Chef self-delivery offering + pricing (Phase 2).
+	// Chef self-delivery offering + pricing. SelfDeliveryTiers is the published
+	// distance→fee ladder and takes precedence over the base/per-km fields; an
+	// empty array clears it and falls back to them.
 	OffersSelfDelivery        *bool                      `json:"offersSelfDelivery"`
+	SelfDeliveryTiers         *models.DeliveryFeeTiers   `json:"selfDeliveryTiers"`
 	SelfDeliveryBaseFee       *float64                   `json:"selfDeliveryBaseFee"`
 	SelfDeliveryFreeRadiusKm  *float64                   `json:"selfDeliveryFreeRadiusKm"`
 	SelfDeliveryPerKm         *float64                   `json:"selfDeliveryPerKm"`
@@ -1147,6 +1155,14 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 	}
 	if req.OffersSelfDelivery != nil {
 		chef.OffersSelfDelivery = *req.OffersSelfDelivery
+	}
+	if req.SelfDeliveryTiers != nil {
+		tiers := *req.SelfDeliveryTiers
+		if err := services.ValidateChefDeliveryTiers(tiers); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		chef.SelfDeliveryTiers = tiers.JSON()
 	}
 	if req.SelfDeliveryBaseFee != nil {
 		chef.SelfDeliveryBaseFee = *req.SelfDeliveryBaseFee
@@ -1506,10 +1522,6 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		// requested time or proposes a different ready/arrival time. Nil at accept =
 		// confirm the customer's request as-is (or "as soon as ready" if none).
 		ConfirmedFulfillmentAt *time.Time `json:"confirmedFulfillmentAt"`
-		// Delivery fee the chef chooses at ACCEPT (#703): 0 ≤ it ≤ the charged
-		// approx-max. Nil = confirm the charged fee as-is. A lower value refunds the
-		// difference to the customer. Ignored for non-delivery orders.
-		DeliveryFee *float64 `json:"deliveryFee"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -1739,21 +1751,9 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	switch order.Status {
 	case models.OrderStatusAccepted:
 		services.SignalOrderChefDecision(order.ID, true, "")
-		// Chef's delivery-fee decision (#703): only for a self-delivery order, only
-		// on the FIRST accept, and only when the chef actually sent a fee. Brings the
-		// charged approx-max DOWN to the chef's number and refunds the difference to
-		// the customer; the accept notification below tells them their order was
-		// accepted, and the order detail shows the reduced fee + refund.
-		if priorStatus == models.OrderStatusPending &&
-			order.FulfillmentType != models.FulfillmentPickup && req.DeliveryFee != nil {
-			finalFee, refunded, adjErr := services.AdjustDeliveryFeeAtAccept(c.Request.Context(), &order, *req.DeliveryFee)
-			if adjErr != nil {
-				log.Printf("delivery-fee-adjust failed order=%s: %v", order.ID, adjErr)
-			} else if refunded > 0 {
-				log.Printf("delivery-fee reduced by chef order=%s finalFee=%.2f refunded=%.2f", order.ID, finalFee, refunded)
-				services.NotifyDeliveryFeeRefund(order, finalFee, refunded)
-			}
-		}
+		// The delivery fee is the chef's own published price for the distance and is
+		// settled at checkout — accepting never re-prices it. (Orders placed before
+		// that rule carry delivery_fee_final and are still displayed from it.)
 	case models.OrderStatusReady:
 		services.SignalOrderReady(order.ID)
 	case models.OrderStatusDelivered:

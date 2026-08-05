@@ -61,6 +61,36 @@ func ResolveAcceptFulfillmentTime(requested, chefProvided *time.Time) (*time.Tim
 // use THIS, not the raw DeliveryFee: after #703 already refunded the (estimate −
 // final) difference, refunding the full estimate again would double-refund the
 // delivery portion, and paying the chef the full estimate would over-pay them.
+// ChefEarnsDeliveryFee reports whether the delivery fee on this order is the
+// kitchen's money.
+//
+// It is, once the chef is recorded as the carrier. Before Mark Ready nobody has
+// chosen a carrier yet, so a fee priced from the chef's OWN published rates is
+// projected as theirs — that projection is the figure the chef accepts the order
+// on, and omitting it showed a payout that contradicted the customer's receipt.
+// A platform or 3PL fee is never the kitchen's, at any stage.
+func (o *Order) ChefEarnsDeliveryFee() bool {
+	switch o.FulfillmentType {
+	case FulfillmentPickup:
+		return false
+	case FulfillmentChefDelivery:
+		return true
+	default:
+		return o.DeliveryFeeSource == DeliveryFeeSourceChef && o.CarrierUnassigned()
+	}
+}
+
+// CarrierUnassigned is true while the order is still in the kitchen — Mark Ready
+// is where the delivery leg is handed to whoever carries it.
+func (o *Order) CarrierUnassigned() bool {
+	switch o.Status {
+	case OrderStatusPending, OrderStatusAccepted, OrderStatusPreparing:
+		return true
+	default:
+		return false
+	}
+}
+
 func (o *Order) EffectiveDeliveryFee() float64 {
 	if o.DeliveryFeeFinal != nil {
 		return *o.DeliveryFeeFinal
@@ -71,6 +101,11 @@ func (o *Order) EffectiveDeliveryFee() float64 {
 type OrderStatus string
 
 const (
+	// Who priced an order's delivery fee (Order.DeliveryFeeSource).
+	DeliveryFeeSourceChef     = "chef"
+	DeliveryFeeSourcePlatform = "platform"
+	DeliveryFeeSourceProvider = "provider"
+
 	OrderStatusPending    OrderStatus = "pending"
 	OrderStatusAccepted   OrderStatus = "accepted"
 	OrderStatusPreparing  OrderStatus = "preparing"
@@ -121,9 +156,15 @@ type Order struct {
 
 	// Pricing
 	Subtotal float64 `gorm:"not null" json:"subtotal"`
-	// DeliveryFee is the amount CHARGED upfront (the recommended self-delivery
-	// approx-max, #703). It stays frozen as the billed figure on the invoice.
+	// DeliveryFee is the amount CHARGED, from the chef's published pricing or the
+	// carrier's quote. It is settled at checkout and stays frozen as the billed
+	// figure on the invoice.
 	DeliveryFee float64 `gorm:"default:0" json:"deliveryFee"`
+	// DeliveryFeeSource records WHOSE price this was — the chef's own rates, the
+	// platform's flat fee, or a 3PL quote. It is the only way to know, before a
+	// carrier is chosen at Mark Ready, whether the fee is the kitchen's to earn.
+	// Empty on orders placed before the column existed.
+	DeliveryFeeSource string `gorm:"type:varchar(10)" json:"deliveryFeeSource,omitempty"`
 	// DeliveryFeeFinal is the fee the CHEF chose at accept (#703): 0 ≤ it ≤
 	// DeliveryFee. When set below DeliveryFee, the difference was refunded to the
 	// customer (tracked in RefundAmount) and the chef is settled on this figure.

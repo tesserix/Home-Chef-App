@@ -27,9 +27,15 @@ type ChefProfile struct {
 	DeliveryRadius float64        `gorm:"default:10" json:"deliveryRadius"` // in km
 	ServiceRadius  float64        `gorm:"default:10" json:"serviceRadius"`  // in km
 	OffersPickup   bool           `gorm:"default:false" json:"offersPickup"`
-	// Chef self-delivery (Phase 2): the chef delivers the order themselves, for
-	// free or a minimal distance-based fee. Fee = BaseFee + max(0, distanceKm −
+	// Chef self-delivery: the chef delivers the order themselves.
+	//
+	// SelfDeliveryTiers is the chef's published distance→fee ladder ("up to 5 km
+	// ₹75, up to 10 km ₹150") and is the price the customer pays — it overrides
+	// the platform base fee and the base/per-km columns below, which remain only
+	// for kitchens that never set a ladder. Fee = BaseFee + max(0, distanceKm −
 	// FreeRadiusKm) × PerKm, capped at MaxFee (0 = uncapped). All default 0.
+	// Either way the platform's own ceiling for the distance applies.
+	SelfDeliveryTiers        string  `gorm:"type:jsonb;default:'[]'" json:"-"`
 	OffersSelfDelivery       bool    `gorm:"default:false" json:"offersSelfDelivery"`
 	SelfDeliveryBaseFee      float64 `gorm:"default:0" json:"selfDeliveryBaseFee"`
 	SelfDeliveryFreeRadiusKm float64 `gorm:"default:0" json:"selfDeliveryFreeRadiusKm"`
@@ -383,19 +389,20 @@ type ChefProfileResponse struct {
 	DeliverableToYou *bool `json:"deliverableToYou,omitempty"`
 	// Chef self-delivery offering + pricing (Phase 2). Surfaced so the customer
 	// checkout selector can show the mode and compute its fee.
-	OffersSelfDelivery        bool    `json:"offersSelfDelivery"`
-	SelfDeliveryBaseFee       float64 `json:"selfDeliveryBaseFee"`
-	SelfDeliveryFreeRadiusKm  float64 `json:"selfDeliveryFreeRadiusKm"`
-	SelfDeliveryPerKm         float64 `json:"selfDeliveryPerKm"`
-	SelfDeliveryMaxFee        float64 `json:"selfDeliveryMaxFee"`
-	SelfDeliveryMaxDistanceKm float64 `json:"selfDeliveryMaxDistanceKm"`
-	Rating                    float64 `json:"rating"`
-	TotalReviews              int     `json:"totalReviews"`
-	LikeCount                 int     `json:"likeCount"`
-	SubscriberCount           int     `json:"subscriberCount"`
-	ArticleReactionCount      int     `json:"articleReactionCount"`
-	TotalOrders               int     `json:"totalOrders"`
-	IsVerified                bool    `json:"verified"`
+	OffersSelfDelivery        bool             `json:"offersSelfDelivery"`
+	SelfDeliveryTiers         DeliveryFeeTiers `json:"selfDeliveryTiers"`
+	SelfDeliveryBaseFee       float64          `json:"selfDeliveryBaseFee"`
+	SelfDeliveryFreeRadiusKm  float64          `json:"selfDeliveryFreeRadiusKm"`
+	SelfDeliveryPerKm         float64          `json:"selfDeliveryPerKm"`
+	SelfDeliveryMaxFee        float64          `json:"selfDeliveryMaxFee"`
+	SelfDeliveryMaxDistanceKm float64          `json:"selfDeliveryMaxDistanceKm"`
+	Rating                    float64          `json:"rating"`
+	TotalReviews              int              `json:"totalReviews"`
+	LikeCount                 int              `json:"likeCount"`
+	SubscriberCount           int              `json:"subscriberCount"`
+	ArticleReactionCount      int              `json:"articleReactionCount"`
+	TotalOrders               int              `json:"totalOrders"`
+	IsVerified                bool             `json:"verified"`
 	// FoodSafetyBadge: chef holds a verified, non-expired FSSAI licence (#35).
 	// Set by the handler (needs a DB lookup), so it's false on the bare model.
 	FoodSafetyBadge bool `json:"foodSafetyBadge"`
@@ -513,6 +520,7 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		ServiceRadius:             c.ServiceRadius,
 		OffersPickup:              c.OffersPickup,
 		OffersSelfDelivery:        c.OffersSelfDelivery,
+		SelfDeliveryTiers:         c.DeliveryTiers(),
 		SelfDeliveryBaseFee:       c.SelfDeliveryBaseFee,
 		SelfDeliveryFreeRadiusKm:  c.SelfDeliveryFreeRadiusKm,
 		SelfDeliveryPerKm:         c.SelfDeliveryPerKm,

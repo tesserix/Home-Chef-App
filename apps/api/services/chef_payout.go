@@ -40,10 +40,10 @@ type ChefPayoutBreakdown struct {
 
 // ComputeChefPayout builds an order's chef payout.
 //
-// The delivery fee counts ONLY when the chef carried the leg themselves — under
-// any other fulfilment the platform or a 3PL carried it and the fee is not the
-// kitchen's. A free-zone or pickup order contributes 0, and the caller renders
-// no delivery line at all rather than a ₹0 one.
+// The delivery fee counts ONLY when the leg is the chef's (ChefEarnsDeliveryFee)
+// — under any other fulfilment the platform or a 3PL carried it and the fee is
+// not the kitchen's. A free-zone or pickup order contributes 0, and the caller
+// renders no delivery line at all rather than a ₹0 one.
 //
 // Never negative: a penalty larger than the order cannot make the chef owe money
 // on it. The remainder stays outstanding in the penalty ledger.
@@ -53,14 +53,10 @@ func ComputeChefPayout(order *models.Order, penalty float64) ChefPayoutBreakdown
 		ChefTip:    Round2(order.ChefTip),
 		Penalty:    Round2(penalty),
 	}
-	if order.FulfillmentType == models.FulfillmentChefDelivery {
-		// The fee the chef actually settled on: they may have lowered it at accept
-		// (#703), and the difference was refunded to the customer.
-		fee := order.DeliveryFee
-		if order.DeliveryFeeFinal != nil {
-			fee = *order.DeliveryFeeFinal
-		}
-		if fee > 0 {
+	if order.ChefEarnsDeliveryFee() {
+		// EffectiveDeliveryFee, not the raw charge: an order from before delivery
+		// pricing was fixed at checkout may carry a reduced final fee.
+		if fee := order.EffectiveDeliveryFee(); fee > 0 {
 			b.DeliveryFee = Round2(fee)
 		}
 	}

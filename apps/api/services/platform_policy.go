@@ -30,6 +30,14 @@ type PlatformPolicy struct {
 	ChefPayoutPercent   float64 `json:"chefPayoutPercent"`   // of subtotal
 	DriverPayoutPercent float64 `json:"driverPayoutPercent"` // of deliveryFee
 
+	// Ceiling on what a self-delivering chef may charge for delivery, as
+	// base + perKm × distance, never above Max. A chef publishes their own
+	// distance→fee ladder and it is final at checkout, so this is the only thing
+	// standing between a customer and an arbitrary delivery price.
+	ChefDeliveryFeeCapBase  float64 `json:"chefDeliveryFeeCapBase"`
+	ChefDeliveryFeeCapPerKm float64 `json:"chefDeliveryFeeCapPerKm"`
+	ChefDeliveryFeeCapMax   float64 `json:"chefDeliveryFeeCapMax"`
+
 	// FSSAI filing service (fe3dr.com/fssai/). A chef asks us to obtain their
 	// registration; they pay one amount and we pay FSSAI out of it.
 	//
@@ -147,6 +155,12 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		PerKmDeliveryFee:    0.0,
 		ChefPayoutPercent:   80.0,
 		DriverPayoutPercent: 80.0,
+		// ₹30 at the door + ₹12/km, hard-stopped at ₹300 — a 5 km delivery may be
+		// priced up to ₹90 and a 10 km one up to ₹150, which brackets what home
+		// kitchens actually charge without licensing a ₹400 delivery.
+		ChefDeliveryFeeCapBase:  30.0,
+		ChefDeliveryFeeCapPerKm: 12.0,
+		ChefDeliveryFeeCapMax:   300.0,
 		// ON by owner's decision. It can still be switched off at runtime from
 		// Settings → Platform without a deploy, which is the control that matters
 		// for a flow handling money and identity documents.

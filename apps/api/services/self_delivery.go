@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"math"
 
 	"github.com/homechef/api/models"
 )
@@ -33,6 +34,16 @@ type SelfDeliveryFeeBreakdown struct {
 	// MaxFee is the chef's cap (0 = uncapped); Capped is true when it bit.
 	MaxFee float64 `json:"maxFee"`
 	Capped bool    `json:"capped"`
+	// TierApplied says the chef's published distance→fee ladder priced this
+	// delivery, in which case TierUpToKm names the band and every component above
+	// is zero — a band is a flat rate, not a base plus a distance calculation.
+	TierApplied bool    `json:"tierApplied"`
+	TierUpToKm  float64 `json:"tierUpToKm"`
+	// PlatformMaxFee is the platform's own ceiling for this delivery, and
+	// CappedByPlatform says it had to bite. It should never bite in practice —
+	// a chef's pricing is validated against it when they save it.
+	PlatformMaxFee   float64 `json:"platformMaxFee"`
+	CappedByPlatform bool    `json:"cappedByPlatform"`
 	// FuelSurge / SurgeMultiplier are the surge factors folded into the DISTANCE
 	// component for the customer ESTIMATE (#704+). Both are 1.0 on the charge-basis
 	// path (ComputeSelfDeliveryFeeBreakdown) — surge never changes what's charged.
@@ -77,14 +88,20 @@ func computeSelfDeliveryBreakdown(chef models.ChefProfile, dropLat, dropLng, sur
 		WeatherSurge:    1.0,
 		TrafficSurge:    1.0,
 	}
-	fee := chef.SelfDeliveryBaseFee
-
 	if chef.Latitude != 0 && chef.Longitude != 0 && dropLat != 0 && dropLng != 0 {
 		b.DistanceKnown = true
 		// Road distance, not straight line (#701): the chef drives roads, so the
 		// per-km fee should reflect the driven distance. RoadDistanceKm uses a real
 		// router when configured, else a winding-factor fallback — never blocks.
 		b.DistanceKm = RoadDistanceKm(chef.Latitude, chef.Longitude, dropLat, dropLng)
+	}
+
+	if tiers := chef.DeliveryTiers(); len(tiers) > 0 {
+		return applyTierPricing(b, tiers)
+	}
+
+	fee := chef.SelfDeliveryBaseFee
+	if b.DistanceKnown {
 		extra := b.DistanceKm - chef.SelfDeliveryFreeRadiusKm
 		// A chef who set no free radius has no free zone, so a zero-distance drop
 		// is not "inside" one — it just has nothing to bill for distance.
@@ -113,7 +130,95 @@ func computeSelfDeliveryBreakdown(chef models.ChefProfile, dropLat, dropLng, sur
 		fee = 0
 	}
 	b.Fee = fee
+	return capToPlatformCeiling(b, b.DistanceKm)
+}
+
+// applyTierPricing prices the delivery from the chef's published ladder. The
+// band is a FLAT rate: no base, no distance component, and no surge — the chef
+// published a price for the distance and that is what the customer pays.
+func applyTierPricing(b SelfDeliveryFeeBreakdown, tiers models.DeliveryFeeTiers) SelfDeliveryFeeBreakdown {
+	km := b.DistanceKm
+	if !b.DistanceKnown {
+		// Nothing measured the drop, so bill the nearest band rather than guessing
+		// upward against a customer who never agreed to the far one.
+		km = 0
+	}
+	tier, ok := tiers.TierForKm(km)
+	if !ok {
+		return b
+	}
+	b.BaseFee, b.PerKm, b.MaxFee, b.FreeRadiusKm = 0, 0, 0, 0
+	b.SurgeMultiplier = 1.0
+	b.TierApplied = true
+	b.TierUpToKm = tier.UpToKm
+	b.Fee = models.RoundAmount(tier.Fee)
+	b.WithinFreeZone = b.Fee == 0
+	// Ceiling checked at the band's distance, not the drop's: a 5 km band is one
+	// price for the whole band, so a short drop inside it isn't over-priced.
+	return capToPlatformCeiling(b, tier.UpToKm)
+}
+
+// capToPlatformCeiling holds any chef fee to what the platform allows at `km`.
+// Chef pricing is validated on save, so this is the backstop for pricing saved
+// before a ceiling change.
+func capToPlatformCeiling(b SelfDeliveryFeeBreakdown, km float64) SelfDeliveryFeeBreakdown {
+	b.PlatformMaxFee = MaxChefDeliveryFee(km)
+	if b.Fee > b.PlatformMaxFee {
+		b.Fee = b.PlatformMaxFee
+		b.CappedByPlatform = true
+	}
 	return b
+}
+
+// ValidateChefDeliveryTiers checks a ladder a chef is trying to save against
+// the live platform ceiling. Every surface that lets a chef set delivery pricing
+// must go through this — onboarding, the profile editor, admin edits.
+func ValidateChefDeliveryTiers(tiers models.DeliveryFeeTiers) error {
+	return tiers.Validate(MaxChefDeliveryFee)
+}
+
+// ChefDeliveryFeeCapPolicy is the ceiling in the shape the apps need it: enough
+// to draw the limit beside each band the chef is editing, rather than letting
+// them discover it from a rejected save.
+type ChefDeliveryFeeCapPolicy struct {
+	BaseFee  float64 `json:"baseFee"`
+	PerKm    float64 `json:"perKm"`
+	MaxFee   float64 `json:"maxFee"`
+	MaxBands int     `json:"maxBands"`
+	MaxKm    float64 `json:"maxKm"`
+}
+
+// ChefDeliveryFeeCap is the live ceiling. An unconfigured policy reads as the
+// shipped default: a zero ceiling would clamp every kitchen's delivery to free
+// rather than mean "no limit".
+func ChefDeliveryFeeCap() ChefDeliveryFeeCapPolicy {
+	p, def := GetPlatformPolicy(), DefaultPlatformPolicy()
+	cap := ChefDeliveryFeeCapPolicy{
+		BaseFee:  p.ChefDeliveryFeeCapBase,
+		PerKm:    p.ChefDeliveryFeeCapPerKm,
+		MaxFee:   p.ChefDeliveryFeeCapMax,
+		MaxBands: models.MaxDeliveryFeeTiers,
+		MaxKm:    models.MaxDeliveryTierKm,
+	}
+	if cap.BaseFee <= 0 {
+		cap.BaseFee = def.ChefDeliveryFeeCapBase
+	}
+	if cap.PerKm <= 0 {
+		cap.PerKm = def.ChefDeliveryFeeCapPerKm
+	}
+	if cap.MaxFee <= 0 {
+		cap.MaxFee = def.ChefDeliveryFeeCapMax
+	}
+	return cap
+}
+
+// MaxChefDeliveryFee is the most a chef may charge to deliver `km`.
+func MaxChefDeliveryFee(km float64) float64 {
+	if km < 0 {
+		km = 0
+	}
+	cap := ChefDeliveryFeeCap()
+	return models.RoundAmount(math.Min(cap.BaseFee+cap.PerKm*km, cap.MaxFee))
 }
 
 // EstimateSelfDeliveryFeeBreakdown is the customer-facing ESTIMATE: the charge
