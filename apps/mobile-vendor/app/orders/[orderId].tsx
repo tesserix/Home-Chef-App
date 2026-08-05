@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatMoney, moneyValue } from '../../lib/format';
 import {
   ActionSheetIOS,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -29,6 +27,7 @@ import {
   showAlertOutsideReact,
 } from '@homechef/mobile-shared/ui';
 import { DietIcon } from '../../components/vendor/DietIcon';
+import { OrderMessageThread } from '../../components/vendor/OrderMessageThread';
 import { OrderExpensesCard } from '../../components/OrderExpensesCard';
 import {
   useOrderDetail,
@@ -296,15 +295,6 @@ function Chip({ label, selected, onPress, grow }: ChipProps) {
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
     </Pressable>
   );
-}
-
-// Parses the chef's delivery-fee entry, clamped to [0, charged] — they can only
-// bring the customer's fee DOWN (#703). null = left blank, i.e. charge as-is.
-function parseDeliveryFeeInput(raw: string, charged: number): number | null {
-  if (raw.trim() === '') return null;
-  const n = parseFloat(raw);
-  if (Number.isNaN(n)) return null;
-  return Math.max(0, Math.min(n, charged));
 }
 
 function round2(n: number): number {
@@ -939,9 +929,6 @@ export default function OrderDetailScreen() {
   // Home-tiffin scheduling (#709): at accept the chef confirms the customer's
   // requested time (null) or bumps it by a preset when the kitchen needs longer.
   const [proposeOffsetMin, setProposeOffsetMin] = useState<number | null>(null);
-  // Chef's delivery-fee choice at accept (#703). Empty = charge the customer the
-  // recommended amount as-is; a number (0..charged) lowers it + refunds the diff.
-  const [deliveryFeeInput, setDeliveryFeeInput] = useState('');
   const updateStatus = useUpdateOrderStatus();
   const uploadPhoto = useUploadOrderPhoto();
   const cancelOrder = useCancelOrder(orderId);
@@ -1257,39 +1244,15 @@ export default function OrderDetailScreen() {
   const isPickup = order.fulfillmentType === 'pickup';
   const isChefDelivery = order.fulfillmentType === 'chef_delivery';
 
-  // Delivery fee (#703). The customer was charged `deliveryFee` upfront; at
-  // accept the chef can bring it down and the difference is refunded. The
-  // PRICING block has to follow what the chef is typing — showing the frozen
-  // charged figure made them commit to a total they had never actually seen.
+  // The delivery fee is the chef's own published price for the distance and is
+  // settled at checkout — accepting never re-prices it. Orders placed before
+  // that rule may carry a reduced deliveryFeeFinal and are displayed from it.
   const chargedDeliveryFee = pricing.deliveryFee;
-  const canEditDeliveryFee =
-    order.status === 'pending' && !isPickup && chargedDeliveryFee > 0;
-  const typedDeliveryFee = parseDeliveryFeeInput(
-    deliveryFeeInput,
-    chargedDeliveryFee,
-  );
-  // Before accept: what the chef is typing (blank = charge as-is). After:
-  // whatever they settled on.
-  const effectiveDeliveryFee = canEditDeliveryFee
-    ? (typedDeliveryFee ?? chargedDeliveryFee)
-    : (pricing.deliveryFeeFinal ?? chargedDeliveryFee);
+  const effectiveDeliveryFee = pricing.deliveryFeeFinal ?? chargedDeliveryFee;
   const deliveryFeeRefund = round2(chargedDeliveryFee - effectiveDeliveryFee);
 
-  // While the chef is typing a lower fee at accept (#703) the server's estimate
-  // still carries the charged one — so YOUR EARNINGS has to follow the keyboard,
-  // or the chef commits to a figure they never saw. Applies only to a leg the
-  // chef carries (payout.deliveryFee > 0); on a platform-carried order the fee
-  // was never theirs and lowering it changes nothing they earn. The server
-  // re-serves the authoritative payout the moment the accept lands.
-  const payoutDeliveryFee =
-    payout && canEditDeliveryFee && payout.deliveryFee > 0
-      ? round2(effectiveDeliveryFee)
-      : (payout?.deliveryFee ?? 0);
-  const payoutNet = payout
-    ? round2(payout.netPayout - (payout.deliveryFee - payoutDeliveryFee))
-    : 0;
-  // Total stays the frozen billed amount server-side; what the customer
-  // effectively pays is that minus the refunded delivery difference.
+  const payoutDeliveryFee = payout?.deliveryFee ?? 0;
+  const payoutNet = payout ? round2(payout.netPayout) : 0;
   const effectiveTotal = round2(pricing.total - deliveryFeeRefund);
 
   // Soft self-delivery distance warning: the chef set a comfort radius and this
@@ -1356,7 +1319,8 @@ export default function OrderDetailScreen() {
 
         {/* CUSTOMER section — first name only. Phone + direct call/message are
             intentionally not shown: the rider handles pickup→delivery, and
-            withholding contact prevents off-platform arrangements. */}
+            withholding contact prevents off-platform arrangements. The mediated
+            thread below is the sanctioned channel instead (#53). */}
         <SectionLabel>CUSTOMER</SectionLabel>
         <View style={styles.card}>
           <View style={styles.customerRow}>
@@ -1366,6 +1330,10 @@ export default function OrderDetailScreen() {
               </Text>
             </View>
           </View>
+        </View>
+
+        <View style={{ marginTop: theme.spacing[3] }}>
+          <OrderMessageThread orderId={order.id} />
         </View>
 
         {/* ITEMS section */}
@@ -1615,52 +1583,9 @@ export default function OrderDetailScreen() {
           </>
         ) : null}
 
-        {/* DELIVERY FEE (#703): the chef sets what they'll charge for delivery at
-            accept. The customer was charged the recommended approx-max upfront; the
-            chef can lower it (or ₹0 within their free zone) and the difference is
-            refunded. Only for a pending self-delivery order that has a fee. */}
-        {canEditDeliveryFee ? (
-          <>
-            <SectionLabel>DELIVERY FEE</SectionLabel>
-            <View style={styles.card}>
-              <View style={styles.deliveryFeeRow}>
-                <Text style={styles.timingLabel}>You'll charge</Text>
-                {/* Bordered field with a ₹ prefix. The bare right-aligned input
-                    read as static text, so the chef had no cue it was editable
-                    — the one control in this block that must invite a tap. */}
-                <View style={styles.deliveryFeeField}>
-                  <Text style={styles.deliveryFeePrefix}>₹</Text>
-                  <TextInput
-                    value={deliveryFeeInput}
-                    onChangeText={setDeliveryFeeInput}
-                    keyboardType="decimal-pad"
-                    placeholder={moneyValue(chargedDeliveryFee)}
-                    placeholderTextColor={theme.colors.ink.muted}
-                    style={styles.deliveryFeeInput}
-                    accessibilityLabel="Delivery fee you'll charge"
-                  />
-                </View>
-              </View>
-              {/* Live consequence of what they just typed — the same figures the
-                  PRICING block below now shows, so the decision is priced before
-                  they hit Accept. */}
-              {deliveryFeeRefund > 0 ? (
-                <View style={styles.deliveryFeeRefundRow}>
-                  <Text style={styles.timingLabel}>Refunded to customer</Text>
-                  <Text style={styles.deliveryFeeRefundValue}>
-                    −{formatMoney(deliveryFeeRefund)}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={styles.deliveryHint}>
-              Customer was charged ₹{chargedDeliveryFee.toFixed(0)} (recommended by
-              distance). Lower it — or ₹0 if they're inside your free zone — and the difference
-              is refunded to them. You can't charge more than ₹
-              {chargedDeliveryFee.toFixed(0)}.
-            </Text>
-          </>
-        ) : order.pricing.deliveryFee > 0 && typeof order.pricing.deliveryFeeFinal === 'number' ? (
+        {/* DELIVERY FEE: read-only. The customer paid the chef's published rate
+            for this distance at checkout and it is not re-priced at accept. */}
+        {order.pricing.deliveryFee > 0 && typeof order.pricing.deliveryFeeFinal === 'number' ? (
           <>
             <SectionLabel>DELIVERY FEE</SectionLabel>
             <View style={styles.card}>
@@ -1740,8 +1665,7 @@ export default function OrderDetailScreen() {
         {deliveryFeeRefund > 0 ? (
           <Text style={styles.deliveryHint}>
             Was ₹{pricing.total.toLocaleString('en-IN', { minimumFractionDigits: 0 })} —
-            ₹{deliveryFeeRefund.toFixed(0)} of delivery{' '}
-            {canEditDeliveryFee ? 'will be refunded' : 'was refunded'} to the customer.
+            ₹{deliveryFeeRefund.toFixed(0)} of delivery was refunded to the customer.
           </Text>
         ) : null}
 
@@ -1788,15 +1712,7 @@ export default function OrderDetailScreen() {
               : new Date(Date.now() + 45 * 60 * 1000);
             confirmedAt = new Date(base.getTime() + proposeOffsetMin * 60 * 1000).toISOString();
           }
-          // Chef's delivery-fee choice (#703): the same clamped figure the
-          // PRICING block priced above; undefined = blank, charge as-is.
-          triggerAction(
-            order.id,
-            'accepted',
-            undefined,
-            confirmedAt,
-            typedDeliveryFee ?? undefined,
-          );
+          triggerAction(order.id, 'accepted', undefined, confirmedAt);
         }}
         onReject={() => triggerAction(order.id, 'rejected')}
         onMarkPreparing={() => {
@@ -2240,58 +2156,6 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
 
-  // Delivery-fee input (#703)
-  deliveryFeeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    minHeight: 44,
-    gap: theme.spacing[3],
-  },
-  // Bordered container so the field reads as editable; matches the chip radius
-  // and hairline so the two control blocks look like one system.
-  deliveryFeeField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[1],
-    minHeight: 44,
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.mist.DEFAULT,
-    backgroundColor: theme.colors.bone,
-  },
-  deliveryFeePrefix: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.soft,
-  },
-  deliveryFeeInput: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.DEFAULT,
-    textAlign: 'right',
-    minWidth: 84,
-    paddingVertical: 6,
-    // Tabular figures — this sits directly above the pricing rows.
-    fontVariant: ['tabular-nums'],
-  },
-  deliveryFeeRefundRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing[4],
-    paddingBottom: theme.spacing[3],
-    gap: theme.spacing[3],
-  },
-  deliveryFeeRefundValue: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.success.DEFAULT,
-    fontVariant: ['tabular-nums'],
-  },
   // Explanatory copy that sits BELOW a card — aligned to the card gutter.
   deliveryHint: {
     fontFamily: 'Inter',
