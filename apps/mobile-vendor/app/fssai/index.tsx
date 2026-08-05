@@ -20,6 +20,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
@@ -157,8 +158,12 @@ export default function FssaiScreen() {
     }
   }
 
+  // Works for a draft AND for a paid request an admin has asked more of, so the
+  // target is the live request rather than the draft alone.
+  const uploadTarget = draft ?? (request?.infoRequested ? request : null);
+
   async function handleUpload(kind: FssaiDocumentKind) {
-    if (!draft) return;
+    if (!uploadTarget) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       showToast({ message: 'Allow photo access to attach your documents.', tone: 'error' });
@@ -174,7 +179,7 @@ export default function FssaiScreen() {
     setUploading(kind);
     try {
       await uploadDocument.mutateAsync({
-        requestId: draft.id,
+        requestId: uploadTarget.id,
         kind,
         uri: asset.uri,
         mimeType: asset.mimeType,
@@ -188,9 +193,9 @@ export default function FssaiScreen() {
   }
 
   async function handleRemove(kind: FssaiDocumentKind) {
-    if (!draft) return;
+    if (!uploadTarget) return;
     try {
-      await removeDocument.mutateAsync({ requestId: draft.id, kind });
+      await removeDocument.mutateAsync({ requestId: uploadTarget.id, kind });
     } catch (err) {
       reportError(err, 'Could not remove the document');
     }
@@ -284,7 +289,12 @@ export default function FssaiScreen() {
     <Shell>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {request && isFssaiPaid(request.status) ? (
-          <Tracker request={request} />
+          <Tracker
+            request={request}
+            uploading={uploading}
+            onUpload={handleUpload}
+            onRemove={handleRemove}
+          />
         ) : draft ? (
           <Draft
             request={draft}
@@ -483,10 +493,6 @@ function Draft({
   paying,
   notice,
 }: DraftProps) {
-  const byKind = new Map<FssaiDocumentKind, FssaiDocument>(
-    request.documents.map((d) => [d.kind, d]),
-  );
-
   return (
     <>
       <View style={styles.card}>
@@ -502,6 +508,58 @@ function Draft({
         FSSAI needs a photo of you and a government photo ID. Add an address proof
         only if your kitchen is somewhere other than the address on that ID.
       </Text>
+      <DocumentRows
+        request={request}
+        uploading={uploading}
+        onUpload={onUpload}
+        onRemove={onRemove}
+      />
+
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+
+      <PrimaryButton
+        label={
+          paying
+            ? 'Opening payment…'
+            : request.canPay
+              ? `Pay ${formatMoney(request.feeTotal)} and apply`
+              : 'Add your photo and photo ID to continue'
+        }
+        onPress={onPay}
+        disabled={!request.canPay || paying}
+      />
+
+      <Pressable
+        onPress={onCancel}
+        accessibilityRole="button"
+        accessibilityLabel="Discard this request"
+        style={styles.secondary}
+      >
+        <Text style={styles.secondaryText}>Discard this request</Text>
+      </Pressable>
+    </>
+  );
+}
+
+/** The three document rows. Shared by the draft (before paying) and the tracker
+ *  (when an admin has asked for something), so a chef sees one control in both
+ *  places rather than a second one written for the second case. */
+function DocumentRows({
+  request,
+  uploading,
+  onUpload,
+  onRemove,
+}: {
+  request: FssaiRequest;
+  uploading: FssaiDocumentKind | null;
+  onUpload: (kind: FssaiDocumentKind) => void;
+  onRemove: (kind: FssaiDocumentKind) => void;
+}) {
+  const byKind = new Map<FssaiDocumentKind, FssaiDocument>(
+    request.documents.map((d) => [d.kind, d]),
+  );
+  return (
+    <>
       {FSSAI_DOCUMENT_KINDS.map((kind) => {
         const doc = byKind.get(kind);
         const optional = kind === 'address_proof';
@@ -538,34 +596,21 @@ function Draft({
           </View>
         );
       })}
-
-      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-
-      <PrimaryButton
-        label={
-          paying
-            ? 'Opening payment…'
-            : request.canPay
-              ? `Pay ${formatMoney(request.feeTotal)} and apply`
-              : 'Add your photo and photo ID to continue'
-        }
-        onPress={onPay}
-        disabled={!request.canPay || paying}
-      />
-
-      <Pressable
-        onPress={onCancel}
-        accessibilityRole="button"
-        accessibilityLabel="Discard this request"
-        style={styles.secondary}
-      >
-        <Text style={styles.secondaryText}>Discard this request</Text>
-      </Pressable>
     </>
   );
 }
 
-function Tracker({ request }: { request: FssaiRequest }) {
+function Tracker({
+  request,
+  uploading,
+  onUpload,
+  onRemove,
+}: {
+  request: FssaiRequest;
+  uploading: FssaiDocumentKind | null;
+  onUpload: (kind: FssaiDocumentKind) => void;
+  onRemove: (kind: FssaiDocumentKind) => void;
+}) {
   const step = fssaiStepIndex(request.status);
   return (
     <>
@@ -602,6 +647,42 @@ function Tracker({ request }: { request: FssaiRequest }) {
             ) : null}
           </View>
         </>
+      ) : null}
+
+      {request.infoRequested ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>We need something from you</Text>
+          {/* The admin's own words. Paraphrasing here would be a second version
+              of the truth for the chef to reconcile. */}
+          <Text style={styles.body}>{request.infoRequested}</Text>
+          <Text style={styles.fine}>
+            Add it below and we'll carry on — you've already paid, nothing more is due.
+          </Text>
+        </View>
+      ) : null}
+
+      {request.infoRequested ? (
+        <DocumentRows
+          request={request}
+          uploading={uploading}
+          onUpload={onUpload}
+          onRemove={onRemove}
+        />
+      ) : null}
+
+      {request.licenseFileUrl ? (
+        <Pressable
+          onPress={() => void Linking.openURL(request.licenseFileUrl!)}
+          accessibilityRole="button"
+          accessibilityLabel="Download your FSSAI certificate"
+          style={styles.card}
+        >
+          <Text style={styles.cardTitle}>Your FSSAI certificate</Text>
+          <Text style={styles.body}>
+            {request.licenseFileName || 'Tap to download'} — this is the document to show if
+            anyone asks to see your registration.
+          </Text>
+        </Pressable>
       ) : null}
 
       {request.rejectedReason ? (
