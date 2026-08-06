@@ -69,13 +69,17 @@ import {
 } from '@homechef/mobile-shared/hooks';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
+import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
-import { useDiscoveryChefs } from '../../hooks/useDiscoveryChefs';
 import { useCustomerCoords, useActiveAddress } from '../../hooks/useCustomerCoords';
 import { useWallet } from '../../hooks/useWallet';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
+
+// Discovery reach (km) from the customer's location. Home kitchens are
+// hyperlocal — a kitchen further out can't cook for you, so it isn't shown.
+const NEARBY_RADIUS_KM = 30;
 
 // Android ripple tint for pills/rows on white or light surfaces — translucent
 // ink derived from the charcoal token (never a new literal colour), matching
@@ -204,18 +208,16 @@ export default function HomeScreen() {
     sort,
     lat: coords?.lat,
     lng: coords?.lng,
-    // Real near-me radius (km) — the API caps it. Keeps the feed to nearby
-    // kitchens instead of surfacing ones in other cities/states.
-    radius: coords ? 25 : undefined,
+    // Real near-me radius (km) — the API caps it. Nobody, guest or signed in,
+    // sees a kitchen further than this from where they are.
+    radius: coords ? NEARBY_RADIUS_KM : undefined,
     // Hard region gate: only kitchens in the delivery address's state.
     state: activeAddress?.state || undefined,
     limit: 20,
   };
 
-  // Guests with no kitchen in range fall back to kitchens beyond their area, so
-  // guest browsing always has something real to open.
-  const { chefs, isLoading, isFetching, refetch, showingBeyondArea } =
-    useDiscoveryChefs(filters);
+  const { data, isLoading, isFetching, refetch } = useChefs(filters);
+  const chefs = data?.data ?? [];
 
   // Staggered card entrances (reduced-motion gated). No bounce — ease-out-quart.
   const reduceMotion = useReducedMotion();
@@ -570,15 +572,6 @@ export default function HomeScreen() {
           ) : null}
         </View>
       </View>
-
-      {/* Nobody cooks where the guest is standing, so the feed reached past their
-          area. Say so plainly — these kitchens can't deliver to them yet. */}
-      {showingBeyondArea ? (
-        <Text style={styles.beyondAreaNote}>
-          No kitchens near you yet — here&apos;s what home chefs are cooking
-          elsewhere. Set your address to see who can deliver to you.
-        </Text>
-      ) : null}
 
       {/* Today's (or the next) meal for a plan holder (#1037). Renders nothing
           for everyone else, so Home is unchanged for the majority. It sits at
@@ -1089,16 +1082,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 12,
     color: customerColors.charcoal.DEFAULT,
-  },
-
-  beyondAreaNote: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    lineHeight: 18,
-    color: customerColors.charcoal.soft,
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 12,
   },
 
   // ── List layout ───────────────────────────────────────────────────────────
