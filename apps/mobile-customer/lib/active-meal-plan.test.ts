@@ -160,6 +160,74 @@ describe('selectActiveMealPlanMeal', () => {
     ).toBeNull();
   });
 
+  // Once a plan meal goes into preparation the platform mints a real order for
+  // it, which lands in the floating active-order card. Showing it here too
+  // described the same food twice, in two cards, at the moment it mattered most.
+  describe('meals already covered by the floating active-order card', () => {
+    it('skips the cooking meal and shows what is booked next', () => {
+      const got = selectActiveMealPlanMeal(
+        [
+          plan({
+            days: [
+              day({ date: TODAY, slot: 'lunch', status: 'prepared', orderId: 'o1', dishName: 'Cooking now' }),
+              day({ date: TODAY, slot: 'dinner', dishName: 'Up next' }),
+            ],
+          }),
+        ],
+        TODAY,
+        new Set(['o1']),
+      );
+      expect(got?.day.dishName).toBe('Up next');
+    });
+
+    it('hides entirely when the only meal left is the one already on screen', () => {
+      expect(
+        selectActiveMealPlanMeal(
+          [plan({ days: [day({ date: TODAY, status: 'prepared', orderId: 'o1' })] })],
+          TODAY,
+          new Set(['o1']),
+        ),
+      ).toBeNull();
+    });
+
+    it('still shows a meal whose order is NOT active — a delivered day keeps its row', () => {
+      const got = selectActiveMealPlanMeal(
+        [plan({ days: [day({ date: TODAY, orderId: 'o-old', dishName: 'Mine' })] })],
+        TODAY,
+        new Set(['o-other']),
+      );
+      expect(got?.day.dishName).toBe('Mine');
+    });
+
+    it('keeps counting the covered meal in the progress figure', () => {
+      // The customer IS eating meal 1 today; skipping it for display must not
+      // renumber the plan underneath them.
+      const got = selectActiveMealPlanMeal(
+        [
+          plan({
+            days: [
+              day({ date: TODAY, slot: 'lunch', status: 'prepared', orderId: 'o1' }),
+              day({ date: '2026-08-07' }),
+              day({ date: '2026-08-08' }),
+            ],
+          }),
+        ],
+        TODAY,
+        new Set(['o1']),
+      );
+      expect(got?.mealNumber).toBe(2);
+      expect(got?.totalMeals).toBe(3);
+    });
+
+    it('defaults to covering nothing when no active orders are passed', () => {
+      const got = selectActiveMealPlanMeal(
+        [plan({ days: [day({ date: TODAY, status: 'prepared', orderId: 'o1' })] })],
+        TODAY,
+      );
+      expect(got?.day.orderId).toBe('o1');
+    });
+  });
+
   it('handles no plans, and a plan with no days', () => {
     expect(selectActiveMealPlanMeal(undefined, TODAY)).toBeNull();
     expect(selectActiveMealPlanMeal([], TODAY)).toBeNull();

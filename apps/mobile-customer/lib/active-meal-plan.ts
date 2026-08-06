@@ -43,17 +43,32 @@ function byDateThenSlot(a: MealPlanDay, b: MealPlanDay): number {
  *    indefinitely, so trusting status alone would put a phantom "Scheduled" for
  *    last Tuesday on the Home screen. The date is the authority here, not the
  *    status.
+ *  - Never a meal the floating active-order card is already telling. See
+ *    `activeOrderIds` below.
  *  - Prefer the earliest still-to-come meal (today's before tomorrow's).
  *  - If everything from today on is already delivered, fall back to today's last
  *    meal so the card reads "Delivered" for the rest of the day instead of
  *    vanishing the moment lunch arrives.
  *  - Across several live plans, whichever meal lands soonest wins.
+ *
+ * `activeOrderIds` — the ids of orders currently in flight. Once a plan meal
+ * actually goes into preparation the platform mints a REAL order for it
+ * (services/meal_plan_fulfillment.go:257, status `pending`, source `meal_plan`),
+ * and `GetOrders` does not filter by source — so that meal is already on Home as
+ * a floating active-order card, with a live progress bar this card cannot match.
+ * Showing it here too described the same food twice, in two different cards, at
+ * the moment it mattered most. Skipping it hands the cooking meal to the card
+ * built for cooking and lets this one move on to what is booked NEXT, which is
+ * the question the order card cannot answer.
  */
 export function selectActiveMealPlanMeal(
   plans: MealPlan[] | undefined,
   todayKey: string,
+  activeOrderIds: ReadonlySet<string> = new Set(),
 ): ActiveMealPlanMeal | null {
   const candidates: ActiveMealPlanMeal[] = [];
+  const coveredByOrderCard = (d: MealPlanDay): boolean =>
+    Boolean(d.orderId && activeOrderIds.has(d.orderId));
 
   for (const plan of plans ?? []) {
     if (!isLiveMealPlanStatus(plan.status)) continue;
@@ -63,11 +78,15 @@ export function selectActiveMealPlanMeal(
       .sort(byDateThenSlot);
     if (standing.length === 0) continue;
 
-    const fromTodayOn = standing.filter((d) => toLocalDateKey(d.date) >= todayKey);
+    // Covered meals are excluded from SELECTION but stay in `standing`, so
+    // "Meal 3 of 5" keeps counting the meal the customer is eating today.
+    const selectable = standing.filter(
+      (d) => toLocalDateKey(d.date) >= todayKey && !coveredByOrderCard(d),
+    );
     const day =
-      fromTodayOn.find((d) => d.status !== 'delivered') ??
+      selectable.find((d) => d.status !== 'delivered') ??
       // Nothing left to come: keep today's last meal on screen, but only today's.
-      [...fromTodayOn].reverse().find((d) => toLocalDateKey(d.date) === todayKey);
+      [...selectable].reverse().find((d) => toLocalDateKey(d.date) === todayKey);
     if (!day) continue;
 
     candidates.push({

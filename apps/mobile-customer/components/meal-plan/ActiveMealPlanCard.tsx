@@ -22,6 +22,7 @@ import { CalendarCheck, ChevronRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
 import { useMyMealPlans } from '../../hooks/useMealPlans';
+import { useActiveOrder } from '../../hooks/useActiveOrder';
 import { mealPlanDayStatusMeta, toLocalDateKey } from '../../lib/meal-plan';
 import { selectActiveMealPlanMeal } from '../../lib/active-meal-plan';
 import { DietIcon } from '@homechef/mobile-shared/ui';
@@ -48,9 +49,19 @@ export function ActiveMealPlanCard() {
   // past midnight rolls to the new day on the next data tick rather than
   // insisting yesterday's meal is still "Today".
   const todayKey = toLocalDateKey(new Date().toISOString());
+
+  // A meal that is actually cooking already has its own floating active-order
+  // card (the plan mints a real order per meal), so hand it over and show what
+  // is booked NEXT instead of describing the same food twice.
+  const { orders: activeOrders } = useActiveOrder();
+  const activeOrderIds = useMemo(
+    () => new Set(activeOrders.map((o) => o.id)),
+    [activeOrders],
+  );
+
   const selected = useMemo(
-    () => selectActiveMealPlanMeal(data?.data, todayKey),
-    [data?.data, todayKey],
+    () => selectActiveMealPlanMeal(data?.data, todayKey, activeOrderIds),
+    [data?.data, todayKey, activeOrderIds],
   );
 
   if (!selected) return null;
