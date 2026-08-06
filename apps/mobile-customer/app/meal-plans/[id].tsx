@@ -38,6 +38,7 @@ import {
   isDeclinedDayStatus,
   toLocalDateKey,
 } from '../../lib/meal-plan';
+import { mealPlanApprovalCopy } from '../../lib/meal-plan-approval-copy';
 import { canConfirmReceipt } from '../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { MealPlanDayList } from '../../components/meal-plan/MealPlanDayList';
@@ -203,6 +204,10 @@ export default function MealPlanDetailScreen() {
     : mealPlanAdvanceBreakdown(plan);
   const refund = mealPlanRefundSummary(plan);
 
+  // Banner wording is derived, not fixed (#1036): "revised" is only true when
+  // the chef actually dropped something. Pure + unit-tested in lib/.
+  const approvalCopy = mealPlanApprovalCopy(days);
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <Header />
@@ -219,11 +224,8 @@ export default function MealPlanDetailScreen() {
 
         {needsApproval ? (
           <View style={styles.banner}>
-            <Text style={styles.bannerTitle}>Your chef revised this plan</Text>
-            <Text style={styles.bannerText}>
-              They can cook {acceptedDays.length} of {days.length} days. Approve
-              to confirm those, or reject to cancel the whole plan.
-            </Text>
+            <Text style={styles.bannerTitle}>{approvalCopy.title}</Text>
+            <Text style={styles.bannerText}>{approvalCopy.body}</Text>
           </View>
         ) : null}
 
@@ -306,7 +308,9 @@ export default function MealPlanDetailScreen() {
         </View>
         {needsApproval ? (
           <Text style={styles.totalNote}>
-            Estimated from your chef's accepted days. Confirmed at checkout.
+            {/* "meals", not "days" (#1040): plan.days holds booked meals, and a
+                plan can book both lunch and dinner on one date. */}
+            Estimated from your chef&apos;s accepted meals. Confirmed at checkout.
           </Text>
         ) : null}
 
@@ -356,7 +360,7 @@ export default function MealPlanDetailScreen() {
             onPress={approval.approve}
             disabled={approval.isPending}
             accessibilityRole="button"
-            accessibilityLabel={`Approve ${acceptedDays.length} days`}
+            accessibilityLabel={`Approve ${acceptedDays.length} meal${acceptedDays.length === 1 ? '' : 's'}`}
             android_ripple={approval.isPending ? undefined : { color: CANVAS_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (

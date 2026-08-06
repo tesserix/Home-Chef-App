@@ -19,7 +19,7 @@ export interface MealPlanApproval {
   approve: () => void;
   reject: () => void;
   isPending: boolean;
-  /** Number of days the chef can cook (declined days excluded) — for button copy. */
+  /** Number of meals the chef can cook (declined ones excluded) — for button copy. */
   acceptedCount: number;
 }
 
@@ -38,7 +38,9 @@ export function useMealPlanApproval(
     showAlert(
       approve ? 'Approve & pay?' : 'Reject plan?',
       approve
-        ? `Confirm the ${acceptedCount} day${acceptedCount === 1 ? '' : 's'} your chef can cook, then pay the advance (food + GST + delivery, shown at checkout) to lock them in.`
+        ? // "meal", not "day" (#1040) — plan.days holds booked meals, so a plan
+          // over 3 dates with lunch + dinner is 6 of these, not 3.
+          `Confirm the ${acceptedCount} meal${acceptedCount === 1 ? '' : 's'} your chef can cook, then pay the advance (food + GST + delivery, shown at checkout) to lock them in.`
         : 'This cancels the whole plan. You can book again any time.',
       [
         { text: 'Back', style: 'cancel' },
