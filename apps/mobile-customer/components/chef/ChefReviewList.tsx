@@ -10,13 +10,22 @@ import { useRef } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Image } from 'expo-image';
-import { MoreHorizontal, Star } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { MoreHorizontal, Pencil, Star, Trash2 } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { EmptyState, ReportSheet, type SheetHandle } from '@homechef/mobile-shared/ui';
+import {
+  EmptyState,
+  ReportSheet,
+  SheetBase,
+  useAlert,
+  type SheetHandle,
+} from '@homechef/mobile-shared/ui';
+import { useAuthStore } from '../../store/auth-store';
 import { useChefReviews, type ChefReview } from '../../hooks/useChefs';
 import { useReportContent, useBlockUser } from '../../hooks/useModeration';
-import { useAuthStore } from '../../store/auth-store';
 import { useProfile } from '../../hooks/useProfile';
+import { useDeleteReview } from '../../hooks/useReviewMutations';
+import { friendlyErrorMessage } from '../../lib/errors';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec (§3.5).
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -82,17 +91,39 @@ function ReviewRow({ review, viewerId }: ReviewRowProps) {
   // App Review 1.2 — reviews are user-generated content, so each row carries a
   // reachable report action and, where the reviewer's id is known, a block.
   const reportSheetRef = useRef<SheetHandle>(null);
+  const ownSheetRef = useRef<SheetHandle>(null);
   const reportContent = useReportContent();
   const blockUser = useBlockUser();
+  const deleteReview = useDeleteReview();
+  const router = useRouter();
+  const { showAlert } = useAlert();
 
   // Moderation is for OTHER people's content (#1047). The overflow rendered the
   // generic report/block sheet unconditionally, so on your own review the app
   // offered to report you to its own moderation queue and to "Block Priya S."
-  // — the signed-in customer, blocking herself, almost certainly into a broken
-  // self-referential block row. Your own review gets a quiet ownership marker
-  // instead. (Edit/Delete belong here too, but /v1/reviews is POST +
-  // GET-by-order only — no update or delete endpoint exists yet.)
+  // — the signed-in customer, blocking herself. Your own review gets edit and
+  // delete instead.
   const isOwnReview = Boolean(viewerId && review.customerId && review.customerId === viewerId);
+
+  function confirmDelete() {
+    ownSheetRef.current?.dismiss();
+    showAlert('Delete this review?', 'Your rating and comment will be removed from this kitchen.', [
+      { text: 'Keep review', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          deleteReview.mutate(
+            { reviewId: review.id, orderId: review.orderId },
+            {
+              onError: (e) =>
+                showAlert('Could not delete', friendlyErrorMessage(e, 'Please try again.')),
+            },
+          );
+        },
+      },
+    ]);
+  }
 
   return (
     <View style={styles.card}>
@@ -104,19 +135,19 @@ function ReviewRow({ review, viewerId }: ReviewRowProps) {
           </Text>
           <Text style={styles.date}>{formatRelativeDate(review.createdAt)}</Text>
         </View>
-        {isOwnReview ? (
-          <Text style={styles.ownBadge}>Your review</Text>
-        ) : (
-          <Pressable
-            onPress={() => reportSheetRef.current?.present()}
-            accessibilityRole="button"
-            accessibilityLabel="Report or block this reviewer"
-            hitSlop={8}
-            style={styles.reportButton}
-          >
-            <MoreHorizontal size={18} color={customerColors.charcoal.soft} />
-          </Pressable>
-        )}
+        <Pressable
+          onPress={() =>
+            isOwnReview ? ownSheetRef.current?.present() : reportSheetRef.current?.present()
+          }
+          accessibilityRole="button"
+          accessibilityLabel={
+            isOwnReview ? 'Edit or delete your review' : 'Report or block this reviewer'
+          }
+          hitSlop={8}
+          style={styles.reportButton}
+        >
+          <MoreHorizontal size={18} color={customerColors.charcoal.soft} />
+        </Pressable>
       </View>
       <View style={styles.starRow}>
         <Text style={styles.star}>★</Text>
@@ -134,7 +165,37 @@ function ReviewRow({ review, viewerId }: ReviewRowProps) {
         </View>
       ) : null}
 
-      {isOwnReview ? null : (
+      {isOwnReview ? (
+        <SheetBase ref={ownSheetRef} scrollable={false}>
+          <View style={styles.ownSheet}>
+            <Text style={styles.ownSheetTitle}>Your review</Text>
+            <Pressable
+              onPress={() => {
+                ownSheetRef.current?.dismiss();
+                if (review.orderId) router.push(`/order/${review.orderId}/review`);
+              }}
+              disabled={!review.orderId}
+              accessibilityRole="button"
+              accessibilityLabel="Edit review"
+              style={styles.ownSheetAction}
+            >
+              <Pencil size={18} color={customerColors.charcoal.DEFAULT} />
+              <Text style={styles.ownSheetActionText}>Edit review</Text>
+            </Pressable>
+            <Pressable
+              onPress={confirmDelete}
+              accessibilityRole="button"
+              accessibilityLabel="Delete review"
+              style={styles.ownSheetAction}
+            >
+              <Trash2 size={18} color={customerColors.destructive.DEFAULT} />
+              <Text style={[styles.ownSheetActionText, styles.ownSheetDestructive]}>
+                Delete review
+              </Text>
+            </Pressable>
+          </View>
+        </SheetBase>
+      ) : (
       <ReportSheet
         ref={reportSheetRef}
         subject="this review"
@@ -295,18 +356,36 @@ const styles = StyleSheet.create({
   headerTextCol: {
     flex: 1,
   },
+  ownSheet: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    gap: 4,
+  },
+  ownSheetTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 17,
+    color: customerColors.charcoal.DEFAULT,
+    marginBottom: 8,
+  },
+  ownSheetAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 52,
+  },
+  ownSheetActionText: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    color: customerColors.charcoal.DEFAULT,
+  },
+  ownSheetDestructive: {
+    color: customerColors.destructive.DEFAULT,
+  },
   reportButton: {
     minHeight: 44,
     minWidth: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // Ownership marker where the moderation overflow would sit — a label, not a
-  // control, so it needs no touch target.
-  ownBadge: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 11,
-    color: customerColors.charcoal.soft,
   },
   customerName: {
     fontFamily: 'Inter-SemiBold',

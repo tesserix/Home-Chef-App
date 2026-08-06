@@ -9,6 +9,7 @@ import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useCreateReview } from '../../../hooks/useCreateReview';
 import { useOrderReview } from '../../../hooks/useOrderReview';
+import { useUpdateReview, useDeleteReview } from '../../../hooks/useReviewMutations';
 import { friendlyErrorMessage } from '../../../lib/errors';
 
 // Android ripple tint for the star targets — translucent token, never a new
@@ -101,9 +102,15 @@ export default function OrderReviewScreen() {
   const order = data?.data;
   const { data: existingReview, isLoading: reviewLoading } = useOrderReview(id ?? '');
   const createReview = useCreateReview();
+  const updateReview = useUpdateReview();
+  const deleteReview = useDeleteReview();
   const { ready, draft, saveDraft, clearDraft } = useFormDraft<string>(
     `review-${id ?? 'unknown'}`,
   );
+
+  // Editing rewrites the review in place; the read state is the default so a
+  // customer sees what they wrote before they can change it (#1047).
+  const [editing, setEditing] = useState(false);
 
   const [overall, setOverall] = useState(0);
   const [food, setFood] = useState(0);
@@ -148,9 +155,67 @@ export default function OrderReviewScreen() {
     }));
   }, [dishes, existingReview]);
 
+  function startEditing() {
+    if (!existingReview) return;
+    setOverall(existingReview.overallRating);
+    setFood(existingReview.foodRating ?? 0);
+    setDelivery(existingReview.deliveryRating ?? 0);
+    setValue(existingReview.valueRating ?? 0);
+    setPackaging(existingReview.packagingRating ?? 0);
+    setHygiene(existingReview.hygieneRating ?? 0);
+    setTitle(existingReview.title ?? '');
+    setComment(existingReview.comment ?? '');
+    setEditing(true);
+  }
+
+  function confirmDelete() {
+    showAlert('Delete this review?', 'Your rating and comment will be removed from this kitchen.', [
+      { text: 'Keep review', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          if (!existingReview) return;
+          deleteReview.mutate(
+            { reviewId: existingReview.id, orderId: id },
+            {
+              onSuccess: () => router.back(),
+              onError: (e) =>
+                showAlert('Could not delete', friendlyErrorMessage(e, 'Please try again.')),
+            },
+          );
+        },
+      },
+    ]);
+  }
+
   function handleSubmit() {
     if (overall < 1) {
       showAlert('Add a rating', 'Please give an overall rating before submitting.');
+      return;
+    }
+    if (existingReview) {
+      updateReview.mutate(
+        {
+          reviewId: existingReview.id,
+          orderId: id,
+          overallRating: overall,
+          foodRating: food,
+          deliveryRating: delivery,
+          valueRating: value,
+          packagingRating: packaging,
+          hygieneRating: hygiene,
+          title,
+          comment,
+        },
+        {
+          onSuccess: () => {
+            clearDraft();
+            setEditing(false);
+          },
+          onError: (e) => showAlert('Could not save', friendlyErrorMessage(e, 'Please try again.')),
+        },
+      );
       return;
     }
     createReview.mutate(
@@ -177,6 +242,8 @@ export default function OrderReviewScreen() {
     );
   }
 
+  const saving = createReview.isPending || updateReview.isPending;
+
   const inputStyle = {
     backgroundColor: customerColors.surface.soft,
     borderRadius: 12,
@@ -189,7 +256,9 @@ export default function OrderReviewScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: customerColors.canvas }}>
-      <Stack.Screen options={{ title: existingReview ? 'Your review' : 'Leave a review' }} />
+      <Stack.Screen
+        options={{ title: editing ? 'Edit review' : existingReview ? 'Your review' : 'Leave a review' }}
+      />
       {isLoading || reviewLoading ? (
         <ActivityIndicator style={{ marginTop: 32 }} color={customerColors.charcoal.soft} />
       ) : !order ? (
@@ -200,7 +269,7 @@ export default function OrderReviewScreen() {
         <Text style={{ textAlign: 'center', marginTop: 32, fontFamily: 'Inter', color: customerColors.charcoal.soft }}>
           You can review this order once it’s delivered.
         </Text>
-      ) : existingReview ? (
+      ) : existingReview && !editing ? (
         // An order can carry one review (reviews.order_id is unique), so once it
         // exists the form would only ever 409 — show what was submitted instead.
         <KeyboardAwareScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
@@ -263,11 +332,55 @@ export default function OrderReviewScreen() {
               </Text>
             </View>
           ) : null}
+
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+            <Pressable
+              onPress={startEditing}
+              accessibilityRole="button"
+              accessibilityLabel="Edit review"
+              style={{
+                flex: 1,
+                minHeight: 52,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: customerColors.hairline,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.charcoal.DEFAULT }}>
+                Edit review
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={confirmDelete}
+              disabled={deleteReview.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Delete review"
+              style={{
+                flex: 1,
+                minHeight: 52,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: customerColors.destructive.DEFAULT,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {deleteReview.isPending ? (
+                <ActivityIndicator color={customerColors.destructive.DEFAULT} />
+              ) : (
+                <Text style={{ fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.destructive.DEFAULT }}>
+                  Delete review
+                </Text>
+              )}
+            </Pressable>
+          </View>
         </KeyboardAwareScrollView>
       ) : (
         <KeyboardAwareScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
           <Text style={{ fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginBottom: 16 }}>
-            How was order #{order.orderNumber}?
+            {editing ? `Editing your review of #${order.orderNumber}.` : `How was order #${order.orderNumber}?`}
           </Text>
 
           <View style={{ borderWidth: 1, borderColor: customerColors.hairline, borderRadius: 16, padding: 16 }}>
@@ -279,7 +392,9 @@ export default function OrderReviewScreen() {
             <StarRow label="Hygiene" value={hygiene} onChange={setHygiene} />
           </View>
 
-          {dishes.length > 0 && (
+          {/* Per-dish stars are submitted once with the review; the edit route
+              rewrites the review's own ratings only. */}
+          {dishes.length > 0 && !editing && (
             <View style={{ borderWidth: 1, borderColor: customerColors.hairline, borderRadius: 16, padding: 16, marginTop: 16 }}>
               <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '600', color: customerColors.charcoal.DEFAULT, marginBottom: 4 }}>
                 Rate the dishes
@@ -319,12 +434,12 @@ export default function OrderReviewScreen() {
 
           <Pressable
             onPress={handleSubmit}
-            disabled={createReview.isPending}
+            disabled={saving}
             accessibilityRole="button"
-            accessibilityLabel="Submit review"
+            accessibilityLabel={editing ? 'Save changes' : 'Submit review'}
             style={{ marginTop: 24 }}
             android_ripple={
-              overall < 1 || createReview.isPending
+              overall < 1 || saving
                 ? undefined
                 : { color: `${customerColors.canvas}33`, borderless: false }
             }
@@ -345,7 +460,7 @@ export default function OrderReviewScreen() {
                   justifyContent: 'center',
                 }}
               >
-                {createReview.isPending ? (
+                {saving ? (
                   <ActivityIndicator color={customerColors.canvas} />
                 ) : (
                   <Text
@@ -355,12 +470,25 @@ export default function OrderReviewScreen() {
                       color: overall < 1 ? customerColors.charcoal.soft : customerColors.canvas,
                     }}
                   >
-                    Submit review
+                    {editing ? 'Save changes' : 'Submit review'}
                   </Text>
                 )}
               </View>
             )}
           </Pressable>
+
+          {editing ? (
+            <Pressable
+              onPress={() => setEditing(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel editing"
+              style={{ marginTop: 12, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontFamily: 'Inter', fontSize: 15, color: customerColors.charcoal.soft }}>
+                Cancel
+              </Text>
+            </Pressable>
+          ) : null}
         </KeyboardAwareScrollView>
       )}
     </SafeAreaView>

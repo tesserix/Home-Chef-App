@@ -271,6 +271,11 @@ type MealPlanDay struct {
 	PayoutSettledAt      *time.Time `gorm:"" json:"payoutSettledAt,omitempty"`
 	PayoutSettleAttempts int        `gorm:"default:0" json:"-"`
 
+	// RefundAmount is the money that actually went back for this day, computed for the
+	// response rather than stored (services.AnnotateMealPlanRefunds). Without it a cancelled
+	// plan could only tell the customer THAT a refund happened, never how much (#1041).
+	RefundAmount *float64 `gorm:"-" json:"refundAmount,omitempty"`
+
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }

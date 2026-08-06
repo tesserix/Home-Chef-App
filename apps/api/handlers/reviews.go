@@ -64,6 +64,132 @@ func (h *ReviewHandler) GetOrderReview(c *gin.Context) {
 	}})
 }
 
+// updateReviewRequest is a partial edit — every field is a pointer so an omitted
+// rating keeps its stored value rather than resetting to zero.
+type updateReviewRequest struct {
+	OverallRating   *int    `json:"overallRating"`
+	FoodRating      *int    `json:"foodRating"`
+	DeliveryRating  *int    `json:"deliveryRating"`
+	ValueRating     *int    `json:"valueRating"`
+	PackagingRating *int    `json:"packagingRating"`
+	HygieneRating   *int    `json:"hygieneRating"`
+	Title           *string `json:"title"`
+	Comment         *string `json:"comment"`
+}
+
+// UpdateReview rewrites the calling customer's own review. A customer could
+// previously only report or block themselves — never correct what they wrote
+// (#1047).
+func (h *ReviewHandler) UpdateReview(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+
+	reviewID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review id"})
+		return
+	}
+
+	var req updateReviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	var review models.Review
+	// Scoped by customer so another customer's review reads as absent, not denied.
+	if err := database.DB.Where("id = ? AND customer_id = ?", reviewID, userID).First(&review).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Review not found"})
+		return
+	}
+
+	updates := map[string]any{}
+	ratings := map[string]*int{
+		"overall_rating":   req.OverallRating,
+		"food_rating":      req.FoodRating,
+		"delivery_rating":  req.DeliveryRating,
+		"value_rating":     req.ValueRating,
+		"packaging_rating": req.PackagingRating,
+		"hygiene_rating":   req.HygieneRating,
+	}
+	for column, v := range ratings {
+		if v == nil {
+			continue
+		}
+		// Overall carries the chef's public score, so it may never be cleared;
+		// the optional sub-scores may be (0 = not given).
+		lowest := 0
+		if column == "overall_rating" {
+			lowest = 1
+		}
+		if *v < lowest || *v > 5 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Ratings must be between 1 and 5"})
+			return
+		}
+		updates[column] = *v
+	}
+	if req.Title != nil {
+		updates["title"] = *req.Title
+	}
+	if req.Comment != nil {
+		updates["comment"] = *req.Comment
+	}
+
+	if len(updates) > 0 {
+		if err := database.DB.Model(&review).Updates(updates).Error; err != nil {
+			log.Printf("Failed to update review %s: %v", reviewID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update review"})
+			return
+		}
+		updateChefRating(review.ChefID, review.Mode)
+	}
+
+	database.DB.First(&review, "id = ?", reviewID)
+	c.JSON(http.StatusOK, review.ToResponse())
+}
+
+// DeleteReview withdraws the calling customer's own review, along with the
+// per-dish stars it carried (#1047).
+func (h *ReviewHandler) DeleteReview(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+
+	reviewID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid review id"})
+		return
+	}
+
+	var review models.Review
+	if err := database.DB.Where("id = ? AND customer_id = ?", reviewID, userID).First(&review).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Review not found"})
+		return
+	}
+
+	var dishes []models.DishRating
+	database.DB.Where("review_id = ?", reviewID).Find(&dishes)
+
+	if err := database.DB.Delete(&review).Error; err != nil {
+		log.Printf("Failed to delete review %s: %v", reviewID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete review"})
+		return
+	}
+	database.DB.Where("review_id = ?", reviewID).Delete(&models.DishRating{})
+
+	updateChefRating(review.ChefID, review.Mode)
+	for _, d := range dishes {
+		recomputeMenuItemRating(d.MenuItemID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
 // CreateReview creates a new review for an order.
 // Accepts multipart/form-data with optional image uploads (up to 3).
 func (h *ReviewHandler) CreateReview(c *gin.Context) {
