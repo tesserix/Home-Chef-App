@@ -91,13 +91,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # delivery is excluded: it still carries the `jest-expo` preset, which
-        # needs the unmet `@react-native/jest-preset` peer and dies at startup
-        # (#957), and it has no suite to run yet. Adding that peer as a
-        # dependency is not the fix: 6435cc39 reverted exactly that because it
-        # re-keys react-native's peer resolution and breaks Metro. Add it here
-        # once it carries a standalone jest config and a test.
-        app: [customer, vendor, admin]
+        # delivery now carries its own jest config and a suite, so it runs here
+        # too. It is still absent from the typecheck matrix above.
+        app: [customer, vendor, admin, delivery]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
