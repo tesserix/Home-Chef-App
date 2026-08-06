@@ -15,6 +15,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { EmptyState, ReportSheet, type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useChefReviews, type ChefReview } from '../../hooks/useChefs';
 import { useReportContent, useBlockUser } from '../../hooks/useModeration';
+import { useAuthStore } from '../../store/auth-store';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec (§3.5).
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -81,6 +82,16 @@ function ReviewRow({ review }: ReviewRowProps) {
   const reportContent = useReportContent();
   const blockUser = useBlockUser();
 
+  // Moderation is for OTHER people's content (#1047). The overflow rendered the
+  // generic report/block sheet unconditionally, so on your own review the app
+  // offered to report you to its own moderation queue and to "Block Priya S."
+  // — the signed-in customer, blocking herself, almost certainly into a broken
+  // self-referential block row. Your own review gets a quiet ownership marker
+  // instead. (Edit/Delete belong here too, but /v1/reviews is POST +
+  // GET-by-order only — no update or delete endpoint exists yet.)
+  const viewerId = useAuthStore((s) => s.user?.id);
+  const isOwnReview = Boolean(viewerId && review.customerId && review.customerId === viewerId);
+
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -91,15 +102,19 @@ function ReviewRow({ review }: ReviewRowProps) {
           </Text>
           <Text style={styles.date}>{formatRelativeDate(review.createdAt)}</Text>
         </View>
-        <Pressable
-          onPress={() => reportSheetRef.current?.present()}
-          accessibilityRole="button"
-          accessibilityLabel="Report or block this reviewer"
-          hitSlop={8}
-          style={styles.reportButton}
-        >
-          <MoreHorizontal size={18} color={customerColors.charcoal.soft} />
-        </Pressable>
+        {isOwnReview ? (
+          <Text style={styles.ownBadge}>Your review</Text>
+        ) : (
+          <Pressable
+            onPress={() => reportSheetRef.current?.present()}
+            accessibilityRole="button"
+            accessibilityLabel="Report or block this reviewer"
+            hitSlop={8}
+            style={styles.reportButton}
+          >
+            <MoreHorizontal size={18} color={customerColors.charcoal.soft} />
+          </Pressable>
+        )}
       </View>
       <View style={styles.starRow}>
         <Text style={styles.star}>★</Text>
@@ -117,6 +132,7 @@ function ReviewRow({ review }: ReviewRowProps) {
         </View>
       ) : null}
 
+      {isOwnReview ? null : (
       <ReportSheet
         ref={reportSheetRef}
         subject="this review"
@@ -137,6 +153,7 @@ function ReviewRow({ review }: ReviewRowProps) {
         }
         blockLabel={`Block ${review.customerName || 'this reviewer'}`}
       />
+      )}
     </View>
   );
 }
@@ -265,6 +282,13 @@ const styles = StyleSheet.create({
     minWidth: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Ownership marker where the moderation overflow would sit — a label, not a
+  // control, so it needs no touch target.
+  ownBadge: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    color: customerColors.charcoal.soft,
   },
   customerName: {
     fontFamily: 'Inter-SemiBold',
