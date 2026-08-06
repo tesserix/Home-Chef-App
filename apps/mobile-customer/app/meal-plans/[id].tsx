@@ -213,9 +213,15 @@ export default function MealPlanDetailScreen() {
       <Header />
       <ScrollView style={styles.scrollFill} contentContainerStyle={styles.scroll}>
         <View style={styles.summaryRow}>
-          <View>
+          <View style={{ flex: 1 }}>
+            {/* Chef name carries the header (Geist, the display face) — it's
+                the thing the customer actually recognises. The plan number is
+                a reference ID, not a headline, so it drops to a caption below
+                rather than competing with the chef's name for top billing. */}
+            <Text style={styles.chefName} numberOfLines={1}>
+              {plan.chef?.businessName ?? 'Your chef'}
+            </Text>
             <Text style={styles.planNo}>{plan.mealPlanNumber}</Text>
-            <Text style={styles.chefName}>{plan.chef?.businessName ?? 'Your chef'}</Text>
           </View>
           <View style={[styles.chip, { backgroundColor: meta.bg }]}>
             <Text style={[styles.chipText, { color: meta.color }]}>{meta.label}</Text>
@@ -280,8 +286,14 @@ export default function MealPlanDetailScreen() {
             leaving 27% of the charge unexplained on screen. Every line comes
             from one calculator (`mealPlanSubsetBreakdown`), so food + GST +
             delivery always reach the total printed beneath them — the standard
-            order detail already meets. */}
-        <View style={styles.moneyBlock}>
+            order detail already meets.
+            It's also now one tinted container (#money-block-separation): this
+            used to be bare label/value text sitting directly under the
+            day-list card with nothing but a margin between them — it read as
+            an extension of the list, not its own unit. surface.soft (#F7F7F7)
+            against the white day-list card above is enough contrast to read
+            as a distinct block without needing a shadow or a second hairline. */}
+        <View style={styles.moneyCard}>
           <View style={styles.moneyRow}>
             <Text style={styles.moneyLabel}>Food subtotal</Text>
             <Text style={styles.moneyValue}>{formatMoney(charge.food)}</Text>
@@ -298,21 +310,21 @@ export default function MealPlanDetailScreen() {
               <Text style={styles.moneyValue}>{formatMoney(charge.gst)}</Text>
             </View>
           ) : null}
-        </View>
 
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>
-            {needsApproval ? 'If approved' : 'Total'}
-          </Text>
-          <Text style={styles.totalValue}>{formatMoney(charge.total)}</Text>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>
+              {needsApproval ? 'If approved' : 'Total'}
+            </Text>
+            <Text style={styles.totalValue}>{formatMoney(charge.total)}</Text>
+          </View>
+          {needsApproval ? (
+            <Text style={styles.totalNote}>
+              {/* "meals", not "days" (#1040): plan.days holds booked meals, and a
+                  plan can book both lunch and dinner on one date. */}
+              Estimated from your chef&apos;s accepted meals. Confirmed at checkout.
+            </Text>
+          ) : null}
         </View>
-        {needsApproval ? (
-          <Text style={styles.totalNote}>
-            {/* "meals", not "days" (#1040): plan.days holds booked meals, and a
-                plan can book both lunch and dinner on one date. */}
-            Estimated from your chef&apos;s accepted meals. Confirmed at checkout.
-          </Text>
-        ) : null}
 
         {/* The plan said only that a refund happened; the amount lived in the wallet,
             quoted as a percentage of a base no screen named (#1041). */}
@@ -461,15 +473,22 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: 12,
     marginBottom: 16,
   },
-  planNo: { fontFamily: 'Inter-Medium', fontSize: 13, color: customerColors.charcoal.soft },
   chefName: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 20,
+    fontFamily: 'Geist',
+    fontSize: 22,
     color: customerColors.charcoal.DEFAULT,
-    marginTop: 2,
+    letterSpacing: -0.3,
+  },
+  planNo: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 13,
+    color: customerColors.charcoal.soft,
+    fontVariant: ['tabular-nums'],
+    marginTop: 3,
   },
   chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   chipText: { fontFamily: 'Inter-SemiBold', fontSize: 12 },
@@ -527,9 +546,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: customerColors.canvas,
   },
-  moneyBlock: {
+  moneyCard: {
     marginTop: 16,
-    paddingHorizontal: 4,
+    backgroundColor: customerColors.surface.soft,
+    borderRadius: 12,
+    padding: 16,
     gap: 6,
   },
   moneyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -544,9 +565,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 6,
     paddingTop: 12,
-    paddingHorizontal: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: customerColors.hairline,
   },
@@ -579,7 +599,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 12,
     color: customerColors.charcoal.soft,
-    paddingHorizontal: 4,
     marginTop: 6,
   },
   totalLabel: { fontFamily: 'Inter', fontSize: 15, color: customerColors.charcoal.soft },
