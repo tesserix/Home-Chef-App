@@ -136,6 +136,12 @@ const styles = StyleSheet.create({
   },
   // 44px min target (§ touch targets, customer).
   pressable: { borderRadius: 8, minHeight: 44, justifyContent: 'center' },
+  // Selection reads as a FILL, not a border. Android resolves border widths to
+  // whole dp on a rounded shape, so a hairline outline broke up at the corners
+  // and a full 1dp outline is 3 physical pixels — heavy and crude in a saturated
+  // colour. A tint has neither problem, and it is what every other chip in this
+  // app already uses (status pills, filter chips), so these stop being the one
+  // outlined control on a screen full of filled ones.
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -143,13 +149,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     minHeight: 36,
     borderRadius: 8,
-    borderWidth: HAIRLINE,
-    borderColor: customerColors.charcoal.soft,
+    backgroundColor: customerColors.surface.soft,
   },
   pillPressed: { opacity: 0.6 },
-  pillLiked: { borderColor: customerColors.coral.DEFAULT },
+  pillLiked: { backgroundColor: customerColors.coral.tint },
   pillSubscribed: {
-    borderColor: customerColors.charcoal.DEFAULT,
     backgroundColor: `${customerColors.charcoal.DEFAULT}0D`,
   },
   pillText: {

@@ -92,8 +92,13 @@ export default function FeedbackScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
                   accessibilityLabel={label}
+                  // Selected reads as a coral TINT, not a coral outline. A 1px
+                  // border on a rounded shape is resolved to whole dp by
+                  // Android, so a saturated outline renders chunky and breaks up
+                  // at the corners. The tint also matches how selection is shown
+                  // everywhere else in this app.
                   className={`flex-1 min-h-[88px] rounded-lg border px-3 py-3 gap-1 ${
-                    selected ? 'border-coral bg-white' : 'border-hairline bg-white'
+                    selected ? 'border-coral-tint bg-coral-tint' : 'border-hairline bg-canvas'
                   }`}
                 >
                   <Icon
