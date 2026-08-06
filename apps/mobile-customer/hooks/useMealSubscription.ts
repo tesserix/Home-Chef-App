@@ -1,20 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 
-// Customer meal subscription (tiffin, #2/#3/#283). Browse a chef's offer, preview
-// the price, subscribe, and manage (pause/resume/skip/cancel) + see fulfillment.
-
-export interface MealChefOffer {
-  available: boolean;
-  slots?: string[];
-  cadences?: string[];
-  perMealPrice?: number;
-  deliveryFee?: number;
-  cutoffTime?: string;
-  trialEnabled?: boolean;
-  trialPrice?: number;
-  trialDurationDays?: number;
-}
+// Customer meal subscription (tiffin, #2/#3/#283) — MANAGEMENT ONLY since
+// #1035: list, pause/resume/skip/cancel, and see fulfilment. New signups were
+// removed from the UI, so nothing here browses a chef's offer or subscribes.
 
 export interface MealSubscription {
   id: string;
@@ -46,38 +35,12 @@ export interface MealAdherence {
   skipped: number;
 }
 
-export interface MealSelection {
-  chefId: string;
-  slots: string[];
-  days: number[];
-  variant: string;
-  cadence: string;
-  addressId?: string;
-}
-
-/** A chef's tiffin offer (or { available:false }). */
-export function useMealChefOffer(chefId?: string) {
-  return useQuery<MealChefOffer>({
-    queryKey: ['meal-offer', chefId],
-    queryFn: async () => (await api.get<MealChefOffer>(`/v1/chefs/${chefId}/subscription`)).data,
-    enabled: !!chefId,
-  });
-}
-
-/** Live per-cycle price preview for a selection. */
-export function usePreviewMealPrice() {
-  return useMutation<{ cycleAmount: number; currency: string; deliveryFee: number }, Error, MealSelection>({
-    mutationFn: async (sel) => (await api.post('/v1/meal-subscriptions/preview', sel)).data,
-  });
-}
-
-export function useSubscribeMeal() {
-  const qc = useQueryClient();
-  return useMutation<{ subscription: MealSubscription }, Error, MealSelection>({
-    mutationFn: async (sel) => (await api.post('/v1/meal-subscriptions', sel)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-subscriptions'] }),
-  });
-}
+// `MealChefOffer` / `MealSelection`, the chef's-offer read, the price preview
+// and the subscribe mutation lived here to serve /meal-subscription/:chefId —
+// the signup screen. #1035 removed new recurring signups from the UI, so that
+// screen and its only entry point are gone and these had no callers left.
+// GET /v1/chefs/:id/subscription and POST /v1/meal-subscriptions{,/preview}
+// remain on the server; restore from git history if signup ever comes back.
 
 export function useMealSubscriptions() {
   return useQuery<{ data: MealSubscription[]; count: number }>({

@@ -37,7 +37,6 @@ import { useChef, useChefMenu } from '../../hooks/useChefs';
 import { useCustomerCoords } from '../../hooks/useCustomerCoords';
 import { useChefAvailabilityWS } from '../../hooks/useChefAvailabilityWS';
 import { useChefWeeklyMenu } from '../../hooks/useMealPlans';
-import { useMealChefOffer } from '../../hooks/useMealSubscription';
 import { useCreateGroupOrder, type GroupType } from '../../hooks/useGroupOrder';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import { useCartStore } from '../../store/cart-store';
@@ -133,8 +132,6 @@ export default function ChefDetailScreen() {
   const createGroup = useCreateGroupOrder();
   // Chef's published fixed weekly menu (#1) — read-only preview below the CTAs.
   const { data: weeklyMenu } = useChefWeeklyMenu(chefData?.data?.id ?? id ?? '');
-  // Daily tiffin subscription offer (#283) — shown only when the chef offers one.
-  const { data: mealOffer } = useMealChefOffer(chefData?.data?.id ?? id ?? '');
 
   // Start a group / office order (#46): pick the context, then open the hub.
   function startGroupOrder(chefId: string) {
@@ -683,13 +680,13 @@ export default function ChefDetailScreen() {
             ) : null}
 
             {/* ── WEEKLY PLAN TAB ── */}
-            {/* Tiffin pre-booking + subscription + weekly menu (#196/#283/#1) —
-                DEFERRED flows stay gated: the tab itself only exists while
-                TIFFIN_ENABLED (see DETAIL_TABS). */}
+            {/* Tiffin pre-booking + weekly menu (#196/#1) — DEFERRED flows stay
+                gated: the tab itself only exists while TIFFIN_ENABLED (see
+                DETAIL_TABS). Recurring-subscription signup was removed from
+                this pane in #1035. */}
             {activeTab === 'weekly' && TIFFIN_ENABLED ? (
               <ChefWeeklyPlanTab
                 chefId={chef.id}
-                mealOfferAvailable={mealOffer?.available === true}
                 weeklyMenuItems={weeklyMenu?.items ?? []}
                 weeklyMenuPublished={weeklyMenu?.isPublished === true}
               />

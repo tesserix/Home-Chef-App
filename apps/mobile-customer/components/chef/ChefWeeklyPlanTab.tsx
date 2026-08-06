@@ -1,8 +1,8 @@
 // "Weekly plan" tab pane on the chef detail screen. Everything tiffin lives
-// here — the plan-a-week and subscribe entry points (slim hairline rows, no
-// tinted cards), the MyPlanChip for an existing live plan, and the compact
-// weekly-menu preview. The screen only mounts this pane when TIFFIN_ENABLED,
-// so the deferred-money-flow gating is unchanged.
+// here — the plan-a-week entry point (a slim hairline row, no tinted card), the
+// MyPlanChip for an existing live plan, and the compact weekly-menu preview.
+// The screen only mounts this pane when TIFFIN_ENABLED, so the
+// deferred-money-flow gating is unchanged.
 
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -15,8 +15,6 @@ import { WeeklyMenuPreview } from './WeeklyMenuPreview';
 
 export interface ChefWeeklyPlanTabProps {
   chefId: string;
-  /** Chef has an active daily-tiffin subscription offer (#283). */
-  mealOfferAvailable: boolean;
   /** Chef's published fixed weekly menu items (#1); empty when none. */
   weeklyMenuItems: WeeklyMenuItem[];
   weeklyMenuPublished: boolean;
@@ -24,7 +22,6 @@ export interface ChefWeeklyPlanTabProps {
 
 export function ChefWeeklyPlanTab({
   chefId,
-  mealOfferAvailable,
   weeklyMenuItems,
   weeklyMenuPublished,
 }: ChefWeeklyPlanTabProps) {
@@ -52,22 +49,13 @@ export function ChefWeeklyPlanTab({
             opens a sheet with each day's fulfilment status (#434). */}
         <MyPlanChip chefId={chefId} />
 
-        {/* Daily tiffin subscription (#283) — only when the chef offers one. */}
-        {mealOfferAvailable ? (
-          <ChefActionRow
-            icon={
-              <CalendarDays
-                size={18}
-                color={customerColors.coral.DEFAULT}
-                strokeWidth={2}
-              />
-            }
-            title="Subscribe to daily tiffin"
-            caption="Recurring meals, delivered automatically"
-            onPress={() => router.push(`/meal-subscription/${chefId}` as never)}
-            accessibilityLabel="Subscribe to a daily tiffin"
-          />
-        ) : null}
+        {/* "Subscribe to daily tiffin" used to sit here (#283), linking into
+            /meal-subscription/:chefId. Removed per the product decision in
+            #1035: no NEW recurring signups from the chef page. The pre-book
+            "Plan a week of meals" flow above is unaffected, existing
+            subscribers keep Profile → My subscriptions (and the Plans-tab row)
+            to view/pause/skip/cancel, and the backend /meal-subscriptions
+            endpoints stay for them. */}
       </View>
 
       {/* Compact weekly-menu preview (#1) — one day at a time. */}
