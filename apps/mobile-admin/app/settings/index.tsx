@@ -61,7 +61,7 @@ export default function SettingsScreen() {
 
         <View style={{ height: 8 }} />
         <Text style={{ fontFamily: 'Inter', fontSize: 12, color: c.ink.muted, textAlign: 'center' }}>
-          Fe3dr Admin · Home Chef platform
+          Fe3dr Admin
         </Text>
       </ScrollView>
     </Screen>

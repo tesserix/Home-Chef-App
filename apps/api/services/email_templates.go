@@ -18,7 +18,7 @@ import (
 // tax fields do.
 func esc(s string) string { return html.EscapeString(s) }
 
-// Enterprise HTML email templates for Fe3dr / HomeChef
+// Enterprise HTML email templates for Fe3dr
 // Responsive, branded layout matching the Fe3dr design system.
 // Base colors: neutral ink (#111827), gray-700 (#374151), gray-900 (#111827) — deliberately brandless/monochrome
 

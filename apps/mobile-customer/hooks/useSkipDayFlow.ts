@@ -18,10 +18,10 @@ export function useSkipDayFlow(planId: string | undefined) {
     if (!planId) return;
     showAlert(
       'Where would you like your refund?',
-      'HomeChef Wallet is instant — use it on your next order. Your original payment method takes ~5–7 business days (per RBI).',
+      'Fe3dr Wallet is instant — use it on your next order. Your original payment method takes ~5–7 business days (per RBI).',
       [
         {
-          text: 'HomeChef Wallet (instant)',
+          text: 'Fe3dr Wallet (instant)',
           onPress: () =>
             chooseMedium.mutate(
               { planId, dayId, medium: 'wallet' },

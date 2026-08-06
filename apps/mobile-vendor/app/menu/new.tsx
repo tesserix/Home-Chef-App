@@ -20,6 +20,7 @@ import {
 } from '../../hooks/useVendorMenu';
 import { MenuItemForm } from './MenuItemForm';
 import { useOffersBakery } from '../../hooks/useChefVertical';
+import { leaveTo } from '../../lib/navigation';
 import type { MenuItemFormValues } from './MenuItemForm';
 import { useState } from 'react';
 
@@ -106,7 +107,7 @@ export default function NewMenuItemScreen() {
       } else {
         showToast({ message: `${values.name} added to menu`, tone: 'success' });
       }
-      router.back();
+      leaveTo(router, '/(tabs)/menu');
     } catch (err: unknown) {
       showAlert(
         'Could not add item',
@@ -139,7 +140,7 @@ export default function NewMenuItemScreen() {
       onSave={handleSave}
       isSaving={isSaving}
       onCreateCategory={handleCreateCategory}
-      onBack={() => router.back()}
+      onBack={() => leaveTo(router, '/(tabs)/menu')}
       onDraftChange={saveDraft}
     />
   );

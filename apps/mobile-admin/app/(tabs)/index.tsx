@@ -35,7 +35,7 @@ export default function DashboardScreen() {
     <Screen>
       <ScreenHeader
         title="Dashboard"
-        subtitle={user?.email ? `Signed in as ${user.email}` : 'Home Chef platform overview'}
+        subtitle={user?.email ? `Signed in as ${user.email}` : 'Fe3dr platform overview'}
       />
       <ScrollView
         showsVerticalScrollIndicator={false}

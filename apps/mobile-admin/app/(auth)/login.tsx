@@ -111,7 +111,7 @@ export default function LoginPage() {
     <LoginScreen
       brand="Fe3dr · Admin"
       title="Admin console"
-      subtitle="Sign in to manage the Home Chef platform"
+      subtitle="Sign in to manage the Fe3dr platform"
       onLogin={async ({ email, password }) => {
         try {
           await signInWithEmail(email, password);

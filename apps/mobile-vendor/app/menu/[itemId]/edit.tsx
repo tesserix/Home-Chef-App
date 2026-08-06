@@ -24,6 +24,7 @@ import {
 import { api } from '../../../lib/api';
 import { MenuItemForm } from '../MenuItemForm';
 import { useOffersBakery } from '../../../hooks/useChefVertical';
+import { leaveTo } from '../../../lib/navigation';
 import type { MenuItemFormValues } from '../MenuItemForm';
 
 export default function EditMenuItemScreen() {
@@ -156,7 +157,7 @@ export default function EditMenuItemScreen() {
         },
       });
       showToast({ message: 'Item saved', tone: 'success' });
-      router.back();
+      leaveTo(router, '/(tabs)/menu');
     } catch (err: unknown) {
       showAlert(
         'Could not save',
@@ -168,7 +169,7 @@ export default function EditMenuItemScreen() {
   function handleDelete() {
     if (!itemId) return;
     deleteMutation.mutate(itemId, {
-      onSuccess: () => router.back(),
+      onSuccess: () => leaveTo(router, '/(tabs)/menu'),
       onError: (err) =>
         showAlert('Delete failed', getServerErrorMessage(err, 'Please try again.')),
     });
@@ -224,7 +225,7 @@ export default function EditMenuItemScreen() {
       onRemoveExistingPhoto={handleRemoveExistingPhoto}
       onAddPhoto={handleAddPhoto}
       isUploadingPhoto={uploadMutation.isPending}
-      onBack={() => router.back()}
+      onBack={() => leaveTo(router, '/(tabs)/menu')}
     />
   );
 }

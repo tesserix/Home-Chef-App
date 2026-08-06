@@ -2,8 +2,8 @@
 // what the product is, how it is priced by weight, and the choices a customer
 // must make (shape, flavour, egg, sugar) before the cake can be baked.
 //
-// Only rendered for a bakery kitchen — the backend rejects a spec from a meals
-// chef outright.
+// Only rendered for a kitchen that sells bakery — either vertical or opt-in.
+// The backend gates on the same rule and rejects a spec from anyone else.
 
 import { Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { Trash2 } from 'lucide-react-native';

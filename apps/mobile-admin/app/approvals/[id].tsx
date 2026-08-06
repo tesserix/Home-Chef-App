@@ -100,7 +100,7 @@ export default function ApprovalDetailScreen() {
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
           {a.kitchenTypeNonHome ? (
-            <Warning text="Submitted kitchen type is NOT a home kitchen — HomeChef onboards home cooks only." />
+            <Warning text="Submitted kitchen type is NOT a home kitchen — Fe3dr onboards home cooks only." />
           ) : null}
           {a.fssaiLooksCommercial ? (
             <Warning text="FSSAI licence looks like a commercial (State/Central) registration — verify this is a home kitchen." />

@@ -737,6 +737,11 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		// class of bug the self-delivery fields below fixed) — the chef then sees
 		// the wrong state and a single tap flips the real value the wrong way.
 		"autoScheduleEnabled": resp.AutoScheduleEnabled,
+		// What the kitchen sells. Omitting these left the vendor app unable to
+		// tell an opted-in baker from a meals-only kitchen, so the cake
+		// configurator never appeared and the opt-in read as a missing feature.
+		"vertical":    resp.Vertical,
+		"sellsBakery": resp.SellsBakery,
 		"kitchenPhotos":       resp.KitchenPhotos,
 		"addressLine1":        chef.AddressLine1,
 		"addressLine2":        chef.AddressLine2,

@@ -1,6 +1,10 @@
 import { describe, it, expect } from '@jest/globals';
 
-import { pricingHint, RESTAURANT_PARITY_PRICE } from './pricing-guidance';
+import {
+  pricingHint,
+  RESTAURANT_PARITY_PRICE,
+  BAKERY_PARITY_PRICE,
+} from './pricing-guidance';
 
 // Why: a home chef's edge over a restaurant is price for comparable food. If a
 // chef prices at restaurant parity the customer has no reason to choose them —
@@ -42,5 +46,28 @@ describe('pricingHint', () => {
 
   it('tolerates spacing and decimals a chef might type', () => {
     expect(pricingHint(' 500.00 ')?.tone).toBe('warn');
+  });
+});
+
+// A whole celebration cake is not a plated meal: ₹1400 for a two-kilo truffle
+// cake is the going rate, and telling a baker to stay under ₹500 is advice they
+// can only ignore — which teaches them to ignore the next warning too.
+describe('pricingHint for a bakery item', () => {
+  it('stays quiet at a normal celebration-cake price', () => {
+    expect(pricingHint('1450', { isBakery: true })).toBeNull();
+  });
+
+  it('warns only once the price passes what a bakery would charge', () => {
+    const hint = pricingHint(String(BAKERY_PARITY_PRICE), { isBakery: true });
+    expect(hint?.tone).toBe('warn');
+    expect(hint!.message).toMatch(/bakery/i);
+  });
+
+  it('does not mention restaurants to a baker', () => {
+    expect(pricingHint('5000', { isBakery: true })!.message).not.toMatch(/restaurant/i);
+  });
+
+  it('still warns a cooked-food kitchen at the lower line', () => {
+    expect(pricingHint('1450', { isBakery: false })?.tone).toBe('warn');
   });
 });

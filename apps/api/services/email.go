@@ -187,7 +187,7 @@ func (s *EmailService) SendApprovalInfoRequested(to, chefName, requestTitle, adm
 		<p>Our team has asked for more information on your application item:
 		<strong>%s</strong>.</p>
 		<p style="white-space: pre-wrap; padding: 12px; background: #F4F2EC; border-left: 3px solid #C2410C;">%s</p>
-		<p>Please open the HomeChef Vendor app to respond — the request is
+		<p>Please open the Fe3dr Vendor app to respond — the request is
 		waiting under <strong>Action Required</strong> on your dashboard.</p>
 		<p>— Fe3dr</p>
 	`, chefName, requestTitle, adminNotes)

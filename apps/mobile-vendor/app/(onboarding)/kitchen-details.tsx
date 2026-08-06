@@ -26,6 +26,7 @@ import { MapPin, UtensilsCrossed, FileText, Navigation, CakeSlice, Check } from 
 import { Input, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
+import { SelectField } from '../../components/SelectField';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import { api } from '../../lib/api';
@@ -647,141 +648,41 @@ export default function KitchenDetailsScreen() {
 
         <View style={styles.innerHairline} />
 
-        {/* State — Input + quick-pick chip strip */}
-        <View>
-          <Controller
-            control={control}
-            name="state"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label={t('onboarding.state')}
-                placeholder={t('onboarding.statePlaceholder')}
-                onBlur={onBlur}
-                onChangeText={onChange}
-                value={value}
-                autoCapitalize="words"
-                error={errors.state?.message ? t(errors.state.message) : undefined}
-              />
-            )}
-          />
-          {states.isLoading ? null : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.pickerStrip}
-            >
-              {(states.data ?? []).map((s) => {
-                const selected = s.name === selectedStateName;
-                return (
-                  <Pressable
-                    key={s.id}
-                    onPress={() => pickState(s)}
-                    hitSlop={4}
-                    accessibilityRole="button"
-                    accessibilityLabel={s.name}
-                    accessibilityState={{ selected }}
-                    android_ripple={{
-                      color: selected
-                        ? `${theme.colors.paper}30`
-                        : `${theme.colors.ink.DEFAULT}14`,
-                      borderless: false,
-                    }}
-                  >
-                    {({ pressed }) => (
-                      <View
-                        style={[
-                          styles.pickerChip,
-                          selected && styles.pickerChipActive,
-                          pressed && Platform.OS === 'ios' && { opacity: 0.7 },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.pickerChipLabel,
-                            selected && styles.pickerChipLabelActive,
-                          ]}
-                        >
-                          {s.name}
-                        </Text>
-                      </View>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
+        {/* State and city are dropdowns, not chip strips: 36 states never fit a
+            strip, and the one already picked was rarely among the two shown. */}
+        <SelectField
+          label={t('onboarding.state')}
+          value={selectedStateName}
+          options={(states.data ?? []).map((s) => s.name)}
+          onChange={(name) => {
+            const picked = states.data?.find((s) => s.name === name);
+            if (picked) pickState(picked);
+          }}
+          placeholder={t('onboarding.statePlaceholder')}
+          loading={states.isLoading}
+          error={errors.state?.message ? t(errors.state.message) : undefined}
+          hasBorderBottom={false}
+        />
 
         <View style={styles.innerHairline} />
 
-        {/* City — same pattern as State */}
-        <View>
-          <Controller
-            control={control}
-            name="city"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label={t('onboarding.city')}
-                placeholder={
-                  selectedStateCode
-                    ? t('onboarding.cityPlaceholderState')
-                    : t('onboarding.cityPlaceholderNoState')
-                }
-                onBlur={onBlur}
-                onChangeText={onChange}
-                value={value}
-                autoCapitalize="words"
-                error={errors.city?.message ? t(errors.city.message) : undefined}
-              />
-            )}
-          />
-          {selectedStateCode && !cities.isLoading && (cities.data?.length ?? 0) > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.pickerStrip}
-            >
-              {(cities.data ?? []).map((c) => {
-                const selected = c.name === selectedCityName;
-                return (
-                  <Pressable
-                    key={c.id}
-                    onPress={() => pickCity(c)}
-                    hitSlop={4}
-                    accessibilityRole="button"
-                    accessibilityLabel={c.name}
-                    accessibilityState={{ selected }}
-                    android_ripple={{
-                      color: selected
-                        ? `${theme.colors.paper}30`
-                        : `${theme.colors.ink.DEFAULT}14`,
-                      borderless: false,
-                    }}
-                  >
-                    {({ pressed }) => (
-                      <View
-                        style={[
-                          styles.pickerChip,
-                          selected && styles.pickerChipActive,
-                          pressed && Platform.OS === 'ios' && { opacity: 0.7 },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.pickerChipLabel,
-                            selected && styles.pickerChipLabelActive,
-                          ]}
-                        >
-                          {c.name}
-                        </Text>
-                      </View>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          ) : null}
-        </View>
+        <SelectField
+          label={t('onboarding.city')}
+          value={selectedCityName}
+          options={(cities.data ?? []).map((c) => c.name)}
+          onChange={(name) => {
+            const picked = cities.data?.find((c) => c.name === name);
+            if (picked) pickCity(picked);
+          }}
+          placeholder={
+            selectedStateCode
+              ? t('onboarding.cityPlaceholderState')
+              : t('onboarding.cityPlaceholderNoState')
+          }
+          loading={!!selectedStateCode && cities.isLoading}
+          error={errors.city?.message ? t(errors.city.message) : undefined}
+          hasBorderBottom={false}
+        />
 
         <View style={styles.innerHairline} />
 
@@ -991,37 +892,6 @@ const styles = StyleSheet.create({
 
   searchWrap: {
     marginBottom: theme.spacing[3],
-  },
-
-  // Picker strip — horizontally scrollable chip row for State + City
-  pickerStrip: {
-    gap: theme.spacing[2],
-    paddingRight: theme.spacing[4],
-    paddingBottom: theme.spacing[1],
-    paddingTop: theme.spacing[2],
-  },
-  pickerChip: {
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.mist.strong,
-    backgroundColor: theme.colors.paper,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  pickerChipActive: {
-    borderColor: theme.colors.ink.DEFAULT,
-    backgroundColor: theme.colors.ink.DEFAULT,
-  },
-  pickerChipLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.soft,
-    letterSpacing: 0.1,
-  },
-  pickerChipLabelActive: {
-    color: theme.colors.paper,
   },
 
   // Address suggestions panel
