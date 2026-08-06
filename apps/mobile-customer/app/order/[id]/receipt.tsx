@@ -356,9 +356,12 @@ function Line({
 }) {
   return (
     <View style={styles.totalRow}>
-      <Text style={[styles.totalLabel, bold && styles.totalBold, refund && styles.refundText]}>
-        {label}
-      </Text>
+      {/* Money coming BACK is green, and only the figure carries the colour —
+          the label stays charcoal. Both of those match the order-detail
+          breakdown, which is the screen a customer compares this against; the
+          receipt was reading them in coral, so the same refund looked like a
+          warning here and a credit there. */}
+      <Text style={[styles.totalLabel, bold && styles.totalBold]}>{label}</Text>
       <Text
         style={[styles.totalValue, bold && styles.totalBold, refund && styles.refundText]}
       >
@@ -490,7 +493,7 @@ const styles = StyleSheet.create({
   totalLabel: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft },
   totalValue: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT, fontVariant: ['tabular-nums'] },
   totalBold: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
-  refundText: { color: customerColors.coral.pressed },
+  refundText: { color: customerColors.success.DEFAULT },
   footer: { fontFamily: 'Inter', fontSize: 11, color: customerColors.charcoal.soft, textAlign: 'center', lineHeight: 16 },
   footerBrand: {
     fontFamily: 'Inter-SemiBold',

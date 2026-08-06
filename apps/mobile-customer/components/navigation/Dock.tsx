@@ -159,13 +159,17 @@ const styles = StyleSheet.create({
   slotPressedIOS: {
     opacity: 0.6,
   },
+  // The selected pill sits in a 64px bar. At paddingVertical 9 it stood 38px
+  // tall, leaving 13px of dead space above and below — the highlight read as
+  // undersized for the bar containing it. 12 brings it to 44px (also the touch
+  // -target floor), so the gap is an even 10px and the pill fills its row.
   activePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
+    paddingVertical: 12,
+    borderRadius: 22,
     backgroundColor: customerColors.coral.tint,
   },
   activeLabel: {
