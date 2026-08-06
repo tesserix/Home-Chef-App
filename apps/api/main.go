@@ -110,6 +110,13 @@ func main() {
 	// via the /admin/tax-rates endpoint survive future restarts.
 	services.SeedTaxRates()
 
+	// #925 — scrub plaintext phone numbers out of phone_e164_bidx, which the MFA
+	// enrollment path wrote them into. Idempotent and cheap once converged, so it
+	// runs on every boot rather than being a one-shot someone has to remember to
+	// trigger. Must land before #710's read-cutover, which assumes _bidx columns
+	// hold hashes.
+	services.RemediatePlaintextPhoneBidx(database.DB)
+
 	// Seed location reference data (India + 36 states + ~50 major cities +
 	// representative PIN codes). Idempotent — relies on ON CONFLICT DO
 	// NOTHING so re-runs are free. The schema is country-agnostic; the

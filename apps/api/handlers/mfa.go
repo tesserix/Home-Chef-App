@@ -13,6 +13,7 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/piicrypto"
 	"github.com/homechef/api/services"
 )
 
@@ -244,9 +245,17 @@ func (h *MFAHandler) EnrollPhone(c *gin.Context) {
 
 	if err := database.DB.Model(&models.UserMFASettings{}).Where("user_id = ?", userID).
 		Updates(map[string]any{
-			"phone_enrolled":  true,
-			"phone_e164_enc":  models.EncryptedString(verified.E164),
-			"phone_e164_bidx": services.NormalizeE164(verified.E164),
+			"phone_enrolled": true,
+			"phone_e164_enc": models.EncryptedString(verified.E164),
+			// A _bidx column holds a KEYED HASH, never the value. This wrote the
+			// normalized number in the clear, one column over from the ciphertext
+			// it was supposed to make unnecessary — so encrypting phone_e164_enc
+			// bought nothing for any user who enrolled a phone (#925).
+			//
+			// Normalize first, then hash: BlindIndex only lowercases and trims, so
+			// hashing an unnormalized number would make "+91 98…" and "+9198…"
+			// index differently and never match each other.
+			"phone_e164_bidx": piicrypto.BlindIndex(services.NormalizeE164(verified.E164)),
 			"updated_at":      time.Now(),
 		}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save two-factor settings"})
