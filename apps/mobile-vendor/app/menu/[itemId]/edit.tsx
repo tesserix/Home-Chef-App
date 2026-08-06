@@ -18,10 +18,10 @@ import {
   useUpdateMenuItem,
   useDeleteMenuItem,
   useUploadMenuPhoto,
+  useDeleteMenuPhoto,
   useCreateCategory,
   extraDietTags,
 } from '../../../hooks/useVendorMenu';
-import { api } from '../../../lib/api';
 import { MenuItemForm } from '../MenuItemForm';
 import { useOffersBakery } from '../../../hooks/useChefVertical';
 import { leaveTo } from '../../../lib/navigation';
@@ -39,6 +39,7 @@ export default function EditMenuItemScreen() {
   const updateMutation = useUpdateMenuItem();
   const deleteMutation = useDeleteMenuItem();
   const uploadMutation = useUploadMenuPhoto();
+  const removePhotoMutation = useDeleteMenuPhoto();
   const createCategoryMutation = useCreateCategory();
   const isBakery = useOffersBakery();
 
@@ -175,16 +176,14 @@ export default function EditMenuItemScreen() {
     });
   }
 
-  async function handleRemoveExistingPhoto(imageId: string) {
-    try {
-      await api.delete(`/chef/menu/items/${itemId}/images/${imageId}`);
-      // Cache invalidation is triggered inside useDeleteMenuItem's onSettled;
-      // for the photo endpoint we do a manual query invalidation via the
-      // upload mutation's queryClient. For simplicity we reload via refetch —
-      // the upload mutation shares the same MENU_KEY invalidation.
-    } catch (err: unknown) {
-      showAlert('Could not remove photo', getServerErrorMessage(err, 'Please try again.'));
-    }
+  function handleRemoveExistingPhoto(imageId: string) {
+    removePhotoMutation.mutate(
+      { itemId: itemId ?? '', imageId },
+      {
+        onError: (err) =>
+          showAlert('Could not remove photo', getServerErrorMessage(err, 'Please try again.')),
+      },
+    );
   }
 
   // Without this the form's "Add category" control renders enabled but is a
