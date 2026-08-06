@@ -162,10 +162,9 @@ export function mapMenuItem(
 
 // ─── Hooks ────────────────────────────────────────────────────────────────
 
-export function useChefs(filters: ChefFilters = {}, options?: { enabled?: boolean }) {
+export function useChefs(filters: ChefFilters = {}) {
   return useQuery<{ data: Chef[] }>({
     queryKey: ['chefs', filters],
-    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const r = await api.get('/v1/chefs', { params: filters });
       const list = (r.data?.data ?? []) as ApiChefProfile[];

@@ -26,6 +26,7 @@ import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { DialogProvider, ToastProvider } from '@homechef/mobile-shared/ui';
+import { isGuestBrowsable } from '../lib/guest-routes';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -314,7 +315,9 @@ export default function RootLayout() {
       // Redirect only when they are somewhere that isn't browse. Replacing
       // unconditionally re-ran on every pass and remounted the tabs underneath
       // the customer, which is the other half of what made the screen flicker.
-      if (!inAuthGroup && !inTabsGroup) router.replace('/(tabs)');
+      if (!inAuthGroup && !inTabsGroup && !isGuestBrowsable(segments as string[])) {
+        router.replace('/(tabs)');
+      }
     } else if (!onboardingComplete) {
       // Wait for the server reconciliation before deciding, so we never flash the
       // setup wizard at a returning user whose profile is already complete.
@@ -339,6 +342,7 @@ export default function RootLayout() {
     inOnboardingGroup,
     onboardingComplete,
     onboardingChecked,
+    segments,
   ]);
 
   // Fonts must resolve BEFORE the tree mounts. The previous approach rendered
