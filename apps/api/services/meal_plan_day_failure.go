@@ -51,6 +51,18 @@ var terminalOrFailedDayStatuses = []models.MealPlanDayStatus{
 	models.MealPlanDaySkipped, models.MealPlanDayDeclined, models.MealPlanDayRefunded,
 }
 
+// isTerminalOrFailedDayStatus reports whether s is in terminalOrFailedDayStatuses —
+// pulled out as a pure predicate so sweeps (e.g. sweepOverdueDayOrders) can filter
+// candidates in Go without re-listing the set.
+func isTerminalOrFailedDayStatus(s models.MealPlanDayStatus) bool {
+	for _, t := range terminalOrFailedDayStatuses {
+		if s == t {
+			return true
+		}
+	}
+	return false
+}
+
 // MarkMealPlanDayFailed is the failure-path mirror of MarkMealPlanDayDelivered: when a
 // terminally-failed delivery's order is a meal-plan per-day shell, find the day by its
 // fulfilment order id, mark it `failed` (NON-terminal — the plan waits for admin

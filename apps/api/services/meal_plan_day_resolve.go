@@ -155,8 +155,15 @@ func withholdDisputedDayHold(tx *gorm.DB, dayID uuid.UUID) error {
 // completePlanIfAllDaysTerminal re-checks the plan (with the just-committed day status,
 // read within the same tx) and marks it completed once every day is terminal. Guarded on
 // the confirmed/active source status so a concurrent transition wins (mirrors
-// completeFinishedPlans). A `failed` day is non-terminal, so a plan with any other
-// unresolved failed day stays open.
+// completeFinishedPlans) — and so a caller that races the periodic completeFinishedPlans
+// sweep loses cleanly (RowsAffected==0) rather than double-emitting. A `failed` day is
+// non-terminal, so a plan with any other unresolved failed day stays open.
+//
+// #1034: emits the SAME meal_plan.completed notification completeFinishedPlans does, on
+// the SAME guarded transition, so every path that can complete a plan (day-resolve,
+// day-skip, and now the delivered hook) notifies the customer exactly once — not just the
+// periodic sweep. Before this the day-resolve/day-skip paths silently completed the plan
+// with no notification at all.
 func completePlanIfAllDaysTerminal(tx *gorm.DB, planID uuid.UUID) error {
 	var statuses []models.MealPlanDayStatus
 	if err := tx.Model(&models.MealPlanDay{}).
@@ -177,5 +184,14 @@ func completePlanIfAllDaysTerminal(tx *gorm.DB, planID uuid.UUID) error {
 	if res.Error != nil {
 		return fmt.Errorf("meal-plan day resolve: complete plan %s: %w", planID, res.Error)
 	}
-	return nil
+	if res.RowsAffected == 0 {
+		return nil // a concurrent completion (or the periodic sweep) already won
+	}
+	var plan models.MealPlan
+	if err := tx.Select("customer_id", "meal_plan_number").First(&plan, "id = ?", planID).Error; err != nil {
+		return fmt.Errorf("meal-plan day resolve: reload plan %s for completion notice: %w", planID, err)
+	}
+	return EnqueueEvent(tx, SubjectMealPlanCompleted, "meal_plan.completed", plan.CustomerID, map[string]any{
+		"meal_plan_id": planID.String(), "meal_plan_no": plan.MealPlanNumber,
+	})
 }

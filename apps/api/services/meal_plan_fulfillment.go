@@ -49,6 +49,7 @@ func runMealPlanFulfillment(_ context.Context) {
 	}()
 	generateDueDayOrders()
 	sweepStuckDays()
+	sweepOverdueDayOrders()
 	completeFinishedPlans()
 }
 
@@ -189,6 +190,95 @@ func sweepStuckDays() {
 				return nil
 			}); err != nil {
 				log.Printf("meal-plan-fulfillment: stuck-day sweep for day %s failed: %v", d.ID, err)
+			}
+		}
+	}
+}
+
+// overdueDayOrderGrace is how long past a day's date its GENERATED order may sit without
+// ever reaching the delivery pipeline before sweepOverdueDayOrders freezes it. Same window
+// as stuckDaySweepGrace (the no-order sibling case) for one predictable "a day is overdue"
+// story across both sweeps.
+const overdueDayOrderGrace = 24 * time.Hour
+
+// preDispatchOrderStatuses is the order-status subset sweepOverdueDayOrders treats as
+// "nothing ever happened" — the chef never even progressed the order into the delivery
+// hand-off. Deliberately NARROWER than "not yet delivered": `delivering`/`picked_up` mean
+// something IS in flight, and freezing those here would race a genuine in-flight
+// completion (MarkMealPlanDayDelivered's guard excludes `failed` days, so a false freeze
+// would permanently strand a day that was actually about to deliver fine). A delivery that
+// WAS dispatched and then stalled/failed is the job of the deliveries-table sweeps above
+// (reconcileStrandedDeliveryFailures / reconcileStrandedRetryTimeouts), which key off the
+// `deliveries` row instead and carry their own tighter (15/30 min) grace.
+var preDispatchOrderStatuses = []models.OrderStatus{
+	models.OrderStatusPending, models.OrderStatusAccepted,
+	models.OrderStatusPreparing, models.OrderStatusReady,
+}
+
+func isPreDispatchOrderStatus(s models.OrderStatus) bool {
+	for _, c := range preDispatchOrderStatuses {
+		if s == c {
+			return true
+		}
+	}
+	return false
+}
+
+// sweepOverdueDayOrders is the #1034 fix: a meal-plan day that DID get an order generated
+// (unlike sweepStuckDays' no-address case, which never gets one) but whose chef never acted
+// on it — never accepted, never prepped, never handed it to delivery — sat `confirmed` (the
+// customer app's "Scheduled" pill) forever once the day's date passed, and blocked
+// completeFinishedPlans from ever closing the plan (allDaysTerminal is false for
+// confirmed/prepared days).
+//
+// MONEY-SAFE BY DESIGN: unlike sweepStuckDays, which refunds a no-order day directly
+// because no food was ever committed to, an order DOES exist here — the chef may have
+// started cooking, so this sweep must NOT guess refund-vs-release. It reuses the SAME
+// #393 delivery-failure freeze a genuinely failed delivery goes through
+// (TerminalizeDeliveryFailure → MarkMealPlanDayFailed, since the per-day shell order has no
+// razorpay_order_id and so skips the gateway path): the day flips to the NON-terminal
+// `failed` status, its payout hold freezes to `disputed`, and an admin confirms the actual
+// fault (customer/platform/chef) through the existing delivery-failure queue exactly as
+// #393 already does for a courier-reported failure. FailureOther maps to FaultAmbiguous
+// (SuggestedFaultClass) — it can never auto-resolve a refund or a payout either; a human
+// decides where the money goes. No money moves in this function.
+//
+// Idempotent + safe under concurrency: MarkMealPlanDayFailed's guarded UPDATE excludes
+// every terminal day status AND `failed` itself, so a repeat sweep run, or a day that
+// resolved (delivered/cancelled/etc.) between the query and the freeze, is a no-op.
+func sweepOverdueDayOrders() {
+	cutoff := time.Now().Add(-overdueDayOrderGrace)
+	var plans []models.MealPlan
+	if err := database.DB.
+		Where("status IN ?", []models.MealPlanStatus{models.MealPlanConfirmed, models.MealPlanActive}).
+		Preload("Days").Find(&plans).Error; err != nil {
+		log.Printf("meal-plan-fulfillment: load plans for overdue-order sweep failed: %v", err)
+		return
+	}
+	for i := range plans {
+		p := &plans[i]
+		for j := range p.Days {
+			d := &p.Days[j]
+			if d.OrderID == nil || !d.Date.Before(cutoff) || isTerminalOrFailedDayStatus(d.Status) {
+				continue
+			}
+			var order models.Order
+			if err := database.DB.First(&order, "id = ?", *d.OrderID).Error; err != nil {
+				log.Printf("meal-plan-fulfillment: overdue-order sweep: load order %s for day %s: %v", *d.OrderID, d.ID, err)
+				continue
+			}
+			if !isPreDispatchOrderStatus(order.Status) {
+				continue // something already happened (dispatched/delivered/cancelled) — not this sweep's job
+			}
+			froze, err := TerminalizeDeliveryFailure(database.DB, &order, models.FailureOther, "meal-plan-overdue-sweep", map[string]any{
+				"meal_plan_id": p.ID.String(), "day_id": d.ID.String(), "source": "meal-plan-overdue-sweep",
+			})
+			if err != nil {
+				log.Printf("meal-plan-fulfillment: overdue-order sweep: freeze day %s failed: %v", d.ID, err)
+				continue
+			}
+			if froze {
+				log.Printf("meal-plan-fulfillment: froze overdue day %s (order %s, plan %s) into delivery-failure review", d.ID, order.ID, p.ID)
 			}
 		}
 	}
@@ -397,6 +487,17 @@ func MarkMealPlanDayDelivered(orderID uuid.UUID) {
 			return nil
 		}
 		if err := SetMealPlanDayHoldAwaitingConfirmation(tx, day.ID); err != nil {
+			return err
+		}
+		// #1034: complete the plan the SAME instant its last day delivers, rather than
+		// waiting for completeFinishedPlans' next tick (up to mealPlanFulfillmentInterval
+		// later). completePlanIfAllDaysTerminal re-reads every day's status within this tx
+		// (so it sees the delivered status just written) and is a no-op unless every day is
+		// now terminal; completeFinishedPlans stays registered as the periodic backstop for
+		// any path that doesn't go through this hook (e.g. the day-resolve/day-skip flows
+		// already call it directly; this closes the last gap: MarkMealPlanDayDelivered
+		// previously never called it at all).
+		if err := completePlanIfAllDaysTerminal(tx, day.MealPlanID); err != nil {
 			return err
 		}
 		// The event's userID MUST be the CUSTOMER's users.id — handleMealPlanDayDelivered

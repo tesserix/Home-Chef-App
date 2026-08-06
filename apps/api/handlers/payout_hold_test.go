@@ -37,7 +37,10 @@ func setupHoldHandlerDB(t *testing.T) *gorm.DB {
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			customer_confirmed_at DATETIME, delivered_at DATETIME, date DATETIME, refund_txn_id TEXT,
 			created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, status TEXT)`,
+		// meal_plan_number + updated_at: completePlanIfAllDaysTerminal (#1034, now reached
+		// via MarkMealPlanDayDelivered) reads/writes both when a delivered day completes
+		// its plan.
+		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT, status TEXT, updated_at DATETIME)`,
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT, value TEXT, type TEXT, updated_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
