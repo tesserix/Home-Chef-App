@@ -146,6 +146,16 @@ func (h *MealSubscriptionHandler) GetChefOffer(c *gin.Context) {
 // PreviewPrice computes the live per-cycle price for a selection.
 // POST /meal-subscriptions/preview
 func (h *MealSubscriptionHandler) PreviewPrice(c *gin.Context) {
+	// The recurring tiffin product is off (#1052). #1035 removed every customer
+	// surface — signup, management, the Plans-tab row — so a subscription created
+	// now would be one no customer could see or cancel, and one that starts
+	// charging the day UPI-Autopay (#281) lands. Refuse rather than grow the set
+	// of rows that outlive their UI. 410, not 404: the endpoint existed and was
+	// withdrawn, which is what a stale client needs to be told.
+	if !services.MealSubscriptionsEnabled() {
+		c.JSON(http.StatusGone, gin.H{"error": "Meal subscriptions aren't available"})
+		return
+	}
 	var req mealSubSelection
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -229,6 +239,16 @@ func normaliseDayVariants(in map[string]string, days []int64) string {
 // activation in the billing phase.
 // POST /meal-subscriptions
 func (h *MealSubscriptionHandler) Subscribe(c *gin.Context) {
+	// The recurring tiffin product is off (#1052). #1035 removed every customer
+	// surface — signup, management, the Plans-tab row — so a subscription created
+	// now would be one no customer could see or cancel, and one that starts
+	// charging the day UPI-Autopay (#281) lands. Refuse rather than grow the set
+	// of rows that outlive their UI. 410, not 404: the endpoint existed and was
+	// withdrawn, which is what a stale client needs to be told.
+	if !services.MealSubscriptionsEnabled() {
+		c.JSON(http.StatusGone, gin.H{"error": "Meal subscriptions aren't available"})
+		return
+	}
 	userID, _ := middleware.GetUserID(c)
 	var req mealSubSelection
 	if err := c.ShouldBindJSON(&req); err != nil {

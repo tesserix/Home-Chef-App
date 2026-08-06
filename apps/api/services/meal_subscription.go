@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/models"
 )
 
@@ -96,9 +97,26 @@ func CanCancelMealSub(status string) bool {
 	return false
 }
 
+// MealSubscriptionsEnabled reports whether the recurring tiffin product is live
+// (#1052). Off by default, and off in prod: #1035 removed every customer-facing
+// surface, so a subscription that kept generating orders — or, once UPI-Autopay
+// (#281) lands, kept charging — would do so to a customer with no in-app way to
+// stop it. Nil config reads as OFF: an unconfigured process must not be the one
+// that starts billing people.
+func MealSubscriptionsEnabled() bool {
+	return config.AppConfig != nil && config.AppConfig.MealSubscriptionsEnabled
+}
+
 // MealSubGeneratesOrders reports whether the daily auto-order cron should generate
 // for a subscription in this status (active only; paused/past_due/cancelled don't).
-func MealSubGeneratesOrders(status string) bool { return status == models.MealSubStatusActive }
+//
+// Gated on the product flag as well as the status, so the legacy rows left behind
+// by #1035 stay inert without anyone having to find and cancel them first. This
+// is the belt to the creation-block's braces: even a row that is already ACTIVE
+// produces nothing while the product is off.
+func MealSubGeneratesOrders(status string) bool {
+	return MealSubscriptionsEnabled() && status == models.MealSubStatusActive
+}
 
 // GetChefSubscriptionConfig loads a chef's meal-subscription offer config, or nil.
 func GetChefSubscriptionConfig(db *gorm.DB, chefID uuid.UUID) *models.ChefSubscriptionConfig {

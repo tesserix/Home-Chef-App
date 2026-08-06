@@ -231,6 +231,16 @@ type Config struct {
 	// WITHOUT auto-charging the customer. Turn ON in test/staging to exercise the
 	// full flow; keep OFF in prod until #281 billing is live.
 	MealSubscriptionAutoActivate bool
+	// MealSubscriptionsEnabled gates the RECURRING tiffin subscription product as
+	// a whole (#1052). Default OFF: #1035 removed every customer-facing surface —
+	// signup, management, the Plans-tab row — so nothing in the app can create a
+	// subscription or cancel one. Rows and endpoints outliving that UI is a
+	// billing trap: the moment UPI-Autopay (#281) is switched on, a legacy
+	// active/trialing row would start charging a customer who has no in-app way
+	// to stop it. With this off, creation is refused and no subscription can
+	// generate orders, so the trap cannot spring. Turn ON only together with a
+	// customer-reachable cancel path.
+	MealSubscriptionsEnabled bool
 	// CateringDepositEnabled gates the catering deposit/advance money flow (#55):
 	// creating a Razorpay deposit order to confirm a catering booking. Default OFF —
 	// the request → quote → accept flow works without it; flip on only after the
@@ -389,6 +399,7 @@ func Load() {
 	walletPaymentFlow, _ := strconv.ParseBool(getEnv("WALLET_PAYMENT_FLOW_ENABLED", "false"))
 	mealPlanRefundV2, _ := strconv.ParseBool(getEnv("MEALPLAN_REFUND_FLOW_V2_ENABLED", "false"))
 	mealSubAutoActivate, _ := strconv.ParseBool(getEnv("MEAL_SUBSCRIPTION_AUTO_ACTIVATE", "false"))
+	mealSubsEnabled, _ := strconv.ParseBool(getEnv("MEAL_SUBSCRIPTIONS_ENABLED", "false"))
 	groupOrders, _ := strconv.ParseBool(getEnv("GROUP_ORDERS_ENABLED", "false"))
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
 	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
@@ -584,6 +595,7 @@ func Load() {
 		WalletPaymentFlowEnabled:        walletPaymentFlow,
 		MealPlanRefundFlowV2Enabled:     mealPlanRefundV2,
 		MealSubscriptionAutoActivate:    mealSubAutoActivate,
+		MealSubscriptionsEnabled:        mealSubsEnabled,
 		GroupOrdersEnabled:              groupOrders,
 		DeliveryDistancePricePerCallUSD: distancePricePerCall,
 		DeliveryWeatherPricePerCallUSD:  weatherPricePerCall,

@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/models"
 )
 
@@ -45,9 +46,9 @@ func nextWeekday(wd time.Weekday) time.Time {
 func TestCutoffPassed(t *testing.T) {
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 	at := func(h, m int) time.Time { return time.Date(2026, 1, 1, h, m, 0, 0, ist) }
-	assert.True(t, cutoffPassed(at(21, 30), "21:00", ist))  // after cutoff
-	assert.False(t, cutoffPassed(at(20, 0), "21:00", ist))  // before cutoff
-	assert.True(t, cutoffPassed(at(8, 0), "bad", ist))      // malformed → fail-open
+	assert.True(t, cutoffPassed(at(21, 30), "21:00", ist)) // after cutoff
+	assert.False(t, cutoffPassed(at(20, 0), "21:00", ist)) // before cutoff
+	assert.True(t, cutoffPassed(at(8, 0), "bad", ist))     // malformed → fail-open
 }
 
 func setupMealOrderDB(t *testing.T) *gorm.DB {
@@ -95,6 +96,12 @@ func seedDishVariant(t *testing.T, db *gorm.DB, chefID uuid.UUID, weekday int, s
 // orders/payments tables, which this sqlite harness doesn't create. Dish
 // resolution — the thing under test — is identical on both branches.
 func TestGenerateMealSubscriptionDay_PerDayVariant(t *testing.T) {
+	// #1052 gates generation on the product flag; these tests are about the
+	// generator, so they opt in explicitly.
+	prevCfg := config.AppConfig
+	t.Cleanup(func() { config.AppConfig = prevCfg })
+	config.AppConfig = &config.Config{MealSubscriptionsEnabled: true}
+
 	run := func(t *testing.T, dayVariants string, wantDish string) {
 		t.Helper()
 		db := setupMealOrderDB(t)
@@ -141,6 +148,12 @@ func TestGenerateMealSubscriptionDay_PerDayVariant(t *testing.T) {
 }
 
 func TestGenerateMealSubscriptionDay(t *testing.T) {
+	// #1052 gates generation on the product flag; these tests are about the
+	// generator, so they opt in explicitly.
+	prevCfg := config.AppConfig
+	t.Cleanup(func() { config.AppConfig = prevCfg })
+	config.AppConfig = &config.Config{MealSubscriptionsEnabled: true}
+
 	t.Run("skipped date records a skipped fulfillment, no order", func(t *testing.T) {
 		db := setupMealOrderDB(t)
 		chef, cust := uuid.New(), uuid.New()

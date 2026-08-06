@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/models"
 )
 
@@ -70,6 +71,12 @@ func TestMealSubLifecycleTransitions(t *testing.T) {
 	assert.True(t, CanCancelMealSub(models.MealSubStatusPaused))
 	assert.True(t, CanCancelMealSub(models.MealSubStatusTrialing))
 	assert.False(t, CanCancelMealSub(models.MealSubStatusCancelled))
+
+	// Generation is gated on the product flag as well as the status (#1052), so
+	// this assertion has to turn the product on to be about the STATUS rule.
+	prevCfg := config.AppConfig
+	t.Cleanup(func() { config.AppConfig = prevCfg })
+	config.AppConfig = &config.Config{MealSubscriptionsEnabled: true}
 
 	assert.True(t, MealSubGeneratesOrders(models.MealSubStatusActive))
 	assert.False(t, MealSubGeneratesOrders(models.MealSubStatusPaused))
