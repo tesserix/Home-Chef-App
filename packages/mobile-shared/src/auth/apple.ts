@@ -7,7 +7,9 @@
 // which never offers Sign in with Apple. Deferring the load to an actual Apple
 // sign-in tap keeps startup free of these native modules on every platform.
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import type { AxiosInstance } from 'axios';
 
+import { apiVersionPrefix } from '../api/version-prefix';
 import { signInWithAppleCredential } from './sign-in';
 
 // apple.ts — Sign in with Apple, with the nonce Apple and Firebase both expect.
@@ -122,13 +124,16 @@ export async function signInWithApple(): Promise<FirebaseAuthTypes.UserCredentia
  */
 export async function linkPendingAppleGrant(api: {
   post: (url: string, body: unknown) => Promise<unknown>;
+  defaults?: { baseURL?: string };
 }): Promise<void> {
   const code = pendingAppleAuthCode;
   pendingAppleAuthCode = null;
   if (!code) return;
 
   try {
-    await api.post('/v1/auth/apple/link', { authorizationCode: code });
+    await api.post(`${apiVersionPrefix(api as AxiosInstance)}/auth/apple/link`, {
+      authorizationCode: code,
+    });
   } catch {
     // Non-fatal by contract — see above.
   }
