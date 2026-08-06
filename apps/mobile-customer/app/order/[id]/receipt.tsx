@@ -117,6 +117,16 @@ export default function OrderReceiptScreen() {
   const discount = order?.discount ?? 0;
   const refund = order?.refundAmount ?? 0;
 
+  // What actually left the customer's payment method (#1027). A receipt headed
+  // "PAYMENT RECEIPT" whose Total is the gross order value states an amount the
+  // customer never paid: wallet and loyalty credit are settled before the
+  // gateway is charged. Same fields and same arithmetic as the order-detail
+  // screen (`order/[id]/index.tsx`), so the two screens can never disagree.
+  const walletApplied = order?.walletApplied ?? 0;
+  const loyaltyApplied = order?.loyaltyApplied ?? 0;
+  const creditApplied = walletApplied + loyaltyApplied;
+  const amountCharged = Math.max((order?.totalAmount ?? 0) - creditApplied, 0);
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -185,7 +195,7 @@ export default function OrderReceiptScreen() {
                 number and date sit beside it as reference, not as the headline. */}
             <View style={styles.amountBlock}>
               <Text style={styles.amountLabel}>{refund > 0 ? 'Amount paid' : 'Total paid'}</Text>
-              <Text style={styles.amount}>{money(order.totalAmount)}</Text>
+              <Text style={styles.amount}>{money(amountCharged)}</Text>
             </View>
 
             <View style={styles.metaGrid}>
@@ -276,6 +286,18 @@ export default function OrderReceiptScreen() {
 
             <View style={styles.totalRule} />
             <Line label="Total" value={money(order.totalAmount)} bold />
+            {/* Credit settled before the gateway, then the figure that was
+                actually charged (#1027). Only rendered when credit was applied,
+                so an ordinary order keeps the one bold Total it had. */}
+            {walletApplied > 0.005 ? (
+              <Line label="Wallet credit" value={`-${money(walletApplied)}`} refund />
+            ) : null}
+            {loyaltyApplied > 0.005 ? (
+              <Line label="Loyalty points" value={`-${money(loyaltyApplied)}`} refund />
+            ) : null}
+            {creditApplied > 0.005 ? (
+              <Line label="Paid by card / UPI" value={money(amountCharged)} bold />
+            ) : null}
             {refund > 0 ? (
               <Line label="Refunded" value={`-${money(refund)}`} refund />
             ) : null}
