@@ -25,6 +25,7 @@ import { useChefReviews, type ChefReview } from '../../hooks/useChefs';
 import { useReportContent, useBlockUser } from '../../hooks/useModeration';
 import { useProfile } from '../../hooks/useProfile';
 import { useDeleteReview } from '../../hooks/useReviewMutations';
+import { useRequireAccount } from '../../hooks/useRequireAccount';
 import { friendlyErrorMessage } from '../../lib/errors';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec (§3.5).
@@ -97,6 +98,7 @@ function ReviewRow({ review, viewerId }: ReviewRowProps) {
   const deleteReview = useDeleteReview();
   const router = useRouter();
   const { showAlert } = useAlert();
+  const requireAccount = useRequireAccount();
 
   // Moderation is for OTHER people's content (#1047). The overflow rendered the
   // generic report/block sheet unconditionally, so on your own review the app
@@ -136,9 +138,16 @@ function ReviewRow({ review, viewerId }: ReviewRowProps) {
           <Text style={styles.date}>{formatRelativeDate(review.createdAt)}</Text>
         </View>
         <Pressable
-          onPress={() =>
-            isOwnReview ? ownSheetRef.current?.present() : reportSheetRef.current?.present()
-          }
+          onPress={() => {
+            if (isOwnReview) {
+              ownSheetRef.current?.present();
+              return;
+            }
+            // A guest may read reviews but cannot moderate them — prompt rather
+            // than open a sheet whose submit would 401.
+            if (!requireAccount('report a review')) return;
+            reportSheetRef.current?.present();
+          }}
           accessibilityRole="button"
           accessibilityLabel={
             isOwnReview ? 'Edit or delete your review' : 'Report or block this reviewer'
