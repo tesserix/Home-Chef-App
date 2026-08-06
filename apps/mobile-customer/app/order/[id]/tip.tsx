@@ -14,6 +14,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { useCreateTip } from '../../../hooks/useTip';
+import { useOrder } from '../../../hooks/useOrderHistory';
 import { friendlyErrorMessage } from '../../../lib/errors';
 
 const PRESETS = [20, 50, 100];
@@ -29,15 +30,25 @@ export default function TipScreen() {
   const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const createTip = useCreateTip();
+  const { data: orderRes } = useOrder(id);
+  const order = orderRes?.data;
   const [chefAmount, setChefAmount] = useState(50);
   const [riderAmount, setRiderAmount] = useState(0);
 
-  const total = chefAmount + riderAmount;
+  // Only an explicit `false` hides a leg; an older API sends nothing and keeps
+  // the previous behaviour.
+  const chefTippable = order?.tipEligibility?.chef !== false;
+  const riderTippable = order?.tipEligibility?.rider !== false;
+
+  // Never send an amount for a leg that is not on screen.
+  const chefTip = chefTippable ? chefAmount : 0;
+  const riderTip = riderTippable ? riderAmount : 0;
+  const total = chefTip + riderTip;
 
   function send() {
     if (!id || total < 1) return;
     createTip.mutate(
-      { orderId: id, chefAmount, riderAmount },
+      { orderId: id, chefAmount: chefTip, riderAmount: riderTip },
       {
         onSuccess: (data) => {
           // A tip rides the same gateway as the order it thanks, so the server
@@ -102,17 +113,26 @@ export default function TipScreen() {
           no platform cut.
         </Text>
 
-        <TipPicker
-          label="Your chef"
-          amount={chefAmount}
-          onChange={setChefAmount}
-        />
-        <TipPicker
-          label="Your rider"
-          caption="Only if a rider delivered your order"
-          amount={riderAmount}
-          onChange={setRiderAmount}
-        />
+        {/* Each leg is offered only when it can actually be paid (#1029). The
+            rider picker in particular is never payable on a Cashfree order —
+            Easy Split has no route to a delivery partner at all — so offering
+            it there guaranteed a 409 after the customer had chosen an amount.
+            `undefined` (older API) keeps both pickers, as before. */}
+        {chefTippable ? (
+          <TipPicker
+            label="Your chef"
+            amount={chefAmount}
+            onChange={setChefAmount}
+          />
+        ) : null}
+        {riderTippable ? (
+          <TipPicker
+            label="Your rider"
+            caption="Only if a rider delivered your order"
+            amount={riderAmount}
+            onChange={setRiderAmount}
+          />
+        ) : null}
       </KeyboardAwareScrollView>
 
       <View style={styles.footer}>

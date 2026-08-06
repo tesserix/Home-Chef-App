@@ -84,6 +84,10 @@ interface ApiOrder {
   // reconciled against the customer's bank charge (D-12).
   walletApplied?: number;
   loyaltyApplied?: number;
+  // Which tip legs this order can actually pay out (#1029). Absent on an older
+  // API, which must keep the previous behaviour — so only an explicit `false`
+  // hides the tip entry; `undefined` does not.
+  tipEligibility?: { chef: boolean; rider: boolean };
   walletRefunded?: number;
   loyaltyRefunded?: number;
   refundedAt?: string;
@@ -128,6 +132,7 @@ function mapOrder(raw: ApiOrder): Order {
     refundAmount: raw.refundAmount,
     walletApplied: raw.walletApplied,
     loyaltyApplied: raw.loyaltyApplied,
+    tipEligibility: raw.tipEligibility,
     walletRefunded: raw.walletRefunded,
     loyaltyRefunded: raw.loyaltyRefunded,
     refundedAt: raw.refundedAt,

@@ -848,15 +848,28 @@ export default function OrderDetailScreen() {
                   {reorder.isPending ? 'Reordering…' : 'Reorder'}
                 </Text>
               </Pressable>
-              <Text style={styles.quietLinkDot}>·</Text>
-              <Pressable
-                onPress={() => router.push(`/order/${order.id}/tip`)}
-                accessibilityRole="button"
-                accessibilityLabel="Tip your chef or rider"
-                hitSlop={8}
-              >
-                <Text style={styles.quietLink}>Tip chef</Text>
-              </Pressable>
+              {/* Only when a tip can actually reach someone (#1029). This link
+                  used to show on every delivered order; the customer picked an
+                  amount, committed, and got "This chef's payout account isn't
+                  active yet, so tips can't reach them" — a dead end dressed as a
+                  feature. The server now says up front whether either leg is
+                  payable, using the same predicate the tip endpoint enforces.
+                  `undefined` (older API) keeps the old behaviour rather than
+                  hiding a link that would have worked. */}
+              {order.tipEligibility?.chef !== false ||
+              order.tipEligibility?.rider !== false ? (
+                <>
+                  <Text style={styles.quietLinkDot}>·</Text>
+                  <Pressable
+                    onPress={() => router.push(`/order/${order.id}/tip`)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Tip your chef or rider"
+                    hitSlop={8}
+                  >
+                    <Text style={styles.quietLink}>Tip chef</Text>
+                  </Pressable>
+                </>
+              ) : null}
               <Text style={styles.quietLinkDot}>·</Text>
               <Pressable
                 onPress={() => router.replace('/(tabs)')}

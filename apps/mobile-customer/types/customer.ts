@@ -289,6 +289,11 @@ export interface Order {
   // card charge: gateway charge = totalAmount − walletApplied − loyaltyApplied.
   walletApplied?: number;
   loyaltyApplied?: number;
+  // Which tip legs this order can actually pay out (#1029) — server-computed by
+  // the same predicate the tip endpoint enforces, so the entry point and the
+  // endpoint cannot disagree. Absent on an older API: only an explicit `false`
+  // hides a tip surface, `undefined` keeps the previous behaviour.
+  tipEligibility?: { chef: boolean; rider: boolean };
 }
 
 export interface TrackingResponse {
