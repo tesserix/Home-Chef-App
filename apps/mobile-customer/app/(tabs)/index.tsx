@@ -58,7 +58,8 @@ import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { FilterSheet } from '../../components/home/FilterSheet';
-import { CATERING_ENABLED, WALLET_ENABLED } from '../../lib/features';
+import { CATERING_ENABLED, TIFFIN_ENABLED, WALLET_ENABLED } from '../../lib/features';
+import { ActiveMealPlanCard } from '../../components/meal-plan/ActiveMealPlanCard';
 import { useIsGuest } from '../../hooks/useRequireAccount';
 import { type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
@@ -567,6 +568,13 @@ export default function HomeScreen() {
           ) : null}
         </View>
       </View>
+
+      {/* Today's (or the next) meal for a plan holder (#1037). Renders nothing
+          for everyone else, so Home is unchanged for the majority. It sits at
+          the END of the header — below discovery chrome, immediately above the
+          chef grid — rather than in the floating anchor above the dock, which
+          the active-order card already owns; both float and they overlap. */}
+      {TIFFIN_ENABLED && !isGuest ? <ActiveMealPlanCard /> : null}
     </>
   );
 
@@ -769,10 +777,15 @@ const styles = StyleSheet.create({
 
   // ── Row 1: Search pill ────────────────────────────────────────────────────
   // ── Row 0: Address + map entry ────────────────────────────────────────────
+  // Every header row below sits INSIDE the FlatList's listContent, which already
+  // applies the screen's 16px gutter. Re-applying 16 here pushed all the header
+  // chrome to a 32px gutter while the chef cards stayed at 16, so the search
+  // pill, category rail and filter bar were all visibly narrower than the
+  // content they sit above (and addressRow was asymmetric on top of that). The
+  // gutter is owned in ONE place — listContent — and these rows inherit it.
   addressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: 16,
     gap: 8,
   },
   addressRowPill: {
@@ -853,7 +866,6 @@ const styles = StyleSheet.create({
   },
 
   searchPillWrapper: {
-    paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
   },
@@ -900,7 +912,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'nowrap',
     gap: 4,
-    paddingHorizontal: 12,
     paddingBottom: 8,
   },
   // This is the Pressable's OWN style (not the inner `chip` View below) —
@@ -960,7 +971,6 @@ const styles = StyleSheet.create({
   filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     paddingBottom: 10,
     gap: 8,
   },
@@ -1179,9 +1189,11 @@ const styles = StyleSheet.create({
   },
 
   // ── Skeleton grid ─────────────────────────────────────────────────────────
+  // Also inside listContent (it is the list's empty component while loading),
+  // so it inherits the gutter too — otherwise the skeletons sat 16px narrower
+  // than the cards that replace them and the whole feed shifted on load.
   skeletonGrid: {
     gap: 24,
-    paddingHorizontal: 16,
     paddingTop: 4,
   },
   skeletonCol: {
