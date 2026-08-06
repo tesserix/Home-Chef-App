@@ -19,6 +19,7 @@ import {
   type RefundChoiceDay,
 } from '../../hooks/useMealPlans';
 import { formatMoney } from '../../lib/format';
+import { HAIRLINE } from '../../lib/hairline';
 
 // Slot → display label ('lunch' → 'Lunch'). Trivial + local; not worth a lib export.
 const slotLabel = (slot: string) => (slot ? slot.charAt(0).toUpperCase() + slot.slice(1) : '');
@@ -181,7 +182,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: customerColors.canvas,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     padding: 16,
     gap: 4,
@@ -222,7 +223,7 @@ const styles = StyleSheet.create({
   btnWalletText: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.canvas },
   btnSource: {
     backgroundColor: customerColors.surface.soft,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
   },
   btnSourceText: {

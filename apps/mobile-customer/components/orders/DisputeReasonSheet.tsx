@@ -2,6 +2,7 @@ import { forwardRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SheetBase, type SheetHandle } from '@homechef/mobile-shared/ui';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { HAIRLINE } from '../../lib/hairline';
 
 // Preset reasons for the dispute-the-refund flow (#876). Not the content-
 // moderation taxonomy ReportSheet/REPORT_REASONS uses — that union has no
@@ -140,7 +141,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 14,
     borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     backgroundColor: customerColors.canvas,
   },
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     minHeight: 88,
     borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     padding: 12,
     fontFamily: 'Inter',

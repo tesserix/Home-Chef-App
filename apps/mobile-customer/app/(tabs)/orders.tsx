@@ -22,6 +22,7 @@ import { MealPlanList } from '../../components/meal-plan/MealPlanList';
 import type { Order } from '../../types/customer';
 import { GuestGate } from '../../components/GuestGate';
 import { useIsGuest } from '../../hooks/useRequireAccount';
+import { HAIRLINE } from '../../lib/hairline';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -84,7 +85,7 @@ const skeletonStyles = StyleSheet.create({
     marginHorizontal: 16,
     marginVertical: 5,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     paddingHorizontal: 16,
     paddingVertical: 14,

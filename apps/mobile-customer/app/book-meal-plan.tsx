@@ -36,6 +36,7 @@ import { MealPlanBookRow } from '../components/chef/MealPlanBookRow';
 import { useProfile } from '../hooks/useProfile';
 import { useAlert } from '@homechef/mobile-shared/ui';
 import { formatMoney } from '../lib/format';
+import { HAIRLINE } from '../lib/hairline';
 
 const HORIZON_DAYS = 14; // how far ahead a customer can pre-book
 const LEAD_MS = 12 * 60 * 60 * 1000; // server's booking lead time (mealPlanLeadTime)
@@ -583,7 +584,7 @@ const styles = StyleSheet.create({
   // the coral selected-row tint to the rounded corners.
   dayCard: {
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     backgroundColor: customerColors.canvas,
     overflow: 'hidden',
@@ -597,7 +598,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   slotHeaderDivided: {
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: HAIRLINE,
     borderTopColor: customerColors.hairline,
   },
   slotLabel: {
@@ -617,7 +618,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: customerColors.canvas,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: HAIRLINE,
     borderTopColor: customerColors.hairline,
     gap: 12,
     shadowColor: customerTheme.shadow[2].shadowColor,

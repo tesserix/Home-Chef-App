@@ -55,6 +55,7 @@ import { useConfirmGroupOrderReceived } from '../../hooks/useConfirmReceived';
 import { canConfirmReceipt, payoutHoldMeta } from '../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { formatMoney } from '../../lib/format';
+import { HAIRLINE } from '../../lib/hairline';
 
 const STATUS_LABEL: Record<string, string> = {
   open: 'Open — add items',
@@ -696,7 +697,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: HAIRLINE,
     borderBottomColor: customerColors.hairline,
   },
   chefName: { fontFamily: 'Inter-Medium', fontSize: 14, color: customerColors.charcoal.DEFAULT },
@@ -724,7 +725,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   emptyCart: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     borderRadius: 12,
     padding: 20,
@@ -735,7 +736,7 @@ const styles = StyleSheet.create({
   emptyCartBody: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, textAlign: 'center', lineHeight: 18 },
   pBlock: {
     backgroundColor: customerColors.canvas,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     borderRadius: 12,
     padding: 12,
@@ -772,7 +773,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     borderRadius: 999,
     paddingHorizontal: 4,
@@ -800,13 +801,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 6,
     paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: HAIRLINE,
     borderTopColor: customerColors.hairline,
   },
   sumShareLabel: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.coral.DEFAULT },
   sumShareValue: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.coral.DEFAULT, fontVariant: ['tabular-nums'] },
   menuCard: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     borderRadius: 12,
     paddingHorizontal: 12,
@@ -837,7 +838,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: customerColors.canvas,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: HAIRLINE,
     borderTopColor: customerColors.hairline,
     gap: 10,
     shadowColor: customerTheme.shadow[2].shadowColor,

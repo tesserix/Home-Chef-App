@@ -8,6 +8,7 @@ import { canConfirmReceipt } from '../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { formatOrderDateTime } from '@homechef/mobile-shared/utils';
 import { useAlert } from '@homechef/mobile-shared/ui';
+import { HAIRLINE } from '../../lib/hairline';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const CARD_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
@@ -271,7 +272,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: customerColors.canvas,
     // Hairline border via shadowColor trick — use borderColor instead for clarity
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     // Soft shadow — shadow[1] style
     shadowColor: '#000000',

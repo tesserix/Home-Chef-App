@@ -38,6 +38,7 @@ import { MESSAGING_ENABLED } from '../../../lib/features';
 import type { Order } from '../../../types/customer';
 import { formatMoney } from '../../../lib/format';
 import { useCancellationRequest } from '../../../hooks/useCancellation';
+import { HAIRLINE } from '../../../lib/hairline';
 
 // Android ripple tint for coral-filled CTAs — translucent white derived from
 // the canvas token, never a new literal colour.
@@ -1258,7 +1259,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 16,
     minHeight: 44,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     borderRadius: 12,
     paddingVertical: 12,
@@ -1272,7 +1273,7 @@ const styles = StyleSheet.create({
     gap: 6,
     alignSelf: 'stretch',
     minHeight: 48,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     borderRadius: 12,
     paddingVertical: 12,
@@ -1358,7 +1359,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: HAIRLINE,
     borderBottomColor: customerColors.hairline,
   },
 
@@ -1470,7 +1471,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 10,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     backgroundColor: customerColors.surface.DEFAULT,
   },
@@ -1520,7 +1521,7 @@ const styles = StyleSheet.create({
   // map clips to rounded corners. Shadow[2] lifts it off the canvas.
   mapCard: {
     borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     backgroundColor: customerColors.surface.DEFAULT,
     overflow: 'hidden',
@@ -1552,7 +1553,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.10,
     shadowRadius: 4,
     elevation: 2,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
   },
   // Status / ETA footer row — inside the card, below the map
@@ -1562,7 +1563,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: HAIRLINE,
     borderTopColor: customerColors.hairline,
   },
   mapStatusLeft: {
@@ -1736,7 +1737,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   itemRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: HAIRLINE,
     borderBottomColor: customerColors.hairline,
   },
   itemInfo: {
@@ -1809,7 +1810,7 @@ const styles = StyleSheet.create({
   },
   // Total row — hairline above, heavier weight
   totalRow: {
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: HAIRLINE,
     borderTopColor: customerColors.hairline,
     marginTop: 8,
     paddingTop: 12,

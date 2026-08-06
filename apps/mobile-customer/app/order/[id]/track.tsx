@@ -17,6 +17,7 @@ import { useOrderTracking } from '../../../hooks/useOrderTracking';
 import { DeliveryMap } from '../../../components/tracking/DeliveryMap';
 import { OrderTimeline } from '../../../components/orders/OrderTimeline';
 import { getStepIndex, getStatusLine } from '../../../lib/orderSteps';
+import { HAIRLINE } from '../../../lib/hairline';
 
 // Progress dot row — coral dots for active/passed, hairline for future.
 // Count of 4 mirrors the OrderTimeline step count so they stay in sync.
@@ -293,7 +294,7 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.surface.soft,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
   },
   driverAvatarText: {

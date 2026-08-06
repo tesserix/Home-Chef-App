@@ -19,6 +19,7 @@ import {
 import { formatDateRange, mealPlanStatusMeta } from '../../lib/meal-plan';
 import { useDockClearance } from '../navigation/Dock';
 import { formatMoney } from '../../lib/format';
+import { HAIRLINE } from '../../lib/hairline';
 
 // MealPlanList — the shared list of every meal plan the customer has booked (#196),
 // with a status chip and an "approval needed" flag. Headerless + self-contained (it
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: customerColors.coral.tint,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.coral.DEFAULT,
     padding: 14,
   },
@@ -221,7 +222,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: customerColors.canvas,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     padding: 16,
     gap: 6,

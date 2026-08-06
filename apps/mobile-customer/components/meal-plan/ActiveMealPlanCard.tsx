@@ -27,6 +27,7 @@ import { mealPlanDayStatusMeta, toLocalDateKey } from '../../lib/meal-plan';
 import { selectActiveMealPlanMeal } from '../../lib/active-meal-plan';
 import { DietIcon } from '@homechef/mobile-shared/ui';
 import { CookingIndicator } from '../status/CookingIndicator';
+import { HAIRLINE } from '../../lib/hairline';
 
 /** "Today" / "Tomorrow" / "Fri 8 Aug" — relative reads faster on a glance card. */
 function whenLabel(iso: string, todayKey: string): string {
@@ -147,7 +148,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     backgroundColor: customerColors.surface.DEFAULT,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     gap: 6,
     shadowColor: '#000000',

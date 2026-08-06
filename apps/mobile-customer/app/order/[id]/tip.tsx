@@ -16,6 +16,7 @@ import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { useCreateTip } from '../../../hooks/useTip';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { friendlyErrorMessage } from '../../../lib/errors';
+import { HAIRLINE } from '../../../lib/hairline';
 
 const PRESETS = [20, 50, 100];
 
@@ -263,7 +264,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: customerColors.surface.DEFAULT,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     padding: 16,
     marginBottom: 16,
@@ -313,7 +314,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: customerColors.canvas,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: HAIRLINE,
     borderTopColor: customerColors.hairline,
     gap: 12,
   },

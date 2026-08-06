@@ -73,6 +73,7 @@ import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
 import { useCustomerCoords, useActiveAddress } from '../../hooks/useCustomerCoords';
 import { useWallet } from '../../hooks/useWallet';
+import { HAIRLINE } from '../../lib/hairline';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -802,7 +803,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: customerColors.surface.DEFAULT,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
   },
   // Wallet chip — a glanceable available-balance pill sized to match the round
@@ -815,7 +816,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 12,
     backgroundColor: customerColors.surface.DEFAULT,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
   },
   walletPillText: {
@@ -839,7 +840,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 14,
     backgroundColor: customerColors.surface.DEFAULT,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
   },
   signInPillText: {

@@ -20,6 +20,7 @@ import { useOrder, fetchInvoiceDownloadUrl } from '../../../hooks/useOrderHistor
 import { useAlert } from '@homechef/mobile-shared/ui';
 import { receiptFileName } from '../../../lib/receipt-file';
 import { shareReceiptPdf } from '../../../lib/share-pdf';
+import { HAIRLINE } from '../../../lib/hairline';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -388,7 +389,7 @@ const styles = StyleSheet.create({
   doc: {
     backgroundColor: customerColors.canvas,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     padding: 20,
   },

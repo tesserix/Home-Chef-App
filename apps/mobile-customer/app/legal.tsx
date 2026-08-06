@@ -16,6 +16,7 @@ import {
 } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { HAIRLINE } from '../lib/hairline';
 
 const DOCS: { label: string; route: Href; icon: LucideIcon }[] = [
   { label: 'Terms of Service', route: '/terms', icon: FileText },
@@ -77,7 +78,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 8,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     overflow: 'hidden',
     backgroundColor: customerColors.canvas,

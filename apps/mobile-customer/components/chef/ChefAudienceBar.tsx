@@ -13,6 +13,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Bell, BellRing, Heart } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { HAIRLINE } from '../../lib/hairline';
 
 const PILL_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     minHeight: 36,
     borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.charcoal.soft,
   },
   pillPressed: { opacity: 0.6 },

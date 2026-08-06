@@ -15,6 +15,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
 import { getStepIndex, getStepLabels, getStatusLine } from '../../lib/orderSteps';
 import { StageIcon } from '../status/StageIcon';
+import { HAIRLINE } from '../../lib/hairline';
 
 interface ActiveOrderCardProps {
   order: Order;
@@ -197,7 +198,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 16,
     backgroundColor: customerColors.surface.DEFAULT,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     // shadow[2] — lifted, editorial
     shadowColor: '#000000',

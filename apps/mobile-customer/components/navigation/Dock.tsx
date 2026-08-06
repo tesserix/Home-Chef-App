@@ -17,6 +17,7 @@ import { CalendarCheck, Heart, Home, ShoppingBag, User, type LucideIcon } from '
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { CartFab } from './DockCartPill';
 import { DOCK_BOTTOM_GAP, DOCK_HEIGHT, useDockClearance } from './dock-metrics';
+import { HAIRLINE } from '../../lib/hairline';
 
 // Geometry lives in ./dock-metrics (shared with CartFab, no import cycle).
 // Screens keep importing useDockClearance from here.
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
     height: DOCK_HEIGHT,
     borderRadius: 28,
     backgroundColor: customerColors.canvas,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     paddingHorizontal: 8,
     shadowColor: '#000000',

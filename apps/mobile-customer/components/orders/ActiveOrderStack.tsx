@@ -17,6 +17,7 @@ import { ChevronRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
 import { ActiveOrderCard } from './ActiveOrderCard';
+import { HAIRLINE } from '../../lib/hairline';
 
 // Android ripple tint — translucent token, never a new literal colour.
 const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
@@ -71,7 +72,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
     backgroundColor: customerColors.surface.DEFAULT,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderTopWidth: 0,
     borderColor: customerColors.hairline,
   },

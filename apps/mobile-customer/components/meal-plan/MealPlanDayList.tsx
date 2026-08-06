@@ -27,6 +27,7 @@ import { mealPlanDayStatusMeta, isDeclinedDayStatus, toLocalDateKey } from '../.
 import { canConfirmReceipt } from '../../lib/payout-hold';
 import { CookingIndicator } from '../status/CookingIndicator';
 import { formatMoney } from '../../lib/format';
+import { HAIRLINE } from '../../lib/hairline';
 
 function dayLabel(d: MealPlanDay): string {
   return new Date(d.date).toLocaleDateString(undefined, {
@@ -221,14 +222,14 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: customerColors.surface.DEFAULT,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     // Rows now paint their own full-bleed background (today's row tint), so the
     // card must clip them to its own corner radius.
     overflow: 'hidden',
   },
   dayRow: { paddingHorizontal: 16, paddingVertical: 12 },
-  divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: customerColors.hairline },
+  divider: { borderBottomWidth: HAIRLINE, borderBottomColor: customerColors.hairline },
   // Today's row — the one thing on this screen worth finding at a glance among
   // five otherwise-identical rows. Background tint, not a border, so it reads as
   // a state (the meal that matters right now) rather than a selection outline.

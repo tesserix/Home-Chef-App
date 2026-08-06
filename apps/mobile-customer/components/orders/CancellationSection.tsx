@@ -22,6 +22,7 @@ import { estimateCancellationRefund, toPaise } from '../../lib/cancellation-refu
 import type { Order } from '../../types/customer';
 import { DisputeReasonSheet } from './DisputeReasonSheet';
 import { CancelRefundSheet } from './CancelRefundSheet';
+import { HAIRLINE } from '../../lib/hairline';
 
 /** The order's money, in RUPEES, as the detail screen already holds it. Needed
  *  here for the pre-cancellation refund estimate (#1032) — the customer must see
@@ -378,7 +379,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     padding: 16,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: HAIRLINE,
     borderColor: customerColors.hairline,
     backgroundColor: customerColors.canvas,
     gap: 8,
