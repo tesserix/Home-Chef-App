@@ -25,6 +25,8 @@ import {
   type MealFulfillment,
   type MealSubscription,
 } from '../hooks/useMealSubscription';
+import { useChef } from '../hooks/useChefs';
+import { money, renewalLine } from '../lib/subscription-format';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -53,9 +55,6 @@ const STATUS_LABEL: Record<MealSubscription['status'], string> = {
   cancelled: 'Cancelled',
 };
 
-function money(n: number): string {
-  return `₹${Math.round(n).toLocaleString('en-IN')}`;
-}
 
 // ─── Loading skeleton — matches SubCard proportions ──────────────────────────
 
@@ -148,10 +147,12 @@ function SubCard({ sub }: { sub: MealSubscription }) {
   const { showAlert } = useAlert();
   const action = useMealSubAction();
   const { data: fulfil } = useMealFulfillments(sub.id);
+  const { data: chef } = useChef(sub.chefId);
   const adherence = fulfil?.adherence;
   const active = sub.status === 'active';
   const paused = sub.status === 'paused';
   const terminal = sub.status === 'cancelled';
+  const renewalNote = renewalLine(sub);
 
   function run(a: 'pause' | 'resume' | 'cancel') {
     const confirm = a === 'cancel';
@@ -244,10 +245,24 @@ function SubCard({ sub }: { sub: MealSubscription }) {
           </Text>
         </View>
       </View>
+      {/* Which kitchen (#1042). Three subscriptions of the same shape rendered
+          as three identical cards, so Cancel was a guess about which chef was
+          being cancelled. `chefId` was on the model and unused. */}
+      {chef?.data?.businessName ? (
+        <Text style={styles.chefName} numberOfLines={1}>
+          {chef.data.businessName}
+        </Text>
+      ) : null}
       <Text style={styles.sub}>
         {sub.days.length} days/week · {sub.cadence === 'monthly' ? 'Monthly' : 'Weekly'} ·{' '}
         {money(sub.cycleAmount)}
       </Text>
+      {/* When the next charge lands (#1042) — the single most important fact
+          about a recurring payment, and the one a trial hides most: a customer
+          trialing a ₹900/week plan could not tell when the trial ended or when
+          they were first billed. `currentPeriodEnd` was likewise on the model
+          and never referenced. */}
+      {renewalNote ? <Text style={styles.renewal}>{renewalNote}</Text> : null}
       {sub.creditBalance > 0 ? (
         <Text style={styles.credit}>{money(sub.creditBalance)} credit applies to your next cycle</Text>
       ) : null}
@@ -380,7 +395,15 @@ const styles = StyleSheet.create({
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT, flex: 1 },
+  chefName: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: customerColors.charcoal.DEFAULT },
   sub: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, fontVariant: ['tabular-nums'] },
+  renewal: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    fontVariant: ['tabular-nums'],
+    marginTop: 2,
+  },
   credit: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 12,
