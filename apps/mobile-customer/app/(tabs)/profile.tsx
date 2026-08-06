@@ -69,7 +69,15 @@ function NavRow({ icon, label, onPress, destructive }: NavRowProps) {
         <View
           className={`flex-row items-center px-4 py-3 min-h-[52px] ${pressed ? 'bg-surface-soft' : 'bg-canvas'}`}
         >
-          <View className="w-9 h-9 rounded-full bg-surface-soft items-center justify-center mr-3">
+          {/* Destructive rows get a tinted chip instead of the neutral grey
+              every other row uses — the one place an icon carries meaning
+              rather than just decoration, so "this ends something" is
+              scannable before the label is even read. */}
+          <View
+            className={`w-9 h-9 rounded-full items-center justify-center mr-3 ${
+              destructive ? 'bg-destructive-tint' : 'bg-surface-soft'
+            }`}
+          >
             {icon}
           </View>
           <Text
@@ -91,6 +99,20 @@ function NavRow({ icon, label, onPress, destructive }: NavRowProps) {
 
 function NavRowDivider() {
   return <View className="h-px bg-hairline ml-16" />;
+}
+
+/** Names a group of nav rows so the grouping reads as intentional rather
+ *  than an accidental gap in the scroll. Sentence case, not all-caps —
+ *  a label, not a shout. */
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <Text
+      className="px-4 pb-1 pt-1 text-[13px] font-semibold font-sans"
+      style={{ color: customerColors.charcoal.soft, letterSpacing: 0.1 }}
+    >
+      {children}
+    </Text>
+  );
 }
 
 /** One of the three high-traffic destinations at the top of the hub. */
@@ -272,7 +294,11 @@ function ProfileScreenBody() {
               <View
                 className="mx-4 mt-4 flex-row items-center gap-4 rounded-xl px-4 py-4"
                 style={{
-                  backgroundColor: customerColors.surface.soft,
+                  // Coral tint, not the same flat grey as the quick tiles above —
+                  // this is the one nudge on the screen worth a beat of accent
+                  // colour, and giving it its own tone is what lets it outrank
+                  // three identical-looking utility tiles instead of blending in.
+                  backgroundColor: customerColors.coral.tint,
                   opacity: pressed && Platform.OS === 'ios' ? 0.7 : 1,
                 }}
               >
@@ -341,6 +367,7 @@ function ProfileScreenBody() {
 
           return (
             <View className="mt-6">
+              <SectionLabel>Preferences</SectionLabel>
               {moreRows.map((r, i) => (
                 <View key={r.label}>
                   {i > 0 ? <NavRowDivider /> : null}
@@ -361,10 +388,12 @@ function ProfileScreenBody() {
             the four reference documents consolidate behind one "Legal" row
             (app/legal.tsx index).
         ═══════════════════════════════════════════════════════════════════ */}
-        {/* A hairline, not a heading: the break in rhythm is enough to separate
-            account admin from the destinations above, and three stacked section
-            headers were most of what made this screen feel busy. */}
-        <View className="mt-6 h-2" style={{ backgroundColor: customerColors.surface.soft }} />
+        {/* A labelled section, not a bare grey gap — the gap alone read as an
+            accidental seam in the scroll rather than a deliberate boundary
+            between "things I configure" and "things I do to my account." */}
+        <View className="mt-6">
+          <SectionLabel>Support & legal</SectionLabel>
+        </View>
 
         <NavRow
           icon={<DatabaseZap size={18} color={customerColors.charcoal.soft} />}
@@ -403,14 +432,14 @@ function ProfileScreenBody() {
             Google/Apple (SSO) accounts have no password credential, so this
             section is hidden for them (hasPasswordProvider). ── */}
         {canChangePassword ? (
-          <>
-            <NavRowDivider />
+          <View className="mt-6">
+            <SectionLabel>Account</SectionLabel>
             <NavRow
               icon={<KeyRound size={18} color={customerColors.charcoal.soft} />}
               label="Change password"
               onPress={() => router.push('/(auth)/forgot-password' as never)}
             />
-          </>
+          </View>
         ) : null}
 
         {/* Apple 5.1.1(v) requires account deletion to be initiated IN the app,
@@ -418,14 +447,20 @@ function ProfileScreenBody() {
             always been on the data-privacy screen, but that screen was reachable
             only behind a row called "Your data" — accurate for the export half,
             and invisible to anyone looking to leave. This is the chef app's
-            wording (settings.tsx), pointed at the screen we already have. */}
-        <NavRowDivider />
-        <NavRow
-          icon={<UserMinus size={18} color={customerColors.destructive.DEFAULT} />}
-          label="Pause or delete account"
-          onPress={() => router.push('/data-privacy')}
-          destructive
-        />
+            wording (settings.tsx), pointed at the screen we already have.
+
+            No section label here, deliberately — the extra breathing room
+            plus the destructive tint chip already mark this as the point of
+            no return; a caption would just be more text to read on the way
+            to leaving. */}
+        <View className="mt-6">
+          <NavRow
+            icon={<UserMinus size={18} color={customerColors.destructive.DEFAULT} />}
+            label="Pause or delete account"
+            onPress={() => router.push('/data-privacy')}
+            destructive
+          />
+        </View>
 
         {/* ── Logout — destructive action ── */}
         <Pressable
