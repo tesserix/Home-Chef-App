@@ -919,10 +919,16 @@ export default function DashboardScreen() {
                       </View>
                       <Text style={styles.alertBody} numberOfLines={1}>
                         {pendingMealPlans.length === 1
-                          ? t('dashboard.mealPlanBodyOne', {
-                              name: mealPlanCustomerName(pendingMealPlans[0]!),
-                              count: pendingMealPlans[0]!.days.length,
-                            })
+                          ? t(
+                              // "1 meals" read as a bug on the dashboard (#1040).
+                              pendingMealPlans[0]!.days.length === 1
+                                ? 'dashboard.mealPlanBodyOneMeal'
+                                : 'dashboard.mealPlanBodyOne',
+                              {
+                                name: mealPlanCustomerName(pendingMealPlans[0]!),
+                                count: pendingMealPlans[0]!.days.length,
+                              },
+                            )
                           : t('dashboard.mealPlanBodyMany')}
                       </Text>
                     </View>

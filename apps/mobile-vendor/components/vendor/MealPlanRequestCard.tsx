@@ -53,7 +53,8 @@ export function MealPlanRequestCard({ plan, onPress }: Props) {
               strokeWidth={1.75}
             />
             <Text style={styles.meta}>
-              {dateRange(plan)} · {days.length} day
+              {/* days[] counts booked meals, not dates (#1040). */}
+              {dateRange(plan)} · {days.length} meal
               {days.length === 1 ? '' : 's'}
             </Text>
           </View>

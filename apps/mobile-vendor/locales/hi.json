@@ -47,6 +47,7 @@
     "mealPlanRequestMany": "{{count}} मील प्लान अनुरोध",
     "mealPlanReview": "समीक्षा करें →",
     "mealPlanBodyOne": "{{name}} · {{count}} भोजन — दिन पुष्टि करने के लिए टैप करें",
+    "mealPlanBodyOneMeal": "{{name}} · 1 भोजन — दिन की पुष्टि करने के लिए टैप करें",
     "mealPlanBodyMany": "ग्राहक आपकी पुष्टि का इंतज़ार कर रहे हैं",
     "reupload": "फिर से अपलोड करें →",
     "expired": "समाप्त हो गया",

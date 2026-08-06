@@ -96,7 +96,7 @@ func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.Mea
 		return fmt.Errorf("v2 refund day %s: hold reversal: %w", day.ID, err)
 	}
 
-	reason := fmt.Sprintf("Tiffin %s — refund (%d%%)", plan.MealPlanNumber, percent)
+	reason := MealPlanRefundReason(plan, percent)
 	if dest == models.RefundDestinationSource {
 		// Original method: reverse the escrow charge to the customer's card/UPI (RBI ~5-7 days).
 		refID, err := gatewayRefundToSource(plan, amount, reason, dayRefundKey(day.ID)+":src")

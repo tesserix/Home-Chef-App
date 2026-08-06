@@ -13,11 +13,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '@homechef/mobile-shared/ui';
-import { isPastMealDay, isSkippableMealDay, istCalendarDate } from '@homechef/mobile-shared/utils';
+import {
+  isPastMealDay,
+  isSkippableMealDay,
+  istCalendarDate,
+  subscriptionBillingLine,
+} from '@homechef/mobile-shared/utils';
 import { router } from 'expo-router';
 import { AlertCircle, ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { friendlyErrorMessage } from '../lib/errors';
+import { useChef } from '../hooks/useChefs';
 import {
   useMealSubscriptions,
   useMealSubAction,
@@ -152,6 +158,9 @@ function SubCard({ sub }: { sub: MealSubscription }) {
   const active = sub.status === 'active';
   const paused = sub.status === 'paused';
   const terminal = sub.status === 'cancelled';
+  const { data: chef } = useChef(sub.chefId);
+  const chefName = chef?.data?.name;
+  const billingLine = subscriptionBillingLine(sub);
 
   function run(a: 'pause' | 'resume' | 'cancel') {
     const confirm = a === 'cancel';
@@ -222,10 +231,19 @@ function SubCard({ sub }: { sub: MealSubscription }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardTop}>
-        <Text style={styles.cardTitle}>
-          {sub.slots.map((x) => (x === 'lunch' ? 'Lunch' : 'Dinner')).join(' + ')} ·{' '}
-          {sub.variant === 'veg' ? 'Veg' : 'Non-veg'}
-        </Text>
+        <View style={styles.cardTitleCol}>
+          {/* Three subscriptions to three kitchens rendered identically, so
+              Cancel was a guess about which one (#1042). */}
+          {chefName ? (
+            <Text style={styles.cardChef} numberOfLines={1}>
+              {chefName}
+            </Text>
+          ) : null}
+          <Text style={styles.cardTitle}>
+            {sub.slots.map((x) => (x === 'lunch' ? 'Lunch' : 'Dinner')).join(' + ')} ·{' '}
+            {sub.variant === 'veg' ? 'Veg' : 'Non-veg'}
+          </Text>
+        </View>
         {/* Status chip per spec §2.7 — active/trial reads as in-progress
             (coral-tint), paused/past_due neutral, cancelled neutral. */}
         <View
@@ -248,6 +266,7 @@ function SubCard({ sub }: { sub: MealSubscription }) {
         {sub.days.length} days/week · {sub.cadence === 'monthly' ? 'Monthly' : 'Weekly'} ·{' '}
         {money(sub.cycleAmount)}
       </Text>
+      {billingLine ? <Text style={styles.billing}>{billingLine}</Text> : null}
       {sub.creditBalance > 0 ? (
         <Text style={styles.credit}>{money(sub.creditBalance)} credit applies to your next cycle</Text>
       ) : null}
@@ -379,7 +398,16 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardTitle: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT, flex: 1 },
+  cardTitleCol: { flex: 1 },
+  cardChef: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
+  cardTitle: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
+  billing: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
+    marginTop: 2,
+  },
   sub: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, fontVariant: ['tabular-nums'] },
   credit: {
     fontFamily: 'Inter-SemiBold',

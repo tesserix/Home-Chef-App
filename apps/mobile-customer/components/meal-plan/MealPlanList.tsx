@@ -174,7 +174,10 @@ function PlanRow({ plan }: { plan: MealPlan }) {
           </Text>
           <View style={styles.cardBottom}>
             <Text style={styles.meta}>
-              {formatDateRange(plan.startDate, plan.endDate)} · {days.length} day
+              {/* days[] holds booked meals, and a plan can book lunch and
+                  dinner on one date — labelling them "days" contradicted the
+                  date range beside it (#1040). */}
+              {formatDateRange(plan.startDate, plan.endDate)} · {days.length} meal
               {days.length === 1 ? '' : 's'} · {formatMoney(plan.total)}
             </Text>
             <ChevronRight size={18} color={customerColors.charcoal.soft} />

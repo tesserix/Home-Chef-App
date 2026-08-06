@@ -12,6 +12,11 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useDialog, useAlert } from '@homechef/mobile-shared/ui';
+import {
+  mealPlanChargeLines,
+  mealPlanApprovalEstimate,
+  mealPlanRefundSummary,
+} from '@homechef/mobile-shared/utils';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -193,6 +198,23 @@ export default function MealPlanDetailScreen() {
     plan.status === 'confirmed' || plan.status === 'active';
   const needsApproval = meta.needsAction;
 
+  // Approving a cherry-picked plan charges GST and delivery on the accepted
+  // days too — the screen offered a food-only figure to approve against (#1039).
+  const approvalEstimate = mealPlanApprovalEstimate(plan, {
+    acceptedFood: acceptedTotal,
+    acceptedDayCount: acceptedDays.length,
+    totalDayCount: days.length,
+  });
+  const chargeLines = needsApproval
+    ? mealPlanChargeLines({
+        subtotal: approvalEstimate.food,
+        tax: approvalEstimate.gst,
+        total: approvalEstimate.total,
+      })
+    : mealPlanChargeLines(plan);
+  const chargeTotal = needsApproval ? approvalEstimate.total : plan.total;
+  const refund = mealPlanRefundSummary(plan);
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <Header />
@@ -263,14 +285,42 @@ export default function MealPlanDetailScreen() {
           onReportIssue={reportIssue}
         />
 
+        {/* The meal rows sum to food only; delivery and GST were left off the
+            screen entirely, so the total looked ~27% unexplained (#1039). */}
+        <View style={styles.chargeBlock}>
+          {chargeLines.map((line) => (
+            <View key={line.label} style={styles.chargeRow}>
+              <Text style={styles.chargeLabel}>{line.label}</Text>
+              <Text style={styles.chargeValue}>{formatMoney(line.amount)}</Text>
+            </View>
+          ))}
+        </View>
+
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>
             {needsApproval ? 'If approved' : 'Total'}
           </Text>
-          <Text style={styles.totalValue}>
-            {formatMoney((needsApproval ? acceptedTotal : plan.total))}
-          </Text>
+          <Text style={styles.totalValue}>{formatMoney(chargeTotal)}</Text>
         </View>
+
+        {/* The plan said only that a refund happened; the amount lived in the wallet, quoted
+            as a percentage of a base this screen never named (#1041). */}
+        {refund ? (
+          <View style={styles.refundBlock}>
+            <View style={styles.chargeRow}>
+              <Text style={styles.refundLabel}>Refunded to your wallet</Text>
+              <Text style={styles.refundValue}>{formatMoney(refund.refunded)}</Text>
+            </View>
+            <View style={styles.chargeRow}>
+              <Text style={styles.chargeLabel}>Not refunded</Text>
+              <Text style={styles.chargeValue}>{formatMoney(refund.withheld)}</Text>
+            </View>
+            <Text style={styles.refundNote}>
+              Your refund is the meal price less your kitchen&apos;s commission, plus that
+              meal&apos;s GST and delivery. What your chef kept for prep stays with them.
+            </Text>
+          </View>
+        ) : null}
       </ScrollView>
 
       {needsApproval ? (
@@ -466,12 +516,53 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: customerColors.canvas,
   },
+  chargeBlock: { marginTop: 16, paddingHorizontal: 4, gap: 6 },
+  chargeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  chargeLabel: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft },
+  chargeValue: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  refundBlock: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: customerColors.success.tint,
+    gap: 6,
+  },
+  refundLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.charcoal.DEFAULT,
+  },
+  refundValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  refundNote: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    lineHeight: 17,
+    color: customerColors.charcoal.soft,
+    marginTop: 2,
+  },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 12,
+    paddingTop: 12,
     paddingHorizontal: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: customerColors.hairline,
   },
   totalLabel: { fontFamily: 'Inter', fontSize: 15, color: customerColors.charcoal.soft },
   totalValue: {

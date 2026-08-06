@@ -93,6 +93,8 @@ export interface MealPlanDay {
   refundStage?: string;
   refundPercent?: number;
   refundFloorPercent?: number;
+  /** Money that actually went back for this day — server-computed, refunded days only (#1041). */
+  refundAmount?: number;
 }
 
 export interface MealPlan {

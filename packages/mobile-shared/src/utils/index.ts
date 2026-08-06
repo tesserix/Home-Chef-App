@@ -6,3 +6,6 @@ export * from './subscription-summary-line';
 export * from './order-datetime';
 export * from './cancellation-breakdown';
 export * from './receipt-file';
+export * from './subscription-billing-line';
+export * from './meal-plan-charge';
+export * from './meal-plan-refund-summary';
