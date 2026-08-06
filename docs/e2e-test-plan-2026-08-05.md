@@ -26,20 +26,24 @@ Product/route map: `.claude/skills/fe3dr/SKILL.md`.
 > If it reads `PRODUCTION`, the kitchen is live: **run no payment case**, mark
 > C1–C8 blocked, and tell the user.
 
-## Run status — customer sweep 2026-08-06 02:50 IST
+## Run status — customer sweep 2026-08-06 10:00 IST
 
 **Resume at B5** (§B kitchen-closed), then B2, B6–B12. E7 (reject with a reason) and
 E8 (item-level cancel) still need a fresh sandbox-UPI order — both vendor queues are empty.
+Reviews (§H) covered customer-side this pass: H1–H3 pass, H7 and the new H10 fail
+(#1046, #1047). H4/H5 need vendor Metro (8081) back up; H6, H8, H9 not yet run.
 
 **Environment as left:** Saffron Home Kitchen open, no open test orders, cart empty,
 ChefBook comment count back to 1 (test comment posted and deleted). Metro on 8082
 (customer) and 8081 (vendor); harness `sim.sh` in the session scratchpad.
 
 **Covered this pass (customer only, no vendor cross-check):** rewards, order-detail
-money, receipt, meal plans, wallet, referral, subscriptions, ChefBook + comments.
+money, receipt, meal plans, wallet, referral, subscriptions, ChefBook + comments,
+reviews (§H1–H3, H7, H8, H10), cancelled-order money (D9).
 
 **Blocker:** the receipt/tax-invoice screen cannot be opened at all (#1038), so #1027
-cannot be re-verified and D7 stays failed.
+cannot be re-verified and D7 stays failed. #1038 is a **sticky crash loop** — expo-router
+restores the dead route, so it recurs on every cold launch until the route is cleared.
 
 **Theme of this pass — charge transparency is inconsistent.** Order detail is exemplary
 and reconciles to the paise. Every other money surface falls short of it: meal plans hide
@@ -55,6 +59,12 @@ never state the next charge (#1042).
 - Vendor payout prefill: "You can't charge more than ₹39" against a ₹39.15 prefill.
 - Vendor order detail never stamps **Preparing** (the customer rail does render it).
 - Loyalty "Earn 500 more to redeem" governs points→wallet conversion only, not checkout.
+- Cart cleared via **Clear → Clear cart** ("Your cart is empty" confirmed) reappeared with the
+  same item after navigating back through a still-mounted Checkout screen. Not filed: the
+  mechanism could not be established and it did not reproduce on a clean path — a second
+  clear held, and Home showed no cart afterwards. Worth a targeted repro before opening an issue.
+- Pull-to-refresh on Home left the spinner running for ~90s with the content pushed down;
+  a swipe up recovered it. Seen once.
 
 ## Fixtures
 
@@ -158,6 +168,7 @@ agree, and all three must read `availability`, never `acceptingOrders` alone.
 | D6 | Abandon payment | Open the sheet, back out | Order left unpaid; cart not silently emptied; no orphaned paid row | ⏳ | |
 | D7 | Receipt sanity | Order → Receipt | Line items, taxes, payment ref and total match checkout exactly | ❌ | **Re-test 6 Aug 02:26 — now unreachable.** Tapping *View receipt* redboxes `Cannot find native module 'ExpoSharing'` (`share-pdf.ts:2` ← `receipt.tsx:22`, a module-scope native import); dismissing leaves a blank white screen with no back affordance, and expo-router restores the dead route on relaunch. → #1038. #1027 (pre-wallet total) **cannot be re-verified** until #1038 is fixed. |
 | D8 | Order detail money | Order detail → Price breakdown | Every charge itemised and the lines sum to what was taken | ✅ | `#SAFFRON-HOME-KITCHEN-HC26080514338360`: Subtotal ₹320.00 + Delivery ₹39.14 + Platform fee ₹13.53 + CGST ₹10.20 + SGST ₹10.20 = **₹393.07 Total** ✓, then Wallet −₹0.60 and Loyalty −₹1.60 → **"Charged to your payment method ₹390.87"** ✓. Tax reconciles too: 5% food ₹16.00 + 5% self-delivery ₹1.96 + 18% platform fee ₹2.44 = ₹20.40 = CGST+SGST. This screen is the standard the receipt (#1027/#1038) and meal plans (#1039) should meet. |
+| D9 | Cancelled-order money | Order detail of a cancelled order | Every rupee accounted for; labels consistent | ❌ | **#1048.** Arithmetic is exact — `320.00+39.13+13.53+10.20+10.20=393.06`; `−1.45` wallet → `391.61` charged; refund `175.49` split pro-rata across tenders (`174.85` card + `0.64` wallet, 44.65% of each); retained `217.57 = 192.00 + 25.57`. The **label** is wrong: `index.tsx:1077-1084` renders the residual `total − refund − vendorKept` as "Platform fee (non-refundable) ₹25.57" while "Platform fee ₹13.53" sits four lines above. The other ₹12.04 is withheld GST, never disclosed as tax. Same class as #945, and directly above **Dispute the refund amount**. |
 | D8 | Card path | — | Excluded by request | 🚫 | Sandbox card row dead-ends on a vault OTP |
 
 ## E · Chef receives & fulfils (vendor)
@@ -235,15 +246,16 @@ and the wallet ledger.
 
 | ID | Scenario | Steps | Expected | Status | Notes |
 |----|----------|-------|----------|--------|-------|
-| H1 | Rate a delivered order | Order → Review → stars + comment | Review accepted; confirmation | ⏳ | |
-| H2 | Review on the chef page | Chef → Reviews | Visible with the right author and text | ⏳ | |
-| H3 | Rating aggregate | Chef card / header | Average and count reflect the new review | ⏳ | |
+| H1 | Rate a delivered order | Order → Review → stars + comment | Review accepted; confirmation | ✅ | `#SAFFRON-HOME-KITCHEN-HC26080514338360`. Form offers Overall (required) + Food quality / Delivery / Value / Packaging / Hygiene, plus a per-dish rating. Submitting with no Overall raises "Add a rating — Please give an overall rating before submitting." Set 5/4/5/4/5/5 + dish 5, title, comment → "Thanks! Your review has been submitted." All six stars registered exactly as tapped. |
+| H2 | Review on the chef page | Chef → Reviews | Visible with the right author and text | ✅ | Chef → Reviews shows it at the top: *Priya S. · Today · ★5/5 · "Great butter chicken" / "Rich and hot on arrival. E2E test review."* |
+| H3 | Rating aggregate | Chef card / header | Average and count reflect the new review | ✅ | Home card and chef header both moved to ★4.9 (7); the dish rating propagated too — Butter Chicken now ★5.0 on the menu. |
 | H4 | Chef sees it | Vendor → More → Reviews → `review/[reviewId]` | Listed and opens | ⏳ | |
 | H5 | Chef replies | Reply | Saved; visible to the customer under the review | ⏳ | |
 | H6 | Review gating | Try to review an undelivered order | No review affordance before delivery | ⏳ | |
-| H7 | Duplicate review | Re-open a reviewed order | Edits the existing review; no second row | ⏳ | |
-| H8 | Cancelled order | Try to review a cancelled order | Blocked | ⏳ | |
+| H7 | Duplicate review | Re-open a reviewed order | Edits the existing review; no second row | ❌ | **#1046.** No second row is written — `reviews.go:63-69` counts and returns 409 — but the order CTA still reads **Leave a Review**, re-opening gives a *completely blank* form, and submitting it raises the raw axios string **"Request failed with status code 409"**. The API's own `"This order has already been reviewed"` is discarded. Customer re-enters 7 ratings and 2 text fields before finding out. |
+| H8 | Cancelled order | Try to review a cancelled order | Blocked | ✅ | `#SAFFRON-HOME-KITCHEN-HC26080515161573` (Cancelled) offers only **Reorder**, **Dispute the refund amount** and **View receipt** — no review affordance anywhere on the screen. |
 | H9 | Tip after delivery | Order → Tip → sandbox UPI | Tip charged against its own row; chef earnings reflect it | ⏳ | |
+| H10 | Own review — overflow menu | Chef → Reviews → ⋯ on your own review | Edit / Delete | ❌ | **#1047.** Shows the generic moderation sheet unconditionally: "Report this review" with 9 reasons, plus **Block Priya S.** — offering the signed-in customer the option to block *herself*. No Edit and no Delete anywhere, so a review cannot be corrected or withdrawn. |
 
 ## I · Order messaging (customer ↔ chef)
 
