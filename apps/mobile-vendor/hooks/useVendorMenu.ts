@@ -369,6 +369,22 @@ export function useUploadMenuPhoto() {
   });
 }
 
+/**
+ * Removing a photo has to invalidate the menu like uploading one does, or the
+ * deleted thumbnail stays on screen and a second tap deletes an image the
+ * server has already dropped — which surfaces as "Image not found".
+ */
+export function useDeleteMenuPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, imageId }: { itemId: string; imageId: string }) =>
+      api.delete(`${menuItemImagesPath(itemId)}/${imageId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MENU_KEY });
+    },
+  });
+}
+
 export function useToggleAvailability() {
   const queryClient = useQueryClient();
   return useMutation({
