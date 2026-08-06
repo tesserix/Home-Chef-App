@@ -204,7 +204,7 @@ export function BakerySpecEditor({ spec, setSpec }: Props) {
                           value={o.name}
                           onChangeText={(t) => patchOption(i, { name: t })}
                         />
-                        <View style={styles.priceWrap}>
+                        <View style={[styles.priceWrap, styles.optionPrice]}>
                           <Text style={styles.pricePrefix}>₹</Text>
                           <TextInput
                             style={styles.priceInput}
@@ -464,6 +464,8 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
   },
   optionBlock: { gap: theme.spacing[2] },
+  // Bounded, or the price box eats the row and pushes the delete off-screen.
+  optionPrice: { width: 92, flexGrow: 0, flexShrink: 0 },
   optionRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   toggleRow: {
