@@ -2,8 +2,9 @@
  * MenuItemForm — shared form body for new.tsx and [itemId]/edit.tsx.
  *
  * Design language: v2 "canvas + cards" (UI-V2-SPEC) — bone canvas, white
- * group cards per labelled section, bone-filled inputs, ink-fill pill chips
- * for category/diet/prep-time selectors. Single-column.
+ * group cards per labelled section, bone-filled inputs, dropdowns for the
+ * single-choice fields and ink-fill pill chips for the multi-select ones.
+ * Single-column.
  */
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -30,6 +31,13 @@ import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { validationSummary } from '../../lib/menu-validation';
 import { pricingHint } from '../../lib/pricing-guidance';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
+import { SelectField } from '../../components/SelectField';
+import {
+  categoryIdForName,
+  categoryNameForId,
+  prepTimeForLabel,
+  prepTimeLabel,
+} from '../../lib/menuSelectOptions';
 import { DietIcon } from '../../components/vendor/DietIcon';
 import { ModifierComboEditor } from '../../components/vendor/ModifierComboEditor';
 import { BakerySpecEditor } from '../../components/vendor/BakerySpecEditor';
@@ -208,88 +216,6 @@ const chipStyles = StyleSheet.create({
   labelActive: { color: theme.colors.paper },
   labelTabular: { fontVariant: ['tabular-nums'] },
 });
-
-// ---- Category chip ------------------------------------------------------------
-
-interface CategoryTabProps {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}
-
-function CategoryTab({ label, active, onPress }: CategoryTabProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={label}
-      android_ripple={{
-        color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
-        borderless: false,
-      }}
-    >
-      {({ pressed }) => (
-        <View
-          style={[
-            chipStyles.root,
-            active && chipStyles.rootActive,
-            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
-          ]}
-        >
-          <Text style={[chipStyles.label, active && chipStyles.labelActive]}>
-            {label}
-          </Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}
-
-// ---- Prep time chip -----------------------------------------------------------
-
-interface PrepTabProps {
-  value: number;
-  active: boolean;
-  onPress: () => void;
-}
-
-function PrepTab({ value, active, onPress }: PrepTabProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      accessibilityRole="radio"
-      accessibilityState={{ checked: active }}
-      accessibilityLabel={`${value} minutes`}
-      android_ripple={{
-        color: active ? `${theme.colors.paper}33` : `${theme.colors.ink.DEFAULT}14`,
-        borderless: false,
-      }}
-    >
-      {({ pressed }) => (
-        <View
-          style={[
-            chipStyles.root,
-            active && chipStyles.rootActive,
-            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
-          ]}
-        >
-          <Text
-            style={[
-              chipStyles.label,
-              chipStyles.labelTabular,
-              active && chipStyles.labelActive,
-            ]}
-          >
-            {value} min
-          </Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}
 
 // ---- Diet chip ------------------------------------------------------------------
 
@@ -701,7 +627,7 @@ export function MenuItemForm({
 
   // ---- Handlers -------------------------------------------------------------
 
-  const priceGuidance = pricingHint(price);
+  const priceGuidance = pricingHint(price, { isBakery });
 
   function handleSave() {
     if (!validate()) {
@@ -1092,30 +1018,32 @@ export function MenuItemForm({
             }}
           >
             {categories.length > 0 ? (
-              <View style={styles.tabBarWrap}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.tabBar}
+              <>
+                {/* A dropdown, not a chip strip: a chef with a dozen categories
+                    saw two of them, and the saved one was rarely among those. */}
+                <SelectField
+                  label="Category"
+                  value={categoryNameForId(categories, categoryId)}
+                  options={categories.map((cat) => cat.name)}
+                  onChange={(name) => {
+                    setCategoryId(categoryIdForName(categories, name));
+                    if (errors.categoryId) setErrors((e) => ({ ...e, categoryId: undefined }));
+                  }}
+                  placeholder="Select a category"
+                  searchPlaceholder="Search categories"
+                  hasBorderBottom={false}
+                  hasPadding={false}
+                />
+                <Pressable
+                  onPress={() => setShowNewCatInput((v) => !v)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add a new category"
+                  style={styles.newCatToggle}
                 >
-                  {categories.map((cat) => (
-                    <CategoryTab
-                      key={cat.id}
-                      label={cat.name}
-                      active={categoryId === cat.id}
-                      onPress={() => {
-                        setCategoryId(cat.id);
-                        if (errors.categoryId) setErrors((e) => ({ ...e, categoryId: undefined }));
-                      }}
-                    />
-                  ))}
-                  <CategoryTab
-                    label="+ New"
-                    active={false}
-                    onPress={() => setShowNewCatInput((v) => !v)}
-                  />
-                </ScrollView>
-              </View>
+                  <Text style={styles.newCatToggleLabel}>+ New category</Text>
+                </Pressable>
+              </>
             ) : (
               <Text style={styles.categoryHint}>
                 No categories yet — name your first one below (e.g. Starters) to
@@ -1266,26 +1194,22 @@ export function MenuItemForm({
           />
 
           {/* PREP TIME section — own header so it sits in the same
-              rhythm as CATEGORY (caps label + hairline group + scrollable
-              underline tab strip). */}
+              rhythm as CATEGORY (caps label + card + dropdown). */}
           <Text style={styles.sectionLabel}>PREP TIME</Text>
           <View style={styles.card}>
-            <View style={styles.tabBarWrap}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.tabBar}
-              >
-                {PREP_TIME_OPTIONS.map((mins) => (
-                  <PrepTab
-                    key={mins}
-                    value={mins}
-                    active={preparationTime === mins}
-                    onPress={() => setPreparationTime(mins as PrepTime)}
-                  />
-                ))}
-              </ScrollView>
-            </View>
+            <SelectField
+              label="Time to prepare"
+              value={prepTimeLabel(preparationTime)}
+              options={PREP_TIME_OPTIONS.map(prepTimeLabel)}
+              onChange={(label) => {
+                const mins = prepTimeForLabel(label);
+                if (mins !== null) setPreparationTime(mins as PrepTime);
+              }}
+              placeholder="Select prep time"
+              searchPlaceholder="Search prep times"
+              hasBorderBottom={false}
+              hasPadding={false}
+            />
           </View>
 
           {/* AVAILABLE DAYS — weekly-menu schedule. Pick the days this dish is
@@ -1544,12 +1468,20 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // Category chip strip — chips carry their own pill chrome; the wrap is
-  // just structure now (card provides padding, no hairlines).
+  // Diet tab strip — tabs carry their own pill chrome; the wrap is just
+  // structure (card provides padding, no hairlines).
   tabBarWrap: {},
-  tabBar: {
-    gap: theme.spacing[2],
-    alignItems: 'center',
+
+  // Opens the inline "name your category" row under the category dropdown.
+  newCatToggle: {
+    marginTop: theme.spacing[2],
+    alignSelf: 'flex-start',
+  },
+  newCatToggleLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    fontWeight: '600',
+    color: theme.colors.ink.DEFAULT,
   },
 
   // New category inline row

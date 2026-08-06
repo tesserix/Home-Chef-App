@@ -27,6 +27,7 @@ import {
   Wallet,
   XCircle,
   BookOpen,
+  CakeSlice,
   BadgeCheck,
 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
@@ -63,6 +64,9 @@ const ALL_SECTIONS: NavSection[] = [
       { labelKey: 'catering', caption: 'Event requests, quotes, bookings', route: '/catering', Icon: ChefHat },
       { labelKey: 'reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
       { labelKey: 'chefbook', caption: 'Write recipes customers can read', route: '/chefbook', Icon: BookOpen },
+      // The opt-in itself lives mid-Profile, below the fold, so chefs reported
+      // the bakery vertical as missing entirely (#1065).
+      { labelKey: 'bakery', caption: 'Sell cakes, breads and pastries', route: '/profile?section=bakery', Icon: CakeSlice },
       // Was reachable only from an unlabelled icon in the Profile header, so
       // chefs never found it.
       { labelKey: 'promote', caption: 'Share your kitchen and posts', route: '/promote', Icon: Share2 },

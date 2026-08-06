@@ -18,9 +18,21 @@
  */
 export const RESTAURANT_PARITY_PRICE = 500;
 
+/**
+ * The same point for a bakery item, which is priced as a whole cake rather than
+ * a single serving — a two-kilo truffle cake at ₹1400 is the going rate, not an
+ * outlier.
+ */
+export const BAKERY_PARITY_PRICE = 2500;
+
 export interface PricingHint {
   tone: 'warn';
   message: string;
+}
+
+export interface PricingHintOptions {
+  /** True for a cake or bake, which is priced per whole item. */
+  isBakery?: boolean;
 }
 
 /**
@@ -30,9 +42,24 @@ export interface PricingHint {
  * Non-numeric, empty and non-positive values return null: those are the
  * validator's job, and doubling up would put two messages under one field.
  */
-export function pricingHint(price: string): PricingHint | null {
+export function pricingHint(
+  price: string,
+  { isBakery = false }: PricingHintOptions = {},
+): PricingHint | null {
   const value = Number(String(price).trim());
   if (!Number.isFinite(value) || value <= 0) return null;
+
+  if (isBakery) {
+    if (value < BAKERY_PARITY_PRICE) return null;
+    return {
+      tone: 'warn',
+      message:
+        `At ₹${Math.round(value)} this is above what a bakery charges for a cake this ` +
+        `size. Customers order from a home baker for a better cake at a fairer price — ` +
+        `keep it below ₹${BAKERY_PARITY_PRICE} unless the tiers, weight or decoration ` +
+        `genuinely justify it.`,
+    };
+  }
 
   if (value >= RESTAURANT_PARITY_PRICE) {
     return {

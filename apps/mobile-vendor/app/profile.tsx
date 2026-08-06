@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -35,6 +35,8 @@ import {
   tiersFromRows,
   validateTierRows,
 } from '../lib/deliveryTiers';
+import { focusedProfileSection } from '../lib/profileFocus';
+import { SelectField } from '../components/SelectField';
 
 // ---- Data types -----------------------------------------------------------
 // Matches the backend GET /chef/profile response.
@@ -336,6 +338,14 @@ export default function ProfileScreen() {
   // before the query invalidation refreshes `data`. Cleared in the data
   // useEffect when fresh server values arrive.
   const savedRef = useRef(false);
+
+  // A chef arriving from More → Cakes & bakes lands on the KITCHEN block rather
+  // than the top of a long form, where the opt-in is below the fold (#1065).
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const focusSection = focusedProfileSection(section);
+  const scrollRef = useRef<ScrollView>(null);
+  const kitchenOffsetRef = useRef(0);
+  const didFocusRef = useRef(false);
 
   // Profile is always-editable inline (no separate Edit mode) — closer to
   // iOS Settings + Notes than to a CMS dashboard. The save button stays
@@ -699,6 +709,7 @@ export default function ProfileScreen() {
         </View>
 
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           refreshControl={
@@ -864,7 +875,20 @@ export default function ProfileScreen() {
           {/* KITCHEN section — cuisines + prep time as preset pills,
               minimum order + service radius as small numeric inputs. Less
               typing, less spelling drift. */}
-          <Text style={styles.sectionLabel}>KITCHEN</Text>
+          <Text
+            style={styles.sectionLabel}
+            onLayout={(e) => {
+              kitchenOffsetRef.current = e.nativeEvent.layout.y;
+              if (!focusSection || didFocusRef.current) return;
+              didFocusRef.current = true;
+              scrollRef.current?.scrollTo({
+                y: Math.max(kitchenOffsetRef.current - 12, 0),
+                animated: true,
+              });
+            }}
+          >
+            KITCHEN
+          </Text>
           <View style={styles.hairlineGroup}>
             <View style={styles.chipFieldRow}>
               <Text style={styles.chipFieldLabel}>You sell</Text>
@@ -963,23 +987,17 @@ export default function ProfileScreen() {
               onChangeText={setCity}
               placeholder="e.g. Bengaluru"
             />
-            <View style={styles.chipFieldRow}>
-              <Text style={styles.chipFieldLabel}>State</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.chipStateRow}
-              >
-                {indianStates.map((s) => (
-                  <Chip
-                    key={s.id}
-                    label={s.name}
-                    selected={stateName === s.name}
-                    onPress={() => setStateName(s.name)}
-                  />
-                ))}
-              </ScrollView>
-            </View>
+            {/* A dropdown, not a chip strip: 36 states never fit, and the
+                saved value has to be visible without scrolling to find it. */}
+            <SelectField
+              label="State"
+              value={stateName}
+              options={indianStates.map((s) => s.name)}
+              onChange={setStateName}
+              placeholder="Select your state"
+              searchPlaceholder="Search states"
+              loading={statesQuery.isLoading}
+            />
             <EditableField
               label="Postal code"
               value={postalCode}
@@ -1497,10 +1515,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.spacing[2],
-  },
-  chipStateRow: {
-    gap: theme.spacing[2],
-    paddingRight: theme.spacing[4],
   },
 
   // Pickup toggle row — matches the hairlineGroup container
