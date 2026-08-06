@@ -1,0 +1,101 @@
+package services
+
+import (
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+
+	"github.com/homechef/api/models"
+)
+
+// #1029 — the app offered "Tip chef" on every delivered order and only found out
+// at submit that the money could not reach anyone. These pin the predicate that
+// now gates the entry point to the SAME rules the tip handler enforces.
+
+func deliveredOrder(provider string) *models.Order {
+	return &models.Order{
+		Status:          models.OrderStatusDelivered,
+		PaymentProvider: provider,
+	}
+}
+
+func withRider(o *models.Order, acct string) *models.Order {
+	id := uuid.New()
+	o.Delivery = &models.Delivery{DeliveryPartnerID: &id}
+	o.Delivery.DeliveryPartner.RazorpayAccountID = acct
+	return o
+}
+
+func TestTipEligibility_CashfreeNeedsAnActiveVendor(t *testing.T) {
+	// The exact production state behind #1029: a delivered Cashfree order whose
+	// chef has no Easy Split vendor registration.
+	o := deliveredOrder(string(models.PaymentProviderCashfree))
+	require.False(t, TipEligibilityFor(o).Chef, "no vendor id must not advertise a chef tip")
+	require.False(t, TipEligibilityFor(o).Any())
+
+	o.Chef.CashfreeVendorID = "vend_1"
+	o.Chef.CashfreeVendorStatus = "PENDING"
+	require.False(t, TipEligibilityFor(o).Chef, "a registered-but-inactive vendor still cannot be paid")
+
+	o.Chef.CashfreeVendorStatus = CashfreeVendorActive
+	require.True(t, TipEligibilityFor(o).Chef)
+	require.True(t, TipEligibilityFor(o).Any())
+}
+
+func TestTipEligibility_CashfreeStatusIsCaseInsensitive(t *testing.T) {
+	o := deliveredOrder(string(models.PaymentProviderCashfree))
+	o.Chef.CashfreeVendorID = "vend_1"
+	o.Chef.CashfreeVendorStatus = "active"
+	require.True(t, TipEligibilityFor(o).Chef, "handler uses EqualFold; the flag must too")
+}
+
+func TestTipEligibility_CashfreeNeverOffersARiderTip(t *testing.T) {
+	// DeliveryPartner carries only a Razorpay linked account, so Easy Split has
+	// no route to a rider at all — the screen must not show the rider section.
+	o := withRider(deliveredOrder(string(models.PaymentProviderCashfree)), "acc_rider")
+	o.Chef.CashfreeVendorID = "vend_1"
+	o.Chef.CashfreeVendorStatus = CashfreeVendorActive
+	require.True(t, TipEligibilityFor(o).Chef)
+	require.False(t, TipEligibilityFor(o).Rider)
+}
+
+func TestTipEligibility_RazorpayJudgesEachLegSeparately(t *testing.T) {
+	o := deliveredOrder(string(models.PaymentProviderRazorpay))
+	require.False(t, TipEligibilityFor(o).Chef, "no linked account, no chef tip")
+	require.False(t, TipEligibilityFor(o).Rider, "no delivery, no rider tip")
+
+	o.Chef.RazorpayAccountID = "acc_chef"
+	require.True(t, TipEligibilityFor(o).Chef)
+	require.False(t, TipEligibilityFor(o).Rider)
+
+	withRider(o, "acc_rider")
+	require.True(t, TipEligibilityFor(o).Rider)
+}
+
+func TestTipEligibility_RiderWithoutALinkedAccountIsNotTippable(t *testing.T) {
+	o := withRider(deliveredOrder(string(models.PaymentProviderRazorpay)), "")
+	require.False(t, TipEligibilityFor(o).Rider)
+}
+
+func TestTipEligibility_OnlyDeliveredOrdersAreTippable(t *testing.T) {
+	// Mirrors the handler's first guard: "You can only tip after the order is
+	// delivered". An in-flight order must not show the entry point at all.
+	for _, st := range []models.OrderStatus{
+		models.OrderStatusPending,
+		models.OrderStatusPreparing,
+		models.OrderStatusDelivering,
+		models.OrderStatusCancelled,
+		models.OrderStatusRefunded,
+	} {
+		o := deliveredOrder(string(models.PaymentProviderRazorpay))
+		o.Status = st
+		o.Chef.RazorpayAccountID = "acc_chef"
+		withRider(o, "acc_rider")
+		require.False(t, TipEligibilityFor(o).Any(), "status %s must not be tippable", st)
+	}
+}
+
+func TestTipEligibility_NilOrderIsNotTippable(t *testing.T) {
+	require.False(t, TipEligibilityFor(nil).Any())
+}

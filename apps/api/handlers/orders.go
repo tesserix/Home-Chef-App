@@ -923,7 +923,11 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 	var order models.Order
 	// Preload Chef.User so the receipt can print the proprietor (owner) name
 	// alongside the business name + FSSAI/GSTIN (official document, #receipt).
-	if err := database.DB.Preload("Items").Preload("Chef").Preload("Chef.User").Preload("Delivery").
+	// Delivery.DeliveryPartner is preloaded for the tip-eligibility check below —
+	// the rider leg needs the partner's linked account, and an unloaded
+	// association would read as "no rider to tip".
+	if err := database.DB.Preload("Items").Preload("Chef").Preload("Chef.User").
+		Preload("Delivery").Preload("Delivery.DeliveryPartner").
 		Where("id = ? AND customer_id = ?", orderID, userID).
 		Scopes(services.CustomerVisibleModes(viewerEmail(c))).
 		First(&order).Error; err != nil {
@@ -942,6 +946,13 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 	if sources := services.ClassifyOrderSources(database.DB, []uuid.UUID{order.ID}); len(sources) > 0 {
 		resp.Source = sources[order.ID]
 	}
+	// Whether a tip can actually reach anyone on this order (#1029). The app used
+	// to offer "Tip chef" on every delivered order and only discovered at submit
+	// that the chef had no active payout account — the customer picked an amount,
+	// committed, and got a 409. Same predicate the tip handler enforces, so the
+	// entry point and the endpoint cannot disagree.
+	tipElig := services.TipEligibilityFor(&order)
+	resp.TipEligibility = &tipElig
 	c.JSON(http.StatusOK, resp)
 }
 

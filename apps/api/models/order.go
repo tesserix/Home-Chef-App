@@ -496,6 +496,20 @@ const (
 	OrderSourceGroup        OrderSource = "group"
 )
 
+// TipEligibility reports which tip legs an order can actually pay out (#1029).
+// The rule that fills it is services.TipEligibilityFor — it needs the gateway
+// constants, so only the shape lives here. A nil TipEligibility on a response
+// means "not computed" and callers should fall back to their previous
+// behaviour; false means "we checked, and this leg cannot be paid".
+type TipEligibility struct {
+	Chef  bool `json:"chef"`
+	Rider bool `json:"rider"`
+}
+
+// Any reports whether a tip can reach anyone on this order — the gate for
+// showing the tip entry point at all.
+func (t TipEligibility) Any() bool { return t.Chef || t.Rider }
+
 type OrderResponse struct {
 	ID              uuid.UUID       `json:"id"`
 	OrderNumber     string          `json:"orderNumber"`
@@ -504,6 +518,9 @@ type OrderResponse struct {
 	PaymentStatus   PaymentStatus   `json:"paymentStatus"`
 	PaymentProvider string          `json:"paymentProvider,omitempty"`
 	Currency        string          `json:"currency"`
+	// Which tip legs this order can actually pay out (#1029). Populated by the
+	// handlers that preload Chef + Delivery; nil elsewhere, meaning "unknown".
+	TipEligibility *TipEligibility `json:"tipEligibility,omitempty"`
 	// Source groups the order in the vendor feed (à-la-carte / meal-plan day /
 	// subscription day / group). Set by the chef-orders handler (#435).
 	Source OrderSource `json:"source,omitempty"`
