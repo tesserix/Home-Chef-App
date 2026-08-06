@@ -40,7 +40,10 @@ export function useCreateReview() {
       if (dishes.length) fd.append('dishRatings', JSON.stringify(dishes));
       await api.post('/v1/reviews', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
     },
-    onSuccess: () => {
+    onSuccess: (_data, input) => {
+      // Drop the order-review cache too, or the order detail keeps offering the
+      // form for an order that can now only 409 (#1046).
+      void queryClient.invalidateQueries({ queryKey: ['order-review', input.orderId] });
       void queryClient.invalidateQueries({ queryKey: ['orders'] });
       void queryClient.invalidateQueries({ queryKey: ['chefs'] });
     },

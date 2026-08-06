@@ -21,6 +21,49 @@ func NewReviewHandler() *ReviewHandler {
 	return &ReviewHandler{}
 }
 
+// orderReviewResponse is the customer's own review of an order, with the
+// per-dish stars the public review response omits — the app needs them to
+// render back what the customer actually submitted.
+type orderReviewResponse struct {
+	models.ReviewResponse
+	DishRatings []models.DishRating `json:"dishRatings"`
+}
+
+// GetOrderReview returns the calling customer's review of an order, or null if
+// they have not reviewed it. Without this the app could only discover an
+// existing review by attempting a create and reading the 409 (#1046).
+func (h *ReviewHandler) GetOrderReview(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+
+	orderID, err := uuid.Parse(c.Param("orderId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid orderId"})
+		return
+	}
+
+	var review models.Review
+	err = database.DB.
+		Where("order_id = ? AND customer_id = ?", orderID, userID).
+		First(&review).Error
+	if err != nil {
+		// Not reviewed yet is the normal case, not a failure.
+		c.JSON(http.StatusOK, gin.H{"review": nil})
+		return
+	}
+
+	dishRatings := []models.DishRating{}
+	database.DB.Where("review_id = ?", review.ID).Find(&dishRatings)
+
+	c.JSON(http.StatusOK, gin.H{"review": orderReviewResponse{
+		ReviewResponse: review.ToResponse(),
+		DishRatings:    dishRatings,
+	}})
+}
+
 // CreateReview creates a new review for an order.
 // Accepts multipart/form-data with optional image uploads (up to 3).
 func (h *ReviewHandler) CreateReview(c *gin.Context) {
