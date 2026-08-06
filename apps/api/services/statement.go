@@ -42,6 +42,33 @@ type statementOrderRow struct {
 	ChefID         uuid.UUID `gorm:"column:chef_id"`
 	UserID         uuid.UUID `gorm:"column:user_id"`
 	ChefState      string    `gorm:"column:chef_state"`
+	// FulfillmentType decides who the delivery fee belongs to; DeliveryFeeFinal
+	// is the #703 lowered-at-accept figure the customer was actually charged.
+	FulfillmentType  string   `gorm:"column:fulfillment_type"`
+	DeliveryFeeFinal *float64 `gorm:"column:delivery_fee_final"`
+}
+
+// earningsInput maps a scanned row to the settlement engine. Every statement
+// surface goes through here so none of them can disagree about what a chef is
+// owed. flatRate is the legacy fallback for rows placed before #390 froze a rate.
+func (r statementOrderRow) earningsInput(flatRate float64) EarningsInput {
+	fee := r.DeliveryFee
+	if r.DeliveryFeeFinal != nil {
+		fee = *r.DeliveryFeeFinal
+	}
+	return EarningsInput{
+		OrderID:              r.OrderID,
+		OrderNumber:          r.OrderNumber,
+		CompletedAt:          r.CompletedAt,
+		ItemRevenue:          r.ItemRevenue,
+		Tax:                  ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
+		ChefFundedDiscount:   r.ChefFundedDiscount,
+		DeliveryFee:          fee,
+		ChefEarnsDeliveryFee: SettledChefEarnsDeliveryFee(r.FulfillmentType),
+		ChefTip:              r.ChefTip,
+		DeliveryState:        r.DeliveryState,
+		CommissionRate:       rowRate(r.CommissionRate, flatRate),
+	}
 }
 
 // MostRecentClosedWeek returns the [start, end) bounds — in UTC — of the most
@@ -90,20 +117,7 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			b = &chefBucket{userID: r.UserID, chefState: r.ChefState, commissionRate: flatRate}
 			buckets[r.ChefID] = b
 		}
-		earnings := ComputeOrderEarnings(EarningsInput{
-			OrderID:            r.OrderID,
-			OrderNumber:        r.OrderNumber,
-			CompletedAt:        r.CompletedAt,
-			ItemRevenue:        r.ItemRevenue,
-			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
-			ChefFundedDiscount: r.ChefFundedDiscount,
-			DeliveryFee:        r.DeliveryFee,
-			ChefTip:            r.ChefTip,
-			DeliveryState:      r.DeliveryState,
-			// Per-row frozen rate (#390); the once-resolved flatRate is the legacy
-			// fallback for orders placed before commission_rate was stamped.
-			CommissionRate: rowRate(r.CommissionRate, flatRate),
-		}, b.chefState)
+		earnings := ComputeOrderEarnings(r.earningsInput(flatRate), b.chefState)
 		b.billed = append(b.billed, billedOrder{ID: r.OrderID, Net: earnings.NetPayout})
 		b.totals.Add(earnings)
 	}
@@ -156,6 +170,7 @@ func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, 
 		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax,
 		       o.tax_food, o.tax_service, o.chef_funded_discount,
 		       o.delivery_fee, o.chef_tip, o.delivery_address_state, o.commission_rate,
+		       o.fulfillment_type, o.delivery_fee_final,
 		       o.chef_id, c.user_id, c.state AS chef_state
 		FROM   orders o
 		JOIN   chef_profiles c ON c.id = o.chef_id

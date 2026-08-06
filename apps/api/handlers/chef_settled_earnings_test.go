@@ -31,11 +31,16 @@ func setupSettledEarningsDB(t *testing.T) (*gorm.DB, models.ChefProfile) {
 		chef_id TEXT, status TEXT, mode TEXT DEFAULT 'live',
 		subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, tax_food REAL DEFAULT 0,
 		tax_service REAL DEFAULT 0, chef_funded_discount REAL DEFAULT 0,
-		delivery_fee REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
+		delivery_fee REAL DEFAULT 0, delivery_fee_final REAL, chef_tip REAL DEFAULT 0,
+		fulfillment_type TEXT DEFAULT 'delivery',
 		delivery_address_state TEXT, commission_rate REAL DEFAULT 0,
 		payout_hold_status TEXT, created_at DATETIME, delivered_at DATETIME,
 		refunded_at DATETIME, deleted_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, mode TEXT)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE chef_penalties (id TEXT PRIMARY KEY, chef_id TEXT,
+		user_id TEXT, kind TEXT, status TEXT, source_key TEXT, order_id TEXT, reference TEXT,
+		currency TEXT, basis_amount REAL, rate_percent REAL, amount REAL,
+		created_at DATETIME, updated_at DATETIME)`).Error)
 
 	chef := models.ChefProfile{ID: uuid.New(), State: "Maharashtra"}
 	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, mode) VALUES (?, 'live')`, chef.ID.String()).Error)
@@ -47,16 +52,17 @@ func setupSettledEarningsDB(t *testing.T) (*gorm.DB, models.ChefProfile) {
 }
 
 type settledOrderSeed struct {
-	subtotal    float64
-	taxFood     float64
-	tip         float64
-	deliveryFee float64
-	mode        string
-	createdAt   time.Time
-	deliveredAt time.Time
-	refundedAt  *time.Time
-	deletedAt   *time.Time
-	status      string
+	subtotal        float64
+	taxFood         float64
+	tip             float64
+	deliveryFee     float64
+	fulfillmentType string
+	mode            string
+	createdAt       time.Time
+	deliveredAt     time.Time
+	refundedAt      *time.Time
+	deletedAt       *time.Time
+	status          string
 }
 
 func seedSettledOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, s settledOrderSeed) uuid.UUID {
@@ -67,16 +73,19 @@ func seedSettledOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, s settledOrde
 	if s.status == "" {
 		s.status = "delivered"
 	}
+	if s.fulfillmentType == "" {
+		s.fulfillmentType = "delivery"
+	}
 	if s.createdAt.IsZero() {
 		s.createdAt = s.deliveredAt
 	}
 	id := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, chef_id, status, mode,
-		subtotal, tax, tax_food, tax_service, delivery_fee, chef_tip,
+		subtotal, tax, tax_food, tax_service, delivery_fee, chef_tip, fulfillment_type,
 		delivery_address_state, created_at, delivered_at, refunded_at, deleted_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'Maharashtra', ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'Maharashtra', ?, ?, ?, ?)`,
 		id.String(), "HC-"+id.String()[:6], chefID.String(), s.status, s.mode,
-		s.subtotal, s.taxFood, s.taxFood, s.deliveryFee, s.tip,
+		s.subtotal, s.taxFood, s.taxFood, s.deliveryFee, s.tip, s.fulfillmentType,
 		s.createdAt, s.deliveredAt, s.refundedAt, s.deletedAt).Error)
 	return id
 }
@@ -158,7 +167,28 @@ func TestChefSettledEarnings_DeliveryFeeIsNotChefMoney(t *testing.T) {
 	noFee, _, err := chefSettledEarnings(chef2, now.AddDate(0, 0, -7), now, 0.06)
 	require.NoError(t, err)
 
-	require.Equal(t, withFee.NetPayout, noFee.NetPayout, "the delivery fee is the driver's money")
+	require.Equal(t, withFee.NetPayout, noFee.NetPayout, "a platform-carried leg's fee is the driver's money")
+}
+
+// The other half: the chef priced this leg from their own published rates, was
+// paid for it by the customer, and drove it. It is their income.
+func TestChefSettledEarnings_ChefCarriedLegKeepsTheFee(t *testing.T) {
+	db, chef := setupSettledEarningsDB(t)
+	now := time.Now()
+
+	seedSettledOrder(t, db, chef.ID, settledOrderSeed{
+		subtotal: 500, taxFood: 25, deliveryFee: 60,
+		fulfillmentType: "chef_delivery", deliveredAt: now.Add(-time.Hour),
+	})
+
+	totals, orders, err := chefSettledEarnings(chef, now.AddDate(0, 0, -7), now, 0.06)
+	require.NoError(t, err)
+	require.Len(t, orders, 1)
+
+	// gross 500 + 25 + 60 = 585; commission 6% of FOOD only = 30; TDS 1% = 5.85.
+	require.InDelta(t, 585.0, totals.GrossRevenue, 0.005)
+	require.InDelta(t, 30.0, totals.PlatformCommission, 0.005)
+	require.InDelta(t, 549.15, totals.NetPayout, 0.005)
 }
 
 // The dashboard hero labelled "Total earnings" taps straight through to the
@@ -225,4 +255,69 @@ func TestChefSettledEarnings_EmptyWindow(t *testing.T) {
 	require.Zero(t, totals.OrdersCount)
 	require.Zero(t, totals.NetPayout)
 	require.Empty(t, orders)
+}
+
+// A cancellation levy is money the chef does not keep. The Earnings screen showed
+// the payout before it, so it disagreed with both the order's payout card and the
+// settlement that actually nets the levy off.
+func TestChefSettledEarnings_SubtractsTheOrdersPenalty(t *testing.T) {
+	db, chef := setupSettledEarningsDB(t)
+	now := time.Now()
+
+	orderID := seedSettledOrder(t, db, chef.ID, settledOrderSeed{
+		subtotal: 500, taxFood: 25, deliveredAt: now.Add(-time.Hour),
+	})
+	require.NoError(t, db.Exec(`INSERT INTO chef_penalties (id, chef_id, kind, status, source_key, order_id, amount)
+		VALUES (?, ?, 'chef_cancel', 'pending', ?, ?, ?)`,
+		uuid.New().String(), chef.ID.String(),
+		services.ChefCancelPenaltySourceKey(orderID), orderID.String(), 40.0).Error)
+
+	totals, orders, err := chefSettledEarnings(chef, now.AddDate(0, 0, -7), now, 0.06)
+	require.NoError(t, err)
+	require.Len(t, orders, 1)
+
+	// gross 525; commission 30; TDS 5.25 → 489.75 before the levy, 449.75 after.
+	require.InDelta(t, 40.0, orders[0].Penalty, 0.005)
+	require.InDelta(t, 449.75, orders[0].NetPayout, 0.005)
+	require.InDelta(t, 40.0, totals.Penalties, 0.005)
+	require.InDelta(t, 449.75, totals.NetPayout, 0.005)
+}
+
+// A waived levy was cancelled by an admin — it was never owed and must not be shown.
+func TestChefSettledEarnings_IgnoresWaivedPenalties(t *testing.T) {
+	db, chef := setupSettledEarningsDB(t)
+	now := time.Now()
+
+	orderID := seedSettledOrder(t, db, chef.ID, settledOrderSeed{
+		subtotal: 500, taxFood: 25, deliveredAt: now.Add(-time.Hour),
+	})
+	require.NoError(t, db.Exec(`INSERT INTO chef_penalties (id, chef_id, kind, status, source_key, order_id, amount)
+		VALUES (?, ?, 'chef_cancel', 'waived', ?, ?, ?)`,
+		uuid.New().String(), chef.ID.String(),
+		services.ChefCancelPenaltySourceKey(orderID), orderID.String(), 40.0).Error)
+
+	totals, orders, err := chefSettledEarnings(chef, now.AddDate(0, 0, -7), now, 0.06)
+	require.NoError(t, err)
+	require.Zero(t, orders[0].Penalty)
+	require.InDelta(t, 489.75, totals.NetPayout, 0.005)
+}
+
+// A levy larger than the order cannot make the chef owe money on it; the
+// remainder stays outstanding in the ledger.
+func TestChefSettledEarnings_PenaltyNeverDrivesAnOrderNegative(t *testing.T) {
+	db, chef := setupSettledEarningsDB(t)
+	now := time.Now()
+
+	orderID := seedSettledOrder(t, db, chef.ID, settledOrderSeed{
+		subtotal: 100, deliveredAt: now.Add(-time.Hour),
+	})
+	require.NoError(t, db.Exec(`INSERT INTO chef_penalties (id, chef_id, kind, status, source_key, order_id, amount)
+		VALUES (?, ?, 'chef_cancel', 'pending', ?, ?, ?)`,
+		uuid.New().String(), chef.ID.String(),
+		services.ChefCancelPenaltySourceKey(orderID), orderID.String(), 5000.0).Error)
+
+	totals, orders, err := chefSettledEarnings(chef, now.AddDate(0, 0, -7), now, 0.06)
+	require.NoError(t, err)
+	require.Zero(t, orders[0].NetPayout)
+	require.Zero(t, totals.NetPayout)
 }

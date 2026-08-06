@@ -1049,6 +1049,13 @@ export default function EarningsScreen() {
                 value={`− ${fmtInr(totals.tds)}`}
                 secondary
               />
+              {(totals.penalties ?? 0) > 0 && (
+                <BreakdownRow
+                  label={t('earnings.penalties')}
+                  value={`− ${fmtInr(totals.penalties ?? 0)}`}
+                  secondary
+                />
+              )}
               <BreakdownRow
                 label={t('earnings.netPayout')}
                 value={fmtInr(totals.netPayout)}

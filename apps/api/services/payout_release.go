@@ -157,10 +157,14 @@ func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 		ChefTip             float64
 		ChefFundedDiscount  float64
 		CommissionRate      float64
+		FulfillmentType     string
+		DeliveryFee         float64
+		DeliveryFeeFinal    *float64
 	}
 	q := db.Table("orders").
 		Select("id, chef_id, total AS amount, payout_hold_status, delivered_at, customer_confirmed_at, "+
 			"order_number AS context, subtotal, tax, tax_food, tax_service, chef_tip, chef_funded_discount, commission_rate, "+
+			"fulfillment_type, delivery_fee, delivery_fee_final, "+
 			"EXISTS(SELECT 1 FROM order_issues oi WHERE oi.order_id = orders.id AND oi.status = 'pending') AS has_open_issue").
 		Where("payout_hold_status IN ?", f.pendingStatuses()).
 		// Cross-guard (#457): never surface a refunded/cancelled order NOR one with
@@ -180,12 +184,18 @@ func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	}
 	rows := make([]pendingRow, 0, len(raw))
 	for _, r := range raw {
+		fee := r.DeliveryFee
+		if r.DeliveryFeeFinal != nil {
+			fee = *r.DeliveryFeeFinal
+		}
 		net := ComputeOrderEarnings(EarningsInput{
-			ItemRevenue:        r.Subtotal,
-			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
-			ChefTip:            r.ChefTip,
-			ChefFundedDiscount: r.ChefFundedDiscount,
-			CommissionRate:     r.CommissionRate,
+			ItemRevenue:          r.Subtotal,
+			Tax:                  ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
+			ChefTip:              r.ChefTip,
+			ChefFundedDiscount:   r.ChefFundedDiscount,
+			CommissionRate:       r.CommissionRate,
+			DeliveryFee:          fee,
+			ChefEarnsDeliveryFee: SettledChefEarnsDeliveryFee(r.FulfillmentType),
 		}, "").NetPayout
 		rows = append(rows, pendingRow{
 			ID: r.ID, ChefID: r.ChefID, Amount: r.Amount, NetPayout: net,

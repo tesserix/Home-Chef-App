@@ -18,6 +18,9 @@ export interface EarningsBreakdownTotals {
   sgst: number;
   igst: number;
   tds: number;
+  /** Cancellation levies attributed to these orders, ALREADY subtracted from
+   * netPayout. Optional: a client can outrun the API deploy that added it. */
+  penalties?: number;
   netPayout: number;
   ordersCount: number;
   // Escrow split (#617): net payout still in escrow vs already released. Both 0
@@ -39,6 +42,9 @@ export interface EarningsBreakdownOrder {
   sgst: number;
   igst: number;
   tds: number;
+  /** Levy on this order, ALREADY subtracted from netPayout. Optional: a client
+   * can outrun the API deploy that added it. */
+  penalty?: number;
   netPayout: number;
   // Escrow hold lifecycle (#617). Absent (undefined) when there is no hold —
   // escrow flags off — so the per-order pill hides.

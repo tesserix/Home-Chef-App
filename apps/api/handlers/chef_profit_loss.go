@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
@@ -78,9 +79,18 @@ func (h *ChefHandler) GetChefProfitLoss(c *gin.Context) {
 	chefState := normaliseState(chef.State)
 	liveRate := services.GetCommissionRate(database.DB)
 
+	// Same levy netting as the Earnings screen, so "what I was paid" is one number
+	// across both surfaces.
+	ids := make([]uuid.UUID, len(rows))
+	for i, r := range rows {
+		ids[i] = r.OrderID
+	}
+	penalties := services.ChefOrderPenalties(database.DB, ids)
+
 	var gross, commission, taxes, tds, net float64
 	for _, r := range rows {
 		e := computeOrderBreakdown(r, chefState, liveRate)
+		e.applyPenalty(penalties[r.OrderID])
 		gross += e.Gross
 		commission += e.PlatformCommission
 		taxes += e.CGST + e.SGST + e.IGST

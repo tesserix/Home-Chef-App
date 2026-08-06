@@ -57,6 +57,7 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 		-- reads these; without them it errors and the hero silently reads zero.
 		tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0,
 		chef_funded_discount REAL DEFAULT 0, delivery_fee REAL DEFAULT 0,
+		delivery_fee_final REAL,
 		chef_tip REAL DEFAULT 0, delivery_address_state TEXT DEFAULT '',
 		commission_rate REAL DEFAULT 0, payout_hold_status TEXT DEFAULT '',
 		delivered_at DATETIME, refunded_at DATETIME,
