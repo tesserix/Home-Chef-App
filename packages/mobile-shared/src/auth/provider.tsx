@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import auth from "@react-native-firebase/auth";
+import { getAuth, onAuthStateChanged } from "@react-native-firebase/auth";
 import { configureFirebaseAuth } from "./firebase";
 import {
   autoLogin,
@@ -72,7 +72,7 @@ export function AuthProvider({ children, bffUrl, tenantId }: AuthProviderProps) 
       }
       if (cancelled) return;
 
-      unsub = auth().onAuthStateChanged(async (fb) => {
+      unsub = onAuthStateChanged(getAuth(), async (fb) => {
         // A dev-only REST sign-in (iOS Simulator) has no Firebase user; don't
         // let the null notification tear down its session.
         if (!fb && !(__DEV__ && isDevSimSessionActive())) {

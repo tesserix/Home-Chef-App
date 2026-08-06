@@ -2,7 +2,7 @@
 // cert and so cannot carry a keychain entitlement — @react-native-firebase/auth
 // throws `auth/keychain-error` when it persists credentials. We re-run the same
 // GIP sign-in over REST and hold the tokens in memory for the process lifetime.
-import auth from "@react-native-firebase/auth";
+import { getAuth } from "@react-native-firebase/auth";
 import Constants from "expo-constants";
 
 const GIP_HOST = "https://identitytoolkit.googleapis.com/v1";
@@ -38,7 +38,7 @@ function bundleId(): string {
 // RN Firebase reads its key from GoogleService-Info.plist, which is the one the
 // GIP REST endpoint accepts for this bundle — not EXPO_PUBLIC_GIP_API_KEY.
 function apiKey(): string {
-  return auth().app.options.apiKey ?? "";
+  return getAuth().app.options.apiKey ?? "";
 }
 
 async function postJSON<T>(url: string, body: unknown): Promise<T> {

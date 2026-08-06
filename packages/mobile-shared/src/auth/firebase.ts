@@ -1,4 +1,4 @@
-import auth from "@react-native-firebase/auth";
+import { getAuth } from "@react-native-firebase/auth";
 
 /**
  * Pin the Firebase auth client to a specific GIP tenant pool.
@@ -8,11 +8,11 @@ import auth from "@react-native-firebase/auth";
  * direct property assignment throws a Proxy TypeError. Use the async
  * `setTenantId()` method instead. The native side propagates the tenant
  * via the await; the JS-side `_tenantId` field is set synchronously inside
- * setTenantId so subsequent `auth().tenantId` reads return immediately.
+ * setTenantId so subsequent `getAuth().tenantId` reads return immediately.
  */
 export async function configureFirebaseAuth(tenantId: string): Promise<void> {
-  await auth().setTenantId(tenantId);
+  await getAuth().setTenantId(tenantId);
 }
 
-export type FirebaseAuth = ReturnType<typeof auth>;
+export type FirebaseAuth = ReturnType<typeof getAuth>;
 export type FirebaseUser = NonNullable<FirebaseAuth["currentUser"]>;
