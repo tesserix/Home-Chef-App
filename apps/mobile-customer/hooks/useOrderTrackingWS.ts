@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
-import { socketReconnectDelayWithJitterMs } from '@homechef/mobile-shared/utils';
-import { openEventStream, type EventStreamHandle } from '@homechef/mobile-shared/realtime';
+import {
+  openEventStream,
+  streamRetryPlan,
+  type EventStreamHandle,
+} from '@homechef/mobile-shared/realtime';
 import { useAuthStore } from '../store/auth-store';
 import { useOrderTracking } from './useOrderTracking';
 
@@ -56,17 +59,20 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
     const apiBase = process.env.EXPO_PUBLIC_API_URL ?? 'https://fe3dr.com/api';
     const myGeneration = ++generation.current;
 
-    const fail = () => {
+    const fail = (status: number) => {
       if (myGeneration !== generation.current || !enabled) return;
       streamRef.current = null;
       failureCount.current += 1;
+      const plan = streamRetryPlan(status, failureCount.current);
+      // A refusal (no driver assigned yet, stale token) degrades at once —
+      // waiting out a budget of attempts that will all be refused the same way
+      // only delays the polling the screen is going to need anyway.
       // Past the budget the screen runs on polling — but keep dialling, so a
       // stream that recovers takes over again (#892).
-      if (failureCount.current >= MAX_STREAM_FAILURES) setUseFallback(true);
-      reconnectTimer.current = setTimeout(
-        connect,
-        socketReconnectDelayWithJitterMs(failureCount.current),
-      );
+      if (plan.degrade || failureCount.current >= MAX_STREAM_FAILURES) {
+        setUseFallback(true);
+      }
+      reconnectTimer.current = setTimeout(connect, plan.delayMs);
     };
 
     const onFrame = (raw: string) => {

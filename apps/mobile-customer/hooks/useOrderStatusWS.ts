@@ -1,8 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
-import { socketReconnectDelayWithJitterMs } from '@homechef/mobile-shared/utils';
-import { openEventStream, type EventStreamHandle } from '@homechef/mobile-shared/realtime';
+import {
+  openEventStream,
+  streamRetryPlan,
+  type EventStreamHandle,
+} from '@homechef/mobile-shared/realtime';
 import { useAuthStore } from '../store/auth-store';
 import type { Order } from '../types/customer';
 
@@ -96,13 +99,13 @@ export function useOrderStatusWS(
       `${apiBase}/v1/notifications/sse`,
       token,
       onFrame,
-      () => {
+      (status) => {
         if (myGeneration !== generation.current || !enabled) return;
         streamRef.current = null;
         failureCount.current += 1;
         reconnectTimer.current = setTimeout(
           connect,
-          socketReconnectDelayWithJitterMs(failureCount.current),
+          streamRetryPlan(status, failureCount.current).delayMs,
         );
       },
     );

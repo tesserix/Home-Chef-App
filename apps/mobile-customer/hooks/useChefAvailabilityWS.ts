@@ -19,8 +19,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { openEventStream, type EventStreamHandle } from '@homechef/mobile-shared/realtime';
-import { socketReconnectDelayWithJitterMs } from '@homechef/mobile-shared/utils';
+import {
+  openEventStream,
+  streamRetryPlan,
+  type EventStreamHandle,
+} from '@homechef/mobile-shared/realtime';
 import { useAuthStore } from '../store/auth-store';
 
 const MAX_STREAM_FAILURES = 3;
@@ -64,17 +67,17 @@ export function useChefAvailabilityWS(chefId?: string | null): void {
       `${apiBase}/v1/chefs/${chefId}/availability/sse`,
       token,
       onFrame,
-      () => {
+      (status) => {
         if (closedByUs.current || myGeneration !== generation.current) return;
         streamRef.current = null;
         failureCount.current += 1;
+        const plan = streamRetryPlan(status, failureCount.current);
         // Past the budget the refetch fallback below carries the badge, but keep
         // dialling so a stream that recovers takes over again.
-        if (failureCount.current >= MAX_STREAM_FAILURES) setLive(false);
-        reconnectTimer.current = setTimeout(
-          connect,
-          socketReconnectDelayWithJitterMs(failureCount.current),
-        );
+        if (plan.degrade || failureCount.current >= MAX_STREAM_FAILURES) {
+          setLive(false);
+        }
+        reconnectTimer.current = setTimeout(connect, plan.delayMs);
       },
     );
   }, [chefId, queryClient]);

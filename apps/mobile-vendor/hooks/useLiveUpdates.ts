@@ -1,8 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
-import { socketReconnectDelayWithJitterMs } from '@homechef/mobile-shared/utils';
-import { openEventStream } from '@homechef/mobile-shared/realtime';
+import { openEventStream, streamRetryPlan } from '@homechef/mobile-shared/realtime';
 
 import { useAuthStore } from '../store/auth-store';
 import { invalidationsFor, parseLiveFrame } from '../lib/live-updates';
@@ -68,13 +67,13 @@ export function useLiveUpdates(enabled: boolean = true): void {
       `${base.http}/notifications/sse`,
       token,
       applyFrame,
-      () => {
+      (status) => {
         if (myGeneration !== generation.current || !enabled) return;
         sseRef.current = null;
         failureCount.current += 1;
         reconnectTimer.current = setTimeout(
           connect,
-          socketReconnectDelayWithJitterMs(failureCount.current),
+          streamRetryPlan(status, failureCount.current).delayMs,
         );
       },
     );

@@ -8,6 +8,8 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { AxiosInstance, AxiosRequestConfig } from 'axios';
 
+import { apiVersionPrefix } from '../api/version-prefix';
+
 /**
  * Get the raw FCM device token for this device.
  * Returns null on iOS simulators (cannot receive push) or when permission is denied.
@@ -70,8 +72,7 @@ export async function getRawFCMToken(): Promise<string | null> {
  * for every app and for any future one regardless of where it mounts.
  */
 export function deviceTokenPath(client: AxiosInstance): string {
-  const base = (client.defaults.baseURL ?? '').replace(/\/+$/, '');
-  return /\/v1$/.test(base) ? '/profile/device-token' : '/v1/profile/device-token';
+  return `${apiVersionPrefix(client)}/profile/device-token`;
 }
 
 /**

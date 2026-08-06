@@ -57,13 +57,14 @@ describe('deviceTokenPath', () => {
     );
   });
 
-  it('does not mistake a path merely containing v1 for a /v1 suffix', () => {
-    // .../api/v10 and .../v1/orders must NOT be treated as ending in /v1.
-    expect(deviceTokenPath(clientWithBase('https://x.test/api/v10'))).toBe(
-      '/v1/profile/device-token'
-    );
+  it('does not mistake a path merely containing v1 for a version suffix', () => {
+    // A version has to be the LAST segment: .../v1/orders still needs the prefix.
     expect(deviceTokenPath(clientWithBase('https://x.test/api/v1/orders'))).toBe(
       '/v1/profile/device-token'
+    );
+    // .../api/v10 is a versioned base in its own right, not a stray "v1".
+    expect(deviceTokenPath(clientWithBase('https://x.test/api/v10'))).toBe(
+      '/profile/device-token'
     );
   });
 

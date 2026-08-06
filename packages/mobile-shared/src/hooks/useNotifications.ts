@@ -16,11 +16,10 @@ import {
 } from '@tanstack/react-query';
 import type { AxiosInstance } from 'axios';
 
-import {
-  socketReconnectDelayMs,
-  socketReconnectDelayWithJitterMs,
-} from '../utils/socket-backoff';
+import { socketReconnectDelayMs } from '../utils/socket-backoff';
 import { openEventStream, type EventStreamHandle } from '../realtime/event-stream';
+import { streamRetryPlan } from '../realtime/stream-retry';
+import { apiVersionPrefix, versionPrefixFor } from '../api/version-prefix';
 
 export interface AppNotification {
   id: string;
@@ -38,17 +37,8 @@ export interface AppNotification {
 export const NOTIFICATION_LIST_KEY = ['notifications', 'list'] as const;
 export const NOTIFICATION_UNREAD_KEY = ['notifications', 'unread'] as const;
 
-// The two apps configure EXPO_PUBLIC_API_URL differently — the customer's ends
-// in `/api` (so paths carry the `/v1` version), the vendor's already ends in
-// `/api/v1` (so paths must NOT repeat it). Derive the version prefix from the
-// base URL so the same shared paths work in both, instead of hardcoding `/v1`
-// (which double-prefixed the vendor → 404 → an empty, silent feed).
-function versionPrefix(baseUrl: string | undefined | null): string {
-  return baseUrl && /\/v\d+\/?$/.test(baseUrl) ? '' : '/v1';
-}
-
 function restPrefix(api: AxiosInstance): string {
-  return versionPrefix(api.defaults?.baseURL);
+  return apiVersionPrefix(api);
 }
 
 /** Normalise a notification's `data` (string or object) into a flat record. */
@@ -200,18 +190,6 @@ export function notificationSocketReconnectDelayMs(
   return socketReconnectDelayMs(consecutiveFailures);
 }
 
-/**
- * The scheduled delay: the curve above, decorrelated by jitter (#982).
- *
- * The curve itself stays deterministic so the escalation behaviour proven in
- * #928 remains exactly assertable; jitter is applied only where the timer is
- * actually armed, so clients that all dropped on one server-side event do not
- * retry in the same millisecond.
- */
-function scheduledReconnectDelayMs(consecutiveFailures: number): number {
-  return socketReconnectDelayWithJitterMs(consecutiveFailures);
-}
-
 /** How long a connection must survive to count as healthy rather than a flap. */
 export const NOTIFICATION_SOCKET_STABLE_MS = 30_000;
 
@@ -277,7 +255,7 @@ export function useNotificationSocket(opts: {
     if (!token) return;
     const myGeneration = ++generation.current;
 
-    const reschedule = () => {
+    const reschedule = (status: number) => {
       if (myGeneration !== generation.current || !enabled) return;
       const openForMs =
         openedAt.current === null ? null : Date.now() - openedAt.current;
@@ -286,13 +264,13 @@ export function useNotificationSocket(opts: {
       if (!shouldReconnectNotificationSocket(enabled, failures.current)) return;
       reconnectTimer.current = setTimeout(
         connect,
-        scheduledReconnectDelayMs(failures.current),
+        streamRetryPlan(status, failures.current).delayMs,
       );
     };
 
     openedAt.current = Date.now();
     streamRef.current = openEventStream(
-      `${apiBaseUrl}${versionPrefix(apiBaseUrl)}/notifications/sse`,
+      `${apiBaseUrl}${versionPrefixFor(apiBaseUrl)}/notifications/sse`,
       token,
       () => {
         // The stream signals "something changed" (a new notification, or the

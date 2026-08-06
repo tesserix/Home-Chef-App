@@ -27,12 +27,17 @@ export interface EventStreamHandle {
  * `token` may be empty for a stream whose route authenticates optionally (a
  * kitchen's open/closed state is public, and browsing is guest-friendly) — the
  * header is then omitted rather than sent as "Bearer ".
+ *
+ * `onError` receives the HTTP status the stream died with, or 0 when the
+ * transport never reached the server. A caller that retries a 400 the same way
+ * it retries a dropped connection will retry forever, because the server's
+ * answer will not change.
  */
 export function openEventStream(
   url: string,
   token: string,
   onFrame: (raw: string) => void,
-  onError?: () => void,
+  onError?: (status: number) => void,
 ): EventStreamHandle {
   const xhr = new XMLHttpRequest();
   // How much of responseText has already been turned into frames. XHR keeps the
@@ -45,7 +50,15 @@ export function openEventStream(
   const fail = () => {
     if (closed || failed) return;
     failed = true;
-    onError?.();
+    // Reading .status can throw in some XHR states; a stream that died without
+    // one is indistinguishable from a transport failure anyway.
+    let status = 0;
+    try {
+      status = xhr.status ?? 0;
+    } catch {
+      status = 0;
+    }
+    onError?.(status);
   };
 
   const drain = () => {

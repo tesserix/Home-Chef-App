@@ -4,6 +4,8 @@
 
 import type { AxiosInstance } from 'axios';
 
+import { apiVersionPrefix } from '../api/version-prefix';
+
 export type FeedbackKind = 'feedback' | 'idea';
 export type FeedbackApp = 'customer' | 'vendor' | 'delivery';
 
@@ -39,7 +41,7 @@ export function validateFeedback(input: { title: string; message: string }): str
 }
 
 export async function submitFeedback(api: AxiosInstance, input: FeedbackInput): Promise<FeedbackReceipt> {
-  const r = await api.post('/v1/feedback', {
+  const r = await api.post(`${apiVersionPrefix(api)}/feedback`, {
     kind: input.kind,
     title: input.title.trim(),
     message: input.message.trim(),

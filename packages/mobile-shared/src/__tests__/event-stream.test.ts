@@ -86,6 +86,29 @@ describe('openEventStream', () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
+  // A stream the server refused (400 no_active_delivery, 404, 401) will refuse
+  // the next attempt for the same reason. The caller can only tell that from a
+  // transport drop if it is given the status.
+  it('reports the HTTP status the server rejected with', () => {
+    const onError = vi.fn();
+    openEventStream('https://x/sse', 'tok', vi.fn(), onError);
+
+    FakeXhr.last.status = 400;
+    FakeXhr.last.fail();
+
+    expect(onError).toHaveBeenCalledWith(400);
+  });
+
+  it('reports status 0 when the transport never reached the server', () => {
+    const onError = vi.fn();
+    openEventStream('https://x/sse', 'tok', vi.fn(), onError);
+
+    FakeXhr.last.status = 0;
+    FakeXhr.last.fail();
+
+    expect(onError).toHaveBeenCalledWith(0);
+  });
+
   it('stays silent after the caller closes it', () => {
     const onError = vi.fn();
     const handle = openEventStream('https://x/sse', 'tok', vi.fn(), onError);
