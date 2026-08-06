@@ -198,11 +198,11 @@ func (b OrderItemBakery) Summary() string {
 // ParsedBakery decodes an order line's bakery snapshot. Returns nil when the
 // line is an ordinary dish.
 func (oi *OrderItem) ParsedBakery() *OrderItemBakery {
-	if strings.TrimSpace(oi.BakeryDetails) == "" {
+	if oi.BakeryDetails == nil || strings.TrimSpace(*oi.BakeryDetails) == "" {
 		return nil
 	}
 	var b OrderItemBakery
-	if err := json.Unmarshal([]byte(oi.BakeryDetails), &b); err != nil {
+	if err := json.Unmarshal([]byte(*oi.BakeryDetails), &b); err != nil {
 		return nil
 	}
 	return &b
