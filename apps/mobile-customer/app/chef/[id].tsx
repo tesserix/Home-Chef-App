@@ -28,17 +28,15 @@ import { ChevronLeft, Heart, Share2, UtensilsCrossed, ShoppingCart } from 'lucid
 import * as Haptics from 'expo-haptics';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { ChefAudienceBar } from '../../components/chef/ChefAudienceBar';
-import {
-  useChefAudience,
-  useToggleChefLike,
-  useToggleChefSubscription,
-} from '../../hooks/useChefAudience';
+import { useChefAudience } from '../../hooks/useChefAudience';
+import { useChefGuestActions } from '../../hooks/useChefGuestActions';
 import { useChef, useChefMenu } from '../../hooks/useChefs';
 import { useCustomerCoords } from '../../hooks/useCustomerCoords';
 import { useChefAvailabilityWS } from '../../hooks/useChefAvailabilityWS';
 import { useChefWeeklyMenu } from '../../hooks/useMealPlans';
 import { useCreateGroupOrder, type GroupType } from '../../hooks/useGroupOrder';
-import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
+import { useFavorites } from '../../hooks/useFavorites';
+import { useRequireAccount } from '../../hooks/useRequireAccount';
 import { useCartStore } from '../../store/cart-store';
 import {
   ChefDetailTabs,
@@ -125,16 +123,16 @@ export default function ChefDetailScreen() {
   // customer while they read the menu (#970). Keyed on the resolved UUID.
   useChefAvailabilityWS(chefData?.data?.id);
   const { data: favData } = useFavorites();
-  const toggleFavorite = useToggleFavorite();
   const { data: audience } = useChefAudience(id);
-  const toggleLike = useToggleChefLike(id);
-  const toggleSubscribe = useToggleChefSubscription(id);
+  const guestActions = useChefGuestActions(id);
+  const requireAccount = useRequireAccount();
   const createGroup = useCreateGroupOrder();
   // Chef's published fixed weekly menu (#1) — read-only preview below the CTAs.
   const { data: weeklyMenu } = useChefWeeklyMenu(chefData?.data?.id ?? id ?? '');
 
   // Start a group / office order (#46): pick the context, then open the hub.
   function startGroupOrder(chefId: string) {
+    if (!requireAccount('start a group order')) return;
     const start = (type: GroupType) =>
       createGroup.mutate(
         { chefId, type, splitMode: 'split' },
@@ -271,6 +269,8 @@ export default function ChefDetailScreen() {
 
   const handleToggleSave = () => {
     if (!chef) return;
+    // Ahead of the animation, so a guest's heart never fills for a save that can't happen.
+    if (!requireAccount('save a chef')) return;
     if (!reduceMotion) {
       heartScale.value = withSequence(
         withTiming(1.25, { duration: 75 }),
@@ -278,7 +278,7 @@ export default function ChefDetailScreen() {
       );
     }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    toggleFavorite.mutate({ chefId: chef.id, isFavorited: isSaved });
+    guestActions.toggleFavorite({ chefId: chef.id, isFavorited: isSaved });
   };
 
   const handleShare = async () => {
@@ -584,9 +584,11 @@ export default function ChefDetailScreen() {
               subscribed={audience?.subscribed ?? false}
               likeCount={audience?.likeCount ?? chef.likeCount ?? 0}
               subscriberCount={audience?.subscriberCount ?? chef.subscriberCount ?? 0}
-              busy={toggleLike.isPending || toggleSubscribe.isPending}
-              onToggleLike={() => toggleLike.mutate(audience?.liked ?? false)}
-              onToggleSubscribe={() => toggleSubscribe.mutate(audience?.subscribed ?? false)}
+              busy={guestActions.busy}
+              onToggleLike={() => guestActions.toggleLike(audience?.liked ?? false)}
+              onToggleSubscribe={() =>
+                guestActions.toggleSubscribe(audience?.subscribed ?? false)
+              }
             />
 
             {/* Unavailable kitchen (#794): the API sends ready-to-render copy
