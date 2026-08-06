@@ -18,8 +18,28 @@ import { useRouter } from 'expo-router';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { formatMoney } from '../../lib/format';
 import { refundDestinationLine } from '../../lib/refund-destination';
+import { estimateCancellationRefund, toPaise } from '../../lib/cancellation-refund-estimate';
 import type { Order } from '../../types/customer';
 import { DisputeReasonSheet } from './DisputeReasonSheet';
+import { CancelRefundSheet } from './CancelRefundSheet';
+
+/** The order's money, in RUPEES, as the detail screen already holds it. Needed
+ *  here for the pre-cancellation refund estimate (#1032) — the customer must see
+ *  what a cancellation costs BEFORE the request is sent, not on the cancelled-
+ *  order screen afterwards. */
+export interface CancellationPricing {
+  subtotal: number;
+  /** Effective delivery fee (deliveryFeeFinal ?? deliveryFee, #703). */
+  deliveryFee: number;
+  platformFee: number;
+  tax: number;
+  discount: number;
+  total: number;
+  /** Already refunded through any other channel — caps the estimate (#642). */
+  alreadyRefunded: number;
+  /** Wallet + loyalty credit that funded the order, for the pro-rata note. */
+  creditApplied: number;
+}
 
 // Which orders the GENERIC cancellation endpoint refuses, and where they are
 // actually cancelled. Keys mirror OrderResponse.source; a missing entry means the
@@ -71,12 +91,14 @@ export function CancellationSection({
   source,
   walletRefunded,
   loyaltyRefunded,
+  pricing,
 }: {
   orderId: string;
   status: string;
   source?: Order['source'];
   walletRefunded?: number;
   loyaltyRefunded?: number;
+  pricing?: CancellationPricing;
 }) {
   const { showAlert } = useAlert();
   const router = useRouter();
@@ -86,6 +108,7 @@ export function CancellationSection({
   const dispute = useDisputeCancellation();
   const [expanded, setExpanded] = useState(false);
   const disputeSheetRef = useRef<SheetHandle>(null);
+  const refundSheetRef = useRef<SheetHandle>(null);
 
   if (isLoading) return null;
 
@@ -201,6 +224,33 @@ export function CancellationSection({
     );
   }
 
+  // The refund estimate the confirmation sheet shows (#1032). Bounds, not a
+  // figure: on an accepted order the chef picks the tier when they confirm, so
+  // no exact number exists yet — see lib/cancellation-refund-estimate.ts.
+  const estimate = pricing
+    ? estimateCancellationRefund({
+        status,
+        subtotalPaise: toPaise(pricing.subtotal),
+        discountPaise: toPaise(pricing.discount),
+        deliveryFeePaise: toPaise(pricing.deliveryFee),
+        platformFeePaise: toPaise(pricing.platformFee),
+        taxPaise: toPaise(pricing.tax),
+        totalPaise: toPaise(pricing.total),
+        alreadyRefundedPaise: toPaise(pricing.alreadyRefunded),
+      })
+    : null;
+
+  // With an estimate, the request goes through the confirmation sheet. Without
+  // one (the screen didn't pass pricing) the button still submits directly —
+  // a missing prop must not leave a customer unable to cancel at all.
+  function onRequestPress() {
+    if (estimate) {
+      refundSheetRef.current?.present();
+      return;
+    }
+    onRequest();
+  }
+
   return (
     <View style={styles.card}>
       {!expanded ? (
@@ -220,7 +270,7 @@ export function CancellationSection({
             is. The platform fee isn't refundable.
           </Text>
           <Pressable
-            onPress={onRequest}
+            onPress={onRequestPress}
             disabled={req.isPending}
             accessibilityRole="button"
             accessibilityLabel="Request cancellation"
@@ -240,6 +290,16 @@ export function CancellationSection({
           </Pressable>
         </>
       )}
+      {/* Mounted regardless of `expanded` so dismissing the sheet can't unmount
+          it mid-exit-animation. SheetBase renders nothing until presented. */}
+      {estimate ? (
+        <CancelRefundSheet
+          ref={refundSheetRef}
+          estimate={estimate}
+          creditApplied={pricing?.creditApplied ?? 0}
+          onConfirm={onRequest}
+        />
+      ) : null}
     </View>
   );
 }

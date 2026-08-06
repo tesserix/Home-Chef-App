@@ -604,6 +604,24 @@ export default function OrderDetailScreen() {
           source={order.source}
           walletRefunded={order.walletRefunded}
           loyaltyRefunded={order.loyaltyRefunded}
+          // #1032 — the money the pre-cancellation refund estimate is computed
+          // from. Passed rather than refetched: these are the same figures the
+          // price breakdown above renders, so the estimate and the breakdown
+          // can never disagree. Delivery uses the EFFECTIVE fee (#703), which is
+          // what handlers/cancellation.go feeds the tier model.
+          pricing={{
+            subtotal,
+            deliveryFee: order.deliveryFeeFinal ?? deliveryFee,
+            platformFee,
+            // order.tax is the total; the split rows are the same money, summed
+            // only as a fallback for a response that carries the lines but not
+            // the total.
+            tax: order.tax ?? taxLines.reduce((sum, line) => sum + line.amount, 0),
+            discount,
+            total: order.totalAmount,
+            alreadyRefunded: order.refundAmount ?? 0,
+            creditApplied,
+          }}
         />
 
         {/* Pay now — unpaid order recovery (verify failed / sheet dismissed). */}
