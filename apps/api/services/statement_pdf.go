@@ -52,20 +52,8 @@ func GenerateWeeklyStatementPDF(statementID uuid.UUID) ([]byte, string, error) {
 		if r.ChefID != stmt.ChefID {
 			continue
 		}
-		lines = append(lines, ComputeOrderEarnings(EarningsInput{
-			OrderID:            r.OrderID,
-			OrderNumber:        r.OrderNumber,
-			CompletedAt:        r.CompletedAt,
-			ItemRevenue:        r.ItemRevenue,
-			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
-			ChefFundedDiscount: r.ChefFundedDiscount,
-			DeliveryFee:        r.DeliveryFee,
-			ChefTip:            r.ChefTip,
-			DeliveryState:      r.DeliveryState,
-			// Per-row frozen rate (#390), falling back to the once-resolved live
-			// rate for legacy orders — so the PDF matches the stored statement.
-			CommissionRate: rowRate(r.CommissionRate, commissionRate),
-		}, chef.State))
+		// Same mapping as the stored statement, so the PDF cannot disagree with it.
+		lines = append(lines, ComputeOrderEarnings(r.earningsInput(commissionRate), chef.State))
 	}
 
 	cfg := config.NewBuilder().

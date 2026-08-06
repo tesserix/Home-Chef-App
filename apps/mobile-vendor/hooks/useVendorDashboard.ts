@@ -5,13 +5,16 @@ import type { ChefPayout } from '../lib/chefPayout';
 export interface DashboardData {
   todayOrders: number;
   todayEarnings: number;
-  /** Rolling 7-day order count (IST week window). Optional: a client can outrun
-   * the API deploy that added it. */
+  /** Orders PLACED in the settlement week — the population the orders tab shows.
+   * Optional: a client can outrun the API deploy that added it. */
   weekOrders?: number;
-  /** Rolling 7-day captured revenue (IST week window). */
+  /** Orders DELIVERED in the settlement week: the ones weekRevenue came from.
+   * Pair this with the money, never weekOrders. */
+  weekSettledOrders?: number;
+  /** Settled gross earnings for the week, same basis as the Earnings screen. */
   weekRevenue?: number;
-  /** Lifetime captured revenue across all time. The hero shows this all-time
-   * total; optional so a client can outrun the API deploy that added it. */
+  /** Lifetime settled gross earnings. The hero shows this all-time total;
+   * optional so a client can outrun the API deploy that added it. */
   totalEarnings?: number;
   /** Lifetime order count (chef.TotalOrders). */
   totalOrders?: number;

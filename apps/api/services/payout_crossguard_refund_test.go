@@ -42,6 +42,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			payment_provider TEXT DEFAULT 'razorpay', total REAL DEFAULT 0,
 			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 			chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
+			fulfillment_type TEXT DEFAULT 'delivery', delivery_fee REAL DEFAULT 0, delivery_fee_final REAL,
 			payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, delivered_at DATETIME,
 			payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 			refund_amount REAL DEFAULT 0, refund_reason TEXT, refund_initiated_by TEXT,

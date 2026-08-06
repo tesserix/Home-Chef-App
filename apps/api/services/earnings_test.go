@@ -83,6 +83,51 @@ func TestComputeOrderEarnings_GrossUsesTaxNotDelivery(t *testing.T) {
 	}
 }
 
+func TestComputeOrderEarnings_ChefCarriedTheLegSoTheFeeIsTheirs(t *testing.T) {
+	// The fee on a chef_delivery order is priced from the CHEF's own published
+	// rates and charged to the customer for a leg the chef drove. Treating it as
+	// "the driver's money" left it with the platform: the chef set the price, did
+	// the work, and was paid nothing for it.
+	got := ComputeOrderEarnings(EarningsInput{
+		ItemRevenue:          1000,
+		Tax:                  50,
+		DeliveryFee:          70,
+		ChefEarnsDeliveryFee: true,
+		ChefTip:              20,
+		DeliveryState:        "maharashtra",
+		CommissionRate:       0.06,
+	}, "Maharashtra")
+
+	// gross = 1000 + 50(tax) + 20(tip) + 70(delivery they carried) = 1140
+	if got.Gross != 1140 {
+		t.Errorf("gross = %.2f, want 1140 (chef carried the leg)", got.Gross)
+	}
+	// Commission is on FOOD revenue only — the platform takes no cut of a leg it
+	// did not carry or price.
+	if got.PlatformCommission != 60 {
+		t.Errorf("commission = %.2f, want 60 (food only)", got.PlatformCommission)
+	}
+	// tds = 1% × 1140 = 11.40; net = 1140 − 60 − 11.40 = 1068.60
+	if got.TDS != 11.4 {
+		t.Errorf("tds = %.2f, want 11.40 (194-O is on the whole supply)", got.TDS)
+	}
+	if got.NetPayout != 1068.6 {
+		t.Errorf("netPayout = %.2f, want 1068.60", got.NetPayout)
+	}
+}
+
+func TestComputeOrderEarnings_PlatformCarriedTheLegSoTheFeeIsNot(t *testing.T) {
+	// The flag is what decides it, not the presence of a fee: a 3PL leg stays the
+	// driver's money exactly as before.
+	got := ComputeOrderEarnings(EarningsInput{
+		ItemRevenue: 1000, Tax: 50, DeliveryFee: 70, ChefTip: 20,
+		DeliveryState: "maharashtra", CommissionRate: 0.06,
+	}, "Maharashtra")
+	if got.Gross != 1070 || got.NetPayout != 999.3 {
+		t.Errorf("gross/net = %.2f/%.2f, want 1070/999.30", got.Gross, got.NetPayout)
+	}
+}
+
 func TestComputeOrderEarnings_DefaultRateIsSixPercent(t *testing.T) {
 	// A 0 / unset CommissionRate must fall back to the flat 6% default, NOT 15%.
 	got := ComputeOrderEarnings(EarningsInput{
@@ -340,5 +385,22 @@ func TestComputeOrderEarnings_UnknownDeliveryStateIsIntraState(t *testing.T) {
 	in.DeliveryState = "Karnataka"
 	if intra := ComputeOrderEarnings(in, "Karnataka"); intra.IGST != 0 {
 		t.Fatalf("an explicit same-state order must stay intra, got IGST %.2f", intra.IGST)
+	}
+}
+
+func TestSettledChefEarnsDeliveryFee(t *testing.T) {
+	cases := []struct {
+		fulfillment string
+		want        bool
+	}{
+		{"chef_delivery", true},
+		{"delivery", false},
+		{"pickup", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := SettledChefEarnsDeliveryFee(tc.fulfillment); got != tc.want {
+			t.Errorf("SettledChefEarnsDeliveryFee(%q) = %v, want %v", tc.fulfillment, got, tc.want)
+		}
 	}
 }

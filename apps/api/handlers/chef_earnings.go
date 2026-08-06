@@ -56,6 +56,10 @@ type earningsOrderRow struct {
 	// for every order while the escrow flags are off, so the chef-facing held/
 	// released split degrades to zero and the per-order pill hides.
 	PayoutHoldStatus string `gorm:"column:payout_hold_status"`
+	// FulfillmentType decides who the delivery fee belongs to; DeliveryFeeFinal
+	// is the #703 lowered-at-accept figure the customer was actually charged.
+	FulfillmentType  string   `gorm:"column:fulfillment_type"`
+	DeliveryFeeFinal *float64 `gorm:"column:delivery_fee_final"`
 }
 
 // earningsOrderResponse is the per-order breakdown shape on the wire.
@@ -72,7 +76,10 @@ type earningsOrderResponse struct {
 	SGST               float64   `json:"sgst"`
 	IGST               float64   `json:"igst"`
 	TDS                float64   `json:"tds"`
-	NetPayout          float64   `json:"netPayout"`
+	// Penalty is the cancellation levy attributed to this order, already
+	// subtracted from NetPayout so the row matches the order's payout card.
+	Penalty   float64 `json:"penalty"`
+	NetPayout float64 `json:"netPayout"`
 	// PayoutHoldStatus surfaces the escrow hold lifecycle so the vendor app can
 	// pill the row (awaiting/confirmed/released/disputed). Omitted when empty
 	// (no hold — escrow flags off), so pre-launch rows render exactly as before.
@@ -87,8 +94,12 @@ type earningsTotals struct {
 	SGST               float64 `json:"sgst"`
 	IGST               float64 `json:"igst"`
 	TDS                float64 `json:"tds"`
-	NetPayout          float64 `json:"netPayout"`
-	OrdersCount        int     `json:"ordersCount"`
+	// Penalties is the cancellation levies attributed to these orders. Already
+	// subtracted from NetPayout — the settlement nets the same money off the
+	// weekly statement, so showing it before the levy contradicted the payout.
+	Penalties   float64 `json:"penalties"`
+	NetPayout   float64 `json:"netPayout"`
+	OrdersCount int     `json:"ordersCount"`
 	// Held is the net payout still in escrow (awaiting confirmation / eligible /
 	// disputed); Released is the net payout the platform has released to the chef.
 	// Both are 0 while the escrow flags are off (every hold is empty), so the
@@ -166,7 +177,8 @@ func chefSettledEarnings(
 	err := database.DB.Raw(`
 		SELECT id, order_number, delivered_at, subtotal, tax,
 		       tax_food, tax_service, chef_funded_discount,
-		       delivery_fee, chef_tip, delivery_address_state, commission_rate,
+		       delivery_fee, delivery_fee_final, fulfillment_type,
+		       chef_tip, delivery_address_state, commission_rate,
 		       payout_hold_status
 		FROM   orders
 		WHERE  chef_id       = ?
@@ -187,10 +199,20 @@ func chefSettledEarnings(
 		return earningsTotals{}, nil, err
 	}
 
+	// Levies are read once for the whole window: the settlement nets them off the
+	// weekly statement, so an Earnings screen that ignored them showed the chef a
+	// payout they were never going to receive.
+	ids := make([]uuid.UUID, len(rows))
+	for i, row := range rows {
+		ids[i] = row.OrderID
+	}
+	penalties := services.ChefOrderPenalties(database.DB, ids)
+
 	orderItems := make([]earningsOrderResponse, 0, len(rows))
 	var totals earningsTotals
 	for _, row := range rows {
 		breakdown := computeOrderBreakdown(row, chef.State, commissionRate)
+		breakdown.applyPenalty(penalties[row.OrderID])
 		orderItems = append(orderItems, breakdown)
 
 		totals.GrossRevenue += breakdown.Gross
@@ -199,6 +221,7 @@ func chefSettledEarnings(
 		totals.SGST += breakdown.SGST
 		totals.IGST += breakdown.IGST
 		totals.TDS += breakdown.TDS
+		totals.Penalties += breakdown.Penalty
 		totals.NetPayout += breakdown.NetPayout
 		totals.OrdersCount++
 
@@ -216,10 +239,25 @@ func chefSettledEarnings(
 	totals.SGST = round2(totals.SGST)
 	totals.IGST = round2(totals.IGST)
 	totals.TDS = round2(totals.TDS)
+	totals.Penalties = round2(totals.Penalties)
 	totals.NetPayout = round2(totals.NetPayout)
 	totals.Held = round2(totals.Held)
 	totals.Released = round2(totals.Released)
 	return totals, orderItems, nil
+}
+
+// applyPenalty nets a cancellation levy off this row. Never negative: a levy
+// larger than the order cannot make the chef owe money on it, and the remainder
+// stays outstanding in the penalty ledger (services.ComputeChefPayout).
+func (r *earningsOrderResponse) applyPenalty(penalty float64) {
+	if penalty <= 0 {
+		return
+	}
+	r.Penalty = round2(penalty)
+	r.NetPayout = round2(r.NetPayout - r.Penalty)
+	if r.NetPayout < 0 {
+		r.NetPayout = 0
+	}
 }
 
 // computeOrderBreakdown applies the earnings rules to a single order row and
@@ -227,16 +265,21 @@ func chefSettledEarnings(
 // services.ComputeOrderEarnings so the live endpoint, the weekly statement
 // generator, and the TDS certificate all settle identically.
 func computeOrderBreakdown(row earningsOrderRow, chefState string, commissionRate float64) earningsOrderResponse {
+	fee := row.DeliveryFee
+	if row.DeliveryFeeFinal != nil {
+		fee = *row.DeliveryFeeFinal
+	}
 	e := services.ComputeOrderEarnings(services.EarningsInput{
-		OrderID:            row.OrderID,
-		OrderNumber:        row.OrderNumber,
-		CompletedAt:        row.CompletedAt,
-		ItemRevenue:        row.ItemRevenue,
-		Tax:                services.ChefTaxOf(row.Tax, row.TaxFood, row.TaxService),
-		ChefFundedDiscount: row.ChefFundedDiscount,
-		DeliveryFee:        row.DeliveryFee,
-		ChefTip:            row.ChefTip,
-		DeliveryState:      row.DeliveryState,
+		OrderID:              row.OrderID,
+		OrderNumber:          row.OrderNumber,
+		CompletedAt:          row.CompletedAt,
+		ItemRevenue:          row.ItemRevenue,
+		Tax:                  services.ChefTaxOf(row.Tax, row.TaxFood, row.TaxService),
+		ChefFundedDiscount:   row.ChefFundedDiscount,
+		DeliveryFee:          fee,
+		ChefEarnsDeliveryFee: services.SettledChefEarnsDeliveryFee(row.FulfillmentType),
+		ChefTip:              row.ChefTip,
+		DeliveryState:        row.DeliveryState,
 		// Per-row frozen rate (#390), falling back to the once-resolved live rate
 		// for legacy orders so the breakdown matches the settlement statement.
 		CommissionRate: rowRate(row.CommissionRate, commissionRate),

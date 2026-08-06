@@ -169,6 +169,30 @@ type catchupRow struct {
 	// Selected only by loadUnderbilledOrders; the catch-up path deals in orders
 	// nothing has been credited for yet, and leaves it zero.
 	SettledNetPayout float64
+	// FulfillmentType decides who the delivery fee belongs to; DeliveryFeeFinal
+	// is the #703 lowered-at-accept figure the customer was actually charged.
+	FulfillmentType  string
+	DeliveryFee      float64
+	DeliveryFeeFinal *float64
+}
+
+// earningsInput maps a catch-up row to the settlement engine, on the same basis
+// as the statement that skipped or under-billed it.
+func (r catchupRow) earningsInput() EarningsInput {
+	fee := r.DeliveryFee
+	if r.DeliveryFeeFinal != nil {
+		fee = *r.DeliveryFeeFinal
+	}
+	return EarningsInput{
+		ItemRevenue:          r.Subtotal,
+		Tax:                  ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
+		ChefTip:              r.ChefTip,
+		ChefFundedDiscount:   r.ChefFundedDiscount,
+		CommissionRate:       r.CommissionRate,
+		DeliveryState:        r.DeliveryState,
+		DeliveryFee:          fee,
+		ChefEarnsDeliveryFee: SettledChefEarnsDeliveryFee(r.FulfillmentType),
+	}
 }
 
 // loadCatchupOrders finds delivered, payable, unsettled orders whose week already
@@ -182,6 +206,7 @@ func loadCatchupOrders(db *gorm.DB, limit int) ([]catchupRow, error) {
 	err := db.Table("orders o").
 		Select(`o.id, o.order_number, o.chef_id, s.id AS statement_id,
 			o.subtotal, o.tax, o.tax_food, o.tax_service, o.chef_tip, o.chef_funded_discount, o.commission_rate,
+			o.fulfillment_type, o.delivery_fee, o.delivery_fee_final,
 			c.state AS chef_state, o.delivery_address_state AS delivery_state`).
 		Joins("JOIN chef_profiles c ON c.id = o.chef_id").
 		Joins(`JOIN weekly_statements s ON s.chef_id = o.chef_id
@@ -215,6 +240,7 @@ func loadUnderbilledOrders(db *gorm.DB, limit int) ([]catchupRow, error) {
 	err := db.Table("orders o").
 		Select(`o.id, o.order_number, o.chef_id, o.billed_statement_id AS statement_id,
 			o.subtotal, o.tax, o.tax_food, o.tax_service, o.chef_tip, o.chef_funded_discount, o.commission_rate,
+			o.fulfillment_type, o.delivery_fee, o.delivery_fee_final,
 			o.settled_net_payout, c.state AS chef_state, o.delivery_address_state AS delivery_state`).
 		Joins("JOIN chef_profiles c ON c.id = o.chef_id").
 		Where("o.status = ?", models.OrderStatusDelivered).
@@ -243,14 +269,7 @@ func reconcileUnderbilledOrders(db *gorm.DB) {
 	adjusted := 0.0
 	for i := range rows {
 		r := rows[i]
-		net := ComputeOrderEarnings(EarningsInput{
-			ItemRevenue:        r.Subtotal,
-			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
-			ChefTip:            r.ChefTip,
-			ChefFundedDiscount: r.ChefFundedDiscount,
-			CommissionRate:     r.CommissionRate,
-			DeliveryState:      r.DeliveryState,
-		}, r.ChefState).NetPayout
+		net := ComputeOrderEarnings(r.earningsInput(), r.ChefState).NetPayout
 		delta := Round2(net - r.SettledNetPayout)
 		if delta < underbilledEpsilon {
 			// Never negative: a settlement is not clawed back here. An order whose value
@@ -314,14 +333,7 @@ func reconcileStatementCatchup() {
 	credited := 0.0
 	for i := range rows {
 		r := rows[i]
-		net := ComputeOrderEarnings(EarningsInput{
-			ItemRevenue:        r.Subtotal,
-			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
-			ChefTip:            r.ChefTip,
-			ChefFundedDiscount: r.ChefFundedDiscount,
-			CommissionRate:     r.CommissionRate,
-			DeliveryState:      r.DeliveryState,
-		}, r.ChefState).NetPayout
+		net := ComputeOrderEarnings(r.earningsInput(), r.ChefState).NetPayout
 		if net <= 0 {
 			continue
 		}

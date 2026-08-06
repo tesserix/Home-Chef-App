@@ -8,9 +8,10 @@ package services
 // drifting — a rate change here propagates everywhere.
 //
 //   - Platform commission on item revenue (subtotal only).
-//   - gross = itemRevenue + Tax + chefTip. The food GST (Tax) is the chef's
-//     income and enters gross; the delivery fee is the DRIVER's money and is
-//     EXCLUDED from the chef's gross/net (#390).
+//   - gross = itemRevenue + Tax + chefTip (+ the delivery fee when the chef
+//     carried the leg). The food GST (Tax) is the chef's income and enters
+//     gross; a 3PL/platform delivery fee is the DRIVER's money and is EXCLUDED
+//     (#390).
 //   - GST 18% on the commission: CGST 9% + SGST 9% (intra-state) or
 //     IGST 18% (inter-state). This GST is the platform's downstream remittance
 //     obligation on its own commission — NOT deducted from the chef's payout and
@@ -58,6 +59,10 @@ type EarningsInput struct {
 	CompletedAt time.Time
 	ItemRevenue float64
 	DeliveryFee float64
+	// ChefEarnsDeliveryFee makes DeliveryFee the chef's income rather than the
+	// driver's. True for a leg the chef carried themselves, where the fee was
+	// priced from the chef's OWN published rates (models.Order.ChefEarnsDeliveryFee).
+	ChefEarnsDeliveryFee bool
 	// Tax is the order's food GST. The chef receives it, so it enters the chef's
 	// gross (and thus TDS base) — unlike DeliveryFee, which is the driver's (#390).
 	Tax           float64
@@ -105,11 +110,12 @@ type EarningsTotals struct {
 // ComputeOrderEarnings applies the settlement rules to a single order.
 //
 //	commission = RateCommission × itemRevenue
-//	gross      = itemRevenue + Tax + chefTip   (delivery fee is the driver's, excluded)
+//	gross      = itemRevenue + Tax + chefTip + delivery fee the chef carried
 //	intra-state (order.state == chef.state): CGST 9% + SGST 9% on commission
 //	inter-state (order.state != chef.state): IGST 18% on commission
 //	tds        = RateTDS × gross
 //	netPayout  = gross − commission − tds   (GST is not deducted from chef)
+//
 // isIntraState decides which GST head the commission is billed under.
 //
 // An UNKNOWN delivery state counts as intra-state, not inter. The comparison
@@ -142,10 +148,17 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 	if itemRevenue < 0 {
 		itemRevenue = 0
 	}
+	// Commission is on FOOD revenue only. The platform takes no cut of a delivery
+	// leg it neither carried nor priced.
 	commission := Round2(rate * itemRevenue)
-	// Gross is the chef's income: food revenue + food GST (Tax) + chef tip. The
-	// delivery fee is intentionally NOT here — it is the driver's money (#390).
-	gross := Round2(itemRevenue + in.Tax + in.ChefTip)
+	// Gross is the chef's income: food revenue + food GST (Tax) + chef tip, plus
+	// the delivery fee when the chef carried the leg. A 3PL/platform leg is the
+	// driver's money and stays out (#390).
+	chefDelivery := 0.0
+	if in.ChefEarnsDeliveryFee {
+		chefDelivery = in.DeliveryFee
+	}
+	gross := Round2(itemRevenue + in.Tax + in.ChefTip + chefDelivery)
 
 	// GST on the platform's commission. Split so CGST+SGST reconciles EXACTLY to the
 	// full GST liability (#462): compute the full GST once, then put the odd paise (if
@@ -169,8 +182,8 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 		OrderNumber: in.OrderNumber,
 		CompletedAt: in.CompletedAt,
 		ItemRevenue: Round2(itemRevenue),
-		// DeliveryFee is retained for display/context only — it does NOT enter
-		// gross or net (it is the driver's money, settled separately) (#390).
+		// The charged fee, whoever it belongs to; ChefEarnsDeliveryFee decides
+		// whether it also entered gross (#390).
 		DeliveryFee:        Round2(in.DeliveryFee),
 		Tip:                Round2(in.ChefTip),
 		Gross:              gross,
@@ -245,15 +258,24 @@ func ChefTaxOf(orderTax, taxFood, taxService float64) float64 {
 	return orderTax
 }
 
+// SettledChefEarnsDeliveryFee is the row-level form of
+// models.Order.ChefEarnsDeliveryFee for an order that has already been
+// delivered. By then a carrier is assigned, so only a leg the chef drove
+// themselves qualifies — the pre-Mark-Ready projection no longer applies.
+func SettledChefEarnsDeliveryFee(fulfillmentType string) bool {
+	return fulfillmentType == string(models.FulfillmentChefDelivery)
+}
+
 func ChefNetPayoutFor(order *models.Order) float64 {
 	return ComputeOrderEarnings(EarningsInput{
-		ItemRevenue:        order.Subtotal,
-		Tax:                ChefAttributableTax(order),
-		ChefTip:            order.ChefTip,
-		DeliveryFee:        order.DeliveryFee,
-		ChefFundedDiscount: order.ChefFundedDiscount,
-		DeliveryState:      order.DeliveryAddressState,
-		CommissionRate:     order.CommissionRate,
+		ItemRevenue:          order.Subtotal,
+		Tax:                  ChefAttributableTax(order),
+		ChefTip:              order.ChefTip,
+		DeliveryFee:          order.EffectiveDeliveryFee(),
+		ChefEarnsDeliveryFee: order.ChefEarnsDeliveryFee(),
+		ChefFundedDiscount:   order.ChefFundedDiscount,
+		DeliveryState:        order.DeliveryAddressState,
+		CommissionRate:       order.CommissionRate,
 	}, order.Chef.State).NetPayout
 }
 

@@ -67,6 +67,7 @@ func GenerateTDSCertificatePDF(chefID uuid.UUID, fyStartYear int) ([]byte, strin
 		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax,
 		       o.tax_food, o.tax_service, o.chef_funded_discount,
 		       o.delivery_fee, o.chef_tip, o.delivery_address_state, o.commission_rate,
+		       o.fulfillment_type, o.delivery_fee_final,
 		       o.chef_id, c.user_id, c.state AS chef_state
 		FROM   orders o
 		JOIN   chef_profiles c ON c.id = o.chef_id
@@ -90,18 +91,10 @@ func GenerateTDSCertificatePDF(chefID uuid.UUID, fyStartYear int) ([]byte, strin
 	}
 	var totalGross, totalTDS float64
 	for _, r := range rows {
-		e := ComputeOrderEarnings(EarningsInput{
-			ItemRevenue:        r.ItemRevenue,
-			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
-			ChefFundedDiscount: r.ChefFundedDiscount,
-			DeliveryFee:        r.DeliveryFee,
-			ChefTip:            r.ChefTip,
-			DeliveryState:      r.DeliveryState,
-			// Per-row frozen rate (#390). This file resolves no live rate of its
-			// own, so a legacy 0 falls through to DefaultCommissionRate inside
-			// ComputeOrderEarnings — the intended legacy behaviour.
-			CommissionRate: r.CommissionRate,
-		}, chef.State)
+		// Per-row frozen rate (#390). This file resolves no live rate of its own,
+		// so a legacy 0 falls through to DefaultCommissionRate inside
+		// ComputeOrderEarnings — the intended legacy behaviour.
+		e := ComputeOrderEarnings(r.earningsInput(0), chef.State)
 		qi := financialQuarterIndex(r.CompletedAt)
 		quarters[qi].gross += e.Gross
 		quarters[qi].tds += e.TDS

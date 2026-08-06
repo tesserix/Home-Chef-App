@@ -211,7 +211,7 @@ func ChefPayoutsFor(db *gorm.DB, orders []models.Order) map[uuid.UUID]*models.Ch
 		settled[rows[i].OrderID] = &rows[i]
 	}
 
-	penalties := chefOrderPenalties(db, ids)
+	penalties := ChefOrderPenalties(db, ids)
 	for i := range orders {
 		id := orders[i].ID
 		if row, ok := settled[id]; ok {
@@ -223,10 +223,10 @@ func ChefPayoutsFor(db *gorm.DB, orders []models.Order) map[uuid.UUID]*models.Ch
 	return out
 }
 
-// chefOrderPenalties is the batched ChefOrderPenalty — the levy attributed to
+// ChefOrderPenalties is the batched ChefOrderPenalty — the levy attributed to
 // each of the given orders, absent meaning none. Waived levies are excluded (an
 // admin cancelled them, so they were never owed).
-func chefOrderPenalties(db *gorm.DB, orderIDs []uuid.UUID) map[uuid.UUID]float64 {
+func ChefOrderPenalties(db *gorm.DB, orderIDs []uuid.UUID) map[uuid.UUID]float64 {
 	out := make(map[uuid.UUID]float64, len(orderIDs))
 	if len(orderIDs) == 0 {
 		return out

@@ -171,6 +171,7 @@ func ComputeFYStatement(chefID uuid.UUID, fyStartYear int) (*FYStatement, error)
 		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax,
 		       o.tax_food, o.tax_service, o.chef_funded_discount,
 		       o.delivery_fee, o.chef_tip, o.delivery_address_state, o.commission_rate,
+		       o.fulfillment_type, o.delivery_fee_final,
 		       o.chef_id, c.user_id, c.state AS chef_state
 		FROM   orders o
 		JOIN   chef_profiles c ON c.id = o.chef_id
@@ -198,15 +199,9 @@ func ComputeFYStatement(chefID uuid.UUID, fyStartYear int) (*FYStatement, error)
 	}
 
 	for _, r := range rows {
-		e := ComputeOrderEarnings(EarningsInput{
-			ItemRevenue:        r.ItemRevenue,
-			Tax:                ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
-			ChefFundedDiscount: r.ChefFundedDiscount,
-			DeliveryFee:        r.DeliveryFee,
-			ChefTip:            r.ChefTip,
-			DeliveryState:      r.DeliveryState,
-			CommissionRate:     r.CommissionRate,
-		}, chef.State)
+		// No live rate is resolved here, so a legacy 0 falls through to
+		// DefaultCommissionRate inside ComputeOrderEarnings — intended.
+		e := ComputeOrderEarnings(r.earningsInput(0), chef.State)
 
 		stmt.OrdersCount++
 		stmt.FoodRevenue += r.ItemRevenue - r.ChefFundedDiscount

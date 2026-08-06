@@ -23,16 +23,8 @@ import (
 	"github.com/homechef/api/services"
 )
 
-// payoutMoneyColumns adds the order columns the payout formula reads that the
-// visibility harness does not already carry.
-func payoutMoneyColumns(t *testing.T, db *gorm.DB) {
-	t.Helper()
-	require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN delivery_fee_final REAL`).Error)
-}
-
 func payoutTables(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	payoutMoneyColumns(t, db)
 	require.NoError(t, db.Exec(`CREATE TABLE order_chef_payouts (id TEXT PRIMARY KEY, order_id TEXT UNIQUE,
 		chef_id TEXT, currency TEXT, food_amount REAL, delivery_fee REAL, chef_tip REAL, penalty REAL,
 		net_payout REAL, status TEXT, computed_at DATETIME, created_at DATETIME, updated_at DATETIME)`).Error)
@@ -174,7 +166,6 @@ func TestChefDashboard_ActiveOrdersCarryThePayout(t *testing.T) {
 // a list of orders is more important than the payout line on it.
 func TestChefOrders_SurvivesAMissingPayoutTable(t *testing.T) {
 	db := setupChefVisDB(t) // deliberately WITHOUT the payout/penalty tables
-	payoutMoneyColumns(t, db)
 	userID, chefID := seedVisChef(t, db)
 	seedPayoutOrder(t, db, chefID, "pending", models.FulfillmentChefDelivery)
 

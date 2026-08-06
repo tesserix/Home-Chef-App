@@ -206,3 +206,29 @@ func TestStatementCatchup_ClosesTheGapTheStatementOpens(t *testing.T) {
 	db.Model(&models.ChefBonus{}).Count(&count)
 	assert.EqualValues(t, 1, count, "the money the frozen statement could not pay reaches the chef")
 }
+
+// A leg the chef drove themselves: the fee is priced from the chef's own rates
+// and is their income, so the catch-up credit must carry it.
+func TestStatementCatchup_CreditsTheFeeOnAChefCarriedLeg(t *testing.T) {
+	db, chefID := setupCatchupDB(t)
+	stmt := addCatchupStatement(t, db, chefID)
+	// A stamped order keeps the historical backfill off this statement.
+	addCatchupOrder(t, db, chefID, "BILLED", "release_eligible", &stmt)
+
+	id := uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, order_number, chef_id, status, delivered_at, subtotal, tax,
+		   total, commission_rate, payout_hold_status, delivery_address_state,
+		   delivery_fee, fulfillment_type)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		id.String(), "SELF-DELIVERED", chefID.String(), "delivered", catchupWeek.Add(36*time.Hour),
+		500.0, 25.0, 630.0, 0.06, "release_eligible", "KA", 70.0, "chef_delivery").Error)
+
+	reconcileStatementCatchup()
+
+	var bonuses []models.ChefBonus
+	require.NoError(t, db.Find(&bonuses).Error)
+	require.Len(t, bonuses, 1)
+	// gross 500 + 25 + 70 = 595; commission 6% of FOOD only = 30; TDS 1% = 5.95.
+	assert.InDelta(t, 559.05, bonuses[0].Amount, 0.01)
+}

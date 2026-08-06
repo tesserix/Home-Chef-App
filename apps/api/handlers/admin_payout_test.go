@@ -32,6 +32,7 @@ const payoutOrdersDDL = `CREATE TABLE orders (mode text DEFAULT 'live', test_ses
 	customer_id TEXT, chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 	subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 	chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
+	fulfillment_type TEXT DEFAULT 'delivery', delivery_fee REAL DEFAULT 0, delivery_fee_final REAL,
 	payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, delivered_at DATETIME,
 	payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 	refunded_at DATETIME, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`
