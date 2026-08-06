@@ -231,6 +231,8 @@ export function useChefMenu(chefId: string) {
 // the backend ReviewResponse fields the reviews list renders.
 export interface ChefReview {
   id: string;
+  /** The order reviewed — the deep link the author's "Edit review" opens. */
+  orderId?: string;
   overallRating: number;
   title?: string;
   comment: string;

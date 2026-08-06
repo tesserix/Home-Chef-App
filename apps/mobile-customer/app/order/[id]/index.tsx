@@ -22,6 +22,7 @@ import { useReorder } from '../../../hooks/useReorder';
 import { useConfirmOrderReceived } from '../../../hooks/useConfirmReceived';
 import { useOrderReview } from '../../../hooks/useOrderReview';
 import { canConfirmReceipt, payoutHoldMeta } from '../../../lib/payout-hold';
+import { splitRetainedAmount } from '@homechef/mobile-shared/utils';
 import { friendlyErrorMessage } from '../../../lib/errors';
 import { CancellationSection } from '../../../components/orders/CancellationSection';
 import { useCartStore, makeLineId } from '../../../store/cart-store';
@@ -346,6 +347,15 @@ export default function OrderDetailScreen() {
       ? Math.round((deliveryFee - order.deliveryFeeFinal) * 100) / 100
       : 0;
   const platformFee = order.platformFee ?? 0;
+  // A cancelled order's platform-side retention, split into the fee and the tax
+  // withheld on it — one "Platform fee" line for both contradicted the fee row
+  // above it (#1048).
+  const retained = splitRetainedAmount({
+    totalAmount: order.totalAmount,
+    refundAmount: order.refundAmount ?? 0,
+    vendorKept: (cancelRequest?.vendorKeptPaise ?? 0) / 100,
+    platformFee,
+  });
   // The API's split tax rows (CGST+SGST / IGST), the same ones the receipt and
   // the PDF print. A single "Tax" row here contradicted both.
   const taxLines = order.taxLines ?? [];
@@ -1079,16 +1089,18 @@ export default function OrderDetailScreen() {
                         {formatMoney((cancelRequest?.vendorKeptPaise ?? 0) / 100)}
                       </Text>
                     </View>
-                    <View style={styles.priceRow}>
-                      <Text style={styles.priceLabel}>Platform fee (non-refundable)</Text>
-                      <Text style={styles.priceValue}>
-                        {formatMoney(
-                          order.totalAmount -
-                            order.refundAmount -
-                            (cancelRequest?.vendorKeptPaise ?? 0) / 100,
-                        )}
-                      </Text>
-                    </View>
+                    {retained.platformFee > 0.005 ? (
+                      <View style={styles.priceRow}>
+                        <Text style={styles.priceLabel}>Platform fee (non-refundable)</Text>
+                        <Text style={styles.priceValue}>{formatMoney(retained.platformFee)}</Text>
+                      </View>
+                    ) : null}
+                    {retained.taxWithheld > 0.005 ? (
+                      <View style={styles.priceRow}>
+                        <Text style={styles.priceLabel}>GST withheld</Text>
+                        <Text style={styles.priceValue}>{formatMoney(retained.taxWithheld)}</Text>
+                      </View>
+                    ) : null}
                   </>
                 ) : (
                   <View style={styles.priceRow}>

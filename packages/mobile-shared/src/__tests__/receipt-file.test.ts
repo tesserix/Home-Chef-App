@@ -1,6 +1,6 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 
-import { receiptFileName } from './receipt-file';
+import { receiptFileName } from '../utils/receipt-file';
 
 describe('receiptFileName', () => {
   it('names a tax invoice after the order it belongs to', () => {

@@ -18,8 +18,8 @@ import { ChevronLeft, Download, Share2 } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder, fetchInvoiceDownloadUrl } from '../../../hooks/useOrderHistory';
 import { useAlert } from '@homechef/mobile-shared/ui';
-import { receiptFileName } from '../../../lib/receipt-file';
-import { shareReceiptPdf } from '../../../lib/share-pdf';
+import { receiptFileName } from '@homechef/mobile-shared/utils';
+import { shareReceiptPdf, isShareUnavailable } from '../../../lib/share-pdf';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -78,7 +78,14 @@ export default function OrderReceiptScreen() {
     setSharing(true);
     try {
       const url = await fetchInvoiceDownloadUrl(order.id);
-      await shareReceiptPdf(url, receiptFileName(order.orderNumber, isTaxInvoice));
+      try {
+        await shareReceiptPdf(url, receiptFileName(order.orderNumber, isTaxInvoice));
+      } catch (e) {
+        // No share sheet on this build/device — the browser can still save,
+        // share and print the same PDF, so fall through rather than fail.
+        if (!isShareUnavailable(e)) throw e;
+        await WebBrowser.openBrowserAsync(url);
+      }
     } catch {
       showAlert(
         "Couldn't share the PDF",

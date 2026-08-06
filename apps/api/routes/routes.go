@@ -1538,6 +1538,8 @@ func SetupRouter() *gin.Engine {
 		{
 			reviews.POST("", reviewHandler.CreateReview)
 			reviews.GET("/order/:orderId", reviewHandler.GetOrderReview)
+			reviews.PATCH("/:id", reviewHandler.UpdateReview)
+			reviews.DELETE("/:id", reviewHandler.DeleteReview)
 		}
 
 		// Favorites (authenticated customers)
