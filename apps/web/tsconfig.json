@@ -22,7 +22,10 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // Bakery and dietary rules are dependency-free TS shared with the apps,
+      // so the web app runs the same pricing the server enforces (#1065).
+      "@homechef/mobile-shared/*": ["../../packages/mobile-shared/src/*"]
     }
   },
   "include": ["src"],

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { multipartConfig } from '@homechef/mobile-shared/api';
+import type { BakerySpec } from '@homechef/mobile-shared/bakery';
 import { api } from '../lib/api';
 
 export interface MenuItemImage {
@@ -46,6 +47,8 @@ export interface MenuItem {
   isCombo?: boolean;
   modifierGroups?: MenuItemModifierGroup[];
   comboItems?: MenuItemComboItem[];
+  // Bakery configurator (#1065) — present only on a bakery kitchen's items.
+  bakery?: BakerySpec | null;
 }
 
 // Read shapes for an item's modifier groups + combo components (#52).
@@ -80,6 +83,33 @@ export interface ModifierGroupInput {
 export interface ComboItemInput {
   menuItemId: string;
   quantity: number;
+}
+
+// Bakery configurator write shape (#1065) — replace-all, like modifier groups.
+// null strips the spec and turns the item back into an ordinary dish.
+export interface BakeryOptionInput {
+  kind: string;
+  name: string;
+  priceDelta: number;
+  priceMode: 'flat' | 'per_kg';
+  dietaryTags?: string[];
+  allergens?: string[];
+  isAvailable?: boolean;
+  isDefault?: boolean;
+}
+export interface BakerySpecInput {
+  productType: string;
+  pricePerKg: number;
+  minWeightKg: number;
+  maxWeightKg: number;
+  weightStepKg: number;
+  servesPerKg: number;
+  allowMessage: boolean;
+  maxMessageChars: number;
+  allowReferencePhoto: boolean;
+  leadTimeHours: number;
+  occasions: string[];
+  options: BakeryOptionInput[];
 }
 
 // Treat any of these tag strings as "vegetarian". Lowercased + trimmed
@@ -123,6 +153,8 @@ export interface CreateMenuItemPayload {
   isCombo?: boolean;
   modifierGroups?: ModifierGroupInput[];
   comboItems?: ComboItemInput[];
+  // null clears an existing configurator; undefined leaves it alone (#1065).
+  bakery?: BakerySpecInput | null;
 }
 
 // Translate the frontend `isVeg` boolean to the backend's tag array.

@@ -66,6 +66,11 @@ function CartItemRow({ item }: { item: CartItem }) {
           <Text className="text-xs text-charcoal-soft" style={{ fontVariant: ['tabular-nums'] }}>
             ₹{item.price.toFixed(2)} each
           </Text>
+          {item.bakerySummary ? (
+            <Text className="text-xs text-charcoal-soft" numberOfLines={2}>
+              {item.bakerySummary}
+            </Text>
+          ) : null}
           {item.modifiers && item.modifiers.length > 0 ? (
             <Text className="text-xs text-charcoal-soft" numberOfLines={2}>
               {item.modifiers.map((m) => m.optionName).join(', ')}

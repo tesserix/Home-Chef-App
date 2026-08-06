@@ -9,6 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@homechef/mobile-shared': path.resolve(__dirname, '../../packages/mobile-shared/src'),
     },
   },
   // @tesserix/web's deep `export *` chains aren't all preserved by Vite's

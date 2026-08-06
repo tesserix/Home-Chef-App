@@ -46,6 +46,10 @@ interface ChefProfile {
   profileImage?: string;
   bannerImage?: string;
   cuisines: string[];
+  // 'kitchen' | 'bakery' (#1065) — a bakery gets the cake configurator on its
+  // menu and its own customer-facing section.
+  vertical?: string;
+  sellsBakery?: boolean;
   specialties: string[];
   prepTime: string;
   minimumOrder: number;
@@ -76,6 +80,8 @@ interface ChefProfile {
 
 interface UpdateChefProfilePayload {
   businessName?: string;
+  vertical?: string;
+  sellsBakery?: boolean;
   description?: string;
   cuisines?: string[];
   prepTime?: string;
@@ -337,6 +343,9 @@ export default function ProfileScreen() {
   const [businessName, setBusinessName] = useState('');
   const [description, setDescription] = useState('');
   const [cuisines, setCuisines] = useState<string[]>([]);
+  const [vertical, setVertical] = useState('kitchen');
+  // One store, both shelves (#1065): a meals kitchen can also sell bakes.
+  const [sellsBakery, setSellsBakery] = useState(false);
   const [prepTime, setPrepTime] = useState('');
   const [minimumOrder, setMinimumOrder] = useState('');
   const [serviceRadius, setServiceRadius] = useState('');
@@ -368,6 +377,8 @@ export default function ProfileScreen() {
       description.trim() !== (data.description ?? '') ||
       JSON.stringify([...cuisines].sort()) !==
         JSON.stringify([...(data.cuisines ?? [])].sort()) ||
+      vertical !== (data.vertical || 'kitchen') ||
+      sellsBakery !== (data.sellsBakery ?? false) ||
       prepTime.trim() !== (data.prepTime ?? '') ||
       parseNumber(minimumOrder) !== (data.minimumOrder ?? 0) ||
       parseNumber(serviceRadius) !== (data.serviceRadius ?? 0) ||
@@ -396,6 +407,8 @@ export default function ProfileScreen() {
       setBusinessName(data.businessName ?? '');
       setDescription(data.description ?? '');
       setCuisines(data.cuisines ?? []);
+      setVertical(data.vertical || 'kitchen');
+      setSellsBakery(data.sellsBakery ?? false);
       setPrepTime(data.prepTime ?? '');
       setMinimumOrder(
         data.minimumOrder ? String(data.minimumOrder) : '',
@@ -446,6 +459,8 @@ export default function ProfileScreen() {
     return {
       businessName: businessName.trim(),
       description: description.trim(),
+      vertical,
+      sellsBakery: vertical === 'bakery' || sellsBakery,
       cuisines,
       prepTime: prepTime.trim(),
       minimumOrder: parseNumber(minimumOrder),
@@ -851,6 +866,36 @@ export default function ProfileScreen() {
               typing, less spelling drift. */}
           <Text style={styles.sectionLabel}>KITCHEN</Text>
           <View style={styles.hairlineGroup}>
+            <View style={styles.chipFieldRow}>
+              <Text style={styles.chipFieldLabel}>You sell</Text>
+              <View style={styles.chipWrap}>
+                {[
+                  { value: 'kitchen', label: 'Cooked meals' },
+                  { value: 'bakery', label: 'Bakes' },
+                ].map((opt) => (
+                  <Chip
+                    key={opt.value}
+                    label={opt.label}
+                    selected={vertical === opt.value}
+                    onPress={() => setVertical(opt.value)}
+                  />
+                ))}
+              </View>
+            </View>
+            {/* A meals kitchen can add a bakery shelf without becoming a bakery:
+                its bakes then appear in the customer's Bakery section (#1065). */}
+            {vertical === 'kitchen' ? (
+              <View style={styles.chipFieldRow}>
+                <Text style={styles.chipFieldLabel}>Also bakes</Text>
+                <View style={styles.chipWrap}>
+                  <Chip
+                    label="I also sell cakes and bakes"
+                    selected={sellsBakery}
+                    onPress={() => setSellsBakery(!sellsBakery)}
+                  />
+                </View>
+              </View>
+            ) : null}
             <View style={styles.chipFieldRow}>
               <Text style={styles.chipFieldLabel}>Cuisines</Text>
               <View style={styles.chipWrap}>

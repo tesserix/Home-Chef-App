@@ -10,7 +10,21 @@ interface CreateOrderPayload {
   chefId: string;
   // `notes` is the per-item wire field (apps/api CreateOrderItem.json:"notes").
   // modifierOptionIds are the selected add-ons for the line (#232).
-  items: { menuItemId: string; quantity: number; notes?: string; modifierOptionIds?: string[] }[];
+  // bakery carries the cake configuration for a configured bake (#1065) — the
+  // server re-prices it and stores the snapshot the kitchen bakes from.
+  items: {
+    menuItemId: string;
+    quantity: number;
+    notes?: string;
+    modifierOptionIds?: string[];
+    bakery?: {
+      weightKg?: number;
+      bakeryOptionIds?: string[];
+      messageOnCake?: string;
+      referencePhotoUrl?: string;
+      occasion?: string;
+    };
+  }[];
   // Omit when fulfillmentType is 'pickup' — the server does not require an
   // address for pickup orders (backend Task 4).
   deliveryAddressId?: string;

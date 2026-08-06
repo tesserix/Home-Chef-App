@@ -19,6 +19,7 @@ import {
   useCreateCategory,
 } from '../../hooks/useVendorMenu';
 import { MenuItemForm } from './MenuItemForm';
+import { useOffersBakery } from '../../hooks/useChefVertical';
 import type { MenuItemFormValues } from './MenuItemForm';
 import { useState } from 'react';
 
@@ -33,6 +34,7 @@ const BLANK: MenuItemFormValues = {
   isCombo: false,
   modifierGroups: [],
   comboItems: [],
+  bakery: null,
   preparationTime: 15,
   hsn: '',
   availableDays: [],
@@ -42,6 +44,7 @@ export default function NewMenuItemScreen() {
   const { showAlert } = useAlert();
   const { data: menuData } = useVendorMenu();
   const createMutation = useCreateMenuItem();
+  const isBakery = useOffersBakery();
   const createCategoryMutation = useCreateCategory();
   const { show: showToast } = useToast();
 
@@ -73,6 +76,7 @@ export default function NewMenuItemScreen() {
         isCombo: values.isCombo,
         modifierGroups: values.modifierGroups,
         comboItems: values.comboItems,
+        bakery: values.bakery,
         preparationTime: values.preparationTime,
         hsn: values.hsn || undefined,
         availableDays: values.availableDays,
@@ -131,6 +135,7 @@ export default function NewMenuItemScreen() {
       initialValues={draft ?? BLANK}
       categories={categories}
       menuItems={(menuData?.items ?? []).map((m) => ({ id: m.id, name: m.name }))}
+      isBakery={isBakery}
       onSave={handleSave}
       isSaving={isSaving}
       onCreateCategory={handleCreateCategory}

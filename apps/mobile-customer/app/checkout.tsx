@@ -43,6 +43,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { customerColors, customerTheme } from "@homechef/mobile-shared/theme";
+import { earliestBakeryFulfillment } from "@homechef/mobile-shared/bakery";
 import { useCartStore } from "../store/cart-store";
 import { useCreateOrder } from "../hooks/useOrderCheckout";
 import { useChef } from "../hooks/useChefs";
@@ -118,6 +119,18 @@ function slotDayLabel(dateStr: string): string {
     day: "numeric",
     month: "short",
   });
+}
+
+// "Tomorrow, 4:30 pm" — the earliest time a bake with a lead time can be had.
+function leadTimeLabel(d: Date): string {
+  const day = slotDayLabel(
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+  );
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${day}, ${time}`;
 }
 
 // R13 (zero-flicker) — component-layer stale-while-revalidating. The delivery
@@ -280,6 +293,33 @@ export default function CheckoutScreen() {
   // order but honours a reserved slot, so the grid opens and a time is required
   // rather than letting checkout complete into a rejection (#969).
   const kitchenClosed = chefData?.data?.availability?.orderable === false;
+  // Bakery lead time (#1065) — a cake is baked to order, so the server refuses an
+  // ASAP order (or one scheduled inside the notice window) for a bake. Block it
+  // here with the reason instead of letting checkout complete into a rejection.
+  const bakeryLeadHours = cartStore.items.reduce(
+    (max, i) => Math.max(max, i.bakeryLeadTimeHours ?? 0),
+    0,
+  );
+  const bakeryEarliest =
+    bakeryLeadHours > 0
+      ? earliestBakeryFulfillment(new Date(), bakeryLeadHours)
+      : null;
+  const chosenFulfillmentAt = useSlotPicker
+    ? (() => {
+        const s = availableSlots.find(
+          (x) => x.slot === selectedSlot?.slot && x.date === selectedSlot?.date,
+        );
+        return s ? new Date(s.scheduledFor) : null;
+      })()
+    : requestedTime;
+  const bakeryTimeTooSoon =
+    bakeryEarliest !== null &&
+    (chosenFulfillmentAt === null ||
+      chosenFulfillmentAt.getTime() < bakeryEarliest.getTime());
+  const bakeryLeadNotice =
+    bakeryEarliest === null
+      ? null
+      : `This order includes a bake that needs ${bakeryLeadHours}h notice — choose a time from ${leadTimeLabel(bakeryEarliest)} onwards.`;
   // Realistic proposable times come from the server, derived from the CHEF's meal
   // windows + open hours + prep headroom — NOT "now + 1h" (which proposed 9am for a
   // 6am order). Same list for delivery and pickup.
@@ -334,8 +374,10 @@ export default function CheckoutScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const addressSectionRef = useRef<View>(null);
   const termsSectionRef = useRef<View>(null);
+  const timeSectionRef = useRef<View>(null);
   const addressSectionY = useRef(0);
   const termsSectionY = useRef(0);
+  const timeSectionY = useRef(0);
   function focusSection(sectionRef: RefObject<View | null>, y: number) {
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
     const node = sectionRef.current ? findNodeHandle(sectionRef.current) : null;
@@ -483,6 +525,11 @@ export default function CheckoutScreen() {
       focusSection(termsSectionRef, termsSectionY.current);
       return;
     }
+    if (bakeryTimeTooSoon && bakeryLeadNotice) {
+      setError(bakeryLeadNotice);
+      focusSection(timeSectionRef, timeSectionY.current);
+      return;
+    }
     // Guard re-entry: the button is disabled via canPlaceOrder, but a second tap
     // can still land during the async create→pay round-trip before the disabled
     // state applies. Without this a double-tap creates a duplicate order + charge.
@@ -510,6 +557,16 @@ export default function CheckoutScreen() {
           notes: i.instructions?.trim() || undefined,
           // Selected add-on option ids for this line (#232).
           modifierOptionIds: i.modifiers?.map((m) => m.optionId),
+          // The cake configuration (#1065) — re-priced server-side.
+          bakery: i.bakery
+            ? {
+                weightKg: i.bakery.weightKg,
+                bakeryOptionIds: i.bakery.optionIds,
+                messageOnCake: i.bakery.messageOnCake,
+                referencePhotoUrl: i.bakery.referencePhotoUrl,
+                occasion: i.bakery.occasion,
+              }
+            : undefined,
         })),
         deliveryAddressId:
           fulfillment === "pickup" ? undefined : selectedAddressId,
@@ -573,6 +630,7 @@ export default function CheckoutScreen() {
     !isLoading &&
     // A closed kitchen only accepts a reserved slot, so a time is mandatory (#969).
     (!kitchenClosed || requestedTime !== null) &&
+    !bakeryTimeTooSoon &&
     acceptedTerms;
 
   function formatAddress(addr: Address): string {
@@ -1277,6 +1335,12 @@ export default function CheckoutScreen() {
                 </View>
                 <View className="flex-1">
                   <Text className="text-sm text-charcoal">{item.name}</Text>
+                  {/* Cake configuration (#1065) */}
+                  {item.bakerySummary ? (
+                    <Text className="text-xs text-charcoal-soft">
+                      {item.bakerySummary}
+                    </Text>
+                  ) : null}
                   {/* Selected add-ons (#232) */}
                   {item.modifiers && item.modifiers.length > 0 ? (
                     <Text className="text-xs text-charcoal-soft">
@@ -1749,56 +1813,77 @@ export default function CheckoutScreen() {
             the suggested-time handshake (#709): the customer proposes a time and
             the chef confirms or proposes a different one at accept. */}
         {useSlotPicker ? (
-          <View className="bg-canvas border-t border-hairline p-4">
+          <View
+            ref={timeSectionRef}
+            onLayout={(e) => {
+              timeSectionY.current = e.nativeEvent.layout.y;
+            }}
+            className="bg-canvas border-t border-hairline p-4"
+          >
             <Text className="text-sm font-medium text-charcoal-soft mb-3">
               Delivery time
             </Text>
+            {bakeryLeadNotice ? (
+              <Text className="text-xs text-charcoal-soft mb-3 leading-4">
+                {bakeryLeadNotice}
+              </Text>
+            ) : null}
             <View className="flex-row flex-wrap gap-2">
-              {/* ASAP (default) — selected chip = coral fill + white text per spec */}
-              <Pressable
-                onPress={() => setSelectedSlot(null)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: selectedSlot === null }}
-                accessibilityLabel="ASAP, after chef accepts"
-                android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
-              >
-                {({ pressed }) => (
-                  <View
-                    className={`px-3 py-2 rounded-xl border justify-center ${
-                      selectedSlot === null
-                        ? "border-coral bg-coral"
-                        : "border-hairline bg-surface-soft"
-                    } ${pressed && Platform.OS === "ios" && selectedSlot !== null ? "bg-hairline" : ""}`}
-                    style={{ minHeight: 44 }}
-                  >
-                    <Text
-                      className={`text-sm font-medium ${
-                        selectedSlot === null ? "text-canvas" : "text-charcoal"
-                      }`}
+              {/* ASAP (default) — selected chip = coral fill + white text per spec.
+                  Withheld for a bake: there is no ASAP when it has to be baked. */}
+              {bakeryEarliest !== null ? null : (
+                <Pressable
+                  onPress={() => setSelectedSlot(null)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: selectedSlot === null }}
+                  accessibilityLabel="ASAP, after chef accepts"
+                  android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
+                >
+                  {({ pressed }) => (
+                    <View
+                      className={`px-3 py-2 rounded-xl border justify-center ${
+                        selectedSlot === null
+                          ? "border-coral bg-coral"
+                          : "border-hairline bg-surface-soft"
+                      } ${pressed && Platform.OS === "ios" && selectedSlot !== null ? "bg-hairline" : ""}`}
+                      style={{ minHeight: 44 }}
                     >
-                      ASAP
-                    </Text>
-                    <Text
-                      className={`text-xs ${selectedSlot === null ? "text-canvas/80" : "text-charcoal-soft"}`}
-                    >
-                      After chef accepts
-                    </Text>
-                  </View>
-                )}
-              </Pressable>
+                      <Text
+                        className={`text-sm font-medium ${
+                          selectedSlot === null
+                            ? "text-canvas"
+                            : "text-charcoal"
+                        }`}
+                      >
+                        ASAP
+                      </Text>
+                      <Text
+                        className={`text-xs ${selectedSlot === null ? "text-canvas/80" : "text-charcoal-soft"}`}
+                      >
+                        After chef accepts
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              )}
 
               {availableSlots.map((s: DeliverySlot) => {
                 const sel =
                   selectedSlot?.slot === s.slot &&
                   selectedSlot?.date === s.date;
+                // Inside a bake's notice window — the server would reject it.
+                const tooSoon =
+                  bakeryEarliest !== null &&
+                  new Date(s.scheduledFor).getTime() < bakeryEarliest.getTime();
                 return (
                   <Pressable
                     key={`${s.date}-${s.slot}`}
                     onPress={() =>
                       setSelectedSlot({ slot: s.slot, date: s.date })
                     }
+                    disabled={tooSoon}
                     accessibilityRole="radio"
-                    accessibilityState={{ selected: sel }}
+                    accessibilityState={{ selected: sel, disabled: tooSoon }}
                     accessibilityLabel={`${slotDayLabel(s.date)} ${s.label} ${s.window}`}
                     android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
                   >
@@ -1809,7 +1894,7 @@ export default function CheckoutScreen() {
                             ? "border-coral bg-coral"
                             : "border-hairline bg-surface-soft"
                         } ${pressed && Platform.OS === "ios" && !sel ? "bg-hairline" : ""}`}
-                        style={{ minHeight: 44 }}
+                        style={{ minHeight: 44, opacity: tooSoon ? 0.4 : 1 }}
                       >
                         <Text
                           className={`text-sm font-medium ${sel ? "text-canvas" : "text-charcoal"}`}
@@ -1831,25 +1916,33 @@ export default function CheckoutScreen() {
             </View>
           </View>
         ) : (
-          <View className="bg-canvas border-t border-hairline p-4">
+          <View
+            ref={timeSectionRef}
+            onLayout={(e) => {
+              timeSectionY.current = e.nativeEvent.layout.y;
+            }}
+            className="bg-canvas border-t border-hairline p-4"
+          >
             <Text className="text-sm font-medium text-charcoal mb-0.5">
               {fulfillment === "pickup"
                 ? "Preferred pickup time"
                 : "Preferred delivery time"}
             </Text>
             <Text className="text-xs text-charcoal-soft mb-3 leading-4">
-              {kitchenClosed
-                ? "This kitchen is closed right now. Pick a time below to reserve your order for when they reopen."
-                : fulfillment === "pickup"
-                  ? "When will you come to collect? It's a home kitchen — the chef confirms once they accept."
-                  : "Suggest when you'd like it. It's a home kitchen, not a restaurant — the chef confirms or proposes a time when they accept."}
+              {bakeryLeadNotice
+                ? bakeryLeadNotice
+                : kitchenClosed
+                  ? "This kitchen is closed right now. Pick a time below to reserve your order for when they reopen."
+                  : fulfillment === "pickup"
+                    ? "When will you come to collect? It's a home kitchen — the chef confirms once they accept."
+                    : "Suggest when you'd like it. It's a home kitchen, not a restaurant — the chef confirms or proposes a time when they accept."}
             </Text>
             <View className="gap-3">
               {/* As soon as ready (default) — recommended, full-width so it reads
                   as the primary choice above the specific-time clusters (R14: the
                   default hero option). Withheld while the kitchen is closed:
                   there is no "soon" to be ready, and the server would reject it. */}
-              {kitchenClosed ? null : (
+              {kitchenClosed || bakeryEarliest !== null ? null : (
                 <Pressable
                   onPress={() => {
                     // Re-selecting ASAP collapses the grid and clears any picked
@@ -1901,7 +1994,10 @@ export default function CheckoutScreen() {
                   (#871). Collapse them behind a one-tap affordance; scheduling
                   stays one tap away, and the grid re-appears automatically once
                   a specific time is picked. */}
-              {!kitchenClosed && !showTimeGrid && requestedTime === null ? (
+              {!kitchenClosed &&
+              bakeryEarliest === null &&
+              !showTimeGrid &&
+              requestedTime === null ? (
                 <Pressable
                   onPress={() => setShowTimeGrid(true)}
                   accessibilityRole="button"
@@ -1931,7 +2027,10 @@ export default function CheckoutScreen() {
 
               {/* Specific times, grouped into scannable day·meal clusters. Chips
                   show just the clock label — the cluster header carries day+meal. */}
-              {(kitchenClosed || showTimeGrid || requestedTime !== null) &&
+              {(kitchenClosed ||
+                bakeryEarliest !== null ||
+                showTimeGrid ||
+                requestedTime !== null) &&
                 fulfillmentTimeGroups.map((group) => (
                   <View key={group.key} className="gap-2">
                     <Text className="text-xs font-semibold text-charcoal-soft">
@@ -1942,12 +2041,20 @@ export default function CheckoutScreen() {
                         const sel =
                           requestedTime?.toISOString() ===
                           new Date(t.at).toISOString();
+                        // Inside a bake's notice window — the server would reject it.
+                        const tooSoon =
+                          bakeryEarliest !== null &&
+                          new Date(t.at).getTime() < bakeryEarliest.getTime();
                         return (
                           <Pressable
                             key={t.at}
                             onPress={() => setRequestedTime(new Date(t.at))}
+                            disabled={tooSoon}
                             accessibilityRole="radio"
-                            accessibilityState={{ selected: sel }}
+                            accessibilityState={{
+                              selected: sel,
+                              disabled: tooSoon,
+                            }}
                             accessibilityLabel={`${fulfillment === "pickup" ? "Pickup" : "Delivery"} around ${t.label}, ${t.day} ${t.meal}`}
                             android_ripple={{
                               color: CORAL_RIPPLE,
@@ -1961,7 +2068,10 @@ export default function CheckoutScreen() {
                                     ? "border-coral bg-coral"
                                     : "border-hairline bg-surface-soft"
                                 } ${pressed && Platform.OS === "ios" && !sel ? "bg-hairline" : ""}`}
-                                style={{ minHeight: 44 }}
+                                style={{
+                                  minHeight: 44,
+                                  opacity: tooSoon ? 0.4 : 1,
+                                }}
                               >
                                 <Text
                                   className={`text-sm font-medium ${sel ? "text-canvas" : "text-charcoal"}`}

@@ -23,6 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import { ChevronLeft, Plus } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast, useAlert } from '@homechef/mobile-shared/ui';
@@ -31,11 +32,13 @@ import { pricingHint } from '../../lib/pricing-guidance';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import { DietIcon } from '../../components/vendor/DietIcon';
 import { ModifierComboEditor } from '../../components/vendor/ModifierComboEditor';
+import { BakerySpecEditor } from '../../components/vendor/BakerySpecEditor';
 import type {
   MenuItemImage,
   Category,
   ModifierGroupInput,
   ComboItemInput,
+  BakerySpecInput,
 } from '../../hooks/useVendorMenu';
 
 // ---- Constants ---------------------------------------------------------------
@@ -71,6 +74,9 @@ export interface MenuItemFormValues {
   isCombo: boolean;
   modifierGroups: ModifierGroupInput[];
   comboItems: ComboItemInput[];
+  // Bakery configurator (#1065). null = an ordinary item; only a bakery
+  // kitchen ever sees the editor.
+  bakery: BakerySpecInput | null;
   preparationTime: number;
   // HSN/SAC — optional. Backend defaults to 996331 (restaurant
   // services) when empty. Most chefs leave this alone; surfaces as
@@ -106,6 +112,8 @@ export interface MenuItemFormProps {
   categories: Category[];
   /** The chef's other menu items, for the combo builder's item picker (#52). */
   menuItems?: { id: string; name: string }[];
+  /** True for a bakery kitchen — reveals the cake configurator (#1065). */
+  isBakery?: boolean;
   /** Called when the chef confirms deletion (edit mode only). */
   onDelete?: () => void;
   /** True while the delete mutation is in-flight. */
@@ -481,6 +489,7 @@ export function MenuItemForm({
   existingPhotos = [],
   categories,
   menuItems,
+  isBakery = false,
   onDelete,
   isDeleting = false,
   onSave,
@@ -562,6 +571,7 @@ export function MenuItemForm({
   const [modifierGroups, setModifierGroups] = useState<ModifierGroupInput[]>(initialValues.modifierGroups ?? []);
   const [comboItems, setComboItems] = useState<ComboItemInput[]>(initialValues.comboItems ?? []);
   const [isCombo, setIsCombo] = useState(initialValues.isCombo ?? false);
+  const [bakery, setBakery] = useState<BakerySpecInput | null>(initialValues.bakery ?? null);
   const [preparationTime, setPreparationTime] = useState(initialValues.preparationTime);
   const [hsn, setHsn] = useState(initialValues.hsn);
   const [availableDays, setAvailableDays] = useState<number[]>(initialValues.availableDays ?? []);
@@ -587,6 +597,7 @@ export function MenuItemForm({
       isCombo,
       modifierGroups,
       comboItems,
+      bakery,
       preparationTime,
       hsn,
       availableDays,
@@ -602,6 +613,7 @@ export function MenuItemForm({
     isCombo,
     modifierGroups,
     comboItems,
+    bakery,
     preparationTime,
     hsn,
     availableDays,
@@ -718,6 +730,10 @@ export function MenuItemForm({
           .map((g) => ({ ...g, options: g.options.filter((o) => o.name.trim() !== '') }))
           .filter((g) => g.options.length > 0),
         comboItems: isCombo ? comboItems : [],
+        // Drop unnamed choices — a half-filled row is not a product option.
+        bakery: bakery
+          ? { ...bakery, options: bakery.options.filter((o) => o.name.trim() !== '') }
+          : null,
         preparationTime,
         hsn: hsn.trim(),
         availableDays: [...availableDays].sort((a, b) => a - b),
@@ -1219,6 +1235,25 @@ export function MenuItemForm({
             </View>
           </View>
 
+          {/* BAKERY configurator (#1065) — kitchens that bake. The prompt is
+              the only place a meals kitchen discovers it can opt in later. */}
+          {isBakery ? (
+            <BakerySpecEditor spec={bakery} setSpec={setBakery} />
+          ) : (
+            <Pressable
+              style={styles.card}
+              accessibilityRole="button"
+              accessibilityLabel="Sell cakes and bakes — open profile"
+              onPress={() => router.push('/profile')}
+            >
+              <Text style={styles.bakeryPromptTitle}>Selling cakes or bread?</Text>
+              <Text style={styles.categoryHint}>
+                Turn on “I also sell cakes and bakes” in your profile to add sizes, shapes and
+                a message-on-cake option. Same store, same orders.
+              </Text>
+            </Pressable>
+          )}
+
           {/* ADD-ONS + COMBO sections (#52) */}
           <ModifierComboEditor
             groups={modifierGroups}
@@ -1394,6 +1429,13 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.muted,
     paddingHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[2],
+  },
+
+  bakeryPromptTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    marginBottom: theme.spacing[1],
   },
 
   // Empty-state hint shown in the CATEGORY card when the chef has no

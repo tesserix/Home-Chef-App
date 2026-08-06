@@ -414,8 +414,12 @@ type OrderItem struct {
 	// Modifiers is a JSON snapshot of the selected add-ons for this line (#232) —
 	// []OrderItemModifier{groupName, optionName, priceDelta}. Subtotal already
 	// includes their deltas; this is the immutable breakdown for the order + invoice.
-	Modifiers string    `gorm:"type:jsonb;default:'[]'" json:"-"`
-	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
+	Modifiers string `gorm:"type:jsonb;default:'[]'" json:"-"`
+	// BakeryDetails is the JSON snapshot of a configured bakery line (#1065) —
+	// weight, shape, flavour, egg/sugar choice, message. Empty for ordinary
+	// dishes. Subtotal already includes its deltas. See OrderItemBakery.
+	BakeryDetails string    `gorm:"type:jsonb" json:"-"`
+	CreatedAt     time.Time `gorm:"autoCreateTime" json:"createdAt"`
 
 	// Per-line cancellation — set when the chef marks a single line item
 	// as unfulfillable mid-prep. The order itself stays accepted /
@@ -670,6 +674,12 @@ type OrderItemResponse struct {
 	Notes      string    `json:"notes,omitempty"`
 	// Modifiers (#232) — the selected add-ons for this line.
 	Modifiers []OrderItemModifier `json:"modifiers"`
+	// Bakery (#1065) — the configuration a bakery line was ordered with. The
+	// chef bakes from it and the customer's receipt prints it. Nil for a dish.
+	Bakery *OrderItemBakery `json:"bakery,omitempty"`
+	// BakerySummary is the same configuration as one line of display text, so
+	// every surface renders it identically.
+	BakerySummary string `json:"bakerySummary,omitempty"`
 	// SpecialInstructions is an alias for Notes exposed in the vendor detail view.
 	SpecialInstructions string `json:"specialInstructions,omitempty"`
 	// IsVeg is resolved live from the MenuItem at response time. Omitted when nil
@@ -800,6 +810,10 @@ func (o *Order) ToResponse() OrderResponse {
 			CancelledReason: item.CancelledReason,
 			CancelledAt:     item.CancelledAt,
 			RefundAmount:    item.RefundAmount,
+		}
+		if b := item.ParsedBakery(); b != nil {
+			items[i].Bakery = b
+			items[i].BakerySummary = b.Summary()
 		}
 	}
 

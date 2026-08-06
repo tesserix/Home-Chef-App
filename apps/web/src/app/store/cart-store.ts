@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { MenuItem, Chef, SelectedModifier } from '@/shared/types';
+import type { MenuItem, Chef, SelectedModifier, BakeryLineInput } from '@/shared/types';
 
 export interface CartItem {
   id: string;
   menuItemId: string;
   name: string;
   description: string;
-  /** UNIT price including any modifier deltas (#232). */
+  /** UNIT price including any modifier deltas (#232) or bakery configuration (#1065). */
   price: number;
   quantity: number;
   imageUrl?: string;
@@ -15,12 +15,45 @@ export interface CartItem {
   customizations?: Record<string, string | boolean>;
   /** Selected add-on modifiers for this line (#232). */
   modifiers?: SelectedModifier[];
+  /** Bakery configuration, sent verbatim at checkout for the server to re-price (#1065). */
+  bakery?: BakeryLineInput;
+  /** The configuration as one line of display text. */
+  bakerySummary?: string;
+  /** Advance notice this line needs, in hours — checkout forces a later slot. */
+  bakeryLeadTimeHours?: number;
 }
 
-/** Stable key for a menu item + its modifier selection (#232). */
-function lineKey(menuItemId: string, modifiers?: SelectedModifier[]): string {
-  if (!modifiers || modifiers.length === 0) return menuItemId;
-  return `${menuItemId}::${modifiers.map((m) => m.optionId).sort().join(',')}`;
+/** What the configurator hands the cart for a configured bake (#1065). */
+export interface BakeryLineConfig {
+  bakery: BakeryLineInput;
+  unitPrice: number;
+  summary: string;
+  leadTimeHours: number;
+}
+
+/** Stable key for a menu item + its modifier selection (#232) + its bake (#1065). */
+function lineKey(
+  menuItemId: string,
+  modifiers?: SelectedModifier[],
+  bakery?: BakeryLineInput
+): string {
+  const parts: string[] = [];
+  if (modifiers && modifiers.length > 0) {
+    parts.push(modifiers.map((m) => m.optionId).sort().join(','));
+  }
+  if (bakery) parts.push(bakeryKey(bakery));
+  if (parts.length === 0) return menuItemId;
+  return `${menuItemId}::${parts.join('|')}`;
+}
+
+function bakeryKey(b: BakeryLineInput): string {
+  return [
+    b.weightKg ?? '',
+    [...(b.optionIds ?? [])].sort().join(','),
+    (b.messageOnCake ?? '').trim(),
+    b.occasion ?? '',
+    b.referencePhotoUrl ?? '',
+  ].join('~');
 }
 
 interface CartState {
@@ -35,7 +68,13 @@ interface CartState {
 }
 
 interface CartActions {
-  addItem: (item: MenuItem, quantity: number, notes?: string, modifiers?: SelectedModifier[]) => void;
+  addItem: (
+    item: MenuItem,
+    quantity: number,
+    notes?: string,
+    modifiers?: SelectedModifier[],
+    bakery?: BakeryLineConfig
+  ) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   updateNotes: (itemId: string, notes: string) => void;
@@ -62,7 +101,7 @@ export const useCartStore = create<CartStore>()(
     (set, get) => ({
       ...initialState,
 
-      addItem: (item, quantity, notes, modifiers) => {
+      addItem: (item, quantity, notes, modifiers, bakery) => {
         const { items, chefId } = get();
 
         // If cart has items from different chef, show confirmation
@@ -73,8 +112,10 @@ export const useCartStore = create<CartStore>()(
 
         // Merge by line key so the same dish with different add-ons is a
         // distinct line (#232).
-        const key = lineKey(item.id, modifiers);
-        const existingIndex = items.findIndex((i) => lineKey(i.menuItemId, i.modifiers) === key);
+        const key = lineKey(item.id, modifiers, bakery?.bakery);
+        const existingIndex = items.findIndex(
+          (i) => lineKey(i.menuItemId, i.modifiers, i.bakery) === key
+        );
 
         if (existingIndex > -1) {
           // Update existing line
@@ -88,8 +129,11 @@ export const useCartStore = create<CartStore>()(
           // it so the customer re-validates against the new subtotal.
           set({ items: updated, promoCode: null, promoDiscount: 0 });
         } else {
-          // Unit price includes any modifier deltas.
-          const unitPrice = item.price + (modifiers ?? []).reduce((s, m) => s + m.priceDelta, 0);
+          // A configured bake is priced by the configurator (per-kg ladder plus
+          // option deltas); everything else is item price plus modifier deltas.
+          const unitPrice =
+            bakery?.unitPrice ??
+            item.price + (modifiers ?? []).reduce((s, m) => s + m.priceDelta, 0);
           const newItem: CartItem = {
             id: `cart-${Date.now()}-${Math.round(item.price)}`,
             menuItemId: item.id,
@@ -100,6 +144,9 @@ export const useCartStore = create<CartStore>()(
             imageUrl: item.imageUrl,
             notes,
             modifiers,
+            bakery: bakery?.bakery,
+            bakerySummary: bakery?.summary,
+            bakeryLeadTimeHours: bakery?.leadTimeHours,
           };
           set({
             items: [...items, newItem],

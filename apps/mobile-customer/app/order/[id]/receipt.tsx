@@ -264,6 +264,9 @@ export default function OrderReceiptScreen() {
                   <Text style={styles.itemName} numberOfLines={2}>
                     {it.name}
                   </Text>
+                  {it.bakerySummary ? (
+                    <Text style={styles.itemUnit}>{it.bakerySummary}</Text>
+                  ) : null}
                   {it.quantity > 1 ? (
                     <Text style={styles.itemUnit}>{money(it.price)} each</Text>
                   ) : null}

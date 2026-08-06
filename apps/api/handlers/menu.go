@@ -67,6 +67,7 @@ func (h *MenuHandler) GetChefMenuItems(c *gin.Context) {
 		Preload("ModifierGroups", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
 		Preload("ModifierGroups.Options", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
 		Preload("ComboItems", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Scopes(PreloadBakery).
 		Order("sort_order ASC, created_at DESC").Find(&items)
 
 	// Ensure nil slices are returned as empty arrays in JSON
@@ -163,6 +164,7 @@ func (h *MenuHandler) GetMenuItem(c *gin.Context) {
 		Preload("ModifierGroups", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
 		Preload("ModifierGroups.Options", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
 		Preload("ComboItems", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Scopes(PreloadBakery).
 		Where("id = ? AND chef_id = ?", itemID, chef.ID).First(&item).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Menu item not found"})
 		return
@@ -240,6 +242,12 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 	// Save add-on groups + combo components (#52, replace-all).
 	if err := saveItemModifiers(item.ID, chef.ID, req.ModifierGroups, req.ComboItems); err != nil {
 		log.Printf("Failed to save item modifiers/combo: %v", err)
+	}
+
+	// Attach the bakery configurator, if this is a bakery product (#1065).
+	if err := saveItemBakerySpec(item.ID, chef.ID, chef.OffersBakery(), req.Bakery); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	// Create approval request for admin review
@@ -392,6 +400,17 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 		}
 		if err := saveItemModifiers(item.ID, chef.ID, groups, combos); err != nil {
 			log.Printf("Failed to save item modifiers/combo: %v", err)
+		}
+	}
+
+	// Replace the bakery configurator when the baker edited it (#1065).
+	if bakery, touched, err := parseBakeryUpdate(req.Bakery); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	} else if touched {
+		if err := saveItemBakerySpec(item.ID, chef.ID, chef.OffersBakery(), bakery); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 	}
 
@@ -836,6 +855,37 @@ type CreateMenuItemRequest struct {
 	IsCombo        bool                 `json:"isCombo"`
 	ModifierGroups []ModifierGroupInput `json:"modifierGroups"`
 	ComboItems     []ComboItemInput     `json:"comboItems"`
+	// Bakery (#1065) — present only for a bakery chef's configurable product.
+	Bakery *BakerySpecInput `json:"bakery"`
+}
+
+// BakerySpecInput is the bakery configurator a baker attaches to an item
+// (#1065). Sent whole on every save; nil leaves/removes the spec.
+type BakerySpecInput struct {
+	ProductType         string              `json:"productType"`
+	PricePerKg          float64             `json:"pricePerKg"`
+	MinWeightKg         float64             `json:"minWeightKg"`
+	MaxWeightKg         float64             `json:"maxWeightKg"`
+	WeightStepKg        float64             `json:"weightStepKg"`
+	ServesPerKg         int                 `json:"servesPerKg"`
+	AllowMessage        bool                `json:"allowMessage"`
+	MaxMessageChars     int                 `json:"maxMessageChars"`
+	AllowReferencePhoto bool                `json:"allowReferencePhoto"`
+	LeadTimeHours       int                 `json:"leadTimeHours"`
+	Occasions           []string            `json:"occasions"`
+	Options             []BakeryOptionInput `json:"options"`
+}
+
+type BakeryOptionInput struct {
+	Kind        string   `json:"kind"`
+	Name        string   `json:"name"`
+	PriceDelta  float64  `json:"priceDelta"`
+	PriceMode   string   `json:"priceMode"`
+	DietaryTags []string `json:"dietaryTags"`
+	Allergens   []string `json:"allergens"`
+	ImageURL    string   `json:"imageUrl"`
+	IsAvailable *bool    `json:"isAvailable"`
+	IsDefault   bool     `json:"isDefault"`
 }
 
 // ModifierGroupInput / ModifierOptionInput / ComboItemInput are the nested save
@@ -887,6 +937,11 @@ type UpdateMenuItemRequest struct {
 	IsCombo        *bool                 `json:"isCombo"`
 	ModifierGroups *[]ModifierGroupInput `json:"modifierGroups"`
 	ComboItems     *[]ComboItemInput     `json:"comboItems"`
+	// Bakery (#1065) — when present, replace-all the item's configurator. Send
+	// an explicit null to strip it. Raw so an omitted key can be told apart
+	// from a null one: an availability toggle sends neither and must not wipe
+	// a cake's options. See parseBakeryUpdate.
+	Bakery json.RawMessage `json:"bakery"`
 }
 
 type CreateCategoryRequest struct {

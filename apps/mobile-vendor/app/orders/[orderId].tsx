@@ -1381,6 +1381,11 @@ export default function OrderDetailScreen() {
                         ? `${item.quantity} × ${item.name}`
                         : item.name}
                     </Text>
+                    {item.bakerySummary ? (
+                      <Text style={styles.itemBakery} numberOfLines={3}>
+                        {item.bakerySummary}
+                      </Text>
+                    ) : null}
                     {item.specialInstructions ? (
                       <Text style={styles.itemNote} numberOfLines={2}>
                         {item.specialInstructions}
@@ -2008,6 +2013,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
+    marginTop: 2,
+    lineHeight: 19,
+  },
+  // Bakery configuration reads as the spec the chef bakes to, not a footnote.
+  itemBakery: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.herb.soft,
     marginTop: 2,
     lineHeight: 19,
   },

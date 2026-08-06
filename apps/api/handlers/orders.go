@@ -111,6 +111,10 @@ type CreateOrderItem struct {
 	// The server validates them against the item's groups, prices them, and
 	// snapshots the selection onto the order line.
 	ModifierOptionIDs []uuid.UUID `json:"modifierOptionIds"`
+	// Bakery is the cake/bake configuration for this line (#1065) — size, shape,
+	// flavour, egg/sugar choice, message. Required for an item that has a bakery
+	// spec; ignored for an ordinary dish.
+	Bakery *services.BakeryLineInput `json:"bakery"`
 }
 
 // validateAndPriceModifiers checks the selected option ids against a menu item's
@@ -367,6 +371,9 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 	var capReservations []capReservation
 
+	// The longest advance notice any bakery line on this order needs (#1065).
+	maxBakeryLeadHours := 0
+
 	// Only today's scheduled dishes are orderable — a dish not on the chef's
 	// weekly menu for today (per AvailableDays) can't be ordered even by id.
 	schedClause, schedArg := services.MenuScheduleClause(services.TodayWeekday())
@@ -393,7 +400,33 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		}
 		modJSON, _ := json.Marshal(modSnapshot)
 
-		unitPrice := menuItem.Price + modDelta
+		// A bakery product is configured before it can be priced (#1065): the
+		// spec replaces the flat price with per-kg pricing and adds the shape /
+		// flavour / egg deltas. The longest lead time on the order also gates
+		// how soon it can be scheduled.
+		basePrice := menuItem.Price
+		bakeryJSON := ""
+		var spec models.BakerySpec
+		if err := database.DB.Preload("Options", func(db *gorm.DB) *gorm.DB { return db.Order("kind, sort_order") }).
+			Where("menu_item_id = ?", item.MenuItemID).First(&spec).Error; err == nil {
+			in := services.BakeryLineInput{}
+			if item.Bakery != nil {
+				in = *item.Bakery
+			}
+			unit, snap, berr := services.PriceBakeryLine(spec, menuItem.Price, in)
+			if berr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s: %s", menuItem.Name, berr.Error())})
+				return
+			}
+			basePrice = unit
+			b, _ := json.Marshal(snap)
+			bakeryJSON = string(b)
+			if spec.LeadTimeHours > maxBakeryLeadHours {
+				maxBakeryLeadHours = spec.LeadTimeHours
+			}
+		}
+
+		unitPrice := basePrice + modDelta
 		itemSubtotal := unitPrice * float64(item.Quantity)
 		subtotal += itemSubtotal
 
@@ -406,12 +439,27 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 			Subtotal:      itemSubtotal,
 			Notes:         item.Notes,
 			Modifiers:     string(modJSON),
+			BakeryDetails: bakeryJSON,
 		}
 
 		if menuItem.DailyCapacity != nil && *menuItem.DailyCapacity > 0 {
 			capReservations = append(capReservations, capReservation{
 				itemID: item.MenuItemID, name: menuItem.Name, qty: item.Quantity, cap: *menuItem.DailyCapacity,
 			})
+		}
+	}
+
+	// A bake needing notice must be scheduled far enough ahead (#1065). Checked
+	// against the resolved slot when the chef offers slots, else the customer's
+	// requested time — a cake is never an "as soon as possible" order.
+	if maxBakeryLeadHours > 0 {
+		wanted := slotScheduledFor
+		if wanted == nil {
+			wanted = req.ScheduledFor
+		}
+		if err := services.ValidateBakeryLeadTime(time.Now(), wanted, maxBakeryLeadHours); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 	}
 

@@ -550,6 +550,26 @@ export default function HomeScreen() {
               </View>
             )}
           </Pressable>
+          {/* Bakery (#1065) — cakes and bakes are browsed by occasion, not by
+              kitchen, so they get their own section rather than a chef filter. */}
+          <Pressable
+            onPress={() => router.push('/bakery')}
+            accessibilityRole="button"
+            accessibilityLabel="Go to Bakery"
+            hitSlop={5}
+            android_ripple={{ color: ROW_RIPPLE, borderless: false }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.navLinkPill,
+                  pressed && Platform.OS === 'ios' && styles.pressedIOS,
+                ]}
+              >
+                <Text style={styles.navLinkLabel}>Bakery</Text>
+              </View>
+            )}
+          </Pressable>
           {/* Catering — DEFERRED for v1 (CATERING_DEPOSIT_ENABLED off). */}
           {CATERING_ENABLED ? (
             <Pressable

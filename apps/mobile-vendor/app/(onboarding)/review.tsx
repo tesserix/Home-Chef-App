@@ -132,6 +132,8 @@ export default function ReviewScreen() {
         phone: personalInfo.phone,
         email: personalInfo.email,
         businessName: kitchenDetails.businessName,
+        vertical: kitchenDetails.vertical,
+        sellsBakery: kitchenDetails.vertical === 'bakery' || kitchenDetails.sellsBakery,
         description: kitchenDetails.description,
         cuisines: kitchenDetails.cuisines,
         kitchenAddress: {
@@ -248,6 +250,16 @@ export default function ReviewScreen() {
       {/* ── KITCHEN ──────────────────────────────────────────── */}
       <Section title={t('onboarding.kitchen')} editRoute="/(onboarding)/kitchen-details">
         <RowItem label={t('onboarding.businessNameLabel')} value={kitchenDetails.businessName || '—'} />
+        <RowItem
+          label={t('onboarding.vertical')}
+          value={
+            kitchenDetails.vertical === 'bakery'
+              ? t('onboarding.verticalBakery')
+              : kitchenDetails.sellsBakery
+                ? `${t('onboarding.verticalKitchen')} + ${t('onboarding.verticalBakery')}`
+                : t('onboarding.verticalKitchen')
+          }
+        />
         <RowItem
           label={t('onboarding.cuisines')}
           value={kitchenDetails.cuisines.length > 0 ? kitchenDetails.cuisines.join(', ') : '—'}

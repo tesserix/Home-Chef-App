@@ -2,6 +2,7 @@
 // Reference: apps/api/handlers/chefs.go, orders.go, delivery.go
 
 import type { PayoutHoldStatus } from '../lib/payout-hold';
+import type { BakerySpec } from '@homechef/mobile-shared/bakery';
 
 /** The kitchen's real-time availability status (server-computed, mirrors the order
  *  gates: accepting flag + live schedule window + daily cutoff + platform hours).
@@ -117,7 +118,13 @@ export interface MenuItem {
   isCombo?: boolean;
   modifierGroups?: ModifierGroup[];
   comboItems?: ComboItemRef[];
+  // Bakery configurator (#1065) — present on a bakery's configurable items;
+  // its presence is what opens the cake sheet instead of a plain add.
+  bakery?: BakerySpec | null;
 }
+
+/** Re-exported so screens type a menu item's configurator without a second import. */
+export type { BakerySpec, BakeryOption } from '@homechef/mobile-shared/bakery';
 
 /** A per-item modifier group with options (#232). */
 export interface ModifierOption {
@@ -150,6 +157,16 @@ export interface SelectedModifier {
   priceDelta: number;
 }
 
+// The bakery configuration a cake line was added with (#1065). Sent verbatim as
+// `bakery` on the checkout item; the server re-prices it and stores the snapshot.
+export interface CartBakeryConfig {
+  weightKg?: number;
+  optionIds?: string[];
+  messageOnCake?: string;
+  referencePhotoUrl?: string;
+  occasion?: string;
+}
+
 export interface CartItem {
   /** Unique per (menuItemId + modifier selection). Equals menuItemId when no
    *  modifiers are chosen, so the same dish with different add-ons is a separate
@@ -165,6 +182,12 @@ export interface CartItem {
   instructions?: string;
   /** Selected add-on modifiers for this line (#232). */
   modifiers?: SelectedModifier[];
+  /** Bakery configuration for a configured bake (#1065). */
+  bakery?: CartBakeryConfig;
+  /** The configuration as one line of display text, for the cart and checkout. */
+  bakerySummary?: string;
+  /** Advance notice this line needs, in hours — checkout forces a slot. */
+  bakeryLeadTimeHours?: number;
 }
 
 export interface Address {
@@ -188,6 +211,9 @@ export interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  // The bake this line was configured as (#1065) — printed verbatim on the
+  // order, the receipt and the invoice.
+  bakerySummary?: string;
 }
 
 /**

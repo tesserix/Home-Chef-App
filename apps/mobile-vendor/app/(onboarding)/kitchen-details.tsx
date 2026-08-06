@@ -22,7 +22,7 @@ import { z } from 'zod';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
-import { MapPin, UtensilsCrossed, FileText, Navigation } from 'lucide-react-native';
+import { MapPin, UtensilsCrossed, FileText, Navigation, CakeSlice, Check } from 'lucide-react-native';
 import { Input, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -51,7 +51,16 @@ const CUISINE_OPTIONS = [
   'Other',
 ] as const;
 
+// A bakery sells configured products (weight, shape, flavour) and gets its own
+// customer-facing section; everything else is a kitchen (#1065).
+const VERTICALS = [
+  { value: 'kitchen', icon: UtensilsCrossed, title: 'onboarding.verticalKitchen', hint: 'onboarding.verticalKitchenHint' },
+  { value: 'bakery', icon: CakeSlice, title: 'onboarding.verticalBakery', hint: 'onboarding.verticalBakeryHint' },
+] as const;
+
 const schema = z.object({
+  vertical: z.enum(['kitchen', 'bakery']),
+  sellsBakery: z.boolean(),
   businessName: z.string().min(3, 'onboarding.errBusinessNameMin'),
   cuisines: z.array(z.string()).min(1, 'onboarding.errCuisineMin'),
   description: z
@@ -88,6 +97,8 @@ export default function KitchenDetailsScreen() {
     // Seed from the persisted draft so editing this step from Review (or
     // resuming after backgrounding) shows the saved values, not a blank form.
     defaultValues: {
+      vertical: kitchenDetails.vertical ?? 'kitchen',
+      sellsBakery: kitchenDetails.sellsBakery ?? false,
       businessName: kitchenDetails.businessName,
       cuisines: kitchenDetails.cuisines,
       description: kitchenDetails.description,
@@ -99,6 +110,8 @@ export default function KitchenDetailsScreen() {
     },
   });
 
+  const selectedVertical = watch('vertical');
+  const alsoBakes = watch('sellsBakery');
   const selectedCuisines = watch('cuisines');
   const descriptionValue = watch('description');
   const selectedStateName = watch('state');
@@ -328,6 +341,57 @@ export default function KitchenDetailsScreen() {
           identityFieldY.current = e.nativeEvent.layout.y;
         }}
       >
+        {/* What this kitchen sells — drives the bakery configurator (#1065) */}
+        <View>
+          <Text style={styles.fieldLabel}>{t('onboarding.vertical')}</Text>
+          <View style={styles.verticalRow}>
+            {VERTICALS.map((v) => {
+              const selected = selectedVertical === v.value;
+              const Icon = v.icon;
+              return (
+                <Pressable
+                  key={v.value}
+                  onPress={() => setValue('vertical', v.value, { shouldValidate: true })}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={t(v.title)}
+                  style={[styles.verticalCard, selected && styles.verticalCardActive]}
+                >
+                  <Icon
+                    size={20}
+                    color={selected ? theme.colors.herb.DEFAULT : theme.colors.ink.soft}
+                  />
+                  <Text style={[styles.verticalTitle, selected && styles.verticalTitleActive]}>
+                    {t(v.title)}
+                  </Text>
+                  <Text style={styles.verticalHint}>{t(v.hint)}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {/* One store, both shelves (#1065) — a meals kitchen that also bakes
+              gets the cake configurator and shows up in the Bakery section. */}
+          {selectedVertical === 'kitchen' ? (
+            <Pressable
+              onPress={() => setValue('sellsBakery', !alsoBakes, { shouldValidate: true })}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: alsoBakes }}
+              accessibilityLabel={t('onboarding.alsoBakes')}
+              style={styles.alsoBakesRow}
+            >
+              <View style={[styles.checkbox, alsoBakes && styles.checkboxOn]}>
+                {alsoBakes ? <Check size={13} color={theme.colors.paper} /> : null}
+              </View>
+              <View style={styles.alsoBakesText}>
+                <Text style={styles.alsoBakesTitle}>{t('onboarding.alsoBakes')}</Text>
+                <Text style={styles.verticalHint}>{t('onboarding.alsoBakesHint')}</Text>
+              </View>
+            </Pressable>
+          ) : null}
+        </View>
+
+        <View style={styles.innerHairline} />
+
         {/* Business name */}
         <Controller
           control={control}
@@ -863,6 +927,66 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.paper,
     letterSpacing: 0.2,
+  },
+
+  alsoBakesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 12,
+    minHeight: 44,
+  },
+  alsoBakesText: { flex: 1 },
+  alsoBakesTitle: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    color: theme.colors.ink.DEFAULT,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    marginTop: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.DEFAULT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxOn: {
+    borderColor: theme.colors.herb.DEFAULT,
+    backgroundColor: theme.colors.herb.DEFAULT,
+  },
+  verticalRow: {
+    flexDirection: 'row',
+    gap: theme.spacing[3],
+  },
+  verticalCard: {
+    flex: 1,
+    gap: theme.spacing[1],
+    padding: theme.spacing[3],
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+    backgroundColor: theme.colors.paper,
+    minHeight: 96,
+  },
+  verticalCardActive: {
+    borderColor: theme.colors.herb.DEFAULT,
+    backgroundColor: theme.colors.herb.tint,
+  },
+  verticalTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  verticalTitleActive: {
+    color: theme.colors.herb.soft,
+  },
+  verticalHint: {
+    fontFamily: 'Inter-Regular',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+    lineHeight: 16,
   },
 
   searchWrap: {

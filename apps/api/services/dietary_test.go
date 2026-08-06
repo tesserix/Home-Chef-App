@@ -97,3 +97,44 @@ func TestDietaryConflicts(t *testing.T) {
 		}
 	}
 }
+
+// A diet implies allergens it forbids (#1065) — an eggless customer must be
+// warned about a cake that declares eggs even when they never listed eggs as an
+// allergy to avoid.
+func TestDietaryConflicts_DietImpliedAllergens(t *testing.T) {
+	cases := []struct {
+		name      string
+		diet      []string
+		allergens []string
+		wantLabel string
+		wantCount int
+	}{
+		{"eggless customer, cake with egg", []string{"eggless"}, []string{"eggs"}, "Eggs", 1},
+		{"eggless customer, eggless cake", []string{"eggless"}, []string{"dairy"}, "", 0},
+		{"vegan customer, dairy frosting", []string{"vegan"}, []string{"dairy"}, "Dairy (milk)", 1},
+		{"gluten-free customer, wheat sponge", []string{"gluten-free"}, []string{"gluten"}, "Gluten (wheat, barley, rye)", 1},
+		{"nut-free customer, hazelnut cake", []string{"nut-free"}, []string{"tree-nuts"}, "Tree Nuts", 1},
+		{"no diet set", nil, []string{"eggs"}, "", 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := DietaryConflicts(tc.diet, nil, nil, tc.allergens, nil)
+			if len(got) != tc.wantCount {
+				t.Fatalf("got %d conflicts %+v, want %d", len(got), got, tc.wantCount)
+			}
+			if tc.wantCount > 0 && got[0].Label != tc.wantLabel {
+				t.Errorf("label = %q, want %q", got[0].Label, tc.wantLabel)
+			}
+		})
+	}
+}
+
+// The same allergen must not be reported twice when the customer both avoids it
+// and follows a diet that forbids it.
+func TestDietaryConflicts_NoDuplicateAllergenWarning(t *testing.T) {
+	got := DietaryConflicts([]string{"eggless"}, []string{"eggs"}, nil, []string{"eggs"}, nil)
+	if len(got) != 1 {
+		t.Fatalf("got %d conflicts %+v, want 1", len(got), got)
+	}
+}

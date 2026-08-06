@@ -81,6 +81,9 @@ type ReorderItemResponse struct {
 	Available   bool              `json:"available"`
 	Reason      string            `json:"reason,omitempty"`      // why it's unavailable
 	NeedsReview bool              `json:"needsReview,omitempty"` // add-ons changed; re-pick
+	// A bake is priced only once it's configured (#1065), so its line can't be
+	// rebuilt from the snapshot — the customer re-picks size, flavour and message.
+	RequiresConfig bool `json:"requiresConfig,omitempty"`
 }
 
 // ReorderResponse is the cart-fill preview returned for a past order.
@@ -134,7 +137,7 @@ func (h *OrderHandler) ReorderOrder(c *gin.Context) {
 		}
 
 		var mi models.MenuItem
-		if err := database.DB.Preload("ModifierGroups.Options").
+		if err := database.DB.Preload("ModifierGroups.Options").Scopes(PreloadBakery).
 			First(&mi, "id = ?", oi.MenuItemID).Error; err != nil {
 			line.Available = false
 			line.Reason = "No longer on the menu"
@@ -159,6 +162,13 @@ func (h *OrderHandler) ReorderOrder(c *gin.Context) {
 			if _, soldOut := services.RemainingToday(mi.ID, mi.DailyCapacity, day); soldOut {
 				line.Available = false
 				line.Reason = "Sold out today"
+				break
+			}
+			if mi.Bakery != nil {
+				line.Available = true
+				line.RequiresConfig = true
+				line.NeedsReview = true
+				line.UnitPrice = mi.Price
 				break
 			}
 			mods, allMatched := resolveModifierOptions(oi.ParsedModifiers(), mi.ModifierGroups)

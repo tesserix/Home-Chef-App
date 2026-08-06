@@ -94,18 +94,8 @@ func GenerateOrderInvoice(order *models.Order) (*models.OrderInvoice, error) {
 	for i, item := range order.Items {
 		itemTotal := models.RoundAmount(item.Price * float64(item.Quantity))
 		subtotal += itemTotal
-		// Append the selected add-ons to the line name so the invoice shows what
-		// the customer paid for (the deltas are already in item.Price) (#232).
-		name := item.Name
-		if mods := item.ParsedModifiers(); len(mods) > 0 {
-			parts := make([]string, len(mods))
-			for j, m := range mods {
-				parts[j] = m.OptionName
-			}
-			name = name + " (" + strings.Join(parts, ", ") + ")"
-		}
 		lineItems[i] = models.InvoiceLineItem{
-			Name:      name,
+			Name:      InvoiceLineName(item),
 			Quantity:  item.Quantity,
 			UnitPrice: item.Price,
 			Total:     itemTotal,
@@ -380,4 +370,24 @@ func GetOrderInvoiceByOrderID(orderID uuid.UUID) (*models.OrderInvoice, error) {
 	}
 
 	return GenerateOrderInvoice(&order)
+}
+
+// InvoiceLineName is what a line is called wherever it's printed: the dish plus
+// the bake it was configured as and the add-ons chosen, since those are what the
+// customer actually paid for (their deltas are already inside item.Price).
+func InvoiceLineName(item models.OrderItem) string {
+	name := item.Name
+	if b := item.ParsedBakery(); b != nil {
+		if s := b.Summary(); s != "" {
+			name = name + " — " + s
+		}
+	}
+	if mods := item.ParsedModifiers(); len(mods) > 0 {
+		parts := make([]string, len(mods))
+		for j, m := range mods {
+			parts[j] = m.OptionName
+		}
+		name = name + " (" + strings.Join(parts, ", ") + ")"
+	}
+	return name
 }

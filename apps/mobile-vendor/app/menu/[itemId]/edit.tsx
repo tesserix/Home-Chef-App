@@ -23,6 +23,7 @@ import {
 } from '../../../hooks/useVendorMenu';
 import { api } from '../../../lib/api';
 import { MenuItemForm } from '../MenuItemForm';
+import { useOffersBakery } from '../../../hooks/useChefVertical';
 import type { MenuItemFormValues } from '../MenuItemForm';
 
 export default function EditMenuItemScreen() {
@@ -38,6 +39,7 @@ export default function EditMenuItemScreen() {
   const deleteMutation = useDeleteMenuItem();
   const uploadMutation = useUploadMenuPhoto();
   const createCategoryMutation = useCreateCategory();
+  const isBakery = useOffersBakery();
 
   // Derive initial values from the item whenever it first arrives (or updates).
   // We keep a version counter so MenuItemForm can re-mount with fresh
@@ -54,6 +56,7 @@ export default function EditMenuItemScreen() {
     isCombo: false,
     modifierGroups: [],
     comboItems: [],
+    bakery: null,
     preparationTime: 15,
     hsn: '',
     availableDays: [],
@@ -83,6 +86,32 @@ export default function EditMenuItemScreen() {
           options: g.options.map((o) => ({ name: o.name, priceDelta: o.priceDelta, isAvailable: o.isAvailable })),
         })),
         comboItems: (item.comboItems ?? []).map((c) => ({ menuItemId: c.menuItemId, quantity: c.quantity })),
+        // Bakery configurator (#1065) — read shape to the editor's input shape.
+        bakery: item.bakery
+          ? {
+              productType: item.bakery.productType,
+              pricePerKg: item.bakery.pricePerKg,
+              minWeightKg: item.bakery.minWeightKg,
+              maxWeightKg: item.bakery.maxWeightKg,
+              weightStepKg: item.bakery.weightStepKg,
+              servesPerKg: item.bakery.servesPerKg,
+              allowMessage: item.bakery.allowMessage,
+              maxMessageChars: item.bakery.maxMessageChars,
+              allowReferencePhoto: item.bakery.allowReferencePhoto,
+              leadTimeHours: item.bakery.leadTimeHours,
+              occasions: item.bakery.occasions ?? [],
+              options: (item.bakery.options ?? []).map((o) => ({
+                kind: o.kind,
+                name: o.name,
+                priceDelta: o.priceDelta,
+                priceMode: o.priceMode,
+                dietaryTags: o.dietaryTags ?? [],
+                allergens: o.allergens ?? [],
+                isAvailable: o.isAvailable,
+                isDefault: o.isDefault,
+              })),
+            }
+          : null,
         preparationTime: item.preparationTime ?? 15,
         hsn: item.hsn ?? '',
         availableDays: item.availableDays ?? [],
@@ -120,6 +149,7 @@ export default function EditMenuItemScreen() {
           isCombo: values.isCombo,
           modifierGroups: values.modifierGroups,
           comboItems: values.comboItems,
+          bakery: values.bakery,
           preparationTime: values.preparationTime,
           hsn: values.hsn,
           availableDays: values.availableDays,
@@ -185,6 +215,7 @@ export default function EditMenuItemScreen() {
       menuItems={(menuData?.items ?? [])
         .filter((m) => m.id !== itemId)
         .map((m) => ({ id: m.id, name: m.name }))}
+      isBakery={isBakery}
       onSave={handleSave}
       isSaving={isSaving}
       onDelete={handleDelete}
