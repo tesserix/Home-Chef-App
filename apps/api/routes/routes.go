@@ -1537,6 +1537,7 @@ func SetupRouter() *gin.Engine {
 		reviews.Use(bffAuth(bffKey, bffWindow))
 		{
 			reviews.POST("", reviewHandler.CreateReview)
+			reviews.GET("/order/:orderId", reviewHandler.GetOrderReview)
 		}
 
 		// Favorites (authenticated customers)

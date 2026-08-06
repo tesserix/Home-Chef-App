@@ -20,6 +20,7 @@ import { Sheet, type SheetHandle, useAlert } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReorder } from '../../../hooks/useReorder';
 import { useConfirmOrderReceived } from '../../../hooks/useConfirmReceived';
+import { useOrderReview } from '../../../hooks/useOrderReview';
 import { canConfirmReceipt, payoutHoldMeta } from '../../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../../lib/errors';
 import { CancellationSection } from '../../../components/orders/CancellationSection';
@@ -193,6 +194,9 @@ export default function OrderDetailScreen() {
   // the price breakdown: only the cancellation snapshot knows how the retained
   // remainder splits between the chef and the platform (#945).
   const { data: cancelRequest } = useCancellationRequest(id ?? undefined);
+  // Whether this order already carries the customer's review, so the CTA offers
+  // the review they wrote instead of a form that can only 409 (#1046).
+  const { data: existingReview } = useOrderReview(id ?? '');
   const [paying, setPaying] = React.useState(false);
   // Food-ready photo lightbox — the inline photo is a compact thumbnail; the
   // full image opens in a tap-to-dismiss overlay so it doesn't dominate the screen.
@@ -772,12 +776,14 @@ export default function OrderDetailScreen() {
             <Pressable
               onPress={() => router.push(`/order/${order.id}/review`)}
               accessibilityRole="button"
-              accessibilityLabel="Leave a review for this order"
+              accessibilityLabel={
+                existingReview ? 'View your review of this order' : 'Leave a review for this order'
+              }
               style={showConfirm ? { marginTop: 12 } : undefined}
             >
               <View style={showConfirm ? styles.tipButton : styles.trackButton}>
                 <Text style={showConfirm ? styles.tipButtonText : styles.trackButtonText}>
-                  Leave a Review
+                  {existingReview ? 'View Your Review' : 'Leave a Review'}
                 </Text>
               </View>
             </Pressable>
