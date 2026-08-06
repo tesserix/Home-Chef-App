@@ -43,7 +43,7 @@ export default function UpgradeRequiredScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>HOME CHEF · VENDOR</Text>
+      <Text style={styles.label}>FE3DR · VENDOR</Text>
       <Text style={styles.title}>Update required</Text>
       <Text style={styles.body}>
         This version of the app is no longer supported. Update from the App Store

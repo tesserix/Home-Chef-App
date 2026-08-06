@@ -67,7 +67,7 @@ export default function RefundChoicesScreen() {
           ListHeaderComponent={
             choices.length > 0 ? (
               <Text style={styles.intro}>
-                Your chef agreed a refund. Pick where it goes — your HomeChef wallet is instant, or
+                Your chef agreed a refund. Pick where it goes — your Fe3dr wallet is instant, or
                 we can reverse it to your original payment method (per RBI, that takes 5–7 business
                 days). It covers the food and that day’s delivery fee; the GST and platform fee aren’t
                 refundable.
@@ -126,7 +126,7 @@ function RefundCard({ choice }: { choice: RefundChoiceDay }) {
           onPress={() => pick('wallet')}
           disabled={busy}
           accessibilityRole="button"
-          accessibilityLabel="Refund to HomeChef wallet, instant"
+          accessibilityLabel="Refund to Fe3dr wallet, instant"
           style={[styles.btn, styles.btnWallet, busy && styles.btnDisabled]}
         >
           {pending === 'wallet' ? (

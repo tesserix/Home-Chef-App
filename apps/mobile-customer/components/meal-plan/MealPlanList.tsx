@@ -131,7 +131,7 @@ function RefundChoiceBanner({ count }: { count: number }) {
               {count === 1 ? 'A refund is ready' : `${count} refunds are ready`}
             </Text>
             <Text style={styles.bannerText}>
-              Choose your HomeChef wallet (instant) or your original payment method.
+              Choose your Fe3dr wallet (instant) or your original payment method.
             </Text>
           </View>
           <ChevronRight size={18} color={customerColors.coral.DEFAULT} />
