@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatRating } from '@/shared/utils/format-rating';
 import { useParams, Link, useNavigate } from "react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
@@ -293,8 +294,8 @@ export default function ChefDetailPage() {
                       className="h-4 w-4 fill-herb text-herb"
                       aria-hidden="true"
                     />
-                    <span className="font-semibold text-herb">
-                      {chef.rating}
+                    <span className="font-semibold text-herb tabular-nums">
+                      {formatRating(chef.rating)}
                     </span>
                   </div>
                   <span className="text-sm text-ink-muted">
