@@ -103,12 +103,25 @@ function getStatusChip(order: Order): ChipStyle {
 
 // Tabular date for order row (e.g. "12 Jun 2026")
 
+// Card weight — three tiers so a live order reads as more important than a
+// months-old cancelled one, instead of every row carrying identical visual
+// mass. 'elevated' = still in flight (deserves attention), 'default' =
+// delivered (settled, but a real receipt), 'quiet' = cancelled (recede).
+type CardWeight = 'elevated' | 'default' | 'quiet';
+
+function getCardWeight(order: Order): CardWeight {
+  if (order.status === 'cancelled') return 'quiet';
+  if (order.status === 'delivered') return 'default';
+  return 'elevated';
+}
+
 export function OrderCard({ order }: OrderCardProps) {
   const { showAlert } = useAlert();
   const router = useRouter();
   const confirm = useConfirmOrderReceived();
   const chip = getStatusChip(order);
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const weight = getCardWeight(order);
   // #617 — inline confirm affordance for a delivered order awaiting confirmation
   // (inert while the escrow flags are off). The nested Pressable intercepts its
   // own touch, so tapping it confirms without navigating to the detail screen.
@@ -158,21 +171,33 @@ export function OrderCard({ order }: OrderCardProps) {
         // kills shadow on iOS so we split: shadow on the outer View only,
         // clip radius on the inner content View.
         <View
-          style={[styles.cardOuter, pressed && Platform.OS === 'ios' && styles.cardPressed]}
+          style={[
+            styles.cardOuter,
+            weight === 'elevated' && styles.cardOuterElevated,
+            weight === 'quiet' && styles.cardOuterQuiet,
+            pressed && Platform.OS === 'ios' && styles.cardPressed,
+          ]}
         >
           <View style={styles.cardInner}>
             {/* Top row: chef name + status chip */}
             <View style={styles.topRow}>
               <View style={styles.chefInfo}>
                 <Text
-                  style={styles.chefName}
+                  style={[styles.chefName, weight === 'quiet' && styles.chefNameQuiet]}
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
                   {/* Order API carries no chef object yet — neutral fallback. */}
                   {order.chef?.name ?? 'Your order'}
                 </Text>
-                <Text style={styles.orderNumber}>#{order.orderNumber}</Text>
+                {/* De-emphasised, single-line order ref — was the loudest thing on
+                    the card despite being the least useful; it wrapped to two
+                    lines and pushed everything else down. Middle-ellipsis keeps
+                    the unique tail (the part a customer would actually quote)
+                    visible instead of truncating it away. */}
+                <Text style={styles.orderNumber} numberOfLines={1} ellipsizeMode="middle">
+                  #{order.orderNumber}
+                </Text>
               </View>
 
               {/* Status chip — radius-full, tint bg + dark text */}
@@ -193,7 +218,9 @@ export function OrderCard({ order }: OrderCardProps) {
                 {'  ·  '}
                 {formatOrderDateTime(order.createdAt)}
               </Text>
-              <Text style={styles.total}>{formatMoney(order.totalAmount)}</Text>
+              <Text style={[styles.total, weight === 'quiet' && styles.totalQuiet]}>
+                {formatMoney(order.totalAmount)}
+              </Text>
             </View>
 
             {/* #617 — confirm receipt inline (only while awaiting confirmation) */}
@@ -237,6 +264,9 @@ const styles = StyleSheet.create({
 
   // Shadow lives here (NOT on cardInner) — iOS kills shadow if overflow+radius
   // are on the same View as shadowColor/shadowOffset.
+  //
+  // Base tier = 'default' (delivered / other terminal-but-not-cancelled):
+  // shadow[1], a settled receipt that still sits slightly off the canvas.
   cardOuter: {
     borderRadius: 12,
     backgroundColor: customerColors.canvas,
@@ -249,6 +279,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 3,
     elevation: 1,
+  },
+  // 'elevated' tier — a live order in flight. Same lift language as the Home
+  // screen's ActiveOrderCard (shadow[2]: {0,4}/0.10/12/4) so an order that
+  // still needs the customer's attention visibly sits above a settled one,
+  // without adding any new colour to the card.
+  cardOuterElevated: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  // 'quiet' tier — cancelled. Flattened to the hairline only (no shadow) so
+  // it recedes behind active/delivered rows instead of matching their weight.
+  cardOuterQuiet: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   cardPressed: {
     opacity: 0.92,
@@ -280,10 +330,20 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.DEFAULT,
     letterSpacing: 0,
   },
+  // Cancelled orders recede — chef name drops to the secondary text colour
+  // instead of full charcoal, matching the flattened card shadow.
+  chefNameQuiet: {
+    color: customerColors.charcoal.soft,
+  },
+  // Order ref — was the single loudest element on the card (12pt, full-width,
+  // wrapped to two lines). Dropped a size, single-line + middle-ellipsis so
+  // it never fights the chef name or bottom row for space or attention.
   orderNumber: {
     fontFamily: 'Inter',
-    fontSize: 12,
+    fontSize: 11,
     color: customerColors.charcoal.soft,
+    letterSpacing: 0.1,
+    marginTop: 1,
     // Tabular numerals so the hash-number aligns neatly
     fontVariant: ['tabular-nums'],
   },
@@ -329,6 +389,11 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.DEFAULT,
     // Tabular numerals so price digits are monospaced
     fontVariant: ['tabular-nums'],
+  },
+  // Cancelled orders' total recedes with the rest of the card — still
+  // Inter-SemiBold (it's still the total) but in the secondary ink colour.
+  totalQuiet: {
+    color: customerColors.charcoal.soft,
   },
 
   // #617 — inline "Confirm received" CTA (filled coral, compact) in the card footer.

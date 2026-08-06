@@ -527,12 +527,14 @@ const styles = StyleSheet.create({
   modeToggleRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingTop: 2,
-    paddingBottom: 2,
   },
   modeSegment: {
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    // minHeight (not paddingVertical) carries the 44pt touch target, so
+    // trimming vertical padding here reclaims row height without shrinking
+    // the tappable area — two stacked filter rows were eating a lot of
+    // space above any content.
+    paddingVertical: 8,
     minHeight: 44,
     justifyContent: 'center',
     marginRight: 8,
@@ -574,12 +576,14 @@ const styles = StyleSheet.create({
   },
   filterRowContent: {
     paddingHorizontal: 16,
-    paddingBottom: 4,
+    paddingBottom: 2,
     gap: 0,
   },
   filterChip: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
     // No background, no border — just text + optional underline
   },
   filterChipActive: {
