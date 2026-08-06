@@ -11,6 +11,7 @@ import { useLoyalty } from '../hooks/useLoyalty';
 
 // Android ripple tint — translucent token, never a new literal colour.
 const CANVAS_RIPPLE = `${customerColors.canvas}33`;
+const CHARCOAL_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -27,13 +28,24 @@ function sourceLabel(s: string): string {
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Shadow[2] — canvas and the card surface are both pure white, so a hairline
+// alone doesn't separate a card from the page; this is the actual lift.
+// Lives on the OUTER, unclipped view of any card — pairing this with
+// `overflow: hidden` on the same view clips the shadow to nothing on iOS,
+// which is why every rounded-corner + hairline-divided list below is built
+// as an outer/inner pair (cardShadow outside, overflow-hidden inside).
 const cardShadow = {
-  shadowColor: customerColors.charcoal.DEFAULT,
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.06,
-  shadowRadius: 4,
-  elevation: 2,
+  shadowColor: '#000000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.1,
+  shadowRadius: 12,
+  elevation: 4,
 } as const;
+
+// A fixed-width, right-aligned column so every amount's decimal point lines
+// up under the one above it — a wallet is a ledger, and ledgers align.
+// Paired with tabular-nums (equal-width digits) on the Text itself.
+const AMOUNT_COLUMN_WIDTH = 100;
 
 // ─── Loading skeleton — matches balance card + transaction row proportions (R8) ─
 
@@ -50,20 +62,22 @@ function WalletSkeleton() {
         </View>
       </View>
       <View className="h-3 rounded bg-hairline mt-8 mb-3 ml-1" style={{ width: 96 }} />
-      <View className="rounded-xl overflow-hidden bg-canvas" style={cardShadow}>
-        {[0, 1, 2].map((i) => (
-          <View key={i}>
-            {i > 0 && <View className="h-px bg-hairline ml-16" />}
-            <View className="flex-row items-center px-4 py-3 min-h-[56px]">
-              <View className="w-9 h-9 rounded-full bg-surface-soft mr-3" />
-              <View className="flex-1 gap-2">
-                <View className="h-3.5 rounded bg-hairline" style={{ width: '55%' }} />
-                <View className="h-3 rounded bg-hairline" style={{ width: '35%' }} />
+      <View className="rounded-2xl bg-canvas" style={cardShadow}>
+        <View className="overflow-hidden rounded-2xl">
+          {[0, 1, 2].map((i) => (
+            <View key={i}>
+              {i > 0 && <View className="h-px bg-hairline ml-16" />}
+              <View className="flex-row items-center px-4 py-3 min-h-[56px]">
+                <View className="w-9 h-9 rounded-full bg-surface-soft mr-3" />
+                <View className="flex-1 gap-2">
+                  <View className="h-3.5 rounded bg-hairline" style={{ width: '55%' }} />
+                  <View className="h-3 rounded bg-hairline" style={{ width: '35%' }} />
+                </View>
+                <View className="h-4 rounded bg-hairline" style={{ width: 56 }} />
               </View>
-              <View className="h-4 rounded bg-hairline" style={{ width: 56 }} />
             </View>
-          </View>
-        ))}
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -77,10 +91,16 @@ function WalletErrorState({ onRetry }: { onRetry: () => void }) {
       <View className="w-16 h-16 rounded-full bg-surface-soft items-center justify-center">
         <AlertCircle size={28} color={customerColors.charcoal.soft} />
       </View>
-      <Text className="text-lg font-semibold text-charcoal text-center font-display">
+      <Text
+        className="text-lg text-charcoal text-center"
+        style={{ fontFamily: 'Geist-Bold' }}
+      >
         Something went wrong
       </Text>
-      <Text className="text-sm text-charcoal-soft text-center">
+      <Text
+        className="text-sm text-charcoal-soft text-center"
+        style={{ fontFamily: 'Inter' }}
+      >
         We could not load your wallet. Please try again.
       </Text>
       <Pressable
@@ -95,10 +115,98 @@ function WalletErrorState({ onRetry }: { onRetry: () => void }) {
               pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : ''
             }`}
           >
-            <Text className="text-canvas font-semibold text-sm">Try again</Text>
+            <Text
+              className="text-canvas text-sm"
+              style={{ fontFamily: 'Inter-SemiBold' }}
+            >
+              Try again
+            </Text>
           </View>
         )}
       </Pressable>
+    </View>
+  );
+}
+
+// ─── Transaction row ───────────────────────────────────────────────────────────
+
+function TransactionRow({
+  transaction,
+  isFirst,
+}: {
+  transaction: {
+    id: string;
+    type: 'credit' | 'debit';
+    source: string;
+    amount: number;
+    currency: string;
+    reason?: string;
+    createdAt: string;
+  };
+  isFirst: boolean;
+}) {
+  const credit = transaction.type === 'credit';
+  const dateLabel = new Date(transaction.createdAt).toLocaleDateString();
+  const amountLabel = formatMoney(transaction.amount, transaction.currency);
+  const label = sourceLabel(transaction.source);
+
+  return (
+    <View>
+      {!isFirst && <View className="h-px bg-hairline ml-16" />}
+      <View
+        className="flex-row items-center px-4 py-3 min-h-[56px]"
+        // One coherent sentence for a screen reader — "Credit of ₹120.00 for
+        // Refund, 6 Aug 2026" — rather than three unrelated fragments.
+        accessible
+        accessibilityLabel={`${credit ? 'Credit' : 'Debit'} of ${amountLabel} for ${label}${
+          transaction.reason ? `, ${transaction.reason}` : ''
+        }, on ${dateLabel}`}
+      >
+        {/* Direction is legible before the label is read: tinted green for
+            money in, neutral for money out — matches the checkout / receipt
+            convention rather than treating coral (an accent, not a status
+            colour) as a loss indicator. */}
+        <View
+          className="w-9 h-9 rounded-full items-center justify-center mr-3"
+          style={{ backgroundColor: credit ? customerColors.success.tint : customerColors.surface.soft }}
+        >
+          {credit ? (
+            <ArrowDownLeft size={16} color={customerColors.success.DEFAULT} />
+          ) : (
+            <ArrowUpRight size={16} color={customerColors.charcoal.soft} />
+          )}
+        </View>
+        <View className="flex-1">
+          <Text
+            className="text-base text-charcoal"
+            style={{ fontFamily: 'Inter-Medium' }}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
+          <Text
+            className="text-xs text-charcoal-soft"
+            style={{ fontFamily: 'Inter', fontVariant: ['tabular-nums'] }}
+            numberOfLines={1}
+          >
+            {dateLabel}
+            {transaction.reason ? ` · ${transaction.reason}` : ''}
+          </Text>
+        </View>
+        <Text
+          className="text-base"
+          style={{
+            fontFamily: 'Inter-SemiBold',
+            fontVariant: ['tabular-nums'],
+            color: credit ? customerColors.success.DEFAULT : customerColors.charcoal.DEFAULT,
+            width: AMOUNT_COLUMN_WIDTH,
+            textAlign: 'right',
+          }}
+        >
+          {credit ? '+' : '−'}
+          {amountLabel}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -138,83 +246,80 @@ export default function WalletScreen() {
               maxRedeemPct={loyalty?.config?.maxRedeemPct}
               monthlyCap={loyalty?.config?.monthlyRedeemCap}
               expiryDays={loyalty?.config?.expiryDays}
+              currency={currency}
               onPressPoints={() => router.push('/loyalty')}
             />
 
-            <Text className="text-xs font-semibold text-charcoal-soft px-1 pt-6 pb-2">
+            <Text
+              className="text-xs text-charcoal-soft px-1 pt-6 pb-2"
+              style={{ fontFamily: 'Inter-SemiBold', letterSpacing: 0.3 }}
+            >
               Transactions
             </Text>
 
             {txnLoading ? (
-              <View className="rounded-xl overflow-hidden bg-canvas" style={cardShadow}>
-                {[0, 1].map((i) => (
-                  <View key={i}>
-                    {i > 0 && <View className="h-px bg-hairline ml-16" />}
-                    <View className="flex-row items-center px-4 py-3 min-h-[56px]">
-                      <View className="w-9 h-9 rounded-full bg-surface-soft mr-3" />
-                      <View className="flex-1 gap-2">
-                        <View className="h-3.5 rounded bg-hairline" style={{ width: '55%' }} />
-                        <View className="h-3 rounded bg-hairline" style={{ width: '35%' }} />
+              <View className="rounded-2xl bg-canvas" style={cardShadow}>
+                <View className="overflow-hidden rounded-2xl">
+                  {[0, 1].map((i) => (
+                    <View key={i}>
+                      {i > 0 && <View className="h-px bg-hairline ml-16" />}
+                      <View className="flex-row items-center px-4 py-3 min-h-[56px]">
+                        <View className="w-9 h-9 rounded-full bg-surface-soft mr-3" />
+                        <View className="flex-1 gap-2">
+                          <View className="h-3.5 rounded bg-hairline" style={{ width: '55%' }} />
+                          <View className="h-3 rounded bg-hairline" style={{ width: '35%' }} />
+                        </View>
                       </View>
                     </View>
-                  </View>
-                ))}
+                  ))}
+                </View>
               </View>
             ) : txnError ? (
-              <View className="rounded-xl bg-canvas p-6 items-center gap-3" style={cardShadow}>
-                <Text className="text-charcoal-soft text-center">
+              <View className="rounded-2xl bg-canvas p-6 items-center gap-3" style={cardShadow}>
+                <Text
+                  className="text-charcoal-soft text-center"
+                  style={{ fontFamily: 'Inter' }}
+                >
                   Could not load your transactions.
                 </Text>
                 <Pressable
                   onPress={() => void refetchTxns()}
                   accessibilityRole="button"
                   accessibilityLabel="Retry loading transactions"
-                  android_ripple={{ color: `${customerColors.charcoal.DEFAULT}14`, borderless: false }}
+                  android_ripple={{ color: CHARCOAL_RIPPLE, borderless: false }}
                 >
-                  <View className="min-h-[40px] px-4 items-center justify-center rounded-lg border border-hairline">
-                    <Text className="text-sm font-semibold text-charcoal">Try again</Text>
-                  </View>
+                  {({ pressed }) => (
+                    <View
+                      className={`min-h-[44px] px-4 items-center justify-center rounded-lg border border-hairline ${
+                        pressed && Platform.OS === 'ios' ? 'bg-surface-soft' : ''
+                      }`}
+                    >
+                      <Text
+                        className="text-sm text-charcoal"
+                        style={{ fontFamily: 'Inter-SemiBold' }}
+                      >
+                        Try again
+                      </Text>
+                    </View>
+                  )}
                 </Pressable>
               </View>
             ) : txns.length === 0 ? (
-              <View className="rounded-xl bg-canvas p-8 items-center" style={cardShadow}>
-                <Text className="text-charcoal-soft">
+              <View className="rounded-2xl bg-canvas p-8 items-center" style={cardShadow}>
+                <Text
+                  className="text-charcoal-soft text-center"
+                  style={{ fontFamily: 'Inter' }}
+                >
                   No transactions yet. Refunds and credits will appear here.
                 </Text>
               </View>
             ) : (
-              <View className="rounded-xl overflow-hidden bg-canvas" style={cardShadow}>
-                {txns.map((t, i) => {
-                  const credit = t.type === 'credit';
-                  return (
-                    <View key={t.id}>
-                      {i > 0 && <View className="h-px bg-hairline ml-16" />}
-                      <View className="flex-row items-center px-4 py-3 min-h-[56px]">
-                        <View className="w-9 h-9 rounded-full bg-surface-soft items-center justify-center mr-3">
-                          {credit ? (
-                            <ArrowDownLeft size={16} color={customerColors.charcoal.soft} />
-                          ) : (
-                            <ArrowUpRight size={16} color={customerColors.charcoal.soft} />
-                          )}
-                        </View>
-                        <View className="flex-1">
-                          <Text className="text-base text-charcoal">{sourceLabel(t.source)}</Text>
-                          <Text className="text-xs text-charcoal-soft">
-                            {new Date(t.createdAt).toLocaleDateString()}
-                            {t.reason ? ` · ${t.reason}` : ''}
-                          </Text>
-                        </View>
-                        <Text
-                          className="text-base font-semibold text-charcoal"
-                          style={{ fontVariant: ['tabular-nums'] }}
-                        >
-                          {credit ? '+' : '−'}
-                          {formatMoney(t.amount, t.currency)}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })}
+              <View className="rounded-2xl bg-canvas" style={cardShadow}>
+                <View className="overflow-hidden rounded-2xl">
+                  {txns.map((t, i) => (
+                    <TransactionRow key={t.id} transaction={t} isFirst={i === 0} />
+                  ))}
+                </View>
               </View>
             )}
           </View>
