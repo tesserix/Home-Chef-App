@@ -3,7 +3,6 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
-  CalendarDays,
   ChevronRight,
   UtensilsCrossed,
   ScrollText,
@@ -23,7 +22,6 @@ import {
 } from 'lucide-react-native';
 import { useProfile } from '../../hooks/useProfile';
 import {
-  TIFFIN_ENABLED,
   CATERING_ENABLED,
   WALLET_ENABLED,
   REWARDS_ENABLED,
@@ -352,11 +350,12 @@ function ProfileScreenBody() {
               label: 'Catering',
               route: '/catering',
             },
-            TIFFIN_ENABLED && {
-              icon: <CalendarDays size={18} color={customerColors.charcoal.soft} />,
-              label: 'My meal plans',
-              route: '/meal-plans',
-            },
+            // "My meal plans" sat here. Removed: the Plans dock tab is one tap
+            // from anywhere and is now the single home for the meal-plan list,
+            // which was previously reachable from four places at once (this row,
+            // the Plans tab, an Orders-tab segment and the /meal-plans route).
+            // The route itself stays — deep links and the post-booking redirect
+            // both land on it.
             // "My subscriptions" sat here (#696, as the fix for /subscriptions
             // being an orphan route). Removed with the rest of the recurring
             // tiffin UI in #1035 — with no way to subscribe, a management screen
