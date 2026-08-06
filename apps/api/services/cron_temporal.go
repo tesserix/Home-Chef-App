@@ -44,6 +44,10 @@ func cronJobs() []cronJob {
 		{"meal-plan-refund-deadline", refundDeadlineSweepInterval, runMealPlanRefundDeadlineSweep, StartMealPlanRefundDeadlineCron},
 		{"meal-plan-fulfillment", mealPlanFulfillmentInterval, runMealPlanFulfillment, StartMealPlanFulfillmentCron},
 		{"group-order-sweep", groupOrderSweepInterval, runGroupOrderSweep, StartGroupOrderCron},
+		// #1029 — finish chef payout onboarding the save path only starts. Nothing
+		// retried a failed Easy Split registration or re-read one still verifying,
+		// so a chef could sit un-payable (and un-tippable) forever.
+		{"easy-split-reconcile", easySplitReconcileInterval, runEasySplitReconcile, StartEasySplitReconcileCron},
 		{"winback-scan", winbackScanInterval, runWinbackScan, StartWinbackCron},
 		{"meal-sub-orders", mealSubOrderScanInterval, runMealSubscriptionDailyOrders, StartMealSubscriptionOrderCron},
 		{"campaign-dispatch", campaignDispatchInterval, runCampaignDispatch, StartCampaignCron},

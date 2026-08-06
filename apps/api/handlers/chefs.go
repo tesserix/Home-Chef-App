@@ -2796,7 +2796,13 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		"razorpayAccountId":        maskID(chef.RazorpayAccountID),
 		"razorpaySettlementStatus": chef.RazorpaySettlementStatus,
 		"panOnFile":                chef.PanNumber != "",
+		// This is the status as it stood BEFORE the registration goroutine above
+		// ran, so on a first save it is empty even when registration is about to
+		// succeed. Say that, rather than letting the vendor app render "not
+		// active" as a settled verdict — the reconcile sweep (#1029) will carry
+		// it to ACTIVE, and GET /chef/payout reports the real state.
 		"cashfreeVendorStatus":     chef.CashfreeVendorStatus,
+		"cashfreeVendorPending":    !strings.EqualFold(chef.CashfreeVendorStatus, services.CashfreeVendorActive),
 	}
 	if settlementErrorCode != "" {
 		// Present even for the UPI case: the response must not read as an
