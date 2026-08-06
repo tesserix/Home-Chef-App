@@ -445,6 +445,7 @@ func (h *MealPlanHandler) GetMyMealPlans(c *gin.Context) {
 		Preload("Days").Preload("Chef").Order("created_at DESC").Find(&plans)
 	for i := range plans {
 		plans[i].ProjectForCustomer()
+		services.AnnotateMealPlanRefunds(&plans[i])
 	}
 	c.JSON(http.StatusOK, gin.H{"data": plans})
 }
@@ -458,6 +459,7 @@ func (h *MealPlanHandler) GetMealPlan(c *gin.Context) {
 		return
 	}
 	plan.ProjectForCustomer()
+	services.AnnotateMealPlanRefunds(&plan)
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 

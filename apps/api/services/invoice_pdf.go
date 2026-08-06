@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -120,14 +121,19 @@ func addInvoiceHeader(m core.Maroto, order *models.Order) {
 	// date sit beside it rather than above it.
 	curr := strOrDefault(order.Currency, "INR")
 	m.AddRows(
-		row.New(14).Add(
-			col.New(7).Add(
-				text.New("AMOUNT PAID", props.Text{Top: 3, Size: 7, Style: fontstyle.Bold, Color: docMutedColor()}),
-				text.New(fmt.Sprintf("%s %.2f", curr, order.ToResponse().Total), props.Text{Top: 6, Size: 16, Style: fontstyle.Bold}),
-			),
+		// Order numbers carry the kitchen's name, so they run to 40 characters —
+		// on one line beside the amount they wrapped back over it. The reference
+		// gets its own line under a small label, at 8pt, and the amount column
+		// narrows to leave it room.
+		row.New(16).Add(
 			col.New(5).Add(
-				text.New(fmt.Sprintf("Invoice #  %s", order.OrderNumber), props.Text{Top: 4, Size: 9, Align: align.Right}),
-				text.New(order.CreatedAt.Format("02 Jan 2006"), props.Text{Top: 9, Size: 9, Align: align.Right, Color: docMutedColor()}),
+				text.New("AMOUNT PAID", props.Text{Top: 3.5, Size: 7, Style: fontstyle.Bold, Color: docMutedColor()}),
+				text.New(fmt.Sprintf("%s %.2f", curr, order.ToResponse().Total), props.Text{Top: 6.5, Size: 16, Style: fontstyle.Bold}),
+			),
+			col.New(7).Add(
+				text.New("INVOICE #", props.Text{Top: 3.5, Size: 7, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()}),
+				text.New(order.OrderNumber, props.Text{Top: 7, Size: 8, Align: align.Right}),
+				text.New(order.CreatedAt.Format("02 Jan 2006"), props.Text{Top: 11.5, Size: 8, Align: align.Right, Color: docMutedColor()}),
 			),
 		).WithStyle(&props.Cell{BackgroundColor: docTintColor()}),
 	)
@@ -148,6 +154,53 @@ func hairline() core.Row {
 	return row.New(0.4).Add(col.New(12).Add(spacer())).WithStyle(&props.Cell{BackgroundColor: docRuleColor()})
 }
 
+// Half of the A4 content width — the party columns are 6/12 each.
+const halfColumnMM = 90.0
+
+// Line box for the 9pt body lines in a party block.
+const partyLineMM = 4.6
+
+// textLines estimates how many lines a string occupies in a column of widthMM at
+// the given font size. maroto positions text absolutely and reports no measured
+// height, so a stacked block has to predict the wrap itself or the next line
+// lands on top of the previous one.
+func textLines(s string, fontSize, widthMM float64) int {
+	if strings.TrimSpace(s) == "" {
+		return 0
+	}
+	// Helvetica averages ~0.5em per character; pt→mm is 25.4/72.
+	perChar := fontSize * 0.5 * 25.4 / 72
+	perLine := math.Max(1, math.Floor(widthMM/perChar))
+	return int(math.Ceil(float64(len([]rune(s))) / perLine))
+}
+
+// chefPartyLines is the SOLD BY block's optional lines in print order.
+func chefPartyLines(chef *models.ChefProfile) []string {
+	var lines []string
+	if owner := strings.TrimSpace(chef.User.FirstName + " " + chef.User.LastName); owner != "" {
+		lines = append(lines, "Chef: "+owner)
+	}
+	if addr := joinNonEmpty([]string{chef.AddressLine1, chef.AddressLine2, chef.City, chef.State, chef.PostalCode}, ", "); addr != "" {
+		lines = append(lines, addr)
+	}
+	if chef.GSTIN != "" {
+		lines = append(lines, "GSTIN: "+chef.GSTIN)
+	}
+	if chef.FSSAILicenseNumber != "" {
+		lines = append(lines, "FSSAI: "+chef.FSSAILicenseNumber)
+	}
+	return lines
+}
+
+// chefPartyBlockHeight is the room the SOLD BY block needs once its lines wrap.
+func chefPartyBlockHeight(chef *models.ChefProfile) float64 {
+	top := 9.0
+	for _, line := range chefPartyLines(chef) {
+		top += partyLineMM * float64(textLines(line, 9, halfColumnMM))
+	}
+	return top + 2
+}
+
 func addInvoiceParties(m core.Maroto, order *models.Order) {
 	chef := order.Chef
 	cust := order.Customer
@@ -156,37 +209,30 @@ func addInvoiceParties(m core.Maroto, order *models.Order) {
 		text.New("SOLD BY", props.Text{Size: 7, Style: fontstyle.Bold, Color: docMutedColor()}),
 		text.New(chef.BusinessName, props.Text{Top: 4, Size: 11, Style: fontstyle.Bold}),
 	}
-	// Running vertical offset so optional lines (proprietor, address, GSTIN, FSSAI)
-	// stack cleanly with no gaps when any is absent.
+	// Running vertical offset, advanced by the WRAPPED height of each line so
+	// GSTIN never prints on top of a two-line address.
 	top := 9.0
-	if owner := strings.TrimSpace(chef.User.FirstName + " " + chef.User.LastName); owner != "" {
-		chefBlock = append(chefBlock, text.New("Chef: "+owner, props.Text{Top: top, Size: 9}))
-		top += 5
-	}
-	addrLine := joinNonEmpty([]string{chef.AddressLine1, chef.AddressLine2, chef.City, chef.State, chef.PostalCode}, ", ")
-	if addrLine != "" {
-		chefBlock = append(chefBlock, text.New(addrLine, props.Text{Top: top, Size: 9}))
-		top += 5
-	}
-	if chef.GSTIN != "" {
-		chefBlock = append(chefBlock, text.New("GSTIN: "+chef.GSTIN, props.Text{Top: top, Size: 9, Style: fontstyle.Bold}))
-		top += 5
-	}
-	if chef.FSSAILicenseNumber != "" {
-		chefBlock = append(chefBlock, text.New("FSSAI: "+chef.FSSAILicenseNumber, props.Text{Top: top, Size: 9}))
-		top += 5
+	for _, line := range chefPartyLines(&chef) {
+		style := fontstyle.Normal
+		if strings.HasPrefix(line, "GSTIN: ") {
+			style = fontstyle.Bold
+		}
+		chefBlock = append(chefBlock, text.New(line, props.Text{Top: top, Size: 9, Style: style}))
+		top += partyLineMM * float64(textLines(line, 9, halfColumnMM))
 	}
 
 	custBlock := []core.Component{
 		text.New("BILL TO", props.Text{Size: 7, Style: fontstyle.Bold, Color: docMutedColor()}),
 		text.New(strOrDefault(cust.FirstName+" "+cust.LastName, "Customer"), props.Text{Top: 4, Size: 11, Style: fontstyle.Bold}),
 	}
+	custTop := 9.0
 	custAddr := joinNonEmpty([]string{order.DeliveryAddressLine1, order.DeliveryAddressLine2, order.DeliveryAddressCity, order.DeliveryAddressState, order.DeliveryAddressPostalCode}, ", ")
 	if custAddr != "" {
-		custBlock = append(custBlock, text.New(custAddr, props.Text{Top: 9, Size: 9}))
+		custBlock = append(custBlock, text.New(custAddr, props.Text{Top: custTop, Size: 9}))
+		custTop += partyLineMM * float64(textLines(custAddr, 9, halfColumnMM))
 	}
 
-	m.AddRow(26,
+	m.AddRow(math.Max(math.Max(top, custTop)+2, 26),
 		col.New(6).Add(chefBlock...),
 		col.New(6).Add(custBlock...),
 	)

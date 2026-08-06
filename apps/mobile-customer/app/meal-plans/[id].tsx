@@ -12,6 +12,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useDialog, useAlert } from '@homechef/mobile-shared/ui';
+import { mealPlanRefundSummary } from '@homechef/mobile-shared/utils';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
@@ -200,6 +201,7 @@ export default function MealPlanDetailScreen() {
   const charge = needsApproval
     ? mealPlanSubsetBreakdown(plan, acceptedFood, acceptedDays.length)
     : mealPlanAdvanceBreakdown(plan);
+  const refund = mealPlanRefundSummary(plan);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -306,6 +308,25 @@ export default function MealPlanDetailScreen() {
           <Text style={styles.totalNote}>
             Estimated from your chef's accepted days. Confirmed at checkout.
           </Text>
+        ) : null}
+
+        {/* The plan said only that a refund happened; the amount lived in the wallet,
+            quoted as a percentage of a base no screen named (#1041). */}
+        {refund ? (
+          <View style={styles.refundBlock}>
+            <View style={styles.moneyRow}>
+              <Text style={styles.refundLabel}>Refunded to your wallet</Text>
+              <Text style={styles.refundValue}>{formatMoney(refund.refunded)}</Text>
+            </View>
+            <View style={styles.moneyRow}>
+              <Text style={styles.moneyLabel}>Not refunded</Text>
+              <Text style={styles.moneyValue}>{formatMoney(refund.withheld)}</Text>
+            </View>
+            <Text style={styles.refundNote}>
+              Your refund is the meal price less your kitchen&apos;s commission, plus that
+              meal&apos;s GST and delivery. What your chef kept for prep stays with them.
+            </Text>
+          </View>
         ) : null}
       </ScrollView>
 
@@ -524,6 +545,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: customerColors.hairline,
+  },
+  refundBlock: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: customerColors.success.tint,
+    gap: 6,
+  },
+  refundLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.charcoal.DEFAULT,
+  },
+  refundValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  refundNote: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    lineHeight: 17,
+    color: customerColors.charcoal.soft,
+    marginTop: 2,
   },
   totalNote: {
     fontFamily: 'Inter',
