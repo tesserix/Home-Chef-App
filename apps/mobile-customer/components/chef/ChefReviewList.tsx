@@ -16,6 +16,7 @@ import { EmptyState, ReportSheet, type SheetHandle } from '@homechef/mobile-shar
 import { useChefReviews, type ChefReview } from '../../hooks/useChefs';
 import { useReportContent, useBlockUser } from '../../hooks/useModeration';
 import { useAuthStore } from '../../store/auth-store';
+import { useProfile } from '../../hooks/useProfile';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec (§3.5).
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -73,9 +74,11 @@ function ReviewerAvatar({ name, avatarUrl }: ReviewerAvatarProps) {
 
 interface ReviewRowProps {
   review: ChefReview;
+  /** The signed-in customer's USER id, or undefined for a guest. */
+  viewerId?: string;
 }
 
-function ReviewRow({ review }: ReviewRowProps) {
+function ReviewRow({ review, viewerId }: ReviewRowProps) {
   // App Review 1.2 — reviews are user-generated content, so each row carries a
   // reachable report action and, where the reviewer's id is known, a block.
   const reportSheetRef = useRef<SheetHandle>(null);
@@ -89,7 +92,6 @@ function ReviewRow({ review }: ReviewRowProps) {
   // self-referential block row. Your own review gets a quiet ownership marker
   // instead. (Edit/Delete belong here too, but /v1/reviews is POST +
   // GET-by-order only — no update or delete endpoint exists yet.)
-  const viewerId = useAuthStore((s) => s.user?.id);
   const isOwnReview = Boolean(viewerId && review.customerId && review.customerId === viewerId);
 
   return (
@@ -173,6 +175,22 @@ export interface ChefReviewListProps {
 export function ChefReviewList({ chefId, animateOnMount = true }: ChefReviewListProps) {
   const { data, isLoading, isError } = useChefReviews(chefId);
   const reviews = data?.data ?? [];
+
+  // Who is looking (#1047), resolved ONCE for the whole list rather than per row.
+  //
+  // This must come from the profile, not `useAuthStore().user`: the store only
+  // populates `user` in `setAuthResponse`, i.e. immediately after a fresh login.
+  // `hydrateFromStorage` — the cold-launch path every returning customer takes —
+  // restores the token and `isAuthenticated` but leaves `user` null. Keying
+  // ownership off the store therefore silently never matched, which is exactly
+  // how this shipped broken the first time.
+  //
+  // `profile.userId`, not `profile.id`: the latter is the CustomerProfile row id
+  // (the hook's own doc comment warns about it), while reviews carry the
+  // reviewer's USER id. Skipped entirely for a guest, who owns nothing here.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { data: profile } = useProfile({ enabled: isAuthenticated });
+  const viewerId = profile?.userId;
   const reduceMotion = useReducedMotion();
   const shouldAnimate = animateOnMount && !reduceMotion;
 
@@ -218,7 +236,7 @@ export function ChefReviewList({ chefId, animateOnMount = true }: ChefReviewList
               : undefined
           }
         >
-          <ReviewRow review={review} />
+          <ReviewRow review={review} viewerId={viewerId} />
         </Animated.View>
       ))}
     </View>
