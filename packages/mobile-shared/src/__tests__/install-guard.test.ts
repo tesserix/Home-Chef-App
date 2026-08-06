@@ -25,18 +25,27 @@ vi.mock('expo-secure-store', () => ({
   AFTER_FIRST_UNLOCK: 'AFTER_FIRST_UNLOCK',
 }));
 
-vi.mock('@react-native-firebase/auth', () => {
-  const signOut = vi.fn(async () => {});
-  const authFn = Object.assign(vi.fn(() => ({ signOut })), {
-    GoogleAuthProvider: { credential: vi.fn() },
-    AppleAuthProvider: { credential: vi.fn() },
-  });
-  return { default: authFn };
-});
+const { mockFirebaseSignOut } = vi.hoisted(() => ({
+  mockFirebaseSignOut: vi.fn(async () => {}),
+}));
+
+vi.mock('@react-native-firebase/auth', () => ({
+  default: vi.fn(),
+  getAuth: vi.fn(() => ({ currentUser: null })),
+  signOut: mockFirebaseSignOut,
+  signInWithEmailAndPassword: vi.fn(),
+  createUserWithEmailAndPassword: vi.fn(),
+  signInWithCredential: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
+  verifyPhoneNumber: vi.fn(),
+  updateProfile: vi.fn(),
+  getIdToken: vi.fn(),
+  GoogleAuthProvider: { credential: vi.fn() },
+  AppleAuthProvider: { credential: vi.fn() },
+}));
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import firebaseAuth from '@react-native-firebase/auth';
 import {
   decideInstallReset,
   ensureFreshInstallReset,
@@ -90,7 +99,7 @@ describe('ensureFreshInstallReset (runner)', () => {
 
     expect(d.isFreshInstall).toBe(false);
     expect(SecureStore.deleteItemAsync).not.toHaveBeenCalled();
-    expect(firebaseAuth().signOut).not.toHaveBeenCalled();
+    expect(mockFirebaseSignOut).not.toHaveBeenCalled();
     expect(AsyncStorage.setItem).not.toHaveBeenCalled();
   });
 
@@ -103,7 +112,7 @@ describe('ensureFreshInstallReset (runner)', () => {
     for (const key of FRESH_INSTALL_SECURE_KEYS) {
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(key);
     }
-    expect(firebaseAuth().signOut).toHaveBeenCalledTimes(1);
+    expect(mockFirebaseSignOut).toHaveBeenCalledTimes(1);
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       INSTALL_SENTINEL_KEY,
       expect.any(String),
@@ -117,7 +126,7 @@ describe('ensureFreshInstallReset (runner)', () => {
 
     expect(d.isFreshInstall).toBe(false);
     expect(SecureStore.deleteItemAsync).not.toHaveBeenCalled();
-    expect(firebaseAuth().signOut).not.toHaveBeenCalled();
+    expect(mockFirebaseSignOut).not.toHaveBeenCalled();
   });
 
   it('best-effort: a failing key delete does not abort the reset', async () => {

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import { colors, spacing } from '../theme/tokens';
 
 /**
  * OfflineBanner — non-blocking connectivity indicator.
@@ -24,10 +25,26 @@ export function OfflineBanner() {
   if (!isOffline) return null;
 
   return (
-    <View className="bg-herb px-4 py-2 flex-row items-center justify-center">
-      <Text className="text-paper text-sm font-medium">
-        You are offline — showing cached data
-      </Text>
+    <View style={styles.banner}>
+      <Text style={styles.label}>You are offline — showing cached data</Text>
     </View>
   );
 }
+
+// StyleSheet, not NativeWind classes: this package has no NativeWind types, so
+// className silently did nothing here and the banner rendered unstyled.
+const styles = StyleSheet.create({
+  banner: {
+    backgroundColor: colors.herb.DEFAULT,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  label: {
+    color: colors.paper,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+});

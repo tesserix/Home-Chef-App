@@ -5,15 +5,6 @@
 
 import { describe, it, expect } from 'vitest';
 
-// resolveAuthErrorMessage lives in bff-session.ts, which imports expo-secure-store
-// at module scope — mock it so the module loads in the node test env.
-import { vi } from 'vitest';
-vi.mock('expo-secure-store', () => ({
-  getItemAsync: vi.fn(),
-  setItemAsync: vi.fn(),
-  deleteItemAsync: vi.fn(),
-}));
-
 import { resolveAuthErrorMessage } from '../auth/bff-session';
 
 describe('resolveAuthErrorMessage', () => {

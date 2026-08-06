@@ -32,6 +32,14 @@ export function openSse(opts: SseOptions): SseHandle {
   let consumed = 0;
   let closedByUs = false;
   let opened = false;
+  // A dropped stream fires onerror AND settles to DONE. Reporting both made the
+  // caller count two failures for one drop and double its reconnect backoff.
+  let reported = false;
+  const report = (reason: "error" | "end" | "unauthorized") => {
+    if (closedByUs || reported) return;
+    reported = true;
+    opts.onClose?.(reason);
+  };
 
   const emitFrom = (text: string) => {
     // Only parse what is newly arrived, and only up to the last complete
@@ -61,9 +69,9 @@ export function openSse(opts: SseOptions): SseHandle {
     if (closedByUs) return;
     if (xhr.readyState === 2 /* HEADERS_RECEIVED */) {
       if (xhr.status === 401 || xhr.status === 403) {
+        report("unauthorized");
         closedByUs = true;
         xhr.abort();
-        opts.onClose?.("unauthorized");
         return;
       }
       if (xhr.status === 200) {
@@ -78,13 +86,10 @@ export function openSse(opts: SseOptions): SseHandle {
     }
     if (xhr.readyState === 4 /* DONE */) {
       emitFrom(xhr.responseText ?? "");
-      opts.onClose?.(opened ? "end" : "error");
+      report(opened ? "end" : "error");
     }
   };
-  xhr.onerror = () => {
-    if (closedByUs) return;
-    opts.onClose?.("error");
-  };
+  xhr.onerror = () => report("error");
   xhr.send();
 
   return {

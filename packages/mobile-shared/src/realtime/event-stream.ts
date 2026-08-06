@@ -39,6 +39,14 @@ export function openEventStream(
   // whole response in memory and grows it, so we parse only the tail each time.
   let consumed = 0;
   let closed = false;
+  // A dropped stream fires onerror AND settles to DONE. Reporting both told the
+  // caller it had failed twice, which leaked a reconnect timer and a live stream.
+  let failed = false;
+  const fail = () => {
+    if (closed || failed) return;
+    failed = true;
+    onError?.();
+  };
 
   const drain = () => {
     const text = xhr.responseText ?? '';
@@ -65,11 +73,9 @@ export function openEventStream(
     if (xhr.readyState >= 3) drain();
     // 4 = DONE: the stream ended. A stream that ends is a failure by
     // definition, so let the caller reconnect — unless we closed it ourselves.
-    if (xhr.readyState === 4 && !closed) onError?.();
+    if (xhr.readyState === 4) fail();
   };
-  xhr.onerror = () => {
-    if (!closed) onError?.();
-  };
+  xhr.onerror = fail;
   xhr.send();
 
   return {

@@ -8,37 +8,26 @@ import { useAuthStore } from '../store/auth-store';
 import { invalidationsFor, parseLiveFrame } from '../lib/live-updates';
 
 
-// React Native's WebSocket takes a headers option as a 3rd argument that the DOM type
-// omits. The stream is user-scoped and authenticates with the Bearer token.
 /**
- * The `/v1` base, over http and ws.
+ * The `/v1` base for the stream.
  *
  * The apps disagree about where `/v1` lives: this one's EXPO_PUBLIC_API_URL ends in
  * `/api/v1`, the customer's in `/api`. Appending `/v1` blindly produced `/api/v1/v1/...`,
- * which 404s — and because the socket fails silently and falls back, the only symptom was
- * stale data. Normalise instead of assuming either convention.
+ * which 404s — and because the stream fails silently, the only symptom was stale data.
+ * Normalise instead of assuming either convention.
  */
-export function streamBase(base?: string): { ws: string; http: string } {
+export function streamBase(base?: string): { http: string } {
   const raw = (base ?? process.env.EXPO_PUBLIC_API_URL ?? 'https://vendors.fe3dr.com/api/v1')
     .replace(/\/+$/, '');
-  const http = /\/v1$/.test(raw) ? raw : `${raw}/v1`;
-  return {
-    http,
-    ws: http.replace(/^https?:\/\//, (m: string) => (m.startsWith('https') ? 'wss://' : 'ws://')),
-  };
+  return { http: /\/v1$/.test(raw) ? raw : `${raw}/v1` };
 }
 
 /**
  * Keeps the chef's lists live: a new order, a customer approving a plan, a refund landing in
  * their queue all arrive pushed instead of on the next poll.
  *
- * WebSocket first, SSE after repeated failures. Both carry the same per-user stream, so the
- * fallback is a transport swap and nothing else — the invalidation routing (lib/live-updates)
- * is shared, and cannot drift between them.
- *
- * WS keeps retrying with capped backoff even while SSE is active, so a connectivity blip
- * can recover to real-time WS instead of being stuck on SSE for the rest of the session
- * (#892).
+ * Retries with capped backoff, so a connectivity blip recovers to real-time instead of
+ * leaving the session on polling for the rest of the shift (#892).
  *
  * Mount ONCE, high in the tree. The stream is user-scoped, so a second mount is a second
  * connection for the same events.

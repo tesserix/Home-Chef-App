@@ -103,12 +103,12 @@ describe('parseLiveFrame', () => {
 
 // The apps disagree about where /v1 lives: the vendor base ends in /api/v1, the customer's
 // in /api. Appending it blindly produced /api/v1/v1/... — a 404 whose only symptom was
-// stale data, because the socket fails silently and falls back.
+// stale data, because the stream fails silently.
 describe('streamBase', () => {
   it('does not double a /v1 the base already carries', () => {
-    const { http, ws } = streamBase('https://vendors.fe3dr.com/api/v1');
-    expect(http).toBe('https://vendors.fe3dr.com/api/v1');
-    expect(ws).toBe('wss://vendors.fe3dr.com/api/v1');
+    expect(streamBase('https://vendors.fe3dr.com/api/v1').http).toBe(
+      'https://vendors.fe3dr.com/api/v1',
+    );
   });
 
   it('adds /v1 when the base stops at /api', () => {
@@ -119,7 +119,7 @@ describe('streamBase', () => {
     expect(streamBase('https://fe3dr.com/api/v1/').http).toBe('https://fe3dr.com/api/v1');
   });
 
-  it('uses ws:// for a plaintext base (local dev)', () => {
-    expect(streamBase('http://localhost:8090/api/v1').ws).toBe('ws://localhost:8090/api/v1');
+  it('leaves a plaintext base alone (local dev)', () => {
+    expect(streamBase('http://localhost:8090/api/v1').http).toBe('http://localhost:8090/api/v1');
   });
 });
