@@ -12,7 +12,7 @@ import {
   DatabaseZap,
   KeyRound,
   UserMinus,
-  Heart,
+  Bookmark,
   Receipt,
   Salad,
   LifeBuoy,
@@ -262,7 +262,7 @@ function ProfileScreenBody() {
         {/* ── Three high-traffic destinations ── */}
         <View className="flex-row gap-3 px-4">
           <QuickTile
-            icon={<Heart size={22} color={customerColors.charcoal.DEFAULT} />}
+            icon={<Bookmark size={22} color={customerColors.charcoal.DEFAULT} />}
             label="Saved"
             onPress={() => router.push('/(tabs)/favorites' as never)}
           />

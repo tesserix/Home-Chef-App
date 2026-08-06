@@ -12,6 +12,13 @@
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Bell, BellRing, Heart } from 'lucide-react-native';
+
+// The Heart here is LIKE — public sentiment with a visible count. SAVE (the
+// private shortlist that fills the Saved tab) is a Bookmark everywhere: the
+// feed tile, the chef header, dish cards and the Saved tab itself. They were
+// both hearts, so a liked-but-unsaved kitchen showed one filled heart beside
+// two empty ones and read as a bug. Icon encodes the ACTION, not the object —
+// do not merge these back together.
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { HAIRLINE } from '../../lib/hairline';
 

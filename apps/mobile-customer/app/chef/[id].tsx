@@ -24,7 +24,7 @@ import Animated, {
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft, Heart, Share2, UtensilsCrossed, ShoppingCart } from 'lucide-react-native';
+import { Bookmark, ChevronLeft, Share2, UtensilsCrossed, ShoppingCart } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { ChefAudienceBar } from '../../components/chef/ChefAudienceBar';
@@ -407,7 +407,7 @@ export default function ChefDetailScreen() {
           )}
         </Pressable>
 
-        {/* Share + Heart — grouped on the right */}
+        {/* Share + Save — grouped on the right */}
         <View style={styles.overlayBtnRightGroup}>
           <Pressable
             onPress={() => { void handleShare(); }}
@@ -448,7 +448,7 @@ export default function ChefDetailScreen() {
                 ]}
               >
                 <Animated.View style={heartAnimStyle}>
-                  <Heart
+                  <Bookmark
                     size={20}
                     color={
                       isSaved

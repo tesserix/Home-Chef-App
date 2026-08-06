@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { Clock, Heart, UtensilsCrossed } from 'lucide-react-native';
+import { Bookmark, Clock, UtensilsCrossed } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import { useRequireAccount } from '../../hooks/useRequireAccount';
@@ -151,7 +151,7 @@ export function ChefCard({ chef }: ChefCardProps) {
                     android_ripple={{ color: HEART_RIPPLE, borderless: true, radius: 20 }}
                   >
                     <Animated.View style={[styles.heartButton, heartAnimStyle]}>
-                      <Heart
+                      <Bookmark
                         size={18}
                         color={isFavorited ? customerColors.coral.DEFAULT : customerColors.canvas}
                         fill={isFavorited ? customerColors.coral.DEFAULT : 'transparent'}

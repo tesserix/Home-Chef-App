@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FlatList, Platform, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Heart, ChefHat, Bell } from 'lucide-react-native';
+import { Bookmark, ChefHat, Bell } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useFavorites, useFavoriteDishes } from '../../hooks/useFavorites';
 import { useChefSubscriptions } from '../../hooks/useChefAudience';
@@ -56,7 +56,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
     <View className="flex-1 items-center justify-center px-8 gap-4">
       <View className="w-16 h-16 rounded-full bg-surface-soft items-center justify-center">
-        <Heart size={28} color={customerColors.hairline} />
+        <Bookmark size={28} color={customerColors.hairline} />
       </View>
       <Text className="text-lg font-semibold text-charcoal text-center font-display">
         Something went wrong
@@ -130,7 +130,7 @@ function EmptyDishesState() {
   return (
     <View className="flex-1 items-center justify-center px-8 gap-4 pt-16">
       <View className="w-20 h-20 rounded-full bg-surface-soft items-center justify-center">
-        <Heart size={34} color={customerColors.charcoal.soft} />
+        <Bookmark size={34} color={customerColors.charcoal.soft} />
       </View>
       <View className="items-center gap-2">
         <Text className="text-xl font-bold text-charcoal text-center font-display">
@@ -265,7 +265,7 @@ export default function FavoritesScreen() {
   if (isGuest) {
     return (
       <GuestGate
-        icon={Heart}
+        icon={Bookmark}
         title="Save the chefs you love"
         body="Sign in to keep a list of your favourite kitchens and get told when they post a new menu."
       />

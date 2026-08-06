@@ -11,7 +11,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { Heart } from 'lucide-react-native';
+import { Bookmark } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
 // Android ripple tint — translucent canvas derived from the token (never a
@@ -25,7 +25,7 @@ interface FavoriteHeartProps {
   onToggle: () => void;
   /** Entity name for the accessibility label, e.g. the dish name. */
   label: string;
-  /** Heart glyph size (the circular backdrop scales with it). */
+  /** Glyph size (the circular backdrop scales with it). */
   size?: number;
 }
 
@@ -56,7 +56,7 @@ export function FavoriteHeart({ filled, onToggle, label, size = 18 }: FavoriteHe
         android_ripple={{ color: HEART_RIPPLE, borderless: true, radius: 20 }}
       >
         <Animated.View style={[styles.button, animStyle]}>
-          <Heart
+          <Bookmark
             size={size}
             color={filled ? customerColors.coral.DEFAULT : customerColors.canvas}
             fill={filled ? customerColors.coral.DEFAULT : 'transparent'}
