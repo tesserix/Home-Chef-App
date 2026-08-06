@@ -10,10 +10,11 @@ import (
 // One line name for every surface: the app, the invoice rows and the PDF.
 func TestInvoiceLineName(t *testing.T) {
 	bakery, _ := json.Marshal(models.OrderItemBakery{
-		WeightKg:   1.5,
-		Selections: []models.BakerySelection{{Kind: "shape", Label: "Shape", Name: "Heart"}},
+		WeightKg:      1.5,
+		Selections:    []models.BakerySelection{{Kind: "shape", Label: "Shape", Name: "Heart"}},
 		MessageOnCake: "Happy Birthday",
 	})
+	bakeryJSON := string(bakery)
 	mods, _ := json.Marshal([]models.OrderItemModifier{{GroupName: "Sides", OptionName: "Extra raita"}})
 
 	cases := []struct {
@@ -24,7 +25,7 @@ func TestInvoiceLineName(t *testing.T) {
 		{"plain", models.OrderItem{Name: "Dal Khichdi"}, "Dal Khichdi"},
 		{
 			"bakery",
-			models.OrderItem{Name: "Truffle Cake", BakeryDetails: string(bakery)},
+			models.OrderItem{Name: "Truffle Cake", BakeryDetails: &bakeryJSON},
 			"Truffle Cake — 1.5 kg · Heart · “Happy Birthday”",
 		},
 		{

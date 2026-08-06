@@ -405,7 +405,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		// flavour / egg deltas. The longest lead time on the order also gates
 		// how soon it can be scheduled.
 		basePrice := menuItem.Price
-		bakeryJSON := ""
+		var bakeryJSON *string
 		var spec models.BakerySpec
 		if err := database.DB.Preload("Options", func(db *gorm.DB) *gorm.DB { return db.Order("kind, sort_order") }).
 			Where("menu_item_id = ?", item.MenuItemID).First(&spec).Error; err == nil {
@@ -420,7 +420,8 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 			}
 			basePrice = unit
 			b, _ := json.Marshal(snap)
-			bakeryJSON = string(b)
+			s := string(b)
+			bakeryJSON = &s
 			if spec.LeadTimeHours > maxBakeryLeadHours {
 				maxBakeryLeadHours = spec.LeadTimeHours
 			}

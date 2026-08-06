@@ -418,7 +418,11 @@ type OrderItem struct {
 	// BakeryDetails is the JSON snapshot of a configured bakery line (#1065) —
 	// weight, shape, flavour, egg/sugar choice, message. Empty for ordinary
 	// dishes. Subtotal already includes its deltas. See OrderItemBakery.
-	BakeryDetails string    `gorm:"type:jsonb" json:"-"`
+	//
+	// A pointer because an ordinary dish must write SQL NULL: an empty Go string
+	// reaches jsonb as '' and Postgres rejects it (22P02), which failed every
+	// order that carried a non-bakery line.
+	BakeryDetails *string   `gorm:"type:jsonb" json:"-"`
 	CreatedAt     time.Time `gorm:"autoCreateTime" json:"createdAt"`
 
 	// Per-line cancellation — set when the chef marks a single line item
