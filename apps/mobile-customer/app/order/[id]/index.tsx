@@ -360,6 +360,36 @@ export default function OrderDetailScreen() {
   // Chef pickup address comes from TrackOrder (only populated for pickup orders).
   const pickupAddress = tracking?.chef?.address?.trim();
 
+  // What the platform retained on a cancellation, itemised (#1048/#1033).
+  //
+  // The screen used to print `total − refund − vendorKept` under the label
+  // "Platform fee (non-refundable)". That figure is a RESIDUAL, not a fee: on a
+  // ₹393.06 order it read ₹25.57 while the Platform fee line four rows above
+  // read ₹13.53, and the ₹12.04 difference — withheld GST — was never disclosed
+  // as tax anywhere. Two contradictory numbers under one word, directly above
+  // the "Dispute the refund amount" button.
+  //
+  // The tier model (`services/cancellation_refund.go`) already splits the refund
+  // into food/delivery/tax, and the server has always sent that snapshot. So the
+  // withheld tax and the withheld delivery are derivable exactly, and the fee
+  // line here equals the fee line above. Tax is taken as the remainder so the
+  // three lines always sum to the retained total even on a legacy row with a
+  // partial snapshot — the customer can still account for every rupee.
+  const retainedTotal =
+    Math.round((order.totalAmount - (order.refundAmount ?? 0)) * 100) / 100;
+  const vendorKept = (cancelRequest?.vendorKeptPaise ?? 0) / 100;
+  const platformKept = Math.max(Math.round((retainedTotal - vendorKept) * 100) / 100, 0);
+  const deliveryKept = Math.min(
+    Math.max(
+      Math.round((deliveryFee - (cancelRequest?.deliveryRefundPaise ?? 0) / 100) * 100) / 100,
+      0,
+    ),
+    platformKept,
+  );
+  const platformFeeKept = Math.min(platformFee, Math.max(platformKept - deliveryKept, 0));
+  const taxKept =
+    Math.round((platformKept - deliveryKept - platformFeeKept) * 100) / 100;
+
   // Reorder (#238) — fetch a re-validated preview, fill the cart with the
   // available lines (resolving current add-on option IDs), and route the
   // customer to checkout — or to the chef to review if anything changed.
@@ -1079,16 +1109,24 @@ export default function OrderDetailScreen() {
                         {formatMoney((cancelRequest?.vendorKeptPaise ?? 0) / 100)}
                       </Text>
                     </View>
-                    <View style={styles.priceRow}>
-                      <Text style={styles.priceLabel}>Platform fee (non-refundable)</Text>
-                      <Text style={styles.priceValue}>
-                        {formatMoney(
-                          order.totalAmount -
-                            order.refundAmount -
-                            (cancelRequest?.vendorKeptPaise ?? 0) / 100,
-                        )}
-                      </Text>
-                    </View>
+                    {platformFeeKept > 0.005 ? (
+                      <View style={styles.priceRow}>
+                        <Text style={styles.priceLabel}>Platform fee (non-refundable)</Text>
+                        <Text style={styles.priceValue}>{formatMoney(platformFeeKept)}</Text>
+                      </View>
+                    ) : null}
+                    {deliveryKept > 0.005 ? (
+                      <View style={styles.priceRow}>
+                        <Text style={styles.priceLabel}>Delivery (driver dispatched)</Text>
+                        <Text style={styles.priceValue}>{formatMoney(deliveryKept)}</Text>
+                      </View>
+                    ) : null}
+                    {taxKept > 0.005 ? (
+                      <View style={styles.priceRow}>
+                        <Text style={styles.priceLabel}>GST on the amount retained</Text>
+                        <Text style={styles.priceValue}>{formatMoney(taxKept)}</Text>
+                      </View>
+                    ) : null}
                   </>
                 ) : (
                   <View style={styles.priceRow}>

@@ -24,6 +24,15 @@ export interface CancellationRequest {
    *  ₹352.77 in fees when ₹320.00 of it was the chef's (#945). */
   vendorKeptPaise?: number;
   platformKeptPaise?: number;
+  /** The refund snapshot's components (paise), as computed by the tier model
+   *  (`services/cancellation_refund.go`). The server has always sent these; the
+   *  app ignored them and called the whole non-vendor remainder "Platform fee",
+   *  so withheld GST was presented to the customer as a platform charge (#1048,
+   *  #1033) — beside the Dispute button, and contradicting the platform-fee line
+   *  in the same block. With these, every retained rupee can be named. */
+  foodRefundPaise?: number;
+  deliveryRefundPaise?: number;
+  taxRefundPaise?: number;
 }
 
 // Where a refund landed, as reported by the server. NOT a customer choice: the
