@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
   CalendarDays,
-  RefreshCw,
   ChevronRight,
   UtensilsCrossed,
   ScrollText,
@@ -332,17 +331,10 @@ function ProfileScreenBody() {
               label: 'My meal plans',
               route: '/meal-plans',
             },
-            // /subscriptions was an ORPHAN route (#696): the only screen that can
-            // pause or cancel a RECURRING charge, reachable solely via a one-shot
-            // "View" button in the alert shown right after subscribing. Dismiss that
-            // alert and the customer could never find it again — they'd have to call
-            // support or charge back to stop being billed. This row is the whole fix;
-            // the screen and its API already work.
-            TIFFIN_ENABLED && {
-              icon: <RefreshCw size={18} color={customerColors.charcoal.soft} />,
-              label: 'My subscriptions',
-              route: '/subscriptions',
-            },
+            // "My subscriptions" sat here (#696, as the fix for /subscriptions
+            // being an orphan route). Removed with the rest of the recurring
+            // tiffin UI in #1035 — with no way to subscribe, a management screen
+            // for subscriptions has nothing to manage.
           ].filter(Boolean) as { icon: React.ReactNode; label: string; route: string }[];
 
           if (moreRows.length === 0) return null;

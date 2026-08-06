@@ -11,7 +11,9 @@
  * per-tenant control is ever needed.
  */
 
-/** Tiffin meal-plans ("plan a week") + daily tiffin subscription (escrow, UPI Autopay). */
+/** Tiffin meal-plans — "plan a week", pre-booked and paid per plan (escrow).
+ *  No longer covers the RECURRING daily tiffin subscription: that UI was removed
+ *  in #1035, so this flag now gates the pre-book flow only. */
 export const TIFFIN_ENABLED: boolean = true;
 
 /**
