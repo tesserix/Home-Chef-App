@@ -30,6 +30,7 @@ jest.mock('../lib/api', () => ({
 import { api } from '../lib/api';
 import {
   mealPlanAdvanceBreakdown,
+  mealPlanSubsetBreakdown,
   useChefWeeklyMenu,
   useMyMealPlans,
   useMealPlan,
@@ -121,5 +122,36 @@ describe('mealPlanAdvanceBreakdown', () => {
     expect(b.amountPaise).toBe(117999);
     const weird = mealPlanAdvanceBreakdown({ subtotal: 100, tax: 50, total: 120 });
     expect(weird.delivery).toBe(0); // total below food+gst floors at 0, never negative
+  });
+});
+
+describe('mealPlanSubsetBreakdown', () => {
+  // 5 days, ₹1,000 food, 5% GST, ₹40/day delivery → ₹1,250.
+  const plan = { subtotal: 1000, tax: 50, total: 1250, days: [1, 2, 3, 4, 5] };
+
+  it('every day accepted reproduces the plan exactly', () => {
+    expect(mealPlanSubsetBreakdown(plan, 1000, 5)).toEqual(mealPlanAdvanceBreakdown(plan));
+  });
+
+  it('a cherry-picked subset carries its GST and its delivery, not food alone (#1039)', () => {
+    // 3 of 5 days, ₹600 of food: GST at the plan's 5%, delivery for 3 days.
+    const b = mealPlanSubsetBreakdown(plan, 600, 3);
+    expect(b.food).toBe(600);
+    expect(b.gst).toBe(30);
+    expect(b.delivery).toBe(120);
+    expect(b.total).toBe(750); // NOT 600 — the bug approved against food only
+    expect(b.food + b.gst + b.delivery).toBe(b.total); // the lines reach the total
+    expect(b.amountPaise).toBe(75000);
+  });
+
+  it('rejecting every day charges nothing', () => {
+    expect(mealPlanSubsetBreakdown(plan, 0, 0).total).toBe(0);
+  });
+
+  it('falls back to the plan when there is no base to scale against', () => {
+    const escrowOff = { subtotal: 0, total: 0, days: [] };
+    expect(mealPlanSubsetBreakdown(escrowOff, 0, 0)).toEqual(mealPlanAdvanceBreakdown(escrowOff));
+    const noDays = { subtotal: 500, tax: 25, total: 525, days: [] };
+    expect(mealPlanSubsetBreakdown(noDays, 200, 1)).toEqual(mealPlanAdvanceBreakdown(noDays));
   });
 });

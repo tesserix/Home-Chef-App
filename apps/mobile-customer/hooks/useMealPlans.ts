@@ -241,6 +241,35 @@ export function mealPlanAdvanceBreakdown(plan: {
   return { food, gst, delivery, total, amountPaise: Math.round(total * 100) };
 }
 
+/** The advance for a SUBSET of a plan's days — what a customer is agreeing to
+ *  when a chef has cherry-picked and the plan awaits approval (#1039).
+ *
+ *  The approval screen used to show the accepted days' food sum and call it the
+ *  total, so the customer approved a number with no GST and no delivery in it —
+ *  #402 reappearing on this screen. The real charge is minted server-side after
+ *  approval, so this is an estimate, derived the same way the server builds one:
+ *  GST at the plan's own effective rate on the accepted food, delivery at the
+ *  plan's per-day rate for the accepted days. With every day accepted it returns
+ *  the plan's own figures exactly. Pure. */
+export function mealPlanSubsetBreakdown(
+  plan: { subtotal: number; tax?: number; total: number; days?: unknown[] },
+  acceptedFood: number,
+  acceptedDayCount: number,
+): MealPlanAdvanceBreakdown {
+  const round2 = (x: number) => Math.round(x * 100) / 100;
+  const full = mealPlanAdvanceBreakdown(plan);
+  const dayCount = plan.days?.length ?? 0;
+
+  // Nothing to scale against (escrow off, or a plan with no days): fall back to
+  // the plan's own breakdown rather than inventing a rate from a zero base.
+  if (full.food <= 0 || dayCount <= 0) return full;
+
+  const gst = round2(acceptedFood * (full.gst / full.food));
+  const delivery = round2((full.delivery / dayCount) * acceptedDayCount);
+  const total = round2(acceptedFood + gst + delivery);
+  return { food: acceptedFood, gst, delivery, total, amountPaise: Math.round(total * 100) };
+}
+
 /** Book a calendar of days from one chef. */
 export function useCreateMealPlan() {
   const qc = useQueryClient();

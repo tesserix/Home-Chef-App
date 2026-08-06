@@ -19,6 +19,8 @@ const CANVAS_RIPPLE = `${customerColors.canvas}33`;
 const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
 import {
   canCancelMealPlan,
+  mealPlanAdvanceBreakdown,
+  mealPlanSubsetBreakdown,
   useCancelMealPlan,
   useMealPlan,
   type MealPlanDay,
@@ -114,7 +116,7 @@ export default function MealPlanDetailScreen() {
   const meta = mealPlanStatusMeta(plan.status);
   const days = plan.days ?? [];
   const acceptedDays = days.filter((d) => !isDeclinedDayStatus(d.status));
-  const acceptedTotal = acceptedDays.reduce((s, d) => s + (d.price ?? 0), 0);
+  const acceptedFood = acceptedDays.reduce((s, d) => s + (d.price ?? 0), 0);
 
   // #617 — escrow fulfilment confirmation for delivered days awaiting the
   // customer's confirmation. The bulk banner is scoped to TODAY's awaiting days
@@ -193,6 +195,12 @@ export default function MealPlanDetailScreen() {
     plan.status === 'confirmed' || plan.status === 'active';
   const needsApproval = meta.needsAction;
 
+  // One calculator for both branches (#1039): the plan's own charge once it is
+  // paid for, the accepted subset's estimate while it awaits approval.
+  const charge = needsApproval
+    ? mealPlanSubsetBreakdown(plan, acceptedFood, acceptedDays.length)
+    : mealPlanAdvanceBreakdown(plan);
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <Header />
@@ -263,14 +271,42 @@ export default function MealPlanDetailScreen() {
           onReportIssue={reportIssue}
         />
 
+        {/* The charge, itemised (#1039). This block used to be a bare Total: on a
+            live plan the meal rows summed to ₹1,190 above a Total of ₹1,513.63,
+            leaving 27% of the charge unexplained on screen. Every line comes
+            from one calculator (`mealPlanSubsetBreakdown`), so food + GST +
+            delivery always reach the total printed beneath them — the standard
+            order detail already meets. */}
+        <View style={styles.moneyBlock}>
+          <View style={styles.moneyRow}>
+            <Text style={styles.moneyLabel}>Food subtotal</Text>
+            <Text style={styles.moneyValue}>{formatMoney(charge.food)}</Text>
+          </View>
+          {charge.delivery > 0.005 ? (
+            <View style={styles.moneyRow}>
+              <Text style={styles.moneyLabel}>Delivery</Text>
+              <Text style={styles.moneyValue}>{formatMoney(charge.delivery)}</Text>
+            </View>
+          ) : null}
+          {charge.gst > 0.005 ? (
+            <View style={styles.moneyRow}>
+              <Text style={styles.moneyLabel}>GST</Text>
+              <Text style={styles.moneyValue}>{formatMoney(charge.gst)}</Text>
+            </View>
+          ) : null}
+        </View>
+
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>
             {needsApproval ? 'If approved' : 'Total'}
           </Text>
-          <Text style={styles.totalValue}>
-            {formatMoney((needsApproval ? acceptedTotal : plan.total))}
-          </Text>
+          <Text style={styles.totalValue}>{formatMoney(charge.total)}</Text>
         </View>
+        {needsApproval ? (
+          <Text style={styles.totalNote}>
+            Estimated from your chef's accepted days. Confirmed at checkout.
+          </Text>
+        ) : null}
       </ScrollView>
 
       {needsApproval ? (
@@ -466,12 +502,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: customerColors.canvas,
   },
+  moneyBlock: {
+    marginTop: 16,
+    paddingHorizontal: 4,
+    gap: 6,
+  },
+  moneyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  moneyLabel: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft },
+  moneyValue: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 12,
+    paddingTop: 12,
     paddingHorizontal: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: customerColors.hairline,
+  },
+  totalNote: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    paddingHorizontal: 4,
+    marginTop: 6,
   },
   totalLabel: { fontFamily: 'Inter', fontSize: 15, color: customerColors.charcoal.soft },
   totalValue: {
