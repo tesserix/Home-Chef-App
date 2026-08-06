@@ -12,10 +12,12 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/johnfercher/maroto/v2"
 	"github.com/johnfercher/maroto/v2/pkg/components/col"
+	"github.com/johnfercher/maroto/v2/pkg/components/image"
 	"github.com/johnfercher/maroto/v2/pkg/components/row"
 	"github.com/johnfercher/maroto/v2/pkg/components/text"
 	"github.com/johnfercher/maroto/v2/pkg/config"
 	"github.com/johnfercher/maroto/v2/pkg/consts/align"
+	"github.com/johnfercher/maroto/v2/pkg/consts/extension"
 	"github.com/johnfercher/maroto/v2/pkg/consts/fontstyle"
 	"github.com/johnfercher/maroto/v2/pkg/core"
 	"github.com/johnfercher/maroto/v2/pkg/props"
@@ -107,9 +109,10 @@ func addInvoiceHeader(m core.Maroto, order *models.Order) {
 	// Masthead: brand lockup left, document type right, both on one baseline —
 	// the same hierarchy as the in-app receipt so the two read as one document.
 	m.AddRow(12,
-		col.New(6).Add(
-			text.New(BrandName, props.Text{Top: 1, Size: 18, Style: fontstyle.Bold}),
-			text.New(BrandWebsite, props.Text{Top: 8, Size: 8, Color: docMutedColor()}),
+		col.New(1).Add(image.NewFromBytes(brandMarkPNG(), extension.Png, props.Rect{Percent: 72})),
+		col.New(5).Add(
+			text.New(BrandName, props.Text{Left: 2, Top: 1, Size: 18, Style: fontstyle.Bold}),
+			text.New(BrandWebsite, props.Text{Left: 2, Top: 8, Size: 8, Color: docMutedColor()}),
 		),
 		col.New(6).Add(
 			text.New(title, props.Text{Top: 2, Size: 13, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()}),
