@@ -48,6 +48,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     alignSelf: 'flex-start',
+    // The row above (ChefActionRow) ends in a hairline divider, and this chip
+    // had no top margin — so a tinted pill sat flush against that rule, reading
+    // as if it were clipped by it rather than sitting under it. The margins give
+    // it its own band between the two rows it lives between.
+    marginTop: 12,
+    marginBottom: 4,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 999,
