@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatRating } from '@/shared/utils/format-rating';
 import { Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -332,7 +333,7 @@ function QuoteCard({
                 <h3 className="font-semibold text-ink">{quote.chef?.businessName}</h3>
                 <div className="mt-1 flex items-center gap-2 text-sm text-ink-muted">
                   <Star className="h-4 w-4 fill-amber text-amber"  aria-hidden="true" />
-                  <span>{quote.chef?.rating}</span>
+                  <span className="tabular-nums">{formatRating(quote.chef?.rating)}</span>
                   <span>({quote.chef?.totalReviews} reviews)</span>
                 </div>
               </div>
