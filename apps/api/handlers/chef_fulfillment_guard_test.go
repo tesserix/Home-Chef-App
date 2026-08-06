@@ -40,6 +40,7 @@ const chefProfilesGuardDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'liv
 	slug text DEFAULT '', description text DEFAULT '',
 	profile_image text DEFAULT '', banner_image text DEFAULT '',
 	cuisines text DEFAULT '{}', specialties text DEFAULT '{}',
+	vertical text DEFAULT 'kitchen', sells_bakery numeric DEFAULT 0,
 	prep_time text DEFAULT '', minimum_order real DEFAULT 0,
 	delivery_radius real DEFAULT 10, service_radius real DEFAULT 10,
 	offers_pickup integer DEFAULT 0, offers_self_delivery integer DEFAULT 0,

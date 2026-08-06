@@ -87,6 +87,9 @@ type MenuItem struct {
 	// Add-on / combo composition (#52). Preloaded by the menu read handlers.
 	ModifierGroups []ModifierGroup `gorm:"foreignKey:MenuItemID" json:"modifierGroups,omitempty"`
 	ComboItems     []ComboItem     `gorm:"foreignKey:ComboID" json:"comboItems,omitempty"`
+	// Bakery configurator (#1065). Non-nil turns this item into a configurable
+	// bakery product — size, shape, flavour, egg/sugar choice, message.
+	Bakery *BakerySpec `gorm:"foreignKey:MenuItemID" json:"bakery,omitempty"`
 }
 
 type MenuItemImage struct {
@@ -144,6 +147,11 @@ type MenuItemResponse struct {
 	IsCombo        bool            `json:"isCombo"`
 	ModifierGroups []ModifierGroup `json:"modifierGroups"`
 	ComboItems     []ComboItem     `json:"comboItems"`
+	// Bakery configurator (#1065) — omitted for an ordinary dish.
+	Bakery *BakerySpec `json:"bakery,omitempty"`
+	// WeightChoices are the sizes the configurator offers, expanded from the
+	// spec's min/max/step so every client renders the same ladder.
+	WeightChoices []float64 `json:"weightChoices,omitempty"`
 }
 
 func (m *MenuItem) ToResponse() MenuItemResponse {
@@ -196,6 +204,8 @@ func (m *MenuItem) ToResponse() MenuItemResponse {
 		IsCombo:        m.IsCombo,
 		ModifierGroups: ensureGroups(m.ModifierGroups),
 		ComboItems:     ensureCombo(m.ComboItems),
+		Bakery:         m.Bakery,
+		WeightChoices:  m.Bakery.WeightChoices(),
 	}
 }
 

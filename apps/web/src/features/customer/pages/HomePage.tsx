@@ -302,6 +302,7 @@ export default function HomePage() {
               search UI. */}
           <div className="mt-4 flex flex-wrap gap-2">
             {[
+              { label: 'Bakery', to: '/bakery' },
               { label: 'Open now', to: '/chefs?isOpen=true' },
               { label: 'Highest rated', to: '/chefs?sort=rating' },
               { label: 'Fastest delivery', to: '/chefs?sort=prepTime' },

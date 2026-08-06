@@ -397,7 +397,18 @@ export default function OrderDetailScreen() {
   function handleReorder() {
     reorder.mutate(order.id, {
       onSuccess: (res) => {
-        const available = res.items.filter((i) => i.available);
+        // A bake is priced only once it's configured (#1065) — it can't be
+        // rebuilt from the snapshot, so it goes back through the cake sheet.
+        const needsConfig = res.items.filter((i) => i.available && i.requiresConfig);
+        const available = res.items.filter((i) => i.available && !i.requiresConfig);
+        if (available.length === 0 && needsConfig.length > 0) {
+          showAlert(
+            'Customise your bake',
+            'Cakes and bakes are made to order — pick the size, flavour and message again.',
+            [{ text: 'OK', onPress: () => router.push(`/chef/${res.chefId}`) }],
+          );
+          return;
+        }
         if (available.length === 0) {
           showAlert('Unavailable', 'None of these items are available right now.');
           return;
@@ -420,14 +431,19 @@ export default function OrderDetailScreen() {
               { id: res.chefId, name: res.chefName },
             );
           }
-          const dropped = res.items.length - available.length;
+          const dropped = res.items.length - available.length - needsConfig.length;
           const needsReview = available.some((i) => i.needsReview);
-          if (dropped > 0 || needsReview) {
+          if (dropped > 0 || needsReview || needsConfig.length > 0) {
             const msgs: string[] = [];
             if (dropped > 0) {
               msgs.push(`${dropped} item${dropped > 1 ? 's are' : ' is'} no longer available.`);
             }
             if (needsReview) msgs.push('Some add-ons changed — please review your cart.');
+            if (needsConfig.length > 0) {
+              msgs.push(
+                `${needsConfig.length} bake${needsConfig.length > 1 ? 's need' : ' needs'} customising again.`,
+              );
+            }
             showAlert('Review your cart', msgs.join(' '), [
               { text: 'OK', onPress: () => router.push(`/chef/${res.chefId}`) },
             ]);
@@ -954,6 +970,9 @@ export default function OrderDetailScreen() {
                 <Text style={styles.itemName} numberOfLines={2}>
                   {item.name}
                 </Text>
+                {item.bakerySummary ? (
+                  <Text style={styles.itemBakery}>{item.bakerySummary}</Text>
+                ) : null}
                 <Text style={styles.itemQty}>×{item.quantity}</Text>
               </View>
               <Text style={styles.itemSubtotal}>
@@ -1758,6 +1777,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: customerColors.charcoal.soft,
     fontVariant: ['tabular-nums'],
+  },
+  itemBakery: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
   },
   itemSubtotal: {
     fontFamily: 'Inter-SemiBold',

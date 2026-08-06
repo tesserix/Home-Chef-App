@@ -207,6 +207,11 @@ export function MainLayout() {
                       </li>
                     )}
                     <li>
+                      <Link to="/bakery" className="text-ink-muted hover:text-ink">
+                        Bakery
+                      </Link>
+                    </li>
+                    <li>
                       <Link to="/chefbook" className="text-ink-muted hover:text-ink">
                         ChefBook
                       </Link>

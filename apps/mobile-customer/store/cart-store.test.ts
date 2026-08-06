@@ -127,3 +127,57 @@ describe('cart-store', () => {
     expect(after).not.toBe(before);
   });
 });
+
+// Bakery lines (#1065): two cakes of the same menu item configured differently
+// are two different orders to bake, so they must never merge into one line.
+describe('bakery lines', () => {
+  const bakeryLine = (overrides: Partial<CartItem> = {}): CartItem =>
+    item({
+      menuItemId: 'cake-1',
+      name: 'Chocolate Truffle',
+      price: 1700,
+      bakery: {
+        weightKg: 1.5,
+        optionIds: ['shape-heart', 'fl-choc'],
+        messageOnCake: 'Happy Birthday Aarav',
+      },
+      bakerySummary: '1.5 kg · Heart · Belgian chocolate',
+      ...overrides,
+    });
+
+  it('keeps two differently configured cakes as separate lines', () => {
+    const store = useCartStore.getState();
+    store.addItem({ ...bakeryLine(), lineId: '' }, chefA);
+    store.addItem(
+      {
+        ...bakeryLine({
+          price: 900,
+          bakery: { weightKg: 1, optionIds: ['shape-round', 'fl-choc'] },
+          bakerySummary: '1 kg · Round · Belgian chocolate',
+        }),
+        lineId: '',
+      },
+      chefA,
+    );
+
+    expect(useCartStore.getState().items).toHaveLength(2);
+    expect(useCartStore.getState().total()).toBe(2600);
+  });
+
+  it('merges two identically configured cakes into one line', () => {
+    const store = useCartStore.getState();
+    store.addItem({ ...bakeryLine(), lineId: '' }, chefA);
+    store.addItem({ ...bakeryLine(), lineId: '' }, chefA);
+
+    const items = useCartStore.getState().items;
+    expect(items).toHaveLength(1);
+    expect(items[0]!.quantity).toBe(2);
+  });
+
+  it('carries the configuration through to the line it stores', () => {
+    useCartStore.getState().addItem({ ...bakeryLine(), lineId: '' }, chefA);
+    const line = useCartStore.getState().items[0]!;
+    expect(line.bakery?.weightKg).toBe(1.5);
+    expect(line.bakerySummary).toContain('Heart');
+  });
+});

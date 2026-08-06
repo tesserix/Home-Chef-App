@@ -171,6 +171,8 @@ func Migrate() error {
 		// Add-ons / combos (#52)
 		&models.ModifierGroup{},
 		&models.ModifierOption{},
+		&models.BakerySpec{},
+		&models.BakeryOption{},
 		&models.ComboItem{},
 
 		// Orders

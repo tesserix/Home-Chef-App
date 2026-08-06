@@ -116,6 +116,18 @@ type ChefProfile struct {
 	// column existed read as home.
 	KitchenType string `gorm:"type:varchar(20);default:'home_kitchen'" json:"kitchenType"`
 
+	// Vertical is what this home kitchen sells (#1065): "kitchen" (meals, the
+	// default) or "bakery" (cakes, breads, pastries). Both are home chefs on the
+	// same orders/payments/payout rails — the vertical only changes discovery
+	// (a Bakery tab and occasion filters) and the menu editor (a bakery product
+	// gets a size/shape/flavour configurator instead of a spice level).
+	Vertical string `gorm:"type:varchar(16);default:'kitchen';index" json:"vertical"`
+
+	// SellsBakery lets a meals kitchen ALSO sell cakes and breads — one store,
+	// both shelves. Vertical stays the primary identity (how the store is listed
+	// and branded); this is the capability that opens the configurator.
+	SellsBakery bool `gorm:"default:false" json:"sellsBakery"`
+
 	// Address
 	AddressLine1 string `gorm:"" json:"addressLine1"`
 	AddressLine2 string `gorm:"" json:"addressLine2"`
@@ -336,6 +348,31 @@ func (c *ChefProfile) IsHomeKitchen() bool {
 	return c.KitchenType == "" || c.KitchenType == KitchenTypeHome
 }
 
+// Verticals a home kitchen can trade in (#1065).
+const (
+	VerticalKitchen = "kitchen"
+	VerticalBakery  = "bakery"
+)
+
+// Verticals is the canonical vocabulary, for validation and for the picker in
+// vendor onboarding.
+var Verticals = []string{VerticalKitchen, VerticalBakery}
+
+// EffectiveVertical treats a blank column (rows created before the vertical
+// existed) as a meals kitchen.
+func (c *ChefProfile) EffectiveVertical() string {
+	if c.Vertical == VerticalBakery {
+		return VerticalBakery
+	}
+	return VerticalKitchen
+}
+
+// OffersBakery reports whether this kitchen sells bakery products at all —
+// either as its whole trade or alongside its meals.
+func (c *ChefProfile) OffersBakery() bool {
+	return c.EffectiveVertical() == VerticalBakery || c.SellsBakery
+}
+
 // IsTestMode reports whether this kitchen currently inhabits the test partition.
 func (c *ChefProfile) IsTestMode() bool { return IsTestMode(c.Mode) }
 
@@ -416,6 +453,8 @@ type ChefProfileResponse struct {
 	PausedUntil         *time.Time             `json:"pausedUntil,omitempty"`
 	KitchenPhotos       []string               `json:"kitchenPhotos"`
 	KitchenType         string                 `json:"kitchenType"`
+	Vertical            string                 `json:"vertical"`
+	SellsBakery         bool                   `json:"sellsBakery"`
 	City                string                 `json:"city"`
 	State               string                 `json:"state"`
 	Country             string                 `json:"country"`  // chef's PayoutCountry (ISO alpha-2)
@@ -540,6 +579,8 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		PausedUntil:               c.PausedUntil,
 		KitchenPhotos:             kitchenPhotos,
 		KitchenType:               kitchenType,
+		Vertical:                  c.EffectiveVertical(),
+		SellsBakery:               c.OffersBakery(),
 		City:                      c.City,
 		State:                     c.State,
 		Country:                   country,
@@ -641,6 +682,8 @@ func (c *ChefProfile) ToClosedResponse() ChefProfileResponse {
 		ProfileImage:    c.ProfileImage,
 		BannerImage:     c.BannerImage,
 		Cuisines:        []string(c.Cuisines),
+		Vertical:        c.EffectiveVertical(),
+		SellsBakery:     c.OffersBakery(),
 		City:            c.City,
 		State:           c.State,
 		AcceptingOrders: false,

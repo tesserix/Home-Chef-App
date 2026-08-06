@@ -13,6 +13,9 @@ export interface OrderDetailItem {
   lineTotal: number;
   isVeg?: boolean;
   specialInstructions?: string;
+  // The configuration a bakery line was ordered with, as one line of text —
+  // the chef bakes from this (#1065).
+  bakerySummary?: string;
   // Per-line cancellation state — populated by the backend after a
   // chef triggers POST /chef/orders/:id/items/:itemId/cancel. The
   // detail screen renders cancelled lines with strikethrough + a

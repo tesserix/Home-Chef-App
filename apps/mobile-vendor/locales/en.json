@@ -413,7 +413,14 @@
     "fssaiExpiryRequired": "FSSAI expiry date needed",
     "fssaiExpiryRequiredBody": "Enter the expiry date as YYYY-MM-DD. We use it to remind you 30, 15 and 7 days before your licence lapses.",
     "fssaiExpiredTitle": "That licence has expired",
-    "fssaiExpiredBody": "The expiry date you entered is in the past. Renew your FSSAI licence and upload the current one."
+    "fssaiExpiredBody": "The expiry date you entered is in the past. Renew your FSSAI licence and upload the current one.",
+    "vertical": "What do you sell?",
+    "verticalKitchen": "Kitchen",
+    "verticalKitchenHint": "Cooked meals, thalis, snacks",
+    "verticalBakery": "Bakery",
+    "verticalBakeryHint": "Cakes, breads, pastries, patties",
+    "alsoBakes": "I also sell cakes and bakes",
+    "alsoBakesHint": "Your bakes show up in the Bakery section too — same store, same orders"
   },
   "more": {
     "title": "More",

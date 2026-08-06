@@ -15,6 +15,11 @@ interface PersonalInfo {
 
 interface KitchenDetails {
   businessName: string;
+  // What this kitchen sells (#1065). A bakery gets the cake configurator on its
+  // menu and its own customer-facing section; everything else is a kitchen.
+  vertical: 'kitchen' | 'bakery';
+  // One store, both shelves (#1065) — a meals kitchen that also sells bakes.
+  sellsBakery: boolean;
   cuisines: string[];
   description: string;
   addressLine1: string;
@@ -118,6 +123,8 @@ const initialState = {
   personalInfo: { fullName: '', phone: '', email: '' },
   kitchenDetails: {
     businessName: '',
+    vertical: 'kitchen' as const,
+    sellsBakery: false,
     cuisines: [],
     description: '',
     addressLine1: '',

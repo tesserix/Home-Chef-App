@@ -1,5 +1,18 @@
 export * from './auth';
 
+// Bakery types + pricing rules are shared verbatim with the mobile apps so web
+// and app price a cake identically to the server (#1065).
+export type {
+  BakerySpec,
+  BakeryOption,
+  BakeryOptionKind,
+  BakeryProductType,
+  BakeryLineInput,
+  BakerySelection,
+  OrderItemBakery,
+} from '@homechef/mobile-shared/bakery';
+import type { BakerySpec } from '@homechef/mobile-shared/bakery';
+
 // Common API response types
 export interface ApiResponse<T> {
   success: boolean;
@@ -67,6 +80,10 @@ export interface Chef {
   // does not surface it to the customer storefront. Until then this is undefined
   // and the badge falls back to a neutral state.
   fssaiLicenseNumber?: string;
+  // One store, both shelves (#1065): true when the kitchen sells cakes and
+  // bakes, either as its whole trade or alongside its meals.
+  sellsBakery?: boolean;
+  vertical?: string;
   createdAt: string;
 }
 
@@ -124,6 +141,9 @@ export interface MenuItem {
   isCombo?: boolean;
   modifierGroups?: ModifierGroup[];
   comboItems?: ComboItemRef[];
+  // Cake/bake configurator (#1065). Present only on a bakery product; the
+  // customer must configure it before it can be priced or added to the cart.
+  bakery?: BakerySpec | null;
 }
 
 /** Per-item add-on modifier group (#232). */
@@ -317,6 +337,9 @@ export interface OrderItem {
   subtotal: number;
   notes?: string;
   imageUrl?: string;
+  // What the bake was configured as, server-rendered from the immutable
+  // per-line snapshot so it reads the same on screen and on the invoice (#1065).
+  bakerySummary?: string;
 }
 
 export type PaymentStatus =

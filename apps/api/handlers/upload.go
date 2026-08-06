@@ -600,6 +600,16 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 
 // Onboarding handles the chef onboarding form submission (JSON only — files uploaded separately)
 // POST /chef/onboarding
+// normalizeVertical maps the onboarding choice onto the vertical vocabulary.
+// Anything unrecognised is a meals kitchen — the safe default, since a bakery
+// storefront is opt-in.
+func normalizeVertical(v string) string {
+	if strings.EqualFold(strings.TrimSpace(v), models.VerticalBakery) {
+		return models.VerticalBakery
+	}
+	return models.VerticalKitchen
+}
+
 // normalizeKitchenType enforces the home-chefs-only rule at onboarding. Fe3dr
 // does not onboard commercial vendors, so any kitchen type other than home is
 // rejected outright; a blank value (older clients that don't send the field)
@@ -758,6 +768,8 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		GSTIN:              req.GSTIN,
 		KitchenPhotos:      pq.StringArray(req.KitchenPhotos),
 		KitchenType:        kitchenType,
+		Vertical:           normalizeVertical(req.Vertical),
+		SellsBakery:        req.SellsBakery,
 		IsActive:           true,
 		AcceptingOrders:    false,
 	}
@@ -941,6 +953,8 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 		chef.KitchenPhotos = pq.StringArray(req.KitchenPhotos)
 	}
 	chef.KitchenType = kitchenType
+	chef.Vertical = normalizeVertical(req.Vertical)
+	chef.SellsBakery = req.SellsBakery
 	chef.IsActive = true
 	// A (re-)submission restarts the 30-day document clock and re-arms the
 	// single warning.
@@ -1223,14 +1237,20 @@ type OnboardingRequest struct {
 	BusinessName   string            `json:"businessName" binding:"required"`
 	Description    string            `json:"description" binding:"required"`
 	KitchenType    string            `json:"kitchenType"`
-	Cuisines       []string          `json:"cuisines" binding:"required"`
-	Specialties    []string          `json:"specialties"`
-	YearsOfExp     string            `json:"yearsOfExperience"`
-	MealsPerDay    string            `json:"mealsPerDay"`
-	PrepTime       string            `json:"prepTime"`
-	ServiceRadius  float64           `json:"serviceRadius"`
-	MinimumOrder   float64           `json:"minimumOrder"`
-	DeliveryFee    float64           `json:"deliveryFee"`
+	// Vertical is what the kitchen sells (#1065): "kitchen" (meals) or "bakery".
+	// Blank means meals — the default every kitchen had before the vertical.
+	Vertical string `json:"vertical"`
+	// SellsBakery lets a meals kitchen also sell cakes and breads — one store,
+	// both shelves.
+	SellsBakery   bool     `json:"sellsBakery"`
+	Cuisines      []string `json:"cuisines" binding:"required"`
+	Specialties   []string `json:"specialties"`
+	YearsOfExp    string   `json:"yearsOfExperience"`
+	MealsPerDay   string   `json:"mealsPerDay"`
+	PrepTime      string   `json:"prepTime"`
+	ServiceRadius float64  `json:"serviceRadius"`
+	MinimumOrder  float64  `json:"minimumOrder"`
+	DeliveryFee   float64  `json:"deliveryFee"`
 	// Fulfillment — how customers get their food. At least one must be true or the
 	// kitchen can't be activated (the admin verify gate rejects it). The onboarding
 	// wizard requires the chef to pick at least one, so a completed application

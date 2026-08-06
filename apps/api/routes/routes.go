@@ -399,6 +399,12 @@ func SetupRouter() *gin.Engine {
 		v1.GET("/campaigns/track/open/:id", campaignHandler.TrackOpen)
 		v1.GET("/campaigns/unsubscribe/:id", campaignHandler.Unsubscribe)
 
+		// Bakery vertical (#1065) — the configurator vocabulary and the customer's
+		// cakes-and-bakes browse. Public: both are discovery surfaces.
+		bakeryHandler := handlers.NewBakeryHandler()
+		v1.GET("/bakery/options", bakeryHandler.GetBakeryOptions)
+		v1.GET("/bakery/products", bakeryHandler.GetBakeryProducts)
+
 		// Dietary & allergen taxonomy (public) + per-cart conflict check (#41).
 		v1.GET("/dietary/options", dietaryHandler.GetDietaryOptions)
 		dietary := v1.Group("/dietary")

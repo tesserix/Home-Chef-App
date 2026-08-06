@@ -124,6 +124,26 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		query = query.Where("? = ANY(cuisines)", cuisine)
 	}
 
+	// Vertical filter (#1065) — "bakery" or "kitchen". A blank column predates
+	// the vertical and means a meals kitchen, so match it too. Bakery matches a
+	// meals kitchen that also bakes: one store can trade on both shelves.
+	if v := strings.ToLower(strings.TrimSpace(c.Query("vertical"))); v != "" {
+		if v == models.VerticalBakery {
+			query = query.Where("(vertical = ? OR sells_bakery = true)", models.VerticalBakery)
+		} else {
+			query = query.Where("(vertical IS NULL OR vertical = '' OR vertical = ?)", models.VerticalKitchen)
+		}
+	}
+
+	// Bakery occasion filter — kitchens with at least one product offered for
+	// this occasion (an empty occasions array means "any occasion").
+	if occ := strings.ToLower(strings.TrimSpace(c.Query("occasion"))); occ != "" {
+		query = query.Where(`id IN (SELECT mi.chef_id FROM menu_items mi
+			JOIN bakery_specs bs ON bs.menu_item_id = mi.id AND bs.deleted_at IS NULL
+			WHERE mi.is_approved = true AND mi.deleted_at IS NULL
+			  AND (cardinality(bs.occasions) = 0 OR ? = ANY(bs.occasions)))`, occ)
+	}
+
 	// isOpen filter
 	if isOpen == "true" {
 		query = query.Where("accepting_orders = ?", true)
@@ -540,7 +560,8 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 		// and see what a combo includes.
 		Preload("ModifierGroups", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
 		Preload("ModifierGroups.Options", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
-		Preload("ComboItems", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") })
+		Preload("ComboItems", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Scopes(PreloadBakery)
 
 	if category != "" {
 		query = query.Where("category_id = ?", category)
@@ -1080,6 +1101,13 @@ type UpdateChefProfileRequest struct {
 	SelfDeliveryMaxFee        *float64                   `json:"selfDeliveryMaxFee"`
 	SelfDeliveryMaxDistanceKm *float64                   `json:"selfDeliveryMaxDistanceKm"`
 	OperatingHours            map[string]*DayHoursUpdate `json:"operatingHours"`
+	// Vertical (#1065) — a kitchen can switch between meals and bakery from the
+	// profile screen. Switching to meals leaves any bakery configurators on the
+	// items alone; they simply stop being offered until the kitchen switches back.
+	Vertical *string `json:"vertical"`
+	// SellsBakery — a meals kitchen can add a bakery shelf without changing what
+	// it primarily is.
+	SellsBakery *bool `json:"sellsBakery"`
 
 	// Address fields — added so the chef can edit their kitchen address
 	// post-onboarding. Backend previously only accepted these during the
@@ -1130,6 +1158,12 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 	}
 	if req.Cuisines != nil {
 		chef.Cuisines = req.Cuisines
+	}
+	if req.Vertical != nil {
+		chef.Vertical = normalizeVertical(*req.Vertical)
+	}
+	if req.SellsBakery != nil {
+		chef.SellsBakery = *req.SellsBakery
 	}
 	if req.Specialties != nil {
 		chef.Specialties = req.Specialties
@@ -2801,8 +2835,8 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		// succeed. Say that, rather than letting the vendor app render "not
 		// active" as a settled verdict — the reconcile sweep (#1029) will carry
 		// it to ACTIVE, and GET /chef/payout reports the real state.
-		"cashfreeVendorStatus":     chef.CashfreeVendorStatus,
-		"cashfreeVendorPending":    !strings.EqualFold(chef.CashfreeVendorStatus, services.CashfreeVendorActive),
+		"cashfreeVendorStatus":  chef.CashfreeVendorStatus,
+		"cashfreeVendorPending": !strings.EqualFold(chef.CashfreeVendorStatus, services.CashfreeVendorActive),
 	}
 	if settlementErrorCode != "" {
 		// Present even for the UPI case: the response must not read as an

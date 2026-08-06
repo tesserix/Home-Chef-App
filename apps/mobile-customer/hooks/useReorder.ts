@@ -19,6 +19,9 @@ export interface ReorderItem {
   available: boolean;
   reason?: string;
   needsReview?: boolean;
+  // A bake (#1065) — size, flavour and message are picked again on the chef's
+  // page, so this line is never auto-filled into the cart.
+  requiresConfig?: boolean;
 }
 
 export interface ReorderResponse {

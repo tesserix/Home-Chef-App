@@ -260,7 +260,7 @@ func addInvoiceItems(m core.Maroto, order *models.Order, hsnMeta map[uuid.UUID]s
 			hsn = "996331"
 		}
 		rows = append(rows, row.New(7).Add(
-			col.New(5).Add(text.New(it.Name, props.Text{Top: 1.8, Left: 1.5, Size: 9})),
+			col.New(5).Add(text.New(InvoiceLineName(it), props.Text{Top: 1.8, Left: 1.5, Size: 9})),
 			col.New(2).Add(text.New(hsn, props.Text{Top: 1.8, Size: 8, Align: align.Center, Color: docMutedColor()})),
 			col.New(1).Add(text.New(fmt.Sprintf("%d", it.Quantity), props.Text{Top: 1.8, Size: 9, Align: align.Right})),
 			col.New(2).Add(text.New(fmt.Sprintf("%.2f", it.Price), props.Text{Top: 1.8, Size: 9, Align: align.Right})),

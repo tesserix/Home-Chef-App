@@ -36,6 +36,7 @@ interface ApiOrderItem {
   name: string;
   price: number;
   quantity: number;
+  bakerySummary?: string;
 }
 
 interface ApiOrderChef {
@@ -108,6 +109,7 @@ function mapOrderItem(i: ApiOrderItem): OrderItem {
     name: i.name,
     price: i.price,
     quantity: i.quantity,
+    bakerySummary: i.bakerySummary,
   };
 }
 

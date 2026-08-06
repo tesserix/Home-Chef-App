@@ -16,7 +16,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { CartItem, SelectedModifier } from '../types/customer';
+import type { CartBakeryConfig, CartItem, SelectedModifier } from '../types/customer';
 
 interface ChefSummary {
   id: string;
@@ -25,11 +25,35 @@ interface ChefSummary {
 
 type AddItemResult = 'ok' | 'cross_chef_conflict';
 
-/** Stable line id for a menu item + its modifier selection. */
-export function makeLineId(menuItemId: string, modifiers?: SelectedModifier[]): string {
-  if (!modifiers || modifiers.length === 0) return menuItemId;
-  const ids = modifiers.map((m) => m.optionId).sort().join(',');
-  return `${menuItemId}::${ids}`;
+/**
+ * Stable line id for a menu item + its modifier selection + its bakery
+ * configuration. Two cakes of the same item at different weights are two
+ * different things to bake, so they stay separate lines (#1065).
+ */
+export function makeLineId(
+  menuItemId: string,
+  modifiers?: SelectedModifier[],
+  bakery?: CartBakeryConfig,
+): string {
+  const parts: string[] = [];
+  if (modifiers && modifiers.length > 0) {
+    parts.push(modifiers.map((m) => m.optionId).sort().join(','));
+  }
+  if (bakery) {
+    parts.push(bakeryKey(bakery));
+  }
+  if (parts.length === 0) return menuItemId;
+  return `${menuItemId}::${parts.join('|')}`;
+}
+
+function bakeryKey(b: CartBakeryConfig): string {
+  return [
+    b.weightKg ?? '',
+    [...(b.optionIds ?? [])].sort().join(','),
+    (b.messageOnCake ?? '').trim(),
+    b.occasion ?? '',
+    b.referencePhotoUrl ?? '',
+  ].join('~');
 }
 
 interface CartState {
@@ -89,7 +113,7 @@ export const useCartStore = create<CartState>()(
           return 'cross_chef_conflict';
         }
 
-        const lineId = item.lineId || makeLineId(item.menuItemId, item.modifiers);
+        const lineId = item.lineId || makeLineId(item.menuItemId, item.modifiers, item.bakery);
         const existing = items.find((i) => i.lineId === lineId);
 
         if (existing) {

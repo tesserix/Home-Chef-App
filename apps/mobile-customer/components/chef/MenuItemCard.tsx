@@ -8,9 +8,10 @@ import { useCartStore, makeLineId } from '../../store/cart-store';
 import { useDietaryConflicts } from '../../hooks/useDietaryConflicts';
 import { useFavoriteDishIds, useToggleFavoriteDish } from '../../hooks/useFavorites';
 import { ModifierSheet } from '../cart/ModifierSheet';
+import { BakerySheet } from '../cart/BakerySheet';
 import { FavoriteHeart } from '../shared/FavoriteHeart';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import type { CartItem, MenuItem, SelectedModifier } from '../../types/customer';
+import type { CartBakeryConfig, CartItem, MenuItem, SelectedModifier } from '../../types/customer';
 import { formatMoney } from '../../lib/format';
 
 // Android ripple tints — translucent colours derived from existing tokens
@@ -40,6 +41,11 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
   const hasModifiers = (item.modifierGroups?.length ?? 0) > 0;
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  // Bakery (#1065): a configurable bake is priced only once it's configured, so
+  // the cake sheet takes precedence over the add-on picker.
+  const isBakery = item.bakery != null;
+  const [bakeryOpen, setBakeryOpen] = useState(false);
+
   // Favorite dish (#237): heart on the photo, state from the saved-ids set.
   const { data: favoriteDishIds } = useFavoriteDishIds();
   const isFavorited = favoriteDishIds?.has(item.id) ?? false;
@@ -66,6 +72,10 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
   };
 
   const handleAdd = () => {
+    if (isBakery) {
+      setBakeryOpen(true);
+      return;
+    }
     if (hasModifiers) {
       setSheetOpen(true);
       return;
@@ -94,6 +104,26 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
       quantity,
       imageUrl: item.imageUrl,
       modifiers,
+    });
+  };
+
+  const handleBakeryConfirm = (
+    bakery: CartBakeryConfig,
+    summary: string,
+    unitPrice: number,
+    quantity: number,
+  ) => {
+    setBakeryOpen(false);
+    addToCart({
+      lineId: makeLineId(item.id, undefined, bakery),
+      menuItemId: item.id,
+      name: item.name,
+      price: unitPrice,
+      quantity,
+      imageUrl: item.imageUrl,
+      bakery,
+      bakerySummary: summary,
+      bakeryLeadTimeHours: item.bakery?.leadTimeHours ?? 0,
     });
   };
 
@@ -315,6 +345,16 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
           }
         />
       </View>
+
+      {/* Cake configurator (#1065) — opens for a bakery's configurable item. */}
+      {isBakery ? (
+        <BakerySheet
+          item={item}
+          visible={bakeryOpen}
+          onClose={() => setBakeryOpen(false)}
+          onConfirm={handleBakeryConfirm}
+        />
+      ) : null}
 
       {/* Add-on picker (#232) — opens for items with modifier groups. */}
       {hasModifiers ? (

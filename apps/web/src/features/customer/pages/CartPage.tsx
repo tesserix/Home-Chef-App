@@ -196,9 +196,17 @@ export default function CartPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <h4 className="font-medium text-ink">{item.name}</h4>
-                        <p className="text-sm text-ink-muted line-clamp-1">
-                          {item.description}
-                        </p>
+                        {/* How this bake was configured (#1065) — the line was
+                            priced on it, so it belongs next to the price. */}
+                        {item.bakerySummary ? (
+                          <p className="text-sm text-ink-muted">
+                            {item.bakerySummary}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-ink-muted line-clamp-1">
+                            {item.description}
+                          </p>
+                        )}
                       </div>
                       <button
                         type="button"

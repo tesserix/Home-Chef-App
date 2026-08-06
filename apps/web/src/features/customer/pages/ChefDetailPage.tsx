@@ -18,16 +18,18 @@ import {
   ShieldCheck,
   Users,
   AlertTriangle,
+  CakeSlice,
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/shared/services/api-client";
-import { useCartStore } from "@/app/store/cart-store";
+import { useCartStore, type BakeryLineConfig } from "@/app/store/cart-store";
 import { useFavoritesStore } from "@/app/store/favorites-store";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useFormatPrice } from "@/shared/utils/format-price";
 import { findItemConflicts, type DietaryProfile } from "@/shared/utils/dietary";
 import { formatDate } from "@/shared/utils/format-date";
 import { Button, SimpleDialog } from "@/shared/components/ui";
+import { BakeryConfigurator } from "../components/BakeryConfigurator";
 import type {
   Chef,
   MenuItem,
@@ -216,6 +218,17 @@ export default function ChefDetailPage() {
                         <Check className="h-3 w-3" aria-hidden="true" />
                         Verified
                       </span>
+                    )}
+                    {/* One store, both shelves (#1065) — a meals kitchen that
+                        also bakes says so here rather than hiding it in the menu. */}
+                    {chef.sellsBakery && (
+                      <Link
+                        to="/bakery"
+                        className="inline-flex items-center gap-1 rounded-full bg-herb-tint px-2 py-0.5 text-xs font-medium text-herb"
+                      >
+                        <CakeSlice className="h-3 w-3" aria-hidden="true" />
+                        Bakery
+                      </Link>
                     )}
                   </div>
                   <p className="mt-1 text-ink-soft">
@@ -564,18 +577,27 @@ function MenuItemCard({
   const hasModifiers = (item.modifierGroups?.length ?? 0) > 0;
   const [modOpen, setModOpen] = useState(false);
   const [picks, setPicks] = useState<Record<string, string[]>>({});
+  // A bake is priced only once it's configured (#1065), so it can't be added
+  // straight from the card — size, shape and flavour come first.
+  const isBake = item.bakery != null;
+  const [bakeOpen, setBakeOpen] = useState(false);
   // A cart already holding another kitchen's food blocks this add. Rather than
   // telling the customer to go and fix it themselves, hold the attempted line
   // here and offer to replace the cart — the same choice the mobile app gives.
   const [pendingLine, setPendingLine] = useState<{
     quantity: number;
     modifiers?: SelectedModifier[];
+    bakery?: BakeryLineConfig;
   } | null>(null);
 
-  const addLine = (modifiers?: SelectedModifier[]) => {
+  const addLine = (
+    modifiers?: SelectedModifier[],
+    bakery?: BakeryLineConfig,
+    qty = quantity,
+  ) => {
     try {
       if (cart.items.length === 0) cart.setChef(chefInfo);
-      cart.addItem(item, quantity, undefined, modifiers);
+      cart.addItem(item, qty, undefined, modifiers, bakery);
       toast.success(`Added ${item.name} to cart`);
       setQuantity(1);
     } catch (error) {
@@ -583,7 +605,7 @@ function MenuItemCard({
         // Offer the way out instead of naming the obstacle. The previous copy
         // ("Clear cart first") described a task the customer had no control to
         // perform from this screen, so the only way forward was to guess.
-        setPendingLine({ quantity, modifiers });
+        setPendingLine({ quantity: qty, modifiers, bakery });
       }
     }
   };
@@ -595,13 +617,23 @@ function MenuItemCard({
     if (!pendingLine) return;
     cart.clearCart();
     cart.setChef(chefInfo);
-    cart.addItem(item, pendingLine.quantity, undefined, pendingLine.modifiers);
+    cart.addItem(
+      item,
+      pendingLine.quantity,
+      undefined,
+      pendingLine.modifiers,
+      pendingLine.bakery,
+    );
     toast.success(`Cart replaced with ${item.name}`);
     setQuantity(1);
     setPendingLine(null);
   };
 
   const handleAddToCart = () => {
+    if (isBake) {
+      setBakeOpen(true);
+      return;
+    }
     if (hasModifiers) {
       setModOpen(true);
       return;
@@ -770,10 +802,17 @@ function MenuItemCard({
           {/* Price and Actions */}
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-baseline gap-2">
-              <span className="text-lg font-semibold text-ink">
-                {fp(item.price)}
-              </span>
-              {item.comparePrice && (
+              {/* A per-kg bake has no single price until it's sized (#1065). */}
+              {isBake && item.bakery!.pricePerKg > 0 ? (
+                <span className="text-lg font-semibold text-ink">
+                  from {fp(item.bakery!.pricePerKg * item.bakery!.minWeightKg)}
+                </span>
+              ) : (
+                <span className="text-lg font-semibold text-ink">
+                  {fp(item.price)}
+                </span>
+              )}
+              {!isBake && item.comparePrice && (
                 <span className="text-sm text-ink-muted line-through">
                   {fp(item.comparePrice)}
                 </span>
@@ -795,8 +834,11 @@ function MenuItemCard({
               </span>
             ) : item.isAvailable ? (
               <div className="flex items-center gap-2">
-                {/* Quantity selector */}
-                <div className="flex items-center rounded-lg border">
+                {/* Quantity selector — a bake picks its quantity inside the
+                    configurator, alongside the size that prices it. */}
+                <div
+                  className={`flex items-center rounded-lg border ${isBake ? "hidden" : ""}`}
+                >
                   <button
                     type="button"
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -815,7 +857,7 @@ function MenuItemCard({
                 </div>
 
                 <Button variant="primary" size="sm" onClick={handleAddToCart}>
-                  {cartItem ? "Add More" : "Add"}
+                  {isBake ? "Customise" : cartItem ? "Add More" : "Add"}
                 </Button>
               </div>
             ) : (
@@ -824,6 +866,28 @@ function MenuItemCard({
           </div>
         </div>
       </div>
+
+      {/* Cake configurator (#1065) */}
+      {isBake && (
+        <BakeryConfigurator
+          item={item}
+          open={bakeOpen}
+          onOpenChange={setBakeOpen}
+          onConfirm={(config, summary, unitPrice, qty) => {
+            setBakeOpen(false);
+            addLine(
+              undefined,
+              {
+                bakery: config,
+                unitPrice,
+                summary,
+                leadTimeHours: item.bakery?.leadTimeHours ?? 0,
+              },
+              qty,
+            );
+          }}
+        />
+      )}
 
       {/* Add-on picker (#232) */}
       {hasModifiers && (

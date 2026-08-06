@@ -52,6 +52,9 @@ interface ReorderResponseItem {
   available: boolean;
   reason?: string;
   needsReview?: boolean;
+  // A bake is priced only once it's configured (#1065), so its line can't be
+  // rebuilt from the snapshot — the customer re-picks size, flavour and message.
+  requiresConfig?: boolean;
 }
 interface ReorderResponse {
   chefId: string;
@@ -174,9 +177,15 @@ export default function OrderDetailPage() {
   const reorderMutation = useMutation({
     mutationFn: () => apiClient.post<ReorderResponse>(`/orders/${id}/reorder`),
     onSuccess: (res) => {
-      const available = res.items.filter((i) => i.available);
-      if (available.length === 0) {
+      const needsConfig = res.items.filter((i) => i.available && i.requiresConfig);
+      const available = res.items.filter((i) => i.available && !i.requiresConfig);
+      if (available.length === 0 && needsConfig.length === 0) {
         toast.error('None of these items are available right now');
+        return;
+      }
+      if (available.length === 0) {
+        toast.message('Customise your bake — pick a size and flavour again');
+        navigate(`/chefs/${res.chefId}`);
         return;
       }
       // Cross-chef: clear first so addItem won't reject with DIFFERENT_CHEF.
@@ -203,10 +212,15 @@ export default function OrderDetailPage() {
         } as MenuItem;
         cart.addItem(menuItem, it.quantity, it.notes, mods.length ? mods : undefined);
       }
-      const dropped = res.items.length - available.length;
+      const dropped = res.items.length - available.length - needsConfig.length;
       if (dropped > 0) toast.warning(`${dropped} item${dropped > 1 ? 's are' : ' is'} no longer available`);
       if (available.some((i) => i.needsReview)) {
         toast.message('Some add-ons changed — please review your cart');
+      }
+      if (needsConfig.length > 0) {
+        toast.message(
+          `${needsConfig.length} bake${needsConfig.length > 1 ? 's need' : ' needs'} customising again`,
+        );
       }
       navigate(`/chefs/${res.chefId}`);
     },
@@ -468,6 +482,11 @@ export default function OrderDetailPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <h4 className="font-medium text-ink">{item.name}</h4>
+                      {/* What the bake was made as (#1065) — from the immutable
+                          per-line snapshot, so it matches the invoice. */}
+                      {item.bakerySummary && (
+                        <p className="text-sm text-ink-muted">{item.bakerySummary}</p>
+                      )}
                       <p className="text-sm text-ink-muted">Qty: {item.quantity}</p>
                       {item.notes && (
                         <p className="mt-1 text-sm text-ink-muted italic">Note: {item.notes}</p>

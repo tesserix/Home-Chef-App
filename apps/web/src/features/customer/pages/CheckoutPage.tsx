@@ -24,6 +24,7 @@ import { loadStripeJs } from "@/shared/utils/load-stripe";
 import { openCashfreeCheckout } from "@/shared/utils/cashfree";
 import { resolveCssVarColor } from "@/shared/utils/css-color";
 import { Button } from "@/shared/components/ui";
+import { earliestBakeryFulfillment } from "@homechef/mobile-shared/bakery";
 import type { Order, Address } from "@/shared/types";
 import { useDeliveryQuote, type CreditIntent } from "../hooks/useDeliveryQuote";
 import { surgeReasonText } from "../lib/surge";
@@ -70,6 +71,7 @@ interface DeliverySlot {
   window: string; // "12:00–14:00"
   remaining: number | null; // null = unlimited
   available: boolean;
+  scheduledFor: string; // the slot's instant, used to gate bakery lead time
 }
 interface DeliverySlotsResponse {
   slotsEnabled: boolean;
@@ -85,6 +87,20 @@ interface DietaryWarning {
 interface DietaryCheckResult {
   hasConflicts: boolean;
   warnings: DietaryWarning[];
+}
+
+// "Tomorrow, 4:30 pm" — the earliest a bake with a lead time can be had (#1065).
+function leadTimeLabel(d: Date): string {
+  const day = slotDayLabel(
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`,
+  );
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${day}, ${time}`;
 }
 
 // slotDayLabel turns a "YYYY-MM-DD" slot date into a label relative to today
@@ -179,6 +195,36 @@ export default function CheckoutPage() {
     () => groupFulfillmentTimes(fulfillmentTimesData?.times ?? []),
     [fulfillmentTimesData],
   );
+  // Bakery lead time (#1065). The server rejects an order placed sooner than a
+  // bake needs, so the customer is told here rather than at submit: ASAP is
+  // hidden, too-soon times are disabled, and placing the order is blocked.
+  const bakeryLeadHours = cart.items.reduce(
+    (max, i) => Math.max(max, i.bakeryLeadTimeHours ?? 0),
+    0,
+  );
+  const bakeryEarliest =
+    bakeryLeadHours > 0
+      ? earliestBakeryFulfillment(new Date(), bakeryLeadHours)
+      : null;
+  const chosenFulfillmentAt = useSlotPicker
+    ? (() => {
+        const s = availableSlots.find(
+          (x) => x.slot === selectedSlot?.slot && x.date === selectedSlot?.date,
+        );
+        return s ? new Date(s.scheduledFor) : null;
+      })()
+    : requestedTime
+      ? new Date(requestedTime.at)
+      : null;
+  const bakeryTimeTooSoon =
+    bakeryEarliest !== null &&
+    (chosenFulfillmentAt === null ||
+      chosenFulfillmentAt.getTime() < bakeryEarliest.getTime());
+  const bakeryLeadNotice =
+    bakeryEarliest === null
+      ? null
+      : `This order includes a bake that needs ${bakeryLeadHours}h notice — choose a time from ${leadTimeLabel(bakeryEarliest)} onwards.`;
+
   // Dietary & allergen conflict warning (#41) — server-checks the cart's items
   // against the customer's saved profile. Non-blocking.
   const cartItemIds = cart.items.map((i) => i.menuItemId);
@@ -421,6 +467,10 @@ export default function CheckoutPage() {
       );
       return;
     }
+    if (bakeryTimeTooSoon && bakeryLeadNotice) {
+      toast.error(bakeryLeadNotice);
+      return;
+    }
 
     setIsProcessing(true);
 
@@ -434,6 +484,9 @@ export default function CheckoutPage() {
           quantity: i.quantity,
           notes: i.notes || undefined,
           modifierOptionIds: i.modifiers?.map((m) => m.optionId),
+          // The bake as configured (#1065) — the server re-prices it from the
+          // spec and snapshots it onto the line.
+          bakery: i.bakery,
         })),
         chefId: cart.chefId,
         // Pickup carries no delivery address. Sending one anyway would make the
@@ -1179,11 +1232,20 @@ export default function CheckoutPage() {
                 {isPickup ? "Pickup time" : "Delivery time"}
               </h2>
 
+              {/* A bake can't be made to order in the next half hour (#1065). */}
+              {bakeryLeadNotice && (
+                <p className="mt-2 rounded-lg bg-herb-tint px-3 py-2 text-sm text-ink">
+                  {bakeryLeadNotice}
+                </p>
+              )}
+
               {useSlotPicker ? (
                 <div className="mt-4 space-y-3">
-                  {/* ASAP (default) */}
+                  {/* ASAP (default) — not offered when a bake needs notice. */}
                   <label
-                    className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
+                    className={`${
+                      bakeryEarliest !== null ? "hidden" : "flex"
+                    } cursor-pointer items-center gap-3 rounded-lg border p-4 ${
                       selectedSlot === null
                         ? "border-herb bg-herb-tint"
                         : "border-mist hover:bg-paper"
@@ -1213,19 +1275,27 @@ export default function CheckoutPage() {
                     const sel =
                       selectedSlot?.slot === s.slot &&
                       selectedSlot?.date === s.date;
+                    // Too soon for a bake that needs notice (#1065).
+                    const tooSoon =
+                      bakeryEarliest !== null &&
+                      new Date(s.scheduledFor).getTime() <
+                        bakeryEarliest.getTime();
                     return (
                       <label
                         key={`${s.date}-${s.slot}`}
-                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
-                          sel
-                            ? "border-herb bg-herb-tint"
-                            : "border-mist hover:bg-paper"
+                        className={`flex items-center gap-3 rounded-lg border p-4 ${
+                          tooSoon
+                            ? "cursor-not-allowed border-mist opacity-40"
+                            : sel
+                              ? "cursor-pointer border-herb bg-herb-tint"
+                              : "cursor-pointer border-mist hover:bg-paper"
                         }`}
                       >
                         <input
                           type="radio"
                           name="time"
                           checked={sel}
+                          disabled={tooSoon}
                           onChange={() =>
                             setSelectedSlot({ slot: s.slot, date: s.date })
                           }
@@ -1258,7 +1328,9 @@ export default function CheckoutPage() {
                     {/* As soon as ready — the default, and deliberately the widest
                         option so it reads as the primary choice. */}
                     <label
-                      className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
+                      className={`${
+                        bakeryEarliest !== null ? "hidden" : "flex"
+                      } cursor-pointer items-center gap-3 rounded-lg border p-4 ${
                         requestedTime === null
                           ? "border-herb bg-herb-tint"
                           : "border-mist hover:bg-paper"
@@ -1289,17 +1361,25 @@ export default function CheckoutPage() {
                         <div className="flex flex-wrap gap-2">
                           {group.times.map((t) => {
                             const sel = requestedTime?.at === t.at;
+                            // Too soon for a bake that needs notice (#1065).
+                            const tooSoon =
+                              bakeryEarliest !== null &&
+                              new Date(t.at).getTime() <
+                                bakeryEarliest.getTime();
                             return (
                               <button
                                 type="button"
                                 key={t.at}
+                                disabled={tooSoon}
                                 onClick={() => setRequestedTime(t)}
                                 aria-pressed={sel}
                                 aria-label={`${isPickup ? "Pickup" : "Delivery"} around ${t.label}, ${t.day} ${t.meal}`}
                                 className={`min-h-11 rounded-lg border px-4 py-2 text-sm tabular-nums transition-colors ${
-                                  sel
-                                    ? "border-herb bg-herb-tint font-medium text-herb"
-                                    : "border-mist text-ink-soft hover:bg-paper"
+                                  tooSoon
+                                    ? "border-mist text-ink-soft opacity-40"
+                                    : sel
+                                      ? "border-herb bg-herb-tint font-medium text-herb"
+                                      : "border-mist text-ink-soft hover:bg-paper"
                                 }`}
                               >
                                 {t.label}
@@ -1685,7 +1765,10 @@ export default function CheckoutPage() {
                   (!isPickup && !selectedAddress) ||
                   !acceptedTerms ||
                   addressNeedsLocation ||
-                  deliveryOutOfRange
+                  deliveryOutOfRange ||
+                  // A bake ordered sooner than its lead time is rejected by the
+                  // server — block it here, where the fix is one tap away (#1065).
+                  bakeryTimeTooSoon
                 }
                 rightIcon={
                   !isProcessing ? (

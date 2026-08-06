@@ -31,6 +31,42 @@ var DietOptions = []DietaryOption{
 	{"dairy-free", "Dairy-Free"},
 	{"nut-free", "Nut-Free"},
 	{"low-carb", "Low-Carb"},
+	// Bakery-led diets (#1065). Eggless is the single most-asked-for filter on an
+	// Indian cake order, and diabetics ask for sugar-free by name — both matter
+	// enough to be first-class tokens rather than free text in a description.
+	{"eggless", "Eggless"},
+	{"contains-egg", "Contains Egg"},
+	{"sugar-free", "Sugar-Free"},
+	{"no-added-sugar", "No Added Sugar"},
+	{"whole-wheat", "Whole Wheat"},
+	{"vegan-bake", "Vegan Bake"},
+}
+
+// BakeryDietOptions is the subset the bakery filters and the cake configurator
+// surface — the rest of the taxonomy is noise on a cake.
+var BakeryDietOptions = []DietaryOption{
+	{"eggless", "Eggless"},
+	{"contains-egg", "Contains Egg"},
+	{"vegan", "Vegan"},
+	{"sugar-free", "Sugar-Free"},
+	{"no-added-sugar", "No Added Sugar"},
+	{"gluten-free", "Gluten-Free"},
+	{"dairy-free", "Dairy-Free"},
+	{"nut-free", "Nut-Free"},
+	{"whole-wheat", "Whole Wheat"},
+	{"jain", "Jain"},
+}
+
+// BakeryAllergenOptions is the allergen subset a baker actually declares.
+var BakeryAllergenOptions = []DietaryOption{
+	{"gluten", "Gluten (wheat, barley, rye)"},
+	{"eggs", "Eggs"},
+	{"dairy", "Dairy (milk)"},
+	{"peanuts", "Peanuts"},
+	{"tree-nuts", "Tree Nuts"},
+	{"soy", "Soy"},
+	{"sesame", "Sesame"},
+	{"sulphites", "Sulphites"},
 }
 
 // AllergenOptions is the canonical allergen vocabulary — the full set of major
@@ -56,6 +92,19 @@ var AllergenOptions = []DietaryOption{
 
 // vegDiets are the diet preferences that a non-vegetarian dish violates.
 var vegDiets = map[string]bool{"vegetarian": true, "vegan": true, "jain": true}
+
+// dietForbiddenAllergens maps a diet to the allergens it rules out by
+// definition (#1065). An eggless customer never has to also list eggs as an
+// allergy for us to warn them off an egg cake — the diet already said so.
+var dietForbiddenAllergens = map[string][]string{
+	"eggless":     {"eggs"},
+	"vegan":       {"eggs", "dairy", "fish", "shellfish", "molluscs"},
+	"vegan-bake":  {"eggs", "dairy"},
+	"gluten-free": {"gluten"},
+	"dairy-free":  {"dairy"},
+	"nut-free":    {"peanuts", "tree-nuts"},
+	"jain":        {"eggs"},
+}
 
 // DietaryConflict describes one reason a dish clashes with a customer's profile.
 type DietaryConflict struct {
@@ -103,25 +152,35 @@ func labelFor(token string, options []DietaryOption) string {
 func DietaryConflicts(dietPrefs, avoidAllergens, itemDietaryTags, itemAllergens []string, itemIsVeg *bool) []DietaryConflict {
 	conflicts := []DietaryConflict{}
 
-	// Allergen clashes: any allergen the dish declares that the customer avoids.
+	prefs := normTokens(dietPrefs)
+
+	// Allergen clashes: any allergen the dish declares that the customer avoids,
+	// either explicitly or by following a diet that rules it out.
 	avoid := normTokens(avoidAllergens)
+	for d := range prefs {
+		for _, a := range dietForbiddenAllergens[d] {
+			avoid[a] = true
+		}
+	}
 	if len(avoid) > 0 {
+		seen := map[string]bool{}
 		for _, a := range itemAllergens {
 			key := strings.ToLower(strings.TrimSpace(a))
-			if avoid[key] {
-				conflicts = append(conflicts, DietaryConflict{
-					Type:   "allergen",
-					Label:  labelFor(a, AllergenOptions),
-					Detail: "Contains " + labelFor(a, AllergenOptions) + ", which you avoid",
-				})
+			if !avoid[key] || seen[key] {
+				continue
 			}
+			seen[key] = true
+			conflicts = append(conflicts, DietaryConflict{
+				Type:   "allergen",
+				Label:  labelFor(a, AllergenOptions),
+				Detail: "Contains " + labelFor(a, AllergenOptions) + ", which you avoid",
+			})
 		}
 	}
 
 	// Diet clash: a veg-following customer + an explicitly non-veg dish. We only
 	// trust an explicit signal (IsVeg == false, or a non-veg dietary tag) — the
 	// mere absence of a "vegetarian" tag is not treated as non-veg.
-	prefs := normTokens(dietPrefs)
 	wantsVeg := false
 	var vegLabel string
 	for d := range prefs {
