@@ -174,7 +174,12 @@ function PlanRow({ plan }: { plan: MealPlan }) {
           </Text>
           <View style={styles.cardBottom}>
             <Text style={styles.meta}>
-              {formatDateRange(plan.startDate, plan.endDate)} · {days.length} day
+              {/* MEALS, not days (#1040). `plan.days` is the array of booked
+                  meals — a plan can book lunch AND dinner on one date — so the
+                  count contradicted the date range beside it: "7 Aug – 9 Aug ·
+                  5 days" for three calendar dates, "4 Aug – 4 Aug · 2 days" for
+                  one. Meals is also what the customer is buying. */}
+              {formatDateRange(plan.startDate, plan.endDate)} · {days.length} meal
               {days.length === 1 ? '' : 's'} · {formatMoney(plan.total)}
             </Text>
             <ChevronRight size={18} color={customerColors.charcoal.soft} />
