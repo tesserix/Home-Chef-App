@@ -1,4 +1,19 @@
-import auth, { FirebaseAuthTypes } from "@react-native-firebase/auth";
+// Modular API throughout (v22+). The namespaced `auth().x()` shape still works
+// but logs a deprecation warning on every call, which buried real errors.
+import {
+  AppleAuthProvider,
+  GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  getAuth,
+  getIdToken as getFirebaseIdToken,
+  sendPasswordResetEmail as sendFirebasePasswordResetEmail,
+  signInWithCredential,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  updateProfile,
+  verifyPhoneNumber,
+} from "@react-native-firebase/auth";
+import type { FirebaseAuthTypes } from "@react-native-firebase/auth";
 import {
   clearDevSimSession,
   devSimSignIn,
@@ -7,8 +22,8 @@ import {
 } from "./dev-sim-auth";
 
 export async function signInWithGoogleCredential(idToken: string, accessToken?: string) {
-  const cred = auth.GoogleAuthProvider.credential(idToken, accessToken);
-  return auth().signInWithCredential(cred);
+  const cred = GoogleAuthProvider.credential(idToken, accessToken);
+  return signInWithCredential(getAuth(), cred);
 }
 
 /**
@@ -33,13 +48,13 @@ export async function signInWithAppleCredential(
   rawNonce: string,
   fullName?: AppleFullName | null
 ): Promise<FirebaseAuthTypes.UserCredential> {
-  const cred = auth.AppleAuthProvider.credential(idToken, rawNonce);
-  const result = await auth().signInWithCredential(cred);
+  const cred = AppleAuthProvider.credential(idToken, rawNonce);
+  const result = await signInWithCredential(getAuth(), cred);
 
   const displayName = buildDisplayName(fullName);
   if (displayName && !result.user.displayName) {
     try {
-      await result.user.updateProfile({ displayName });
+      await updateProfile(result.user, { displayName });
     } catch {
       // Best-effort: name capture is non-fatal. The user remains signed in.
     }
@@ -61,11 +76,11 @@ function buildDisplayName(fullName?: AppleFullName | null): string {
 
 export async function signInWithEmail(email: string, password: string) {
   try {
-    return await auth().signInWithEmailAndPassword(email, password);
+    return await signInWithEmailAndPassword(getAuth(), email, password);
   } catch (err) {
     // iOS Simulator has no keychain entitlement; fall back to GIP REST in dev.
     if (__DEV__ && isKeychainError(err)) {
-      await devSimSignIn(auth().tenantId ?? "", email, password);
+      await devSimSignIn(getAuth().tenantId ?? "", email, password);
       return null;
     }
     throw err;
@@ -73,26 +88,28 @@ export async function signInWithEmail(email: string, password: string) {
 }
 
 export async function registerWithEmail(email: string, password: string) {
-  return auth().createUserWithEmailAndPassword(email, password);
+  return createUserWithEmailAndPassword(getAuth(), email, password);
 }
 
 export async function startPhoneSignIn(phone: string) {
-  return auth().verifyPhoneNumber(phone);
+  // 60s is the auto-verify timeout the namespaced call defaulted to; modular
+  // makes it a required argument.
+  return verifyPhoneNumber(getAuth(), phone, 60);
 }
 
 export async function getIdToken(forceRefresh = false): Promise<string | null> {
-  const u = auth().currentUser;
-  if (u) return u.getIdToken(forceRefresh);
+  const u = getAuth().currentUser;
+  if (u) return getFirebaseIdToken(u, forceRefresh);
   return __DEV__ ? getDevSimIdToken() : null;
 }
 
 export async function signOut(): Promise<void> {
   clearDevSimSession();
-  return auth().signOut();
+  return firebaseSignOut(getAuth());
 }
 
 export async function sendPasswordResetEmail(email: string): Promise<void> {
-  return auth().sendPasswordResetEmail(email);
+  return sendFirebasePasswordResetEmail(getAuth(), email);
 }
 
 /**
@@ -100,7 +117,7 @@ export async function sendPasswordResetEmail(email: string): Promise<void> {
  * 'password', 'google.com', 'apple.com'. Empty array when signed out.
  */
 export function getLinkedProviderIds(): string[] {
-  return auth().currentUser?.providerData.map((p) => p.providerId) ?? [];
+  return getAuth().currentUser?.providerData.map((p) => p.providerId) ?? [];
 }
 
 /**
