@@ -1,4 +1,6 @@
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { UtensilsCrossed } from 'lucide-react-native';
 import { formatMoney } from '../../lib/format';
 import { useRouter } from 'expo-router';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -13,6 +15,10 @@ import { HAIRLINE } from '../../lib/hairline';
 // Android ripple tints — translucent tokens, never a new literal colour.
 const CARD_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
 const CONFIRM_RIPPLE = `${customerColors.canvas}33`;
+
+// Same blurhash placeholder ChefCard/MenuItemCard/MealPlanDayList use — one
+// photo placeholder token across the app, not a per-screen invention.
+const PHOTO_BLURHASH = 'L6PZfSi_.AyE_3t7t7R**0o#DgR4';
 
 interface OrderCardProps {
   order: Order;
@@ -180,8 +186,38 @@ export function OrderCard({ order }: OrderCardProps) {
           ]}
         >
           <View style={styles.cardInner}>
-            {/* Top row: chef name + status chip */}
+            {/* Top row: chef photo + chef name + status chip */}
             <View style={styles.topRow}>
+              {/* Chef face (#photo-forward-pass) — the API already resolves
+                  chef.imageUrl (see hooks/useOrderHistory.ts) but the card
+                  never rendered it, leaving a food app's history screen 100%
+                  text. Fixed 48x48 footprint either way so a photo-less order
+                  never shifts layout relative to one with a photo, matching
+                  the MealPlanDayList / ChefCard placeholder convention. */}
+              <View
+                style={[styles.avatarWrap, weight === 'quiet' && styles.avatarWrapQuiet]}
+              >
+                {order.chef?.imageUrl ? (
+                  <Image
+                    source={{ uri: order.chef.imageUrl }}
+                    style={styles.avatarImage}
+                    contentFit="cover"
+                    placeholder={{ blurhash: PHOTO_BLURHASH }}
+                    transition={150}
+                    accessibilityElementsHidden
+                  />
+                ) : (
+                  <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
+                    <UtensilsCrossed
+                      size={20}
+                      color={customerColors.charcoal.soft}
+                      strokeWidth={1.5}
+                      accessibilityElementsHidden
+                    />
+                  </View>
+                )}
+              </View>
+
               <View style={styles.chefInfo}>
                 <Text
                   style={[styles.chefName, weight === 'quiet' && styles.chefNameQuiet]}
@@ -314,13 +350,46 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
 
-  // — Chef name + order number column
+  // — Photo + chef name/order number + status chip
+  // Centered (not flex-start): the 48px avatar is taller than the two-line
+  // text column next to it, and top-aligning them left the text looking
+  // stranded against the photo's white space.
   topRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
   },
+
+  // Chef avatar — fixed 48x48 footprint whether or not the order carries a
+  // photo, so no row ever shifts relative to its neighbours. Hairline ring
+  // for definition (white card on white canvas), never coral — the status
+  // chip already owns this card's one accent moment.
+  avatarWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: HAIRLINE,
+    borderColor: customerColors.hairline,
+    backgroundColor: customerColors.surface.soft,
+  },
+  // Cancelled orders recede — the face dims along with the rest of the card.
+  avatarWrapQuiet: {
+    opacity: 0.55,
+  },
+  avatarImage: {
+    width: 48,
+    height: 48,
+    // Fill on the Image itself so there's no blank flash before the
+    // blurhash/photo paints.
+    backgroundColor: customerColors.surface.soft,
+  },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   chefInfo: {
     flex: 1,
     gap: 3,
@@ -350,15 +419,18 @@ const styles = StyleSheet.create({
   },
 
   // — Status chip (radius-full, tint bg + dark text, Inter-SemiBold caption)
+  // One of the card's two scan anchors (the other is the total below) — sized
+  // up a touch from the original 11pt/4pt so it reads as a destination, not
+  // an afterthought next to the new photo.
   statusChip: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    alignSelf: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
     borderRadius: 9999,
   },
   statusText: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.1,
   },
 
@@ -384,10 +456,15 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     flex: 1,
   },
+  // The card's other scan anchor. Geist (not Inter) per the type system's
+  // "brand numerals" allowance — matches how a total/amount already reads
+  // elsewhere in this app (e.g. app/payment/hold.tsx) — and a bump from 15pt
+  // so it doesn't blend into the same weight as the chef name above it.
   total: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 15,
+    fontFamily: 'Geist',
+    fontSize: 17,
     color: customerColors.charcoal.DEFAULT,
+    letterSpacing: -0.2,
     // Tabular numerals so price digits are monospaced
     fontVariant: ['tabular-nums'],
   },

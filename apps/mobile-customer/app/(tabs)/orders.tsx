@@ -65,16 +65,19 @@ function SkeletonCard() {
   return (
     <View style={skeletonStyles.card}>
       <View style={skeletonStyles.topRow}>
+        {/* Matches OrderCard's 48x48 chef-photo footprint so the swap from
+            skeleton to real content never jumps the row height. */}
+        <View style={skeletonStyles.avatar} />
         <View style={skeletonStyles.col}>
           <View style={[skeletonStyles.line, { width: '60%', height: 14 }]} />
           <View style={[skeletonStyles.line, { width: '35%', height: 11 }]} />
         </View>
-        <View style={[skeletonStyles.chip, { width: 72, height: 22 }]} />
+        <View style={[skeletonStyles.chip, { width: 76, height: 24 }]} />
       </View>
       <View style={skeletonStyles.hairline} />
       <View style={skeletonStyles.bottomRow}>
         <View style={[skeletonStyles.line, { width: '50%', height: 12 }]} />
-        <View style={[skeletonStyles.line, { width: '18%', height: 14 }]} />
+        <View style={[skeletonStyles.line, { width: '20%', height: 16 }]} />
       </View>
     </View>
   );
@@ -93,9 +96,15 @@ const skeletonStyles = StyleSheet.create({
   },
   topRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: customerColors.hairline,
   },
   col: { flex: 1, gap: 6 },
   line: {
