@@ -69,8 +69,8 @@ import {
 } from '@homechef/mobile-shared/hooks';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
-import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
+import { useDiscoveryChefs } from '../../hooks/useDiscoveryChefs';
 import { useCustomerCoords, useActiveAddress } from '../../hooks/useCustomerCoords';
 import { useWallet } from '../../hooks/useWallet';
 
@@ -212,8 +212,10 @@ export default function HomeScreen() {
     limit: 20,
   };
 
-  const { data, isLoading, isFetching, refetch } = useChefs(filters);
-  const chefs = data?.data ?? [];
+  // Guests with no kitchen in range fall back to kitchens beyond their area, so
+  // guest browsing always has something real to open.
+  const { chefs, isLoading, isFetching, refetch, showingBeyondArea } =
+    useDiscoveryChefs(filters);
 
   // Staggered card entrances (reduced-motion gated). No bounce — ease-out-quart.
   const reduceMotion = useReducedMotion();
@@ -568,6 +570,15 @@ export default function HomeScreen() {
           ) : null}
         </View>
       </View>
+
+      {/* Nobody cooks where the guest is standing, so the feed reached past their
+          area. Say so plainly — these kitchens can't deliver to them yet. */}
+      {showingBeyondArea ? (
+        <Text style={styles.beyondAreaNote}>
+          No kitchens near you yet — here&apos;s what home chefs are cooking
+          elsewhere. Set your address to see who can deliver to you.
+        </Text>
+      ) : null}
 
       {/* Today's (or the next) meal for a plan holder (#1037). Renders nothing
           for everyone else, so Home is unchanged for the majority. It sits at
@@ -1078,6 +1089,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 12,
     color: customerColors.charcoal.DEFAULT,
+  },
+
+  beyondAreaNote: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    lineHeight: 18,
+    color: customerColors.charcoal.soft,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 12,
   },
 
   // ── List layout ───────────────────────────────────────────────────────────
