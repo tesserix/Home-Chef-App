@@ -31,13 +31,13 @@ Three native mobile apps (Customer, Vendor/Chef, Delivery Driver) for the Home C
 - Node.js 22.x (all frontend applications - Vite, React)
 - Docker (multi-stage containerization for all services)
 - Alpine Linux 3.19 (production container images)
-- npm (sunset web apps: web, vendor-portal, delivery-portal — see SUNSET.md in each)
+- npm (web apps: `apps/web` is ACTIVE; `vendor-portal` + `delivery-portal` are sunset — see SUNSET.md in each)
 - Go modules (backend)
 ## Frameworks
 - Gin v1.10.0 (`apps/api/go.mod`) - HTTP framework for all Go services
 - GORM v1.25.12 + PostgreSQL driver - ORM for database operations
 - PostgreSQL 16 - Primary data store (via docker-compose)
-- Vite 6.0.3 - Build tool and dev server (web, vendor-portal, delivery-portal — all sunset, see SUNSET.md in each)
+- Vite 6.0.3 - Build tool and dev server (`apps/web` — ACTIVE; `vendor-portal` + `delivery-portal` — sunset, see SUNSET.md in each)
 - React 19.0.0 - UI rendering for all frontend applications
 - React Router v7.1.0 - Client-side routing
 - Radix UI (comprehensive primitives: avatar, checkbox, dialog, dropdown, label, select, separator, slot, switch, tabs, toast, tooltip)
@@ -47,8 +47,8 @@ Three native mobile apps (Customer, Vendor/Chef, Delivery Driver) for the Home C
 - Lucide React v0.468.0 - Icon library
 - `class-variance-authority` v0.7.1 - Component variant management
 - `clsx` v2.1.1 - Conditional class names
-- Zustand v5.0.2 - Client state (web, vendor-portal, delivery-portal — all sunset, see SUNSET.md in each)
-- TanStack React Query v5.62.8 - Server state and caching (web, vendor-portal, delivery-portal — all sunset, see SUNSET.md in each)
+- Zustand v5.0.2 - Client state (`apps/web` — ACTIVE; `vendor-portal` + `delivery-portal` — sunset)
+- TanStack React Query v5.62.8 - Server state and caching (`apps/web` — ACTIVE; `vendor-portal` + `delivery-portal` — sunset)
 - React Context - Built-in context API usage
 - React Hook Form v7.54.1 - Form handling across all frontends
 - Zod v3.24.1 - TypeScript-first schema validation
@@ -266,7 +266,8 @@ Three native mobile apps (Customer, Vendor/Chef, Delivery Driver) for the Home C
 - Depends on: PostgreSQL, Redis (optional), NATS (optional), GCS, Razorpay, SendGrid, etc.
 - Used by: All four frontends via HTTP requests
 - Purpose: React SPA with client-side routing, forms, state management, UI rendering
-- Locations: `apps/web`, `apps/vendor-portal`, `apps/delivery-portal` — **all sunset** (see `SUNSET.md` in each, and issue #21). The live products are the Expo apps: `apps/mobile-customer`, `apps/mobile-vendor`, `apps/mobile-delivery`.
+- Locations: `apps/web` is **ACTIVE** — the customer web ordering app, built and deployed on every `main` commit since 2026-07-27 (it was paused 2026-06-11 and returned; its `SUNSET.md` is kept only for the history and its "paused" statements no longer hold). `apps/vendor-portal` and `apps/delivery-portal` are **sunset** — decommissioned, app-only now (see `SUNSET.md` in each, and issue #21).
+- The mobile products are the Expo apps: `apps/mobile-customer`, `apps/mobile-vendor`, `apps/mobile-delivery`. "Web parity" work is therefore still meaningful for the customer web app, and moot for the two portals.
 - Depends on: HTTP API, local storage, Zustand stores
 - Used by: End users via browsers
 
