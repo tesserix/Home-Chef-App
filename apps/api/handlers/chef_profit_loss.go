@@ -102,16 +102,28 @@ func (h *ChefHandler) GetChefProfitLoss(c *gin.Context) {
 	// Bucketed on expense_date, not created_at: a chef entering yesterday's gas
 	// bill this morning belongs in yesterday's week, which is what the FY
 	// statement already does.
+	// No deleted_at predicate: ChefExpense has no soft-delete field and the table
+	// has no such column, so this filter made the statement error on every call
+	// (#1028). The error was the one unchecked Scan in this file, so expenseRows
+	// stayed empty and the P&L reported Expenses ₹0 and a profit equal to net
+	// earnings — while Expenses & tax, reading the same rows, showed the real
+	// total. Two money screens disagreeing, silently. Expenses are hard-deleted;
+	// there is nothing to exclude.
 	var expenseRows []plCategoryLine
-	database.DB.Raw(`
+	if err := database.DB.Raw(`
 		SELECT category, COALESCE(SUM(amount), 0) AS amount
 		FROM   chef_expenses
 		WHERE  chef_id       = ?
 		AND    expense_date >= ?
-		AND    deleted_at    IS NULL
 		GROUP  BY category
 		ORDER  BY amount DESC
-	`, chef.ID, start.UTC()).Scan(&expenseRows)
+	`, chef.ID, start.UTC()).Scan(&expenseRows).Error; err != nil {
+		// Fail loudly. A money figure that silently degrades to zero is worse
+		// than an error the caller can see and retry: it looks like a chef with
+		// no costs, and it is what let this ship unnoticed.
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load expenses"})
+		return
+	}
 
 	var expenses float64
 	for _, e := range expenseRows {
