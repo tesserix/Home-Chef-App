@@ -92,13 +92,14 @@ export default function FeedbackScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
                   accessibilityLabel={label}
-                  // Selected reads as a coral TINT, not a coral outline. A 1px
-                  // border on a rounded shape is resolved to whole dp by
-                  // Android, so a saturated outline renders chunky and breaks up
-                  // at the corners. The tint also matches how selection is shown
-                  // everywhere else in this app.
-                  className={`flex-1 min-h-[88px] rounded-lg border px-3 py-3 gap-1 ${
-                    selected ? 'border-coral-tint bg-coral-tint' : 'border-hairline bg-canvas'
+                  // No border at all — selection is a FILL. Any border on a
+                  // rounded shape is resolved to whole dp by Android and renders
+                  // rough at the corners, which is visible even when the border
+                  // colour matches the fill. Two fills also keep both cards on
+                  // an identical box model, so selecting one cannot shift its
+                  // size by a pixel.
+                  className={`flex-1 min-h-[88px] rounded-lg px-3 py-3 gap-1 ${
+                    selected ? 'bg-coral-tint' : 'bg-surface-soft'
                   }`}
                 >
                   <Icon
