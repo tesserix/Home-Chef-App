@@ -18,7 +18,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as Clipboard from 'expo-clipboard';
 import {
   Bell,
   BookOpen,
@@ -32,6 +31,7 @@ import {
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
+import { copyLink } from '../lib/copy-link';
 import { useMyArticles } from '../hooks/useChefBook';
 import {
   SHARE_TARGETS,
@@ -109,8 +109,12 @@ export default function PromoteScreen() {
 
   const onCopy = useCallback(async () => {
     if (!url) return;
-    await Clipboard.setStringAsync(url);
-    showToast({ message: 'Link copied', tone: 'success' });
+    const copied = await copyLink(url);
+    showToast(
+      copied
+        ? { message: 'Link copied', tone: 'success' }
+        : { message: 'Could not copy. Long-press the link instead.', tone: 'error' },
+    );
   }, [url, showToast]);
 
   return (
