@@ -69,6 +69,24 @@ func runEasySplitReconcile(ctx context.Context) {
 	ReconcileEasySplitVendors(ctx, database.DB, easySplitReconcileBatch)
 }
 
+// easySplitReconcileCandidates selects the chefs one pass is worth spending
+// Cashfree calls on: a payout destination on file, and a registration that can
+// still move. Terminal and long-dead ones are excluded in SQL rather than in Go
+// so the batch limit isn't spent on rows that would be skipped anyway — the
+// same rule EasySplitNeedsReconcile states for a single chef (#1083).
+func easySplitReconcileCandidates(db *gorm.DB, limit int) ([]models.ChefProfile, error) {
+	var chefs []models.ChefProfile
+	err := db.Preload("User").
+		Where("COALESCE(payout_method, '') <> ''").
+		Where("UPPER(COALESCE(cashfree_vendor_status, '')) NOT IN ?",
+			[]string{CashfreeVendorActive, CashfreeVendorDeleted, CashfreeVendorBankValidationFailed}).
+		Where("COALESCE(cashfree_vendor_status, '') = '' OR updated_at > ?",
+			time.Now().Add(-easySplitDeadAfter)).
+		Limit(limit).
+		Find(&chefs).Error
+	return chefs, err
+}
+
 // ReconcileEasySplitVendors retries registration / refreshes status for chefs
 // that have payout details but no ACTIVE Easy Split vendor. Returns how many
 // chefs it moved to ACTIVE, and how many it attempted.
@@ -80,15 +98,8 @@ func ReconcileEasySplitVendors(ctx context.Context, db *gorm.DB, limit int) (act
 		return 0, 0
 	}
 
-	var chefs []models.ChefProfile
-	// Only chefs who have actually given us a destination: without a payout
-	// method there is nothing to register, and sweeping them would burn a
-	// Cashfree call per pass forever.
-	if err := db.Preload("User").
-		Where("COALESCE(payout_method, '') <> ''").
-		Where("COALESCE(cashfree_vendor_status, '') <> ?", CashfreeVendorActive).
-		Limit(limit).
-		Find(&chefs).Error; err != nil {
+	chefs, err := easySplitReconcileCandidates(db, limit)
+	if err != nil {
 		log.Printf("easy-split-reconcile: query failed: %v", err)
 		return 0, 0
 	}

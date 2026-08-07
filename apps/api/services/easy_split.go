@@ -161,14 +161,7 @@ func EnsureEasySplitVendorWith(
 		return nil, err
 	}
 
-	if uErr := db.Model(&models.ChefProfile{}).Where("id = ?", chef.ID).Updates(map[string]any{
-		"cashfree_vendor_id":     vendor.VendorID,
-		"cashfree_vendor_status": vendor.Status,
-	}).Error; uErr != nil {
-		return vendor, fmt.Errorf("easy-split: vendor %s registered but not persisted: %w", vendor.VendorID, uErr)
-	}
-	chef.CashfreeVendorID = vendor.VendorID
-	chef.CashfreeVendorStatus = vendor.Status
+	ApplyEasySplitVendorStatus(db, chef, vendor.VendorID, vendor.Status)
 	_ = ctx
 	return vendor, nil
 }
@@ -205,13 +198,8 @@ func RefreshEasySplitVendor(_ context.Context, db *gorm.DB, chef *models.ChefPro
 	if err != nil {
 		return nil, err
 	}
-	if uErr := db.Model(&models.ChefProfile{}).Where("id = ?", chef.ID).Updates(map[string]any{
-		"cashfree_vendor_id":     vendor.VendorID,
-		"cashfree_vendor_status": vendor.Status,
-	}).Error; uErr != nil {
-		return vendor, fmt.Errorf("easy-split: vendor %s refreshed but not persisted: %w", vendor.VendorID, uErr)
-	}
-	chef.CashfreeVendorID = vendor.VendorID
-	chef.CashfreeVendorStatus = vendor.Status
+	// A transport error never reaches here, so a Cashfree outage leaves the
+	// stored status exactly as it was (#1083) — never marks a chef unpayable.
+	ApplyEasySplitVendorStatus(db, chef, vendor.VendorID, vendor.Status)
 	return vendor, nil
 }

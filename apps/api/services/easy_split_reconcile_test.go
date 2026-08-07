@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,7 @@ func setupEasySplitReconcileDB(t *testing.T) *gorm.DB {
 		business_name text DEFAULT '', pan_number text DEFAULT '',
 		payout_method text DEFAULT '',
 		cashfree_vendor_id text DEFAULT '', cashfree_vendor_status text DEFAULT '',
-		razorpay_account_id text DEFAULT '', deleted_at datetime
+		razorpay_account_id text DEFAULT '', updated_at datetime, deleted_at datetime
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE users (id text PRIMARY KEY, email text, phone text, deleted_at datetime)`).Error)
 	return db
@@ -35,22 +36,25 @@ func setupEasySplitReconcileDB(t *testing.T) *gorm.DB {
 
 func insertChef(t *testing.T, db *gorm.DB, payoutMethod, vendorID, vendorStatus string) uuid.UUID {
 	t.Helper()
+	return insertChefTouched(t, db, payoutMethod, vendorID, vendorStatus, time.Now())
+}
+
+func insertChefTouched(t *testing.T, db *gorm.DB, payoutMethod, vendorID, vendorStatus string, updatedAt time.Time) uuid.UUID {
+	t.Helper()
 	id := uuid.New()
 	require.NoError(t, db.Exec(
-		`INSERT INTO chef_profiles (id, user_id, mode, payout_method, cashfree_vendor_id, cashfree_vendor_status) VALUES (?,?,?,?,?,?)`,
-		id.String(), uuid.New().String(), "live", payoutMethod, vendorID, vendorStatus).Error)
+		`INSERT INTO chef_profiles (id, user_id, mode, payout_method, cashfree_vendor_id, cashfree_vendor_status, updated_at)
+		 VALUES (?,?,?,?,?,?,?)`,
+		id.String(), uuid.New().String(), "live", payoutMethod, vendorID, vendorStatus, updatedAt).Error)
 	return id
 }
 
-// pendingChefs runs the sweep's own selection criteria, so the test pins the
-// query rather than a copy of it.
+// pendingChefs calls the sweep's own selection, so the test pins the query
+// rather than a copy of it that can drift.
 func pendingChefs(t *testing.T, db *gorm.DB) []models.ChefProfile {
 	t.Helper()
-	var chefs []models.ChefProfile
-	require.NoError(t, db.
-		Where("COALESCE(payout_method, '') <> ''").
-		Where("COALESCE(cashfree_vendor_status, '') <> ?", CashfreeVendorActive).
-		Find(&chefs).Error)
+	chefs, err := easySplitReconcileCandidates(db, easySplitReconcileBatch)
+	require.NoError(t, err)
 	return chefs
 }
 
@@ -82,6 +86,32 @@ func TestEasySplitReconcile_ActiveIsMatchedCaseInsensitively(t *testing.T) {
 	// stored lowercase must not be swept forever.
 	insertChef(t, db, "bank", "vend_1", "ACTIVE")
 	require.Empty(t, pendingChefs(t, db))
+}
+
+// A state Cashfree will never move out of, and a registration that has not
+// moved in months, both cost a Cashfree call every 30 minutes and can only ever
+// return the same answer (#1083).
+func TestEasySplitReconcile_StopsPollingTerminalAndDeadRegistrations(t *testing.T) {
+	db := setupEasySplitReconcileDB(t)
+	fresh := time.Now().Add(-time.Hour)
+	stale := time.Now().Add(-90 * 24 * time.Hour)
+
+	verifying := insertChefTouched(t, db, "bank", "vend_1", CashfreeVendorInBankValidation, fresh)
+	insertChefTouched(t, db, "bank", "vend_2", CashfreeVendorDeleted, fresh)
+	insertChefTouched(t, db, "bank", "vend_3", CashfreeVendorBankValidationFailed, fresh)
+	insertChefTouched(t, db, "bank", "vend_4", CashfreeVendorInBankValidation, stale)
+	// Never registered: the age of the row says nothing about a registration,
+	// so the sweep stays their only retry.
+	neverRegistered := insertChefTouched(t, db, "bank", "", "", stale)
+
+	got := pendingChefs(t, db)
+	ids := map[uuid.UUID]bool{}
+	for _, c := range got {
+		ids[c.ID] = true
+	}
+	require.Len(t, got, 2)
+	require.True(t, ids[verifying])
+	require.True(t, ids[neverRegistered])
 }
 
 func TestReconcileEasySplitVendors_GuardsAgainstNoWork(t *testing.T) {

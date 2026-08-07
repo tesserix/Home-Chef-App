@@ -482,6 +482,10 @@ func (h *PaymentHandler) CashfreeWebhook(c *gin.Context) {
 	case cfWebhookRefundStatus:
 		derr = h.handleCashfreeRefundStatus(event.Data, signedMode)
 	default:
+		if isCashfreeVendorEvent(event.Type) {
+			derr = h.handleCashfreeVendorStatus(event.Data)
+			break
+		}
 		log.Printf("Unhandled Cashfree webhook event: %s", event.Type)
 	}
 	if derr != nil {

@@ -48,7 +48,8 @@ func PayoutRegistrationFor(chef *models.ChefProfile) PayoutRegistration {
 	case strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorActive):
 		return PayoutRegistration{State: PayoutRegistrationVerified, Message: "Verified — payouts active"}
 	case strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorBlocked),
-		strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorDeleted):
+		strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorDeleted),
+		strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorBankValidationFailed):
 		return PayoutRegistration{
 			State:   PayoutRegistrationFailed,
 			Message: "Couldn't verify — please check your details",
