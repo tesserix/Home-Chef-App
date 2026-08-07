@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -134,6 +135,57 @@ func (c *CashfreeClient) CreateVendor(req *CashfreeVendorRequest) (*CashfreeVend
 		return nil, fmt.Errorf("cashfree: parse vendor response: %w", err)
 	}
 	return &result, nil
+}
+
+// ErrEasySplitRetryable — Cashfree has not finished syncing the payment yet.
+// The same call a couple of minutes later succeeds, so the caller must retry
+// rather than give up on the split rail.
+var ErrEasySplitRetryable = errors.New("cashfree: order not ready to split yet")
+
+type cashfreeSplitRequest struct {
+	Split []CashfreeVendorSplit `json:"split"`
+	// DisableSplit closes the split window for this order. We split once, for
+	// one vendor, so leaving it open would hold the vendor's balance
+	// provisional until the delay lapses for no gain.
+	DisableSplit bool `json:"disable_split"`
+}
+
+// SplitOrderAfterPayment allocates a vendor's share of an order that has
+// already been paid — the ADR-0003 rail, replacing order_splits at capture so
+// the release governor decides before the money moves.
+//
+// idempotencyKey is what makes a retry after a timeout safe; Cashfree dedupes
+// on it. An already-applied split comes back as "transaction already
+// processed" (409, and 400 in the sandbox) and is reported as success: the chef
+// has been paid, and calling it a failure would send the order down the payout
+// rail and pay them twice.
+func (c *CashfreeClient) SplitOrderAfterPayment(orderID string, splits []CashfreeVendorSplit, idempotencyKey string) error {
+	if orderID == "" || len(splits) == 0 {
+		return fmt.Errorf("cashfree: split for order %q needs at least one vendor share", orderID)
+	}
+	body, err := json.Marshal(cashfreeSplitRequest{Split: splits, DisableSplit: true})
+	if err != nil {
+		return fmt.Errorf("cashfree: marshal split request: %w", err)
+	}
+
+	resp, status, err := c.do("POST", "/easy-split/orders/"+orderID+"/split", body,
+		map[string]string{"x-idempotency-key": idempotencyKey})
+	if err != nil {
+		return err
+	}
+	if status < 400 {
+		return nil
+	}
+
+	message := strings.ToLower(string(resp))
+	switch {
+	case strings.Contains(message, "already processed"):
+		log.Printf("cashfree[%s]: order %s was already split — treating as done", c.mode, orderID)
+		return nil
+	case strings.Contains(message, "not synced"):
+		return ErrEasySplitRetryable
+	}
+	return cashfreeError(status, resp)
 }
 
 // FetchVendor reads a vendor's current state — the answer to "has Cashfree

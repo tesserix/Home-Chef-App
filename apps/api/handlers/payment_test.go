@@ -67,6 +67,7 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		payout_hold_status TEXT DEFAULT '', wallet_applied REAL DEFAULT 0,
 		loyalty_applied REAL DEFAULT 0, loyalty_points_spent REAL DEFAULT 0,
 		wallet_refunded REAL DEFAULT 0, loyalty_refunded REAL DEFAULT 0,
+		gateway_split_paise INTEGER DEFAULT 0,
 		service_fee REAL DEFAULT 0, discount REAL DEFAULT 0, delivery_fee_final REAL,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)

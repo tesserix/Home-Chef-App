@@ -660,6 +660,14 @@ func settleReverse(db *gorm.DB, aggType string, id uuid.UUID) error {
 func releaseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 	switch aggType {
 	case aggTypeOrder:
+		// The Easy Split rail runs first: this is the moment ADR-0003 moved the
+		// split to, so that every hold, block and clawback has already had its
+		// say before the chef's share leaves the platform account. An error here
+		// fails the release deliberately — a settled hold would never be
+		// re-driven, and the split would be lost.
+		if _, err := ReleaseOrderSplit(db, id, time.Now()); err != nil {
+			return fmt.Errorf("payout-release: split order %s: %w", id, err)
+		}
 		if err := ReleaseOrderPayouts(id); err != nil {
 			return fmt.Errorf("payout-release: release order payout %s: %w", id, err)
 		}
