@@ -740,15 +740,15 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		// What the kitchen sells. Omitting these left the vendor app unable to
 		// tell an opted-in baker from a meals-only kitchen, so the cake
 		// configurator never appeared and the opt-in read as a missing feature.
-		"vertical":    resp.Vertical,
-		"sellsBakery": resp.SellsBakery,
-		"kitchenPhotos":       resp.KitchenPhotos,
-		"addressLine1":        chef.AddressLine1,
-		"addressLine2":        chef.AddressLine2,
-		"city":                chef.City,
-		"state":               chef.State,
-		"postalCode":          chef.PostalCode,
-		"operatingHours":      operatingHours,
+		"vertical":       resp.Vertical,
+		"sellsBakery":    resp.SellsBakery,
+		"kitchenPhotos":  resp.KitchenPhotos,
+		"addressLine1":   chef.AddressLine1,
+		"addressLine2":   chef.AddressLine2,
+		"city":           chef.City,
+		"state":          chef.State,
+		"postalCode":     chef.PostalCode,
+		"operatingHours": operatingHours,
 		// Fulfillment capabilities + self-delivery pricing. These MUST be
 		// returned so the vendor profile editor reflects the saved state — when
 		// they were omitted the toggles always re-read as OFF after a reload, and
@@ -2532,9 +2532,10 @@ func (h *ChefHandler) GetPayoutDetails(c *gin.Context) {
 		"payoutCountry":     chef.PayoutCountry,
 		"panNumber":         maskPAN(chef.PanNumber),
 		"panOnFile":         chef.PanNumber != "",
-		// The chef-visible verdict on their Cashfree split registration:
-		// ACTIVE means order money reaches their bank straight from capture.
-		"cashfreeVendorStatus": chef.CashfreeVendorStatus,
+		// The chef-visible verdict on their split registration, in plain words:
+		// verified means order money reaches their bank straight from capture
+		// (#1082). Raw Cashfree status strings never leave the server.
+		"payoutRegistration": services.PayoutRegistrationFor(&chef),
 	})
 }
 
@@ -2802,18 +2803,25 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 	// can pay the chef straight from the gateway once Cashfree verifies it.
 	// Deliberately NOT gated on easy_split_enabled: registration moves no money,
 	// and pre-staging vendors means flipping the flag later needs no re-saves.
-	// Best-effort: split falls back to full capture until the vendor is ACTIVE.
+	//
+	// Synchronous, for the reason the payout-rail block above gives (#1082): a
+	// backgrounded registration meant the save response could only report the
+	// status as it stood BEFORE registering, so a chef's very first save always
+	// read "pending" even when Cashfree had already refused their details.
+	easySplitErrorCode := ""
 	if services.GetCashfreeFor(chef.Mode) != nil {
 		bank := services.CashfreeVendorBank{
 			AccountNumber: req.BankAccountNumber, AccountHolder: req.BankAccountName, IFSC: req.BankIFSC,
 		}
-		chefCopy := chef
-		go func() {
-			if _, esErr := services.EnsureEasySplitVendorWith(context.Background(), database.DB,
-				&chefCopy, bank, chefCopy.User.Email, chefCopy.User.Phone); esErr != nil {
-				log.Printf("easy-split: vendor registration failed for chef %s: %v", chefCopy.ID, esErr)
-			}
-		}()
+		if _, esErr := services.EnsureEasySplitVendorWith(c.Request.Context(), database.DB,
+			&chef, bank, chef.User.Email, chef.User.Phone); esErr != nil {
+			// Never fatal: the details are saved and the reconcile sweep retries.
+			// The chef is told, because until this succeeds they are not payable
+			// from capture. The error itself is logged, never returned — it can
+			// quote the bank details back.
+			easySplitErrorCode = "payout_verification_failed"
+			log.Printf("easy-split: vendor registration failed for chef %s: %v", chef.ID, esErr)
+		}
 	}
 
 	// Audit the payout change. NEVER store raw bank details in the audit row —
@@ -2835,13 +2843,13 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		"razorpayAccountId":        maskID(chef.RazorpayAccountID),
 		"razorpaySettlementStatus": chef.RazorpaySettlementStatus,
 		"panOnFile":                chef.PanNumber != "",
-		// This is the status as it stood BEFORE the registration goroutine above
-		// ran, so on a first save it is empty even when registration is about to
-		// succeed. Say that, rather than letting the vendor app render "not
-		// active" as a settled verdict — the reconcile sweep (#1029) will carry
-		// it to ACTIVE, and GET /chef/payout reports the real state.
-		"cashfreeVendorStatus":  chef.CashfreeVendorStatus,
-		"cashfreeVendorPending": !strings.EqualFold(chef.CashfreeVendorStatus, services.CashfreeVendorActive),
+		// Registration ran synchronously above, so this is the live verdict, in
+		// the chef's own words — Cashfree's status strings are gateway
+		// vocabulary and never leave the server (#1082).
+		"payoutRegistration": services.PayoutRegistrationFor(&chef),
+	}
+	if easySplitErrorCode != "" {
+		resp["payoutRegistrationError"] = easySplitErrorCode
 	}
 	if settlementErrorCode != "" {
 		// Present even for the UPI case: the response must not read as an

@@ -26,6 +26,9 @@ const (
 	CashfreeVendorInBeneCreation = "IN_BENE_CREATION"
 	CashfreeVendorBlocked        = "BLOCKED"
 	CashfreeVendorDeleted        = "DELETED"
+	// CashfreeVendorInBankValidation is undocumented but real: the sandbox
+	// returns it while penny-dropping the account (#1082).
+	CashfreeVendorInBankValidation = "IN_BANK_VALIDATION"
 )
 
 type CashfreeVendorBank struct {
@@ -70,8 +73,8 @@ type CashfreeVendorResponse struct {
 }
 
 // SplitPayable reports whether an order split naming this vendor will be
-// accepted and settled. Only ACTIVE counts — IN_BENE_CREATION means Cashfree
-// is still verifying the destination.
+// accepted and settled. Only ACTIVE counts — every other state, documented or
+// not, means Cashfree has not confirmed the destination.
 func (v *CashfreeVendorResponse) SplitPayable() bool {
 	return v != nil && strings.EqualFold(v.Status, CashfreeVendorActive)
 }

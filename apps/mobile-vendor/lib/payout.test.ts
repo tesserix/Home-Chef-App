@@ -5,6 +5,7 @@ import {
   emptyPayoutForm,
   summarisePayout,
   validatePayoutInput,
+  payoutStatusChip,
   type PayoutFormValues,
 } from './payout';
 
@@ -88,5 +89,49 @@ describe('summarisePayout', () => {
     const summary = summarisePayout(validBank);
     expect(summary).toBe('Bank ••••9012');
     expect(summary).not.toContain('123456789012');
+  });
+});
+
+// #1082 — the chip is the only thing telling a chef whether their money will
+// arrive. It reads the server's plain-language verdict; it must not re-derive
+// one from a gateway status string it does not own.
+describe('payoutStatusChip', () => {
+  it('shows direct settlement once the server says verified', () => {
+    const chip = payoutStatusChip({ state: 'verified', message: 'Verified — payouts active' }, false);
+    expect(chip.tone).toBe('success');
+    expect(chip.label).toBe('Verified — payouts active');
+  });
+
+  it('shows the server message while verification is pending', () => {
+    const chip = payoutStatusChip({ state: 'pending', message: 'Pending verification' }, false);
+    expect(chip.tone).toBe('pending');
+    expect(chip.label).toBe('Pending verification');
+  });
+
+  it('does not describe a failed registration as in progress', () => {
+    const chip = payoutStatusChip(
+      { state: 'failed', message: "Couldn't verify — please check your details" },
+      true,
+    );
+    expect(chip.tone).toBe('error');
+    expect(chip.label).toBe("Couldn't verify — please check your details");
+  });
+
+  it('falls back to the Route state when the server sends no verdict', () => {
+    expect(payoutStatusChip(undefined, true).tone).toBe('success');
+    expect(payoutStatusChip(undefined, false).tone).toBe('pending');
+  });
+
+  // The wording is the server's, so it can be corrected without shipping an
+  // app release. A locally-invented label would drift from it.
+  it('renders the server wording rather than one of its own', () => {
+    const chip = payoutStatusChip({ state: 'pending', message: 'Almost there' }, true);
+    expect(chip.label).toBe('Almost there');
+  });
+
+  // 'none' means no details on file yet, which is not a settlement verdict.
+  it('ignores a "none" verdict and reports the Route state', () => {
+    const chip = payoutStatusChip({ state: 'none', message: 'Add your bank details' }, true);
+    expect(chip.label).toBe('Connected · ready for payouts');
   });
 });
