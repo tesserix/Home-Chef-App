@@ -31,14 +31,11 @@ func NewPaymentHandler() *PaymentHandler {
 	return &PaymentHandler{}
 }
 
-// CreateOrderPayment creates a retired-gateway order with Route transfers for an order.
+// CreateOrderPayment mints the gateway charge for an order.
 //
-// Payment flow:
-//
-//	Customer pays total → the gateway splits automatically:
-//	  - Chef gets: Subtotal + ChefTip (food cost + chef tip)
-//	  - Driver gets: DeliveryFee + DriverTip (delivery fee + driver tip)
-//	  - Fe3dr gets: ₹0 from orders (revenue comes only from subscriptions)
+// The customer pays one total to the platform merchant account; the chef's and
+// rider's shares are allocated later, when the payout governor releases the
+// order (services/easy_split_release.go), not at capture.
 //
 // POST /payments/order/:orderId/create
 func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {

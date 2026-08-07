@@ -20,17 +20,17 @@ import (
 // customer-present step):
 //   1. Booking: one gateway charge for the full requested total → platform
 //      account. (CreateMealPlanAdvanceOrder + VerifyMealPlanAdvance.)
-//   2. Confirm (accept-all or customer-approve): a per-day on-hold Route
-//      transfer to the chef for each ACCEPTED day (HoldChefPayouts), and a
-//      wallet refund of any declined days (RefundDays).
-//   3. Per delivered day: release that day's held transfer (ReleaseDayPayout).
+//   2. Confirm (accept-all or customer-approve): a payout hold per ACCEPTED day
+//      and a wallet refund of any declined days (RefundDays).
+//   3. Per delivered day: the hold is parked, confirmed, then released through
+//      the statement path (payout_mealplan_release_cron.go).
 //   4. Skip / no-show / expiry / reject: refund the affected days to wallet.
 //
 // EVERYTHING here is gated by config.MealPlanEscrowEnabled and is a safe no-op
 // when the flag is off — so the negotiation handshake (#195/#196) and the
 // per-day fulfilment pipeline (#197) work unchanged until the escrow paths are
 // sandbox-verified. Idempotency: wallet refunds key on "mealplan-refund:<dayID>"
-// (unique-indexed in the ledger); releases DB-guard on PayoutTransferID.
+// (unique-indexed in the ledger); hold transitions are conditional UPDATEs.
 
 // MealPlanEscrowActive reports whether the escrow money flow is switched on.
 func MealPlanEscrowActive() bool {
@@ -469,11 +469,9 @@ func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay
 // call (e.g. the SDK returning dismiss on the success auto-redirect) would
 // strand a CAPTURED advance — money taken, plan unconfirmed, chef payout never held.
 // It takes the plain *gorm.DB (NOT a caller tx): it runs the confirm in its own fast
-// LOCAL transaction and then holds the chef payouts OUTSIDE it. Splitting the external
-// Route transfers out of the confirm tx (#395·3 GAP 2) means the DB connection is never
-// held across ~N gateway round-trips, and a hold failure can't roll back the confirm or
-// orphan on-hold transfers. A crash between confirm and hold is healed by the
-// meal-plan-hold-reconcile cron. Both steps are idempotent + status-guarded; returns
+// LOCAL transaction and then parks the chef payout holds OUTSIDE it, so the DB
+// connection is never held across a gateway round-trip and a hold failure can't roll
+// back the confirm (#395·3 GAP 2). Both steps are idempotent + status-guarded; returns
 // confirmed=true only on the transition it performed. No-op when escrow is off.
 func ConfirmMealPlanAdvance(db *gorm.DB, plan *models.MealPlan) (bool, error) {
 	var confirmed bool

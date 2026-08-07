@@ -6,7 +6,7 @@ import (
 
 // easy_split_refund.go — who bears a refund on a split order.
 //
-// With Easy Split the chef's net share leaves the platform at capture, so a
+// With Easy Split the chef's net share leaves the platform on release, so a
 // refund the platform bears alone is money it never held. Whether that happens
 // is an ACCOUNT-LEVEL Cashfree setting we do not control from here: proportional
 // vendor debiting is on by default, but it "can be turned off in your account",

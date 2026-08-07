@@ -15,16 +15,16 @@ import (
 // group_order_payout.go — chef payout for group/office orders (#46). Participants
 // pay their shares into the platform balance; on consolidation the chef's slice
 // (items + tax — delivery/service stay with the platform, the driver is paid via
-// the normal delivery flow) is paid as ONE on-hold Route transfer, released on
-// delivery and reversed on cancellation. Mirrors the meal-plan escrow primitives.
+// the normal delivery flow) is parked as ONE payout hold on delivery, released
+// through the statement path and reversed on cancellation.
 
 // GroupChefPayout is the chef's GROSS slice of a group order (subtotal + tax) — the
 // customer-facing food value, used as the queue's context Amount. The chef is paid
 // groupNetPayout, NOT this.
 func GroupChefPayout(g *models.GroupOrder) float64 { return g.Subtotal + g.Tax }
 
-// groupNetPayout is the chef's NET payout for a group order — the amount the held
-// Route transfer must carry (#546). It mirrors ComputeOrderEarnings / perDayNetPayout
+// groupNetPayout is the chef's NET payout for a group order — the amount the hold
+// must carry (#546). It mirrors ComputeOrderEarnings / perDayNetPayout
 // so group orders settle the chef on the SAME basis as regular orders and meal-plan
 // days, instead of paying the gross slice with no platform commission or TDS:
 //

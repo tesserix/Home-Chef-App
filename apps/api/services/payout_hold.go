@@ -27,7 +27,7 @@ import (
 )
 
 // SetOrderHoldAwaitingConfirmation parks a delivered regular order's payout in a
-// customer-confirmation hold. No-op for orders without a retired-gateway order id
+// customer-confirmation hold. No-op for orders without a gateway order id
 // (meal-plan/group consolidated orders settle through their own paths — mirrors
 // the order_payout.go scoping). Idempotent: the conditional update only fires
 // from the empty (pre-delivery) state, so a replayed delivered event is a no-op.
