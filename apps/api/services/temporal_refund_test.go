@@ -7,6 +7,8 @@ package services
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/homechef/api/config"
+	"github.com/homechef/api/models"
 )
 
 // TestStartDeferredRefundFlow_NoOpWhenTemporalDown verifies the producer is a
@@ -36,32 +39,47 @@ func TestStartDeferredRefundFlow_NoOpOnZeroOrEmptyPayment(t *testing.T) {
 	StartDeferredRefundFlow(uuid.New(), "", 50000)
 }
 
-// TestGatewayRefundForWorkflow_CallsGatewayWithStableKeyAndAmount pins the
-// activity implementation the worker wires onto workflows.GatewayRefundFunc:
-// it must call the injected Razorpay stub with the SAME stable idempotency
-// key (RefundFullIdempotencyKey) the cron uses, and the exact paise amount
-// asked for — the double-refund guarantee depends on this key never drifting.
-func TestGatewayRefundForWorkflow_CallsGatewayWithStableKeyAndAmount(t *testing.T) {
-	setupDeferredCancelRefundDB(t)
-	gotAmount, gotKey, calls := withDeferredRefundGateway(t)
-	orderID := uuid.New()
+// The activity the worker wires onto workflows.GatewayRefundFunc must refund on
+// the order's OWN gateway, with the SAME stable idempotency key the cron uses
+// (RefundFullIdempotencyKey) and the exact paise asked for — the double-refund
+// guarantee depends on that key never drifting.
+//
+// It used to reach straight for the Razorpay client, so the durable retry flow
+// could never heal a deferred Cashfree refund; it errored until the workflow
+// expired and only the cron backstop ever paid the customer. The Razorpay-stub
+// version of this test went with the client in #1086 — the rule it pinned is
+// asserted here instead, on the only gateway an order can be charged on.
+func TestGatewayRefundForWorkflow_CashfreeOrder_RefundsOnCashfree(t *testing.T) {
+	db := setupDeferredCancelRefundDB(t)
+	orderID := seedDeferredCancelOrder(t, db, "pending:gateway-retry:305400", time.Now().Add(-time.Hour))
+	require.NoError(t, db.Exec(`UPDATE orders SET payment_provider = 'cashfree', razorpay_payment_id = '',
+		razorpay_order_id = 'cf_ord_deferred' WHERE id = ?`, orderID.String()).Error)
 
-	refundID, err := GatewayRefundForWorkflow(context.Background(), orderID, "pay_abc123", 305400)
+	var gotPath string
+	var gotBody map[string]any
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&gotBody))
+		_, _ = w.Write([]byte(`{"cf_refund_id":1,"refund_id":"rfnd_cf_healed","order_id":"cf_ord_deferred",
+			"refund_status":"SUCCESS","refund_amount":3054.00}`))
+	})
+
+	refundID, err := GatewayRefundForWorkflow(context.Background(), orderID, "cf_ord_deferred", 305400)
 
 	require.NoError(t, err)
-	require.Equal(t, "rfnd_healed", refundID)
-	require.Equal(t, 1, *calls)
-	require.Equal(t, 305400, *gotAmount)
-	require.Equal(t, normalizeIdempotencyKey(RefundFullIdempotencyKey(orderID)), *gotKey,
-		"must reuse the SAME stable idempotency key the cron uses — dedups a lost-response success instead of double-refunding")
+	require.Equal(t, "rfnd_cf_healed", refundID)
+	require.Equal(t, "/orders/cf_ord_deferred/refunds", gotPath, "Cashfree refunds are order-scoped")
+	require.Equal(t, 3054.00, gotBody["refund_amount"], "the exact paise asked for, as a rupee decimal")
+	require.Equal(t, normalizeIdempotencyKey(RefundFullIdempotencyKey(orderID)), gotBody["refund_id"],
+		"the SAME stable key the cron uses — a lost-response success dedups instead of double-refunding")
 }
 
 // TestGatewayRefundForWorkflow_NilGateway_ReturnsError verifies a nil
-// Razorpay client surfaces as an error (not a silent empty id) so Temporal's
+// gateway client surfaces as an error (not a silent empty id) so Temporal's
 // activity retry policy actually retries instead of treating "no client" as
 // "nothing to refund".
 func TestGatewayRefundForWorkflow_NilGateway_ReturnsError(t *testing.T) {
-	// GetRazorpay() with no cached client falls through to a live Secret Manager
+	// GetCashfreeFor with no cached client falls through to a live Secret Manager
 	// fetch, which needs a non-nil config.AppConfig for its dev-fallback check —
 	// set an empty one so the fetch fails cleanly (no real credentials) instead
 	// of panicking on a nil config in this test binary. Same gotcha documented in
@@ -69,10 +87,14 @@ func TestGatewayRefundForWorkflow_NilGateway_ReturnsError(t *testing.T) {
 	prevCfg := config.AppConfig
 	config.AppConfig = &config.Config{Environment: "test"}
 	t.Cleanup(func() { config.AppConfig = prevCfg })
-	SetRazorpayClient(nil)
-	t.Cleanup(func() { SetRazorpayClient(nil) })
+	withCashfreeClient(t, models.ChefModeLive, nil)
 
-	_, err := GatewayRefundForWorkflow(context.Background(), uuid.New(), "pay_x", 1000)
+	db := setupDeferredCancelRefundDB(t)
+	orderID := seedDeferredCancelOrder(t, db, "pending:gateway-retry:1000", time.Now().Add(-time.Hour))
+	require.NoError(t, db.Exec(`UPDATE orders SET payment_provider = 'cashfree', razorpay_payment_id = '',
+		razorpay_order_id = 'cf_ord_x' WHERE id = ?`, orderID.String()).Error)
+
+	_, err := GatewayRefundForWorkflow(context.Background(), orderID, "cf_ord_x", 1000)
 	require.Error(t, err)
 }
 

@@ -17,12 +17,9 @@ import (
 //	services/cancellation_execute.go   arbitration refund
 //	services/deferred_cancel_refund.go retry cron
 //
-// Four of the six reached straight for GetRazorpayFor + RazorpayPaymentID, and
-// three of those were fronted by `if order.PaymentProvider != "razorpay" { 422 }`.
-// That is a stable arrangement with exactly one INR gateway and a money-losing one
-// with two: the guard reads "not refundable" for a perfectly refundable Cashfree
-// order, and without the guard the call reaches for a payment id that gateway
-// never issued.
+// Four of the six reached straight for one gateway's client and payment id, and
+// three of those were fronted by a `provider != "razorpay" { 422 }` guard that
+// read "not refundable" for a perfectly refundable Cashfree order.
 //
 // So the routing lives here, once. A call site's job is to decide the AMOUNT, the
 // NOTES and the IDEMPOTENCY KEY — all things it genuinely knows — and nothing
@@ -47,9 +44,8 @@ type GatewayRefundResult struct {
 // configured and reachable enough to attempt a refund right now.
 //
 // Callers that defer-and-retry on an unavailable gateway (the chef cancel path,
-// the retry cron) use this instead of a nil-check on a specific client, so a
-// Cashfree order defers for the same reason and by the same route a Razorpay one
-// does rather than falling through a razorpay-shaped nil check.
+// the retry cron) use this instead of a nil-check on a specific client, so every
+// provider defers for the same reason and by the same route.
 func GatewayRefundAvailable(order *models.Order) bool {
 	if order == nil || !order.GatewayRefundable() {
 		return false
@@ -59,10 +55,10 @@ func GatewayRefundAvailable(order *models.Order) bool {
 		return GetCashfreeFor(order.Mode) != nil
 	case models.PaymentProviderStripe:
 		return GetStripe() != nil
-	case models.PaymentProviderWallet:
-		return false
 	default:
-		return GetRazorpayFor(order.Mode) != nil
+		// Wallet is a ledger credit, not a gateway call; anything else (a legacy
+		// razorpay row) has no client left to refund on since #1086.
+		return false
 	}
 }
 
@@ -71,8 +67,8 @@ func GatewayRefundAvailable(order *models.Order) bool {
 //
 // notes are attached to the refund at the gateway for reconciliation — they are
 // informational and never load-bearing. idempotencyKey is the LOGICAL operation
-// id (see the gateway_idempotency.go builders) and IS load-bearing: on Razorpay
-// it becomes the X-Refund-Idempotency header, on Cashfree the refund_id itself.
+// id (see the gateway_idempotency.go builders) and IS load-bearing: on Cashfree
+// it becomes the refund_id itself.
 // Passing a key that collides with a different refund makes the gateway silently
 // dedup the second one — the customer is simply never paid, with no error to
 // notice.
@@ -89,9 +85,9 @@ func IssueOrderGatewayRefund(order *models.Order, amountPaise int, notes map[str
 	}
 	if idempotencyKey == "" {
 		// Refusing is deliberate: without a key a retry-after-timeout becomes a
-		// SECOND real refund on Razorpay, and on Cashfree there is no refund_id to
-		// send at all. An accidental omission must fail loudly here rather than
-		// quietly at the gateway.
+		// SECOND real refund, and on Cashfree there is no refund_id to send at all.
+		// An accidental omission must fail loudly here rather than quietly at the
+		// gateway.
 		return nil, fmt.Errorf("gateway-refund: idempotency key is required")
 	}
 
@@ -152,22 +148,8 @@ func IssueOrderGatewayRefund(order *models.Order, amountPaise int, notes map[str
 		}
 		return &GatewayRefundResult{RefundID: r.ID, Status: r.Status}, nil
 
-	default: // razorpay
-		rz := GetRazorpayFor(order.Mode)
-		if rz == nil {
-			return nil, fmt.Errorf("razorpay gateway not configured")
-		}
-		r, err := rz.CreateRefund(reference, &RefundRequest{
-			Amount:         amountPaise,
-			Speed:          "normal",
-			Notes:          notes,
-			Receipt:        fmt.Sprintf("refund-%s", order.OrderNumber),
-			IdempotencyKey: idempotencyKey,
-		})
-		if err != nil {
-			return nil, err
-		}
-		return &GatewayRefundResult{RefundID: r.ID, Status: r.Status}, nil
+	default:
+		return nil, fmt.Errorf("gateway-refund: order %s has no refundable gateway (%s)", order.ID, provider)
 	}
 }
 

@@ -74,11 +74,11 @@ func TestCancelOrder_GatewayFailure_CancelsAndDefersRefund(t *testing.T) {
 		require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN `+col).Error)
 	}
 	pinSingleConn(t, db)
-	withFailingRefundGateway(t)
+	withCashfreeRefundGateway(t, http.StatusInternalServerError)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	markPreparing(t, orderID)
 
 	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/cancel", regChefCancelOrder,
@@ -114,7 +114,7 @@ func TestCancelOrder_GatewayNil_CancelsAndDefers(t *testing.T) {
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 300, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 300, "cf_o")
 	markPreparing(t, orderID)
 
 	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/cancel", regChefCancelOrder,
@@ -137,21 +137,21 @@ func TestCancelOrder_GatewaySuccess_NoSentinel(t *testing.T) {
 		require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN `+col).Error)
 	}
 	pinSingleConn(t, db)
-	_, refundCalls := withRefundGateway(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 200, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 200, "cf_o")
 	markPreparing(t, orderID)
 
 	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/cancel", regChefCancelOrder,
 		map[string]any{"reason": "equipment_failure"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, 1, *refundCalls)
+	require.Equal(t, 1, gw.calls)
 
 	status, refundID, refundAmount, refundedAt := chefCancelStateOf(t, orderID)
 	require.Equal(t, "cancelled", status)
-	require.Equal(t, "rfnd_test", refundID, "the real gateway id must be recorded, never a deferred sentinel")
+	require.Equal(t, gw.key, refundID, "the real gateway id must be recorded, never a deferred sentinel")
 	require.True(t, refundedAt)
 	require.Equal(t, 200.0, refundAmount)
 }
@@ -169,21 +169,21 @@ func TestCancelOrder_GatewaySuccess_PersistsCancelledThenReplacesSentinel(t *tes
 		require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN `+col).Error)
 	}
 	pinSingleConn(t, db)
-	_, refundCalls := withRefundGateway(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 750, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 750, "cf_o")
 	markPreparing(t, orderID)
 
 	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/cancel", regChefCancelOrder,
 		map[string]any{"reason": "customer_request"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, 1, *refundCalls, "the gateway must be called exactly once")
+	require.Equal(t, 1, gw.calls, "the gateway must be called exactly once")
 
 	status, refundID, refundAmount, refundedAt := chefCancelStateOf(t, orderID)
 	require.Equal(t, "cancelled", status, "the reordered flow still lands the order cancelled")
-	require.Equal(t, "rfnd_test", refundID, "the sentinel persisted before the gateway call must be replaced by the real id")
+	require.Equal(t, gw.key, refundID, "the sentinel persisted before the gateway call must be replaced by the real id")
 	require.False(t, strings.HasPrefix(refundID, "pending:gateway-retry:"), "no sentinel must survive a successful gateway call")
 	require.True(t, refundedAt, "refunded_at was stamped by the reservation, unaffected by the reorder")
 	require.Equal(t, 750.0, refundAmount)

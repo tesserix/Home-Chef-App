@@ -11,45 +11,14 @@ package handlers
 // the customer's wallet instantly, and only the CARD slice is sent to the gateway.
 
 import (
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/homechef/api/database"
-	"github.com/homechef/api/services"
 )
-
-// withRefundGatewayCapturingAmount is withRefundGateway's sibling — it additionally
-// decodes the refund POST body so a test can assert exactly how many paise reached the
-// gateway (the crux of the mixed-payment bug: the gateway must get the CARD slice, never
-// the full reserved total).
-func withRefundGatewayCapturingAmount(t *testing.T) (refundCalls *int, gotAmountPaise *int) {
-	t.Helper()
-	var calls int
-	var amount int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/refund") {
-			var body struct {
-				Amount int `json:"amount"`
-			}
-			_ = json.NewDecoder(r.Body).Decode(&body)
-			amount = body.Amount
-			calls++
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "rfnd_test"})
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-	services.SetRazorpayClient(services.NewRazorpayTestClient(srv.URL, "rzp_test_key", "rzp_test_secret", ""))
-	t.Cleanup(func() { services.SetRazorpayClient(nil) })
-	return &calls, &amount
-}
 
 // railRefundedColumnsOf reads back the wallet_refunded/loyalty_refunded bookkeeping the
 // split writes — the ledger record of what each credit rail has been given back.
@@ -75,12 +44,12 @@ func TestCancelOrder_MixedPayment_GatewayGetsCapturedOnly(t *testing.T) {
 	}
 	addWalletTables(t, db)
 	pinSingleConn(t, db)
-	refundCalls, gotAmountPaise := withRefundGatewayCapturingAmount(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 481.91, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 481.91, "cf_o")
 	markPreparing(t, orderID)
 	require.NoError(t, db.Exec(`UPDATE orders SET wallet_applied = 150.40, loyalty_applied = 3.85 WHERE id = ?`,
 		orderID.String()).Error)
@@ -89,13 +58,13 @@ func TestCancelOrder_MixedPayment_GatewayGetsCapturedOnly(t *testing.T) {
 		map[string]any{"reason": "customer_request"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	require.Equal(t, 1, *refundCalls, "the gateway must be called exactly once")
-	require.Equal(t, 32766, *gotAmountPaise,
+	require.Equal(t, 1, gw.calls, "the gateway must be called exactly once")
+	require.Equal(t, 32766, gw.amountPaise,
 		"the gateway must only be asked to refund what it actually captured (₹327.66 = 32766 paise), not the full ₹481.91 total (48191 paise) — that mismatch is the live bug")
 
 	status, refundID, refundAmount, refundedAt := chefCancelStateOf(t, orderID)
 	require.Equal(t, "cancelled", status)
-	require.Equal(t, "rfnd_test", refundID, "the real gateway id — the gateway call succeeded with the correct amount, no deferred sentinel")
+	require.Equal(t, gw.key, refundID, "the real gateway id — the gateway call succeeded with the correct amount, no deferred sentinel")
 	require.True(t, refundedAt)
 	require.Equal(t, 481.91, refundAmount, "the reservation still records the FULL total owed across every rail")
 
@@ -115,12 +84,12 @@ func TestCancelOrder_PureCard_Unchanged(t *testing.T) {
 		require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN `+col).Error)
 	}
 	pinSingleConn(t, db)
-	refundCalls, gotAmountPaise := withRefundGatewayCapturingAmount(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 200, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 200, "cf_o")
 	markPreparing(t, orderID)
 	// wallet_applied / loyalty_applied stay at their column default of 0.
 
@@ -128,12 +97,12 @@ func TestCancelOrder_PureCard_Unchanged(t *testing.T) {
 		map[string]any{"reason": "equipment_failure"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	require.Equal(t, 1, *refundCalls)
-	require.Equal(t, 20000, *gotAmountPaise, "a pure-card order still refunds the full total to the gateway — unchanged behavior")
+	require.Equal(t, 1, gw.calls)
+	require.Equal(t, 20000, gw.amountPaise, "a pure-card order still refunds the full total to the gateway — unchanged behavior")
 
 	status, refundID, refundAmount, refundedAt := chefCancelStateOf(t, orderID)
 	require.Equal(t, "cancelled", status)
-	require.Equal(t, "rfnd_test", refundID)
+	require.Equal(t, gw.key, refundID)
 	require.True(t, refundedAt)
 	require.Equal(t, 200.0, refundAmount)
 
@@ -152,12 +121,12 @@ func TestCancelOrder_FullyCreditFunded_NoGateway(t *testing.T) {
 	}
 	addWalletTables(t, db)
 	pinSingleConn(t, db)
-	refundCalls, _ := withRefundGatewayCapturingAmount(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 100, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 100, "cf_o")
 	markPreparing(t, orderID)
 	require.NoError(t, db.Exec(`UPDATE orders SET wallet_applied = 80, loyalty_applied = 20 WHERE id = ?`,
 		orderID.String()).Error)
@@ -166,7 +135,7 @@ func TestCancelOrder_FullyCreditFunded_NoGateway(t *testing.T) {
 		map[string]any{"reason": "out_of_ingredient"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	require.Equal(t, 0, *refundCalls, "no card slice remains — the gateway must not be called at all")
+	require.Equal(t, 0, gw.calls, "no card slice remains — the gateway must not be called at all")
 
 	status, refundID, refundAmount, refundedAt := chefCancelStateOf(t, orderID)
 	require.Equal(t, "cancelled", status)

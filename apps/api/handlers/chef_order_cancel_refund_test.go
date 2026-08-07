@@ -21,6 +21,8 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,7 +34,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/homechef/api/database"
-	"github.com/homechef/api/services"
 )
 
 // callChefCancel drives a ChefOrderCancelHandler route with the user id injected the way
@@ -61,49 +62,49 @@ func regGoodwillRefund(r *gin.Engine, h *ChefOrderCancelHandler) {
 	r.POST("/chef/orders/:orderId/refund", h.RefundOrder)
 }
 
-// withRefundGateway points GetRazorpay at an httptest server that answers the refund POST
-// and records the X-Refund-Idempotency header + how many real refunds were issued.
-func withRefundGateway(t *testing.T) (gotKey *string, refundCalls *int) {
-	t.Helper()
-	var key string
-	var calls int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/refund") {
-			key = r.Header.Get("X-Refund-Idempotency")
-			calls++
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "rfnd_test"})
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-	services.SetRazorpayClient(services.NewRazorpayTestClient(srv.URL, "rzp_test_key", "rzp_test_secret", ""))
-	t.Cleanup(func() { services.SetRazorpayClient(nil) })
-	return &key, &calls
+// cfRefundStub records what actually reached Cashfree's order-scoped refund POST.
+type cfRefundStub struct {
+	calls       int
+	key         string // refund_id — the idempotency key, minted from the logical key
+	amountPaise int
 }
 
-// withFailingRefundGateway points GetRazorpay at an httptest server that answers the
-// refund POST with a hard gateway error (HTTP 500) — used to exercise the #766-followup
-// deferral path (CancelOrder must cancel + defer, never hard-block, on a gateway failure).
-func withFailingRefundGateway(t *testing.T) {
+// withCashfreeRefundGateway points the Cashfree client at a stub that answers the
+// refund POST with `status`. Anything but 200 is a hard gateway failure, which is
+// what the #766-followup deferral path needs (cancel + defer, never hard-block).
+func withCashfreeRefundGateway(t *testing.T, status int) *cfRefundStub {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/refund") {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"error":{"description":"gateway unavailable"}}`))
+	stub := &cfRefundStub{}
+	withCashfreeGateway(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/refunds") {
+			w.WriteHeader(http.StatusOK)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-	services.SetRazorpayClient(services.NewRazorpayTestClient(srv.URL, "rzp_test_key", "rzp_test_secret", ""))
-	t.Cleanup(func() { services.SetRazorpayClient(nil) })
+		if status != http.StatusOK {
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(`{"message":"gateway unavailable"}`))
+			return
+		}
+		var body struct {
+			RefundID string  `json:"refund_id"`
+			Amount   float64 `json:"refund_amount"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		stub.calls++
+		stub.key = body.RefundID
+		stub.amountPaise = int(math.Round(body.Amount * 100))
+		_, _ = w.Write([]byte(fmt.Sprintf(
+			`{"cf_refund_id":1,"refund_id":%q,"order_id":"o","refund_status":"SUCCESS","refund_amount":%.2f}`,
+			body.RefundID, body.Amount)))
+	})
+	return stub
 }
 
 func markDeliveredPaid(t *testing.T, orderID uuid.UUID, payID string) {
 	t.Helper()
 	require.NoError(t, database.DB.Exec(
-		`UPDATE orders SET status = 'delivered', payment_status = 'completed', razorpay_payment_id = ? WHERE id = ?`,
+		`UPDATE orders SET status = 'delivered', payment_status = 'completed',
+			payment_provider = 'cashfree', razorpay_payment_id = '', razorpay_order_id = ? WHERE id = ?`,
 		payID, orderID.String()).Error)
 }
 
@@ -131,7 +132,7 @@ func TestClaimOrderItemForCancel_SerializesConcurrentDuplicates(t *testing.T) {
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x") // payment_status=completed
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o") // payment_status=completed
 	itemID := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, is_cancelled, refund_amount) VALUES (?,?,0,0)`,
 		itemID.String(), orderID.String()).Error)
@@ -162,7 +163,7 @@ func TestClaimOrderItemForCancel_LosesToInFlightOrderRefund(t *testing.T) {
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	itemID := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, is_cancelled, refund_amount) VALUES (?,?,0,0)`,
 		itemID.String(), orderID.String()).Error)
@@ -186,11 +187,11 @@ func TestClaimOrderItemForCancel_LosesToInFlightOrderRefund(t *testing.T) {
 // double-count.
 func TestRefundOrder_ConcurrentRefundAlreadyClaimed_409(t *testing.T) {
 	db := setupPayDB(t)
-	_, refundCalls := withRefundGateway(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	markDeliveredPaid(t, orderID, "pay_x")
 	// A concurrent InitiateRefund already won the claim (completed→refunded).
 	require.NoError(t, db.Exec(`UPDATE orders SET payment_status = 'refunded' WHERE id = ?`, orderID.String()).Error)
@@ -198,7 +199,7 @@ func TestRefundOrder_ConcurrentRefundAlreadyClaimed_409(t *testing.T) {
 	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/refund", regGoodwillRefund,
 		map[string]any{"amount": 100.0, "reason": "goodwill"})
 	require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
-	require.Equal(t, 0, *refundCalls, "no second gateway refund issued when a refund is already in progress")
+	require.Equal(t, 0, gw.calls, "no second gateway refund issued when a refund is already in progress")
 
 	_, amt, _ := refundStateOf(t, orderID)
 	require.Equal(t, 0.0, amt, "refund_amount not double-counted")
@@ -209,18 +210,18 @@ func TestRefundOrder_ConcurrentRefundAlreadyClaimed_409(t *testing.T) {
 // idempotency key.
 func TestRefundOrder_PartialGoodwill_ClaimRevertedAndKeyed(t *testing.T) {
 	db := setupPayDB(t)
-	gotKey, refundCalls := withRefundGateway(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	markDeliveredPaid(t, orderID, "pay_x")
 
 	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/refund", regGoodwillRefund,
 		map[string]any{"amount": 100.0, "reason": "partial goodwill"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, 1, *refundCalls)
-	require.NotEmpty(t, *gotKey, "the goodwill refund threads a gateway idempotency key (#574/#576)")
+	require.Equal(t, 1, gw.calls)
+	require.NotEmpty(t, gw.key, "the goodwill refund threads a gateway idempotency key (#574/#576)")
 
 	status, amt, refundedAt := refundStateOf(t, orderID)
 	require.Equal(t, "completed", status, "a partial goodwill refund reverts the claim → order stays non-terminal")
@@ -231,17 +232,17 @@ func TestRefundOrder_PartialGoodwill_ClaimRevertedAndKeyed(t *testing.T) {
 // A FULL goodwill refund keeps the claim (terminal), stamps refunded_at, and keys the gateway.
 func TestRefundOrder_FullGoodwill_TerminalAndKeyed(t *testing.T) {
 	db := setupPayDB(t)
-	gotKey, _ := withRefundGateway(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	markDeliveredPaid(t, orderID, "pay_x")
 
 	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/refund", regGoodwillRefund,
 		map[string]any{"amount": 500.0, "reason": "full goodwill"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	require.NotEmpty(t, *gotKey, "full goodwill refund threads a gateway idempotency key")
+	require.NotEmpty(t, gw.key, "full goodwill refund threads a gateway idempotency key")
 
 	status, amt, refundedAt := refundStateOf(t, orderID)
 	require.Equal(t, "refunded", status, "a full goodwill refund is terminal (claim not reverted)")
@@ -253,11 +254,11 @@ func TestRefundOrder_FullGoodwill_TerminalAndKeyed(t *testing.T) {
 // refunded) is idempotent — no second gateway refund, no double-count.
 func TestRefundOrder_AfterFullRefund_IdempotentNoDoubleRefund(t *testing.T) {
 	db := setupPayDB(t)
-	_, refundCalls := withRefundGateway(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	markDeliveredPaid(t, orderID, "pay_x")
 	// Already fully refunded.
 	require.NoError(t, db.Exec(`UPDATE orders SET refund_amount = 500, refunded_at = ?, payment_status = 'refunded' WHERE id = ?`,
@@ -266,5 +267,5 @@ func TestRefundOrder_AfterFullRefund_IdempotentNoDoubleRefund(t *testing.T) {
 	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/refund", regGoodwillRefund,
 		map[string]any{"amount": 100.0, "reason": "retry"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String()) // remaining<=0 → idempotent 200
-	require.Equal(t, 0, *refundCalls, "no gateway refund when nothing remains refundable")
+	require.Equal(t, 0, gw.calls, "no gateway refund when nothing remains refundable")
 }

@@ -10,7 +10,6 @@ package services
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/google/uuid"
@@ -28,12 +27,12 @@ func seedTypedRefundOrder(t *testing.T, db *gorm.DB) *models.Order {
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-MP", CustomerID: uuid.New(), ChefID: uuid.New(),
 		Status: models.OrderStatusCancelled, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "razorpay", RazorpayPaymentID: "pay_typed", Total: 300,
+		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_typed", Total: 300,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
-		payment_provider, razorpay_payment_id, total, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		payment_provider, razorpay_order_id, total, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), o.ChefID.String(), string(o.Status),
-		string(models.PaymentCompleted), "razorpay", "pay_typed", 300.0, 0.0).Error)
+		string(models.PaymentCompleted), "cashfree", "cf_ord_typed", 300.0, 0.0).Error)
 	return o
 }
 
@@ -41,18 +40,11 @@ func seedTypedRefundOrder(t *testing.T, db *gorm.DB) *models.Order {
 // asserts nothing moved: no gateway hit, payment_status stays completed, refund_amount stays 0.
 func assertNoGenericRefund(t *testing.T, db *gorm.DB, o *models.Order) {
 	t.Helper()
-	gatewayCalled := false
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gatewayCalled = true
-		_, _ = w.Write([]byte(`{"id":"rfnd_x","status":"processed"}`))
-	}))
-	defer srv.Close()
-	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
-	t.Cleanup(func() { SetRazorpayClient(nil) })
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	require.NoError(t, RefundOrderForCancellation(o, "customer", "cancel"))
 
-	require.False(t, gatewayCalled, "a typed escrow order must NOT be refunded via the generic gateway path")
+	require.False(t, spy.calls > 0, "a typed escrow order must NOT be refunded via the generic gateway path")
 	ps, amt, rid, _ := loadRefund(t, db, o.ID)
 	require.Equal(t, string(models.PaymentCompleted), ps, "payment_status stays completed — no generic refund claim on a typed order")
 	require.Equal(t, 0.0, amt, "no refund_amount written by the generic path")
@@ -83,18 +75,11 @@ func TestRefundOrderForCancellation_PlainOrderStillRefunds(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	o := seedTypedRefundOrder(t, db) // paid razorpay order, but no typed back-ref inserted
 
-	gatewayCalled := false
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gatewayCalled = true
-		_, _ = w.Write([]byte(`{"id":"rfnd_ok","status":"processed"}`))
-	}))
-	defer srv.Close()
-	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
-	t.Cleanup(func() { SetRazorpayClient(nil) })
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	require.NoError(t, RefundOrderForCancellation(o, "customer", "cancel"))
 
-	require.True(t, gatewayCalled, "an ordinary paid order still refunds via the generic gateway path")
+	require.True(t, spy.calls > 0, "an ordinary paid order still refunds via the generic gateway path")
 	ps, amt, rid, _ := loadRefund(t, db, o.ID)
 	require.Equal(t, string(models.PaymentRefunded), ps)
 	require.Equal(t, 300.0, amt)

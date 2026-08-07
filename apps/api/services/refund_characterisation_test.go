@@ -98,7 +98,7 @@ func TestCharacterise_FullAndPartialKeyspaces_DoNotCollide(t *testing.T) {
 
 func TestCharacterise_FullReservation_WinsOnce_AndLoserSeesIt(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedRazorpayWalletOrder(t, db, 300, 0)
+	o := seedWalletFundedOrder(t, db, 300, 0)
 
 	amount, won, err := ReserveFullRefund(db, o.ID)
 	require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestCharacterise_FullReservation_WinsOnce_AndLoserSeesIt(t *testing.T) {
 // itself to 0."
 func TestCharacterise_PartialAfterFullReservation_CapsToZero(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedRazorpayWalletOrder(t, db, 300, 0)
+	o := seedWalletFundedOrder(t, db, 300, 0)
 
 	_, won, err := ReserveFullRefund(db, o.ID)
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ func TestCharacterise_PartialAfterFullReservation_CapsToZero(t *testing.T) {
 // revertClaim() when CreateRefund errors.
 func TestCharacterise_ReleasingFullReservation_RestoresRemaining(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedRazorpayWalletOrder(t, db, 300, 0)
+	o := seedWalletFundedOrder(t, db, 300, 0)
 
 	amount, won, err := ReserveFullRefund(db, o.ID)
 	require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestCharacterise_ReleasingFullReservation_RestoresRemaining(t *testing.T) {
 // reverts too early and two refunds race the cap.
 func TestCharacterise_PartialReservation_HoldsAMutexUntilTheCallerReverts(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedRazorpayWalletOrder(t, db, 300, 0)
+	o := seedWalletFundedOrder(t, db, 300, 0)
 
 	amount, prior, full, won, err := ReserveRefund(db, o.ID, 100)
 	require.NoError(t, err)
@@ -199,7 +199,7 @@ func TestCharacterise_PartialReservation_HoldsAMutexUntilTheCallerReverts(t *tes
 // invariant the coordinator's pending-sum must reproduce.
 func TestCharacterise_ReservationsCannotExceedOrderTotal(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedRazorpayWalletOrder(t, db, 300, 0)
+	o := seedWalletFundedOrder(t, db, 300, 0)
 
 	first, _, _, won, err := ReserveRefund(db, o.ID, 250)
 	require.NoError(t, err)

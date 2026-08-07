@@ -12,7 +12,6 @@ package services
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -38,15 +37,15 @@ func seedPaidPendingOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, _slot str
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-STRAND", CustomerID: uuid.New(), ChefID: chefID,
 		Status: models.OrderStatusPending, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "razorpay", RazorpayPaymentID: "pay_strand", Total: 250,
+		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_strand", Total: 250,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders
 		(id, order_number, customer_id, chef_id, status, payment_status, payment_provider,
-		 razorpay_payment_id, total, refund_amount, scheduled_for, created_at, updated_at)
+		 razorpay_order_id, total, refund_amount, scheduled_for, created_at, updated_at)
 		VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), chefID.String(),
-		string(models.OrderStatusPending), string(models.PaymentCompleted), "razorpay",
-		"pay_strand", 250.0, serviceDay, created, created).Error)
+		string(models.OrderStatusPending), string(models.PaymentCompleted), "cashfree",
+		"cf_ord_strand", 250.0, serviceDay, created, created).Error)
 	return o
 }
 
@@ -58,15 +57,10 @@ func setupUnacceptedDB(t *testing.T) (*gorm.DB, uuid.UUID) {
 	return db, chefID
 }
 
-// razorpayOK stands in for a working gateway.
-func razorpayOK(t *testing.T) {
+// gatewayOK stands in for a working gateway.
+func gatewayOK(t *testing.T) {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"id":"rfnd_sweep","status":"processed"}`))
-	}))
-	t.Cleanup(srv.Close)
-	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
-	t.Cleanup(func() { SetRazorpayClient(nil) })
+	withCashfreeRefundSpy(t, http.StatusOK)
 }
 
 func orderRow(t *testing.T, db *gorm.DB, id uuid.UUID) (status, paymentStatus string, refund float64) {
@@ -86,7 +80,7 @@ func orderRow(t *testing.T, db *gorm.DB, id uuid.UUID) (status, paymentStatus st
 // forever with no refund and no timeout.
 func TestUnacceptedSweep_VoidsAnOrderTheKitchenClosedOn(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	lunchDay := ist(2026, 7, 20, 12, 0)
 	o := seedPaidPendingOrder(t, db, chefID, "lunch", lunchDay, ist(2026, 7, 20, 9, 0))
 
@@ -103,7 +97,7 @@ func TestUnacceptedSweep_VoidsAnOrderTheKitchenClosedOn(t *testing.T) {
 // abandoned anything.
 func TestUnacceptedSweep_LeavesOrdersWhoseKitchenIsStillOpen(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	lunchDay := ist(2026, 7, 20, 12, 0)
 	o := seedPaidPendingOrder(t, db, chefID, "lunch", lunchDay, ist(2026, 7, 20, 9, 0))
 
@@ -120,7 +114,7 @@ func TestUnacceptedSweep_LeavesOrdersWhoseKitchenIsStillOpen(t *testing.T) {
 // could plausibly have looked at it.
 func TestUnacceptedSweep_NeverVoidsAnAdvanceOrderEarly(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	placed := ist(2026, 7, 20, 10, 0)
 	tomorrowDinner := ist(2026, 7, 21, 20, 0)
 	o := seedPaidPendingOrder(t, db, chefID, "dinner", tomorrowDinner, placed)
@@ -142,7 +136,7 @@ func TestUnacceptedSweep_NeverVoidsAnAdvanceOrderEarly(t *testing.T) {
 // cooked; an unpaid one is stale_order_cron's job.
 func TestUnacceptedSweep_IgnoresOrdersThatAreNotStranded(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	lunchDay := ist(2026, 7, 20, 12, 0)
 	placed := ist(2026, 7, 20, 9, 0)
 
@@ -167,13 +161,7 @@ func TestUnacceptedSweep_IgnoresOrdersThatAreNotStranded(t *testing.T) {
 // order the customer was not refunded for. That state looks resolved and is not.
 func TestUnacceptedSweep_GatewayFailure_LeavesTheOrderPendingForRetry(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"error":{"description":"boom"}}`))
-	}))
-	defer srv.Close()
-	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
-	t.Cleanup(func() { SetRazorpayClient(nil) })
+	withCashfreeRefundSpy(t, http.StatusInternalServerError)
 
 	o := seedPaidPendingOrder(t, db, chefID, "lunch", ist(2026, 7, 20, 12, 0), ist(2026, 7, 20, 9, 0))
 
@@ -189,24 +177,13 @@ func TestUnacceptedSweep_GatewayFailure_LeavesTheOrderPendingForRetry(t *testing
 // A retry after a failure must refund exactly once.
 func TestUnacceptedSweep_RetryAfterFailure_RefundsOnce(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	fail := true
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if fail {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"error":{"description":"boom"}}`))
-			return
-		}
-		_, _ = w.Write([]byte(`{"id":"rfnd_sweep","status":"processed"}`))
-	}))
-	defer srv.Close()
-	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
-	t.Cleanup(func() { SetRazorpayClient(nil) })
+	spy := withCashfreeRefundSpy(t, http.StatusInternalServerError)
 
 	o := seedPaidPendingOrder(t, db, chefID, "lunch", ist(2026, 7, 20, 12, 0), ist(2026, 7, 20, 9, 0))
 	after := ist(2026, 7, 20, 14, 5)
 	require.Equal(t, 0, refundUnacceptedOrders(context.Background(), db, after))
 
-	fail = false
+	spy.failing = false
 	require.Equal(t, 1, refundUnacceptedOrders(context.Background(), db, after))
 
 	_, _, refund := orderRow(t, db, o.ID)
@@ -216,7 +193,7 @@ func TestUnacceptedSweep_RetryAfterFailure_RefundsOnce(t *testing.T) {
 // A refunded order must not be swept again on the next tick.
 func TestUnacceptedSweep_IsIdempotentAcrossTicks(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	o := seedPaidPendingOrder(t, db, chefID, "lunch", ist(2026, 7, 20, 12, 0), ist(2026, 7, 20, 9, 0))
 	after := ist(2026, 7, 20, 14, 5)
 
@@ -232,7 +209,7 @@ func TestUnacceptedSweep_IsIdempotentAcrossTicks(t *testing.T) {
 // money and cancelled my dinner".
 func TestUnacceptedSweep_StagesTheVoidEvent(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	seedPaidPendingOrder(t, db, chefID, "lunch", ist(2026, 7, 20, 12, 0), ist(2026, 7, 20, 9, 0))
 
 	require.Equal(t, 1, refundUnacceptedOrders(context.Background(), db, ist(2026, 7, 20, 14, 5)))
@@ -250,7 +227,7 @@ func TestUnacceptedSweep_StagesTheVoidEvent(t *testing.T) {
 // pay the customer twice.
 func TestUnacceptedSweep_SkipsTypedEscrowOrders(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	o := seedPaidPendingOrder(t, db, chefID, "lunch", ist(2026, 7, 20, 12, 0), ist(2026, 7, 20, 9, 0))
 	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days (id, order_id, status) VALUES (?,?,?)`,
 		uuid.NewString(), o.ID.String(), "confirmed").Error)

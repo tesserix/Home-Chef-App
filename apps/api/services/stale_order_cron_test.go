@@ -31,16 +31,6 @@ import (
 	"github.com/homechef/api/models"
 )
 
-// setupStaleOrderDB extends setupCancelRefundDB's orders table with
-// razorpay_order_id — the column this cron reads to decide whether an order was
-// ever handed to a gateway at all.
-func setupStaleOrderDB(t *testing.T) *gorm.DB {
-	t.Helper()
-	db := setupCancelRefundDB(t)
-	require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN razorpay_order_id TEXT DEFAULT ''`).Error)
-	return db
-}
-
 // seedStaleOrder is a payment_status=pending order created well past the
 // 30-minute grace window, stamped with the given provider/gateway-order-id/mode.
 // No items, no delivery slot — see the file header on why.
@@ -119,7 +109,7 @@ func TestDecideStaleOrderAction_DecisionTable(t *testing.T) {
 // ── Scenario 1: captured payment -> stays pending, never settled ───────────
 
 func TestStaleOrderSweep_CapturedPayment_StaysPendingAndIsNotSettled(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_captured", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -142,7 +132,7 @@ func TestStaleOrderSweep_CapturedPayment_StaysPendingAndIsNotSettled(t *testing.
 // ── Scenario 2: gateway confirms not captured -> cancelled exactly as before ─
 
 func TestStaleOrderSweep_NotCaptured_CancelsExactlyAsBefore(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_notcaptured", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -165,7 +155,7 @@ func TestStaleOrderSweep_NotCaptured_CancelsExactlyAsBefore(t *testing.T) {
 // ── Scenario 3: gateway fetch error -> never cancel, retried next tick ──────
 
 func TestStaleOrderSweep_GatewayError_NeverCancelsAndIsRetried(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_erroring", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -198,7 +188,7 @@ func TestStaleOrderSweep_GatewayError_NeverCancelsAndIsRetried(t *testing.T) {
 // ── Scenario 4: gateway not configured for the order's mode -> never cancel ─
 
 func TestStaleOrderSweep_GatewayNotConfiguredForMode_NeverCancels(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_noconfig", models.ChefModeTest, now.Add(-staleOrderGrace))
 
@@ -224,7 +214,7 @@ func TestStaleOrderSweep_GatewayNotConfiguredForMode_NeverCancels(t *testing.T) 
 // ── Scenario 5: no gateway order id ever stamped -> zero gateway calls ──────
 
 func TestStaleOrderSweep_NoGatewayOrderID_CancelsWithZeroGatewayCalls(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -257,7 +247,7 @@ func TestStaleOrderSweep_NoGatewayOrderID_CancelsWithZeroGatewayCalls(t *testing
 // left unconfigured (would error if ever consulted), and a hit on it fails the
 // test.
 func TestStaleOrderSweep_CashfreeOrder_NeverRoutedToRazorpay(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_routing", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -286,7 +276,7 @@ func TestStaleOrderSweep_CashfreeOrder_NeverRoutedToRazorpay(t *testing.T) {
 // backstop must hold: an unknown answer is never a cancel, and the retired
 // gateway is never asked.
 func TestStaleOrderSweep_RazorpayOrder_NeverCancelledAndNeverAsked(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "razorpay", "order_rzp_legacy", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -317,7 +307,7 @@ func TestStaleOrderSweep_RazorpayOrder_NeverCancelledAndNeverAsked(t *testing.T)
 // status=cancelled rows), so nothing recovers it.
 
 func TestStaleOrderSweep_CashfreePendingPayment_NeverCancels(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_pending", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -343,7 +333,7 @@ func TestStaleOrderSweep_CashfreePendingPayment_NeverCancels(t *testing.T) {
 
 // A dead attempt still cancels — the fix must not turn the sweep into a no-op.
 func TestStaleOrderSweep_CashfreeAllAttemptsDead_StillCancels(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_dead", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -368,7 +358,7 @@ func TestStaleOrderSweep_CashfreeAllAttemptsDead_StillCancels(t *testing.T) {
 // customer who failed once and is mid-way through a second attempt is precisely
 // who must not have their order cancelled under them.
 func TestStaleOrderSweep_CashfreeFailedThenPending_IsInFlight(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_retry", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -393,7 +383,7 @@ func TestStaleOrderSweep_CashfreeFailedThenPending_IsInFlight(t *testing.T) {
 // An unrecognised gateway state reads as in-flight, never as dead. A status
 // neither gateway has shipped yet must not be able to cancel an order.
 func TestStaleOrderSweep_UnknownGatewayStatus_TreatedAsInFlight(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	seedStaleOrder(t, db, "cashfree", "cf_order_novel", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -414,7 +404,7 @@ func TestStaleOrderSweep_UnknownGatewayStatus_TreatedAsInFlight(t *testing.T) {
 // (HC26080404499485) after the first version of the D-14 fix swept NOT_ATTEMPTED
 // into the "unknown, therefore in flight" default.
 func TestStaleOrderSweep_CashfreeNotAttempted_StillCancels(t *testing.T) {
-	db := setupStaleOrderDB(t)
+	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_unstarted", models.ChefModeLive, now.Add(-staleOrderGrace))
 
@@ -436,7 +426,7 @@ func TestStaleOrderSweep_CashfreeNotAttempted_StillCancels(t *testing.T) {
 func TestStaleOrderSweep_CashfreeVoidAndCancelled_StillCancel(t *testing.T) {
 	for _, st := range []string{"VOID", "CANCELLED"} {
 		t.Run(st, func(t *testing.T) {
-			db := setupStaleOrderDB(t)
+			db := setupCancelRefundDB(t)
 			now := time.Now()
 			seedStaleOrder(t, db, "cashfree", "cf_order_"+st, models.ChefModeLive, now.Add(-staleOrderGrace))
 
