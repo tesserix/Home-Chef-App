@@ -2,23 +2,20 @@ import { useEffect, useRef, useCallback } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { openEventStream, streamRetryPlan } from '@homechef/mobile-shared/realtime';
+import { versionPrefixFor } from '@homechef/mobile-shared/api';
 
 import { useAuthStore } from '../store/auth-store';
 import { invalidationsFor, parseLiveFrame } from '../lib/live-updates';
 
 
 /**
- * The `/v1` base for the stream.
- *
- * The apps disagree about where `/v1` lives: this one's EXPO_PUBLIC_API_URL ends in
- * `/api/v1`, the customer's in `/api`. Appending `/v1` blindly produced `/api/v1/v1/...`,
- * which 404s — and because the stream fails silently, the only symptom was stale data.
- * Normalise instead of assuming either convention.
+ * The `/v1` base for the stream. The rule itself is shared — every private copy
+ * of it has eventually drifted into a `/v1/v1/...` 404 somewhere.
  */
 export function streamBase(base?: string): { http: string } {
   const raw = (base ?? process.env.EXPO_PUBLIC_API_URL ?? 'https://vendors.fe3dr.com/api/v1')
     .replace(/\/+$/, '');
-  return { http: /\/v1$/.test(raw) ? raw : `${raw}/v1` };
+  return { http: `${raw}${versionPrefixFor(raw)}` };
 }
 
 /**

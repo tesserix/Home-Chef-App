@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	natsclient "github.com/nats-io/nats.go"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
@@ -1299,20 +1298,19 @@ func (h *OrderHandler) TrackOrderWS(c *gin.Context) {
 	}()
 
 	// Subscribe to core NATS (not JetStream) for live location fan-out.
-	subject := fmt.Sprintf("%s.%s", services.SubjectDeliveryLocation, deliveryID)
-	sub, err := services.GetNATSClient().Subscribe(subject, func(msg *natsclient.Msg) {
+	stop, err := subscribeTracking(orderID, deliveryID, func(data []byte) {
 		select {
-		case writeCh <- msg.Data:
+		case writeCh <- data:
 		default:
 			// Channel full — drop this message rather than block the NATS dispatcher.
 		}
 	})
 	if err != nil {
-		log.Printf("NATS subscribe failed for delivery %s: %v", deliveryID, err)
+		log.Printf("NATS subscribe failed for order %s: %v", orderID, err)
 		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(1011, "Internal error"))
 		return
 	}
-	defer sub.Unsubscribe()
+	defer stop()
 
 	// Read pump — blocks until client disconnects or sends a close frame.
 	// T-04-05: SetReadLimit caps inbound frame size at 512 bytes.

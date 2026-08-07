@@ -70,6 +70,7 @@ export function useNotificationsWS(enabled = true) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const failures = useRef(0);
 
   const pollUnreadCount = useCallback(async () => {
     try {
@@ -89,20 +90,41 @@ export function useNotificationsWS(enabled = true) {
     }
   }, []);
 
+  const startPolling = useCallback(() => {
+    if (pollTimer.current) return;
+    pollTimer.current = setInterval(pollUnreadCount, 30000);
+    void pollUnreadCount();
+  }, [pollUnreadCount]);
+
   const connect = useCallback(async () => {
     if (!enabled || wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    // Capped exponential backoff with jitter, rather than a fixed 5s: every
+    // client dropped by one server-side event would otherwise retry in the
+    // same second, forever.
+    const retryAfterFailure = () => {
+      failures.current += 1;
+      const base = Math.min(30_000, 1_000 * 2 ** Math.max(0, failures.current - 1));
+      reconnectTimer.current = setTimeout(connect, Math.round(base * (1 - 0.3 * Math.random())));
+      startPolling();
+    };
 
     try {
       const accessToken = await readAccessToken();
       const ticket = await mintWSTicket(accessToken);
-      // Signed out or the mint failed — stay on polling; the reconnect
-      // schedule will try again.
-      if (!ticket) return;
+      // A failed mint never opens a socket, so `onclose` — which is what
+      // schedules the next attempt — can never fire. Without rescheduling here
+      // the bell went permanently dead on one bad mint, with no polling either.
+      if (!ticket) {
+        retryAfterFailure();
+        return;
+      }
       const ws = new WebSocket(getWSUrl(ticket));
       wsRef.current = ws;
 
       ws.onopen = () => {
         setConnected(true);
+        failures.current = 0;
         // Stop polling — WS is live
         if (pollTimer.current) {
           clearInterval(pollTimer.current);
@@ -127,26 +149,17 @@ export function useNotificationsWS(enabled = true) {
       ws.onclose = () => {
         setConnected(false);
         wsRef.current = null;
-        // Reconnect after 5 seconds
-        reconnectTimer.current = setTimeout(connect, 5000);
-        // Start polling as fallback
-        if (!pollTimer.current) {
-          pollTimer.current = setInterval(pollUnreadCount, 30000);
-          pollUnreadCount();
-        }
+        retryAfterFailure();
       };
 
       ws.onerror = () => {
-        ws.close();
+        ws.close(); // onclose does the counting and rescheduling
       };
     } catch {
-      // WS not available — fall back to polling
-      if (!pollTimer.current) {
-        pollTimer.current = setInterval(pollUnreadCount, 30000);
-        pollUnreadCount();
-      }
+      // The constructor itself threw — no socket, so nothing will call onclose.
+      retryAfterFailure();
     }
-  }, [enabled, pollUnreadCount]);
+  }, [enabled, startPolling]);
 
   useEffect(() => {
     if (!enabled) return;
