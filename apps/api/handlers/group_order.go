@@ -643,7 +643,7 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 
 // ───────────────────────── Pay + consolidate ─────────────────────────
 
-// PayGroupShare — POST /group-orders/:id/pay. Creates the Razorpay charge for the
+// PayGroupShare — POST /group-orders/:id/pay. Creates the gateway charge for the
 // caller's share (split) or the full total (host pays).
 func (h *GroupOrderHandler) PayGroupShare(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
@@ -674,67 +674,41 @@ func (h *GroupOrderHandler) PayGroupShare(c *gin.Context) {
 	var shareChefProvider string
 	_ = database.DB.Model(&models.ChefProfile{}).
 		Where("id = ?", g.ChefID).Limit(1).Pluck("payment_provider", &shareChefProvider).Error
-	provider := services.ChargeGatewayFor(shareChefProvider, g.Mode)
-
-	if provider == models.PaymentProviderCashfree {
-		var payer models.User
-		_ = database.DB.First(&payer, "id = ?", userID).Error
-		// The Cashfree order id is the PARTICIPANT's uuid, not the group's — each
-		// share is its own capture, and they must not collide on one order id.
-		cfOrder, cerr := services.CreateCashfreeCharge(
-			g.Mode, me.ID, me.ShareAmount, g.Currency,
-			services.CashfreeCustomerFor(&payer),
-			map[string]string{"purpose": "group_order", "group_order_id": g.ID.String(), "participant_id": me.ID.String()},
-			"Fe3dr group order share", "groupshare",
-		)
-		if cerr != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"error": "Could not start payment"})
-			return
-		}
-		database.DB.Model(&models.GroupOrderParticipant{}).Where("id = ?", me.ID).
-			Updates(map[string]any{
-				"razorpay_order_id": cfOrder.OrderID,
-				"payment_provider":  models.PaymentProviderCashfree,
-			})
-		c.JSON(http.StatusCreated, gin.H{
-			"provider":                 models.PaymentProviderCashfree,
-			"razorpayOrderId":          cfOrder.OrderID,
-			"cashfreeOrderId":          cfOrder.OrderID,
-			"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
-			"cashfreeEnv":              services.CashfreeEnvLabel(g.Mode),
-			"amount":                   services.ToPaise(me.ShareAmount),
-			"currency":                 g.Currency,
-		})
+	// Cashfree or nothing (#1086). A group-order share has no Stripe
+	// implementation, so a non-INR kitchen is refused rather than charged on a
+	// gateway it is not registered with.
+	if provider := services.ChargeGatewayFor(shareChefProvider, g.Mode); provider != models.PaymentProviderCashfree {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Group orders aren't available for this kitchen's payment setup"})
 		return
 	}
 
-	rz := services.GetRazorpayFor(g.Mode)
-	if rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-		return
-	}
-	rzOrder, err := rz.CreateOrder(&services.OrderRequest{
-		Amount:   services.ToPaise(me.ShareAmount),
-		Currency: g.Currency,
-		Receipt:  fmt.Sprintf("GRP-%s-%s", shortID(g.ID), shortID(me.ID)),
-		Notes:    map[string]string{"purpose": "group_order", "group_order_id": g.ID.String(), "participant_id": me.ID.String()},
-	})
-	if err != nil {
+	var payer models.User
+	_ = database.DB.First(&payer, "id = ?", userID).Error
+	// The Cashfree order id is the PARTICIPANT's uuid, not the group's — each
+	// share is its own capture, and they must not collide on one order id.
+	cfOrder, cerr := services.CreateCashfreeCharge(
+		g.Mode, me.ID, me.ShareAmount, g.Currency,
+		services.CashfreeCustomerFor(&payer),
+		map[string]string{"purpose": "group_order", "group_order_id": g.ID.String(), "participant_id": me.ID.String()},
+		"Fe3dr group order share", "groupshare",
+	)
+	if cerr != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Could not start payment"})
 		return
 	}
 	database.DB.Model(&models.GroupOrderParticipant{}).Where("id = ?", me.ID).
 		Updates(map[string]any{
-			"razorpay_order_id": rzOrder.ID,
-			"payment_provider":  models.PaymentProviderRazorpay,
+			"razorpay_order_id": cfOrder.OrderID,
+			"payment_provider":  models.PaymentProviderCashfree,
 		})
-
 	c.JSON(http.StatusCreated, gin.H{
-		"provider":        models.PaymentProviderRazorpay,
-		"razorpayOrderId": rzOrder.ID,
-		"razorpayKeyId":   rz.GetKeyID(),
-		"amount":          rzOrder.Amount,
-		"currency":        g.Currency,
+		"provider":                 models.PaymentProviderCashfree,
+		"razorpayOrderId":          cfOrder.OrderID,
+		"cashfreeOrderId":          cfOrder.OrderID,
+		"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
+		"cashfreeEnv":              services.CashfreeEnvLabel(g.Mode),
+		"amount":                   services.ToPaise(me.ShareAmount),
+		"currency":                 g.Currency,
 	})
 }
 

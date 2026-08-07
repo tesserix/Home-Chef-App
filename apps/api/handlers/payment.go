@@ -18,7 +18,6 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // Currency resolution lives in services.CurrencyForCountry; services.ToMinor
@@ -109,133 +108,19 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 
 	// Resolve the gateway from the chef's configured provider. The branch taken is
 	// also what stamps order.payment_provider, so the gateway that takes the money
-	// and the gateway a later refund goes to cannot disagree. The razorpay arm is
-	// unreachable since #1086 and is deleted with the rest of that gateway.
+	// and the gateway a later refund goes to cannot disagree. Anything selection
+	// cannot charge is refused rather than sent down a gateway's branch by
+	// default — that fallthrough is how a Cashfree order used to reach the
+	// Razorpay code and fail on an empty payment id.
 	switch provider := services.SelectCheckoutGateway(order.Chef.PaymentProvider, order.Mode); provider {
 	case models.PaymentProviderStripe:
 		h.createStripePayment(c, &order, userID)
 	case models.PaymentProviderCashfree:
 		h.createCashfreePayment(c, &order, userID, creditReq)
 	default:
-		h.createRazorpayPayment(c, &order, userID, creditReq)
+		log.Printf("checkout: no charge path for provider %q on order %s", provider, order.OrderNumber)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payments aren't available for this kitchen right now"})
 	}
-}
-
-// createRazorpayPayment is the original INR + Razorpay Route flow. Unchanged
-// from the pre-multi-gateway implementation except that the order's
-// payment_provider column is now stamped so VerifyPayment / InitiateRefund
-// know which code path to run later.
-func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Order, userID uuid.UUID, creditReq services.CreditRequest) {
-	rz := services.GetRazorpayFor(order.Mode)
-	if rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-		return
-	}
-
-	totalPaise := services.ToPaise(order.Total)
-
-	// FSSAI hard lockout (#32/#93): audit + withhold the chef payout when their
-	// food-safety licence has lapsed. services.OrderSettlements() clears the chef
-	// account so no transfer is built; here we record the freeze for the
-	// regulatory trail.
-	if services.IsChefFSSAIExpired(&order.Chef) {
-		chefAmount := services.ChefNetPayoutFor(order)
-		middleware.RecordFSSAILockout("payout_withheld")
-		log.Printf("fssai-lockout: withholding chef payout order=%s chef=%s amount=%.2f",
-			order.OrderNumber, order.Chef.ID, chefAmount)
-		services.LogSystemAudit(c, "chef.payout.fssai_withheld", "chef", order.Chef.ID.String(), nil, map[string]any{
-			"orderNumber":    order.OrderNumber,
-			"withheldAmount": chefAmount,
-			"reason":         "fssai_licence_expired",
-		})
-	}
-
-	settlements := services.OrderSettlements(database.DB, order)
-
-	// Allocate the credit from LIVE state — the same call the /quote endpoint makes,
-	// so the figure the customer was shown and the figure charged here are produced
-	// by one computation rather than two that can drift.
-	quote, err := services.BuildCreditQuote(database.DB, order, userID, creditReq, creditFlags())
-	if err != nil {
-		log.Printf("credit-quote failed order=%s: %v", order.OrderNumber, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not price this order"})
-		return
-	}
-	walletApplied := services.FromPaise(quote.WalletAppliedPaise)
-	loyaltyApplied := services.FromPaise(quote.PointsAppliedPaise)
-
-	// Loyalty behaves exactly like wallet at the gateway: a platform-funded discount
-	// that shrinks the capture but never the chef's or driver's payout. Route funds
-	// each settlement from the capture as far as it reaches and tops up the rest from
-	// the platform balance.
-	creditPaise := quote.WalletAppliedPaise + quote.PointsAppliedPaise
-	plan := services.PlanWalletFunding(totalPaise, creditPaise, creditPaise, settlements)
-
-	// Fully-credit-covered order: nothing left for the gateway, so settle the
-	// chef/driver from the platform balance and mark the order paid in one shot.
-	//
-	// Unreachable on a normal order now — the capture always retains at least the
-	// service fee and GST — but it still fires on a zero-fee configuration, and it
-	// is the correct handling if one ever exists.
-	if plan.FullWallet {
-		h.settleFullWalletOrder(c, order, plan, walletApplied, loyaltyApplied, quote.PointsAppliedPoints)
-		return
-	}
-
-	rzOrder, err := rz.CreateOrder(&services.OrderRequest{
-		Amount:    plan.CapturePaise,
-		Currency:  "INR",
-		Receipt:   order.OrderNumber,
-		Transfers: plan.PaymentTransfers,
-		Notes: map[string]string{
-			"order_id":     order.ID.String(),
-			"order_number": order.OrderNumber,
-			"customer_id":  userID.String(),
-		},
-	})
-	if err != nil {
-		log.Printf("Failed to create Razorpay order: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
-		return
-	}
-
-	// Omit(clause.Associations): `order` carries preloaded Customer/Chef/Delivery,
-	// and without this GORM cascades an upsert into those rows on every stamp —
-	// re-saving user records as a side effect of recording a payment, and failing
-	// the ENTIRE update (silently, since the result was never checked) if any
-	// association column mismatches. Stamping payment columns must touch only the
-	// order.
-	if res := database.DB.Model(order).Omit(clause.Associations).Updates(map[string]interface{}{
-		"razorpay_order_id":    rzOrder.ID,
-		"payment_provider":     "razorpay",
-		"wallet_applied":       walletApplied,
-		"loyalty_applied":      loyaltyApplied,
-		"loyalty_points_spent": quote.PointsAppliedPoints,
-	}); res.Error != nil {
-		// The credit is recorded on the order and settled from it after capture, so
-		// losing this write would strand the customer's applied credit.
-		log.Printf("Failed to stamp payment columns order=%s: %v", order.OrderNumber, res.Error)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"provider":        "razorpay",
-		"razorpayOrderId": rzOrder.ID,
-		"razorpayKeyId":   rz.GetKeyID(),
-		"amount":          plan.CapturePaise,
-		"walletApplied":   walletApplied,
-		"loyaltyApplied":  loyaltyApplied,
-		"pointsApplied":   quote.PointsAppliedPoints,
-		"payable":         services.FromPaise(quote.PayablePaise),
-		"currency":        "INR",
-		"orderNumber":     order.OrderNumber,
-		"prefill": gin.H{
-			"name":  order.Customer.FirstName + " " + order.Customer.LastName,
-			"email": order.Customer.Email,
-			"phone": order.Customer.Phone,
-		},
-	})
 }
 
 // settleFullWalletOrder handles an order fully covered by credit: there is no

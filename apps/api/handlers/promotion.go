@@ -47,7 +47,7 @@ func (h *PromotionHandler) GetFeaturedAdPricing(c *gin.Context) {
 	})
 }
 
-// PurchaseFeaturedAd creates a Razorpay order for the featured ad and activates on payment.
+// PurchaseFeaturedAd creates the gateway order for the featured ad and activates on payment.
 // POST /chef/promotion/purchase
 func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
@@ -81,10 +81,11 @@ func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 
 	// Resolve the rail through the same seam checkout uses, so a kitchen's promo
 	// purchase cannot land on a different gateway from its orders.
-	provider := services.ChargeGatewayFor(chef.PaymentProvider, chef.Mode)
-	rz := services.GetRazorpayFor(chef.Mode)
-	if provider != models.PaymentProviderCashfree && rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
+	// Cashfree or nothing (#1086). A featured listing has no Stripe implementation,
+	// so a non-INR kitchen is refused rather than charged in the wrong currency on
+	// a gateway it is not registered with.
+	if provider := services.ChargeGatewayFor(chef.PaymentProvider, chef.Mode); provider != models.PaymentProviderCashfree {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Featured listings aren't available for this kitchen's payment setup"})
 		return
 	}
 
@@ -109,68 +110,35 @@ func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 		return
 	}
 
-	// Create Razorpay order (no Route transfers — this goes to Fe3dr's account)
-	if provider == models.PaymentProviderCashfree {
-		var payer models.User
-		_ = database.DB.First(&payer, "id = ?", chef.UserID).Error
-		cfOrder, cerr := services.CreateCashfreeCharge(
-			chef.Mode, promo.ID, pricing.MonthlyPrice, pricing.Currency,
-			services.CashfreeCustomerFor(&payer),
-			map[string]string{"type": "featured_ad", "promotion_id": promo.ID.String(), "chef_id": chef.ID.String()},
-			"Fe3dr featured listing", "promo",
-		)
-		if cerr != nil {
-			log.Printf("Failed to create Cashfree order for promotion: %v", cerr)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
-			return
-		}
-		// Stamped together: a row recording a Cashfree order against 'razorpay'
-		// would be verified against the wrong gateway.
-		database.DB.Model(&promo).Updates(map[string]any{
-			"razorpay_order_id": cfOrder.OrderID,
-			"payment_provider":  models.PaymentProviderCashfree,
-		})
-		c.JSON(http.StatusOK, gin.H{
-			"promotionId":              promo.ID,
-			"provider":                 models.PaymentProviderCashfree,
-			"razorpayOrderId":          cfOrder.OrderID,
-			"cashfreeOrderId":          cfOrder.OrderID,
-			"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
-			"cashfreeEnv":              services.CashfreeEnvLabel(chef.Mode),
-			"amount":                   services.ToPaise(pricing.MonthlyPrice),
-			"currency":                 pricing.Currency,
-		})
-		return
-	}
-
-	rzOrder, err := rz.CreateOrder(&services.OrderRequest{
-		Amount:   services.ToPaise(pricing.MonthlyPrice),
-		Currency: pricing.Currency,
-		Receipt:  "promo-" + promo.ID.String()[:8],
-		Notes: map[string]string{
-			"type":         "featured_ad",
-			"promotion_id": promo.ID.String(),
-			"chef_id":      chef.ID.String(),
-		},
-	})
-	if err != nil {
-		log.Printf("Failed to create Razorpay order for promotion: %v", err)
+	// The charge goes to Fe3dr's own account — no split, this is not a food order.
+	var payer models.User
+	_ = database.DB.First(&payer, "id = ?", chef.UserID).Error
+	cfOrder, cerr := services.CreateCashfreeCharge(
+		chef.Mode, promo.ID, pricing.MonthlyPrice, pricing.Currency,
+		services.CashfreeCustomerFor(&payer),
+		map[string]string{"type": "featured_ad", "promotion_id": promo.ID.String(), "chef_id": chef.ID.String()},
+		"Fe3dr featured listing", "promo",
+	)
+	if cerr != nil {
+		log.Printf("Failed to create Cashfree order for promotion: %v", cerr)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
 		return
 	}
-
+	// Stamped together: a row recording a Cashfree order against 'razorpay' would
+	// be verified against the wrong gateway.
 	database.DB.Model(&promo).Updates(map[string]any{
-		"razorpay_order_id": rzOrder.ID,
-		"payment_provider":  models.PaymentProviderRazorpay,
+		"razorpay_order_id": cfOrder.OrderID,
+		"payment_provider":  models.PaymentProviderCashfree,
 	})
-
 	c.JSON(http.StatusOK, gin.H{
-		"promotionId":     promo.ID,
-		"provider":        models.PaymentProviderRazorpay,
-		"razorpayOrderId": rzOrder.ID,
-		"razorpayKeyId":   rz.GetKeyID(),
-		"amount":          services.ToPaise(pricing.MonthlyPrice),
-		"currency":        pricing.Currency,
+		"promotionId":              promo.ID,
+		"provider":                 models.PaymentProviderCashfree,
+		"razorpayOrderId":          cfOrder.OrderID,
+		"cashfreeOrderId":          cfOrder.OrderID,
+		"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
+		"cashfreeEnv":              services.CashfreeEnvLabel(chef.Mode),
+		"amount":                   services.ToPaise(pricing.MonthlyPrice),
+		"currency":                 pricing.Currency,
 	})
 }
 
