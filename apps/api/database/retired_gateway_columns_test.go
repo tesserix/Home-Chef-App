@@ -61,6 +61,34 @@ func TestDropRetiredGatewayColumns_KeepsAColumnThatStillHoldsData(t *testing.T) 
 	require.Equal(t, "acc_live_123", got)
 }
 
+func TestDropRetiredGatewayColumns_DropsAFlagNobodyEverSet(t *testing.T) {
+	db := newChefProfilesForDrop(t)
+	require.NoError(t, db.Exec(`ALTER TABLE chef_profiles ADD COLUMN razorpay_stakeholder_created BOOLEAN DEFAULT false`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, razorpay_stakeholder_created)
+		VALUES ('a', false), ('b', false)`).Error)
+
+	require.NoError(t, dropRetiredGatewayColumns(db, []retiredColumn{
+		{"chef_profiles", "razorpay_stakeholder_created"},
+	}))
+
+	require.False(t, db.Migrator().HasColumn("chef_profiles", "razorpay_stakeholder_created"),
+		"false is the default nobody wrote — it records nothing worth keeping")
+}
+
+func TestDropRetiredGatewayColumns_KeepsAFlagSomebodySet(t *testing.T) {
+	db := newChefProfilesForDrop(t)
+	require.NoError(t, db.Exec(`ALTER TABLE chef_profiles ADD COLUMN razorpay_stakeholder_created BOOLEAN DEFAULT false`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, razorpay_stakeholder_created)
+		VALUES ('a', false), ('b', true)`).Error)
+
+	require.NoError(t, dropRetiredGatewayColumns(db, []retiredColumn{
+		{"chef_profiles", "razorpay_stakeholder_created"},
+	}))
+
+	require.True(t, db.Migrator().HasColumn("chef_profiles", "razorpay_stakeholder_created"),
+		"a flag that was actually set says a stakeholder exists at the gateway")
+}
+
 func TestDropRetiredGatewayColumns_IsIdempotentAndSkipsMissingTables(t *testing.T) {
 	db := newChefProfilesForDrop(t)
 	cols := []retiredColumn{

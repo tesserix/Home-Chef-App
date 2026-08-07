@@ -14,6 +14,12 @@ import (
 
 type retiredColumn struct{ table, column string }
 
+// zeroValueLiterals is what a row that was never written looks like once cast to
+// text: the empty string, the JSON literal a nil payload serialised to, and a
+// boolean false — 'false' on Postgres, '0' on SQLite. A flag nobody ever set
+// records nothing, and keeping the column on that basis kept it forever.
+const zeroValueLiterals = `'', 'null', 'false', 'f', '0'`
+
 // retiredGatewayColumns is what the models dropped in #1086/#1105 and the
 // database did not.
 func retiredGatewayColumns() []retiredColumn {
@@ -40,10 +46,9 @@ func dropRetiredGatewayColumns(db *gorm.DB, cols []retiredColumn) error {
 			continue
 		}
 		var populated int64
-		// 'null' matches the JSON literal a nil payload was serialised to.
 		if err := db.Raw(fmt.Sprintf(
-			`SELECT count(*) FROM %s WHERE %s IS NOT NULL AND CAST(%s AS TEXT) NOT IN ('', 'null')`,
-			c.table, c.column, c.column)).Scan(&populated).Error; err != nil {
+			`SELECT count(*) FROM %s WHERE %s IS NOT NULL AND CAST(%s AS TEXT) NOT IN (%s)`,
+			c.table, c.column, c.column, zeroValueLiterals)).Scan(&populated).Error; err != nil {
 			return fmt.Errorf("inspecting %s.%s: %w", c.table, c.column, err)
 		}
 		if populated > 0 {
