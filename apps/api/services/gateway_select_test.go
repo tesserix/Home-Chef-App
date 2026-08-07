@@ -82,12 +82,16 @@ func TestSelectCheckoutGateway_PrefersCashfreeForExistingRazorpayChefs(t *testin
 	require.Equal(t, models.PaymentProviderCashfree, SelectCheckoutGateway("nonsense", models.ChefModeLive))
 }
 
-// The stored-value MEANING is untouched by that preference. NormalizeProvider
-// still reads a blank row as razorpay, which is what keeps historical orders'
-// refunds routed to the gateway that actually took their money.
-func TestSelectCheckoutGateway_DoesNotChangeStoredProviderMeaning(t *testing.T) {
-	require.Equal(t, models.PaymentProviderRazorpay, models.NormalizeProvider(""))
-	require.Equal(t, models.PaymentProviderRazorpay, models.NormalizeProvider("nonsense"))
+// Whatever this returns is ALSO what gets stamped on the order, so it has to be
+// a value NormalizeProvider reads back unchanged — a selection that normalized to
+// something else would route the refund at a gateway that never took the money.
+// (What each stored value means is pinned in models/payment_provider_test.go.)
+func TestSelectCheckoutGateway_ReturnsAValueThatRoundTrips(t *testing.T) {
+	for _, configured := range []string{"", "nonsense", models.PaymentProviderRazorpay,
+		models.PaymentProviderCashfree, models.PaymentProviderStripe} {
+		got := SelectCheckoutGateway(configured, models.ChefModeLive)
+		require.Equal(t, got, models.NormalizeProvider(got), "configured %q", configured)
+	}
 }
 
 // A slot that just failed to create an order reads as unusable until the

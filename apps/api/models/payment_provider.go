@@ -44,44 +44,30 @@ const (
 	PaymentProviderWallet = "wallet"
 )
 
-// PreferredChefPaymentProvider is the gateway a NEW chef is created with —
-// Cashfree is the platform's first choice for India, with Razorpay remaining a
-// fully supported option a chef or admin can switch to.
-//
-// This is deliberately SEPARATE from NormalizeProvider's fallback, and the
-// distinction is the whole point:
-//
-//   - PreferredChefPaymentProvider answers "what should a NEW kitchen get?" →
-//     cashfree.
-//   - NormalizeProvider("") answers "what does an UNSTAMPED EXISTING ROW mean?" →
-//     razorpay, because every row that predates the payment_provider column really
-//     is a Razorpay order.
-//
-// Conflating them would silently reinterpret every historical order as Cashfree,
-// and their refunds would be issued against a gateway that never took the money.
+// PreferredChefPaymentProvider is the gateway a NEW chef is created with. Since
+// #1086 it is also what an unstamped value normalizes to — there is one INR
+// gateway left, so the two questions have the same answer.
 const PreferredChefPaymentProvider = PaymentProviderCashfree
 
 // NormalizeProvider coerces a stored or user-supplied provider to a known value.
 //
-// An empty or unrecognised value becomes razorpay. That is not a guess — it is
-// the pre-existing behaviour of every `if provider == "" { provider = "razorpay" }`
-// this function replaces, and it is the right failure direction for the rows that
-// predate the payment_provider column (all of which really are Razorpay orders).
+// Razorpay is now a RECOGNISED case rather than the catch-all (#1086). That order
+// matters: a historical razorpay row must keep saying razorpay, because its refund
+// has to go back to the gateway that took the money — while an empty or garbled
+// value resolves to cashfree, the only INR gateway the platform still operates.
 //
-// Note the asymmetry with NormalizeMode: mode fails toward live because a wrong
-// "test" silently captures no money. Provider fails toward razorpay because that
-// is what unstamped historical rows actually are, and a wrong answer here
-// produces a loud gateway rejection rather than silent data loss.
+// The old fallback existed for rows predating the payment_provider column. There
+// are none left: every provider column in production carries an explicit value.
 func NormalizeProvider(p string) string {
 	switch strings.ToLower(strings.TrimSpace(p)) {
-	case PaymentProviderCashfree:
-		return PaymentProviderCashfree
+	case PaymentProviderRazorpay:
+		return PaymentProviderRazorpay
 	case PaymentProviderStripe:
 		return PaymentProviderStripe
 	case PaymentProviderWallet:
 		return PaymentProviderWallet
 	default:
-		return PaymentProviderRazorpay
+		return PaymentProviderCashfree
 	}
 }
 
