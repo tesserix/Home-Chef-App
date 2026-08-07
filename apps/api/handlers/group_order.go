@@ -712,12 +712,6 @@ func (h *GroupOrderHandler) PayGroupShare(c *gin.Context) {
 	})
 }
 
-type verifyGroupShareRequest struct {
-	RazorpayPaymentID string `json:"razorpayPaymentId"`
-	RazorpayOrderID   string `json:"razorpayOrderId"`
-	RazorpaySignature string `json:"razorpaySignature"`
-}
-
 // VerifyGroupShare — POST /group-orders/:id/pay/verify. Confirms the caller's
 // payment; when everyone required has paid, consolidates into one Order.
 func (h *GroupOrderHandler) VerifyGroupShare(c *gin.Context) {
@@ -727,64 +721,26 @@ func (h *GroupOrderHandler) VerifyGroupShare(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid id"})
 		return
 	}
-	var req verifyGroupShareRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
 	g, me, ok := loadGroupForParticipant(id, userID)
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group order not found"})
 		return
 	}
-	// Cashfree gives the client no payment id or signature, so the capture is read
-	// back from the gateway and bound by the order id — this participant's own UUID.
-	if me.PaymentStatus != models.GroupPayCompleted &&
-		me.PaymentProvider == models.PaymentProviderCashfree {
+	// The client supplies no payment id or signature (#1086): the capture is read
+	// back from the gateway, bound by the order id we stored for this share, and
+	// by the share amount (#395·4) so an under-amount capture cannot settle it.
+	if me.PaymentStatus != models.GroupPayCompleted {
 		pay, cerr := services.VerifyCashfreeCharge(g.Mode, me.RazorpayOrderID, me.ShareAmount)
 		if cerr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
 			return
 		}
-		req.RazorpayPaymentID = pay.CFPaymentID.String()
-		req.RazorpaySignature = ""
-		me.PaymentProvider = models.PaymentProviderCashfree
-	} else if me.PaymentStatus != models.GroupPayCompleted {
-		rz := services.GetRazorpayFor(g.Mode)
-		if rz == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-			return
-		}
-		payment, err := rz.FetchPayment(req.RazorpayPaymentID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
-			return
-		}
-		if payment.Status != "captured" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
-			return
-		}
-		if payment.OrderID != me.RazorpayOrderID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Order ID mismatch"})
-			return
-		}
-		// SECURITY (#395·4): bind the captured amount + Checkout signature to THIS
-		// participant's share, mirroring the main-order VerifyPayment — otherwise an
-		// under-amount captured payment on the share's razorpay order (payment.Amount
-		// is unforgeable, from Razorpay) could mark the share paid in full, and a
-		// captured payment from another order could be reused. Amount is the hard gate.
-		if payment.Amount < services.ToPaise(me.ShareAmount) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount does not match the share amount"})
-			return
-		}
-		if req.RazorpaySignature != "" &&
-			!services.VerifyPaymentSignature(me.RazorpayOrderID, req.RazorpayPaymentID, req.RazorpaySignature) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
-			return
-		}
 		if err := database.DB.Model(&models.GroupOrderParticipant{}).
 			Where("id = ? AND payment_status <> ?", me.ID, models.GroupPayCompleted).
-			Updates(map[string]any{"payment_status": models.GroupPayCompleted, "razorpay_payment_id": req.RazorpayPaymentID}).Error; err != nil {
+			Updates(map[string]any{
+				"payment_status":      models.GroupPayCompleted,
+				"razorpay_payment_id": pay.CFPaymentID.String(),
+			}).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record payment"})
 			return
 		}

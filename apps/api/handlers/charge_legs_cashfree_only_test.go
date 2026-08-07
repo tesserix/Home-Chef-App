@@ -73,7 +73,9 @@ func setupChargeDB(t *testing.T) *gorm.DB {
 		id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, accepted_quote_id TEXT,
 		status TEXT DEFAULT 'accepted', deposit_amount REAL DEFAULT 0, deposit_status TEXT DEFAULT '',
 		razorpay_order_id TEXT DEFAULT '', razorpay_payment_id TEXT DEFAULT '',
-		payment_provider TEXT DEFAULT 'razorpay', created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
+		payment_provider TEXT DEFAULT 'razorpay', deposit_paid_at DATETIME,
+		event_type TEXT DEFAULT 'wedding', event_date DATETIME,
+		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE catering_quotes (id TEXT PRIMARY KEY, request_id TEXT, chef_id TEXT,
 		created_at DATETIME, updated_at DATETIME)`).Error)
 	// setupPayDB's group_orders is a stub for a COUNT probe; PayGroupShare loads

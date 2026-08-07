@@ -84,14 +84,11 @@ export interface CateringRequestDetail {
 }
 
 export interface DepositCharge {
-  razorpayOrderId: string;
-  razorpayKeyId: string;
   amount: number; // paise
   currency: string;
-  /** Which gateway minted this charge. Absent on older servers → razorpay. */
-  provider?: string;
+  provider: string;
   cashfreeOrderId?: string;
-  cashfreePaymentSessionId?: string;
+  cashfreePaymentSessionId: string;
   /** SANDBOX | PRODUCTION — different hosts, the client cannot infer it. */
   cashfreeEnv?: string;
 }
