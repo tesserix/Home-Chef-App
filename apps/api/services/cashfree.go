@@ -408,13 +408,14 @@ type CashfreeOrderRequest struct {
 	// Splits is the Easy Split allocation at capture: each vendor's share is
 	// settled by Cashfree directly; order_amount minus the splits stays with
 	// the platform merchant account. Empty means no split — full capture.
-	Splits         []CashfreeOrderSplit `json:"order_splits,omitempty"`
-	IdempotencyKey string               `json:"-"` // → x-idempotency-key header
+	Splits         []CashfreeVendorSplit `json:"order_splits,omitempty"`
+	IdempotencyKey string                `json:"-"` // → x-idempotency-key header
 }
 
-// CashfreeOrderSplit is one vendor's share of an order, in paise (marshalled
-// as Cashfree's rupee-decimal wire format like every other amount).
-type CashfreeOrderSplit struct {
+// CashfreeVendorSplit is one vendor's share, in paise (marshalled as Cashfree's
+// rupee-decimal wire format like every other amount). Cashfree uses the same
+// shape for order_splits at capture and refund_splits at reversal.
+type CashfreeVendorSplit struct {
 	VendorID    string         `json:"vendor_id"`
 	AmountPaise cashfreeAmount `json:"amount"`
 }
@@ -692,7 +693,7 @@ type CashfreeRefundRequest struct {
 	// Splits charges part of the refund back to an Easy Split vendor. Omitted
 	// entirely for a full-capture order, where the platform bears the whole
 	// refund because it received the whole payment. See BuildRefundSplits.
-	Splits []CashfreeRefundSplit `json:"refund_splits,omitempty"`
+	Splits []CashfreeVendorSplit `json:"refund_splits,omitempty"`
 }
 
 // CashfreeRefund is the created (or fetched) refund.

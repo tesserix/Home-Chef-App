@@ -79,7 +79,7 @@ func TestCashfreeEasySplitSandboxRoundTrip(t *testing.T) {
 			CustomerName:  "E2E Split Customer",
 			CustomerEmail: "e2e-split-customer@fe3dr.com",
 		},
-		Splits: []CashfreeOrderSplit{
+		Splits: []CashfreeVendorSplit{
 			{VendorID: vendorID, AmountPaise: CashfreeAmountFromPaise(50555)},
 		},
 		OrderNote: "easy-split sandbox validation",

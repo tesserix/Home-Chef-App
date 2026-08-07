@@ -112,8 +112,9 @@ func IssueOrderGatewayRefund(order *models.Order, amountPaise int, notes map[str
 			AmountPaise:    cashfreeAmount(amountPaise),
 			Note:           cashfreeRefundNote(order, notes),
 			IdempotencyKey: idempotencyKey,
-			// Without this the platform refunds the chef's share out of its own
-			// balance on an Easy Split order, with nothing left to recover it from.
+			// Stated explicitly so the vendor's share is reversed the same way
+			// whether or not Cashfree's proportional debiting is on. See
+			// BuildRefundSplits.
 			Splits: BuildRefundSplits(order, ToPaise(order.RefundAmount), amountPaise),
 		})
 		if err != nil {
