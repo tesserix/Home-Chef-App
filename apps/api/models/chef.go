@@ -211,8 +211,10 @@ type ChefProfile struct {
 	// registration, the destination split-at-capture settles to. Distinct from
 	// the Payouts-rail beneficiary: splits prevent the platform holding vendor
 	// money; the payout rail moves money it already holds.
+	// Both are gateway-internal: a chef reads services.PayoutRegistrationFor
+	// instead, and operators get the raw string from the admin API (#1082).
 	CashfreeVendorID     string `gorm:"default:''" json:"-"`
-	CashfreeVendorStatus string `gorm:"default:''" json:"cashfreeVendorStatus,omitempty"`
+	CashfreeVendorStatus string `gorm:"default:''" json:"-"`
 
 	// Payout details
 	PayoutMethod      string `gorm:"default:''" json:"-"`

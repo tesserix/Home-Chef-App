@@ -30,25 +30,11 @@ import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
+import { payoutStatusChip, type PayoutDetailsResponse } from '../lib/payout';
 
 // ---- Data types -----------------------------------------------------------
 
 type PayoutMethod = 'bank_transfer';
-
-interface PayoutDetailsResponse {
-  payoutMethod: string;
-  bankAccountName: string;
-  bankAccountNumber: string; // already masked by backend
-  bankIFSC: string;
-  upiId: string; // already masked
-  razorpayConnected: boolean;
-  stripeConnected: boolean;
-  paymentProvider: string;
-  payoutCountry: string;
-  panNumber?: string; // already masked
-  panOnFile?: boolean;
-  cashfreeVendorStatus?: string;
-}
 
 interface SavePayoutPayload {
   payoutMethod: PayoutMethod;
@@ -67,46 +53,13 @@ function usePayoutDetails() {
   });
 }
 
-// Settlement status chip (UI-V2-SPEC §2) — the bank card already carries
-// `razorpayConnected` from GET /chef/payout (whether the Route linked
-// account is live), it just wasn't surfaced. Connected is operational-
-// positive (vendor reconciliation → success green); not-yet-connected reads
-// as pending, not an error, so it gets the amber tint.
-interface SettlementChip {
-  label: string;
-  bg: string;
-  fg: string;
-}
-
-function settlementChipMeta(connected: boolean, cashfreeStatus?: string): SettlementChip {
-  // The Cashfree vendor verdict wins when present: ACTIVE means order money
-  // settles straight to the chef's bank from capture.
-  if (cashfreeStatus === 'ACTIVE') {
-    return {
-      label: 'Bank verified · direct settlement',
-      bg: theme.colors.success.tint,
-      fg: theme.colors.success.soft,
-    };
-  }
-  if (cashfreeStatus) {
-    return {
-      label: 'Bank verification in progress',
-      bg: theme.colors.amber.tint,
-      fg: theme.colors.ink.DEFAULT,
-    };
-  }
-  return connected
-    ? {
-        label: 'Connected · ready for payouts',
-        bg: theme.colors.success.tint,
-        fg: theme.colors.success.soft,
-      }
-    : {
-        label: 'Activation pending',
-        bg: theme.colors.amber.tint,
-        fg: theme.colors.ink.DEFAULT,
-      };
-}
+// Settlement status chip (UI-V2-SPEC §2). The wording is the server's plain
+// language verdict (#1082); only the tint is chosen here.
+const CHIP_TINTS = {
+  success: { bg: theme.colors.success.tint, fg: theme.colors.success.soft },
+  pending: { bg: theme.colors.amber.tint, fg: theme.colors.ink.DEFAULT },
+  error: { bg: theme.colors.destructive.tint, fg: theme.colors.destructive.DEFAULT },
+} as const;
 
 function useSavePayout() {
   const queryClient = useQueryClient();
@@ -327,13 +280,14 @@ export default function PayoutScreen() {
               <View style={styles.currentBannerHeader}>
                 <Text style={styles.currentBannerLabel}>Currently using Bank transfer</Text>
                 {(() => {
-                  const chip = settlementChipMeta(
+                  const chip = payoutStatusChip(
+                    data.payoutRegistration,
                     Boolean(data.razorpayConnected),
-                    data.cashfreeVendorStatus,
                   );
+                  const tint = CHIP_TINTS[chip.tone];
                   return (
-                    <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
-                      <Text style={[styles.statusChipLabel, { color: chip.fg }]}>
+                    <View style={[styles.statusChip, { backgroundColor: tint.bg }]}>
+                      <Text style={[styles.statusChipLabel, { color: tint.fg }]}>
                         {chip.label}
                       </Text>
                     </View>

@@ -77,10 +77,17 @@ func TestBuildOrderSplit(t *testing.T) {
 	// Credit-funded orders settle through statements, never a partial split.
 	require.Nil(t, BuildOrderSplit(db, order, capture-5000, 5000))
 
-	// Vendor not yet verified → full capture.
-	pending := easySplitOrder()
-	pending.Chef.CashfreeVendorStatus = CashfreeVendorInBeneCreation
-	require.Nil(t, BuildOrderSplit(db, pending, capture, 0))
+	// Vendor not yet verified → full capture. Every non-ACTIVE state counts,
+	// including the ones Cashfree never documented (#1082): a split naming an
+	// unverified vendor is rejected and takes the whole checkout down with it.
+	for _, status := range []string{
+		CashfreeVendorInBeneCreation, CashfreeVendorInBankValidation,
+		CashfreeVendorBlocked, CashfreeVendorDeleted, "SOME_FUTURE_STATE", "",
+	} {
+		pending := easySplitOrder()
+		pending.Chef.CashfreeVendorStatus = status
+		require.Nil(t, BuildOrderSplit(db, pending, capture, 0), "status %q must not split", status)
+	}
 	unregistered := easySplitOrder()
 	unregistered.Chef.CashfreeVendorID = ""
 	require.Nil(t, BuildOrderSplit(db, unregistered, capture, 0))

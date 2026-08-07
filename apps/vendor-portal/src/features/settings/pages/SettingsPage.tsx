@@ -38,7 +38,7 @@ interface PayoutData {
   payoutCountry?: string;
   panNumber?: string;
   panOnFile?: boolean;
-  cashfreeVendorStatus?: string;
+  payoutRegistration?: { state: 'none' | 'pending' | 'verified' | 'failed'; message: string };
 }
 
 export default function SettingsPage() {
@@ -287,15 +287,19 @@ export default function SettingsPage() {
               Razorpay Pending
             </span>
           ) : null}
-          {payoutData?.cashfreeVendorStatus === 'ACTIVE' ? (
+          {/* The server owns the wording (#1082) — a raw Cashfree status must
+              never be interpreted here, least of all as "in progress" when the
+              registration has actually failed. */}
+          {payoutData?.payoutRegistration?.state === 'verified' ? (
             <span className="flex items-center gap-1.5 rounded-full bg-herb-tint px-3 py-1 text-xs font-medium text-herb">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Bank verified — direct settlement
+              {payoutData.payoutRegistration.message}
             </span>
-          ) : payoutData?.cashfreeVendorStatus ? (
+          ) : payoutData?.payoutRegistration &&
+            payoutData.payoutRegistration.state !== 'none' ? (
             <span className="flex items-center gap-1.5 rounded-full bg-amber-tint px-3 py-1 text-xs font-medium text-amber">
               <XCircle className="h-3.5 w-3.5" />
-              Bank verification in progress
+              {payoutData.payoutRegistration.message}
             </span>
           ) : null}
         </div>

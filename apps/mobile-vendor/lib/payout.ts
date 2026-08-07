@@ -19,6 +19,16 @@
 
 export type PayoutMethod = 'bank_transfer';
 
+/**
+ * The chef's payout registration as the server describes it (#1082). Cashfree's
+ * own status strings stay on the server, so the message is rendered as sent —
+ * this app must not second-guess a verdict it cannot see the inputs to.
+ */
+export interface PayoutRegistration {
+  state: 'none' | 'pending' | 'verified' | 'failed';
+  message: string;
+}
+
 /** GET /chef/payout — sensitive fields arrive already masked. */
 export interface PayoutDetailsResponse {
   payoutMethod: string;
@@ -30,6 +40,40 @@ export interface PayoutDetailsResponse {
   stripeConnected: boolean;
   paymentProvider: string;
   payoutCountry: string;
+  /** Already masked. */
+  panNumber?: string;
+  panOnFile?: boolean;
+  payoutRegistration?: PayoutRegistration;
+}
+
+export type PayoutChipTone = 'success' | 'pending' | 'error';
+
+export interface PayoutStatusChip {
+  label: string;
+  tone: PayoutChipTone;
+}
+
+/**
+ * The settlement chip on the payout screen. An older API sends no verdict, so
+ * the Route connection stands in — but it can never say "in progress" about a
+ * registration the server has already reported as failed.
+ */
+export function payoutStatusChip(
+  registration: PayoutRegistration | undefined,
+  razorpayConnected: boolean,
+): PayoutStatusChip {
+  if (registration && registration.state !== 'none') {
+    const tone: PayoutChipTone =
+      registration.state === 'verified'
+        ? 'success'
+        : registration.state === 'failed'
+          ? 'error'
+          : 'pending';
+    return { label: registration.message, tone };
+  }
+  return razorpayConnected
+    ? { label: 'Connected · ready for payouts', tone: 'success' }
+    : { label: 'Activation pending', tone: 'pending' };
 }
 
 /** POST /chef/payout body. */
