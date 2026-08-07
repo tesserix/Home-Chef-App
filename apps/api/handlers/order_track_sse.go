@@ -43,12 +43,12 @@ import (
 // driver actually appeared.
 //
 // Writes the error response itself; ok=false means the caller must simply return.
-func resolveTrackedDeliveryID(c *gin.Context) (string, bool) {
+func resolveTrackedDeliveryID(c *gin.Context) (string, models.FulfillmentType, bool) {
 	orderID := c.Param("id")
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return "", false
+		return "", "", false
 	}
 
 	// Verify the customer owns this order and load the delivery relationship.
@@ -57,12 +57,20 @@ func resolveTrackedDeliveryID(c *gin.Context) (string, bool) {
 		Where("id = ? AND customer_id = ?", orderID, userID).
 		First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "order_not_found", "message": "Order not found"})
-		return "", false
+		return "", "", false
 	}
 	if order.Delivery == nil || order.Delivery.ID == uuid.Nil {
-		return "", true
+		return "", order.FulfillmentType, true
 	}
-	return order.Delivery.ID.String(), true
+	return order.Delivery.ID.String(), order.FulfillmentType, true
+}
+
+// trackingAwaitsDriver reports whether an order without a delivery yet may still
+// get one. Only pickup can't: the customer collects, so no assignment is coming
+// and subscribing would pin a global delivery.assigned listener open for the
+// life of the screen to filter events that can never match.
+func trackingAwaitsDriver(fulfillment models.FulfillmentType) bool {
+	return fulfillment != models.FulfillmentPickup
 }
 
 // deliveryIDForOrder re-reads the order's delivery. Callers must already have
@@ -82,9 +90,11 @@ func deliveryIDForOrder(orderID string) string {
 // shared by both transports so they carry the identical stream.
 //
 // When the order has no driver yet it waits on delivery.assigned instead of
-// refusing, so the map goes live the moment a driver accepts. Returns a stop
-// func; an error means NATS is unavailable and the stream cannot be served.
-func subscribeTracking(orderID, deliveryID string, send func([]byte)) (func(), error) {
+// refusing, so the map goes live the moment a driver accepts — unless awaitDriver
+// is false, which means no assignment is coming and the stream carries status
+// only. Returns a stop func; an error means NATS is unavailable and the stream
+// cannot be served.
+func subscribeTracking(orderID, deliveryID string, awaitDriver bool, send func([]byte)) (func(), error) {
 	var mu sync.Mutex
 	var locSub, assignedSub *natsclient.Subscription
 
@@ -122,6 +132,9 @@ func subscribeTracking(orderID, deliveryID string, send func([]byte)) (func(), e
 		if err := subscribeLocation(deliveryID); err != nil {
 			return nil, err
 		}
+		return stop, nil
+	}
+	if !awaitDriver {
 		return stop, nil
 	}
 
@@ -172,7 +185,7 @@ func assignedDeliveryForOrder(payload []byte, orderID string) (string, bool) {
 // TrackOrderSSE streams the order's driver-location updates as SSE.
 // GET /api/v1/orders/:id/track/sse
 func (h *OrderHandler) TrackOrderSSE(c *gin.Context) {
-	deliveryID, ok := resolveTrackedDeliveryID(c)
+	deliveryID, fulfillment, ok := resolveTrackedDeliveryID(c)
 	if !ok {
 		return
 	}
@@ -198,7 +211,7 @@ func (h *OrderHandler) TrackOrderSSE(c *gin.Context) {
 	// Buffered so a slow reader cannot block the shared NATS callback.
 	frames := make(chan []byte, 32)
 
-	stop, err := subscribeTracking(c.Param("id"), deliveryID, func(data []byte) {
+	stop, err := subscribeTracking(c.Param("id"), deliveryID, trackingAwaitsDriver(fulfillment), func(data []byte) {
 		select {
 		case frames <- data:
 		default: // full — drop this position rather than stall the dispatcher

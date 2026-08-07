@@ -5,6 +5,7 @@ import {
   getStatusLine,
   getChipLabel,
   isPickupFulfillment,
+  getEtaLine,
 } from './orderSteps';
 
 describe('orderSteps', () => {
@@ -66,6 +67,22 @@ describe('orderSteps', () => {
     it('relabels the terminal status as Collected for pickup', () => {
       expect(getChipLabel('delivered', 'pickup')).toBe('Collected');
       expect(getChipLabel('delivered', 'delivery')).toBe('Delivered');
+    });
+  });
+
+  describe('getEtaLine', () => {
+    it('never promises a delivery on a pickup order', () => {
+      expect(getEtaLine('pickup')).not.toMatch(/deliver/i);
+      expect(getEtaLine('pickup')).toMatch(/pickup|collect/i);
+    });
+
+    it('gives a delivery estimate for delivery and chef_delivery', () => {
+      expect(getEtaLine('delivery')).toMatch(/delivery/i);
+      expect(getEtaLine('chef_delivery')).toMatch(/delivery/i);
+    });
+
+    it('falls back to the delivery wording when unset', () => {
+      expect(getEtaLine(undefined)).toMatch(/delivery/i);
     });
   });
 

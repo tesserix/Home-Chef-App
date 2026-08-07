@@ -28,6 +28,13 @@ export function isPickupFulfillment(
   return fulfillment === 'pickup';
 }
 
+/** Checkout's timing promise. Pickup gets no delivery estimate — nobody drives. */
+export function getEtaLine(fulfillment: Order['fulfillmentType']): string {
+  return isPickupFulfillment(fulfillment)
+    ? 'Ready for pickup 30–45 min after the chef accepts.'
+    : 'Estimated delivery 30–45 min after the chef accepts.';
+}
+
 const DELIVERY_STEPS = [
   'Confirmed',
   'Preparing',
