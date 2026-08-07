@@ -196,34 +196,25 @@ func OrderSettlements(db *gorm.DB, order *models.Order) []Settlement {
 // raised against them (e.g. an order-issue clawback) that could not be netted
 // against a Route transfer already sent, so it comes off the next one instead.
 //
-// Fails OPEN on a ledger read error: pays the unadjusted gross. A comparison
-// we cannot make must not silently confiscate a chef's whole payout for this
-// order — that would turn a transient DB error into a permanent, unrecorded
-// loss with no reconcile path revisiting it. The debt is not lost by paying
-// gross here: ApplyRecoveryDeduction only reads the ledger and never
-// discharges it, so the same outstanding balance is re-derived and correctly
-// deducted from this chef's next order regardless of whether this read
-// succeeded.
+// This is the ONE site that collects (#1079). It is where money is actually
+// withheld, so it is where the resolving ledger entry is written; the sweep's
+// release-time check (BuildReleaseInput in services/payout_release_cron.go)
+// only reads, and defers to the discharge this makes. Collection is idempotent
+// on the order, so a retried settle re-derives the same net without collecting
+// twice.
 //
-// LANDMINE (final money-safety review): this checkout-time reduction and the
-// sweep's release-time block (BuildReleaseInput's RecoveryBalance in
-// services/payout_release_cron.go) are two UNCOORDINATED places handling the
-// SAME debt — one reduces the transfer here, the other blocks release there,
-// and neither knows the other exists. Recovery is non-discharging (see
-// services/payout_recovery.go): nothing anywhere writes a resolving ledger
-// entry, so the same full debt is re-derived and can be re-applied by BOTH
-// sites against the SAME outstanding balance. No penalty/ledger writer may
-// ship until exactly one of these two mechanisms actually collects-and-
-// discharges the debt and the other is changed to defer to it — do not add a
-// third site, and do not wire a discharging writer to only one of the two
-// without also fixing the other.
+// Fails OPEN on a ledger read error: pays the unadjusted gross. A comparison we
+// cannot make must not silently confiscate a chef's whole payout for this order
+// — that would turn a transient DB error into a permanent, unrecorded loss with
+// no reconcile path revisiting it. Nothing is discharged on that path either,
+// so the debt is still owed and is collected from the next order.
 //
 // On the success path, a deduction that actually reduces the transfer
 // (deducted > 0) writes a system audit row — order, chef, gross, and deducted
 // paise only, nothing else — so a reduced payout is never silent.
 func ApplyChefRecoveryDeduction(db *gorm.DB, order *models.Order, grossPaise int) int {
 	gross := payouts.Money{Minor: int64(grossPaise), Currency: payouts.CurrencyINR}
-	net, deducted, err := ApplyRecoveryDeduction(db, order.ChefID, gross, time.Now())
+	net, deducted, err := CollectRecoveryDeduction(db, order.ChefID, gross, "order", order.ID.String(), time.Now())
 	if err != nil {
 		log.Printf("recovery-deduction: ledger read failed, paying gross order=%s chef=%s gross_paise=%d: %v",
 			order.OrderNumber, order.ChefID, grossPaise, err)
