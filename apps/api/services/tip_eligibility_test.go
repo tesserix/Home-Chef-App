@@ -50,14 +50,50 @@ func TestTipEligibility_CashfreeStatusIsCaseInsensitive(t *testing.T) {
 	require.True(t, TipEligibilityFor(o).Chef, "handler uses EqualFold; the flag must too")
 }
 
-func TestTipEligibility_CashfreeNeverOffersARiderTip(t *testing.T) {
-	// DeliveryPartner carries only a Razorpay linked account, so Easy Split has
-	// no route to a rider at all — the screen must not show the rider section.
+func TestTipEligibility_CashfreeOffersNoRiderTipOnAThirdPartyDelivery(t *testing.T) {
+	// A DeliveryPartner carries only a Razorpay linked account, so Easy Split has
+	// no route to them — the screen must not show the rider section.
 	o := withRider(deliveredOrder(string(models.PaymentProviderCashfree)), "acc_rider")
 	o.Chef.CashfreeVendorID = "vend_1"
 	o.Chef.CashfreeVendorStatus = CashfreeVendorActive
 	require.True(t, TipEligibilityFor(o).Chef)
 	require.False(t, TipEligibilityFor(o).Rider)
+}
+
+// #1080 — the chef delivers their own orders today, so the rider leg has a real
+// destination: the chef's own vendor account. Hiding it advertised less than the
+// platform can do; showing it when the handler refuses is the #1029 dead end.
+func TestTipEligibility_CashfreeOffersARiderTipWhenTheChefDelivered(t *testing.T) {
+	o := deliveredOrder(string(models.PaymentProviderCashfree))
+	o.FulfillmentType = models.FulfillmentChefDelivery
+	o.Chef.CashfreeVendorID = "vend_1"
+	o.Chef.CashfreeVendorStatus = CashfreeVendorActive
+
+	require.True(t, TipEligibilityFor(o).Rider)
+	require.True(t, TipEligibilityFor(o).Chef)
+}
+
+// The rider leg is the chef's vendor, so a dormant vendor kills both legs — the
+// screen must not offer a rider tip the handler will refuse.
+func TestTipEligibility_ChefDeliveredRiderLegNeedsTheVendorToo(t *testing.T) {
+	o := deliveredOrder(string(models.PaymentProviderCashfree))
+	o.FulfillmentType = models.FulfillmentChefDelivery
+	o.Chef.CashfreeVendorID = "vend_1"
+	o.Chef.CashfreeVendorStatus = "PENDING"
+
+	require.False(t, TipEligibilityFor(o).Rider)
+	require.False(t, TipEligibilityFor(o).Chef)
+}
+
+// A pickup order has no delivery leg at all, so there is nobody to tip as rider.
+func TestTipEligibility_PickupOffersNoRiderTip(t *testing.T) {
+	o := deliveredOrder(string(models.PaymentProviderCashfree))
+	o.FulfillmentType = models.FulfillmentPickup
+	o.Chef.CashfreeVendorID = "vend_1"
+	o.Chef.CashfreeVendorStatus = CashfreeVendorActive
+
+	require.False(t, TipEligibilityFor(o).Rider)
+	require.True(t, TipEligibilityFor(o).Chef)
 }
 
 func TestTipEligibility_RazorpayJudgesEachLegSeparately(t *testing.T) {

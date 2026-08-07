@@ -43,12 +43,17 @@ func TipEligibilityFor(order *models.Order) models.TipEligibility {
 	}
 
 	if models.NormalizeProvider(order.PaymentProvider) == models.PaymentProviderCashfree {
-		// Easy Split routes the tip to the chef's vendor account, and there is no
-		// Cashfree route for a rider at all — DeliveryPartner carries only a
-		// Razorpay linked account (handlers/tips.go createCashfreeTip).
-		chefOK := order.Chef.CashfreeVendorID != "" &&
+		// Easy Split routes a tip to a vendor account. The chef has one; a
+		// DeliveryPartner has only a Razorpay linked account, so a third-party
+		// delivery still has no rider route. When the chef carried the order
+		// themselves the rider IS the chef, so both legs land on the one vendor
+		// and stand or fall together (#1080, handlers/tips.go planCashfreeTip).
+		vendorOK := order.Chef.CashfreeVendorID != "" &&
 			strings.EqualFold(order.Chef.CashfreeVendorStatus, CashfreeVendorActive)
-		return models.TipEligibility{Chef: chefOK, Rider: false}
+		return models.TipEligibility{
+			Chef:  vendorOK,
+			Rider: vendorOK && order.FulfillmentType == models.FulfillmentChefDelivery,
+		}
 	}
 
 	// Razorpay Route: each leg needs its own linked account.
