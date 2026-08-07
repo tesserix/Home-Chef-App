@@ -1,13 +1,15 @@
 package handlers
 
 // payment_webhook_wallet_settle_test.go — #395·3. An order completed ONLY via the
-// payment.captured webhook (client dropped before calling verify) must still debit
+// payment-success webhook (client dropped before calling verify) must still debit
 // the store credit applied at checkout. Before the fix that settlement ran only in
 // the verify path, so a webhook-only completion left the wallet un-debited and the
 // customer kept credit they had spent.
 //
 // The chef/driver top-up transfers this file also used to assert went with the Route
 // rail in #1086: the chef is paid the whole delivered order on the statement path.
+// Driven on the Cashfree webhook since #1086 — the Razorpay webhook is gone and no
+// order can be captured on it.
 
 import (
 	"encoding/json"
@@ -20,14 +22,14 @@ import (
 	"github.com/homechef/api/models"
 )
 
-// seedWalletOrder inserts a pending, wallet-at-checkout order (wallet_applied) plus a
+// seedWalletOrder inserts a pending, wallet-at-checkout Cashfree order plus a
 // customer wallet pre-funded with the applied credit.
-func seedWalletOrder(t *testing.T, db *gorm.DB, rzOrderID string, total, walletApplied float64) (order, cust uuid.UUID) {
+func seedWalletOrder(t *testing.T, db *gorm.DB, cfOrderID string, total, walletApplied float64) (order, cust uuid.UUID) {
 	t.Helper()
 	cust = payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	order = payOrder(t, db, cust, chef, "pending", total, rzOrderID, "")
+	order = cfPayOrder(t, db, cust, chef, "pending", total, cfOrderID)
 	require.NoError(t, db.Exec(`UPDATE orders SET wallet_applied = ? WHERE id = ?`, walletApplied, order.String()).Error)
 	// Pre-fund the customer wallet with the applied credit so the debit succeeds.
 	require.NoError(t, db.Exec(`INSERT INTO wallets (id, user_id, balance, currency, created_at, updated_at)
@@ -35,13 +37,25 @@ func seedWalletOrder(t *testing.T, db *gorm.DB, rzOrderID string, total, walletA
 	return order, cust
 }
 
-func capturedPayload(rzOrderID, paymentID string, amountPaise int) json.RawMessage {
+func capturedPayload(cfOrderID, cfPaymentID string, rupees float64) json.RawMessage {
 	b, _ := json.Marshal(map[string]any{
-		"payment": map[string]any{"entity": map[string]any{
-			"id": paymentID, "order_id": rzOrderID, "amount": amountPaise, "method": "card", "status": "captured",
-		}},
+		"order": map[string]any{"order_id": cfOrderID},
+		"payment": map[string]any{
+			"cf_payment_id": cfPaymentID, "payment_status": "SUCCESS",
+			"payment_amount": rupees, "payment_group": "upi",
+		},
 	})
 	return b
+}
+
+// A duplicate delivery matches no order and falls through to the FSSAI fallback,
+// which is a real query in production — without the table the fallback errors and
+// the test would be asserting a missing fixture rather than the settlement.
+func addFssaiRequestsTable(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	require.NoError(t, db.Exec(`CREATE TABLE fssai_requests (id TEXT PRIMARY KEY, chef_id TEXT, user_id TEXT,
+		status TEXT DEFAULT 'awaiting_payment', gateway_order TEXT DEFAULT '', mode TEXT DEFAULT 'live',
+		created_at DATETIME, updated_at DATETIME)`).Error)
 }
 
 func walletDebitCount(t *testing.T, db *gorm.DB, orderID uuid.UUID) int64 {
@@ -53,14 +67,14 @@ func walletDebitCount(t *testing.T, db *gorm.DB, orderID uuid.UUID) int64 {
 }
 
 // A webhook-only completion settles the wallet: order completed, credit debited.
-func TestHandlePaymentCaptured_SettlesWalletForWebhookOnlyCompletion(t *testing.T) {
+func TestPaymentSuccessWebhook_SettlesWalletForWebhookOnlyCompletion(t *testing.T) {
 	db := setupPayDB(t)
 	addWalletTables(t, db)
 	addProcessedEventsTable(t, db)
 
 	orderID, cust := seedWalletOrder(t, db, "order_wh1", 500, 100)
 
-	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(capturedPayload("order_wh1", "pay_wh1", 40000), models.ChefModeLive))
+	require.NoError(t, NewPaymentHandler().handleCashfreePaymentSuccess(capturedPayload("order_wh1", "9911", 400), models.ChefModeLive))
 
 	var status string
 	require.NoError(t, db.Raw(`SELECT payment_status FROM orders WHERE id = ?`, orderID.String()).Scan(&status).Error)
@@ -72,16 +86,17 @@ func TestHandlePaymentCaptured_SettlesWalletForWebhookOnlyCompletion(t *testing.
 
 // Settling twice (webhook wins, then a retry / a later verify also settles) must NOT
 // double-debit — the idempotency that makes verify+webhook coexist.
-func TestHandlePaymentCaptured_WalletSettlementIdempotent(t *testing.T) {
+func TestPaymentSuccessWebhook_WalletSettlementIdempotent(t *testing.T) {
 	db := setupPayDB(t)
 	addWalletTables(t, db)
 	addProcessedEventsTable(t, db)
+	addFssaiRequestsTable(t, db)
 
 	orderID, cust := seedWalletOrder(t, db, "order_wh2", 500, 100)
-	payload := capturedPayload("order_wh2", "pay_wh2", 40000)
+	payload := capturedPayload("order_wh2", "9912", 400)
 
-	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(payload, models.ChefModeLive))
-	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(payload, models.ChefModeLive)) // retry / duplicate delivery
+	require.NoError(t, NewPaymentHandler().handleCashfreePaymentSuccess(payload, models.ChefModeLive))
+	require.NoError(t, NewPaymentHandler().handleCashfreePaymentSuccess(payload, models.ChefModeLive)) // retry / duplicate delivery
 
 	require.Equal(t, int64(1), walletDebitCount(t, db, orderID), "debited exactly once across two settlements")
 	require.Equal(t, 0.0, walletBalance(t, db, cust), "no double debit (balance not negative)")
@@ -90,7 +105,7 @@ func TestHandlePaymentCaptured_WalletSettlementIdempotent(t *testing.T) {
 // If the store-credit debit genuinely FAILS (balance drained between checkout and this
 // delayed settlement), the order still completes and the wallet slice is left for
 // reconcile — nothing is written off a credit the platform never collected.
-func TestHandlePaymentCaptured_DebitFailure_LeavesWalletUntouched(t *testing.T) {
+func TestPaymentSuccessWebhook_DebitFailure_LeavesWalletUntouched(t *testing.T) {
 	db := setupPayDB(t)
 	addWalletTables(t, db)
 	addProcessedEventsTable(t, db)
@@ -99,7 +114,7 @@ func TestHandlePaymentCaptured_DebitFailure_LeavesWalletUntouched(t *testing.T) 
 	orderID, cust := seedWalletOrder(t, db, "order_wh3", 500, 100)
 	require.NoError(t, db.Exec(`UPDATE wallets SET balance = 40 WHERE user_id = ?`, cust.String()).Error)
 
-	require.NoError(t, NewPaymentHandler().handlePaymentCaptured(capturedPayload("order_wh3", "pay_wh3", 40000), models.ChefModeLive))
+	require.NoError(t, NewPaymentHandler().handleCashfreePaymentSuccess(capturedPayload("order_wh3", "9913", 400), models.ChefModeLive))
 
 	var status string
 	require.NoError(t, db.Raw(`SELECT payment_status FROM orders WHERE id = ?`, orderID.String()).Scan(&status).Error)

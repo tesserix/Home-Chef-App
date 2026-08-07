@@ -222,7 +222,6 @@ func SetupRouter() *gin.Engine {
 
 	// Webhook endpoints — HMAC verified, but cap inbound rate as a DoS guard.
 	webhookLimit := middleware.RateLimit(20, 40) // 20 rps sustained, 40 burst per IP
-	r.POST("/webhooks/razorpay", webhookLimit, paymentHandler.RazorpayWebhook)
 	r.POST("/webhooks/cashfree", webhookLimit, paymentHandler.CashfreeWebhook)
 	r.POST("/webhooks/stripe", webhookLimit, paymentHandler.StripeWebhook)
 	r.POST("/webhooks/delivery/:provider", webhookLimit, providerHandler.HandleWebhook)
@@ -231,8 +230,7 @@ func SetupRouter() *gin.Engine {
 	// to this service (per-host Istio VirtualServices + Cloudflare); the
 	// root /webhooks/* paths fall through to the web frontend and 404. So the
 	// externally-registered webhook URLs use the /api form
-	// (e.g. https://fe3dr.com/api/webhooks/razorpay).
-	r.POST("/api/webhooks/razorpay", webhookLimit, paymentHandler.RazorpayWebhook)
+	// (e.g. https://fe3dr.com/api/webhooks/cashfree).
 	// This is the URL to register in the Cashfree dashboard (both environments) —
 	// the /api form, since only /api and /ws are publicly routed to this service.
 	r.POST("/api/webhooks/cashfree", webhookLimit, paymentHandler.CashfreeWebhook)

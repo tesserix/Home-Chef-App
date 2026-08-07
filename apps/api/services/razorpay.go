@@ -663,51 +663,6 @@ func (c *RazorpayClient) FetchOrderPayments(orderID string) ([]PaymentResponse, 
 	return result.Items, nil
 }
 
-// --- Webhook Verification ---
-
-// VerifyWebhookSignatureMode validates a webhook payload against BOTH credential
-// slots and reports which one signed it.
-//
-// Razorpay delivers test-dashboard and live-dashboard webhooks to the same URL,
-// each signed with its own secret, and the payload carries no mode marker — so
-// the only way to tell them apart is to try each secret. Live is tried first.
-//
-// The returned mode is a HINT, not an authority. When both slots hold the same
-// key — the interim production state while a real live key is pending — every
-// event resolves to live. The caller MUST additionally compare this against the
-// target record's own mode and drop a mismatch. That comparison, not this
-// function, is what keeps the two worlds apart.
-//
-// Both attempts use constant-time comparison, and the second is only made when
-// the first fails.
-func VerifyWebhookSignatureMode(payload []byte, signature string) (bool, string) {
-	configured := false
-	for _, mode := range []string{models.ChefModeLive, models.ChefModeTest} {
-		c := snapshotRazorpayClient(mode) // #395·5: read the client under the cache mutex
-		if c == nil || c.webhookSecret == "" {
-			continue
-		}
-		configured = true
-		mac := hmac.New(sha256.New, []byte(c.webhookSecret))
-		mac.Write(payload)
-		expected := hex.EncodeToString(mac.Sum(nil))
-		if hmac.Equal([]byte(expected), []byte(signature)) {
-			return true, mode
-		}
-	}
-	if !configured {
-		log.Println("Warning: Razorpay webhook secret not configured for any mode")
-	}
-	return false, ""
-}
-
-// VerifyWebhookSignature reports only whether a webhook is authentic, for
-// callers with no record context to compare a mode against.
-func VerifyWebhookSignature(payload []byte, signature string) bool {
-	ok, _ := VerifyWebhookSignatureMode(payload, signature)
-	return ok
-}
-
 // VerifyPaymentSignatureFor validates a Razorpay Checkout payment signature
 // against ONE mode's key secret:
 // HMAC-SHA256(order_id + "|" + payment_id, keySecret) must equal the signature
