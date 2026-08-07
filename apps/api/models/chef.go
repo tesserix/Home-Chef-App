@@ -207,6 +207,12 @@ type ChefProfile struct {
 	// "" follows the global payout_auto_disburse_enabled flag.
 	PayoutAutoDisburse string `gorm:"type:varchar(8);default:''" json:"payoutAutoDisburse"`
 
+	// EasySplitMode is the same tri-state for the settlement rail itself:
+	// whether this chef's orders pay them straight from the capture. ""
+	// follows easy_split_enabled. Per-chef because switching the rail changes
+	// where money lands, so it rolls out one chef at a time (#1084).
+	EasySplitMode string `gorm:"type:varchar(8);default:''" json:"easySplitMode"`
+
 	// CashfreeVendorID / CashfreeVendorStatus — the chef's Easy Split vendor
 	// registration, the destination split-at-capture settles to. Distinct from
 	// the Payouts-rail beneficiary: splits prevent the platform holding vendor

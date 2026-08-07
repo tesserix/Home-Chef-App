@@ -542,9 +542,11 @@ func (h *AdminPayoutRailHandler) GetChefPayoutProfile(c *gin.Context) {
 			"autoCapUnreadable":  capUnreadable,
 		},
 		"easySplit": gin.H{
-			"enabled":  services.EasySplitEnabled(database.DB),
-			"vendorId": chef.CashfreeVendorID,
-			"status":   chef.CashfreeVendorStatus,
+			"enabled":   services.EasySplitEnabled(database.DB),
+			"mode":      chef.EasySplitMode,
+			"effective": services.EasySplitEnabledForChef(database.DB, &chef),
+			"vendorId":  chef.CashfreeVendorID,
+			"status":    chef.CashfreeVendorStatus,
 		},
 	})
 }
@@ -655,6 +657,84 @@ func (h *AdminPayoutRailHandler) SetPlatformSettlementAccount(c *gin.Context) {
 		"bankIFSC":          fields["bank-ifsc"],
 		"configured":        true,
 	})
+}
+
+// validEasySplitMode reports whether the value is one of the three the
+// tri-state recognises. Anything else must be refused rather than stored: an
+// unrecognised string reads back as "follow the platform flag", which is how a
+// typo would move a chef's money onto a rail nobody chose (#1084).
+func validEasySplitMode(value string) bool {
+	switch value {
+	case services.PayoutAutoOn, services.PayoutAutoOff, "":
+		return true
+	}
+	return false
+}
+
+// SetChefEasySplitMode flips one chef's Easy Split rollout override.
+//
+// PUT /admin/chefs/:id/easy-split-mode
+func (h *AdminPayoutRailHandler) SetChefEasySplitMode(c *gin.Context) {
+	var req struct {
+		Value string `json:"value"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || !validEasySplitMode(req.Value) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "value must be on, off or empty"})
+		return
+	}
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	old := chef.EasySplitMode
+	if err := database.DB.Model(&chef).Update("easy_split_mode", req.Value).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
+		return
+	}
+	chef.EasySplitMode = req.Value
+
+	services.LogAudit(c, "chef.payout.easy_split_mode", "chef", chefID.String(),
+		gin.H{"easySplitMode": old}, gin.H{"easySplitMode": req.Value})
+	c.JSON(http.StatusOK, gin.H{
+		"easySplitMode": req.Value,
+		"effective":     services.EasySplitEnabledForChef(database.DB, &chef),
+	})
+}
+
+// SetEasySplitModeBulk flips a whole cohort in one call — how a rollout
+// actually proceeds. One statement, so a closed browser tab cannot leave half
+// the cohort on one rail and half on the other.
+//
+// PUT /admin/chefs/easy-split-mode
+func (h *AdminPayoutRailHandler) SetEasySplitModeBulk(c *gin.Context) {
+	var req struct {
+		Value   string      `json:"value"`
+		ChefIDs []uuid.UUID `json:"chefIds"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || !validEasySplitMode(req.Value) || len(req.ChefIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "chefIds and a value of on, off or empty are required"})
+		return
+	}
+	ids := make([]string, 0, len(req.ChefIDs))
+	for _, id := range req.ChefIDs {
+		ids = append(ids, id.String())
+	}
+	res := database.DB.Model(&models.ChefProfile{}).Where("id IN ?", ids).
+		Update("easy_split_mode", req.Value)
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
+		return
+	}
+
+	services.LogAudit(c, "chef.payout.easy_split_mode_bulk", "chef", "",
+		nil, gin.H{"easySplitMode": req.Value, "chefIds": ids})
+	c.JSON(http.StatusOK, gin.H{"easySplitMode": req.Value, "updated": res.RowsAffected})
 }
 
 // SetChefDisburseAutomation flips the chef's disbursement auto-approval
@@ -847,11 +927,11 @@ func (h *AdminPayoutRailHandler) GetPayoutSettings(c *gin.Context) {
 	capMinor, capUnreadable := services.PayoutAutoDisburseCap(database.DB)
 	feeMinor, feeOK := services.PlatformFeeFlatMinor(database.DB)
 	c.JSON(http.StatusOK, gin.H{
-		"autoDisburseEnabled":  services.PayoutAutoDisburseEnabled(database.DB),
-		"autoCapMinor":         capMinor,
-		"autoCapUnreadable":    capUnreadable,
-		"easySplitEnabled":     services.EasySplitEnabled(database.DB),
-		"platformFeeFlatMinor": feeMinor,
+		"autoDisburseEnabled":   services.PayoutAutoDisburseEnabled(database.DB),
+		"autoCapMinor":          capMinor,
+		"autoCapUnreadable":     capUnreadable,
+		"easySplitEnabled":      services.EasySplitEnabled(database.DB),
+		"platformFeeFlatMinor":  feeMinor,
 		"platformFeeUnreadable": !feeOK,
 	})
 }

@@ -31,6 +31,7 @@ const releaseOrderDDL = `CREATE TABLE orders (
 const releaseChefDDL = `CREATE TABLE chef_profiles (
 	id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '', mode TEXT DEFAULT 'live',
 	payout_method TEXT DEFAULT '', payout_country TEXT DEFAULT 'IN',
+	easy_split_mode TEXT DEFAULT '',
 	cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
 	created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`
 
@@ -186,6 +187,17 @@ func TestReleaseOrderSplit_IsInertWhileTheFlagIsOff(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, split)
 	require.Zero(t, *calls)
+}
+
+// An order we cannot read is not a reason to block its release — the chef is
+// paid through the payout rail instead, which is where every refusal here ends.
+func TestReleaseOrderSplit_FallsBackWhenTheOrderCannotBeRead(t *testing.T) {
+	db := setupReleaseSplitDB(t)
+
+	split, err := ReleaseOrderSplit(db, uuid.New(), time.Now())
+
+	require.NoError(t, err)
+	require.False(t, split)
 }
 
 // ADR-0003, Consequences: the maturation window has to fit inside the split
