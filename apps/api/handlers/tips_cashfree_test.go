@@ -49,7 +49,7 @@ func TestCashfreeTipOrderID_CarriesTheDispatchPrefix(t *testing.T) {
 // Split there is no platform fee to subtract: the chef's split is the WHOLE tip.
 func TestCashfreeTipSplit_IsTheWholeTip(t *testing.T) {
 	tipPaise := services.ToPaise(50.0)
-	split := services.CashfreeOrderSplit{
+	split := services.CashfreeVendorSplit{
 		VendorID:    "hc_abc",
 		AmountPaise: services.CashfreeAmountFromPaise(tipPaise),
 	}

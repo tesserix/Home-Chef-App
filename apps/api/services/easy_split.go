@@ -63,7 +63,7 @@ func PlatformFeeFlatMinor(db *gorm.DB) (feeMinor int64, ok bool) {
 // chef has no ACTIVE vendor registration, the chef's FSSAI licence has lapsed
 // (payout is withheld, so the money must stay at the platform), the fee
 // setting is unreadable, or the computed share rounds to nothing.
-func BuildOrderSplit(db *gorm.DB, order *models.Order, capturePaise, creditPaise int) *CashfreeOrderSplit {
+func BuildOrderSplit(db *gorm.DB, order *models.Order, capturePaise, creditPaise int) *CashfreeVendorSplit {
 	if order == nil || !EasySplitEnabled(db) || creditPaise > 0 {
 		return nil
 	}
@@ -86,7 +86,7 @@ func BuildOrderSplit(db *gorm.DB, order *models.Order, capturePaise, creditPaise
 	if share > int64(capturePaise) {
 		share = int64(capturePaise)
 	}
-	return &CashfreeOrderSplit{
+	return &CashfreeVendorSplit{
 		VendorID:    chef.CashfreeVendorID,
 		AmountPaise: CashfreeAmountFromPaise(int(share)),
 	}

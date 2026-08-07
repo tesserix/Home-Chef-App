@@ -140,6 +140,24 @@ func TestBuildRefundSplitsUsesTheCallersPriorRefundedBasis(t *testing.T) {
 	}
 }
 
+// Cashfree rejects a refund whose splits exceed the refund amount, and a
+// rejected refund is a customer who is never paid. The split can outrun the leg
+// on inconsistent data — a capture basis smaller than the recorded split, which
+// is what a wallet credit applied after capture looks like.
+func TestBuildRefundSplitsNeverExceedsTheRefundItself(t *testing.T) {
+	order := splitOrder(500, 38000)
+	order.WalletApplied = 200 // capture basis ₹300, below the ₹380 recorded split
+
+	splits := BuildRefundSplits(order, 0, 30000)
+
+	if len(splits) != 1 {
+		t.Fatalf("want 1 refund split, got %d", len(splits))
+	}
+	if got := splits[0].AmountPaise.Paise(); got > 30000 {
+		t.Errorf("vendor refund = %d paise, must not exceed the %d paise refund", got, 30000)
+	}
+}
+
 func TestVendorRefundPaiseRoundsInThePlatformsFavour(t *testing.T) {
 	// ₹100 capture, ₹33.33 vendor share, ₹10 refunded → 3.333 paise per rupee.
 	// 333 is the floor; 334 would hand the vendor a paise it never received.

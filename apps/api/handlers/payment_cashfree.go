@@ -140,10 +140,10 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 	// straight to their vendor account, the remainder (commission, fees, GST,
 	// TDS, delivery money) stays with the platform merchant account. nil for
 	// any reason means the pre-existing full-capture + statement path.
-	var splits []services.CashfreeOrderSplit
+	var splits []services.CashfreeVendorSplit
 	splitPaise := 0
 	if split := services.BuildOrderSplit(database.DB, order, plan.CapturePaise, creditPaise); split != nil {
-		splits = []services.CashfreeOrderSplit{*split}
+		splits = []services.CashfreeVendorSplit{*split}
 		splitPaise = split.AmountPaise.Paise()
 	}
 

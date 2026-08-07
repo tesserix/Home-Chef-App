@@ -387,7 +387,7 @@ func (h *TipHandler) createCashfreeTip(c *gin.Context, order *models.Order, tip 
 			CustomerEmail: order.Customer.Email,
 		},
 		// 100% to the chef — the platform keeps nothing.
-		Splits: []services.CashfreeOrderSplit{{
+		Splits: []services.CashfreeVendorSplit{{
 			VendorID:    chef.CashfreeVendorID,
 			AmountPaise: services.CashfreeAmountFromPaise(tipPaise),
 		}},
