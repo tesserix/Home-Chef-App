@@ -192,33 +192,11 @@ func staleOrderPaymentState(order *models.Order) (state gatewayPaymentState, cap
 		}
 		return gatewayNoPayment, "", nil
 
-	case models.PaymentProviderRazorpay:
-		rz := GetRazorpayFor(order.Mode)
-		if rz == nil {
-			return gatewayNoPayment, "", fmt.Errorf("no razorpay gateway configured for mode %q", order.Mode)
-		}
-		pays, err := rz.FetchOrderPayments(order.RazorpayOrderID)
-		if err != nil {
-			return gatewayNoPayment, "", err
-		}
-		if id := capturedPaymentFor(pays, order.RazorpayOrderID); id != "" {
-			return gatewayCaptured, id, nil
-		}
-		for _, pay := range pays {
-			// `authorized` is money already held on the customer's card and
-			// `created` is an attempt mid-flight; only `failed` is terminally
-			// dead. Anything unrecognised counts as live, for the same asymmetry
-			// IsInFlight documents.
-			if pay.OrderID == order.RazorpayOrderID && pay.Status != "failed" {
-				return gatewayInFlight, "", nil
-			}
-		}
-		return gatewayNoPayment, "", nil
-
 	default:
-		// Provider-mismatch backstop (see PLAN.md's decision table): a
-		// provider this cron doesn't know how to ask is an unknown answer,
-		// never a cancel.
+		// Provider-mismatch backstop (see PLAN.md's decision table): a provider
+		// this cron doesn't know how to ask is an unknown answer, never a
+		// cancel. Legacy Razorpay orders land here since #1086 — the retired
+		// gateway is not asked, and they are never cancelled on its silence.
 		return gatewayNoPayment, "", fmt.Errorf("unrecognised payment provider %q", order.PaymentProvider)
 	}
 }

@@ -5,14 +5,14 @@ package services
 // handlers/payment_complete_generic_test.go (#555), and (Task 2) the
 // TestOrderSettlements_* cases in handlers/payment_test.go (#741), unchanged
 // assertions, now exercising the moved CompleteOrderPaymentTx /
-// CompleteRazorpayOrderTx / OrderSettlements / ApplyChefRecoveryDeduction
+// CompleteCashfreeOrderTx / ApplyChefRecoveryDeduction
 // directly in `services` (their new, single home).
 //
 // #395 item 2 background: the Razorpay verify path computed `wasUnpaid` from
 // the in-memory order and then ran an UNCONDITIONAL completion update, so a
 // payment.captured webhook winning the race (it IS conditional) left the
 // concurrent verify still in the notify branch → duplicate chef "new order"
-// push + duplicate order.paid event. CompleteRazorpayOrderTx makes the
+// push + duplicate order.paid event. CompleteCashfreeOrderTx makes the
 // completion a single conditional transition (WHERE payment_status <>
 // 'completed') and gates the chef notify + event on RowsAffected, mirroring
 // the webhook, so exactly one fires.
@@ -42,7 +42,7 @@ import (
 )
 
 // setupCompleteTxDB is a minimal in-memory schema for CompleteOrderPaymentTx /
-// CompleteRazorpayOrderTx: just the `orders` columns the guarded UPDATE reads
+// CompleteCashfreeOrderTx: just the `orders` columns the guarded UPDATE reads
 // or writes, plus `outbox_events` (the transactional-outbox destination for
 // the chef push + order.paid emit). `deleted_at` is required — GORM's
 // soft-delete default scope adds `WHERE deleted_at IS NULL` to the guarded
@@ -200,14 +200,14 @@ func TestCompleteOrderPaymentTx_Wallet_RetryDoesNotDoubleEmit(t *testing.T) {
 }
 
 // First completion notifies the chef + emits order.paid exactly once.
-func TestCompleteRazorpayOrderTx_FirstCompletionNotifiesOnce(t *testing.T) {
+func TestCompleteCashfreeOrderTx_FirstCompletionNotifiesOnce(t *testing.T) {
 	db := setupCompleteTxDB(t)
 	orderID := seedTxOrder(t, db, "pending")
 
 	order := loadTxOrder(t, db, orderID) // loaded before the tx, mirroring the handler
 	var justCompleted bool
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-		ok, err := CompleteRazorpayOrderTx(tx, order, "card", "pay_x", 50000)
+		ok, err := CompleteCashfreeOrderTx(tx, order, "card", "pay_x", 50000)
 		justCompleted = ok
 		return err
 	}))
@@ -220,7 +220,7 @@ func TestCompleteRazorpayOrderTx_FirstCompletionNotifiesOnce(t *testing.T) {
 
 // A second completion (webhook/verify race, or re-verify) must NOT re-notify or
 // re-emit — the conditional update finds nothing to flip.
-func TestCompleteRazorpayOrderTx_SecondCompletionIsNoop(t *testing.T) {
+func TestCompleteCashfreeOrderTx_SecondCompletionIsNoop(t *testing.T) {
 	db := setupCompleteTxDB(t)
 	orderID := seedTxOrder(t, db, "pending")
 
@@ -232,14 +232,14 @@ func TestCompleteRazorpayOrderTx_SecondCompletionIsNoop(t *testing.T) {
 
 	// Webhook completes it first.
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-		_, err := CompleteRazorpayOrderTx(tx, order1, "card", "pay_x", 50000)
+		_, err := CompleteCashfreeOrderTx(tx, order1, "card", "pay_x", 50000)
 		return err
 	}))
 
 	// The racing verify path runs with its STALE pending order — must be a no-op.
 	var justCompleted bool
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-		ok, err := CompleteRazorpayOrderTx(tx, stale, "card", "pay_x", 50000)
+		ok, err := CompleteCashfreeOrderTx(tx, stale, "card", "pay_x", 50000)
 		justCompleted = ok
 		return err
 	}))

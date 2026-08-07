@@ -8,14 +8,13 @@ package services
 // the row pending forever. Nothing settled it: the settle core lived in
 // `handlers`, which this package cannot import. Settlement is client-verify-only
 // (no webhooks configured — 0 hits/24h), so a lost callback (app killed,
-// network drop, dismissed checkout sheet after Cashfree/Razorpay already
-// captured the money) had no path to ever complete.
+// network drop, dismissed checkout sheet after Cashfree already captured the
+// money) had no path to ever complete.
 //
 // This cron is that path: it finds captured-but-unconfirmed orders and settles
-// them through order_payment_settle.go's SettleCashfreeOrder /
-// SettleRazorpayOrderFromPayment — the SAME transactional core the HTTP verify
-// legs use (#872 step 2, Task 3 extracted it out of `handlers` for exactly this
-// reason).
+// them through order_payment_settle.go's SettleCashfreeOrder — the SAME
+// transactional core the HTTP verify leg uses (#872 step 2, Task 3 extracted it
+// out of `handlers` for exactly this reason).
 //
 // Hard boundary — forward reconcile only. The query's `payment_status =
 // 'pending'` clause structurally excludes every `status = 'cancelled'` row: a
@@ -93,13 +92,11 @@ func runOrderPaymentReconcileScan(_ context.Context) {
 // returns how many it settled. Belt-and-suspenders behind the HTTP client
 // verify path AND step 1's stale-order gateway gate.
 func reconcileOrderPayments(db *gorm.DB, now time.Time) int {
-	// No top-level client: each order is settled against the gateway that took
-	// its payment, so a live order and a test order in the same sweep talk to
-	// different accounts. Bail only when NO slot at all is configured — a live
-	// gateway or a test gateway, either provider, is enough to proceed (a
+	// No top-level client: each order is settled against the mode that took its
+	// payment, so a live order and a test order in the same sweep talk to
+	// different accounts. Bail only when NO slot at all is configured (a
 	// per-order unconfigured slot is handled per-row below).
-	if GetCashfreeFor(models.ChefModeLive) == nil && GetCashfreeFor(models.ChefModeTest) == nil &&
-		GetRazorpayFor(models.ChefModeLive) == nil && GetRazorpayFor(models.ChefModeTest) == nil {
+	if GetCashfreeFor(models.ChefModeLive) == nil && GetCashfreeFor(models.ChefModeTest) == nil {
 		return 0
 	}
 
@@ -132,14 +129,12 @@ func reconcileOrderPayments(db *gorm.DB, now time.Time) int {
 		switch models.NormalizeProvider(order.PaymentProvider) {
 		case models.PaymentProviderCashfree:
 			ok, reason, _ = SettleCashfreeOrder(order)
-		case models.PaymentProviderRazorpay:
-			ok, reason = settleRazorpayFromDiscovery(order)
 		default:
-			// Stripe/unrecognised — known gap, not this cron's job (Stripe orders
-			// key off stripe_payment_intent_id, never razorpay_order_id, so this
-			// predicate structurally excludes them already; this default only
-			// guards an unrecognised value in the column). Not a transient
-			// condition, so no log.
+			// Stripe, legacy Razorpay, anything unrecognised — not this cron's
+			// job. No order can be captured on Razorpay since #1101, so a
+			// legacy row is left exactly as it is rather than settled against a
+			// rail the platform no longer operates. Not a transient condition,
+			// so no log.
 			continue
 		}
 
@@ -148,46 +143,12 @@ func reconcileOrderPayments(db *gorm.DB, now time.Time) int {
 			log.Printf("order-payment-reconcile: settled order %s", order.OrderNumber)
 			continue
 		}
-		// "Payment not completed" (Cashfree) and "" (Razorpay discovery finding
-		// nothing captured) are the plain "still unpaid, waiting" case — must not
-		// spam the log every 5 minutes. Everything else (gateway error,
+		// "Payment not completed" is the plain "still unpaid, waiting" case — it
+		// must not spam the log every 5 minutes. Everything else (gateway error,
 		// unconfigured slot, underpayment, binding mismatch) must be loud.
 		if reason != "" && reason != "Payment not completed" {
 			log.Printf("order-payment-reconcile: order %s not settled: %s", order.OrderNumber, reason)
 		}
 	}
 	return settled
-}
-
-// settleRazorpayFromDiscovery is the Razorpay counterpart to
-// SettleCashfreeOrder's direct gateway-order lookup: the cron has no
-// client-supplied payment id (unlike the HTTP verify leg), so it discovers the
-// captured payment via FetchOrderPayments — the same discovery mechanism
-// meal_plan_advance_reconcile_cron.go and stale_order_cron.go already use —
-// then hands it to SettleRazorpayOrderFromPayment for the binding gate,
-// completion transaction, and wallet settlement.
-func settleRazorpayFromDiscovery(order *models.Order) (bool, string) {
-	rz := GetRazorpayFor(order.Mode)
-	if rz == nil {
-		log.Printf("order-payment-reconcile: no razorpay gateway configured for mode %q (order %s)",
-			order.Mode, order.OrderNumber)
-		return false, "gateway not configured"
-	}
-	pays, err := rz.FetchOrderPayments(order.RazorpayOrderID)
-	if err != nil {
-		log.Printf("order-payment-reconcile: fetch payments failed for order %s (gateway order %s): %v",
-			order.OrderNumber, order.RazorpayOrderID, err)
-		return false, err.Error()
-	}
-	var found *PaymentResponse
-	for i := range pays {
-		if pays[i].Status == "captured" && pays[i].OrderID == order.RazorpayOrderID {
-			found = &pays[i]
-			break
-		}
-	}
-	if found == nil {
-		return false, "" // not captured yet — leave for the stale cron / next tick, no log
-	}
-	return SettleRazorpayOrderFromPayment(order, found)
 }

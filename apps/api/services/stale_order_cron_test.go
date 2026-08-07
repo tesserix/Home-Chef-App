@@ -144,10 +144,10 @@ func TestStaleOrderSweep_CapturedPayment_StaysPendingAndIsNotSettled(t *testing.
 func TestStaleOrderSweep_NotCaptured_CancelsExactlyAsBefore(t *testing.T) {
 	db := setupStaleOrderDB(t)
 	now := time.Now()
-	o := seedStaleOrder(t, db, "razorpay", "order_rzp_notcaptured", models.ChefModeLive, now.Add(-staleOrderGrace))
+	o := seedStaleOrder(t, db, "cashfree", "cf_order_notcaptured", models.ChefModeLive, now.Add(-staleOrderGrace))
 
-	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"items":[]}`))
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[]`))
 	})
 
 	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
@@ -167,11 +167,11 @@ func TestStaleOrderSweep_NotCaptured_CancelsExactlyAsBefore(t *testing.T) {
 func TestStaleOrderSweep_GatewayError_NeverCancelsAndIsRetried(t *testing.T) {
 	db := setupStaleOrderDB(t)
 	now := time.Now()
-	o := seedStaleOrder(t, db, "razorpay", "order_rzp_erroring", models.ChefModeLive, now.Add(-staleOrderGrace))
+	o := seedStaleOrder(t, db, "cashfree", "cf_order_erroring", models.ChefModeLive, now.Add(-staleOrderGrace))
 
-	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"error":{"description":"boom"}}`))
+		_, _ = w.Write([]byte(`{"message":"boom"}`))
 	})
 
 	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
@@ -200,14 +200,14 @@ func TestStaleOrderSweep_GatewayError_NeverCancelsAndIsRetried(t *testing.T) {
 func TestStaleOrderSweep_GatewayNotConfiguredForMode_NeverCancels(t *testing.T) {
 	db := setupStaleOrderDB(t)
 	now := time.Now()
-	o := seedStaleOrder(t, db, "razorpay", "order_rzp_noconfig", models.ChefModeTest, now.Add(-staleOrderGrace))
+	o := seedStaleOrder(t, db, "cashfree", "cf_order_noconfig", models.ChefModeTest, now.Add(-staleOrderGrace))
 
-	// Explicitly leave the TEST slot empty — no SetRazorpayClientFor(test, …)
+	// Explicitly leave the TEST slot empty — no SetCashfreeClientFor(test, …)
 	// call for this test — and restore whatever was there afterward so this
 	// assertion can never leak into a sibling test.
-	prev := snapshotRazorpayClient(models.ChefModeTest)
-	SetRazorpayClientFor(models.ChefModeTest, nil)
-	t.Cleanup(func() { SetRazorpayClientFor(models.ChefModeTest, prev) })
+	prev := snapshotCashfreeClient(models.ChefModeTest)
+	SetCashfreeClientFor(models.ChefModeTest, nil)
+	t.Cleanup(func() { SetCashfreeClientFor(models.ChefModeTest, prev) })
 
 	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 0, expired)
@@ -226,16 +226,16 @@ func TestStaleOrderSweep_GatewayNotConfiguredForMode_NeverCancels(t *testing.T) 
 func TestStaleOrderSweep_NoGatewayOrderID_CancelsWithZeroGatewayCalls(t *testing.T) {
 	db := setupStaleOrderDB(t)
 	now := time.Now()
-	o := seedStaleOrder(t, db, "razorpay", "", models.ChefModeLive, now.Add(-staleOrderGrace))
+	o := seedStaleOrder(t, db, "cashfree", "", models.ChefModeLive, now.Add(-staleOrderGrace))
 
 	var hits int32
 	// Installed deliberately, in the LIVE slot the order's own mode would use,
 	// so a regression that asks the gateway anyway is caught even though a
 	// client IS configured — an empty gateway order id must short-circuit
 	// before any client lookup, not because none happens to be configured.
-	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&hits, 1)
-		_, _ = w.Write([]byte(`{"items":[]}`))
+		_, _ = w.Write([]byte(`[]`))
 	})
 
 	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
@@ -282,29 +282,24 @@ func TestStaleOrderSweep_CashfreeOrder_NeverRoutedToRazorpay(t *testing.T) {
 	require.Equal(t, string(models.OrderStatusPending), status)
 }
 
-// Symmetric: a Razorpay order is confirmed via the Razorpay server; the
-// Cashfree slot is left unconfigured (would error if ever consulted).
-func TestStaleOrderSweep_RazorpayOrder_NeverRoutedToCashfree(t *testing.T) {
+// #1086 — a Razorpay order is an unrecognised provider now. The sweep's
+// backstop must hold: an unknown answer is never a cancel, and the retired
+// gateway is never asked.
+func TestStaleOrderSweep_RazorpayOrder_NeverCancelledAndNeverAsked(t *testing.T) {
 	db := setupStaleOrderDB(t)
 	now := time.Now()
-	o := seedStaleOrder(t, db, "razorpay", "order_rzp_routing", models.ChefModeLive, now.Add(-staleOrderGrace))
+	o := seedStaleOrder(t, db, "razorpay", "order_rzp_legacy", models.ChefModeLive, now.Add(-staleOrderGrace))
 
-	var razorpayHits, cashfreeHits int32
-	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&cashfreeHits, 1)
-		w.WriteHeader(http.StatusInternalServerError)
-	})
+	var razorpayHits int32
 	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&razorpayHits, 1)
-		_, _ = w.Write([]byte(`{"items":[{"id":"pay_routing","order_id":"order_rzp_routing","status":"captured"}]}`))
+		_, _ = w.Write([]byte(`{"items":[]}`))
 	})
 
-	expired, skippedCaptured, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
-	require.Equal(t, 0, expired)
-	require.Equal(t, 1, skippedCaptured)
-	require.Equal(t, 0, skippedError)
-	require.Equal(t, int32(0), atomic.LoadInt32(&cashfreeHits), "a razorpay order must never hit the cashfree gateway")
-	require.Equal(t, int32(1), atomic.LoadInt32(&razorpayHits))
+	expired, _, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
+	require.Equal(t, 0, expired, "an order the sweep cannot ask about is never cancelled")
+	require.Equal(t, 1, skippedError)
+	require.Equal(t, int32(0), atomic.LoadInt32(&razorpayHits), "the retired gateway must never be asked")
 
 	status, _, _, _ := staleOrderRow(t, db, o.ID)
 	require.Equal(t, string(models.OrderStatusPending), status)
@@ -395,25 +390,6 @@ func TestStaleOrderSweep_CashfreeFailedThenPending_IsInFlight(t *testing.T) {
 // Razorpay's `authorized` is money already held on the customer's card. It is
 // not `captured`, so the old probe returned "" for it and cancelled — the worst
 // version of this bug, since the hold is real money.
-func TestStaleOrderSweep_RazorpayAuthorized_NeverCancels(t *testing.T) {
-	db := setupStaleOrderDB(t)
-	now := time.Now()
-	o := seedStaleOrder(t, db, "razorpay", "order_rzp_authorized", models.ChefModeLive, now.Add(-staleOrderGrace))
-
-	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"entity":"collection","count":1,"items":[
-			{"id":"pay_authorized","order_id":"order_rzp_authorized","status":"authorized","amount":39305}
-		]}`))
-	})
-
-	expired, _, skippedInFlight, _ := runStaleOrderScanWithDB(context.Background(), db, now)
-	require.Equal(t, 0, expired)
-	require.Equal(t, 1, skippedInFlight)
-
-	status, _, _, _ := staleOrderRow(t, db, o.ID)
-	require.Equal(t, string(models.OrderStatusPending), status)
-}
-
 // An unrecognised gateway state reads as in-flight, never as dead. A status
 // neither gateway has shipped yet must not be able to cancel an order.
 func TestStaleOrderSweep_UnknownGatewayStatus_TreatedAsInFlight(t *testing.T) {

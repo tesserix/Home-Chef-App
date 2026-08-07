@@ -7,6 +7,9 @@ package handlers
 // with a false "Payment amount does not match the order total" 400, so the client
 // never received a synchronous confirmation and hung on "Confirming your payment…".
 
+// Driven on the Cashfree leg since #1086 — it is the only leg a verify can reach
+// now, and the loyalty-inclusive expected amount is the same rule there.
+
 import (
 	"net/http"
 	"testing"
@@ -15,23 +18,22 @@ import (
 )
 
 // A capture of exactly (Total − LoyaltyApplied) must verify (200) and mark the
-// order completed. Before the fix expectedPaise omitted loyalty, so this 400'd.
+// order completed. Before the fix the expected amount omitted loyalty, so this 400'd.
 func TestVerifyPayment_LoyaltyFundedOrder_Verifies_200(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
-	orderID := payOrder(t, db, cust, chef, "pending", 1000, "rzp_ord_loyalty", "")
+	orderID := cfPayOrder(t, db, cust, chef, "pending", 1000, "cf_ord_loyalty")
 	// ₹100 of the ₹1000 order paid with loyalty points at checkout → the gateway
-	// order was created for, and captured, ₹900 (90000 paise).
+	// order was created for, and captured, ₹900.
 	require.NoError(t, db.Exec(
 		`UPDATE orders SET loyalty_applied = 100, loyalty_points_spent = 2000 WHERE id = ?`,
 		orderID.String()).Error)
 
-	fetchPaymentServer(t, "rzp_ord_loyalty", 90000) // ₹900 captured — matches Total − loyalty
+	withCashfreeGateway(t, cfGateway("cf_ord_loyalty", "9911", 900, "PAID"))
 
-	// No signature supplied: the amount/binding checks are the hard gate under test.
 	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/verify", regVerify,
-		map[string]string{"razorpayPaymentId": "pay_x", "razorpayOrderId": "rzp_ord_loyalty"})
+		map[string]string{"cashfreeOrderId": "cf_ord_loyalty"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	var status string
@@ -45,14 +47,14 @@ func TestVerifyPayment_LoyaltyOrder_UnderCapture_400(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
-	orderID := payOrder(t, db, cust, chef, "pending", 1000, "rzp_ord_short", "")
+	orderID := cfPayOrder(t, db, cust, chef, "pending", 1000, "cf_ord_short")
 	require.NoError(t, db.Exec(
 		`UPDATE orders SET loyalty_applied = 100 WHERE id = ?`, orderID.String()).Error)
 
-	fetchPaymentServer(t, "rzp_ord_short", 50000) // only ₹500 captured vs ₹900 expected
+	withCashfreeGateway(t, cfGateway("cf_ord_short", "9912", 500, "PAID")) // ₹500 vs ₹900 expected
 
 	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/verify", regVerify,
-		map[string]string{"razorpayPaymentId": "pay_x", "razorpayOrderId": "rzp_ord_short"})
+		map[string]string{"cashfreeOrderId": "cf_ord_short"})
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 
 	var status string
