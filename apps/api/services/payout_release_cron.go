@@ -170,20 +170,16 @@ func runPayoutReleaseSweep(ctx context.Context) {
 	}
 
 	// payout.sweep_enabled being on is not the whole gate: this loop only ever
-	// releases aggTypeOrder holds (the query below is orders-only), and
-	// releaseMoney's order branch (ReleaseOrderPayouts, services/order_payout.go)
-	// is itself gated on payoutMovementEnabled() alone — a meal-plan-day or
-	// group-order hold is never touched by this sweep, so MealPlanEscrowActive()
-	// is not this guard's concern (contrast payout_reconcile_cron.go's
-	// runPayoutReconcileScan, which re-drives every aggregate kind and so checks
-	// both flags). Without this check, ReleaseHold still commits the
-	// release_eligible -> released transition and settleRelease still stamps
-	// payout_settled_at, because ReleaseOrderPayouts silently returns nil when
-	// movement is off (a deliberate no-op for its OTHER callers, the admin queue
-	// with the flag on) — leaving the row looking fully settled while the
-	// Razorpay transfer stays on_hold, permanently excluded from the reconcile
-	// cron's own `released AND payout_settled_at IS NULL` query. Bail here,
-	// before that flip, not after.
+	// releases aggTypeOrder holds (the query below is orders-only), which are
+	// gated on payoutMovementEnabled() alone — a meal-plan-day or group-order
+	// hold is never touched by this sweep, so MealPlanEscrowActive() is not this
+	// guard's concern (contrast payout_reconcile_cron.go's runPayoutReconcileScan,
+	// which re-drives every aggregate kind and so checks both flags). Without this
+	// check, ReleaseHold still commits the release_eligible -> released transition
+	// and settleRelease still stamps payout_settled_at — leaving the row looking
+	// fully settled while no money moved, permanently excluded from the reconcile
+	// cron's own `released AND payout_settled_at IS NULL` query. Bail here, before
+	// that flip, not after.
 	if !payoutMovementEnabled() {
 		log.Println("payout-sweep: payout movement (ORDER_PAYOUT_AUTO_RELEASE_ENABLED) is off — skipping this sweep")
 		return

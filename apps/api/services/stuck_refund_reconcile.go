@@ -54,7 +54,7 @@ func reconcileStuckRefunds() int {
 		if kind, err := TypedRefundOrderKind(database.DB, o.ID); err != nil || kind != "" {
 			continue
 		}
-		full, ok, refundedPaise := finalizeStuckRefund(o.ID)
+		full, ok, _ := finalizeStuckRefund(o.ID)
 		if !ok {
 			continue
 		}
@@ -69,8 +69,6 @@ func reconcileStuckRefunds() int {
 		var cgErr error
 		if full {
 			cgErr = WithholdOrReverseOrderHoldForRefund(database.DB, o.ID, "reconcile: finalize stuck full refund")
-		} else {
-			cgErr = WithholdOrReverseOrderHoldForPartialRefund(database.DB, o.ID, refundedPaise, "reconcile: finalize stuck partial refund")
 		}
 		if cgErr != nil {
 			log.Printf("stuck-refund-reconcile: cross-guard for order %s failed: %v", o.ID, cgErr)

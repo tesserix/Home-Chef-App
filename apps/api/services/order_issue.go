@@ -358,18 +358,12 @@ func RefundIssueToWalletWithPolicy(db *gorm.DB, issue *models.OrderIssue, amount
 	// before any money moved), so refunded_at is NULL and the chef's hold is releasable.
 	var clawErr error
 	if clawback {
-		clawErr = WithholdOrReverseOrderHoldForPartialRefund(db, issue.OrderID, ToPaise(creditApplied), reason)
-		if clawErr != nil {
-			log.Printf("payout partial cross-guard failed for order %s (issue %s): %v", issue.OrderID, issue.ID, clawErr)
-		}
-		// #618 slice 2: the order partial-claw above is a no-op for a meal-plan-day SHELL
-		// order (no razorpay_order_id → ReverseOrderChefTransferPartial returns nil) and never
-		// fans out to the day. A single-unit day forfeits its WHOLE payout on any chef-fault
-		// refund, so withhold the day's hold via the full cross-guard (which fans
-		// meal_plan_days.order_id → withheld/reversed). This also flips the day out of
-		// `disputed` so the dispute-clear below cannot release it (the refund_txn_id stamped
-		// in-tx is the durable backstop if this best-effort drive fails). No-op for a normal
-		// order (issue.MealPlanDayID == nil).
+		// #618 slice 2: a single-unit meal-plan day forfeits its WHOLE payout on any
+		// chef-fault refund, so withhold the day's hold via the full cross-guard (which
+		// fans meal_plan_days.order_id → withheld/reversed). This also flips the day out
+		// of `disputed` so the dispute-clear below cannot release it (the refund_txn_id
+		// stamped in-tx is the durable backstop if this best-effort drive fails). No-op
+		// for a normal order (issue.MealPlanDayID == nil).
 		if issue.MealPlanDayID != nil {
 			if hErr := WithholdOrReverseOrderHoldForRefund(db, issue.OrderID, reason); hErr != nil {
 				log.Printf("payout day cross-guard failed for order %s (issue %s): %v", issue.OrderID, issue.ID, hErr)

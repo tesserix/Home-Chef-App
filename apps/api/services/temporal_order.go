@@ -115,7 +115,7 @@ func CompensateOrderRefund(_ context.Context, orderID uuid.UUID, reason string) 
 	}
 	// #544/#394: a typed escrow order (meal-plan day / group) is refund-managed by its own flow on
 	// a DISJOINT idempotency keyspace, and its held chef payout is a DIRECT transfer this generic
-	// path can't reverse (ReverseOrderPayouts only claws the order route-split). Refunding it here
+	// path can't reverse. Refunding it here
 	// (wallet key saga-refund:<orderID>) would double-pay the customer alongside the typed
 	// RefundDay/participant refund. Skip — mirror the RefundOrderForCancellation / InitiateRefund
 	// guard. Fail safe on a type-check error (don't refund a possibly-typed order).
@@ -139,13 +139,6 @@ func CompensateOrderRefund(_ context.Context, orderID uuid.UUID, reason string) 
 	if !won {
 		return nil // already refunded by another path, retried, or nothing left to refund
 	}
-	// Claw back the chef/rider Route split first (#123) — the platform must not pay out an order
-	// it is refunding. No-op unless live payout movement is on. On failure release the
-	// reservation so temporal retries the whole compensation.
-	if rErr := ReverseOrderPayouts(orderID); rErr != nil {
-		ReleaseFullRefundReservation(database.DB, orderID, amount)
-		return fmt.Errorf("refund: reverse payouts for %s: %w", orderID, rErr)
-	}
 	if amount > 0 {
 		if _, cErr := CreditWallet(database.DB, order.CustomerID, amount,
 			models.WalletSourceRefund, &order.ID,
@@ -165,12 +158,7 @@ func CompensateOrderRefund(_ context.Context, orderID uuid.UUID, reason string) 
 	}
 	// Cross-guard the payout hold (#457): flip the hold to withheld/reversed so the
 	// admin queue and any release can never pay out this refunded order. Best-effort
-	// — never fail the refund on a hold-drive error. NOTE: the ReverseOrderPayouts
-	// above already clawed the Route split; the helper's released→reversed branch may
-	// call ReverseOrderPayouts a SECOND time. That is safe because the second gateway
-	// reverse is GATEWAY-REJECTED and logged non-fatal (order_payout.go:108 —
-	// "already reversed errors on Razorpay; logged, not fatal"), NOT because
-	// stampPayoutSettled skips it.
+	// — never fail the refund on a hold-drive error.
 	if hErr := WithholdOrReverseOrderHoldForRefund(database.DB, orderID, "saga refund: "+reason); hErr != nil {
 		log.Printf("payout cross-guard failed for saga refund order %s: %v", orderID, hErr)
 	}

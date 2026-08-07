@@ -38,8 +38,8 @@ import (
 // money conversion is better than two.
 //
 // This closes the loop the PG adapter deliberately left open: because Cashfree PG
-// captures the full order to the platform and splits nothing at the gateway (see
-// models.ProviderSupportsGatewaySplit), chefs and riders are owed money the
+// captures the full order to the platform and splits nothing at capture time,
+// chefs and riders are owed money the
 // platform is holding. Until now that was disbursed by hand — models/statement.go
 // records that automation was "gated on an Indian entity". Payouts is what
 // removes that blocker.

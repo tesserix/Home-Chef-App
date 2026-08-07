@@ -26,8 +26,8 @@ import (
 //     || MealPlanEscrowActive(). Both default OFF at launch → nothing runs.
 //   - Never invents a status transition — it only re-drives the seam for a status an
 //     admin/sweep already committed. It cannot double-pay: stampPayoutSettled is a
-//     conditional UPDATE on settled_at IS NULL, ReleaseOrderPayouts re-filters
-//     OnHold==true, and ReleaseDayPayout tolerates an already-released transfer.
+//     conditional UPDATE on settled_at IS NULL, ReleaseOrderSplit refuses an
+//     already-split order, and ReleaseDayPayout tolerates a released transfer.
 //   - Bounded (sweepBatchLimit per sweep), recover() at the top, log-and-continue per
 //     row so one bad row can't abort the batch.
 //   - Attempt-capped in the DB (payout_settle_attempts): a permanently-failing

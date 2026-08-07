@@ -392,10 +392,9 @@ type CashfreeOrderMeta struct {
 // renders as Cashfree's rupee decimal.
 //
 // There are deliberately NO order_splits here. Cashfree captures the full amount
-// to the platform merchant account and chef/rider money settles through the
-// statement/payout path — see models.ProviderSupportsGatewaySplit for the full
-// reasoning. If Easy Split is adopted later, the split array is added here and
-// that predicate flips; nothing else in the money paths should need to change.
+// to the platform merchant account; the chef's share is split later, on release,
+// through SplitOrderAfterPayment so that every hold and clawback has had its say
+// first (ADR-0003). The remainder settles on the statement/payout path.
 type CashfreeOrderRequest struct {
 	OrderID     string                  `json:"order_id,omitempty"`
 	AmountPaise cashfreeAmount          `json:"order_amount"`

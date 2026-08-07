@@ -13,8 +13,8 @@ package services
 //      non-eligible / already-actioned hold can never reach ReleaseTransfer /
 //      ReverseTransfer. Release only from release_eligible; withheld/reversed are
 //      terminal and excluded from the queue and from re-release.
-//   3. The money seams are all flag-gated (ReleaseOrderPayouts / ReverseOrderPayouts
-//      on OrderPayoutAutoReleaseEnabled; ReleaseDayPayout / ReverseTransfer on
+//   3. The money seams are all flag-gated (ReleaseOrderSplit on
+//      OrderPayoutAutoReleaseEnabled; ReleaseDayPayout / ReverseTransfer on
 //      MealPlanEscrowActive) — OFF ⇒ pure DB state advance, zero money moved. That
 //      is the launch config.
 //
@@ -654,9 +654,9 @@ func settleReverse(db *gorm.DB, aggType string, id uuid.UUID) error {
 	return settlePayout(db, aggType, id)
 }
 
-// releaseMoney runs the post-commit, flag-gated release seam. Order → the Route
-// transfer release; meal-plan day → the held-transfer release. Both no-op when
-// their escrow flag is OFF or the gateway is unconfigured.
+// releaseMoney runs the post-commit, flag-gated release seam. Order → the Easy
+// Split release; meal-plan day → the held-transfer release. Both no-op when their
+// escrow flag is OFF or the gateway is unconfigured.
 func releaseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 	switch aggType {
 	case aggTypeOrder:
@@ -667,9 +667,6 @@ func releaseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 		// re-driven, and the split would be lost.
 		if _, err := ReleaseOrderSplit(db, id, time.Now()); err != nil {
 			return fmt.Errorf("payout-release: split order %s: %w", id, err)
-		}
-		if err := ReleaseOrderPayouts(id); err != nil {
-			return fmt.Errorf("payout-release: release order payout %s: %w", id, err)
 		}
 	case aggTypeMealPlanDay:
 		var day models.MealPlanDay
@@ -890,9 +887,9 @@ func ReverseHold(db *gorm.DB, aggType string, id uuid.UUID, reason string) error
 func reverseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 	switch aggType {
 	case aggTypeOrder:
-		if err := ReverseOrderPayouts(id); err != nil {
-			return fmt.Errorf("payout-release: reverse order payout %s: %w", id, err)
-		}
+		// Nothing to reverse at the gateway: the Easy Split rail settles on release
+		// and the remainder is paid on the statement path, which the refund already
+		// adjusts (#1086).
 	case aggTypeMealPlanDay:
 		var day models.MealPlanDay
 		if err := db.First(&day, "id = ?", id).Error; err != nil {

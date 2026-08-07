@@ -60,8 +60,9 @@ func TestPayoutReconcile_ReleasedUnsettledIsDriven(t *testing.T) {
 	id := seedReleasedOrder(t, db, models.PayoutHoldReleased, nil)
 
 	withEscrowFlag(t, true, func() {
-		// GetRazorpay() is nil in the harness → ReleaseOrderPayouts no-ops and
-		// returns nil == "seam succeeded" → settleRelease stamps settled_at.
+		// The order is not Cashfree-split-eligible in the harness → the release
+		// seam no-ops and returns nil == "succeeded" → settleRelease stamps
+		// settled_at.
 		withSweepDB(t, db, func() { runPayoutReconcileScan(context.Background()) })
 
 		first := settledAtOf(t, db, id)

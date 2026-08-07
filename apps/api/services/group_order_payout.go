@@ -99,7 +99,7 @@ func ReleaseGroupChefPayout(g *models.GroupOrder) error {
 	}
 	rz := GetRazorpayFor(g.Mode)
 	if rz == nil {
-		return nil // gateway unconfigured — no-op like ReleaseOrderPayouts
+		return nil // gateway unconfigured — nothing to release
 	}
 	if _, err := rz.ReleaseTransfer(g.PayoutTransferID); err != nil {
 		if isAlreadyReleasedErr(err) {
