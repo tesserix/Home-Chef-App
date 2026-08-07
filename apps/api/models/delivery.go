@@ -124,7 +124,7 @@ type DeliveryPartner struct {
 	StripeAccountID string `gorm:"" json:"-"`
 	// PaymentProvider controls how earnings are paid out. Column default stays
 	// as it was written; the schema change belongs to a tesserix-k8s PR (#1086).
-	PaymentProvider string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
+	PaymentProvider string `gorm:"type:varchar(20);default:'cashfree'" json:"paymentProvider"`
 	// PayoutCountry is the ISO-3166 alpha-2 country for Stripe Connect
 	// onboarding and currency selection.
 	PayoutCountry        string `gorm:"type:varchar(2);default:'IN'" json:"payoutCountry"`

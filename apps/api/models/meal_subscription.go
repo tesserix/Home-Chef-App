@@ -124,7 +124,7 @@ type MealSubscription struct {
 	DefaultAddressID *uuid.UUID `gorm:"type:uuid" json:"defaultAddressId,omitempty"`
 
 	// Razorpay recurring (Phase 2). GatewaySubID is the Razorpay subscription id.
-	PaymentGateway string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentGateway"`
+	PaymentGateway string `gorm:"type:varchar(20);default:'cashfree'" json:"paymentGateway"`
 	GatewaySubID   string `gorm:"" json:"-"`
 
 	PausedAt     *time.Time     `gorm:"" json:"pausedAt,omitempty"`

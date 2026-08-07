@@ -34,7 +34,7 @@ type ChefPromotion struct {
 	// PaymentProvider rather than assuming Razorpay.
 	GatewayOrderID   string `gorm:"" json:"-"`
 	GatewayPaymentID string `gorm:"" json:"-"`
-	PaymentProvider   string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider,omitempty"`
+	PaymentProvider   string `gorm:"type:varchar(20);default:'cashfree'" json:"paymentProvider,omitempty"`
 	PaymentMethod     string `gorm:"" json:"paymentMethod,omitempty"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`

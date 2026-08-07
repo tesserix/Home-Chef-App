@@ -477,6 +477,30 @@ func Migrate() error {
 		return fmt.Errorf("gateway id column migration failed: %w", err)
 	}
 
+	// #1125 — a row inserted without an explicit provider must not claim a gateway
+	// that can no longer take money. Stated here rather than left to AutoMigrate,
+	// which is not reliable about changing an EXISTING column's default. Existing
+	// rows are untouched: every one already carries an explicit provider.
+	for _, col := range [][2]string{
+		{"orders", "payment_provider"},
+		{"chef_profiles", "payment_provider"},
+		{"delivery_partners", "payment_provider"},
+		{"meal_plans", "payment_provider"},
+		{"catering_requests", "payment_provider"},
+		{"chef_promotions", "payment_provider"},
+		{"group_order_participants", "payment_provider"},
+		{"meal_subscriptions", "payment_gateway"},
+	} {
+		if !DB.Migrator().HasColumn(col[0], col[1]) {
+			continue
+		}
+		stmt := fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN %s SET DEFAULT '%s'`,
+			col[0], col[1], models.PreferredChefPaymentProvider)
+		if err := DB.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("post-migration DDL failed (%q): %w", stmt, err)
+		}
+	}
+
 	// Payment-id uniqueness backstop (#395·1): a DB-level guard against ONE gateway
 	// payment being stamped on two orders (the app-logic binding alone can't stop it).
 	// PARTIAL indexes (WHERE col <> '') because wallet-only / unpaid / Stripe orders and

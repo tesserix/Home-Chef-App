@@ -130,7 +130,7 @@ type MealPlan struct {
 	GatewayOrderID string `gorm:"" json:"gatewayOrderId,omitempty"`
 	// Which gateway actually captured the advance. Stored, never inferred: a plan
 	// captured on Cashfree must refund on Cashfree, and the reverse strands the money.
-	PaymentProvider string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider,omitempty"`
+	PaymentProvider string `gorm:"type:varchar(20);default:'cashfree'" json:"paymentProvider,omitempty"`
 
 	// Negotiation cutoffs — a lapse auto-cancels + fully refunds.
 	ChefRespondBy     *time.Time `gorm:"" json:"chefRespondBy,omitempty"`
