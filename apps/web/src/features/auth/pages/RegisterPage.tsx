@@ -391,7 +391,7 @@ export default function RegisterPage() {
                         <li>Your name and email let us create your account and send order updates.</li>
                         <li>Your phone number lets your chef and driver reach you about your order.</li>
                         <li>Your delivery address is shared only with the chef and driver for orders you place.</li>
-                        <li>We don't sell your data. We use Razorpay or Stripe to process payments; they receive only what's needed to process the transaction.</li>
+                        <li>We don't sell your data. We use Cashfree Payments or Stripe to process payments; they receive only what's needed to process the transaction.</li>
                         <li>
                           You can request access, correction, or deletion of your data any time. See our{' '}
                           <Link to="/privacy" className="text-herb hover:underline">Privacy Policy</Link>.

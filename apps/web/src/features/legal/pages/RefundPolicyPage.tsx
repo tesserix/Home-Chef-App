@@ -398,7 +398,7 @@ export default function RefundPolicyPage() {
                 <p className="mt-2 text-ink-soft">
                   Most refunds land in 3 to 5 working days. The exact day
                   depends on your bank or wallet, not on us. We send the money
-                  to your payment gateway (Razorpay or Stripe) on day 1; from
+                  to your payment gateway (Cashfree Payments or Stripe) on day 1; from
                   there, it follows your bank's processing cycle. We can't
                   speed up your bank, but we can show you the gateway's
                   reference number if you ask.
@@ -589,7 +589,7 @@ export default function RefundPolicyPage() {
             </p>
             <ul className="list-disc space-y-2 pl-5">
               <li>
-                Our payment partner (Razorpay or Stripe) notifies us.
+                Our payment partner (Cashfree Payments or Stripe) notifies us.
               </li>
               <li>
                 We share order records, delivery confirmation, and chat logs

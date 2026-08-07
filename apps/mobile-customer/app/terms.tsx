@@ -31,7 +31,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '4. Payments',
     paragraphs: [
-      'Payments are processed by RBI-licensed payment aggregators (Cashfree Payments or Razorpay). Order proceeds are settled to your chef, less the platform fee and applicable taxes. We do not store your full card details — they are handled by the payment gateway.',
+      'Payments are processed by RBI-licensed payment aggregators (Cashfree Payments or Stripe). Order proceeds are settled to your chef, less the platform fee and applicable taxes. We do not store your full card details — they are handled by the payment gateway.',
       'Your payment is collected and held by Zivana Innovations LLP, the Fe3dr operating entity in India, which is part of Tesserix Pty Ltd. Zivana is the name that may appear on your bank or card statement. Zivana also pays chefs their share.',
     ],
   },

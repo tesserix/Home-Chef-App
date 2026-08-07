@@ -6,9 +6,9 @@
  * validates the bank details and stores sensitive fields in GCP Secret Manager
  * (so server-side reads are masked too).
  *
- * UPI is not an accepted payout method (#767): Razorpay Route settles by
- * NEFT/IMPS to a bank account and has no VPA destination, so a chef who
- * nominated UPI could never be paid. Only bank transfer is offered.
+ * UPI is not an accepted payout method (#767): payouts settle by NEFT/IMPS to a
+ * bank account and have no VPA destination, so a chef who nominated UPI could
+ * never be paid. Only bank transfer is offered.
  */
 import { useEffect, useRef, useState } from 'react';
 import {

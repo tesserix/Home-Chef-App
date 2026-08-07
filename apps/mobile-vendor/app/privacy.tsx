@@ -31,7 +31,7 @@ const SECTIONS: LegalSection[] = [
     paragraphs: [
       '• Customers — your kitchen name, menu, photos, and ratings are shown publicly; for each order, the customer sees the order details needed to receive it.',
       '• Delivery partners — the pickup details needed to collect an order from your kitchen.',
-      '• Payment processor (Razorpay) — your payout details, to settle your earnings.',
+      '• Payment processor (Cashfree Payments) — your payout details, to settle your earnings.',
       '• Service providers — hosting, notifications, and analytics partners, under confidentiality obligations.',
       'Your verification documents are reviewed privately and are not shared with customers. We do not sell your personal data.',
     ],

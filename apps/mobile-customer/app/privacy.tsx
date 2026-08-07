@@ -30,7 +30,7 @@ const SECTIONS: LegalSection[] = [
     paragraphs: [
       '• Home chefs — the order details and the delivery information needed to prepare and fulfil your order.',
       '• Delivery partners — your delivery address and contact details for the duration of the delivery.',
-      '• Payment processor (Razorpay) — to process payments and refunds securely.',
+      '• Payment processor (Cashfree Payments) — to process payments and refunds securely.',
       '• Service providers — who help us run the app (for example hosting, notifications, and analytics), under appropriate confidentiality obligations.',
       'We do not sell your personal data.',
     ],

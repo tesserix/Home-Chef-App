@@ -196,7 +196,7 @@ export default function TermsPage() {
             </h2>
             <p className="mt-3">
               We accept payment in Indian rupees through our payment partners, currently
-              Razorpay and Stripe. They are regulated payment service providers. We never store
+              Cashfree Payments and Stripe. They are regulated payment service providers. We never store
               your full card number. The partner you use stores the card details on their
               systems.
             </p>

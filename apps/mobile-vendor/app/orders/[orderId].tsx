@@ -83,7 +83,7 @@ const CANCEL_REASONS: CancelReason[] = [
 ];
 
 // Pull the API's specific error out of an axios failure so a failed cancel can
-// tell the chef *why* (Razorpay-only, gateway retry, already refunded, …)
+// tell the chef *why* (gateway retry, already refunded, …)
 // rather than a dead-end generic toast.
 function cancelErrorMessage(err: unknown, fallback: string): string {
   const e = err as { response?: { data?: { error?: string } } };
@@ -1027,8 +1027,8 @@ export default function OrderDetailScreen() {
         });
       },
       onError: (err) => {
-        // Surface the backend's specific reason (e.g. "only Razorpay-paid
-        // orders can be cancelled…", "refund failed at gateway; please retry")
+        // Surface the backend's specific reason (e.g. "refund failed at
+        // gateway; please retry")
         // so the chef knows whether to retry or contact support, instead of a
         // dead-end generic message.
         showToast({

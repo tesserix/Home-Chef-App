@@ -6,7 +6,7 @@ import { Badge, Card } from '@/shared/components/ui';
  * Cookie Policy — customer-facing page for the Fe3dr web app.
  *
  * Covers DPDP Act §5 (Notice) requirements + best-practice cookie disclosures:
- * cookie categories, third-party cookies (Razorpay/Stripe), how to manage
+ * cookie categories, third-party cookies (Cashfree/Stripe), how to manage
  * consent, retention, withdrawal, and grievance officer contact.
  *
  * Style: plain English, short sentences, "we"/"you", per STYLE-GUIDE.md §5.
@@ -84,7 +84,7 @@ export default function CookiePolicyPage() {
                 be turned off without breaking the app. We don&apos;t use
                 marketing or advertising cookies. We don&apos;t currently
                 use analytics cookies either. Third parties — our payment
-                processors, Razorpay and Stripe — set their own cookies
+                processors, Cashfree Payments and Stripe — set their own cookies
                 during checkout, and those follow their own rules. You
                 can manage everything from our cookie banner or your
                 browser settings, and withdrawing consent is as easy as
@@ -360,18 +360,18 @@ export default function CookiePolicyPage() {
               <Card variant="default" padding="md" className="mt-6">
                 <ul className="space-y-4">
                   <li>
-                    <h3 className="font-medium text-ink">Razorpay</h3>
+                    <h3 className="font-medium text-ink">Cashfree Payments</h3>
                     <p className="mt-1 text-sm text-ink-soft">
                       Sets cookies during checkout in India for fraud
                       detection and payment-session continuity.
                     </p>
                     <a
-                      href="https://razorpay.com/cookie-policy/"
+                      href="https://www.cashfree.com/privacy-policy/"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-herb hover:underline"
                     >
-                      Razorpay Cookie Policy
+                      Cashfree Privacy &amp; Cookie Policy
                       <ExternalLink
                         aria-hidden="true"
                         className="h-3.5 w-3.5"
@@ -406,7 +406,7 @@ export default function CookiePolicyPage() {
               <p className="mt-4 text-sm text-ink-muted">
                 Payment-processor cookies are required for checkout to
                 work. If you block them in your browser, you won&apos;t
-                be able to pay. We use Razorpay for cards and UPI
+                be able to pay. We use Cashfree Payments for cards and UPI
                 originating in India and Stripe for international cards
                 — only one set of these cookies loads in any single
                 checkout, depending on which provider routes your

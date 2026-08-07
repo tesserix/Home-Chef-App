@@ -97,7 +97,7 @@ export default function RootLayout() {
   // Wire React Query's focusManager to React Native AppState. By default RQ
   // listens for the web `visibilitychange` event, which never fires in RN — so
   // refetchOnWindowFocus is dead and queries stay on stale data when the app
-  // returns from the background (e.g. after the Razorpay payment sheet, or when
+  // returns from the background (e.g. after the payment sheet, or when
   // the customer switches away while the chef advances their order). Marking the
   // app focused on foreground triggers a refetch of stale active queries, so
   // order status refreshes live instead of only after a full app restart.
