@@ -18,7 +18,7 @@ import (
 //
 // Flow (capture-at-create, because accept-all auto-confirms with no later
 // customer-present step):
-//   1. Booking: one Razorpay charge for the full requested total → platform
+//   1. Booking: one gateway charge for the full requested total → platform
 //      account. (CreateMealPlanAdvanceOrder + VerifyMealPlanAdvance.)
 //   2. Confirm (accept-all or customer-approve): a per-day on-hold Route
 //      transfer to the chef for each ACCEPTED day (HoldChefPayouts), and a
@@ -28,7 +28,7 @@ import (
 //
 // EVERYTHING here is gated by config.MealPlanEscrowEnabled and is a safe no-op
 // when the flag is off — so the negotiation handshake (#195/#196) and the
-// per-day fulfilment pipeline (#197) work unchanged until the Razorpay paths are
+// per-day fulfilment pipeline (#197) work unchanged until the escrow paths are
 // sandbox-verified. Idempotency: wallet refunds key on "mealplan-refund:<dayID>"
 // (unique-indexed in the ledger); releases DB-guard on PayoutTransferID.
 
@@ -236,32 +236,17 @@ func mealPlanAdvanceProvider(plan *models.MealPlan) string {
 }
 
 // CreateMealPlanAdvanceOrder creates the gateway order for the full plan total at
-// booking time. Returns the gateway order id plus, on Cashfree, the payment session
-// id the client opens checkout with (Razorpay has no analogue and returns ""), and
-// stamps plan.PaymentProvider so refunds later reach the rail that took the money.
-// No-op (empty ids) when escrow is off.
+// booking time. Returns the gateway order id plus the payment session id the client
+// opens checkout with, and stamps plan.PaymentProvider so refunds later reach the
+// rail that took the money. No-op (empty ids) when escrow is off.
 func CreateMealPlanAdvanceOrder(plan *models.MealPlan) (string, string, error) {
 	if !MealPlanEscrowActive() {
 		return "", "", nil
 	}
-	if mealPlanAdvanceProvider(plan) == models.PaymentProviderCashfree {
-		return createMealPlanCashfreeAdvance(plan)
+	if p := mealPlanAdvanceProvider(plan); p != models.PaymentProviderCashfree {
+		return "", "", fmt.Errorf("meal-plan advance: no gateway for provider %s", p)
 	}
-	rz := GetRazorpayFor(plan.Mode)
-	if rz == nil {
-		return "", "", fmt.Errorf("razorpay not configured")
-	}
-	order, err := rz.CreateOrder(&OrderRequest{
-		Amount:   ToPaise(plan.Total),
-		Currency: plan.Currency,
-		Receipt:  plan.MealPlanNumber,
-		Notes:    map[string]string{"meal_plan_id": plan.ID.String(), "kind": "tiffin_advance"},
-	})
-	if err != nil {
-		return "", "", fmt.Errorf("create advance order: %w", err)
-	}
-	plan.PaymentProvider = models.PaymentProviderRazorpay
-	return order.ID, "", nil
+	return createMealPlanCashfreeAdvance(plan)
 }
 
 // createMealPlanCashfreeAdvance mints the Cashfree advance order. The Cashfree
@@ -308,54 +293,18 @@ func createMealPlanCashfreeAdvance(plan *models.MealPlan) (string, string, error
 // VerifyMealPlanAdvance confirms the customer's advance payment was captured and
 // stamps EscrowPaymentID on the plan. No-op when escrow is off.
 //
-// SECURITY: binds the fetched payment to THIS plan's advance order and amount and
-// verifies the Checkout signature — without this any captured payment (e.g. a ₹1
-// payment reused across plans) could mark a large plan "paid" from the platform
-// escrow. Mirrors the order payment-verify binding in handlers/payment.go.
-func VerifyMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan, paymentID, signature string) error {
+// SECURITY: nothing the client says is trusted — the gateway fetch IS the
+// verification, and the binding is the order id, which is this plan's own UUID, so a
+// capture fetched under it cannot belong to another plan. Without that binding any
+// captured payment (a ₹1 payment reused across plans) could mark a large plan "paid"
+// from the platform escrow.
+func VerifyMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan) error {
 	if !MealPlanEscrowActive() {
 		return nil
 	}
 	if plan.RazorpayOrderID == "" {
 		return fmt.Errorf("no advance order on this plan")
 	}
-	if plan.PaymentProvider == models.PaymentProviderCashfree {
-		return verifyMealPlanCashfreeAdvance(tx, plan)
-	}
-	rz := GetRazorpayFor(plan.Mode)
-	if rz == nil {
-		return fmt.Errorf("razorpay not configured")
-	}
-	pay, err := rz.FetchPayment(paymentID)
-	if err != nil {
-		return fmt.Errorf("fetch advance payment: %w", err)
-	}
-	if pay.Status != "captured" {
-		return fmt.Errorf("advance payment not captured (status=%s)", pay.Status)
-	}
-	if pay.OrderID != plan.RazorpayOrderID {
-		return fmt.Errorf("advance payment does not belong to this plan")
-	}
-	if pay.Amount < ToPaise(plan.Total) {
-		return fmt.Errorf("advance payment amount does not match the plan total")
-	}
-	// Enforced when the client sends it (the customer app always does); the
-	// order+amount binding above is the hard gate and doesn't rely on the client.
-	if signature != "" && !VerifyPaymentSignature(plan.RazorpayOrderID, paymentID, signature) {
-		return fmt.Errorf("advance payment signature verification failed")
-	}
-	plan.EscrowPaymentID = paymentID
-	return tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
-		Update("escrow_payment_id", paymentID).Error
-}
-
-// verifyMealPlanCashfreeAdvance binds the plan to a capture Cashfree itself reports.
-//
-// There is no client signature to check — Cashfree hands the client nothing it could
-// sign — so the gateway fetch IS the verification. The binding is the order id: it is
-// this plan's own UUID, so a capture fetched under it cannot belong to another plan,
-// which is the same guarantee the Razorpay path gets from (order id + amount).
-func verifyMealPlanCashfreeAdvance(tx *gorm.DB, plan *models.MealPlan) error {
 	cf := GetCashfreeFor(plan.Mode)
 	if cf == nil {
 		return fmt.Errorf("cashfree not configured")
@@ -509,16 +458,15 @@ func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay
 // confirmed), stamps the captured payment id, and holds the chef's per-day payouts.
 //
 // It is idempotent and status-guarded, so it is safe to call from BOTH the client
-// verify-payment path (with the Checkout signature) AND the payment.captured webhook
-// fallback (signature "" — the webhook is Razorpay-authenticated and the fetched
-// payment is re-bound to the plan's order + amount inside VerifyMealPlanAdvance),
+// verify-payment path AND the webhook fallback (the capture is re-fetched from the
+// gateway and bound to the plan's order inside VerifyMealPlanAdvance either way),
 // whichever confirms first. A second call no-ops and returns confirmed=false. No-op
 // (false, nil) when escrow is off. Requires plan.Days loaded. Returns confirmed=true
 // only on the transition it actually performed, so a caller can fire any one-shot side
 // effect exactly once; the confirmed event is enqueued here so both callers emit it.
 //
 // #395·3 durability: without the webhook fallback, a dropped client verify-payment
-// call (e.g. the RN Razorpay SDK returning dismiss on the success auto-redirect) would
+// call (e.g. the SDK returning dismiss on the success auto-redirect) would
 // strand a CAPTURED advance — money taken, plan unconfirmed, chef payout never held.
 // It takes the plain *gorm.DB (NOT a caller tx): it runs the confirm in its own fast
 // LOCAL transaction and then holds the chef payouts OUTSIDE it. Splitting the external
@@ -527,11 +475,11 @@ func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay
 // orphan on-hold transfers. A crash between confirm and hold is healed by the
 // meal-plan-hold-reconcile cron. Both steps are idempotent + status-guarded; returns
 // confirmed=true only on the transition it performed. No-op when escrow is off.
-func ConfirmMealPlanAdvance(db *gorm.DB, plan *models.MealPlan, paymentID, signature string) (bool, error) {
+func ConfirmMealPlanAdvance(db *gorm.DB, plan *models.MealPlan) (bool, error) {
 	var confirmed bool
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var e error
-		confirmed, e = confirmMealPlanAdvanceDBTx(tx, plan, paymentID, signature)
+		confirmed, e = confirmMealPlanAdvanceDBTx(tx, plan)
 		return e
 	}); err != nil {
 		return false, err
@@ -544,10 +492,10 @@ func ConfirmMealPlanAdvance(db *gorm.DB, plan *models.MealPlan, paymentID, signa
 // EscrowPaymentID, and enqueue the confirmed event — all in the caller's tx. Returns
 // confirmed=true only on the single transition it performed. Used by ConfirmMealPlanAdvance
 // and by the Temporal confirm activity.
-func confirmMealPlanAdvanceDBTx(tx *gorm.DB, plan *models.MealPlan, paymentID, signature string) (bool, error) {
+func confirmMealPlanAdvanceDBTx(tx *gorm.DB, plan *models.MealPlan) (bool, error) {
 	// Bind + validate the captured payment to this plan's advance order + amount and
 	// stamp EscrowPaymentID (the anti-under-payment gate). No-op when escrow is off.
-	if err := VerifyMealPlanAdvance(tx, plan, paymentID, signature); err != nil {
+	if err := VerifyMealPlanAdvance(tx, plan); err != nil {
 		return false, err
 	}
 	if !MealPlanEscrowActive() {

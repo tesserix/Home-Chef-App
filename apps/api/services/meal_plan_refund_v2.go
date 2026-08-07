@@ -91,7 +91,7 @@ func floorPaise(v float64) float64 {
 //
 // TWO CEILINGS enforce "never refund more than was paid":
 //   - floorPaise, so independently-rounded days can't sum past what was captured;
-//   - a hard cap at plan.Total, the amount the Razorpay advance actually captured
+//   - a hard cap at plan.Total, the amount the advance actually captured
 //     (VerifyMealPlanAdvance binds the payment to it). The proportional share is only
 //     meaningful while the day prices sum to plan.Subtotal, which every legitimate flow
 //     maintains — the cap is the backstop for data where they don't, so a single corrupt day

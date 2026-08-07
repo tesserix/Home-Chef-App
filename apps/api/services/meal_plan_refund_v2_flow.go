@@ -176,24 +176,28 @@ func terminalizeV2DayWithGatewayRef(tx *gorm.DB, day *models.MealPlanDay, percen
 	}).Error
 }
 
-// gatewayRefundToSource issues a partial refund of the plan's captured escrow payment back to the
-// customer's original method (Razorpay). Returns the gateway refund id. idemKey dedups a
-// timeout-after-success retry so a day is never refunded twice at the gateway.
+// gatewayRefundToSource issues a partial refund of the plan's captured escrow payment back
+// to the customer's original method. Returns the gateway refund id. idemKey dedups a
+// timeout-after-success retry so a day is never refunded twice at the gateway — on Cashfree
+// it becomes the refund_id itself.
+//
+// Scoped to the plan's advance ORDER, not its payment: Cashfree refunds are order-scoped.
 func gatewayRefundToSource(plan *models.MealPlan, amount float64, reason, idemKey string) (string, error) {
-	rz := GetRazorpayFor(plan.Mode)
-	if rz == nil {
-		return "", fmt.Errorf("razorpay not configured")
+	cf := GetCashfreeFor(plan.Mode)
+	if cf == nil {
+		return "", fmt.Errorf("cashfree not configured")
 	}
-	resp, err := rz.CreateRefund(plan.EscrowPaymentID, &RefundRequest{
-		Amount: ToPaise(amount),
-		Speed:  "normal",
-		Notes: map[string]string{
-			"meal_plan": plan.MealPlanNumber, "reason": reason,
-		},
+	note := plan.MealPlanNumber + ": " + reason
+	if len(note) > 100 {
+		note = note[:100]
+	}
+	resp, err := cf.CreateRefund(plan.RazorpayOrderID, &CashfreeRefundRequest{
+		AmountPaise:    cashfreeAmount(ToPaise(amount)),
+		Note:           note,
 		IdempotencyKey: idemKey,
 	})
 	if err != nil {
 		return "", err
 	}
-	return resp.ID, nil
+	return resp.RefundID, nil
 }

@@ -45,6 +45,28 @@ func withCashfreeServer(t *testing.T, mode string, handler http.HandlerFunc) *ht
 	return srv
 }
 
+// withCashfreeOrderPayments points the live-mode client at a stub serving Cashfree's
+// order-scoped payments list — the one seam SuccessfulPayment reads. status "" means the
+// order carries no payment at all, which is a different gateway shape from a payment that
+// exists but never succeeded.
+func withCashfreeOrderPayments(t *testing.T, orderID string, amountPaise int, status string) {
+	t.Helper()
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || !strings.HasSuffix(r.URL.Path, "/payments") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if status == "" {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{{
+			"cf_payment_id": 4242, "order_id": orderID,
+			"payment_status": status, "payment_amount": float64(amountPaise) / 100,
+		}})
+	})
+}
+
 // cfRefundSpy records what reached Cashfree's order-scoped refund POST.
 type cfRefundSpy struct {
 	calls       int

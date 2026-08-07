@@ -10,9 +10,6 @@ package services
 // accepted day → emit the confirmed event, and prove it is idempotent + escrow-gated.
 
 import (
-	"encoding/json"
-	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -52,23 +49,6 @@ func setupConfirmAdvanceDB(t *testing.T) *gorm.DB {
 	database.DB = db
 	t.Cleanup(func() { database.DB = prev })
 	return db
-}
-
-// confirmAdvanceStub serves GET /payments/{id} (captured, bound to orderID/amount) for
-// VerifyMealPlanAdvance.
-func confirmAdvanceStub(t *testing.T, orderID string, amountPaise int) {
-	t.Helper()
-	withRazorpayTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/payments/"):
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id": "pay_adv", "status": "captured", "captured": true,
-				"order_id": orderID, "amount": amountPaise,
-			})
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
 }
 
 // seedConfirmPlan inserts an awaiting_customer plan with an advance order + N accepted
@@ -131,15 +111,15 @@ func outboxCount(t *testing.T, db *gorm.DB, subject string) int {
 func TestConfirmMealPlanAdvance_WebhookPath_ConfirmsHoldsStamps(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	confirmAdvanceStub(t, "order_conf1", 35200) // total 352.00 → 35200 paise
+	withCashfreeOrderPayments(t, "order_conf1", 35200, CashfreePaymentSuccess) // total 352.00 → 35200 paise
 	plan, planID, dayIDs := seedConfirmPlan(t, db, "order_conf1", []float64{160, 160})
 
-	confirmed, err := ConfirmMealPlanAdvance(db, plan, "pay_adv", "") // webhook path: no signature
+	confirmed, err := ConfirmMealPlanAdvance(db, plan)
 	require.NoError(t, err)
 	require.True(t, confirmed, "the awaiting_customer → confirmed transition happened")
 
 	require.Equal(t, string(models.MealPlanConfirmed), planField(t, db, planID, "status"), "plan confirmed")
-	require.Equal(t, "pay_adv", planField(t, db, planID, "escrow_payment_id"), "captured payment stamped")
+	require.Equal(t, "4242", planField(t, db, planID, "escrow_payment_id"), "captured payment stamped")
 	require.NotEmpty(t, planField(t, db, planID, "confirmed_at"), "confirmed_at set")
 	for _, d := range dayIDs {
 		require.Equal(t, string(models.MealPlanDayConfirmed), confDayStatus(t, db, d), "accepted day → confirmed")
@@ -152,16 +132,16 @@ func TestConfirmMealPlanAdvance_WebhookPath_ConfirmsHoldsStamps(t *testing.T) {
 func TestConfirmMealPlanAdvance_Idempotent_NoDoubleHold(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	confirmAdvanceStub(t, "order_conf1", 35200)
+	withCashfreeOrderPayments(t, "order_conf1", 35200, CashfreePaymentSuccess)
 	plan, planID, _ := seedConfirmPlan(t, db, "order_conf1", []float64{160, 160})
 
-	c1, err := ConfirmMealPlanAdvance(db, plan, "pay_adv", "")
+	c1, err := ConfirmMealPlanAdvance(db, plan)
 	require.NoError(t, err)
 	require.True(t, c1)
 
 	// Re-run against a fresh in-memory struct (as a second delivery would load).
 	plan2, _, _ := seedConfirmPlanFrom(t, db, planID)
-	c2, err := ConfirmMealPlanAdvance(db, plan2, "pay_adv", "")
+	c2, err := ConfirmMealPlanAdvance(db, plan2)
 	require.NoError(t, err)
 	require.False(t, c2, "already confirmed → no transition")
 	require.Equal(t, 1, outboxCount(t, db, SubjectMealPlanConfirmed), "event not re-emitted")
@@ -185,25 +165,25 @@ func seedConfirmPlanFrom(t *testing.T, db *gorm.DB, planID uuid.UUID) (*models.M
 func TestConfirmMealPlanAdvance_EscrowOff_NoOp(t *testing.T) {
 	escrowFlag(t, false)
 	db := setupConfirmAdvanceDB(t)
-	confirmAdvanceStub(t, "order_conf1", 35200)
+	withCashfreeOrderPayments(t, "order_conf1", 35200, CashfreePaymentSuccess)
 	plan, planID, _ := seedConfirmPlan(t, db, "order_conf1", []float64{160, 160})
 
-	confirmed, err := ConfirmMealPlanAdvance(db, plan, "pay_adv", "")
+	confirmed, err := ConfirmMealPlanAdvance(db, plan)
 	require.NoError(t, err)
 	require.False(t, confirmed)
 	require.Equal(t, string(models.MealPlanAwaitingCustomer), planField(t, db, planID, "status"), "unchanged")
 }
 
-// A captured payment bound to a DIFFERENT gateway order must NOT confirm the plan — the
-// anti-cross-plan-reuse gate in VerifyMealPlanAdvance propagates through and blocks it.
-func TestConfirmMealPlanAdvance_OrderMismatch_NoConfirm(t *testing.T) {
+// No successful payment on the plan's own advance order must NOT confirm the plan — the
+// capture gate in VerifyMealPlanAdvance propagates through and blocks it.
+func TestConfirmMealPlanAdvance_Uncaptured_NoConfirm(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	confirmAdvanceStub(t, "order_OTHER", 35200) // payment belongs to another order
+	withCashfreeOrderPayments(t, "order_conf1", 35200, "") // nothing ever paid on this plan's order
 	plan, planID, _ := seedConfirmPlan(t, db, "order_conf1", []float64{160, 160})
 
-	confirmed, err := ConfirmMealPlanAdvance(db, plan, "pay_adv", "")
+	confirmed, err := ConfirmMealPlanAdvance(db, plan)
 	require.Error(t, err)
 	require.False(t, confirmed)
-	require.Equal(t, string(models.MealPlanAwaitingCustomer), planField(t, db, planID, "status"), "not confirmed on mismatch")
+	require.Equal(t, string(models.MealPlanAwaitingCustomer), planField(t, db, planID, "status"), "not confirmed without a capture")
 }
