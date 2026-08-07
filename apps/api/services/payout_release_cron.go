@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,14 +18,13 @@ import (
 
 // payout_release_cron.go — the 15-minute release sweep (#741).
 //
-// Route creates each order's payee transfers held at checkout. This finds
-// delivered orders whose hold has matured, asks the governor whether they may
-// be released, and clears the ones that may. Blocked orders keep their
-// transfers held and surface in the admin queue with every reason.
+// This finds delivered orders whose hold has matured, asks the governor whether
+// they may be released, and clears the ones that may. Blocked orders stay held
+// and surface in the admin queue with every reason.
 //
 // A sweep rather than a per-order timer: the worst-case lag is one interval,
-// which is immaterial against Razorpay's fixed 2-working-day settlement, and a
-// missed tick self-heals on the next one with no per-order state to reconcile.
+// which is immaterial against the gateway's own settlement cycle, and a missed
+// tick self-heals on the next one with no per-order state to reconcile.
 
 const payoutReleaseInterval = 15 * time.Minute
 
@@ -134,15 +134,17 @@ func BuildReleaseInput(db *gorm.DB, order *models.Order, now time.Time) (payouts
 		DeliveredAt:       deliveredAt(order, now),
 		Maturation:        maturationWindow(db),
 		AutomationEnabled: PayoutAutomationEnabled(db, &order.Chef),
-		// Both must hold: Route only ever settles by NEFT/IMPS to a bank
-		// account, so "activated" alone is not enough — a chef who switches
-		// to UPI keeps whatever razorpay_settlement_status was last written
-		// (SavePayoutDetails now clears it on that switch, but this is the
-		// belt-and-suspenders read for any row that predates that fix or any
-		// gap in it). Trusting status alone would let the sweep auto-release
-		// money toward a bank account the chef has already abandoned (review
-		// finding 2).
-		SettlementActivated: order.Chef.RazorpaySettlementStatus == "activated" && order.Chef.PayoutMethod == "bank_transfer",
+		// Both must hold: neither rail disburses to a VPA, so a verified
+		// vendor alone is not enough — a chef who switches to UPI keeps the
+		// vendor row registered against the bank account they abandoned, and
+		// trusting the status alone would let the sweep auto-release money
+		// toward it (review finding 2). Read on the Cashfree registration
+		// since #1086: Route's activation_status was never written for any
+		// chef, so this gate — non-overridable in the governor — blocked every
+		// order it ever saw.
+		SettlementActivated: order.Chef.CashfreeVendorID != "" &&
+			strings.EqualFold(order.Chef.CashfreeVendorStatus, CashfreeVendorActive) &&
+			order.Chef.PayoutMethod == "bank_transfer",
 		RefundOpen:          order.RefundedAt != nil,
 		RecoveryBalance:     deducted,
 		DeliveredOrderCount: int(delivered),

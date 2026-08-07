@@ -65,7 +65,7 @@ const payoutReleaseOrdersDDL = `CREATE TABLE orders (mode text DEFAULT 'live', t
 const payoutReleaseChefProfilesDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, 
 	address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '',
 	id text PRIMARY KEY, user_id text, business_name text, state text DEFAULT '',
-	razorpay_account_id text DEFAULT '', razorpay_settlement_status text DEFAULT '',
+	cashfree_vendor_id text DEFAULT '', cashfree_vendor_status text DEFAULT '',
 	payout_method text DEFAULT '',
 	payout_auto_release text DEFAULT '')`
 
@@ -115,9 +115,10 @@ func seedDeliveredOrder(t *testing.T, db *gorm.DB, mutateChef func(*models.ChefP
 	t.Helper()
 
 	chef := &models.ChefProfile{
-		ID:                       uuid.New(),
-		RazorpaySettlementStatus: "activated",
-		// The happy-path default: an activated bank-transfer chef is what
+		ID:                   uuid.New(),
+		CashfreeVendorID:     "vend_" + uuid.NewString()[:8],
+		CashfreeVendorStatus: CashfreeVendorActive,
+		// The happy-path default: a verified bank-transfer chef is what
 		// every pre-existing test in this file is actually about (release
 		// eligibility, hold state, dispute guards). Tests specifically about
 		// the payout-method check override this via mutateChef.
@@ -127,9 +128,9 @@ func seedDeliveredOrder(t *testing.T, db *gorm.DB, mutateChef func(*models.ChefP
 		mutateChef(chef)
 	}
 	require.NoError(t, db.Exec(
-		`INSERT INTO chef_profiles (id, razorpay_account_id, razorpay_settlement_status, payout_method, payout_auto_release, state)
+		`INSERT INTO chef_profiles (id, cashfree_vendor_id, cashfree_vendor_status, payout_method, payout_auto_release, state)
 		 VALUES (?,?,?,?,?,?)`,
-		chef.ID.String(), chef.RazorpayAccountID, chef.RazorpaySettlementStatus, chef.PayoutMethod, chef.PayoutAutoRelease, chef.State,
+		chef.ID.String(), chef.CashfreeVendorID, chef.CashfreeVendorStatus, chef.PayoutMethod, chef.PayoutAutoRelease, chef.State,
 	).Error)
 
 	orderID := uuid.New()
@@ -193,7 +194,6 @@ func TestRunPayoutReleaseSweep_SkipsOrderNotAtReleaseEligible(t *testing.T) {
 	db := newPayoutReleaseTestDB(t)
 	releaseReadySettings(t, db)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
-		c.RazorpaySettlementStatus = "activated"
 		c.PayoutAutoRelease = "on"
 	})
 	// payout_hold_status is left at its DDL default ('' / PayoutHoldNone) — the
@@ -219,7 +219,6 @@ func TestRunPayoutReleaseSweep_ReleasesEligibleOrderExactlyOnce(t *testing.T) {
 	db := newPayoutReleaseTestDB(t)
 	releaseReadySettings(t, db)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
-		c.RazorpaySettlementStatus = "activated"
 		c.PayoutAutoRelease = "on"
 	})
 	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
@@ -250,7 +249,6 @@ func TestRunPayoutReleaseSweep_SecondRunDoesNotRepublish(t *testing.T) {
 	db := newPayoutReleaseTestDB(t)
 	releaseReadySettings(t, db)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
-		c.RazorpaySettlementStatus = "activated"
 		c.PayoutAutoRelease = "on"
 	})
 	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
@@ -282,7 +280,6 @@ func TestRunPayoutReleaseSweep_MasterSwitchOffPublishesNothing(t *testing.T) {
 	db := newPayoutReleaseTestDB(t)
 	// payout.sweep_enabled deliberately left unset — the shipped default (off).
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
-		c.RazorpaySettlementStatus = "activated"
 		c.PayoutAutoRelease = "on"
 	})
 	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
@@ -321,7 +318,6 @@ func TestRunPayoutReleaseSweep_MovementOffReleasesNothing(t *testing.T) {
 	db := newPayoutReleaseTestDB(t)
 	releaseReadySettings(t, db)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
-		c.RazorpaySettlementStatus = "activated"
 		c.PayoutAutoRelease = "on"
 	})
 	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
@@ -358,7 +354,6 @@ func TestRunPayoutReleaseSweep_DisputedOrderIsNotReleased(t *testing.T) {
 	db := newPayoutReleaseTestDB(t)
 	releaseReadySettings(t, db)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
-		c.RazorpaySettlementStatus = "activated"
 		c.PayoutAutoRelease = "on"
 	})
 	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
@@ -384,10 +379,14 @@ func TestRunPayoutReleaseSweep_DisputedOrderIsNotReleased(t *testing.T) {
 	}
 }
 
+// The payability gate is the chef's Cashfree registration, not Route's (#1086).
+// Route's activation_status was never written for a single production chef, so
+// every chef read as BlockSettlementNotActivated — a non-overridable block —
+// and no order could ever auto-release.
 func TestBuildReleaseInput_ReadsSettlementActivation(t *testing.T) {
 	db := newPayoutReleaseTestDB(t)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
-		c.RazorpaySettlementStatus = "activated"
+		c.CashfreeVendorStatus = CashfreeVendorActive
 	})
 
 	in, err := BuildReleaseInput(db, order, time.Now())
@@ -395,22 +394,56 @@ func TestBuildReleaseInput_ReadsSettlementActivation(t *testing.T) {
 		t.Fatalf("BuildReleaseInput: %v", err)
 	}
 	if !in.SettlementActivated {
-		t.Fatal("an activated chef must be reported as activated")
+		t.Fatal("an active Cashfree vendor must be reported as activated")
+	}
+}
+
+// Cashfree's own status strings arrive upper-cased, but nothing guarantees the
+// column's case — every other read of it uses EqualFold, and a case mismatch
+// here would silently strand a verified chef's money behind a block an admin
+// cannot override.
+func TestBuildReleaseInput_VendorStatusIsCaseInsensitive(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
+		c.CashfreeVendorStatus = "active"
+	})
+
+	in, err := BuildReleaseInput(db, order, time.Now())
+	if err != nil {
+		t.Fatalf("BuildReleaseInput: %v", err)
+	}
+	if !in.SettlementActivated {
+		t.Fatal("vendor status must be matched case-insensitively, as every other read of it is")
+	}
+}
+
+// A chef with no vendor registration at all has no destination — the state both
+// production chefs were in when the Route gate was removed.
+func TestBuildReleaseInput_NoVendorIsNotActivated(t *testing.T) {
+	db := newPayoutReleaseTestDB(t)
+	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
+		c.CashfreeVendorID = ""
+		c.CashfreeVendorStatus = ""
+	})
+
+	in, err := BuildReleaseInput(db, order, time.Now())
+	if err != nil {
+		t.Fatalf("BuildReleaseInput: %v", err)
+	}
+	if in.SettlementActivated {
+		t.Fatal("a chef with no vendor registration must never read as activated")
 	}
 }
 
 // TestBuildReleaseInput_UpiPayoutMethodNeverReadsAsActivated pins review
-// finding 2: a chef who switched to UPI can carry a stale
-// razorpay_settlement_status="activated" left over from when they were on
-// bank transfer (SavePayoutDetails clears this going forward, but existing
-// rows predating that fix, and any gap, must fail safe here too). Route only
-// ever settles by NEFT/IMPS to a bank account, so "activated" without
-// payout_method=bank_transfer must never let the sweep release money toward
-// an abandoned bank account.
+// finding 2, carried over from the Route gate: a chef who switched to UPI can
+// keep a verified vendor row left over from when they were on bank transfer.
+// Neither rail disburses to a VPA, so a verified vendor without
+// payout_method=bank_transfer must never let the sweep release money toward an
+// abandoned bank account.
 func TestBuildReleaseInput_UpiPayoutMethodNeverReadsAsActivated(t *testing.T) {
 	db := newPayoutReleaseTestDB(t)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
-		c.RazorpaySettlementStatus = "activated"
 		c.PayoutMethod = "upi"
 	})
 
@@ -419,16 +452,16 @@ func TestBuildReleaseInput_UpiPayoutMethodNeverReadsAsActivated(t *testing.T) {
 		t.Fatalf("BuildReleaseInput: %v", err)
 	}
 	if in.SettlementActivated {
-		t.Fatal("a UPI payout method must never read as SettlementActivated, however stale the status column")
+		t.Fatal("a UPI payout method must never read as SettlementActivated, however verified the vendor")
 	}
 }
 
-func TestBuildReleaseInput_TreatsNeedsClarificationAsNotActivated(t *testing.T) {
-	// The single most dangerous mis-mapping: needs_clarification means
-	// Razorpay has NOT accepted the bank account, so a release strands money.
+// The most dangerous mis-mapping: Cashfree refused the bank account, so a
+// release would strand the money.
+func TestBuildReleaseInput_TreatsBankValidationFailedAsNotActivated(t *testing.T) {
 	db := newPayoutReleaseTestDB(t)
 	order := seedDeliveredOrder(t, db, func(c *models.ChefProfile) {
-		c.RazorpaySettlementStatus = "needs_clarification"
+		c.CashfreeVendorStatus = CashfreeVendorBankValidationFailed
 	})
 
 	in, err := BuildReleaseInput(db, order, time.Now())
@@ -436,7 +469,7 @@ func TestBuildReleaseInput_TreatsNeedsClarificationAsNotActivated(t *testing.T) 
 		t.Fatalf("BuildReleaseInput: %v", err)
 	}
 	if in.SettlementActivated {
-		t.Fatal("needs_clarification must not count as activated")
+		t.Fatal("a failed bank validation must not count as activated")
 	}
 }
 
@@ -490,10 +523,10 @@ func TestBuildReleaseInput_FlagsAnOpenRefund(t *testing.T) {
 // with Chef preloaded, matching the shape runPayoutReleaseSweep loads.
 func seedChefWithDeliveredOrders(t *testing.T, db *gorm.DB, priorDelivered int) *models.Order {
 	t.Helper()
-	chef := &models.ChefProfile{ID: uuid.New(), RazorpaySettlementStatus: "activated", PayoutMethod: "bank_transfer"}
+	chef := &models.ChefProfile{ID: uuid.New(), CashfreeVendorID: "vend_ramp", CashfreeVendorStatus: CashfreeVendorActive, PayoutMethod: "bank_transfer"}
 	require.NoError(t, db.Exec(
-		`INSERT INTO chef_profiles (id, razorpay_account_id, razorpay_settlement_status, payout_method, payout_auto_release, state) VALUES (?,?,?,?,?,?)`,
-		chef.ID.String(), chef.RazorpayAccountID, chef.RazorpaySettlementStatus, chef.PayoutMethod, chef.PayoutAutoRelease, chef.State,
+		`INSERT INTO chef_profiles (id, cashfree_vendor_id, cashfree_vendor_status, payout_method, payout_auto_release, state) VALUES (?,?,?,?,?,?)`,
+		chef.ID.String(), chef.CashfreeVendorID, chef.CashfreeVendorStatus, chef.PayoutMethod, chef.PayoutAutoRelease, chef.State,
 	).Error)
 
 	for i := 0; i < priorDelivered; i++ {

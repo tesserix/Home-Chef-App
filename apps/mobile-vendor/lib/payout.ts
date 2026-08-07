@@ -36,7 +36,6 @@ export interface PayoutDetailsResponse {
   bankAccountNumber: string;
   bankIFSC: string;
   upiId: string;
-  razorpayConnected: boolean;
   stripeConnected: boolean;
   paymentProvider: string;
   payoutCountry: string;
@@ -54,26 +53,21 @@ export interface PayoutStatusChip {
 }
 
 /**
- * The settlement chip on the payout screen. An older API sends no verdict, so
- * the Route connection stands in — but it can never say "in progress" about a
- * registration the server has already reported as failed.
+ * The settlement chip on the payout screen. The server's verdict is the only
+ * input since #1086 — the Route connection flag that used to stand in for it
+ * described a rail no chef is paid through.
  */
 export function payoutStatusChip(
   registration: PayoutRegistration | undefined,
-  razorpayConnected: boolean,
 ): PayoutStatusChip {
-  if (registration && registration.state !== 'none') {
-    const tone: PayoutChipTone =
-      registration.state === 'verified'
-        ? 'success'
-        : registration.state === 'failed'
-          ? 'error'
-          : 'pending';
-    return { label: registration.message, tone };
-  }
-  return razorpayConnected
-    ? { label: 'Connected · ready for payouts', tone: 'success' }
-    : { label: 'Activation pending', tone: 'pending' };
+  if (!registration) return { label: 'Activation pending', tone: 'pending' };
+  const tone: PayoutChipTone =
+    registration.state === 'verified'
+      ? 'success'
+      : registration.state === 'failed'
+        ? 'error'
+        : 'pending';
+  return { label: registration.message, tone };
 }
 
 /** POST /chef/payout body. */

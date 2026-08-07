@@ -26,6 +26,7 @@ import (
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 const payoutOrdersDDL = `CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '',
@@ -68,7 +69,7 @@ const payoutAuditDDL = `CREATE TABLE audit_logs (id TEXT DEFAULT '00000000-0000-
 const payoutChefProfilesDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, 
 	id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
 	description TEXT DEFAULT '', accepting_orders INTEGER DEFAULT 1,
-	razorpay_settlement_status TEXT DEFAULT '', razorpay_settlement_requirements TEXT DEFAULT '',
+	cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
 	payout_auto_release TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`
 
 func setupPayoutHandlerDB(t *testing.T) *gorm.DB {
@@ -344,15 +345,18 @@ func TestSetPayoutAutomation_RejectsWhitespaceValue(t *testing.T) {
 	require.Equal(t, int64(0), count, "no audit entry on validation failure")
 }
 
-func TestBlockedChefs_ListsNeedsClarificationWithRequirements(t *testing.T) {
-	// Status alone tells an admin nothing about what to fix, so the
-	// requirements have to travel with it.
+// The list is keyed on the Cashfree registration since #1086 — the Route
+// activation_status it used to read was never written for a single chef, so the
+// page listed every chef on the platform and told an admin nothing.
+func TestBlockedChefs_ListsAFailedVendorWithItsReason(t *testing.T) {
+	// A raw status alone is gateway vocabulary; the plain-words verdict is what
+	// makes the blockage actionable.
 	db := setupPayoutHandlerDB(t)
 	chefID := seedChef(t, db, uuid.New(), "Test Kitchen")
 	chef := models.ChefProfile{ID: chefID}
 	require.NoError(t, db.Model(&chef).Updates(map[string]any{
-		"razorpay_settlement_status":       "needs_clarification",
-		"razorpay_settlement_requirements": `[{"field_reference":"settlements.ifsc_code"}]`,
+		"cashfree_vendor_id":     "vend_1",
+		"cashfree_vendor_status": services.CashfreeVendorBankValidationFailed,
 	}).Error)
 
 	w := doJSON(t, payoutRouter(uuid.New()), http.MethodGet, "/admin/payouts/blocked-chefs", nil)
@@ -360,20 +364,45 @@ func TestBlockedChefs_ListsNeedsClarificationWithRequirements(t *testing.T) {
 
 	var body struct {
 		Chefs []struct {
-			SettlementStatus string `json:"settlementStatus"`
-			Requirements     string `json:"requirements"`
+			SettlementStatus string                      `json:"settlementStatus"`
+			Registration     services.PayoutRegistration `json:"registration"`
 		} `json:"chefs"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	require.Len(t, body.Chefs, 1)
-	require.Contains(t, body.Chefs[0].Requirements, "ifsc_code", "must say what to fix")
+	require.Equal(t, services.CashfreeVendorBankValidationFailed, body.Chefs[0].SettlementStatus,
+		"operators get the raw gateway status (#1082)")
+	require.Equal(t, services.PayoutRegistrationFailed, body.Chefs[0].Registration.State)
+	require.NotEmpty(t, body.Chefs[0].Registration.Message, "must say what to fix")
 }
 
-func TestBlockedChefs_ExcludesAnActivatedChef(t *testing.T) {
+// A chef who has never submitted bank details is blocked too — they are the
+// most common reason a chef goes unpaid.
+func TestBlockedChefs_ListsAChefWithNoVendorAtAll(t *testing.T) {
+	db := setupPayoutHandlerDB(t)
+	seedChef(t, db, uuid.New(), "Test Kitchen")
+
+	w := doJSON(t, payoutRouter(uuid.New()), http.MethodGet, "/admin/payouts/blocked-chefs", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var body struct {
+		Chefs []struct {
+			Registration services.PayoutRegistration `json:"registration"`
+		} `json:"chefs"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Len(t, body.Chefs, 1)
+	require.Equal(t, services.PayoutRegistrationNone, body.Chefs[0].Registration.State)
+}
+
+func TestBlockedChefs_ExcludesAVerifiedChef(t *testing.T) {
 	db := setupPayoutHandlerDB(t)
 	chefID := seedChef(t, db, uuid.New(), "Test Kitchen")
 	chef := models.ChefProfile{ID: chefID}
-	require.NoError(t, db.Model(&chef).Update("razorpay_settlement_status", "activated").Error)
+	require.NoError(t, db.Model(&chef).Updates(map[string]any{
+		"cashfree_vendor_id":     "vend_1",
+		"cashfree_vendor_status": services.CashfreeVendorActive,
+	}).Error)
 
 	w := doJSON(t, payoutRouter(uuid.New()), http.MethodGet, "/admin/payouts/blocked-chefs", nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())

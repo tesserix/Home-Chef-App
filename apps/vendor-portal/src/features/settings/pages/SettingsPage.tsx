@@ -30,8 +30,6 @@ interface PayoutData {
   bankAccountNumber: string;
   bankIFSC: string;
   upiId: string;
-  razorpayConnected: boolean;
-  razorpayAccountId: string;
   stripeConnected?: boolean;
   stripeAccountId?: string;
   paymentProvider?: 'razorpay' | 'stripe' | 'cashfree';
@@ -276,17 +274,6 @@ export default function SettingsPage() {
             <Banknote className="h-5 w-5 text-herb" />
             <h2 className="text-lg font-semibold text-ink">Payout Details</h2>
           </div>
-          {payoutData?.razorpayConnected ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-herb-tint px-3 py-1 text-xs font-medium text-herb">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Razorpay Connected
-            </span>
-          ) : payoutData?.payoutMethod ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-amber-tint px-3 py-1 text-xs font-medium text-amber">
-              <XCircle className="h-3.5 w-3.5" />
-              Razorpay Pending
-            </span>
-          ) : null}
           {/* The server owns the wording (#1082) — a raw Cashfree status must
               never be interpreted here, least of all as "in progress" when the
               registration has actually failed. */}
@@ -303,12 +290,6 @@ export default function SettingsPage() {
             </span>
           ) : null}
         </div>
-        {payoutData?.razorpayConnected && payoutData.razorpayAccountId && (
-          <p className="mt-2 text-xs text-ink-muted">
-            Linked Account: {payoutData.razorpayAccountId}
-          </p>
-        )}
-
         {payoutLoading ? (
           <div className="mt-4 flex items-center justify-center py-8">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-herb border-t-transparent" />
