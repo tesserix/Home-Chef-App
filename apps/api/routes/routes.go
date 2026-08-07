@@ -1320,8 +1320,6 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/staff/invitations/:id/resend", middleware.RequireStaffPermission(models.SPManageStaff), staffHandler.ResendInvitation)
 
 			// Payment gateway — Razorpay (India)
-			admin.GET("/payment-gateway/status", adminHandler.GetPaymentGatewayStatus)
-			admin.PUT("/payment-gateway/keys", adminHandler.UpdatePaymentGatewayKeys)
 
 			// Payment gateway — Cashfree (India, second gateway). Per-mode
 			// credential slots like Razorpay: ?mode=live|test on the status read,

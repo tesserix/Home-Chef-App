@@ -19,7 +19,6 @@ package services
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -63,19 +62,6 @@ func staleOrderRow(t *testing.T, db *gorm.DB, id uuid.UUID) (status, paymentStat
 		`SELECT status, payment_status, cancel_reason, cancelled_at FROM orders WHERE id = ?`, id.String(),
 	).Scan(&row).Error)
 	return row.Status, row.PaymentStatus, row.CancelReason, row.CancelledAt
-}
-
-// withRazorpayServerFor points a mode's Razorpay slot at an httptest.Server and
-// restores the previous occupant, mirroring withCashfreeServer (cashfree_test.go)
-// for the mode Razorpay's own test helpers don't cover.
-func withRazorpayServerFor(t *testing.T, mode string, handler http.HandlerFunc) *httptest.Server {
-	t.Helper()
-	srv := httptest.NewServer(handler)
-	t.Cleanup(srv.Close)
-	prev := snapshotRazorpayClient(mode)
-	t.Cleanup(func() { SetRazorpayClientFor(mode, prev) })
-	SetRazorpayClientFor(mode, NewRazorpayTestClient(srv.URL, "rzp_test", "secret_test", "whsec_test"))
-	return srv
 }
 
 const staleOrderGrace = 45 * time.Minute // safely past the 30-minute threshold
@@ -243,19 +229,13 @@ func TestStaleOrderSweep_NoGatewayOrderID_CancelsWithZeroGatewayCalls(t *testing
 
 // ── Scenario 6: provider routing — never cross-checked against the wrong gateway ─
 
-// A Cashfree order is confirmed via the Cashfree server; the Razorpay slot is
-// left unconfigured (would error if ever consulted), and a hit on it fails the
-// test.
-func TestStaleOrderSweep_CashfreeOrder_NeverRoutedToRazorpay(t *testing.T) {
+// A Cashfree order is confirmed against the Cashfree server, exactly once.
+func TestStaleOrderSweep_CashfreeOrder_AsksCashfreeOnce(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_routing", models.ChefModeLive, now.Add(-staleOrderGrace))
 
-	var razorpayHits, cashfreeHits int32
-	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&razorpayHits, 1)
-		w.WriteHeader(http.StatusInternalServerError)
-	})
+	var cashfreeHits int32
 	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&cashfreeHits, 1)
 		_, _ = w.Write([]byte(`[{"cf_payment_id":9,"order_id":"cf_order_routing","payment_status":"SUCCESS","payment_amount":300.00,"payment_group":"upi"}]`))
@@ -265,31 +245,23 @@ func TestStaleOrderSweep_CashfreeOrder_NeverRoutedToRazorpay(t *testing.T) {
 	require.Equal(t, 0, expired)
 	require.Equal(t, 1, skippedCaptured)
 	require.Equal(t, 0, skippedError)
-	require.Equal(t, int32(0), atomic.LoadInt32(&razorpayHits), "a cashfree order must never hit the razorpay gateway")
 	require.Equal(t, int32(1), atomic.LoadInt32(&cashfreeHits))
 
 	status, _, _, _ := staleOrderRow(t, db, o.ID)
 	require.Equal(t, string(models.OrderStatusPending), status)
 }
 
-// #1086 — a Razorpay order is an unrecognised provider now. The sweep's
-// backstop must hold: an unknown answer is never a cancel, and the retired
-// gateway is never asked.
-func TestStaleOrderSweep_RazorpayOrder_NeverCancelledAndNeverAsked(t *testing.T) {
+// #1086 — a Razorpay order is an unrecognised provider now, and there is no
+// client left to ask. The sweep's backstop must hold: an unknown answer is
+// never a cancel.
+func TestStaleOrderSweep_RazorpayOrder_NeverCancelled(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "razorpay", "order_rzp_legacy", models.ChefModeLive, now.Add(-staleOrderGrace))
 
-	var razorpayHits int32
-	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&razorpayHits, 1)
-		_, _ = w.Write([]byte(`{"items":[]}`))
-	})
-
 	expired, _, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 0, expired, "an order the sweep cannot ask about is never cancelled")
 	require.Equal(t, 1, skippedError)
-	require.Equal(t, int32(0), atomic.LoadInt32(&razorpayHits), "the retired gateway must never be asked")
 
 	status, _, _, _ := staleOrderRow(t, db, o.ID)
 	require.Equal(t, string(models.OrderStatusPending), status)

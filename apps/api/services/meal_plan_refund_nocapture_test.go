@@ -24,8 +24,6 @@ import (
 // reject / cancel / expiry state of an awaiting_customer plan.
 func TestRefundUndeliveredDays_NoCapture_NoCredit(t *testing.T) {
 	escrowFlag(t, true) // escrow globally ON — the leak only exists when the money flow is live
-	t.Cleanup(func() { SetRazorpayClient(nil) })
-	SetRazorpayClient(NewRazorpayTestClient("", "key", "secret", "whsec"))
 	db := setupCrossguardDB(t)
 
 	cust := uuid.New()
@@ -60,8 +58,6 @@ func TestRefundUndeliveredDays_NoCapture_NoCredit(t *testing.T) {
 // not over-block a genuine paid-plan refund.
 func TestRefundUndeliveredDays_Captured_Refunds(t *testing.T) {
 	escrowFlag(t, true)
-	t.Cleanup(func() { SetRazorpayClient(nil) })
-	SetRazorpayClient(NewRazorpayTestClient("", "key", "secret", "whsec"))
 	db := setupCrossguardDB(t)
 
 	cust := uuid.New()

@@ -1116,183 +1116,12 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, settings)
 }
 
-// GetPaymentGatewayStatus reports whether Razorpay is configured and reachable.
-// Credentials come straight from the live client (which reads GCP Secret
-// Manager at runtime) — there's no hidden env/config path that can show stale
-// or placeholder values here.
-func (h *AdminHandler) GetPaymentGatewayStatus(c *gin.Context) {
-	// Which credential slot the admin is asking about. Absent means live, so the
-	// pre-existing admin UI keeps working through the deploy window.
-	slot := models.NormalizeMode(c.Query("mode"))
-	client := services.GetRazorpayFor(slot)
-
-	webhookURL := "https://api.fe3dr.com/webhooks/razorpay"
-
-	if client == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"configured":       false,
-			"slot":             slot,
-			"mode":             "unknown",
-			"webhookUrl":       webhookURL,
-			"webhookSecretSet": false,
-			"keyPrefix":        "",
-			"slotWarning":      "",
-			"error":            "Razorpay is not configured. Enter your keys to set up the gateway.",
-		})
-		return
-	}
-
-	keyID := client.GetKeyID()
-	mode := "unknown"
-	if strings.HasPrefix(keyID, "rzp_test_") {
-		mode = "test"
-	} else if strings.HasPrefix(keyID, "rzp_live_") {
-		mode = "live"
-	}
-
-	// Key ID is a publishable identifier — safe to surface a short prefix.
-	keyPrefix := keyID
-	if len(keyID) > 12 {
-		keyPrefix = keyID[:12] + "..."
-	}
-
-	// Validate credentials by making a lightweight call to Razorpay.
-	healthErr := ""
-	configured := true
-	if err := client.HealthCheck(); err != nil {
-		healthErr = err.Error()
-		configured = false
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"configured":       configured,
-		"slot":             slot,
-		"mode":             mode,
-		"webhookUrl":       webhookURL,
-		"webhookSecretSet": client.HasWebhookSecret(),
-		"keyPrefix":        keyPrefix,
-		"slotWarning":      razorpaySlotWarning(slot, keyID),
-		"error":            healthErr,
-	})
-}
-
-// razorpaySlotWarning flags a credential slot holding a key of the wrong kind.
-//
-// Deliberately a WARNING and not a hard error: the live slot legitimately holds
-// a test key until a real live key is issued, and refusing to save that would
-// make the interim state unreachable. The banner stays up until it's fixed.
-func razorpaySlotWarning(slot, keyID string) string {
-	switch {
-	case keyID == "":
-		return ""
-	case !models.IsTestMode(slot) && strings.HasPrefix(keyID, "rzp_test_"):
-		return "The Live slot is holding a TEST key — no real payment will be captured until a live key is entered."
-	case models.IsTestMode(slot) && strings.HasPrefix(keyID, "rzp_live_"):
-		return "The Test slot is holding a LIVE key — sandbox orders would charge real cards. Replace it before using test mode."
-	default:
-		return ""
-	}
-}
-
-// UpdatePaymentGatewayKeys writes the Razorpay credentials to GCP Secret
-// Manager, invalidates the in-memory cache so the next use picks them up, and
-// runs an immediate health check so the admin sees pass/fail right in the UI
-// response (no second round trip needed).
-//
-// Secrets are never persisted to the DB or to config. The app reads them
-// dynamically from Secret Manager on demand.
-func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
-	var req struct {
-		KeyID         string `json:"keyId"`
-		KeySecret     string `json:"keySecret"`
-		WebhookSecret string `json:"webhookSecret"`
-		// Mode picks the credential slot: "live" (default) or "test".
-		Mode string `json:"mode"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if req.KeyID == "" && req.KeySecret == "" && req.WebhookSecret == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "At least one field is required"})
-		return
-	}
-
-	ctx := c.Request.Context()
-
-	// Writing the key ID and key secret together is the only sensible mode —
-	// a mismatched pair guarantees a 401 from Razorpay. Require both or neither.
-	if (req.KeyID == "") != (req.KeySecret == "") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "keyId and keySecret must be provided together"})
-		return
-	}
-
-	// Persist each provided value to GCP Secret Manager. StorePlatformSecret
-	// creates the secret on first call (idempotent) and appends a new version
-	// on subsequent calls, so the most recent version is always "latest".
-	slot := models.NormalizeMode(req.Mode)
-	idName, secretName, webhookName := services.RazorpaySecretNames(slot)
-	secretMap := map[string]string{
-		idName:      req.KeyID,
-		secretName:  req.KeySecret,
-		webhookName: req.WebhookSecret,
-	}
-	for secretName, value := range secretMap {
-		if value == "" {
-			continue
-		}
-		if err := services.StorePlatformSecret(ctx, secretName, value); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to store %s: %v", secretName, err)})
-			return
-		}
-	}
-
-	// Drop only THIS slot's cached client, so saving test keys can't knock a
-	// healthy live gateway offline.
-	services.InvalidateRazorpayFor(slot)
-	services.LogAudit(c, "payment.keys.update", "payment_gateway", "razorpay", nil, map[string]any{
-		"updatedFields": []string{
-			boolField("keyId", req.KeyID != ""),
-			boolField("keySecret", req.KeySecret != ""),
-			boolField("webhookSecret", req.WebhookSecret != ""),
-		},
-	})
-
-	// Validate by actually calling Razorpay. If the keys are wrong, surface
-	// the exact error to the UI so the admin can fix it immediately.
-	client := services.GetRazorpayFor(slot)
-	if client == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Saved to Secret Manager, but client failed to initialize"})
-		return
-	}
-	warning := razorpaySlotWarning(slot, client.GetKeyID())
-	if err := client.HealthCheck(); err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"message":     "Keys saved, but validation failed",
-			"testError":   err.Error(),
-			"slot":        slot,
-			"slotWarning": warning,
-			"verified":    false,
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":     "Payment gateway keys saved and verified",
-		"slot":        slot,
-		"slotWarning": warning,
-		"verified":    true,
-	})
-}
-
 // GetCashfreeGatewayStatus reports whether one Cashfree credential slot is
 // configured and reachable.
 //
-// Mirrors GetPaymentGatewayStatus (the Razorpay one) including the ?mode=
-// slot selector, so the admin UI renders a parallel card with the same
-// live/test toggle. The two gateways' slots are wholly independent: a broken
-// test slot says nothing about live, and vice versa.
+// The ?mode= slot selector renders one card per slot in the admin UI. The two
+// slots are wholly independent: a broken test slot says nothing about live, and
+// vice versa.
 //
 // GET /admin/payment-gateway/cashfree/status?mode=live|test
 func (h *AdminHandler) GetCashfreeGatewayStatus(c *gin.Context) {
@@ -1356,12 +1185,11 @@ func (h *AdminHandler) GetCashfreeGatewayStatus(c *gin.Context) {
 // cashfreeSlotWarning flags a slot whose resolved environment contradicts its
 // name.
 //
-// With Razorpay this can only be detected from a key prefix; with Cashfree the
-// environment IS the hostname, so a mismatch is structurally impossible unless
-// someone injects a client — which means in practice this warns only about the
-// genuinely dangerous direction and stays silent otherwise. Kept as a warning
-// rather than an error for the same reason razorpaySlotWarning is: the interim
-// state while real credentials are pending must remain reachable.
+// The environment IS the hostname, so a mismatch is structurally impossible
+// unless someone injects a client — in practice this warns only about the
+// genuinely dangerous direction and stays silent otherwise. A warning rather
+// than an error, so the interim state while real credentials are pending stays
+// reachable.
 func cashfreeSlotWarning(slot, environment, appID string) string {
 	// Cashfree sandbox App IDs are prefixed "TEST". A test App ID in the LIVE slot
 	// is a hard failure, not a degraded state, and it is worth calling out
@@ -1395,8 +1223,8 @@ func cashfreeSlotWarning(slot, environment, appID string) string {
 // Manager, invalidates that slot's cached client, and runs an immediate health
 // check so the admin sees pass/fail in the same response.
 //
-// Same contract as UpdatePaymentGatewayKeys (Razorpay), including per-slot
-// invalidation: saving test keys can never knock a healthy live gateway offline.
+// Per-slot invalidation: saving test keys can never knock a healthy live gateway
+// offline.
 // Secrets are never written to the DB or to config — the app reads them from
 // Secret Manager on demand.
 //
@@ -1491,8 +1319,7 @@ func (h *AdminHandler) UpdateCashfreeGatewayKeys(c *gin.Context) {
 }
 
 // GetStripeGatewayStatus reports whether Stripe is configured and reachable.
-// Mirrors GetPaymentGatewayStatus (the Razorpay one) so the admin UI can
-// render a parallel card for the Stripe provider.
+// Mirrors GetCashfreeGatewayStatus so the admin UI renders a parallel card.
 func (h *AdminHandler) GetStripeGatewayStatus(c *gin.Context) {
 	client := services.GetStripe()
 
@@ -1544,8 +1371,7 @@ func (h *AdminHandler) GetStripeGatewayStatus(c *gin.Context) {
 
 // UpdateStripeGatewayKeys persists the Stripe credentials to GCP Secret
 // Manager, invalidates the cached client, and runs an immediate health
-// check so the admin sees pass/fail in one response. Same contract as
-// UpdatePaymentGatewayKeys (Razorpay).
+// check so the admin sees pass/fail in one response.
 func (h *AdminHandler) UpdateStripeGatewayKeys(c *gin.Context) {
 	var req struct {
 		SecretKey      string `json:"secretKey"`

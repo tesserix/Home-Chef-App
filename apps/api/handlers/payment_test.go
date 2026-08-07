@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -271,10 +270,10 @@ func TestCreateOrderPayment_AlreadyPaid_400(t *testing.T) {
 	}
 }
 
-// Note: the "gateway unconfigured → 503" path isn't unit-testable here —
-// services.GetRazorpay() lazily resolves credentials via GCP Secret Manager,
-// which isn't initialised in the test process. In production InitRazorpay() runs
-// at startup. That branch is covered by the live-switch manual step (#25).
+// Note: the "gateway unconfigured → 503" path isn't unit-testable here — the
+// Cashfree client lazily resolves credentials via GCP Secret Manager, which
+// isn't initialised in the test process. Covered by the live-switch manual
+// step (#25).
 
 // ── VerifyPayment ────────────────────────────────────────────────────────────
 
@@ -317,29 +316,18 @@ func TestVerifyPayment_OrderIDMismatch_400(t *testing.T) {
 }
 
 // #1086 — no order can be captured on Razorpay any more, so there is nothing
-// for this endpoint to verify against it. The refusal is explicit and the
-// retired gateway is never contacted, rather than the request falling into a
-// leg that would fetch a payment the platform can no longer act on.
-func TestVerifyPayment_RazorpayOrder_RefusedWithoutContactingTheGateway(t *testing.T) {
+// for this endpoint to verify against it. The refusal must be explicit rather
+// than the request falling into a leg that settles an order on a retired rail.
+func TestVerifyPayment_RazorpayOrder_Refused(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
 	orderID := payOrder(t, db, cust, chef, "pending", 500, "rzp_order_up", "")
 
-	var hits int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&hits, 1)
-		_, _ = w.Write([]byte(`{"id":"pay_up_1","order_id":"rzp_order_up","status":"captured","amount":50000}`))
-	}))
-	t.Cleanup(srv.Close)
-	t.Cleanup(func() { services.SetRazorpayClient(nil) })
-	services.SetRazorpayClient(services.NewRazorpayTestClient(srv.URL, "key_test", "secret_test", "whsec_test"))
-
 	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/verify", regVerify,
 		map[string]string{"razorpayPaymentId": "pay_up_1", "razorpayOrderId": "rzp_order_up", "razorpaySignature": ""})
 
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
-	require.Equal(t, int32(0), atomic.LoadInt32(&hits), "the retired gateway must never be contacted")
 	require.Equal(t, "pending", paymentStatusOf(t, db, orderID))
 }
 
