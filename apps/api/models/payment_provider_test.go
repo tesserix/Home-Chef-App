@@ -12,12 +12,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Blank and unknown MUST resolve to razorpay. This is not a stylistic default: it
-// is what every row predating the payment_provider column actually is, and those
-// rows' refunds have to go back to Razorpay. Flipping it to the new preferred
-// gateway would route historical refunds at a gateway that never took the money.
-func TestNormalizeProvider_UnknownFallsBackToRazorpay(t *testing.T) {
+// Blank and unknown resolve to cashfree since #1086 — the only INR gateway the
+// platform operates. The historical-row argument for razorpay is spent: every
+// provider column in production is explicitly stamped, and razorpay is now a
+// recognised value in its own right (below) rather than the catch-all.
+func TestNormalizeProvider_UnknownFallsBackToCashfree(t *testing.T) {
 	for _, in := range []string{"", "   ", "razorpy", "RAZORPAY!", "unknown"} {
+		require.Equal(t, PaymentProviderCashfree, NormalizeProvider(in), "input %q", in)
+	}
+}
+
+// The load-bearing half of that flip: an EXPLICIT razorpay must still come back
+// as razorpay. Letting it fall through to the new default would re-label 21 live
+// historical orders as Cashfree and route their refunds at a gateway that never
+// took the money.
+func TestNormalizeProvider_ExplicitRazorpayIsPreserved(t *testing.T) {
+	for _, in := range []string{"razorpay", "RAZORPAY", "  Razorpay "} {
 		require.Equal(t, PaymentProviderRazorpay, NormalizeProvider(in), "input %q", in)
 	}
 }
@@ -30,13 +40,8 @@ func TestNormalizeProvider_RecognisesKnownProvidersCaseInsensitively(t *testing.
 	require.Equal(t, PaymentProviderRazorpay, NormalizeProvider("Razorpay"))
 }
 
-// The preferred provider for a NEW chef is Cashfree, and it must be a DIFFERENT
-// answer from NormalizeProvider("") — conflating the two is the failure mode the
-// constant's doc comment warns about.
-func TestPreferredProvider_IsDistinctFromTheHistoricalFallback(t *testing.T) {
+func TestPreferredProvider_IsCashfree(t *testing.T) {
 	require.Equal(t, PaymentProviderCashfree, PreferredChefPaymentProvider)
-	require.NotEqual(t, PreferredChefPaymentProvider, NormalizeProvider(""),
-		"the new-chef preference and the unstamped-row meaning must stay separate")
 }
 
 // Credit rails are INR-denominated: Cashfree takes them exactly as Razorpay does,
@@ -99,9 +104,9 @@ func TestGatewayRefundReference_PerProviderObject(t *testing.T) {
 	wallet.PaymentProvider = PaymentProviderWallet
 	require.Empty(t, wallet.GatewayRefundReference(), "a wallet refund is a ledger credit, not a gateway call")
 
-	// Unstamped → Razorpay's payment id, matching the historical meaning.
+	// Unstamped normalizes to Cashfree, which refunds against the ORDER id.
 	unstamped := base
-	require.Equal(t, "pay_rzp", unstamped.GatewayRefundReference())
+	require.Equal(t, "cf_or_rzp_order", unstamped.GatewayRefundReference())
 }
 
 // GatewayRefundable is what the five former `!= "razorpay"` guards now ask. A
