@@ -132,23 +132,19 @@ func reconcileOne(o *models.Order) ([]Drift, bool) {
 			return nil, false
 		}
 		return reconcileStripe(o), true
-	case models.PaymentProviderWallet:
-		return nil, false // no gateway to reconcile against
 	default:
-		if o.RazorpayPaymentID == "" {
-			return nil, false
-		}
-		return reconcileRazorpay(o), true
+		// Wallet is a ledger credit with no gateway; a legacy razorpay row has no
+		// client left to ask since #1086. Both are skips, not drift.
+		return nil, false
 	}
 }
 
 // reconcileCashfree cross-checks one Cashfree order against the gateway.
 //
-// Cashfree has no single "payment" object carrying a cumulative amount_refunded
-// the way Razorpay does, so the refunded total is summed from the order's refunds.
-// Everything else — the drift kinds, the captured-amount basis, the
-// error-propagating per-line read — is deliberately identical to
-// reconcileRazorpay, so a drift means the same thing whichever gateway produced it.
+// Cashfree has no single "payment" object carrying a cumulative amount_refunded,
+// so the refunded total is summed from the order's refunds. The drift kinds, the
+// captured-amount basis and the error-propagating per-line read are shared with
+// reconcileStripe, so a drift means the same thing whichever gateway produced it.
 func reconcileCashfree(o *models.Order) []Drift {
 	// Live slot on purpose: reconciliation covers real money only, and its queries
 	// exclude the test partition.
@@ -175,9 +171,8 @@ func reconcileCashfree(o *models.Order) []Drift {
 			fmt.Sprintf("fetch refunds for order %s: %v", o.RazorpayOrderID, err), 0, 0))
 	}
 
-	// Same discipline as the Razorpay path: an error-PROPAGATING per-line read, so a
-	// DB blip skips this order rather than understating captured and spuriously
-	// flagging DriftFullRefundUnstamped.
+	// An error-PROPAGATING per-line read, so a DB blip skips this order rather than
+	// understating captured and spuriously flagging DriftFullRefundUnstamped.
 	perLine, plErr := PerLineRefundedTotalTxErr(database.DB, o.ID)
 	if plErr != nil {
 		log.Printf("reconciliation: skip cashfree order %s — per-line refund read failed: %v", o.ID, plErr)
@@ -197,61 +192,6 @@ func reconcileCashfree(o *models.Order) []Drift {
 	case math.Abs(gatewayRefunded-localRefunded) > reconAmountTolerance:
 		drifts = append(drifts, driftFor(o, models.PaymentProviderCashfree, DriftRefundMismatch,
 			"gateway refunds != platform cumulative refunded (RefundAmount + per-line)",
-			localRefunded, gatewayRefunded))
-	}
-	return drifts
-}
-
-func reconcileRazorpay(o *models.Order) []Drift {
-	// Live slot on purpose: reconciliation covers real money only, and its
-	// queries exclude the test partition.
-	client := GetRazorpay()
-	if client == nil {
-		return nil // not configured — skip silently (logged once at startup)
-	}
-	pay, err := client.FetchPayment(o.RazorpayPaymentID)
-	if err != nil {
-		return []Drift{driftFor(o, "razorpay", DriftGatewayUnreachable,
-			fmt.Sprintf("fetch payment %s: %v", o.RazorpayPaymentID, err), 0, 0)}
-	}
-
-	var drifts []Drift
-	if !pay.Captured {
-		drifts = append(drifts, driftFor(o, "razorpay", DriftPaymentNotCaptured,
-			fmt.Sprintf("gateway status=%q captured=false", pay.Status), o.Total, FromPaise(pay.Amount)))
-	}
-
-	// Refund cross-check on the CUMULATIVE basis. The gateway's amount_refunded is the
-	// authoritative total refunded across every channel (in-app full/partial, per-line
-	// cancels, out-of-band dashboard). Locally, the cumulative refunded is
-	// RefundAmount + per-line refunds — Order.RefundAmount alone EXCLUDES per-line
-	// cancels (tracked on order_items), so comparing against it false-positived on every
-	// partially-cancelled order.
-	//
-	// Use the error-PROPAGATING per-line read: a 0-on-error would understate captured
-	// below the gateway refund and spuriously flag DriftFullRefundUnstamped. On a DB blip
-	// we skip this order and reconcile it next run (never a false full-refund signal).
-	perLine, plErr := PerLineRefundedTotalTxErr(database.DB, o.ID)
-	if plErr != nil {
-		log.Printf("reconciliation: skip order %s — per-line refund read failed: %v", o.ID, plErr)
-		return drifts
-	}
-	localRefunded := o.RefundAmount + perLine
-	gatewayRefunded := FromPaise(pay.AmountRefunded)
-	// Original gateway-captured amount: Total is mutated down by per-line cancels, so add
-	// them back; wallet-applied was never charged to the gateway, so subtract it. Matches
-	// handleRefundProcessed's capturedPaise.
-	capturedPaise := ToPaise(o.Total + perLine - o.WalletApplied)
-
-	switch {
-	case capturedPaise > 0 && pay.AmountRefunded >= capturedPaise && o.RefundedAt == nil:
-		// #640: fully refunded at the gateway (in aggregate) but not stamped locally.
-		drifts = append(drifts, driftFor(o, "razorpay", DriftFullRefundUnstamped,
-			"gateway amount_refunded >= captured but refunded_at is NULL (cumulative/out-of-band full refund)",
-			localRefunded, gatewayRefunded))
-	case math.Abs(gatewayRefunded-localRefunded) > reconAmountTolerance:
-		drifts = append(drifts, driftFor(o, "razorpay", DriftRefundMismatch,
-			"gateway amount_refunded != platform cumulative refunded (RefundAmount + per-line)",
 			localRefunded, gatewayRefunded))
 	}
 	return drifts

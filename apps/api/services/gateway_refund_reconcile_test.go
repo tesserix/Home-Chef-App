@@ -20,19 +20,26 @@ import (
 	"github.com/homechef/api/models"
 )
 
-// cannedPayment points the gateway at a single /payments/{id} response with the given
-// captured amount + cumulative amount_refunded (paise).
-func cannedPayment(t *testing.T, capturedPaise, refundedPaise int) {
+// cannedCashfreeOrder points the gateway at one order carrying a SUCCESS payment for
+// capturedPaise and a single SUCCESS refund for refundedPaise — the two order-scoped
+// reads reconcileCashfree makes.
+func cannedCashfreeOrder(t *testing.T, capturedPaise, refundedPaise int) {
 	t.Helper()
-	withRazorpayTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/payments/") {
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id": "pay_x", "status": "captured", "captured": true,
-				"amount": capturedPaise, "amount_refunded": refundedPaise,
-			})
-			return
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/payments"):
+			_ = json.NewEncoder(w).Encode([]map[string]any{{
+				"cf_payment_id": 1, "order_id": "cf_ord_x",
+				"payment_status": CashfreePaymentSuccess, "payment_amount": float64(capturedPaise) / 100,
+			}})
+		case strings.HasSuffix(r.URL.Path, "/refunds"):
+			_ = json.NewEncoder(w).Encode([]map[string]any{{
+				"cf_refund_id": 1, "refund_id": "rf_x", "order_id": "cf_ord_x",
+				"refund_status": CashfreeRefundSuccess, "refund_amount": float64(refundedPaise) / 100,
+			}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-		w.WriteHeader(http.StatusNotFound)
 	})
 }
 
@@ -54,42 +61,42 @@ func seedCompletedOrder(t *testing.T, db *gorm.DB, total float64) uuid.UUID {
 // capturedFullPaise is the gateway cumulative refund that equals captured for a wallet-free order.
 func capturedFullPaise(total float64) int { return ToPaise(total) }
 
-// A cumulative full refund the local ledger missed (gateway amount_refunded == captured, but
+// A cumulative full refund the local ledger missed (gateway refunds == captured, but
 // refunded_at NULL) is flagged as DriftFullRefundUnstamped — the #640 signal.
-func TestReconcileRazorpay_FullRefundUnstamped_Detected(t *testing.T) {
+func TestReconcileCashfree_FullRefundUnstamped_Detected(t *testing.T) {
 	setupStuckRefundDB(t) // provides order_items for PerLineRefundedTotal (0 here)
-	cannedPayment(t, 100000, 100000)
+	cannedCashfreeOrder(t, 100000, 100000)
 
-	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-640", RazorpayPaymentID: "pay_x", Total: 1000}
-	drifts := reconcileRazorpay(o)
+	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-640", RazorpayOrderID: "cf_ord_x", Total: 1000}
+	drifts := reconcileCashfree(o)
 
 	require.Len(t, drifts, 1)
 	require.Equal(t, DriftFullRefundUnstamped, drifts[0].Kind)
 }
 
-// A per-line cancel that is fully recorded locally (gateway amount_refunded == per-line refund)
-// must NOT be flagged — the old code compared the gateway total against Order.RefundAmount only
-// (which excludes per-line) and false-positived on every partially-cancelled order.
-func TestReconcileRazorpay_PerLineFullyRecorded_NoFalsePositive(t *testing.T) {
+// A per-line cancel that is fully recorded locally (gateway refunds == per-line refund)
+// must NOT be flagged — comparing the gateway total against Order.RefundAmount alone
+// (which excludes per-line) false-positives on every partially-cancelled order.
+func TestReconcileCashfree_PerLineFullyRecorded_NoFalsePositive(t *testing.T) {
 	db := setupStuckRefundDB(t)
-	cannedPayment(t, 100000, 60000) // gateway refunded the ₹600 per-line only
+	cannedCashfreeOrder(t, 100000, 60000) // gateway refunded the ₹600 per-line only
 
-	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-PL", RazorpayPaymentID: "pay_x", Total: 400}
+	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-PL", RazorpayOrderID: "cf_ord_x", Total: 400}
 	// ₹600 per-line cancel, fully recorded on order_items.
 	require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, is_cancelled, refund_amount) VALUES (?,?,?,?)`,
 		uuid.NewString(), o.ID.String(), true, 600.0).Error)
 
-	drifts := reconcileRazorpay(o)
+	drifts := reconcileCashfree(o)
 	require.Empty(t, drifts, "captured=1000, gateway refunded=600 (< captured) == local cumulative (0+600) → no drift")
 }
 
 // A genuine partial mismatch (gateway refunded > local cumulative, still < captured) is flagged.
-func TestReconcileRazorpay_GenuineMismatch_Flagged(t *testing.T) {
+func TestReconcileCashfree_GenuineMismatch_Flagged(t *testing.T) {
 	setupStuckRefundDB(t)
-	cannedPayment(t, 100000, 70000) // gateway shows ₹700 refunded
+	cannedCashfreeOrder(t, 100000, 70000) // gateway shows ₹700 refunded
 
-	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-MM", RazorpayPaymentID: "pay_x", Total: 1000, RefundAmount: 600}
-	drifts := reconcileRazorpay(o)
+	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-MM", RazorpayOrderID: "cf_ord_x", Total: 1000, RefundAmount: 600}
+	drifts := reconcileCashfree(o)
 
 	require.Len(t, drifts, 1)
 	require.Equal(t, DriftRefundMismatch, drifts[0].Kind, "gateway ₹700 vs local cumulative ₹600 (< captured ₹1000) → mismatch")
