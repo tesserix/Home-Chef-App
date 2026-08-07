@@ -10,6 +10,7 @@ package services
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/google/uuid"
@@ -20,20 +21,20 @@ import (
 	"github.com/homechef/api/services/orderrefund"
 )
 
-// seedCreditFundedOrder builds a paid razorpay order funded by wallet + loyalty + card.
+// seedCreditFundedOrder builds a paid Cashfree order funded by wallet + loyalty + card.
 func seedCreditFundedOrder(t *testing.T, db *gorm.DB, total, wallet, loyalty float64) *models.Order {
 	t.Helper()
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-C", CustomerID: uuid.New(), ChefID: uuid.New(),
 		Status: models.OrderStatusCancelled, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "razorpay", RazorpayPaymentID: "pay_123",
+		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_credit",
 		Total: total, WalletApplied: wallet, LoyaltyApplied: loyalty,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
-		payment_provider, razorpay_payment_id, total, wallet_applied, loyalty_applied,
+		payment_provider, razorpay_order_id, total, wallet_applied, loyalty_applied,
 		wallet_refunded, loyalty_refunded, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), o.ChefID.String(), string(o.Status),
-		string(models.PaymentCompleted), "razorpay", "pay_123", total, wallet, loyalty,
+		string(models.PaymentCompleted), "cashfree", "cf_ord_credit", total, wallet, loyalty,
 		0.0, 0.0, 0.0).Error)
 	return o
 }
@@ -51,7 +52,7 @@ func walletBalanceOf(t *testing.T, db *gorm.DB, userID uuid.UUID) float64 {
 func TestOrderRefundGateway_SplitsProRataAcrossRails(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	o := seedCreditFundedOrder(t, db, 1000, 400, 100)
-	spy := newRazorpaySpy(t)
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	_, err := OrderRefundGateway{}.RefundPayment(context.Background(), orderrefund.GatewayRequest{
 		OrderID: o.ID, Amount: 500, Reason: "cancelled", Actor: "customer",
@@ -73,7 +74,7 @@ func TestOrderRefundGateway_SplitsProRataAcrossRails(t *testing.T) {
 func TestOrderRefundGateway_LoyaltySliceReturnsAsWalletCredit(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	o := seedCreditFundedOrder(t, db, 1000, 0, 200)
-	newRazorpaySpy(t)
+	withCashfreeRefundSpy(t, http.StatusOK)
 
 	_, err := OrderRefundGateway{}.RefundPayment(context.Background(), orderrefund.GatewayRequest{
 		OrderID: o.ID, Amount: 1000, Reason: "cancelled", Actor: "customer",
@@ -91,7 +92,7 @@ func TestOrderRefundGateway_LoyaltySliceReturnsAsWalletCredit(t *testing.T) {
 func TestOrderRefundGateway_NoCreditGoesEntirelyToTheGateway(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	o := seedCreditFundedOrder(t, db, 500, 0, 0)
-	spy := newRazorpaySpy(t)
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	_, err := OrderRefundGateway{}.RefundPayment(context.Background(), orderrefund.GatewayRequest{
 		OrderID: o.ID, Amount: 500, Reason: "cancelled", Actor: "customer",
@@ -107,7 +108,7 @@ func TestOrderRefundGateway_NoCreditGoesEntirelyToTheGateway(t *testing.T) {
 func TestOrderRefundGateway_SuccessivePartialsEachCreditTheWallet(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	o := seedCreditFundedOrder(t, db, 1000, 500, 0)
-	newRazorpaySpy(t)
+	withCashfreeRefundSpy(t, http.StatusOK)
 
 	for _, scope := range []string{"issue:a", "issue:b"} {
 		var fresh models.Order
@@ -126,7 +127,7 @@ func TestOrderRefundGateway_SuccessivePartialsEachCreditTheWallet(t *testing.T) 
 func TestOrderRefundGateway_SameKeyReplayCreditsOnce(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	o := seedCreditFundedOrder(t, db, 1000, 500, 0)
-	newRazorpaySpy(t)
+	withCashfreeRefundSpy(t, http.StatusOK)
 
 	key := "refund:" + o.ID.String() + ":full"
 	for i := 0; i < 2; i++ {
@@ -144,7 +145,7 @@ func TestOrderRefundGateway_SameKeyReplayCreditsOnce(t *testing.T) {
 func TestOrderRefundGateway_CardSliceNeverExceedsTheCapture(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	o := seedCreditFundedOrder(t, db, 1000, 700, 200) // only 100.00 ever captured
-	spy := newRazorpaySpy(t)
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	_, err := OrderRefundGateway{}.RefundPayment(context.Background(), orderrefund.GatewayRequest{
 		OrderID: o.ID, Amount: 1000, Reason: "cancelled", Actor: "customer",

@@ -36,7 +36,7 @@ func TestInitiateRefund_MealPlanDayOrder_422(t *testing.T) {
 	chef := payChef(t, db, chefUser)
 	// A completed day-order with a gateway payment id — would otherwise be a
 	// perfectly refundable order; the guard must fire before any refund happens.
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_order_x", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	linkMealPlanDay(t, db, orderID)
 
 	w := callPay(chefUser, http.MethodPost, "/payments/order/"+orderID.String()+"/refund", regRefund,
@@ -58,7 +58,7 @@ func TestInitiateRefund_GroupOrder_422(t *testing.T) {
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_order_x", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	linkGroupOrder(t, db, orderID)
 
 	admin := payUser(t, db, "admin")
@@ -75,7 +75,7 @@ func TestInitiateRefund_PlainOrder_PassesGuard(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_order_x", "") // no payment id
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "") // no payment id
 	admin := payUser(t, db, "admin")
 
 	w := callPay(admin, http.MethodPost, "/payments/order/"+orderID.String()+"/refund", regRefund,

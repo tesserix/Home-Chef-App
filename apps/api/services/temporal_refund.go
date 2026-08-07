@@ -5,7 +5,7 @@ package services
 // Mirrors temporal_confirm.go's shape: gated behind temporalRT being set (+ a
 // deploy-time flag), idempotent on an order-keyed workflow ID. Fires
 // IMMEDIATELY when ChefOrderCancelHandler.CancelOrder defers a gateway
-// refund (Razorpay unreachable or erroring — see DeferredCancelRefundPrefix
+// refund (the gateway unreachable or erroring — see DeferredCancelRefundPrefix
 // in deferred_cancel_refund.go), so the customer's refund typically lands
 // within seconds/minutes instead of waiting for the next
 // RetryDeferredCancelRefunds cron tick (up to ~12 minutes, see
@@ -16,9 +16,9 @@ package services
 // or the workflow itself exhausting its 24h retry window.
 //
 // SAFETY (no double refund): both this workflow's gateway activity and the
-// cron's retry call Razorpay with the IDENTICAL stable key,
+// cron's retry call the gateway with the IDENTICAL stable key,
 // RefundFullIdempotencyKey(orderID). Whichever path reaches the gateway
-// first "wins"; the other dedups to the same refund at Razorpay's end
+// first "wins"; the other dedups to the same refund on the gateway's side
 // instead of issuing a second one. See deferred_cancel_refund.go's file
 // header for the full argument — it applies unchanged here.
 
@@ -78,28 +78,31 @@ func StartDeferredRefundFlow(orderID uuid.UUID, paymentID string, amountPaise in
 // error when the gateway is unavailable or refuses the call so the workflow's
 // activity retries with backoff; the SAME stable idempotency key the cron
 // uses (RefundFullIdempotencyKey) means a retry — here or via the cron — is
-// deduped by Razorpay, never a double refund.
-func GatewayRefundForWorkflow(_ context.Context, orderID uuid.UUID, paymentID string, amountPaise int) (string, error) {
-	rzp := GetRazorpayFor(PaymentModeForOrder(orderID))
-	if rzp == nil {
-		return "", errors.New("razorpay unavailable")
+// deduped at the gateway, never a double refund.
+//
+// paymentID is kept for the workflow's activity signature but no longer used:
+// the routing (and the per-gateway reference — payment id on one, order id on
+// another) belongs to IssueOrderGatewayRefund, which the cron backstop already
+// goes through.
+func GatewayRefundForWorkflow(_ context.Context, orderID uuid.UUID, _ string, amountPaise int) (string, error) {
+	var order models.Order
+	if err := database.DB.First(&order, "id = ?", orderID).Error; err != nil {
+		return "", err
 	}
-	refundResp, err := rzp.CreateRefund(paymentID, &RefundRequest{
-		Amount: amountPaise,
-		Speed:  "normal",
-		Notes: map[string]string{
-			"order_id":  orderID.String(),
-			"reason":    "deferred chef cancel",
-			"initiator": "temporal",
-		},
+	if !GatewayRefundAvailable(&order) {
+		return "", errors.New("gateway unavailable for order " + orderID.String())
+	}
+	res, err := IssueOrderGatewayRefund(&order, amountPaise, map[string]string{
+		"order_id":  orderID.String(),
+		"reason":    "deferred chef cancel",
+		"initiator": "temporal",
 		// SAME key CancelOrder / RetryDeferredCancelRefunds use — a lost-response
 		// success dedups here instead of double-refunding. #574.
-		IdempotencyKey: RefundFullIdempotencyKey(orderID),
-	})
+	}, RefundFullIdempotencyKey(orderID))
 	if err != nil {
 		return "", err
 	}
-	return refundResp.ID, nil
+	return res.RefundID, nil
 }
 
 // PersistDeferredRefundID replaces the deferred-cancel-refund sentinel in

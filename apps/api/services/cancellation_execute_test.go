@@ -7,10 +7,7 @@ package services
 // this write was clobbered. The fix increments in-SQL (COALESCE(refund_amount,0) + refund).
 
 import (
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 
 	"github.com/google/uuid"
@@ -61,23 +58,23 @@ func seedCancelExecFixturesDest(t *testing.T, db *gorm.DB, o *models.Order, refu
 	}
 }
 
-// seedMixedPaymentOrder is a Razorpay-captured order that ALSO consumed wallet AND
+// seedMixedPaymentOrder is a gateway-captured order that ALSO consumed wallet AND
 // loyalty store credit at checkout, so the gateway only ever captured
-// (Total − WalletApplied − LoyaltyApplied). razorpayPaymentID may be "" to model a
+// (Total − WalletApplied − LoyaltyApplied). gatewayOrderID may be "" to model a
 // fully-credit-funded order that never touched the gateway at all.
-func seedMixedPaymentOrder(t *testing.T, db *gorm.DB, total, walletApplied, loyaltyApplied float64, razorpayPaymentID string) *models.Order {
+func seedMixedPaymentOrder(t *testing.T, db *gorm.DB, total, walletApplied, loyaltyApplied float64, gatewayOrderID string) *models.Order {
 	t.Helper()
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-MIX", CustomerID: uuid.New(), ChefID: uuid.New(),
 		Status: models.OrderStatusPreparing, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "razorpay", RazorpayPaymentID: razorpayPaymentID,
+		PaymentProvider: "cashfree", RazorpayOrderID: gatewayOrderID,
 		Total: total, WalletApplied: walletApplied, LoyaltyApplied: loyaltyApplied,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
-		payment_provider, razorpay_payment_id, total, wallet_applied, loyalty_applied, refund_amount)
+		payment_provider, razorpay_order_id, total, wallet_applied, loyalty_applied, refund_amount)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), o.ChefID.String(), string(o.Status),
-		string(models.PaymentCompleted), "razorpay", razorpayPaymentID, total, walletApplied, loyaltyApplied, 0.0).Error)
+		string(models.PaymentCompleted), "cashfree", gatewayOrderID, total, walletApplied, loyaltyApplied, 0.0).Error)
 	return o
 }
 
@@ -92,30 +89,19 @@ func seedMixedPaymentOrder(t *testing.T, db *gorm.DB, total, walletApplied, loya
 // the already-correct chef-cancel path).
 func TestExecuteCancellationRefund_MixedPayment_SplitsWalletAndLoyaltyOffGateway(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedMixedPaymentOrder(t, db, 481.91, 150.40, 3.85, "pay_mix")
+	o := seedMixedPaymentOrder(t, db, 481.91, 150.40, 3.85, "cf_ord_mix")
 	cr := seedCancelExecFixturesDest(t, db, o, 46295, "original") // ₹462.95 refund
 
-	var gatewayAmt int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Amount int `json:"amount"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		gatewayAmt = body.Amount
-		_, _ = w.Write([]byte(`{"id":"rfnd_mix","status":"processed"}`))
-	}))
-	defer srv.Close()
-	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
-	t.Cleanup(func() { SetRazorpayClient(nil) })
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	stale := &models.Order{ID: o.ID, CustomerID: o.CustomerID, OrderNumber: o.OrderNumber,
-		PaymentProvider: "razorpay", RazorpayPaymentID: "pay_mix",
+		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_mix",
 		Total: 481.91, WalletApplied: 150.40, LoyaltyApplied: 3.85, RefundAmount: 0}
 	require.NoError(t, ExecuteCancellationRefund(stale, cr), "must not 502 on a mixed-payment refund")
 
-	require.NotEqual(t, 46295, gatewayAmt, "the full refund total must never be sent to the gateway")
-	require.LessOrEqual(t, gatewayAmt, 32766, "card slice must never exceed what was actually captured (Total-Wallet-Loyalty = 481.91-150.40-3.85)")
-	require.Equal(t, 31478, gatewayAmt, "gateway gets exactly the pro-rata card slice")
+	require.NotEqual(t, 46295, spy.amountPaise, "the full refund total must never be sent to the gateway")
+	require.LessOrEqual(t, spy.amountPaise, 32766, "card slice must never exceed what was actually captured (Total-Wallet-Loyalty = 481.91-150.40-3.85)")
+	require.Equal(t, 31478, spy.amountPaise, "gateway gets exactly the pro-rata card slice")
 
 	var status string
 	require.NoError(t, db.Raw(`SELECT status FROM orders WHERE id = ?`, o.ID.String()).Scan(&status).Error)
@@ -138,21 +124,14 @@ func TestExecuteCancellationRefund_FullyCreditFunded_NoGatewayCall(t *testing.T)
 	o := seedMixedPaymentOrder(t, db, 200, 150, 50, "") // wallet+loyalty cover the whole order
 	cr := seedCancelExecFixturesDest(t, db, o, 20000, "original")
 
-	var gatewayCalled atomic.Bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gatewayCalled.Store(true)
-		_, _ = w.Write([]byte(`{"id":"rfnd_should_not_happen","status":"processed"}`))
-	}))
-	defer srv.Close()
-	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
-	t.Cleanup(func() { SetRazorpayClient(nil) })
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	stale := &models.Order{ID: o.ID, CustomerID: o.CustomerID, OrderNumber: o.OrderNumber,
 		PaymentProvider: "razorpay", RazorpayPaymentID: "",
 		Total: 200, WalletApplied: 150, LoyaltyApplied: 50, RefundAmount: 0}
 	require.NoError(t, ExecuteCancellationRefund(stale, cr), "a fully credit-funded refund needs no gateway payment")
 
-	require.False(t, gatewayCalled.Load(), "a fully credit-funded order must not call the gateway")
+	require.False(t, spy.calls > 0, "a fully credit-funded order must not call the gateway")
 
 	ps, refundAmount, _, _ := loadRefund(t, db, o.ID)
 	require.Equal(t, string(models.PaymentRefunded), ps)

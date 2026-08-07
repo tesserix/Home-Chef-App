@@ -42,24 +42,24 @@ func callGoodwillRefund(userID uuid.UUID, orderID string, body any, idemKey stri
 // order+amount+reason window — no second real gateway refund, refund_amount unchanged.
 func TestRefundOrder_IdenticalResubmit_DedupedNoDoubleRefund(t *testing.T) {
 	db := setupPayDB(t)
-	_, refundCalls := withRefundGateway(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	markDeliveredPaid(t, orderID, "pay_x")
 
 	body := map[string]any{"amount": 100.0, "reason": "goodwill"}
 	w1 := callGoodwillRefund(chefUser, orderID.String(), body, "")
 	require.Equal(t, http.StatusOK, w1.Code, w1.Body.String())
-	require.Equal(t, 1, *refundCalls)
+	require.Equal(t, 1, gw.calls)
 	_, amt1, _ := refundStateOf(t, orderID)
 	require.Equal(t, 100.0, amt1)
 
 	// The chef app re-submits the identical refund (its first HTTP response was dropped).
 	w2 := callGoodwillRefund(chefUser, orderID.String(), body, "")
 	require.Equal(t, http.StatusOK, w2.Code, w2.Body.String())
-	require.Equal(t, 1, *refundCalls, "#600: the duplicate issues NO second real refund")
+	require.Equal(t, 1, gw.calls, "#600: the duplicate issues NO second real refund")
 	_, amt2, _ := refundStateOf(t, orderID)
 	require.Equal(t, 100.0, amt2, "refund_amount is not double-counted")
 }
@@ -67,35 +67,35 @@ func TestRefundOrder_IdenticalResubmit_DedupedNoDoubleRefund(t *testing.T) {
 // A retry carrying the SAME Idempotency-Key dedups exactly.
 func TestRefundOrder_SameIdempotencyKey_Deduped(t *testing.T) {
 	db := setupPayDB(t)
-	_, refundCalls := withRefundGateway(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	markDeliveredPaid(t, orderID, "pay_x")
 
 	body := map[string]any{"amount": 100.0, "reason": "goodwill"}
 	require.Equal(t, http.StatusOK, callGoodwillRefund(chefUser, orderID.String(), body, "idem-1").Code)
-	require.Equal(t, 1, *refundCalls)
+	require.Equal(t, 1, gw.calls)
 
 	w2 := callGoodwillRefund(chefUser, orderID.String(), body, "idem-1")
 	require.Equal(t, http.StatusOK, w2.Code, w2.Body.String())
-	require.Equal(t, 1, *refundCalls, "same Idempotency-Key → deduped")
+	require.Equal(t, 1, gw.calls, "same Idempotency-Key → deduped")
 }
 
 // After the dedup window, a genuinely-intended identical repeat refund is allowed.
 func TestRefundOrder_IdenticalRepeatAfterWindow_Allowed(t *testing.T) {
 	db := setupPayDB(t)
-	_, refundCalls := withRefundGateway(t)
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 	markDeliveredPaid(t, orderID, "pay_x")
 
 	body := map[string]any{"amount": 100.0, "reason": "goodwill"}
 	require.Equal(t, http.StatusOK, callGoodwillRefund(chefUser, orderID.String(), body, "").Code)
-	require.Equal(t, 1, *refundCalls)
+	require.Equal(t, 1, gw.calls)
 
 	// Age the claim past the window (no time travel in sqlite).
 	require.NoError(t, database.DB.Exec(
@@ -103,7 +103,7 @@ func TestRefundOrder_IdenticalRepeatAfterWindow_Allowed(t *testing.T) {
 
 	w2 := callGoodwillRefund(chefUser, orderID.String(), body, "")
 	require.Equal(t, http.StatusOK, w2.Code, w2.Body.String())
-	require.Equal(t, 2, *refundCalls, "a genuine identical repeat after the window issues a real refund")
+	require.Equal(t, 2, gw.calls, "a genuine identical repeat after the window issues a real refund")
 	_, amt, _ := refundStateOf(t, orderID)
 	require.Equal(t, 200.0, amt)
 }
@@ -115,7 +115,7 @@ func TestInitiateRefund_IdenticalResubmit_Deduped(t *testing.T) {
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf_o")
 
 	body := map[string]any{"reason": "goodwill", "amount": 100.0, "toWallet": true}
 	w1 := callPay(chefUser, http.MethodPost, "/payments/order/"+orderID.String()+"/refund", regRefund, body)

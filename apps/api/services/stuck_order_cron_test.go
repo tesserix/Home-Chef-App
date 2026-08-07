@@ -21,15 +21,15 @@ func seedAbandonedOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, status mode
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-STUCK", CustomerID: uuid.New(), ChefID: chefID,
 		Status: status, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "razorpay", RazorpayPaymentID: "pay_stuck", Total: 250,
+		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_stuck", Total: 250,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders
 		(id, order_number, customer_id, chef_id, status, payment_status, payment_provider,
-		 razorpay_payment_id, total, refund_amount, created_at, updated_at)
+		 razorpay_order_id, total, refund_amount, created_at, updated_at)
 		VALUES (?,?,?,?,?,?,?,?,?,0,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), chefID.String(),
-		string(status), string(models.PaymentCompleted), "razorpay",
-		"pay_stuck", 250.0, created, created).Error)
+		string(status), string(models.PaymentCompleted), "cashfree",
+		"cf_ord_stuck", 250.0, created, created).Error)
 	return o
 }
 
@@ -44,7 +44,7 @@ func staleReminderCount(t *testing.T, db *gorm.DB, id uuid.UUID) int {
 // way out and no money back.
 func TestStuckSweep_RefundsAnAbandonedOrderInFull(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	now := ist(2026, 7, 20, 12, 0)
 	o := seedAbandonedOrder(t, db, chefID, models.OrderStatusPreparing, now.AddDate(0, 0, -31))
 
@@ -60,7 +60,7 @@ func TestStuckSweep_RefundsAnAbandonedOrderInFull(t *testing.T) {
 // Inside the refund deadline the order is nudged, never refunded — the chef may still finish it.
 func TestStuckSweep_NudgesBeforeTheDeadline(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	now := ist(2026, 7, 20, 12, 0)
 	o := seedAbandonedOrder(t, db, chefID, models.OrderStatusPreparing, now.AddDate(0, 0, -5))
 
@@ -76,7 +76,7 @@ func TestStuckSweep_NudgesBeforeTheDeadline(t *testing.T) {
 // A fresh order is neither nudged nor refunded — being mid-cook is not being stuck.
 func TestStuckSweep_LeavesFreshOrdersAlone(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	now := ist(2026, 7, 20, 12, 0)
 	o := seedAbandonedOrder(t, db, chefID, models.OrderStatusPreparing, now.Add(-2*time.Hour))
 
@@ -89,7 +89,7 @@ func TestStuckSweep_LeavesFreshOrdersAlone(t *testing.T) {
 // A delivered order is finished, however old — the sweep must never reopen completed work.
 func TestStuckSweep_IgnoresDeliveredOrders(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	now := ist(2026, 7, 20, 12, 0)
 	o := seedAbandonedOrder(t, db, chefID, models.OrderStatusDelivered, now.AddDate(0, 0, -60))
 
@@ -105,7 +105,7 @@ func TestStuckSweep_IgnoresDeliveredOrders(t *testing.T) {
 // closing time. Two sweeps refunding one order is the double-refund this must not cause.
 func TestStuckSweep_LeavesPendingOrdersToTheVoidSweep(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	now := ist(2026, 7, 20, 12, 0)
 	o := seedAbandonedOrder(t, db, chefID, models.OrderStatusPending, now.AddDate(0, 0, -31))
 
@@ -119,7 +119,7 @@ func TestStuckSweep_LeavesPendingOrdersToTheVoidSweep(t *testing.T) {
 // Reminders are rate-limited: a second pass the same day must not re-nudge.
 func TestStuckSweep_DoesNotRenudgeWithinTheWindow(t *testing.T) {
 	db, chefID := setupUnacceptedDB(t)
-	razorpayOK(t)
+	gatewayOK(t)
 	now := ist(2026, 7, 20, 12, 0)
 	o := seedAbandonedOrder(t, db, chefID, models.OrderStatusPreparing, now.AddDate(0, 0, -5))
 

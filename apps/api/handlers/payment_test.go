@@ -388,12 +388,12 @@ func TestInitiateRefund_ExceedsTotal_400(t *testing.T) {
 	}
 }
 
-func TestInitiateRefund_AdminAllowed_NoRazorpayPayment_400(t *testing.T) {
+func TestInitiateRefund_AdminAllowed_NoGatewayPayment_400(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
-	// Completed order but no razorpay_payment_id recorded.
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_order_x", "")
+	// Completed order but no gateway order id recorded.
+	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "")
 	admin := payUser(t, db, "admin")
 
 	// Admin passes authz + completed + amount-ok, then fails on the missing
@@ -401,7 +401,7 @@ func TestInitiateRefund_AdminAllowed_NoRazorpayPayment_400(t *testing.T) {
 	w := callPay(admin, http.MethodPost, "/payments/order/"+orderID.String()+"/refund", regRefund,
 		map[string]any{"reason": "ops refund"})
 	if w.Code != http.StatusBadRequest {
-		t.Fatalf("want 400 no-razorpay-payment (admin authorized past 403), got %d (%s)", w.Code, w.Body.String())
+		t.Fatalf("want 400 no-gateway-payment (admin authorized past 403), got %d (%s)", w.Code, w.Body.String())
 	}
 }
 

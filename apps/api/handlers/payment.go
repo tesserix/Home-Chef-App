@@ -763,8 +763,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	case models.PaymentProviderCashfree:
 		if order.RazorpayOrderID == "" {
 			// Cashfree refunds are issued against the ORDER, not the payment — so
-			// the gateway order id is what's required here, unlike the Razorpay
-			// branch below which needs the payment id.
+			// the gateway order id is what's required here.
 			releaseReservation()
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No Cashfree payment found for this order"})
 			return
@@ -833,41 +832,12 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		}
 		refundID = r.ID
 		refundStatus = r.Status
-	default: // razorpay
-		if order.RazorpayPaymentID == "" {
-			releaseReservation()
-			c.JSON(http.StatusBadRequest, gin.H{"error": "No Razorpay payment found for this order"})
-			return
-		}
-		rz := services.GetRazorpayFor(order.Mode)
-		if rz == nil {
-			releaseReservation()
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-			return
-		}
-		r, err := rz.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
-			Amount: services.ToPaise(refundAmount),
-			Speed:  "normal",
-			Notes: map[string]string{
-				"order_id":     order.ID.String(),
-				"order_number": order.OrderNumber,
-				"reason":       req.Reason,
-				"initiated_by": initiatedBy,
-			},
-			Receipt: fmt.Sprintf("refund-%s", order.OrderNumber),
-			// Same prior-refunded basis as the wallet branch above (priorRefunded from the
-			// reserve, #611); the atomic reserve (#567/#611) serializes concurrent submits,
-			// and a retry re-derives the same key so Razorpay dedups it. #574.
-			IdempotencyKey: services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(priorRefunded)),
-		})
-		if err != nil {
-			log.Printf("Failed to create Razorpay refund for order %s: %v", order.OrderNumber, err)
-			releaseReservation()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
-			return
-		}
-		refundID = r.ID
-		refundStatus = r.Status
+	default:
+		// A legacy razorpay row is the only way to land here since #1086 — there is
+		// no client left to refund it on, and all of them are already refunded.
+		releaseReservation()
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "No refundable gateway payment for this order"})
+		return
 	}
 
 	// Persist the refund and stage the order.refunded event atomically. Target the

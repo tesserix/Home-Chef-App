@@ -7,7 +7,7 @@ package services
 // core the HTTP verify legs use, and the cancelled-order backfill boundary is
 // enforced structurally by the query, never merely by convention.
 //
-// Reuses setupStaleOrderDB, seedStaleOrder, withCashfreeServer,
+// Reuses setupCancelRefundDB, seedStaleOrder, withCashfreeServer,
 // withRazorpayServerFor from stale_order_cron_test.go (same package) — extended
 // with chef_profiles/deliveries/delivery_partners so Preload("Chef") and
 // Preload("Delivery.DeliveryPartner") (SettleOrderWallet's requirement) don't
@@ -28,15 +28,15 @@ import (
 	"github.com/homechef/api/models"
 )
 
-// setupReconcileDB extends setupStaleOrderDB with the tables
+// setupReconcileDB extends setupCancelRefundDB with the tables
 // Preload("Chef").Preload("Delivery.DeliveryPartner") queries against. Empty in
 // every test here — no order's wallet/loyalty credit is set, so
 // SettleOrderWallet's provider-split branch (the only reader of Chef/Delivery
 // Route account fields) never runs.
 func setupReconcileDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db := setupStaleOrderDB(t)
-	// setupCancelRefundDB's orders table (the base setupStaleOrderDB extends)
+	db := setupCancelRefundDB(t)
+	// setupCancelRefundDB's orders table (the base setupCancelRefundDB extends)
 	// has no payment_method column — CompleteCashfreeOrderTx
 	// stamp it alongside payment_status=completed.
 	require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT ''`).Error)

@@ -6,9 +6,7 @@ package services
 // exercises the whole flow with no external gateway (CreditWallet is DB-only).
 
 import (
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -22,19 +20,19 @@ import (
 	"github.com/homechef/api/models"
 )
 
-// seedRazorpayWalletOrder is a gateway-charged order that ALSO consumed store credit at
+// seedWalletFundedOrder is a gateway-charged order that ALSO consumed store credit at
 // checkout (wallet_applied), so only (Total − WalletApplied) was captured at the gateway.
-func seedRazorpayWalletOrder(t *testing.T, db *gorm.DB, total, walletApplied float64) *models.Order {
+func seedWalletFundedOrder(t *testing.T, db *gorm.DB, total, walletApplied float64) *models.Order {
 	t.Helper()
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-W", CustomerID: uuid.New(), ChefID: uuid.New(),
 		Status: models.OrderStatusCancelled, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "razorpay", RazorpayPaymentID: "pay_123", Total: total, WalletApplied: walletApplied,
+		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_wallet", Total: total, WalletApplied: walletApplied,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
-		payment_provider, razorpay_payment_id, total, wallet_applied, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		payment_provider, razorpay_order_id, total, wallet_applied, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), o.ChefID.String(), string(o.Status),
-		string(models.PaymentCompleted), "razorpay", "pay_123", total, walletApplied, 0.0).Error)
+		string(models.PaymentCompleted), "cashfree", "cf_ord_wallet", total, walletApplied, 0.0).Error)
 	return o
 }
 
@@ -43,24 +41,13 @@ func seedRazorpayWalletOrder(t *testing.T, db *gorm.DB, total, walletApplied flo
 // money out (wallet re-credit + gateway) must equal the reserved refund_amount.
 func TestRefundOrderForCancellation_WalletApplied_SplitConservesReservedTotal(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedRazorpayWalletOrder(t, db, 300, 120) // ₹300 total, ₹120 from wallet → ₹180 captured
+	o := seedWalletFundedOrder(t, db, 300, 120) // ₹300 total, ₹120 from wallet → ₹180 captured
 
-	var gatewayAmt int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Amount int `json:"amount"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		gatewayAmt = body.Amount
-		_, _ = w.Write([]byte(`{"id":"rfnd_test","status":"processed"}`))
-	}))
-	defer srv.Close()
-	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
-	t.Cleanup(func() { SetRazorpayClient(nil) })
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	require.NoError(t, RefundOrderForCancellation(o, "customer", "cancel"))
 
-	require.Equal(t, 18000, gatewayAmt, "gateway refunds only the captured ₹180 (paise)")
+	require.Equal(t, 18000, spy.amountPaise, "gateway refunds only the captured ₹180 (paise)")
 	ps, amt, rid, _ := loadRefund(t, db, o.ID)
 	require.Equal(t, string(models.PaymentRefunded), ps)
 	require.Equal(t, 300.0, amt, "refund_amount = the full reserved ₹300 (wallet 120 + gateway 180) — conserved")
@@ -74,15 +61,9 @@ func TestRefundOrderForCancellation_WalletApplied_SplitConservesReservedTotal(t 
 // reduced gateway share — else refund_amount would be left inflated by the wallet portion.
 func TestRefundOrderForCancellation_WalletApplied_GatewayFailure_ReleasesFullReservation(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedRazorpayWalletOrder(t, db, 300, 120)
+	o := seedWalletFundedOrder(t, db, 300, 120)
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"error":{"description":"boom"}}`))
-	}))
-	defer srv.Close()
-	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
-	t.Cleanup(func() { SetRazorpayClient(nil) })
+	withCashfreeRefundSpy(t, http.StatusInternalServerError)
 
 	require.Error(t, RefundOrderForCancellation(o, "customer", "cancel"), "gateway failure surfaces")
 
@@ -98,7 +79,8 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT,
-			status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'razorpay', razorpay_payment_id TEXT DEFAULT '',
+			status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'cashfree', razorpay_payment_id TEXT DEFAULT '',
+			razorpay_order_id TEXT DEFAULT '',
 			stripe_payment_intent_id TEXT DEFAULT '', total REAL DEFAULT 0, wallet_applied REAL DEFAULT 0, currency TEXT DEFAULT 'INR',
 			loyalty_applied REAL DEFAULT 0, loyalty_points_spent REAL DEFAULT 0,
 			wallet_refunded REAL DEFAULT 0, loyalty_refunded REAL DEFAULT 0,

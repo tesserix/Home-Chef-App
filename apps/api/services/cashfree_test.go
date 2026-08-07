@@ -14,6 +14,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -42,6 +43,45 @@ func withCashfreeServer(t *testing.T, mode string, handler http.HandlerFunc) *ht
 	t.Cleanup(srv.Close)
 	withCashfreeClient(t, mode, NewCashfreeTestClient(srv.URL, "app_test", "secret_test", "whsec_test", mode))
 	return srv
+}
+
+// cfRefundSpy records what reached Cashfree's order-scoped refund POST.
+type cfRefundSpy struct {
+	calls       int
+	amountPaise int
+	idemKey     string // the refund_id Cashfree is asked to mint
+	failing     bool   // flip mid-test to let a retry-after-failure succeed
+}
+
+// withCashfreeRefundSpy points the live-mode client at a stub answering the refund
+// POST with status — anything but 200 is a hard gateway failure, the shape the
+// deferral and retry paths need.
+func withCashfreeRefundSpy(t *testing.T, status int) *cfRefundSpy {
+	t.Helper()
+	spy := &cfRefundSpy{failing: status != http.StatusOK}
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/refunds") {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if spy.failing {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"gateway unavailable"}`))
+			return
+		}
+		var body struct {
+			RefundID string  `json:"refund_id"`
+			Amount   float64 `json:"refund_amount"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		spy.calls++
+		spy.amountPaise = int(math.Round(body.Amount * 100))
+		spy.idemKey = body.RefundID
+		_, _ = w.Write([]byte(fmt.Sprintf(
+			`{"cf_refund_id":1,"refund_id":%q,"order_id":"o","refund_status":"SUCCESS","refund_amount":%.2f}`,
+			body.RefundID, body.Amount)))
+	})
+	return spy
 }
 
 // --- Amounts: the paise ↔ rupee-decimal boundary ---

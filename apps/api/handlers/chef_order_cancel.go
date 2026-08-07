@@ -32,8 +32,7 @@ var errLineAlreadyRefunded = errors.New("line or order already refunded")
 // totals so subsequent statements + invoices reflect the smaller scope.
 //
 // Gateway-agnostic: every route gates on order.GatewayRefundable() rather than
-// naming a provider, so a Razorpay or Cashfree order behaves identically and an
-// order with nothing refundable at a gateway returns 422.
+// naming a provider, so an order with nothing refundable at a gateway returns 422.
 type ChefOrderCancelHandler struct{}
 
 func NewChefOrderCancelHandler() *ChefOrderCancelHandler {
@@ -56,7 +55,7 @@ type cancelRequest struct {
 
 // CancelOrder cancels the whole order and refunds the customer the FULL total across
 // every rail that funded it — wallet + loyalty credits back to the wallet instantly, the
-// remainder (if any) via a Razorpay refund — then notifies the customer. Idempotent on a
+// remainder (if any) via a gateway refund — then notifies the customer. Idempotent on a
 // re-call: if the order is already cancelled with a refund ID we return 200 + the same
 // payload so retries from the mobile client don't double-refund.
 // POST /chef/orders/:orderId/cancel
@@ -100,9 +99,8 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		return
 	}
 
-	// Any order with a refundable gateway payment (Razorpay or Cashfree) can be
-	// cancelled here. Naming Razorpay would 422 a Cashfree order that is perfectly
-	// refundable — the chef would simply be unable to cancel it.
+	// Any order with a refundable gateway payment can be cancelled here; naming a
+	// provider would 422 an order that is perfectly refundable.
 	if !order.GatewayRefundable() {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
 			"error": "this order has no refundable payment to cancel against; reach out to support",
@@ -174,7 +172,7 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	// A chef must be able to cancel a mid-prep order even when the synchronous gateway
 	// refund can't complete right now — the reservation + the sentinel just persisted
 	// above already commit the full refund obligation, so nothing here can under-refund
-	// the customer. When Razorpay is unreachable or refuses the call, DEFER it instead of
+	// the customer. When the gateway is unreachable or refuses the call, DEFER it instead of
 	// blocking the cancel: the sentinel already encodes the owed paise, and
 	// RetryDeferredCancelRefunds (services/deferred_cancel_refund.go) re-issues the SAME
 	// idempotency-keyed refund on a cron until it lands. Do NOT release the reservation on
@@ -220,7 +218,7 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		// RetryDeferredCancelRefunds cron tick (up to ~12 minutes) — that cron still
 		// backstops if Temporal is down or this workflow never completes. Both paths
 		// call the gateway with the SAME idempotency key, so they can never double-refund.
-		services.StartDeferredRefundFlow(order.ID, order.RazorpayPaymentID, cardPaise)
+		services.StartDeferredRefundFlow(order.ID, order.GatewayRefundReference(), cardPaise)
 	}
 	// Cross-guard the payout hold (#457) — the customer was fully refunded, so the
 	// chef must not be paid. Best-effort; never fail the cancel on a hold-drive error.

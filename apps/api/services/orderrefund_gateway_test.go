@@ -5,9 +5,7 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -15,32 +13,6 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services/orderrefund"
 )
-
-// razorpayRefundSpy captures what actually reached Razorpay.
-type razorpayRefundSpy struct {
-	amountPaise int
-	idemKey     string
-	calls       int
-}
-
-func newRazorpaySpy(t *testing.T) *razorpayRefundSpy {
-	t.Helper()
-	spy := &razorpayRefundSpy{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Amount int `json:"amount"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		spy.calls++
-		spy.amountPaise = body.Amount
-		spy.idemKey = r.Header.Get("X-Refund-Idempotency")
-		_, _ = w.Write([]byte(`{"id":"rfnd_spy","status":"processed"}`))
-	}))
-	t.Cleanup(srv.Close)
-	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
-	t.Cleanup(func() { SetRazorpayClient(nil) })
-	return spy
-}
 
 // The coordinator gives every logical refund its OWN key (refund:<order>:<scope>) — that is
 // how two different refunds on one order stay distinct at the gateway. The adapter must pass
@@ -53,8 +25,8 @@ func newRazorpaySpy(t *testing.T) *razorpayRefundSpy {
 // customer would simply never receive it. No error, no trace — just missing money.
 func TestOrderRefundGateway_PassesTheCoordinatorsPerScopeKey_NotTheFullRefundKey(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedRazorpayWalletOrder(t, db, 300, 0)
-	spy := newRazorpaySpy(t)
+	o := seedWalletFundedOrder(t, db, 300, 0)
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	key := "refund:" + o.ID.String() + ":issue:abc"
 	_, err := OrderRefundGateway{}.RefundPayment(context.Background(), orderrefund.GatewayRequest{
@@ -75,8 +47,8 @@ func TestOrderRefundGateway_PassesTheCoordinatorsPerScopeKey_NotTheFullRefundKey
 // coordinator hands over the full amount owed and must stay ignorant of this split.
 func TestOrderRefundGateway_WalletFundedOrder_SplitsStoreCreditFromTheCapturedSlice(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedRazorpayWalletOrder(t, db, 300, 120) // ₹120 of ₹300 came from the wallet
-	spy := newRazorpaySpy(t)
+	o := seedWalletFundedOrder(t, db, 300, 120) // ₹120 of ₹300 came from the wallet
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	_, err := OrderRefundGateway{}.RefundPayment(context.Background(), orderrefund.GatewayRequest{
 		OrderID: o.ID, Amount: 300, IdempotencyKey: "refund:" + o.ID.String() + ":cancel",
@@ -95,7 +67,7 @@ func TestOrderRefundGateway_WalletFundedOrder_SplitsStoreCreditFromTheCapturedSl
 func TestOrderRefundGateway_WalletPaidOrder_NeverTouchesTheProvider(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	o := seedWalletOrder(t, db, models.PaymentCompleted, 200, 0)
-	spy := newRazorpaySpy(t)
+	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	ref, err := OrderRefundGateway{}.RefundPayment(context.Background(), orderrefund.GatewayRequest{
 		OrderID: o.ID, Amount: 200, IdempotencyKey: "refund:" + o.ID.String() + ":cancel",

@@ -87,7 +87,10 @@ func retryOneDeferredCancelRefund(orderID uuid.UUID) bool {
 			lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
 		}
 		var o models.Order
-		if e := lockTx.Select("id", "refund_id", "razorpay_payment_id").
+		// mode/provider/order-id are part of the routing, not decoration: without them
+		// GatewayRefundAvailable reads a zero provider and every Cashfree order is
+		// skipped forever.
+		if e := lockTx.Select("id", "mode", "refund_id", "payment_provider", "razorpay_payment_id", "razorpay_order_id").
 			First(&o, "id = ?", orderID).Error; e != nil {
 			return e
 		}

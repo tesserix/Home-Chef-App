@@ -7,9 +7,7 @@ package handlers
 // the customer's refund even when the levy itself fails to record.
 
 import (
-	"fmt"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -72,21 +70,6 @@ func withGatewayFeeLevyEnabled(t *testing.T, percent float64, alsoCancelLate boo
 	t.Cleanup(services.InvalidatePlatformPolicy)
 }
 
-// cfRefundGateway serves POST /orders/{id}/refunds with a SUCCESS refund response and
-// counts how many times it was called.
-func cfRefundGateway(refundCalls *int) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/refunds") {
-			*refundCalls++
-			_, _ = w.Write([]byte(fmt.Sprintf(
-				`{"cf_refund_id":%d,"refund_id":"cfrfnd_test_%d","order_id":"cf-order","refund_status":"SUCCESS","refund_amount":100.00}`,
-				*refundCalls, *refundCalls)))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
 func regChefCancelItem(r *gin.Engine, h *ChefOrderCancelHandler) {
 	r.POST("/chef/orders/:orderId/items/:itemId/cancel", h.CancelOrderItem)
 }
@@ -99,8 +82,7 @@ func TestCancelOrder_Cashfree_LevyGatewayFee(t *testing.T) {
 	}
 	pinSingleConn(t, db)
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	gw := withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
@@ -110,7 +92,7 @@ func TestCancelOrder_Cashfree_LevyGatewayFee(t *testing.T) {
 	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/cancel", regChefCancelOrder,
 		map[string]any{"reason": "customer_request"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	require.Equal(t, 1, calls)
+	require.Equal(t, 1, gw.calls)
 
 	rows := gatewayFeePenaltyRowsFor(t, db, orderID)
 	require.Len(t, rows, 1)
@@ -126,8 +108,7 @@ func TestCancelOrder_Cashfree_SkipsWhenCancelLateAlsoLevied(t *testing.T) {
 	}
 	pinSingleConn(t, db)
 	withGatewayFeeLevyEnabled(t, 2, true)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
@@ -147,29 +128,6 @@ func TestCancelOrder_Cashfree_SkipsWhenCancelLateAlsoLevied(t *testing.T) {
 	require.Equal(t, int64(0), gatewayFeeCount, "no stacking by default")
 }
 
-func TestCancelOrder_Razorpay_NoGatewayFeeLevy(t *testing.T) {
-	db := setupPayDB(t)
-	addChefPenaltyTable(t, db)
-	for _, col := range []string{"cancelled_at DATETIME", "cancel_reason TEXT DEFAULT ''"} {
-		require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN `+col).Error)
-	}
-	pinSingleConn(t, db)
-	withGatewayFeeLevyEnabled(t, 2, false)
-	_, _ = withRefundGateway(t)
-	cust := payUser(t, db, "customer")
-	chefUser := payUser(t, db, "chef")
-	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 250, "rzp_o", "pay_x")
-	markPreparing(t, orderID)
-
-	w := callChefCancel(chefUser, http.MethodPost, "/chef/orders/"+orderID.String()+"/cancel", regChefCancelOrder,
-		map[string]any{"reason": "customer_request"})
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	rows := gatewayFeePenaltyRowsFor(t, db, orderID)
-	require.Len(t, rows, 0, "razorpay must not levy the Cashfree-only gateway fee")
-}
-
 func TestCancelOrderItem_Cashfree_LevyGatewayFee(t *testing.T) {
 	db := setupPayDB(t)
 	addChefPenaltyTable(t, db)
@@ -177,8 +135,7 @@ func TestCancelOrderItem_Cashfree_LevyGatewayFee(t *testing.T) {
 		require.NoError(t, db.Exec(`ALTER TABLE order_items ADD COLUMN `+col).Error)
 	}
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
@@ -205,8 +162,7 @@ func TestCancelOrderItem_TwoLines_LevyTwice(t *testing.T) {
 		require.NoError(t, db.Exec(`ALTER TABLE order_items ADD COLUMN `+col).Error)
 	}
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
@@ -234,8 +190,7 @@ func TestRefundOrder_Cashfree_RepeatedGoodwill_LevyEach(t *testing.T) {
 	db := setupPayDB(t)
 	addChefPenaltyTable(t, db)
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
@@ -264,8 +219,7 @@ func TestCancelOrder_GatewayFeeLevyFailure_DoesNotFailCancel(t *testing.T) {
 	}
 	pinSingleConn(t, db)
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)

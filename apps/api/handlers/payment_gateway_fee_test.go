@@ -6,10 +6,9 @@ package handlers
 // sent to the gateway — which the wallet-at-checkout capping logic may have already
 // lowered below the raw requested amount.
 //
-// Reuses addChefPenaltyTable / gatewayFeePenaltyRowsFor / withGatewayFeeLevyEnabled /
-// cfRefundGateway from chef_order_cancel_gateway_fee_test.go (same package) and
-// cfPayOrder / withCashfreeGateway from payment_cashfree_test.go / callPay / regRefund
-// from payment_test.go.
+// Reuses addChefPenaltyTable / gatewayFeePenaltyRowsFor / withGatewayFeeLevyEnabled from
+// chef_order_cancel_gateway_fee_test.go, withCashfreeRefundGateway from
+// chef_order_cancel_refund_test.go, and cfPayOrder / callPay / regRefund (same package).
 
 import (
 	"encoding/json"
@@ -23,8 +22,7 @@ func TestInitiateRefund_ChefInitiated_Cashfree_LevyGatewayFee(t *testing.T) {
 	db := setupPayDB(t)
 	addChefPenaltyTable(t, db)
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
@@ -44,8 +42,7 @@ func TestInitiateRefund_AdminInitiated_Cashfree_NoLevy(t *testing.T) {
 	db := setupPayDB(t)
 	addChefPenaltyTable(t, db)
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
 	orderID := cfPayOrder(t, db, cust, chef, "completed", 500, "cf-order")
@@ -64,8 +61,7 @@ func TestInitiateRefund_ChefInitiated_ToWallet_NoLevy(t *testing.T) {
 	addChefPenaltyTable(t, db)
 	addWalletTables(t, db)
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
@@ -79,24 +75,6 @@ func TestInitiateRefund_ChefInitiated_ToWallet_NoLevy(t *testing.T) {
 	require.Len(t, rows, 0, "a wallet credit never reverses the gateway charge — no gateway fee incurred")
 }
 
-func TestInitiateRefund_ChefInitiated_Razorpay_NoLevy(t *testing.T) {
-	db := setupPayDB(t)
-	addChefPenaltyTable(t, db)
-	withGatewayFeeLevyEnabled(t, 2, false)
-	_, _ = withRefundGateway(t)
-	cust := payUser(t, db, "customer")
-	chefUser := payUser(t, db, "chef")
-	chef := payChef(t, db, chefUser)
-	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_order_x", "pay_x")
-
-	w := callPay(chefUser, http.MethodPost, "/payments/order/"+orderID.String()+"/refund", regRefund,
-		map[string]any{"reason": "partial goodwill", "amount": 100.0})
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	rows := gatewayFeePenaltyRowsFor(t, db, orderID)
-	require.Len(t, rows, 0, "the Cashfree-only gate holds in this handler too")
-}
-
 // A wallet-at-checkout split reduces the amount actually sent to Cashfree below the
 // requested refund amount; the levy's basis must be the CAPPED gateway-bound amount.
 func TestInitiateRefund_ChefInitiated_WalletAtCheckoutSplit_BasisIsGatewayPortionOnly(t *testing.T) {
@@ -104,8 +82,7 @@ func TestInitiateRefund_ChefInitiated_WalletAtCheckoutSplit_BasisIsGatewayPortio
 	addChefPenaltyTable(t, db)
 	addWalletTables(t, db)
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
@@ -128,8 +105,7 @@ func TestInitiateRefund_RepeatedPartialRefunds_Cashfree_LevyEach(t *testing.T) {
 	db := setupPayDB(t)
 	addChefPenaltyTable(t, db)
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
@@ -151,8 +127,7 @@ func TestInitiateRefund_GatewayFeeLevyFailure_DoesNotFailRefund(t *testing.T) {
 	db := setupPayDB(t)
 	// Deliberately DO NOT call addChefPenaltyTable — the levy insert will error.
 	withGatewayFeeLevyEnabled(t, 2, false)
-	var calls int
-	withCashfreeGateway(t, cfRefundGateway(&calls))
+	withCashfreeRefundGateway(t, http.StatusOK)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)
