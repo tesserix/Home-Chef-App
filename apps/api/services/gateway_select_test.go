@@ -1,13 +1,19 @@
 package services
 
-// gateway_select_test.go — the Cashfree-preferred / Razorpay-fallback rule.
+// gateway_select_test.go — which gateway takes a new charge, and whether a slot
+// is usable at all.
 //
-// The fallback exists because Cashfree separates sandbox from production by
-// HOSTNAME: a set of test credentials authenticates against sandbox.cashfree.com
-// and returns 401 against api.cashfree.com. So a platform that has made Cashfree
-// its default while its LIVE slot is still unprovisioned would 503 every real
-// checkout. These tests pin that behaviour down, because it is the difference
-// between "preferred gateway" and "outage".
+// The Razorpay fallback these tests used to pin was removed deliberately by
+// #1086: Cashfree is now the only gateway an INR charge may be created on, so
+// "fall back to razorpay" describes behaviour that no longer exists and the
+// assertions asserting it were rewritten rather than kept passing. Selection
+// itself is covered by gateway_select_cashfree_only_test.go; what survives here
+// is the slot-usability machinery, which still decides whether a checkout is
+// about to fail and is still per-mode.
+//
+// Usability matters because Cashfree separates sandbox from production by
+// HOSTNAME: test credentials authenticate against sandbox.cashfree.com and 401
+// against api.cashfree.com, so a slot can be fully configured and still not work.
 
 import (
 	"net/http"
@@ -47,39 +53,16 @@ func TestSelectCheckoutGateway_UsesCashfreeWhenConfigured(t *testing.T) {
 		SelectCheckoutGateway(models.PaymentProviderCashfree, models.ChefModeLive))
 }
 
-// THE OUTAGE GUARD. A Cashfree chef whose slot has no credentials for this mode
-// falls back to Razorpay rather than failing the checkout. Without this, making
-// Cashfree the default would take live payments down the moment the live slot
-// wasn't provisioned yet.
-func TestSelectCheckoutGateway_FallsBackToRazorpayWhenCashfreeUnconfigured(t *testing.T) {
-	withCashfreeClient(t, models.ChefModeLive, nil)
-
-	require.Equal(t, models.PaymentProviderRazorpay,
-		SelectCheckoutGateway(models.PaymentProviderCashfree, models.ChefModeLive))
-}
-
 // The two slots are independent: a configured TEST slot must not make a LIVE
-// checkout believe Cashfree is available. Getting this wrong would route a real
-// order at a gateway slot that 401s.
-func TestSelectCheckoutGateway_SlotsAreIndependentPerMode(t *testing.T) {
+// checkout read as usable. Getting this wrong would report a real order's
+// gateway as ready when it is about to 401.
+func TestCashfreeUsableFor_SlotsAreIndependentPerMode(t *testing.T) {
 	healthyCashfree(t, models.ChefModeTest)
 	withCashfreeClient(t, models.ChefModeLive, nil)
 
-	require.Equal(t, models.PaymentProviderCashfree,
-		SelectCheckoutGateway(models.PaymentProviderCashfree, models.ChefModeTest))
-	require.Equal(t, models.PaymentProviderRazorpay,
-		SelectCheckoutGateway(models.PaymentProviderCashfree, models.ChefModeLive),
+	require.True(t, cashfreeUsableFor(models.ChefModeTest))
+	require.False(t, cashfreeUsableFor(models.ChefModeLive),
 		"a configured test slot must not stand in for an unconfigured live one")
-}
-
-// Stripe must NOT fall back. A Stripe chef settles in a non-INR currency from a
-// Connect country, so degrading to Razorpay would charge the wrong currency
-// instead of failing honestly.
-func TestSelectCheckoutGateway_StripeNeverFallsBack(t *testing.T) {
-	withCashfreeClient(t, models.ChefModeLive, nil)
-
-	require.Equal(t, models.PaymentProviderStripe,
-		SelectCheckoutGateway(models.PaymentProviderStripe, models.ChefModeLive))
 }
 
 // Cashfree is the platform default for EVERY INR kitchen, including ones whose
@@ -107,22 +90,22 @@ func TestSelectCheckoutGateway_DoesNotChangeStoredProviderMeaning(t *testing.T) 
 	require.Equal(t, models.PaymentProviderRazorpay, models.NormalizeProvider("nonsense"))
 }
 
-// A slot that just failed to create an order is skipped until the cooldown
-// lapses, so a broken gateway costs ONE checkout a round-trip rather than every
-// checkout — which matters now that Cashfree is tried first for everyone.
-func TestSelectCheckoutGateway_BreakerSkipsAFailingSlot(t *testing.T) {
+// A slot that just failed to create an order reads as unusable until the
+// cooldown lapses, so a broken gateway costs ONE checkout a round-trip rather
+// than every checkout.
+func TestCashfreeUsableFor_BreakerMarksAFailingSlot(t *testing.T) {
 	healthyCashfree(t, models.ChefModeLive)
 	t.Cleanup(func() { cashfreeGatewayBreaker.Delete(models.ChefModeLive) })
 
-	require.Equal(t, models.PaymentProviderCashfree, SelectCheckoutGateway("", models.ChefModeLive))
+	require.True(t, cashfreeUsableFor(models.ChefModeLive))
 
 	NoteCashfreeGatewayFailure(models.ChefModeLive)
-	require.Equal(t, models.PaymentProviderRazorpay, SelectCheckoutGateway("", models.ChefModeLive),
-		"a slot that just failed must be skipped, not retried per checkout")
+	require.False(t, cashfreeUsableFor(models.ChefModeLive),
+		"a slot that just failed must be treated as unusable, not re-probed per checkout")
 
 	// The breaker is scoped per mode — a failing live slot must not disable test.
 	healthyCashfree(t, models.ChefModeTest)
-	require.Equal(t, models.PaymentProviderCashfree, SelectCheckoutGateway("", models.ChefModeTest))
+	require.True(t, cashfreeUsableFor(models.ChefModeTest))
 }
 
 // A new chef gets the preferred gateway when it is usable for their mode.
@@ -133,22 +116,10 @@ func TestDefaultChefPaymentProvider_PrefersCashfreeWhenConfigured(t *testing.T) 
 	require.Equal(t, models.PreferredChefPaymentProvider, DefaultChefPaymentProvider(models.ChefModeLive))
 }
 
-// ...and Razorpay when it is not, so a brand-new kitchen is never created unable
-// to take a payment. The chef, not the admin, is who would see that failure.
-func TestDefaultChefPaymentProvider_FallsBackWhenUnconfigured(t *testing.T) {
-	withCashfreeClient(t, models.ChefModeLive, nil)
-
-	require.Equal(t, models.PaymentProviderRazorpay, DefaultChefPaymentProvider(models.ChefModeLive))
-}
-
-// A configured slot whose credentials do NOT work must read as unusable.
-//
-// This is the case that was previously wrong and customer-visible: the delivery
-// quote names the payment aggregator in the checkout's RBI PA disclosure, so a
-// slot that is present-but-401ing would have had the page claim Cashfree while
-// the charge silently fell back to Razorpay — naming the wrong processor on a
-// regulatory disclosure.
-func TestSelectCheckoutGateway_UnhealthySlotIsNotClaimed(t *testing.T) {
+// A configured slot whose credentials do NOT work must read as unusable, so the
+// operator sees a named gateway failure instead of a run of unexplained 500s on
+// the checkout endpoint.
+func TestCashfreeUsableFor_UnhealthySlotIsNotClaimed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"code":"authentication_failed","message":"authentication Failed"}`))
@@ -163,9 +134,8 @@ func TestSelectCheckoutGateway_UnhealthySlotIsNotClaimed(t *testing.T) {
 	withCashfreeClient(t, models.ChefModeLive,
 		NewCashfreeTestClient(srv.URL, "app", "sk", "wh", models.ChefModeLive))
 
-	require.Equal(t, models.PaymentProviderRazorpay,
-		SelectCheckoutGateway("", models.ChefModeLive),
-		"a slot with credentials that 401 must not be claimed as the gateway")
+	require.False(t, cashfreeUsableFor(models.ChefModeLive),
+		"a slot with credentials that 401 must not be claimed as usable")
 }
 
 // The probe result is cached, so selection costs at most one request per mode

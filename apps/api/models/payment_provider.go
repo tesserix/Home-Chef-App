@@ -96,9 +96,11 @@ func IsGatewayProvider(p string) bool {
 
 // SelectableChefProviders are the providers a chef (or an admin on their behalf)
 // may actually be configured with. Wallet is excluded — it is an outcome of a
-// fully-credit-covered order, never a configuration.
+// fully-credit-covered order, never a configuration. Razorpay is excluded since
+// #1086: it can still be READ off a historical order, but nothing may be newly
+// configured onto it.
 func SelectableChefProviders() []string {
-	return []string{PaymentProviderRazorpay, PaymentProviderCashfree, PaymentProviderStripe}
+	return []string{PaymentProviderCashfree, PaymentProviderStripe}
 }
 
 // IsSelectableChefProvider validates a provider submitted by an admin or chef.

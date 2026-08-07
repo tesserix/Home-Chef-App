@@ -12,6 +12,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -24,26 +25,37 @@ import (
 	"github.com/homechef/api/services"
 )
 
-// withGatewayOrderCapture points GetRazorpay at a stub answering the create-order
-// POST, capturing the paise amount actually sent to the gateway.
+// withGatewayOrderCapture points the Cashfree slot at a stub answering the
+// create-order POST, capturing the paise amount actually sent to the gateway.
+//
+// This stubbed Razorpay until #1086 removed the Razorpay fallback; selection now
+// always resolves to Cashfree, so a Razorpay stub would leave every one of these
+// tests 503-ing on an unconfigured gateway instead of exercising the charge.
+// Cashfree's wire amount is rupees-as-decimal, so it is converted back to paise
+// here — the assertions are about what the customer is charged, not the format.
 func withGatewayOrderCapture(t *testing.T) *int {
 	t.Helper()
 	var paise int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			var body struct {
-				Amount int `json:"amount"`
-			}
-			_ = json.NewDecoder(r.Body).Decode(&body)
-			paise = body.Amount
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "order_test", "status": "created"})
-			return
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		amount, isCreate := body["order_amount"].(float64)
+		if isCreate {
+			paise = int(math.Round(amount * 100))
 		}
-		w.WriteHeader(http.StatusOK)
+		orderID, _ := body["order_id"].(string)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"cf_order_id":        1,
+			"order_id":           orderID,
+			"payment_session_id": "sess_test",
+			"order_status":       "ACTIVE",
+			"order_amount":       amount,
+		})
 	}))
 	t.Cleanup(srv.Close)
-	services.SetRazorpayClient(services.NewRazorpayTestClient(srv.URL, "rzp_test_key", "rzp_test_secret", ""))
-	t.Cleanup(func() { services.SetRazorpayClient(nil) })
+	services.SetCashfreeClient(
+		services.NewCashfreeTestClient(srv.URL, "app_test", "secret_test", cfTestWebhookSecret, models.ChefModeLive))
+	t.Cleanup(func() { services.SetCashfreeClient(nil) })
 	return &paise
 }
 

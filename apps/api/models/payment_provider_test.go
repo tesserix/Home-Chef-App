@@ -72,8 +72,10 @@ func TestIsGatewayProvider_WalletIsTheOnlyNonGateway(t *testing.T) {
 // as razorpay. Wallet is not selectable: it is an outcome, never a configuration.
 func TestIsSelectableChefProvider_StrictAndExcludesWallet(t *testing.T) {
 	require.True(t, IsSelectableChefProvider("cashfree"))
-	require.True(t, IsSelectableChefProvider("razorpay"))
 	require.True(t, IsSelectableChefProvider("stripe"))
+	// razorpay was removed from the selectable set by #1086 — it stays READABLE
+	// off a historical row but nothing may be newly configured onto it.
+	require.False(t, IsSelectableChefProvider("razorpay"))
 	require.False(t, IsSelectableChefProvider("wallet"))
 	require.False(t, IsSelectableChefProvider("razorpy"))
 	require.False(t, IsSelectableChefProvider(""))
