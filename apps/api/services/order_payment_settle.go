@@ -165,10 +165,8 @@ func CompleteCashfreeOrderTx(tx *gorm.DB, order *models.Order, method, cfPayment
 // split for a given order (recovery is re-derived from the ledger identically both
 // times, since nothing here mutates it).
 //
-// LANDMINE: this is one of TWO uncoordinated places that act on the same
-// non-discharging recovery debt — see ApplyChefRecoveryDeduction's doc comment
-// below, and services/payout_release_cron.go's BuildReleaseInput (the
-// RecoveryBalance sweep block), for the full explanation before touching either.
+// Recovery is collected here and nowhere else (#1079); the release governor's
+// BuildReleaseInput only reads the balance to decide whether to block.
 func OrderSettlements(db *gorm.DB, order *models.Order) []Settlement {
 	chefAccount := order.Chef.RazorpayAccountID
 	if IsChefFSSAIExpired(&order.Chef) {
@@ -183,10 +181,17 @@ func OrderSettlements(db *gorm.DB, order *models.Order) []Settlement {
 	if order.Delivery != nil {
 		driverAccount = order.Delivery.DeliveryPartner.RazorpayAccountID
 	}
+	// The delivery leg is the driver's money only when a driver carried it. Once
+	// the chef's share includes the fee and the tip for a leg they drove (#1081),
+	// booking them here too would pay the same money twice.
+	driverAmount := 0
+	if !order.ChefEarnsDeliveryFee() {
+		driverAmount = ToPaise(order.DeliveryFee + order.DriverTip)
+	}
 	return []Settlement{
 		{Account: chefAccount, Amount: chefAmount, Hold: true,
 			Notes: map[string]string{"purpose": "food_payment", "order_number": order.OrderNumber}},
-		{Account: driverAccount, Amount: ToPaise(order.DeliveryFee + order.DriverTip), Hold: true,
+		{Account: driverAccount, Amount: driverAmount, Hold: true,
 			Notes: map[string]string{"purpose": "delivery_payment", "order_number": order.OrderNumber}},
 	}
 }

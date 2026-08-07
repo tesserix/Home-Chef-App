@@ -35,6 +35,7 @@ type statementOrderRow struct {
 	ChefFundedDiscount float64   `gorm:"column:chef_funded_discount"`
 	DeliveryFee        float64   `gorm:"column:delivery_fee"`
 	ChefTip            float64   `gorm:"column:chef_tip"`
+	DriverTip          float64   `gorm:"column:driver_tip"`
 	DeliveryState      string    `gorm:"column:delivery_address_state"`
 	// CommissionRate is the rate FROZEN on the order at checkout (#390); 0 for
 	// legacy rows → callers fall back to the live/default rate via rowRate.
@@ -66,6 +67,7 @@ func (r statementOrderRow) earningsInput(flatRate float64) EarningsInput {
 		DeliveryFee:          fee,
 		ChefEarnsDeliveryFee: SettledChefEarnsDeliveryFee(r.FulfillmentType),
 		ChefTip:              r.ChefTip,
+		DriverTip:            r.DriverTip,
 		DeliveryState:        r.DeliveryState,
 		CommissionRate:       rowRate(r.CommissionRate, flatRate),
 	}
@@ -169,7 +171,7 @@ func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, 
 		-- list is invisible to a test that exercises the helper directly.
 		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax,
 		       o.tax_food, o.tax_service, o.chef_funded_discount,
-		       o.delivery_fee, o.chef_tip, o.delivery_address_state, o.commission_rate,
+		       o.delivery_fee, o.chef_tip, o.driver_tip, o.delivery_address_state, o.commission_rate,
 		       o.fulfillment_type, o.delivery_fee_final,
 		       o.chef_id, c.user_id, c.state AS chef_state
 		FROM   orders o

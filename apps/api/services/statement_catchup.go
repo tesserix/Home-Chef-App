@@ -205,7 +205,7 @@ func loadCatchupOrders(db *gorm.DB, limit int) ([]catchupRow, error) {
 	var rows []catchupRow
 	err := db.Table("orders o").
 		Select(`o.id, o.order_number, o.chef_id, s.id AS statement_id,
-			o.subtotal, o.tax, o.tax_food, o.tax_service, o.chef_tip, o.chef_funded_discount, o.commission_rate,
+			o.subtotal, o.tax, o.tax_food, o.tax_service, o.chef_tip, o.driver_tip, o.chef_funded_discount, o.commission_rate,
 			o.fulfillment_type, o.delivery_fee, o.delivery_fee_final,
 			c.state AS chef_state, o.delivery_address_state AS delivery_state`).
 		Joins("JOIN chef_profiles c ON c.id = o.chef_id").
@@ -239,7 +239,7 @@ func loadUnderbilledOrders(db *gorm.DB, limit int) ([]catchupRow, error) {
 	var rows []catchupRow
 	err := db.Table("orders o").
 		Select(`o.id, o.order_number, o.chef_id, o.billed_statement_id AS statement_id,
-			o.subtotal, o.tax, o.tax_food, o.tax_service, o.chef_tip, o.chef_funded_discount, o.commission_rate,
+			o.subtotal, o.tax, o.tax_food, o.tax_service, o.chef_tip, o.driver_tip, o.chef_funded_discount, o.commission_rate,
 			o.fulfillment_type, o.delivery_fee, o.delivery_fee_final,
 			o.settled_net_payout, c.state AS chef_state, o.delivery_address_state AS delivery_state`).
 		Joins("JOIN chef_profiles c ON c.id = o.chef_id").
