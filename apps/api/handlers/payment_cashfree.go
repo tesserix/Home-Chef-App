@@ -44,12 +44,8 @@ import (
 // createCashfreePayment creates (or re-uses) a Cashfree order and hands the
 // client the payment_session_id its SDK opens checkout with.
 //
-// The credit path is the Razorpay path, deliberately: BuildCreditQuote is the
-// same call /quote makes, so the figure the customer was shown and the figure
-// charged here come from one computation. PlanWalletFunding is called with NO
-// settlements — that yields the identical CapturePaise arithmetic while producing
-// no transfers and no top-ups, which is exactly right for a gateway that does not
-// split.
+// BuildCreditQuote is the same call /quote makes, so the figure the customer was
+// shown and the figure charged here come from one computation.
 func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Order, userID uuid.UUID, creditReq services.CreditRequest) {
 	cf := services.GetCashfreeFor(order.Mode)
 	if cf == nil {
@@ -59,10 +55,9 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 
 	totalPaise := services.ToPaise(order.Total)
 
-	// FSSAI hard lockout (#32/#93): record the regulatory trail exactly as the
-	// Razorpay path does. There is no transfer to suppress here — nothing is split
-	// at the gateway — but the chef's payout still has to be withheld downstream,
-	// and the audit entry is what the payout path and the regulator both read.
+	// FSSAI hard lockout (#32/#93): nothing is split at capture, but the chef's
+	// payout still has to be withheld downstream, and this audit entry is what the
+	// payout path and the regulator both read.
 	if services.IsChefFSSAIExpired(&order.Chef) {
 		chefAmount := services.ChefNetPayoutFor(order)
 		middleware.RecordFSSAILockout("payout_withheld")
@@ -86,11 +81,7 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 	loyaltyApplied := services.FromPaise(quote.PointsAppliedPaise)
 
 	creditPaise := quote.WalletAppliedPaise + quote.PointsAppliedPaise
-	// nil settlements: same capture arithmetic, no gateway split. Passing the real
-	// settlements here would build Route TransferSpecs that no Cashfree call
-	// consumes — they'd be silently dropped, and a reader would reasonably assume
-	// the chef was being paid at the gateway when they aren't.
-	plan := services.PlanWalletFunding(totalPaise, creditPaise, creditPaise, nil)
+	plan := services.PlanWalletFunding(totalPaise, creditPaise, creditPaise)
 
 	// Fully-credit-covered order: no gateway leg at all. Shared with the Razorpay
 	// path — it stamps provider=wallet, so nothing downstream looks for a Cashfree

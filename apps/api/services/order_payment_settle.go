@@ -151,50 +151,6 @@ func CompleteCashfreeOrderTx(tx *gorm.DB, order *models.Order, method, cfPayment
 		})
 }
 
-// OrderSettlements derives the chef + driver payouts for an order, chef first so
-// its (larger) food payout stays a single payment-linked transfer when the capture
-// allows (#141). The chef slice is NET (ChefNetPayoutFor, reading the frozen
-// order.CommissionRate), further reduced by any outstanding recovery balance the
-// chef owes the platform (#741, ApplyChefRecoveryDeduction) before the transfer is
-// created — Route transfers are per-payment, so a penalty cannot be netted across
-// orders after the fact the way a daily batch would. The chef account is cleared
-// when its FSSAI licence has lapsed, so that slice is withheld and never
-// transferred. Requires Chef and Delivery.DeliveryPartner preloaded. Deterministic —
-// because the rate is frozen on the row, create and verify produce the identical
-// split for a given order (recovery is re-derived from the ledger identically both
-// times, since nothing here mutates it).
-//
-// Recovery is collected here and nowhere else (#1079); the release governor's
-// BuildReleaseInput only reads the balance to decide whether to block.
-func OrderSettlements(db *gorm.DB, order *models.Order) []Settlement {
-	chefAccount := order.Chef.RazorpayAccountID
-	if IsChefFSSAIExpired(&order.Chef) {
-		chefAccount = ""
-	}
-	chefAmount := ToPaise(ChefNetPayoutFor(order))
-	if chefAccount != "" {
-		chefAmount = ApplyChefRecoveryDeduction(db, order, chefAmount)
-	}
-
-	driverAccount := ""
-	if order.Delivery != nil {
-		driverAccount = order.Delivery.DeliveryPartner.RazorpayAccountID
-	}
-	// The delivery leg is the driver's money only when a driver carried it. Once
-	// the chef's share includes the fee and the tip for a leg they drove (#1081),
-	// booking them here too would pay the same money twice.
-	driverAmount := 0
-	if !order.ChefEarnsDeliveryFee() {
-		driverAmount = ToPaise(order.DeliveryFee + order.DriverTip)
-	}
-	return []Settlement{
-		{Account: chefAccount, Amount: chefAmount, Hold: true,
-			Notes: map[string]string{"purpose": "food_payment", "order_number": order.OrderNumber}},
-		{Account: driverAccount, Amount: driverAmount, Hold: true,
-			Notes: map[string]string{"purpose": "delivery_payment", "order_number": order.OrderNumber}},
-	}
-}
-
 // ApplyChefRecoveryDeduction reduces a chef's gross transfer (in paise) by
 // whatever recovery balance they still owe the platform (#741) — a penalty
 // raised against them (e.g. an order-issue clawback) that could not be netted
