@@ -75,7 +75,7 @@ Verified as called by both clients:
 - **Loyalty** — `/customer/loyalty`, `/customer/loyalty/redeem`,
   `/customer/loyalty/transactions`. **No gap.**
 - **Checkout core** — `/orders`, `/payments/order/{id}/verify`,
-  `/promo/validate`. Order placement and Razorpay verification are present on
+  `/promo/validate`. Order placement and payment verification are present on
   both. **Core is fine**; the gaps are adjacent (§4.2 "Checkout").
 - Referral, favourites, group orders, tipping, reorder, social feed,
   subscriptions, addresses.

@@ -322,7 +322,7 @@ func (h *DriverOnboardingHandler) DriverOnboardingPayout(c *gin.Context) {
 		return
 	}
 
-	// UPI is not an accepted payout destination (#767). Razorpay Route settles
+	// UPI is not an accepted payout destination (#767). The payout rails settle
 	// by NEFT/IMPS to a bank account and has no VPA destination, so a driver who
 	// nominated UPI could never be paid — accepting it only strands their
 	// earnings. Reject anything but bank_transfer at the edge.

@@ -3,7 +3,7 @@ package handlers
 // chef_payout_save_test.go — what SavePayoutDetails does with a chef's bank
 // details (#740/#1086).
 //
-// It was chef_payout_settlement_test.go, pinning the Razorpay v2 onboarding
+// It was chef_payout_settlement_test.go, pinning the retired gateway v2 onboarding
 // sequence (POST /accounts, /stakeholders, /products, PATCH /products/:pid) the
 // save used to drive synchronously. #1086 removed that rail: the destination a
 // chef is actually paid through is their Cashfree Easy Split vendor and the
@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -102,8 +103,9 @@ func TestSavePayoutDetails_ResponseCarriesNoRouteFields(t *testing.T) {
 
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	for _, k := range []string{"razorpayConnected", "razorpayAccountId", "razorpaySettlementStatus", "razorpaySettlementError"} {
-		require.NotContains(t, body, k, "the response must not advertise a Route settlement")
+	for k := range body {
+		require.NotContains(t, strings.ToLower(k), "settlement",
+			"the response must not advertise a second, competing settlement verdict")
 	}
 	require.Contains(t, body, "payoutRegistration", "the chef still gets the verdict that decides whether they are paid")
 }

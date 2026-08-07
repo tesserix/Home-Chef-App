@@ -1,6 +1,6 @@
 // Minimal Stripe.js loader. Loading the SDK on demand (rather than a build
 // dependency on @stripe/stripe-js) keeps the bundle small for the India-only
-// Razorpay customer journey — the Stripe path only runs when a chef is
+// Cashfree customer journey — the Stripe path only runs when a chef is
 // configured for international payouts.
 //
 // Uses the official loader script from js.stripe.com which is required by

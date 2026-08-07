@@ -32,7 +32,7 @@ interface PayoutData {
   upiId: string;
   stripeConnected?: boolean;
   stripeAccountId?: string;
-  paymentProvider?: 'razorpay' | 'stripe' | 'cashfree';
+  paymentProvider?: 'cashfree' | 'stripe';
   payoutCountry?: string;
   panNumber?: string;
   panOnFile?: boolean;
@@ -447,9 +447,9 @@ export default function SettingsPage() {
         )}
       </motion.div>
 
-      {/* Stripe Connect — international payouts. Lives alongside Razorpay
-          so chefs in any country can get paid. Payments to a Stripe-onboarded
-          chef use Stripe at checkout; Razorpay-onboarded chefs still use Razorpay. */}
+      {/* Stripe Connect — international payouts. Lives alongside Cashfree so
+          chefs in any country can get paid: a Stripe-onboarded chef is charged
+          through Stripe at checkout, everyone else through Cashfree. */}
       <StripeConnectCard />
 
       {/* Change Password — only for email/password accounts, not social logins */}
@@ -585,7 +585,7 @@ interface StripeStatus {
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
   country: string;
-  paymentProvider?: 'razorpay' | 'stripe';
+  paymentProvider?: 'cashfree' | 'stripe';
   warning?: string;
 }
 
@@ -661,7 +661,7 @@ function StripeConnectCard() {
   });
 
   const switchProviderMutation = useMutation({
-    mutationFn: (provider: 'razorpay' | 'stripe') =>
+    mutationFn: (provider: 'cashfree' | 'stripe') =>
       apiClient.put<{ paymentProvider: string }>('/chef/payment-provider', { provider }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chef-stripe-status'] });
@@ -675,7 +675,7 @@ function StripeConnectCard() {
   });
 
   const ready = Boolean(data?.connected && data.chargesEnabled && data.payoutsEnabled);
-  const activeProvider = data?.paymentProvider ?? 'razorpay';
+  const activeProvider = data?.paymentProvider ?? 'cashfree';
 
   return (
     <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
@@ -685,7 +685,7 @@ function StripeConnectCard() {
           <div>
             <h2 className="text-lg font-semibold text-ink">Stripe (International Payouts)</h2>
             <p className="text-xs text-ink-muted">
-              For chefs outside India, or as an alternative to Razorpay.
+              For chefs outside India, or as an alternative to Cashfree.
             </p>
           </div>
         </div>
@@ -803,10 +803,10 @@ function StripeConnectCard() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => switchProviderMutation.mutate('razorpay')}
+                onClick={() => switchProviderMutation.mutate('cashfree')}
                 isLoading={switchProviderMutation.isPending}
               >
-                Switch Back to Razorpay
+                Switch Back to Cashfree
               </Button>
             )}
             <Button size="sm" variant="outline" onClick={() => refetch()}>
@@ -817,7 +817,7 @@ function StripeConnectCard() {
           <p className="text-xs text-ink-muted">
             Active gateway for your orders:{' '}
             <span className="font-medium text-ink-soft">
-              {activeProvider === 'stripe' ? 'Stripe' : 'Razorpay'}
+              {activeProvider === 'stripe' ? 'Stripe' : 'Cashfree'}
             </span>
           </p>
         </div>

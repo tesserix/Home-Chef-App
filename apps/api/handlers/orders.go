@@ -648,12 +648,10 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	orderNumber := generateOrderNumber(chef.BusinessName)
 
 	// Inherit the chef's current gateway so VerifyPayment / refund later
-	// read the same provider this order was created against. Falls back to
-	// razorpay for older chefs without the column populated.
-	orderProvider := chef.PaymentProvider
-	if orderProvider == "" {
-		orderProvider = "razorpay"
-	}
+	// read the same provider this order was created against. An unstamped chef
+	// normalizes to the one live INR gateway — a row minted on the retired one is
+	// money nothing can capture (#1132).
+	orderProvider := models.NormalizeProvider(chef.PaymentProvider)
 
 	// Order currency derives from the chef's settlement country so Stripe
 	// charges and chef payouts settle in a consistent currency. Defaults

@@ -731,7 +731,7 @@ Hardened security measures to prevent platform bypass and protect user privacy.
 |       MOBILE           |       SERVICES         |       TOOLS            |
 +------------------------+------------------------+------------------------+
 | React Native           | Firebase (Push)        | GitHub Actions         |
-| Expo                   | Stripe/Razorpay        | Datadog/NewRelic       |
+| Expo                   | Stripe/Cashfree        | Datadog/NewRelic       |
 | React Navigation       | Twilio (SMS)           | Sentry                 |
 |                        | SendGrid (Email)       | Terraform              |
 |                        | Google Maps API        | Jest/Vitest            |
@@ -1028,7 +1028,7 @@ Navigate to Customer -> Deliver -> Confirm -> Complete
 |---------|---------|----------|
 | Google Maps | Location, navigation | P0 |
 | Stripe | Payments (International) | P0 |
-| Razorpay | Payments (India) | P0 |
+| Cashfree | Payments (India) | P0 |
 | Firebase | Push notifications | P0 |
 | Twilio | SMS/OTP | P0 |
 | SendGrid | Email | P0 |

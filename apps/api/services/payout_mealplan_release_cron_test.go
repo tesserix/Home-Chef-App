@@ -4,7 +4,7 @@ package services
 // (services/payout_mealplan_release_cron.go). Pure DB logic on the shared
 // hand-DDL'd sqlite harness (setupHoldDB); escrow flags are OFF (flagsOff) so
 // ReleaseHold's money seam is a no-op and every transition is a plain DB advance
-// — no Razorpay needed. The clock is injected, so maturation is exact.
+// — no the retired gateway needed. The clock is injected, so maturation is exact.
 
 import (
 	"testing"

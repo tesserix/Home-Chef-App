@@ -7,7 +7,7 @@ package handlers
 // refunded_at IS NOT NULL) and (b) trips claimOrderItemForCancel's "whole order refunded" guard.
 // Now refunded_at is stamped only for a FULL refund (amount ≥ the captured Total−WalletApplied).
 //
-// Driven on the Cashfree refund webhook since #1086 — the Razorpay one is gone, and this is
+// Driven on the Cashfree refund webhook since #1086 — the retired gateway one is gone, and this is
 // where the rule lives now.
 
 import (

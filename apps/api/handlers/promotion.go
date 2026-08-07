@@ -124,7 +124,7 @@ func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
 		return
 	}
-	// Stamped together: a row recording a Cashfree order against 'razorpay' would
+	// Stamped together: a row recording a Cashfree order against another provider would
 	// be verified against the wrong gateway.
 	database.DB.Model(&promo).Updates(map[string]any{
 		"gateway_order_id": cfOrder.OrderID,

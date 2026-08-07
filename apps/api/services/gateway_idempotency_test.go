@@ -3,7 +3,7 @@ package services
 // gateway_idempotency_test.go — #574. Stable idempotency keys are what stop a
 // timeout-AFTER-success retry from issuing a SECOND real refund or transfer.
 //
-// The per-endpoint header tests went with the Razorpay client in #1086; Cashfree's
+// The per-endpoint header tests went with the retired gateway client in #1086; Cashfree's
 // own header and refund_id wiring is covered in cashfree_test.go. What must stay
 // pinned here is the key algebra those paths depend on: deterministic for the same
 // logical operation, distinct across different ones, and normalizing into the

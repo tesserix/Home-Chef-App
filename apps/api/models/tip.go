@@ -10,17 +10,16 @@ import (
 type TipStatus string
 
 const (
-	TipPending TipStatus = "pending" // Razorpay order created, awaiting capture
-	TipPaid    TipStatus = "paid"    // captured + Route-split to beneficiaries
+	TipPending TipStatus = "pending" // gateway order created, awaiting capture
+	TipPaid    TipStatus = "paid"    // captured + split to the beneficiaries
 	TipFailed  TipStatus = "failed"
 )
 
 // Tip is an optional, post-delivery, 100%-pass-through gratuity the customer pays
-// to the chef and/or the delivery rider (#45). One Tip row = one Razorpay charge
-// that Route-splits to the beneficiaries' linked accounts on capture — no platform
-// commission and no tax (mirrors the checkout-time tip's tax exclusion). The split
-// amounts are attached to the Razorpay order as transfers with OnHold:false, so
-// they settle immediately (delivery has already happened).
+// to the chef and/or the delivery rider (#45). One Tip row = one Cashfree charge
+// whose Easy Split allocates 100% to the beneficiaries' vendor accounts — no
+// platform commission and no tax (mirrors the checkout-time tip's tax exclusion).
+// The split is applied at capture, since delivery has already happened.
 type Tip struct {
 	// Live/test data partition. See models.ModePartition.
 	ModePartition

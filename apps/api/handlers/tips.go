@@ -88,9 +88,9 @@ func (h *TipHandler) CreateOrderTip(c *gin.Context) {
 
 	// A tip is a new charge, so it is minted on Cashfree whatever gateway the
 	// order it thanks was stamped with (#1086). The old dispatch sent every
-	// non-Cashfree order to Razorpay Route, which demanded a
-	// chef.razorpay_account_id that NO chef on the platform has — the whole tip
-	// surface answered 409 "This chef can't receive tips right now".
+	// non-Cashfree order to the retired gateway's split product, which demanded a
+	// linked account NO chef on the platform has — the whole tip surface
+	// answered 409 "This chef can't receive tips right now".
 	h.createCashfreeTip(c, &order, &tip, req, customerID)
 }
 
@@ -168,11 +168,11 @@ func markTipPaidTx(tx *gorm.DB, tip *models.Tip, paymentID string) error {
 	return nil
 }
 
-// markTipPaidByRazorpayOrder is the webhook path: confirm a tip charge by its
-// Razorpay order id (idempotent). Called from handlePaymentCaptured.
-func markTipPaidByRazorpayOrder(rzOrderID, paymentID string) {
+// markTipPaidByGatewayOrder is the webhook path: confirm a tip charge by its
+// gateway order id (idempotent). Called from handlePaymentCaptured.
+func markTipPaidByGatewayOrder(gatewayOrderID, paymentID string) {
 	var tip models.Tip
-	if err := database.DB.Where("gateway_order_id = ?", rzOrderID).First(&tip).Error; err != nil {
+	if err := database.DB.Where("gateway_order_id = ?", gatewayOrderID).First(&tip).Error; err != nil {
 		return // not a tip charge
 	}
 	if tip.Status == models.TipPaid {
@@ -227,7 +227,7 @@ func planCashfreeTip(order *models.Order, req createTipRequest) (cashfreeTipPlan
 	chef := &order.Chef
 	if chef.CashfreeVendorID == "" || !strings.EqualFold(chef.CashfreeVendorStatus, services.CashfreeVendorActive) {
 		// A real, explainable state — the chef's payout registration is not live —
-		// rather than the blanket message the Razorpay leg used to give everyone.
+		// rather than the blanket message the retired gateway leg used to give everyone.
 		return cashfreeTipPlan{}, http.StatusConflict,
 			"This chef's payout account isn't active yet, so tips can't reach them"
 	}

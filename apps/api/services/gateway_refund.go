@@ -18,7 +18,7 @@ import (
 //	services/deferred_cancel_refund.go retry cron
 //
 // Four of the six reached straight for one gateway's client and payment id, and
-// three of those were fronted by a `provider != "razorpay" { 422 }` guard that
+// three of those were fronted by a `provider != "<one gateway>" { 422 }` guard that
 // read "not refundable" for a perfectly refundable Cashfree order.
 //
 // So the routing lives here, once. A call site's job is to decide the AMOUNT, the
@@ -57,7 +57,7 @@ func GatewayRefundAvailable(order *models.Order) bool {
 		return GetStripe() != nil
 	default:
 		// Wallet is a ledger credit, not a gateway call; anything else (a legacy
-		// razorpay row) has no client left to refund on since #1086.
+		// retired-gateway row) has no client left to refund on since #1086.
 		return false
 	}
 }

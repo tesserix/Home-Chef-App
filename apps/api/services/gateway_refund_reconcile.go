@@ -1,7 +1,7 @@
 package services
 
 // gateway_refund_reconcile.go — #640. Remediation for an order that is fully refunded in
-// AGGREGATE at the gateway (e.g. an in-app partial refund + an out-of-band Razorpay-dashboard
+// AGGREGATE at the gateway (e.g. an in-app partial refund + an out-of-band gateway-dashboard
 // refund) but never had refunded_at stamped by any single app event — so the payout release
 // guard (refunded_at IS NOT NULL / status IN refunded,cancelled / payment_status=refunded)
 // never blocks and the chef could be paid on a fully-refunded order once escrow flags flip.

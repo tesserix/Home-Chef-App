@@ -91,7 +91,7 @@ type GroupOrder struct {
 	// mirroring Order/MealPlanDay: on delivery the hold parks at
 	// awaiting_customer_confirmation (no money moves), the host confirming advances
 	// it to release_eligible, which the admin payout queue (#388) consumes to drive
-	// the real (flag-gated) Razorpay release. release_eligible itself moves no money.
+	// the real (flag-gated) payout release. release_eligible itself moves no money.
 	PayoutHoldStatus    PayoutHoldStatus `gorm:"type:varchar(32);not null;default:''" json:"payoutHoldStatus,omitempty"`
 	CustomerConfirmedAt *time.Time       `gorm:"" json:"customerConfirmedAt,omitempty"`
 	DeliveredAt         *time.Time       `gorm:"" json:"deliveredAt,omitempty"`

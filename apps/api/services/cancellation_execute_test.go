@@ -81,8 +81,8 @@ func seedMixedPaymentOrder(t *testing.T, db *gorm.DB, total, walletApplied, loya
 // #766: a mixed-payment order (wallet + loyalty credit applied at checkout, so the
 // gateway only ever captured Total−WalletApplied−LoyaltyApplied) hit a live 502 on
 // POST /orders/:id/cancel-request: ExecuteCancellationRefund sent the FULL
-// cr.RefundTotalPaise to Razorpay, which exceeds what was actually captured on the
-// card. Razorpay rejects ("amount greater than amount captured"), the sweep re-sends
+// cr.RefundTotalPaise to the retired gateway, which exceeds what was actually captured on the
+// card. the retired gateway rejects ("amount greater than amount captured"), the sweep re-sends
 // the same wrong amount forever, and the customer is never refunded. The fix splits
 // the refund across funding rails — wallet + loyalty slices credit back instantly,
 // and ONLY the card slice reaches the gateway (mirrors splitCancelRefundAcrossRails,
@@ -118,7 +118,7 @@ func TestExecuteCancellationRefund_MixedPayment_SplitsWalletAndLoyaltyOffGateway
 
 // A fully credit-funded order (wallet + loyalty cover the entire refund, so the card
 // slice is 0) must refund entirely to the wallet with NO gateway call at all — even
-// when the order has no Razorpay payment on file (nothing was ever captured).
+// when the order has no the retired gateway payment on file (nothing was ever captured).
 func TestExecuteCancellationRefund_FullyCreditFunded_NoGatewayCall(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	o := seedMixedPaymentOrder(t, db, 200, 150, 50, "") // wallet+loyalty cover the whole order
@@ -127,7 +127,7 @@ func TestExecuteCancellationRefund_FullyCreditFunded_NoGatewayCall(t *testing.T)
 	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	stale := &models.Order{ID: o.ID, CustomerID: o.CustomerID, OrderNumber: o.OrderNumber,
-		PaymentProvider: "razorpay", GatewayPaymentID: "",
+		PaymentProvider: retiredGateway, GatewayPaymentID: "",
 		Total: 200, WalletApplied: 150, LoyaltyApplied: 50, RefundAmount: 0}
 	require.NoError(t, ExecuteCancellationRefund(stale, cr), "a fully credit-funded refund needs no gateway payment")
 

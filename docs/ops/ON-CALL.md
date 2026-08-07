@@ -11,7 +11,7 @@ A page = phone alarm, not just an email. Wire these via Sentry alert rules + an 
 | `vendors.fe3dr.com/api/v1/mobile/min-version` down > 3 min | Whole API is unreachable — chefs can't operate |
 | `auth.fe3dr.com/health` down > 3 min | No one can log in |
 | Sentry: spike > 20 errors in 5 min on `homechef-api` | Something broke broadly |
-| Razorpay capture/refund failure rate > 25% over 10 min | Money is failing |
+| Cashfree capture/refund failure rate > 25% over 10 min | Money is failing |
 | `reconciliation DRIFT` with a refund mismatch | Money moved without a record — investigate same day |
 
 ## What waits until morning (P2 — review with coffee)
@@ -33,7 +33,7 @@ A page = phone alarm, not just an email. Wire these via Sentry alert rules + an 
 
 ## Escalation (when you're the only human)
 
-- Payments: Razorpay/Stripe support dashboards.
+- Payments: Cashfree/Stripe support dashboards.
 - Infra: GCP support (check the support tier on the billing account).
 - Auth: Google Identity Platform status + GCP support.
 

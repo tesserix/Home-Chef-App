@@ -4,7 +4,7 @@ package handlers
 // updates keyed only on the payment-intent id, so a duplicate/out-of-order delivery could
 // re-stamp a refunded/completed order (payment_intent.succeeded on a refunded order →
 // completed re-enables the chef payout on refunded money). Both are now guarded, and the
-// Razorpay capture guard was tightened to also exclude `refunded`.
+// the retired gateway capture guard was tightened to also exclude `refunded`.
 
 import (
 	"encoding/json"

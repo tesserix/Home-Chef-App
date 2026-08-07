@@ -62,7 +62,7 @@ interface StripeStatus {
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
   country: string;
-  paymentProvider?: 'razorpay' | 'stripe';
+  paymentProvider?: 'cashfree' | 'stripe';
   warning?: string;
 }
 
@@ -135,7 +135,7 @@ function StripeConnectCard() {
   });
 
   const switchProvider = useMutation({
-    mutationFn: (p: 'razorpay' | 'stripe') =>
+    mutationFn: (p: 'cashfree' | 'stripe') =>
       apiClient.put<{ paymentProvider: string }>('/delivery/payment-provider', { provider: p }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['driver-stripe-status'] });
@@ -143,7 +143,7 @@ function StripeConnectCard() {
   });
 
   const ready = Boolean(data?.connected && data.chargesEnabled && data.payoutsEnabled);
-  const activeProvider = data?.paymentProvider ?? 'razorpay';
+  const activeProvider = data?.paymentProvider ?? 'cashfree';
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
@@ -153,7 +153,7 @@ function StripeConnectCard() {
           <div>
             <p className="text-sm font-medium text-foreground">Stripe (International Payouts)</p>
             <p className="text-xs text-muted-foreground">
-              For drivers outside India, or as an alternative to Razorpay.
+              For drivers outside India, or as an alternative to Cashfree.
             </p>
           </div>
         </div>
@@ -239,18 +239,18 @@ function StripeConnectCard() {
             )}
             {activeProvider === 'stripe' && (
               <button type="button"
-                onClick={() => switchProvider.mutate('razorpay')}
+                onClick={() => switchProvider.mutate('cashfree')}
                 disabled={switchProvider.isPending}
                 className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary disabled:opacity-50"
               >
-                Switch to Razorpay
+                Switch to Cashfree
               </button>
             )}
           </div>
           <p className="text-xs text-muted-foreground">
             Active payout gateway:{' '}
             <span className="font-medium text-foreground">
-              {activeProvider === 'stripe' ? 'Stripe' : 'Razorpay'}
+              {activeProvider === 'stripe' ? 'Stripe' : 'Cashfree'}
             </span>
           </p>
         </div>

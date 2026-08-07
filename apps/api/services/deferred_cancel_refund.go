@@ -3,8 +3,8 @@ package services
 // deferred_cancel_refund.go — the retry side of the chef-cancel gateway-refund deferral.
 //
 // ChefOrderCancelHandler.CancelOrder must never hard-block a chef's cancel on the
-// synchronous Razorpay refund: the full-refund obligation is reserved (payment_status /
-// refunded_at / refund_amount) unconditionally, but when GetRazorpay() is nil or
+// synchronous gateway refund: the full-refund obligation is reserved (payment_status /
+// refunded_at / refund_amount) unconditionally, but when the gateway client is nil or
 // CreateRefund errors, the handler defers the gateway call instead of failing the
 // request — it stamps a durable sentinel ("pending:gateway-retry:<paise>") into
 // orders.refund_id and returns 200. RetryDeferredCancelRefunds is the sweep that finds
@@ -14,7 +14,7 @@ package services
 // (RefundFullIdempotencyKey(order.ID)) the original CancelOrder call used. So if that
 // original gateway call actually succeeded but its HTTP response was lost (timeout,
 // network drop) — the exact reason we deferred instead of erroring — the retry dedups
-// to the SAME Razorpay refund instead of issuing a second one. No double refund is
+// to the SAME gateway refund instead of issuing a second one. No double refund is
 // possible on this path.
 //
 // The guarded UPDATE (`WHERE refund_id LIKE 'pending:gateway-retry:%'`) is the
@@ -107,8 +107,8 @@ func retryOneDeferredCancelRefund(orderID uuid.UUID) bool {
 
 		// Provider-agnostic: the deferral that created this sentinel could have come
 		// from any gateway, so the retry must route the same way the original call
-		// did (gateway_refund.go) rather than assuming Razorpay — a Cashfree order
-		// deferred here would otherwise be retried against a Razorpay payment id it
+		// did (gateway_refund.go) rather than assuming one gateway — a Cashfree order
+		// deferred here would otherwise be retried against a retired-gateway payment id it
 		// does not have, and would never heal.
 		if !GatewayRefundAvailable(&o) {
 			return nil // gateway still unavailable — leave the sentinel, retry next sweep

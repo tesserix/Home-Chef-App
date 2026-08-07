@@ -6,7 +6,7 @@ package services
 // capacity (#48). Settlement is client-verify-only — there is no webhook
 // configured — so the customer's browser calling back after checkout is the
 // ONLY thing that ever confirms a payment. If that call never lands (dismissed
-// checkout sheet, app killed, network drop after Cashfree/Razorpay already
+// checkout sheet, app killed, network drop after Cashfree already
 // captured the money) the order sits payment_status=pending with no other gate
 // behind it. This cron is that last gate.
 //
@@ -27,7 +27,7 @@ package services
 // The gateway probe was a bool: "is there a CAPTURED payment?". That folds two
 // opposite answers into one — "every attempt is dead" and "an attempt is still
 // running" — and cancelled on both. Cashfree parks a card at PENDING while the
-// bank's OTP page is open and a UPI collect while the payer decides; Razorpay's
+// bank's OTP page is open and a UPI collect while the payer decides; an
 // `authorized` is money already held on the card. All of them read as "" and got
 // the order cancelled, after which the forward-only reconcile cron will not
 // touch it (it excludes status=cancelled by design), so a charge that later
@@ -126,7 +126,7 @@ const (
 	// gatewayCaptured: money moved.
 	gatewayCaptured
 	// gatewayInFlight: an attempt exists that could still take the money —
-	// Cashfree PENDING, Razorpay created/authorized.
+	// Cashfree PENDING or authorized.
 	gatewayInFlight
 )
 
@@ -195,7 +195,7 @@ func staleOrderPaymentState(order *models.Order) (state gatewayPaymentState, cap
 	default:
 		// Provider-mismatch backstop (see PLAN.md's decision table): a provider
 		// this cron doesn't know how to ask is an unknown answer, never a
-		// cancel. Legacy Razorpay orders land here since #1086 — the retired
+		// cancel. Retired-gateway orders land here since #1086 — the retired
 		// gateway is not asked, and they are never cancelled on its silence.
 		return gatewayNoPayment, "", fmt.Errorf("unrecognised payment provider %q", order.PaymentProvider)
 	}

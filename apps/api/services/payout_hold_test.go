@@ -28,7 +28,7 @@ func setupHoldDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, customer_id TEXT, status TEXT,
-			gateway_order_id TEXT DEFAULT '', payment_provider TEXT DEFAULT 'razorpay', payout_hold_status TEXT DEFAULT '',
+			gateway_order_id TEXT DEFAULT '', payment_provider TEXT DEFAULT 'cashfree', payout_hold_status TEXT DEFAULT '',
 			payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 			customer_confirmed_at DATETIME, delivered_at DATETIME, refunded_at DATETIME,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
@@ -97,7 +97,7 @@ func TestSetOrderHoldAwaiting_RegularVsConsolidated(t *testing.T) {
 	require.NoError(t, SetOrderHoldAwaitingConfirmation(db, reg))
 	require.Equal(t, models.PayoutHoldAwaitingConfirmation, loadOrder(t, db, reg).PayoutHoldStatus)
 
-	// Consolidated order with no razorpay id → no-op, stays "".
+	// Consolidated order with no the retired gateway id → no-op, stays "".
 	cons := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, gateway_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
 		cons.String(), uuid.NewString(), "delivered", "", "").Error)

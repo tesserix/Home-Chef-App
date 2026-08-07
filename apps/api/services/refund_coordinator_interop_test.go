@@ -67,7 +67,7 @@ func seedCoordinatorOrder(t *testing.T, db *gorm.DB, total float64) uuid.UUID {
 		payment_provider, gateway_payment_id, total, refund_amount)
 		VALUES (?,?,?,?,?,?,?,?,?,0)`,
 		id.String(), "ORD-INTEROP", uuid.NewString(), uuid.NewString(), string(models.OrderStatusCancelled),
-		string(models.PaymentCompleted), "razorpay", "pay_interop", total).Error)
+		string(models.PaymentCompleted), models.PaymentProviderCashfree, "pay_interop", total).Error)
 	return id
 }
 

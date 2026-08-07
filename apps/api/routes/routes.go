@@ -135,7 +135,7 @@ func SetupRouter() *gin.Engine {
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = allowedOrigins()
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Auth-Token", "X-Request-ID", "X-Razorpay-Signature", "Stripe-Signature", "x-webhook-signature", "x-webhook-timestamp", "x-jwt-claim-sub", "x-jwt-claim-tenant-id", "x-jwt-claim-tenant-slug", "x-jwt-claim-email", "x-jwt-claim-name", "x-jwt-claim-given-name", "x-jwt-claim-family-name"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Auth-Token", "X-Request-ID", "Stripe-Signature", "x-webhook-signature", "x-webhook-timestamp", "x-jwt-claim-sub", "x-jwt-claim-tenant-id", "x-jwt-claim-tenant-slug", "x-jwt-claim-email", "x-jwt-claim-name", "x-jwt-claim-given-name", "x-jwt-claim-family-name"}
 	corsConfig.ExposeHeaders = []string{"X-Request-ID", "Retry-After"}
 	corsConfig.AllowCredentials = true
 	corsConfig.MaxAge = 600
@@ -654,7 +654,7 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/orders/:orderId/messages", messagingHandler.ChefListMessages)
 			chefDashboard.POST("/orders/:orderId/attachments", messagingHandler.ChefUploadAttachment)
 			// Chef-side cancellation (Wave 2). Whole-order issues a full
-			// Razorpay refund; per-line issues a partial and recomputes
+			// gateway refund; per-line issues a partial and recomputes
 			// the order totals so the remaining items continue prep.
 			chefOrderCancelHandler := handlers.NewChefOrderCancelHandler()
 			chefDashboard.POST("/orders/:orderId/cancel", chefOrderCancelHandler.CancelOrder)
@@ -1103,7 +1103,7 @@ func SetupRouter() *gin.Engine {
 
 		// Payment routes (authenticated). Rate-limited per-user to defend
 		// against credential-theft abuse: stolen tokens shouldn't be able to
-		// fire bulk refund/verify floods even though Razorpay itself is
+		// fire bulk refund/verify floods even though the gateway itself is
 		// idempotent.
 		paymentLimit := middleware.RateLimitByUser(2, 5) // 2 rps sustained, 5 burst per user
 		orderPayments := v1.Group("/payments")
@@ -1319,10 +1319,10 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/staff/invitations/:id/revoke", middleware.RequireStaffPermission(models.SPManageStaff), staffHandler.RevokeInvitation)
 			admin.PUT("/staff/invitations/:id/resend", middleware.RequireStaffPermission(models.SPManageStaff), staffHandler.ResendInvitation)
 
-			// Payment gateway — Razorpay (India)
+			// Payment gateway — Cashfree (India)
 
 			// Payment gateway — Cashfree (India, second gateway). Per-mode
-			// credential slots like Razorpay: ?mode=live|test on the status read,
+			// credential slots like Cashfree: ?mode=live|test on the status read,
 			// "mode" in the body on the write.
 			admin.GET("/payment-gateway/cashfree/status", adminHandler.GetCashfreeGatewayStatus)
 			admin.PUT("/payment-gateway/cashfree/keys", adminHandler.UpdateCashfreeGatewayKeys)

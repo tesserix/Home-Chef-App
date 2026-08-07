@@ -96,8 +96,8 @@ func WalletAllowedForOrder(o *models.Order) bool { return !IsTestOrder(o) }
 func LoyaltyAllowedForOrder(o *models.Order) bool { return !IsTestOrder(o) }
 
 // PayoutAllowedForOrder reports whether an order enters the real payout and
-// settlement engine. Test orders do not — their Route transfers are created and
-// released inside the Razorpay TEST account, so the split-payment path is
+// settlement engine. Test orders do not — their splits are created and released
+// inside the gateway's TEST account, so the split-payment path is
 // genuinely exercised without anything reaching a real bank.
 func PayoutAllowedForOrder(o *models.Order) bool { return !IsTestOrder(o) }
 

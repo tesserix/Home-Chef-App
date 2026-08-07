@@ -74,7 +74,7 @@ func GetPlanSettings(countryCode string, subType models.SubscriberType) (*PlanCo
 		YearlyPrice:          4499,
 		TrialDays:            30,
 		MinEarningsThreshold: 5000,
-		PaymentGateway:       "razorpay",
+		PaymentGateway:       models.PreferredChefPaymentProvider,
 		GracePeriodDays:      7,
 		// Premium tier defaults (#44) — admin-overridable per the keys below.
 		PremiumMonthlyPrice:   999,

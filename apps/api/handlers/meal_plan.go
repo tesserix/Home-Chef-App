@@ -609,7 +609,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 			resp["paymentError"] = "Could not start the advance payment; please retry."
 		} else if orderID != "" {
 			// payment_provider is stamped with the order id, never after: a row that
-			// records a Cashfree order against 'razorpay' would refund on the wrong rail.
+			// records a Cashfree order against another provider would refund on the wrong rail.
 			database.DB.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
 				Updates(map[string]any{
 					"gateway_order_id": orderID,

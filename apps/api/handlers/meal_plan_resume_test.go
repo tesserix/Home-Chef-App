@@ -1,8 +1,8 @@
 package handlers
 
 // meal_plan_resume_test.go — abandoned-payment re-entry. Under capture-at-approval the
-// customer's Approve mints a Razorpay advance order and hands the app checkout. If they
-// back out of Razorpay without paying, re-tapping Approve used to 409 ("no longer
+// customer's Approve mints a retired-gateway advance order and hands the app checkout. If they
+// back out of the retired gateway without paying, re-tapping Approve used to 409 ("no longer
 // awaiting your approval") because the mint guard sees gateway_order_id already set —
 // stranding a minted-but-unpaid advance with no way back into checkout. Re-approve must
 // instead RESUME: return the SAME order so the app re-launches checkout. A plan whose

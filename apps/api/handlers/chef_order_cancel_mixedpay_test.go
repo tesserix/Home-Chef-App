@@ -1,7 +1,7 @@
 package handlers
 
 // chef_order_cancel_mixedpay_test.go — money-critical bugfix. A live E2E test found that
-// ChefOrderCancelHandler.CancelOrder refunded the FULL order Total to Razorpay even when
+// ChefOrderCancelHandler.CancelOrder refunded the FULL order Total to the retired gateway even when
 // the order was part-funded by wallet/loyalty checkout credits: the gateway only ever
 // CAPTURED (Total − WalletApplied − LoyaltyApplied), so the refund call failed with
 // "refund amount greater than amount captured", the cancel deferred it, and the retry
@@ -34,7 +34,7 @@ func railRefundedColumnsOf(t *testing.T, orderID uuid.UUID) (walletRefunded, loy
 }
 
 // TestCancelOrder_MixedPayment_GatewayGetsCapturedOnly is the exact live-bug scenario:
-// ₹481.91 total, ₹150.40 wallet + ₹3.85 loyalty applied at checkout, so Razorpay only
+// ₹481.91 total, ₹150.40 wallet + ₹3.85 loyalty applied at checkout, so the retired gateway only
 // captured ₹327.66 (32766 paise). The gateway must be asked to refund exactly that —
 // never the full ₹481.91 — and the wallet+loyalty slices must land back in the wallet.
 func TestCancelOrder_MixedPayment_GatewayGetsCapturedOnly(t *testing.T) {

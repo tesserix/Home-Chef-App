@@ -34,18 +34,20 @@ func TestPreviousISTDay_JustAfterMidnightIST(t *testing.T) {
 	}
 }
 
-// A legacy razorpay-provider row has no gateway left to reconcile against (#1086), so it
-// must be SKIPPED rather than reported as drift — a DriftGatewayUnreachable on every
-// historical order would drown the real findings the sweep exists to surface.
-func TestReconcileOne_LegacyRazorpayOrder_Skips(t *testing.T) {
+// A row stamped with the retired INR gateway has no gateway left to reconcile
+// against (#1086), so it must be SKIPPED rather than reported as drift — a
+// DriftGatewayUnreachable on every historical order would drown the real
+// findings the sweep exists to surface. It normalizes to Cashfree and carries no
+// Cashfree order id, which is exactly what makes it a skip (#1132).
+func TestReconcileOne_LegacyGatewayOrder_Skips(t *testing.T) {
 	o := &models.Order{
-		OrderNumber:       "ORD-LEGACY-RZP",
-		PaymentProvider:   models.PaymentProviderRazorpay,
+		OrderNumber:      "ORD-LEGACY",
+		PaymentProvider:  retiredGateway,
 		GatewayPaymentID: "pay_legacy",
 	}
 	drifts, ok := reconcileOne(o)
 	if ok {
-		t.Errorf("reconcileOne ok = true, want false for a legacy razorpay order")
+		t.Errorf("reconcileOne ok = true, want false for a retired-gateway order")
 	}
 	if drifts != nil {
 		t.Errorf("drifts = %v, want nil", drifts)

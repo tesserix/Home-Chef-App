@@ -15,7 +15,7 @@ package services
 //                                  payment_status)
 // in one conditional UPDATE. RowsAffected==1 ⇒ this call owns the refund; 0 ⇒ a
 // sibling path already refunded → no-op. On a gateway failure the claim is reverted
-// so a retry can re-refund. Razorpay's CreateRefund carries no idempotency key, so
+// so a retry can re-refund. A gateway CreateRefund may carry no idempotency key, so
 // the atomic claim is the ONLY thing preventing a concurrent double-refund.
 //
 // It does NOT write `status` — the caller owns that (cancelled / rejected), so the

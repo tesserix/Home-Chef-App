@@ -36,7 +36,7 @@ const INTERVAL_DESCRIPTIONS: Record<string, string> = {
 };
 
 const GATEWAY_LABELS: Record<string, string> = {
-  razorpay: 'Razorpay',
+  cashfree: 'Cashfree',
   stripe: 'Stripe',
   esewa: 'eSewa',
   sslcommerz: 'SSLCommerz',
@@ -62,7 +62,7 @@ export function StepSubscriptionPlan({ onComplete, onBack }: StepSubscriptionPla
   const [trialDays, setTrialDays] = useState(0);
   const [threshold, setThreshold] = useState(0);
   const [currency, setCurrency] = useState('INR');
-  const [gateway, setGateway] = useState('razorpay');
+  const [gateway, setGateway] = useState('cashfree');
   const [loading, setLoading] = useState(true);
   const [selectedInterval, setSelectedInterval] = useState('monthly');
   const [submitting, setSubmitting] = useState(false);
@@ -75,7 +75,7 @@ export function StepSubscriptionPlan({ onComplete, onBack }: StepSubscriptionPla
         setTrialDays(data.trialDays ?? 0);
         setThreshold(data.minEarningsThreshold ?? 0);
         setCurrency(data.currency ?? 'INR');
-        setGateway(data.paymentGateway ?? 'razorpay');
+        setGateway(data.paymentGateway ?? 'cashfree');
       } catch {
         toast.error('Failed to load subscription plans');
       } finally {

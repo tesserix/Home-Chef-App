@@ -9,7 +9,7 @@ package services
 //      `... WHERE payout_hold_status IN (from...)` guarded by RowsAffected. Zero
 //      rows ⇒ the hold wasn't in an eligible source state ⇒ ErrHoldNotEligible
 //      (the handler maps this to 409). Two concurrent releases: exactly one wins.
-//   2. The status flip runs and COMMITS *before* any Razorpay call, so a
+// 2. The status flip runs and COMMITS *before* any gateway call, so a
 //      non-eligible / already-actioned hold can never reach ReleaseTransfer /
 //      ReverseTransfer. Release only from release_eligible; withheld/reversed are
 //      terminal and excluded from the queue and from re-release.
@@ -19,7 +19,7 @@ package services
 //      is the launch config.
 //
 // PARTIAL-FAILURE DRIFT (must-fix before flags ON): the money seam is dispatched
-// AFTER the tx commits. If that post-commit Razorpay call fails, the row is left
+// AFTER the tx commits. If that post-commit gateway call fails, the row is left
 // `released` with the money UNMOVED, and there is NO in-slice re-drive — nothing
 // here (nor the out-of-scope auto-approve sweep, which only ever operates on
 // release_eligible rows) will retry that stranded row. This is safe ONLY because
@@ -51,7 +51,7 @@ const (
 )
 
 // PendingPayout is one release-eligible hold row for the admin queue. It is a
-// review DTO, not a reconciliation record — the actual Razorpay transfer split is
+// review DTO, not a reconciliation record — the actual split is
 // gateway-side. Amount is per-aggregate: Order.Total (gross the customer paid),
 // MealPlanDay.Price (the day's price), or the group order's chef slice
 // (subtotal + tax) — NOT always the gross customer total.

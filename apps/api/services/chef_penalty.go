@@ -219,7 +219,7 @@ func LevyGatewayFeePenalty(db *gorm.DB, chefID, userID, orderID uuid.UUID, refer
 		return nil, nil
 	}
 	if provider != models.PaymentProviderCashfree {
-		// Cashfree-only per #885 scope. Razorpay/Stripe fee recovery is a noted follow-up,
+		// Cashfree-only per #885 scope. Stripe fee recovery is a noted follow-up,
 		// not this change.
 		return nil, nil
 	}

@@ -14,7 +14,7 @@ import (
 )
 
 // StripeConnectHandler hosts the chef-facing endpoints for Stripe Connect
-// onboarding. Kept separate from the main ChefHandler so the Razorpay-era
+// onboarding. Kept separate from the main ChefHandler so the retired-gateway-era
 // payout endpoints (GetPayoutDetails / SavePayoutDetails) don't grow a mix
 // of India-specific and international-specific concerns.
 type StripeConnectHandler struct{}
@@ -405,11 +405,11 @@ func (h *StripeConnectHandler) RefreshDriverOnboardingLink(c *gin.Context) {
 // SetPaymentProvider lets a chef toggle which gateway their orders settle
 // through. Used when a chef switches regions or when the platform wants to
 // migrate a chef between providers. The chef must have completed onboarding
-// with the target provider (Razorpay account ID or Stripe account ID
+// with the target provider (the gateway's linked account ID or Stripe account ID
 // non-empty) before switching to it.
 //
 // PUT /chef/payment-provider
-// Body: { "provider": "stripe" | "razorpay" | "cashfree" }
+// Body: { "provider": "stripe" | "cashfree" }
 func (h *StripeConnectHandler) SetPaymentProvider(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
@@ -421,7 +421,7 @@ func (h *StripeConnectHandler) SetPaymentProvider(c *gin.Context) {
 		return
 	}
 	req.Provider = strings.ToLower(req.Provider)
-	// Validated strictly (no coercion): silently folding a typo to razorpay would
+	// Validated strictly (no coercion): silently folding a typo to a default would
 	// hide a misconfiguration the operator needs to see.
 	if !models.IsSelectableChefProvider(req.Provider) {
 		c.JSON(http.StatusBadRequest, gin.H{

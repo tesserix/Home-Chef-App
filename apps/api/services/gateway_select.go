@@ -18,7 +18,7 @@ import (
 //     which is Cashfree for every INR kitchen and Stripe for the international
 //     ones. There is no third answer since #1086.
 //
-// The slot-health machinery below survives the Razorpay removal because Cashfree
+// The slot-health machinery below survives that removal because Cashfree
 // picks sandbox-vs-production by HOSTNAME: test credentials authenticate against
 // sandbox.cashfree.com and 401 against api.cashfree.com, so a slot can be fully
 // configured and still not work. It no longer changes WHICH gateway is chosen —
@@ -44,7 +44,7 @@ func SelectCheckoutGateway(configured, mode string) string {
 	}
 
 	// CASHFREE IS THE PLATFORM DEFAULT for every INR kitchen — not only for ones
-	// created since it was added. The stored `razorpay` on an existing chef is
+	// created since it was added. The stored value on an existing chef is
 	// not a choice they made; it is the value every row had before there was
 	// anything else to be, and treating it as a preference would leave the whole
 	// existing estate on the old gateway forever.
@@ -142,7 +142,7 @@ func NoteCashfreeGatewayFailure(mode string) {
 
 // DefaultChefPaymentProvider is the provider to stamp on a newly created chef
 // profile — the preferred one, which since #1086 is the only one an INR kitchen
-// can charge on. It used to consult the slot's health and stamp Razorpay when
+// can charge on. It used to consult the slot's health and stamp the other gateway when
 // Cashfree was unusable; there is nothing to stamp instead now, and a mode whose
 // slot is unprovisioned is an operator problem to fix rather than a reason to
 // create kitchens on a retiring gateway.

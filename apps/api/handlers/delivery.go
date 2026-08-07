@@ -642,7 +642,7 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 		// and release the chef payout (#46). No-op otherwise.
 		services.MarkGroupOrderDelivered(delivery.OrderID)
 		// Park the regular order's payout in a customer-confirmation hold (#387) —
-		// delivery no longer releases funds. No-op for orders without a Razorpay
+		// delivery no longer releases funds. No-op for orders without a retired-gateway
 		// order id (meal-plan/group settle their own).
 		if err := services.SetOrderHoldAwaitingConfirmation(database.DB, delivery.OrderID); err != nil {
 			log.Printf("payout-hold: park order %s on courier delivery failed: %v", delivery.OrderID, err)
@@ -706,8 +706,7 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 			}
 		}()
 
-		// Settle the driver's share. Razorpay orders already split on-hold
-		// transfers at charge time (see payment handler), so Razorpay's
+		// Settle the driver's share. INR orders split at the gateway, so the
 		// normal reconciliation flow handles it. Stripe orders need a
 		// follow-up Transfer from the platform's balance to the driver's
 		// Connect account — this is where it fires.

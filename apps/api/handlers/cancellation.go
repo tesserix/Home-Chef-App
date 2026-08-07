@@ -101,18 +101,17 @@ func validVendorReason(r string) bool {
 // can actually realise, so it is no longer a choice.
 //
 // Wallet remains the fallback for the one case where the gateway genuinely
-// cannot be re-credited — no Razorpay payment to refund against (e.g. an order
+// cannot be re-credited — no gateway payment to refund against (e.g. an order
 // settled entirely from store credit back when wallet checkout was on).
-// ExecuteCancellationRefund hard-errors on "original" without a Razorpay
+// ExecuteCancellationRefund hard-errors on "original" without a gateway
 // payment, so resolving it here keeps that path unreachable.
 //
 // If wallet checkout is ever re-enabled AND the wallet is proven spendable
 // end-to-end, reintroducing the choice is a deliberate product decision — not
 // a default.
 func resolveRefundDestination(order *models.Order) string {
-	// GatewayRefundable, not a provider name: an INR order on Cashfree is just as
-	// refundable to its original method as one on Razorpay, and naming Razorpay
-	// here would have quietly diverted those customers to store credit.
+	// GatewayRefundable, not a provider name: naming one gateway here quietly
+	// diverted every customer on another to store credit.
 	if order.GatewayRefundable() {
 		return "original"
 	}

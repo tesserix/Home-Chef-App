@@ -28,6 +28,10 @@ import (
 	"github.com/homechef/api/services"
 )
 
+// The retired INR gateway is no longer vocabulary in apps/api (#1132); a stored
+// row still carries the string, which is what these tests exercise.
+const retiredGatewayStamp = "razorpay"
+
 // tipGateway stands in for Cashfree: it answers order-create and the verify
 // path's GET /orders/:id/payments, and records every create body it receives.
 func tipGateway(t *testing.T, payments string) *[]map[string]any {
@@ -107,12 +111,12 @@ func verifyTip(customerID, tipID uuid.UUID) *httptest.ResponseRecorder {
 	}, map[string]any{})
 }
 
-// The order is stamped razorpay — a historical row, or any row until
-// NormalizeProvider's default flips. The tip is still a new charge.
-func TestCreateOrderTip_RazorpayStampedOrderIsTippedThroughCashfree(t *testing.T) {
+// The order is stamped with the retired INR gateway — a historical row. The tip
+// is still a new charge, minted on Cashfree.
+func TestCreateOrderTip_LegacyStampedOrderIsTippedThroughCashfree(t *testing.T) {
 	db := setupTipChargeDB(t)
 	bodies := tipGateway(t, `[]`)
-	customerID, orderID := tippableOrder(t, db, models.PaymentProviderRazorpay, "hc_chef1", services.CashfreeVendorActive)
+	customerID, orderID := tippableOrder(t, db, retiredGatewayStamp, "hc_chef1", services.CashfreeVendorActive)
 
 	w := createTip(customerID, orderID, map[string]any{"chefAmount": 60})
 
@@ -133,11 +137,11 @@ func TestCreateOrderTip_RazorpayStampedOrderIsTippedThroughCashfree(t *testing.T
 }
 
 // A chef whose payout registration is not live gets the reason, not the blanket
-// "This chef can't receive tips right now" the Razorpay leg gave everyone.
+// "This chef can't receive tips right now" the old leg gave everyone.
 func TestCreateOrderTip_UnregisteredChefIsRefusedForTheRealReason(t *testing.T) {
 	db := setupTipChargeDB(t)
 	tipGateway(t, `[]`)
-	customerID, orderID := tippableOrder(t, db, models.PaymentProviderRazorpay, "", "")
+	customerID, orderID := tippableOrder(t, db, retiredGatewayStamp, "", "")
 
 	w := createTip(customerID, orderID, map[string]any{"chefAmount": 60})
 
@@ -146,7 +150,7 @@ func TestCreateOrderTip_UnregisteredChefIsRefusedForTheRealReason(t *testing.T) 
 }
 
 // Verification asks the gateway, never the client: no gatewayPaymentId is
-// required, and a legacy gateway order id does not route back to Razorpay.
+// required, and a legacy gateway order id does not route anywhere else.
 func TestVerifyTip_LegacyOrderIDIsVerifiedAgainstCashfree(t *testing.T) {
 	db := setupTipChargeDB(t)
 	tipGateway(t, `[]`)

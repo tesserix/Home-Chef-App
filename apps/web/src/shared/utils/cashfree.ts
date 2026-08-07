@@ -1,29 +1,24 @@
 import { toast } from 'sonner';
 
-// Cashfree web-checkout helper. Mirrors razorpay.ts so tips (#45), group
-// split-pay (#46) and the cart checkout share one create → open → verify path
-// regardless of which gateway the kitchen settles through.
+// Cashfree web-checkout helper. Tips (#45), group split-pay (#46) and the cart
+// checkout all share this one create → open → verify path.
 //
-// Three things differ from the Razorpay helper, and each is forced by the gateway:
+// Three specifics, each one a place a careless port would lose money:
 //
-//  1. THE SDK IS LOADED ON DEMAND. Razorpay's checkout.js is a blocking <script>
-//     in index.html because every order used it. Cashfree is per-kitchen, so
-//     loading it eagerly would cost every visitor a third-party script they will
-//     probably never use. loadCashfreeSdk() injects it the first time a Cashfree
-//     order actually reaches checkout and caches the promise.
+//  1. THE SDK IS LOADED ON DEMAND. loadCashfreeSdk() injects cashfree.js the
+//     first time an order actually reaches checkout and caches the promise, so a
+//     visitor who never pays never pulls a third-party script.
 //
-//  2. THE ENVIRONMENT IS EXPLICIT. Razorpay's key id carries rzp_test_/rzp_live_,
-//     so the SDK infers it. Cashfree has no such marker — sandbox and production
-//     are different hosts — so the mode has to be passed in, and it comes from the
-//     SERVER (cashfreeEnv), never inferred client-side. Guessing wrong here opens
-//     a checkout against the wrong environment entirely.
+//  2. THE ENVIRONMENT IS EXPLICIT. Sandbox and production are different hosts and
+//     the session id carries no marker, so the mode comes from the SERVER
+//     (cashfreeEnv) and is never inferred client-side. Guessing wrong here opens a
+//     checkout against the wrong environment entirely.
 //
-//  3. THERE IS NO CLIENT SIGNATURE TO HAND BACK. Razorpay returns
-//     (payment_id, order_id, signature) that the server re-computes. Cashfree
-//     returns only a local result, so the ONLY authority for "was this paid" is
-//     our server's verify call, which fetches the payment from Cashfree itself.
-//     onSettled therefore fires for any non-error close and lets the server
-//     decide — the client's own view of success is never trusted.
+//  3. THERE IS NO CLIENT SIGNATURE TO HAND BACK. The SDK returns only a local
+//     result, so the ONLY authority for "was this paid" is our server's verify
+//     call, which fetches the payment from Cashfree itself. onSettled therefore
+//     fires for any non-error close and lets the server decide — the client's own
+//     view of success is never trusted.
 
 const CASHFREE_SDK_URL = 'https://sdk.cashfree.com/js/v3/cashfree.js';
 
@@ -32,7 +27,7 @@ export interface CashfreeChargeData {
   cashfreeOrderId: string;
   /** "SANDBOX" | "PRODUCTION" — server-resolved, never inferred here. */
   cashfreeEnv?: string;
-  amount: number; // paise, for display parity with the Razorpay payload
+  amount: number; // paise
   currency: string;
 }
 

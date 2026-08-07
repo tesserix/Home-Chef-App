@@ -14,7 +14,7 @@ package services
 // retains its commission the hard ceiling now has slack, so only the tight one still catches
 // rounding drift.
 //
-// The plan's snapshotted Total is the ceiling: it is what the Razorpay advance actually
+// The plan's snapshotted Total is the ceiling: it is what the retired gateway advance actually
 // captured (VerifyMealPlanAdvance binds the payment to it), so it is the real amount of money
 // that entered escrow for this plan.
 

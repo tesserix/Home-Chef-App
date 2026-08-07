@@ -422,7 +422,7 @@ func Migrate() error {
 		`ALTER TABLE promo_code_usages ALTER COLUMN order_id DROP NOT NULL`,
 		// At most ONE open win-back offer per user (#42) — the DB-level backstop
 		// against concurrent triggers (lapse cron + a cancel/suspend webhook, or a
-		// retried Razorpay delivery) double-minting offers + platform-funded promos.
+		// retried webhook delivery) double-minting offers + platform-funded promos.
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_winback_one_open ON winback_offers (user_id) WHERE status = 'offered'`,
 		// One live meal subscription per (customer, chef) (#280) — backstops the
 		// handler check against concurrent submits so #282 can't double-generate.

@@ -25,7 +25,7 @@ import (
 //
 // The gap between (2) and (3) is where money goes wrong. A gateway payment sits
 // in a non-terminal state — Cashfree PENDING while the bank's OTP page is open,
-// Razorpay `authorized` with a hold already on the card — for longer than the
+// or a legacy `authorized` hold still sitting on the card — for longer than the
 // stale threshold. (2) will not settle it because it is not captured. (3) used
 // to cancel it, and the reconcile cron is forward-only, so a payment that then
 // succeeded landed on a cancelled order that nothing would ever recover.

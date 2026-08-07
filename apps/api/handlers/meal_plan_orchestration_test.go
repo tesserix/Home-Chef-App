@@ -52,7 +52,7 @@ func setupOrchestrationDB(t *testing.T) *gorm.DB {
 			payout_transfer_id text, commission_rate real, payout_hold_status text, refund_txn_id text, order_id text,
 			created_at datetime, updated_at datetime)`,
 		`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text, business_name text, profile_image text,
-			razorpay_account_id text, payout_country text, is_active integer DEFAULT 1, deleted_at datetime)`,
+			payout_country text, is_active integer DEFAULT 1, deleted_at datetime)`,
 		`CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', id text PRIMARY KEY, first_name text, last_name text, email text, phone text, deleted_at datetime)`,
 		`CREATE TABLE outbox_events (id text PRIMARY KEY, subject text, msg_id text, aggregate_type text,
 			aggregate_id text, payload text, status text, attempts int, last_error text, next_retry_at datetime,
@@ -70,7 +70,7 @@ func seedOrchChef(t *testing.T, db *gorm.DB) (chefID, chefUserID uuid.UUID) {
 	t.Helper()
 	chefID, chefUserID = uuid.New(), uuid.New()
 	require.NoError(t, db.Exec(
-		`INSERT INTO chef_profiles (id, user_id, business_name, razorpay_account_id, is_active) VALUES (?,?,?,?,1)`,
+		`INSERT INTO chef_profiles (id, user_id, business_name, is_active) VALUES (?,?,?,1)`,
 		chefID.String(), chefUserID.String(), "Tiffin Kitchen", "acc_chef_1").Error)
 	return chefID, chefUserID
 }

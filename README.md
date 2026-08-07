@@ -21,7 +21,7 @@ see `apps/web/SUNSET.md`). All deployed as Knative services on GKE behind Istio.
 | Web apps       | React 19, Vite 8, Tailwind v4, Radix UI, TanStack Query (ops SPAs); Next.js for `web-landing` |
 | Mobile         | Expo (React Native), `@tesserix/native` design system       |
 | Auth           | Google Identity Platform (GIP) via `apps/auth-bff` (3 tenant pools) |
-| Payments       | Razorpay Route (split payments)                             |
+| Payments       | Cashfree Payments (Easy Split at payout release)            |
 | Messaging      | NATS JetStream — `orders.*`, `chef.*`, `delivery.*`, etc.   |
 | Storage        | GCS (images), GCP Secret Manager (secrets)                  |
 | Container base | `ghcr.io/tesserix/base-*` (Trivy-gated weekly rebuilds)     |

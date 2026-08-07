@@ -2,7 +2,7 @@ package services
 
 // meal_subscription.go — the customer tiffin meal-subscription engine (#2/#3).
 // Pure price + selection-validation + lifecycle logic kept here (DB-free, unit
-// tested); the DB-touching helpers wrap it. The Razorpay recurring rail + the
+// tested); the DB-touching helpers wrap it. The retired gateway recurring rail + the
 // daily auto-order cron land in later phases (#281/#282) on top of this.
 
 import (

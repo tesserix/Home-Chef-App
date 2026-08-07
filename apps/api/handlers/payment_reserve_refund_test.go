@@ -3,8 +3,8 @@ package handlers
 // payment_reserve_refund_test.go — #611. InitiateRefund now reserves the refund UNDER A ROW
 // LOCK (services.ReserveRefund) instead of an unlocked RemainingRefundable read + a separate
 // claim + a stale `order.RefundAmount + amount` persist. These drive the GATEWAY branch via
-// the razorpay httptest seam (the existing partial tests only exercise the to-wallet branch,
-// since GetRazorpay()==nil there 503s before persist). They pin: a gateway refund records the
+// the retired gateway httptest seam (the existing partial tests only exercise the to-wallet branch,
+// since the retired gateway client==nil there 503s before persist). They pin: a gateway refund records the
 // RESERVED amount exactly once (no double read-modify-write), respects prior refunds (never
 // over-refunds past the order total), and classifies full vs partial correctly.
 

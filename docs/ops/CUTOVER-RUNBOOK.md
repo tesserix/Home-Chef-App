@@ -98,7 +98,7 @@ tesserix-home talks to **GCP Secret Manager directly** via `@google-cloud/secret
 endpoint** (an earlier endpoint attempt was reverted). Implement in the 5B session:
 
 - Curated allowlist of GCP secret IDs (do NOT allow arbitrary creation):
-  Razorpay test/live key-id + key-secret + webhook-secret, SendGrid API key, Firebase
+  Cashfree test/live app-id + secret-key + webhook-secret, SendGrid API key, Firebase
   service account, JWT secret. **Confirm each ID against the real GCP SM names + the
   homechef ESO `remoteRefs`** before enabling.
 - Write path: `addSecretVersion` (set/rotate). Status: `getSecretVersion` on `latest`
@@ -108,7 +108,7 @@ endpoint** (an earlier endpoint attempt was reverted). Implement in the 5B sessi
   write-only / masked.
 - **Propagation:** new GCP SM version → ESO sync → k8s secret → env var → **pod rollout
   required** for env-injected secrets to take effect. Surface this in the UI. (This is the
-  mechanism for the Wave-6 Razorpay `test→live` switch + the Shadowfax keys.)
+  mechanism for the Wave-6 Cashfree `sandbox→production` switch + the Shadowfax keys.)
 
 ---
 

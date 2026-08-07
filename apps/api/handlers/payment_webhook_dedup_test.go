@@ -8,7 +8,7 @@ package handlers
 // conditional UPDATE on orders, no referral/notify/tips side-effects) so the
 // test stays focused on the dedup seam.
 //
-// Driven on the Cashfree webhook since #1086 — the Razorpay one is gone.
+// Driven on the Cashfree webhook since #1086 — the retired gateway one is gone.
 
 import (
 	"encoding/json"

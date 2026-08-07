@@ -23,7 +23,7 @@ func seedReserveOrder(t *testing.T, db *gorm.DB, total, refundAmount float64, ps
 	id := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
 		payment_provider, total, refund_amount) VALUES (?,?,?,?,?,?,?,?,?)`,
-		id.String(), "ORD-R", uuid.NewString(), uuid.NewString(), "cancelled", string(ps), "razorpay",
+		id.String(), "ORD-R", uuid.NewString(), uuid.NewString(), "cancelled", string(ps), models.PaymentProviderCashfree,
 		total, refundAmount).Error)
 	return id
 }

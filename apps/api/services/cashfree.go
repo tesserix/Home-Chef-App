@@ -24,44 +24,35 @@ import (
 
 // cashfree.go — the Cashfree Payment Gateway adapter.
 //
-// Deliberately shaped as a near-mirror of razorpay.go: same per-mode credential
-// slots, same cache + invalidate semantics, same "nil means not configured and
-// callers already handle nil" contract, same injectable baseURL test seam. The
-// symmetry is the point — the money paths switch on models.PaymentProvider and
-// otherwise read identically, so a reviewer comparing the two files sees the
-// gateway differences and nothing else.
+// Shaped like every other gateway adapter here: per-mode credential slots, cache
+// + invalidate semantics, a "nil means not configured and callers already handle
+// nil" contract, and an injectable baseURL test seam. The symmetry is the point —
+// the money paths switch on models.PaymentProvider and otherwise read identically.
 //
-// Four things genuinely differ from Razorpay, and each one is a place a careless
-// port would lose money:
+// Four Cashfree specifics, each one a place a careless port would lose money:
 //
-//  1. AMOUNTS ARE RUPEES ON THE WIRE. Razorpay speaks integer paise; Cashfree
-//     speaks a decimal number of rupees ("order_amount": 140.25). Every amount
-//     crossing this boundary goes through cashfreeAmount, which stores paise
-//     internally and renders the decimal by integer arithmetic — never by
-//     formatting a float64, which is how 140.25 becomes 140.25000000000001.
+//  1. AMOUNTS ARE RUPEES ON THE WIRE. Cashfree speaks a decimal number of rupees
+//     ("order_amount": 140.25), not integer paise. Every amount crossing this
+//     boundary goes through cashfreeAmount, which stores paise internally and
+//     renders the decimal by integer arithmetic — never by formatting a float64,
+//     which is how 140.25 becomes 140.25000000000001.
 //
-//  2. ENVIRONMENT IS THE HOSTNAME. Razorpay serves live and test from one host
-//     and tells them apart by key prefix; Cashfree has sandbox.cashfree.com vs
-//     api.cashfree.com. The host is therefore resolved from the CREDENTIALS
-//     (see cashfreeBaseURLFor) rather than from the platform's live/test
-//     partition, so a slot holding sandbox keys reaches the sandbox and works —
-//     exactly as the equivalent Razorpay slot already does. The test slot is
-//     pinned to sandbox regardless, so a sandbox order can never move real
-//     money.
+//  2. ENVIRONMENT IS THE HOSTNAME: sandbox.cashfree.com vs api.cashfree.com. The
+//     host is resolved from the CREDENTIALS (see cashfreeBaseURLFor) rather than
+//     from the platform's live/test partition, so a slot holding sandbox keys
+//     reaches the sandbox and works. The test slot is pinned to sandbox
+//     regardless, so a sandbox order can never move real money.
 //
-//  3. THERE IS NO CLIENT-SIDE PAYMENT SIGNATURE. Razorpay Checkout hands the
-//     client an HMAC of order_id|payment_id that the server re-computes. The
-//     Cashfree SDK returns no such thing; the authority is a server-side
-//     GET /orders/{id} + GET /orders/{id}/payments. That is a stronger gate, not
-//     a weaker one — it never trusts a client-supplied value at all — but it
-//     means verification MUST fetch, and must not be written to "tolerate a
-//     missing signature" the way the Razorpay path does.
+//  3. THERE IS NO CLIENT-SIDE PAYMENT SIGNATURE. The SDK returns nothing the
+//     server can re-verify; the authority is a server-side GET /orders/{id} +
+//     GET /orders/{id}/payments. That is a stronger gate, not a weaker one — it
+//     never trusts a client-supplied value at all — but it means verification
+//     MUST fetch, and must not be written to tolerate a missing signature.
 //
 //  4. REFUND IDEMPOTENCY IS FIRST-CLASS. Cashfree takes a merchant-supplied
 //     refund_id (3–40 alphanumeric) and treats a repeat as the same refund,
-//     instead of Razorpay's per-endpoint X-Refund-Idempotency header. We feed it
-//     the same normalizeIdempotencyKey digest the Razorpay path uses, so one
-//     logical refund has one identity on either gateway.
+//     rather than an idempotency header. We feed it the normalizeIdempotencyKey
+//     digest, so one logical refund has one identity on either gateway.
 
 const (
 	// Environment is selected by HOST, so these are not interchangeable with a
@@ -75,7 +66,7 @@ const (
 	// are the 2023-08-01 ones. Bumping it is a reviewed change, not a drift.
 	cashfreeAPIVersion = "2023-08-01"
 
-	// cashfreeCacheTTL mirrors razorpayCacheTTL. Admin writes call
+	// cashfreeCacheTTL bounds a cached client. Admin writes call
 	// InvalidateCashfreeFor so a key change is picked up immediately; the TTL
 	// only covers rotations made outside the app (e.g. via gcloud).
 	cashfreeCacheTTL = 5 * time.Minute
@@ -85,10 +76,10 @@ const (
 
 // Cashfree credentials live in GCP Secret Manager, product-scoped ("homechef-")
 // so they cannot collide with other products sharing tesseracthub-480811.
-// Exported for the same reason the Razorpay ones are: the admin WRITE path and
-// the client READ path must share one source of truth. A past drift wrote
-// Razorpay keys to one name and read them from another, so admin-entered keys
-// were silently never used — that bug is not worth reproducing here.
+// Exported so the admin WRITE path and the client READ path share one source of
+// truth. A past drift wrote a gateway's keys under one name and read them from
+// another, so admin-entered keys were silently never used — that bug is not
+// worth reproducing here.
 const (
 	SecretCashfreeAppID         = "prod-homechef-cashfree-app-id"
 	SecretCashfreeSecretKey     = "prod-homechef-cashfree-secret-key"
@@ -154,12 +145,10 @@ func cashfreeCredentialsAreSandbox(appID, secretKey string) bool {
 // cashfreeBaseURLFor resolves the API host for a slot.
 //
 // The environment follows the CREDENTIALS, not the platform's live/test
-// partition — which is how Razorpay already behaves, since its key prefix
-// decides and its live slot therefore runs test keys perfectly happily.
-// Binding the host to the slot instead made Cashfree the odd one out: sandbox
-// credentials in the live slot produced a valid client that 401'd against
-// api.cashfree.com, so every live checkout fell back to Razorpay and Cashfree
-// could not be exercised at all before real live keys existed.
+// partition. Binding the host to the slot instead meant sandbox credentials in
+// the live slot produced a valid client that 401'd against api.cashfree.com, so
+// every live checkout failed and Cashfree could not be exercised at all before
+// real live keys existed.
 //
 // The two directions are deliberately NOT symmetric:
 //
@@ -194,7 +183,7 @@ func fetchCashfreeFromSM(ctx context.Context, mode string) (*CashfreeClient, err
 
 	if idErr != nil || secErr != nil || isPlaceholderValue(appID) || isPlaceholderValue(secretKey) {
 		// Dev fallback: env-provided credentials, so local work needs no GCP
-		// access. Deliberately LIVE-ONLY, exactly as the Razorpay fallback is:
+		// access. Deliberately LIVE-ONLY:
 		// the CASHFREE_* env vars describe a single gateway, so honouring them
 		// for the test slot would serve one environment's credentials to the
 		// other — the precise mix-up per-mode slots exist to prevent. An
@@ -231,7 +220,7 @@ func fetchCashfreeFromSM(ctx context.Context, mode string) (*CashfreeClient, err
 // so a test-mode kitchen and a live one can transact concurrently.
 //
 // Returns nil when the slot is not configured — callers must handle nil, which
-// is the same contract GetRazorpayFor has.
+// is the contract every gateway accessor here has.
 func GetCashfreeFor(mode string) *CashfreeClient {
 	mode = models.NormalizeMode(mode)
 
@@ -421,7 +410,7 @@ type CashfreeVendorSplit struct {
 
 // CashfreeOrderResponse is the created (or fetched) order. PaymentSessionID is
 // the token the client SDK opens checkout with — it is the Cashfree analogue of
-// Razorpay's (key_id + order_id) pair, and it is short-lived, which is why the
+// of a checkout token, and it is short-lived, which is why the
 // create path re-uses an ACTIVE order rather than minting a second one.
 type CashfreeOrderResponse struct {
 	CFOrderID        json.Number       `json:"cf_order_id"`
@@ -549,7 +538,7 @@ const (
 )
 
 // IsCaptured reports whether this payment actually took the money. Named to
-// match the question the verify paths ask of Razorpay's `captured` — Cashfree
+// match the question the verify paths ask of a `captured` payment — Cashfree
 // has no separate authorize/capture step for the methods we accept, so SUCCESS
 // is the captured state.
 func (p *CashfreePayment) IsCaptured() bool {
@@ -655,7 +644,7 @@ func (c *CashfreeClient) SuccessfulPayment(orderID string) (*CashfreePayment, er
 }
 
 // FetchPayment reads one payment by its Cashfree id. Cashfree scopes payments
-// under their order, so unlike Razorpay's FetchPayment this needs both ids.
+// under their order, so this needs both ids, not just the payment's.
 func (c *CashfreeClient) FetchPayment(orderID, cfPaymentID string) (*CashfreePayment, error) {
 	resp, status, err := c.do("GET", "/orders/"+orderID+"/payments/"+cfPaymentID, nil, nil)
 	if err != nil {
@@ -677,14 +666,14 @@ func (c *CashfreeClient) FetchPayment(orderID, cfPaymentID string) (*CashfreePay
 //
 // RefundID is REQUIRED by Cashfree and is the idempotency key: a repeat of the
 // same refund_id is the same refund, not a second one. Callers pass the same
-// LOGICAL operation id used for Razorpay (see gateway_idempotency.go builders)
+// LOGICAL operation id used platform-wide (see gateway_idempotency.go builders)
 // and CreateRefund normalizes it into Cashfree's 3–40 alphanumeric window.
 type CashfreeRefundRequest struct {
 	AmountPaise cashfreeAmount `json:"refund_amount"`
 	RefundID    string         `json:"refund_id"`
 	Note        string         `json:"refund_note,omitempty"`
 	// Speed is STANDARD or INSTANT; empty means STANDARD. The platform uses
-	// STANDARD to match Razorpay's "normal".
+	// STANDARD, the ordinary bank-rail speed.
 	Speed string `json:"refund_speed,omitempty"`
 	// IdempotencyKey is the LOGICAL operation id. json:"-" — it becomes both the
 	// refund_id and the x-idempotency-key header, never a body field of its own.
@@ -728,7 +717,7 @@ const (
 )
 
 // PlatformRefundStatus maps Cashfree's refund_status onto the status vocabulary
-// the platform already persists for Razorpay refunds ("processed" / "pending" /
+// the platform already persists for refunds ("processed" / "pending" /
 // "failed"), so order.refund status reads the same regardless of gateway.
 //
 // ONHOLD maps to pending, not failed: the money is still coming, it is just held
@@ -750,9 +739,8 @@ func PlatformRefundStatus(cashfreeStatus string) string {
 // cashfreeRefundID normalizes a logical operation id into Cashfree's refund_id
 // window: 3–40 characters, alphanumeric. normalizeIdempotencyKey already yields
 // 32 lowercase hex characters, which satisfies both bounds and the charset — and
-// crucially is the SAME digest the Razorpay path sends in its
-// X-Refund-Idempotency header, so one logical refund carries one identity across
-// both gateways.
+// crucially is the SAME digest every other refund path derives, so one logical
+// refund carries one identity across gateways.
 func cashfreeRefundID(logical string) string {
 	return normalizeIdempotencyKey(logical)
 }
@@ -762,7 +750,7 @@ func cashfreeRefundID(logical string) string {
 // A 409 (duplicate refund_id) means this exact refund was already accepted — a
 // timeout-after-success retry. The existing refund is fetched and returned, so
 // the caller sees success and does not re-reserve or double-credit. This is the
-// behaviour Razorpay gets from its idempotency header; Cashfree expresses it as
+// behaviour an idempotency header buys elsewhere; Cashfree expresses it as
 // a conflict, and mishandling it is how a customer receives two refunds.
 func (c *CashfreeClient) CreateRefund(orderID string, req *CashfreeRefundRequest) (*CashfreeRefund, error) {
 	if orderID == "" {
@@ -835,7 +823,7 @@ func (c *CashfreeClient) FetchOrderRefunds(orderID string) ([]CashfreeRefund, er
 }
 
 // OrderRefundedPaise totals the SETTLED refunds on an order — the Cashfree
-// equivalent of Razorpay's payment.amount_refunded, which the reconciliation
+// equivalent of a payment's amount_refunded, which the reconciliation
 // cron compares against the platform's own cumulative refunded figure.
 //
 // Only SUCCESS counts. Including PENDING or ONHOLD would overstate what has
@@ -883,8 +871,8 @@ const (
 // cashfreeWebhookMaxSkew bounds how old a webhook's timestamp may be.
 //
 // The signature covers timestamp+body, so an attacker who captures one delivery
-// can replay it verbatim forever and it will keep verifying. Razorpay's path
-// relies on the processed_events claim for that; this adds a time bound on top,
+// can replay it verbatim forever and it will keep verifying. A signature over the
+// body alone relies on the processed_events claim for that; this adds a time bound on top,
 // because the timestamp is right there in the signed payload and not checking it
 // throws away the one anti-replay signal the scheme hands us. Generous enough to
 // absorb Cashfree's own retry schedule and any clock drift.
@@ -897,7 +885,7 @@ const cashfreeWebhookMaxSkew = 30 * time.Minute
 // the RAW body must be used, not a re-marshalled parse, or the digest will not
 // match. Live is tried first.
 //
-// Like the Razorpay equivalent, the returned mode is a HINT, not an authority:
+// The returned mode is a HINT, not an authority:
 // if both slots ever hold the same key every event resolves to live. The caller
 // MUST additionally compare it against the target record's own mode and drop a
 // mismatch — that comparison, not this function, is what keeps the live and test
@@ -950,7 +938,7 @@ func cashfreeTimestampFresh(ts string) bool {
 // --- Introspection (admin surface) ---
 
 // GetAppID returns the Cashfree app id (the public client identifier, the rough
-// analogue of a Razorpay key id). Safe to expose to a frontend.
+// analogue of a retired-gateway key id). Safe to expose to a frontend.
 func (c *CashfreeClient) GetAppID() string { return c.appID }
 
 // Mode reports which credential slot this client is.
@@ -1050,7 +1038,7 @@ func (c *CashfreeClient) do(method, path string, body []byte, extraHeaders map[s
 // ({"message":…,"code":…,"type":…}), falling back to the status alone.
 //
 // Only the structured fields are surfaced, never the raw body — the same
-// discipline doURLSanitized applies on the Razorpay side. Cashfree echoes
+// discipline doURLSanitized applies to URLs. Cashfree echoes
 // submitted values back in some validation errors, and a rejected customer phone
 // or bank detail must not ride an error message into a log line or a Sentry
 // event.

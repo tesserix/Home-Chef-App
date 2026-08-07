@@ -1,7 +1,7 @@
 package handlers
 
 // driver_payout_upi_test.go — #767. UPI is not an accepted payout destination
-// for drivers either: Razorpay Route settles by NEFT/IMPS to a bank account and
+// for drivers either: the retired gateway's split product settles by NEFT/IMPS to a bank account and
 // has no VPA destination, so a driver who nominated UPI could never be paid.
 // DriverOnboardingPayout must reject the request at the edge (400) before it
 // touches the database.

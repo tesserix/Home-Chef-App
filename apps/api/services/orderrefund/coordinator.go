@@ -22,7 +22,7 @@ package orderrefund
 //	tx#2  finalize the ledger + stamp the order's terminal markers
 //
 // The gateway call is outside a transaction deliberately. order_issue.go credits
-// the wallet INSIDE its tx; putting a Razorpay round-trip there would hold a row
+// the wallet INSIDE its tx; putting a retired-gateway round-trip there would hold a row
 // lock across a network call. That is why #691 needs this coordinator rather
 // than a one-line swap.
 //
@@ -85,7 +85,7 @@ var (
 // Unlike mark8ly — which passes the raw ScopeID into the provider's dedup header
 // and therefore must restrict it to [A-Za-z0-9_-] — HomeChef HASHES the logical
 // key (gateway_idempotency.go normalizeIdempotencyKey → 32-char hex), so any
-// charset is already safe by the time it reaches Razorpay. That is why the
+// charset is already safe by the time it reaches the gateway. That is why the
 // existing RefundFullIdempotencyKey ("refund:<uuid>:full") works with colons.
 //
 // So we only reject what would break OUR identity: an empty or whitespace-only
@@ -113,7 +113,7 @@ type GatewayRequest struct {
 // Gateway delivers refund money and returns a reference for it.
 //
 // It is deliberately ORDER-shaped rather than payment-shaped. The first draft took
-// (providerPaymentID, amountPaise), which silently assumed Razorpay: it cannot
+// (providerPaymentID, amountPaise), which silently assumed one gateway: it cannot
 // express a wallet refund (no provider payment at all) or a Stripe one (a payment
 // INTENT, different id, different minor-unit rules), and #691 is precisely the bug
 // of a path that assumed one provider. Routing lives behind this interface, in

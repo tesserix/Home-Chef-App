@@ -3,9 +3,9 @@ package services
 // gateway_select_test.go — which gateway takes a new charge, and whether a slot
 // is usable at all.
 //
-// The Razorpay fallback these tests used to pin was removed deliberately by
+// The retired gateway fallback these tests used to pin was removed deliberately by
 // #1086: Cashfree is now the only gateway an INR charge may be created on, so
-// "fall back to razorpay" describes behaviour that no longer exists and the
+// "fall back to the retired gateway" describes behaviour that no longer exists and the
 // assertions asserting it were rewritten rather than kept passing. Selection
 // itself is covered by gateway_select_cashfree_only_test.go; what survives here
 // is the slot-usability machinery, which still decides whether a checkout is
@@ -66,19 +66,19 @@ func TestCashfreeUsableFor_SlotsAreIndependentPerMode(t *testing.T) {
 }
 
 // Cashfree is the platform default for EVERY INR kitchen, including ones whose
-// stored provider is razorpay or blank.
+// stored provider is the retired gateway or blank.
 //
 // That stored value is not a choice the chef made — it is what every row held
 // before there was an alternative — so honouring it would strand the entire
 // existing estate on the old gateway. Overriding it is safe because the ORDER,
 // not the chef, is authoritative afterwards: the gateway that takes the payment
 // is stamped on the order, and refunds and reconciliation read that.
-func TestSelectCheckoutGateway_PrefersCashfreeForExistingRazorpayChefs(t *testing.T) {
+func TestSelectCheckoutGateway_PrefersCashfreeForChefsOnTheRetiredRail(t *testing.T) {
 	healthyCashfree(t, models.ChefModeLive)
 
 	require.Equal(t, models.PaymentProviderCashfree, SelectCheckoutGateway("", models.ChefModeLive))
 	require.Equal(t, models.PaymentProviderCashfree,
-		SelectCheckoutGateway(models.PaymentProviderRazorpay, models.ChefModeLive))
+		SelectCheckoutGateway(retiredGateway, models.ChefModeLive))
 	require.Equal(t, models.PaymentProviderCashfree, SelectCheckoutGateway("nonsense", models.ChefModeLive))
 }
 
@@ -87,7 +87,7 @@ func TestSelectCheckoutGateway_PrefersCashfreeForExistingRazorpayChefs(t *testin
 // something else would route the refund at a gateway that never took the money.
 // (What each stored value means is pinned in models/payment_provider_test.go.)
 func TestSelectCheckoutGateway_ReturnsAValueThatRoundTrips(t *testing.T) {
-	for _, configured := range []string{"", "nonsense", models.PaymentProviderRazorpay,
+	for _, configured := range []string{"", "nonsense", retiredGateway,
 		models.PaymentProviderCashfree, models.PaymentProviderStripe} {
 		got := SelectCheckoutGateway(configured, models.ChefModeLive)
 		require.Equal(t, got, models.NormalizeProvider(got), "configured %q", configured)

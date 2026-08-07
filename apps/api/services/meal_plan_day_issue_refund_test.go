@@ -11,7 +11,7 @@ package services
 //
 // Uses setupCrossguardDB (orders + meal_plan_days + order_issues + wallets). The shell is
 // seeded with NO gateway_order_id — the faithful day-shell shape that makes the order
-// partial-claw a no-op (the exact hole this slice plugs). Flags OFF, GetRazorpay()==nil,
+// partial-claw a no-op (the exact hole this slice plugs). Flags OFF, the retired gateway client==nil,
 // so every transition is a pure DB state advance.
 
 import (

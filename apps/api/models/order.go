@@ -333,7 +333,7 @@ type Order struct {
 	// Payout hold (#387). Independent of Status: on delivery the hold becomes
 	// awaiting_customer_confirmation (no money moves); the customer confirming
 	// advances it to release_eligible, which the admin payout queue (#388)
-	// consumes to drive the real Razorpay release. release_eligible itself moves
+	// consumes to drive the real payout release. release_eligible itself moves
 	// no money. Empty for meal-plan/consolidated orders (they settle their own).
 	PayoutHoldStatus    PayoutHoldStatus `gorm:"type:varchar(32);default:''" json:"payoutHoldStatus,omitempty"`
 	CustomerConfirmedAt *time.Time       `gorm:"" json:"customerConfirmedAt,omitempty"`
@@ -429,7 +429,7 @@ type OrderItem struct {
 	// as unfulfillable mid-prep. The order itself stays accepted /
 	// preparing so the remaining lines continue; only this line's
 	// subtotal (+ proportional tax) is refunded to the customer.
-	// RefundID is the gateway refund identifier returned by Razorpay /
+	// RefundID is the gateway refund identifier returned by Cashfree /
 	// Stripe; used as the idempotency anchor so retries of the same
 	// per-line cancel don't double-refund.
 	IsCancelled     bool       `gorm:"default:false" json:"isCancelled"`

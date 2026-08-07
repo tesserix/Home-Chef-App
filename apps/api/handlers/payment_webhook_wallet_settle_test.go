@@ -8,7 +8,7 @@ package handlers
 //
 // The chef/driver top-up transfers this file also used to assert went with the Route
 // rail in #1086: the chef is paid the whole delivered order on the statement path.
-// Driven on the Cashfree webhook since #1086 — the Razorpay webhook is gone and no
+// Driven on the Cashfree webhook since #1086 — the retired gateway webhook is gone and no
 // order can be captured on it.
 
 import (

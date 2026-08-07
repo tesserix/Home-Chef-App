@@ -4,7 +4,7 @@ package handlers
 // (amount < remaining) as NON-terminal: it may NOT flip status / payment_status →
 // Refunded nor stamp refunded_at, because every release-side payout guard blocks the
 // WHOLE chef hold on `refunded_at IS NOT NULL`. Only a FULL refund is terminal. These
-// drive the to-wallet branch (GetRazorpay()==nil in tests, so the gateway branch would
+// drive the to-wallet branch (the retired gateway client==nil in tests, so the gateway branch would
 // 503 before persist; the wallet branch reaches the persist that carries the flip).
 
 import (

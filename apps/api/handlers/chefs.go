@@ -2603,8 +2603,8 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		// in Secret Manager.
 		//
 		// A targeted column update, not a struct Save: Save writes every
-		// column on the struct, including razorpay_account_id/
-		// razorpay_product_id/razorpay_settlement_status below — a
+		// column on the struct, including the gateway account columns
+		// written below — a
 		// full-struct save issued from a stale in-memory snapshot could
 		// silently overwrite whatever this same transaction (or a
 		// concurrent one holding the row lock a moment longer) commits for

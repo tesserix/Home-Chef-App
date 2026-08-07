@@ -47,7 +47,7 @@ func TipEligibilityFor(order *models.Order) models.TipEligibility {
 	// on the one vendor and stand or fall together (#1080, planCashfreeTip).
 	//
 	// Not keyed on the order's gateway: a tip is a new charge, always minted on
-	// Cashfree (#1103), so a historical Razorpay order is judged the same way.
+	// Cashfree (#1103), so a historical order on the retired gateway is judged the same way.
 	vendorOK := order.Chef.CashfreeVendorID != "" &&
 		strings.EqualFold(order.Chef.CashfreeVendorStatus, CashfreeVendorActive)
 	return models.TipEligibility{

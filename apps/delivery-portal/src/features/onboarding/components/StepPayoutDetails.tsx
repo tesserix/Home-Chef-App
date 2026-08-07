@@ -4,8 +4,8 @@ import { apiClient } from '@/shared/services/api-client';
 import { toast } from 'sonner';
 import { getCachedFormData, setCachedFormData } from '@/shared/utils/form-cache';
 
-// UPI is not an accepted payout method (#767): Razorpay Route settles by
-// NEFT/IMPS to a bank account and has no VPA destination, so a driver who
+// UPI is not an accepted payout method (#767): the Cashfree Easy Split vendor
+// a driver is settled to holds a bank account, not a VPA, so a driver who
 // nominated UPI could never be paid. Bank transfer is the only option.
 interface PayoutData {
   payoutMethod: 'bank_transfer';

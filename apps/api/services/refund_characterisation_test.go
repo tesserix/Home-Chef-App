@@ -228,7 +228,7 @@ func TestCharacterise_OrderIssueRefund_GoesToWallet_RegardlessOfProvider(t *test
 
 	orderID := uuid.New()
 	customerID := uuid.New()
-	// A RAZORPAY-paid order: every other refund path would route this to the gateway.
+	// A retired-gateway order: every other refund path would route this to the gateway.
 	require.NoError(t, db.Exec(
 		`INSERT INTO orders (id, total, refund_amount) VALUES (?, ?, 0)`,
 		orderID.String(), 200.0,

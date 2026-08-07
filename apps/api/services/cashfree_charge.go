@@ -13,7 +13,7 @@ import (
 // catering deposits, group-order shares, promo purchases (and, via its own
 // escrow-aware path, the meal-plan advance).
 //
-// Each of these used to mint Razorpay directly, bypassing SelectCheckoutGateway
+// Each of these used to mint on the retired gateway directly, bypassing SelectCheckoutGateway
 // entirely, so Cashfree being the platform default only ever applied to orders.
 // The two helpers here are the whole seam: mint, then verify from the gateway.
 //
@@ -89,7 +89,7 @@ func CreateCashfreeCharge(
 // There is no client signature to check — Cashfree hands the client nothing it could
 // sign — so this fetch IS the verification. The binding is the order id: it is the
 // charge row's own UUID, so a capture found under it cannot belong to another row,
-// which is the guarantee the Razorpay paths get from (order id + amount).
+// which is the guarantee a signature over (order id + amount) would give.
 func VerifyCashfreeCharge(mode, cfOrderID string, minAmount float64) (*CashfreePayment, error) {
 	cf := GetCashfreeFor(mode)
 	if cf == nil {

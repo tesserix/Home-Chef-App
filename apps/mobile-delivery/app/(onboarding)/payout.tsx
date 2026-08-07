@@ -18,8 +18,8 @@ import { useAlert } from '@homechef/mobile-shared/ui';
 
 const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
-// UPI is not an accepted payout method (#767): Razorpay Route settles by
-// NEFT/IMPS to a bank account and has no VPA destination, so a driver who
+// UPI is not an accepted payout method (#767): the Cashfree Easy Split vendor
+// a driver is settled to holds a bank account, not a VPA, so a driver who
 // nominated UPI could never be paid. Payouts are bank transfer only.
 const payoutSchema = z
   .object({

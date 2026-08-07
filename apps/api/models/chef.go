@@ -78,7 +78,7 @@ type ChefProfile struct {
 	// remove the application — they only hold payouts (payout gate #739).
 	PayoutReminderSentAt *time.Time `gorm:"" json:"-"`
 
-	// Mode selects which Razorpay credential set, which visibility rules and
+	// Mode selects which gateway credential set, which visibility rules and
 	// which data partition apply to this kitchen. Defaults to live so every
 	// existing chef and every new onboarding is a real kitchen unless an admin
 	// explicitly says otherwise.
@@ -147,16 +147,16 @@ type ChefProfile struct {
 	// Payment gateway linked accounts
 	StripeAccountID string `gorm:"" json:"-"`
 	// PaymentProvider picks which gateway a customer's order gets routed
-	// through: "cashfree" (India), "stripe" (international). Razorpay is still
+	// through: "cashfree" (India), "stripe" (international). A retired-gateway value is still
 	// READ off historical rows but can no longer be configured (#1086).
 	//
 	// The column default only shapes a row inserted without an explicit provider;
 	// every existing row already carries one, so nothing historical is reinterpreted
-	// by it. It defaults to cashfree because a razorpay row minted today is money
+	// by it. It defaults to cashfree because a retired-gateway row minted today is money
 	// that cannot be captured — verify refuses it (#1101, #1125).
 	PaymentProvider string `gorm:"type:varchar(20);default:'cashfree'" json:"paymentProvider"`
 	// PayoutCountry is the ISO-3166 alpha-2 country for Stripe Connect
-	// onboarding (US, GB, AE, …). Unused for Razorpay chefs.
+	// onboarding (US, GB, AE, …). Unused for INR chefs.
 	PayoutCountry string `gorm:"type:varchar(2);default:'IN'" json:"payoutCountry"`
 	// StripeChargesEnabled / StripePayoutsEnabled mirror the Connect
 	// account flags — we cache them here so the UI doesn't have to round-

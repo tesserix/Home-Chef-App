@@ -10,7 +10,7 @@ package services
 // The harness (setupCrossguardDB) extends setupReleaseDB's schema with the
 // refund columns + the wallet tables so the auto-refund path (RefundIssueToWallet
 // → CreditWallet) actually EXECUTES here — the AutoRefundDrivesHold test is real,
-// not a vacuous -run match. Money seams hit GetRazorpay()==nil (no-op) and the
+// not a vacuous -run match. Money seams hit the retired gateway client==nil (no-op) and the
 // escrow flags are OFF, so every transition is a pure DB state advance.
 
 import (
@@ -39,7 +39,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 	for _, s := range []string{
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 			chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', gateway_order_id TEXT DEFAULT '',
-			payment_provider TEXT DEFAULT 'razorpay', total REAL DEFAULT 0,
+			payment_provider TEXT DEFAULT 'cashfree', total REAL DEFAULT 0,
 			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 			chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 			fulfillment_type TEXT DEFAULT 'delivery', delivery_fee REAL DEFAULT 0, delivery_fee_final REAL,
@@ -90,8 +90,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			entity_id TEXT, old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT, correlation_id TEXT, created_at DATETIME)`,
 		// chef_profiles — the partial-refund claw-back (#549) resolves the chef's
 		// Route account by joining orders.chef_id → chef_profiles.id.
-		`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, razorpay_account_id TEXT DEFAULT '',
-			payout_country TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, payout_country TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}

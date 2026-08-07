@@ -178,7 +178,7 @@ type adminPendingRefundDay struct {
 }
 
 // GetAdminPendingRefunds — GET /admin/meal-plan-days/pending-refunds. Days whose refund the
-// customer routed to their ORIGINAL method (RBI); an admin executes the Razorpay reversal via the
+// customer routed to their ORIGINAL method (RBI); an admin executes the gateway reversal via the
 // HMAC gateway. Wallet refunds never appear here (they resolve instantly). Empty when v2 is off.
 func (h *MealPlanHandler) GetAdminPendingRefunds(c *gin.Context) {
 	if !services.MealPlanRefundFlowV2Active() {

@@ -48,13 +48,13 @@ type WeeklyStatement struct {
 	NetPayout      float64 `gorm:"default:0" json:"netPayout"`
 
 	// Payout disbursement tracking (admin). Statements are computed weekly by
-	// the cron; disbursement is currently MANUAL (RazorpayX automation is
+	// the cron; disbursement is currently MANUAL (payout-rail automation is
 	// gated on an Indian entity — see payment-structuring decision). Admin
 	// marks each statement paid after sending the transfer, recording the
 	// gateway/bank reference.
 	Status    PayoutStatus `gorm:"type:varchar(20);default:'pending';index" json:"status"`
 	PaidAt    *time.Time   `gorm:"" json:"paidAt,omitempty"`
-	PayoutRef string       `gorm:"" json:"payoutRef,omitempty"` // UTR / RazorpayX payout id / bank ref
+	PayoutRef string       `gorm:"" json:"payoutRef,omitempty"` // UTR / payout id / bank ref
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 }
@@ -64,5 +64,5 @@ type PayoutStatus string
 
 const (
 	PayoutPending PayoutStatus = "pending" // computed, not yet disbursed
-	PayoutPaid    PayoutStatus = "paid"    // disbursed (manual or RazorpayX), PayoutRef set
+	PayoutPaid    PayoutStatus = "paid"    // disbursed (manual or automated), PayoutRef set
 )

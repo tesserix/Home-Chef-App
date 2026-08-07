@@ -42,7 +42,7 @@ var partitionedTables = []string{
 //     BeforeSave/AfterCreate fires. Cloning 118 orders must not push 118
 //     notifications at a real customer, enqueue 118 NATS events, or start 118
 //     Temporal workflows. This is the single biggest correctness risk here.
-//  2. NO GATEWAY IDENTIFIERS. Razorpay order/payment/transfer ids are cleared,
+//  2. NO GATEWAY IDENTIFIERS. Order/payment/transfer ids are cleared,
 //     so a cloned order can be inspected and driven through its status machine
 //     but can never be charged or refunded against a real payment.
 //  3. PROVENANCE. Every row carries mode=test, the session id, and

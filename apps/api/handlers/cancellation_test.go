@@ -3,7 +3,7 @@ package handlers
 // cancellation_test.go — the cancellation-with-arbitration money flow (#475/#477).
 // Exercises the real refund path (wallet credit via services.CreditWallet) end to
 // end: fast-path auto-refund, vendor-confirm tiered refund, and not-allowed. The
-// gateway ("original") path needs Razorpay (nil in tests), so tests use the wallet
+// gateway ("original") path needs the retired gateway (nil in tests), so tests use the wallet
 // destination; the refund MATH is separately proven in cancellation_refund_test.go.
 // In-memory SQLite; hand-DDL (gen_random_uuid() can't run on SQLite).
 

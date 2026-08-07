@@ -311,7 +311,7 @@ func TestVerifyCashfreePayment_UpstreamFetchFailure502(t *testing.T) {
 
 // A Cashfree gateway that isn't configured answers 503, not 400 — a
 // server-side misconfiguration, not a payment outcome (#872 final item),
-// matching the sibling checks in createCashfreePayment / verifyRazorpayPayment.
+// matching the sibling checks in createCashfreePayment.
 func TestVerifyCashfreePayment_GatewayNotConfigured503(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
@@ -482,16 +482,16 @@ func TestCashfreeWebhook_ReplayIsDeduped(t *testing.T) {
 
 	// NOTE: the webhook path emits NO order.paid — it completes the order with a
 	// bare guarded UPDATE rather than completeOrderPaymentTx. That is exact parity
-	// with handlePaymentCaptured (the Razorpay webhook), which behaves the same way,
+	// with handlePaymentCaptured (the retired gateway webhook), which behaves the same way,
 	// and it is asserted here so the parity is deliberate rather than accidental.
 	//
 	// It is also a pre-existing gap shared by BOTH gateways: an order completed only
 	// by a webhook (client dropped before verify) never emits order.paid, so any
 	// consumer of that event misses it. Fixing it means routing both webhooks through
-	// completeOrderPaymentTx — a change to the Razorpay path too, deliberately not
+	// completeOrderPaymentTx — a change to the retired gateway path too, deliberately not
 	// bundled with adding a gateway.
 	require.Equal(t, int64(0), countOutbox(t, db, "orders.paid"),
-		"webhook completion emits no order.paid — parity with the Razorpay webhook")
+		"webhook completion emits no order.paid")
 }
 
 // A failed/user-dropped webhook marks the order failed, leaving it retryable
@@ -630,7 +630,7 @@ func TestNextCashfreeOrderID_IsDeterministicAndReusesRetrySuffix(t *testing.T) {
 	require.Equal(t, base, nextCashfreeOrderID(id, ""), "first attempt is the bare UUID")
 	require.Equal(t, base, nextCashfreeOrderID(id, base), "an unchanged stamp is reused")
 	require.Equal(t, base+"-r2", nextCashfreeOrderID(id, base+"-r2"), "an existing retry suffix is kept")
-	require.Equal(t, base, nextCashfreeOrderID(id, "order_ABC123razorpay"),
+	require.Equal(t, base, nextCashfreeOrderID(id, "order_ABC123suffixed"),
 		"another gateway's id is ignored, not extended")
 	require.LessOrEqual(t, len(nextCashfreeOrderID(id, "")), 45)
 }

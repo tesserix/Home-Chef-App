@@ -8,7 +8,7 @@ package services
 // enforced structurally by the query, never merely by convention.
 //
 // Reuses setupCancelRefundDB, seedStaleOrder, withCashfreeServer,
-// withRazorpayServerFor from stale_order_cron_test.go (same package) — extended
+// withCashfreeServer from stale_order_cron_test.go (same package) — extended
 // with chef_profiles/deliveries/delivery_partners so Preload("Chef") and
 // Preload("Delivery.DeliveryPartner") (SettleOrderWallet's requirement) don't
 // error on a missing table. Every seeded order in this file has
@@ -42,16 +42,14 @@ func setupReconcileDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT ''`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (
 		id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
-		payment_provider TEXT DEFAULT 'razorpay', razorpay_account_id TEXT DEFAULT '',
-		payout_country TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME
+		payment_provider TEXT DEFAULT 'cashfree', payout_country TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE deliveries (
 		id TEXT PRIMARY KEY, order_id TEXT, delivery_partner_id TEXT, status TEXT DEFAULT 'pending',
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE delivery_partners (
-		id TEXT PRIMARY KEY, user_id TEXT, razorpay_account_id TEXT DEFAULT '',
-		created_at DATETIME, updated_at DATETIME
+		id TEXT PRIMARY KEY, user_id TEXT, created_at DATETIME, updated_at DATETIME
 	)`).Error)
 	return db
 }
@@ -198,7 +196,7 @@ func TestOrderPaymentReconcile_CashfreeOrder_SettlesOnCashfree(t *testing.T) {
 func TestOrderPaymentReconcile_CancelledOrder_NeverSelectedZeroGatewayHits(t *testing.T) {
 	db := setupReconcileDB(t)
 	now := time.Now()
-	o := seedStaleOrder(t, db, "razorpay", "order_rzp_cancelled_backfill", models.ChefModeLive, now.Add(-reconcileGraceElapsed))
+	o := seedStaleOrder(t, db, retiredGateway, "order_legacy_cancelled_backfill", models.ChefModeLive, now.Add(-reconcileGraceElapsed))
 	require.NoError(t, db.Exec(
 		`UPDATE orders SET status = ?, payment_status = ?, cancel_reason = ? WHERE id = ?`,
 		string(models.OrderStatusCancelled), string(models.PaymentFailed), "payment not completed", o.ID.String(),
@@ -207,7 +205,7 @@ func TestOrderPaymentReconcile_CancelledOrder_NeverSelectedZeroGatewayHits(t *te
 	var hits int32
 	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&hits, 1)
-		_, _ = w.Write([]byte(`[{"cf_payment_id":777,"order_id":"order_rzp_cancelled_backfill","payment_status":"SUCCESS","payment_amount":300.00,"payment_group":"upi"}]`))
+		_, _ = w.Write([]byte(`[{"cf_payment_id":777,"order_id":"order_legacy_cancelled_backfill","payment_status":"SUCCESS","payment_amount":300.00,"payment_group":"upi"}]`))
 	})
 
 	settled := reconcileOrderPayments(db, now)
@@ -218,15 +216,15 @@ func TestOrderPaymentReconcile_CancelledOrder_NeverSelectedZeroGatewayHits(t *te
 	require.Equal(t, string(models.PaymentFailed), paymentStatus, "untouched — not this cron's job")
 }
 
-// ── #1086: a Razorpay order is not this cron's business any more ────────────
+// ── #1086: a retired-gateway order is not this cron's business any more ────────────
 //
-// No order can be captured on Razorpay since #1101, so there is nothing left to
+// No order can be captured on the retired gateway since #1101, so there is nothing left to
 // discover — and asking would be worse than useless: the answer could only
 // settle an order against a rail the platform no longer operates.
-func TestOrderPaymentReconcile_RazorpayOrder_LeftAloneWithZeroGatewayHits(t *testing.T) {
+func TestOrderPaymentReconcile_RetiredGatewayOrder_LeftAloneWithZeroGatewayHits(t *testing.T) {
 	db := setupReconcileDB(t)
 	now := time.Now()
-	o := seedStaleOrder(t, db, "razorpay", "order_rzp_legacy", models.ChefModeLive, now.Add(-reconcileGraceElapsed))
+	o := seedStaleOrder(t, db, retiredGateway, "order_legacy", models.ChefModeLive, now.Add(-reconcileGraceElapsed))
 	o.Total = 300
 
 	var cashfreeHits int32
@@ -237,7 +235,7 @@ func TestOrderPaymentReconcile_RazorpayOrder_LeftAloneWithZeroGatewayHits(t *tes
 
 	settled := reconcileOrderPayments(db, now)
 	require.Equal(t, 0, settled)
-	require.Equal(t, int32(0), atomic.LoadInt32(&cashfreeHits), "a legacy razorpay order is never cross-checked on Cashfree")
+	require.Equal(t, int32(0), atomic.LoadInt32(&cashfreeHits), "a retired-gateway order is never cross-checked on Cashfree")
 
 	paymentStatus, gatewayPaymentID := reconcilePaymentRow(t, db, o.ID)
 	require.Equal(t, string(models.PaymentPending), paymentStatus, "a legacy order is left exactly as it was")

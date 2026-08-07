@@ -48,7 +48,7 @@ type statementResponse struct {
 	NetPayout          float64   `json:"netPayout"`
 	// Disbursement state (#617) — the model tracked these but the DTO dropped them,
 	// so the chef couldn't tell a paid statement from a pending one. PaidAt/PayoutRef
-	// are set only once disbursed (manual weekly mark-paid at launch, RazorpayX later).
+	// are set only once disbursed (manual weekly mark-paid at launch, a bank payout rail later).
 	Status    models.PayoutStatus `json:"status"`
 	PaidAt    *time.Time          `json:"paidAt,omitempty"`
 	PayoutRef string              `json:"payoutRef,omitempty"`

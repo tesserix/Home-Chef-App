@@ -7,7 +7,7 @@ import (
 )
 
 // #1125 — the column default is what a row inserted WITHOUT an explicit provider
-// gets. Since #1101 refuses a razorpay order at verify, such a row is money that
+// gets. Since #1101 refuses a retired-gateway order at verify, such a row is money that
 // cannot be captured, and nothing about it fails loudly at insert time. Reflect
 // over the tag rather than grep: a tag typo doesn't fail to compile either.
 func TestPaymentProviderColumnDefaultsAreCashfree(t *testing.T) {

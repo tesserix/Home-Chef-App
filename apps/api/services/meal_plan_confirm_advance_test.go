@@ -3,7 +3,7 @@ package services
 // meal_plan_confirm_advance_test.go — #395·3 durability. ConfirmMealPlanAdvance is the
 // SHARED confirm seam behind BOTH the client verify-payment path AND the
 // payment.captured webhook fallback. The webhook fallback exists because a dropped
-// client verify (the RN Razorpay SDK returning dismiss on the success auto-redirect)
+// client verify (the RN the retired gateway SDK returning dismiss on the success auto-redirect)
 // would otherwise strand a CAPTURED advance — money taken, plan left awaiting_customer,
 // chef payout never held. These tests drive the webhook path (signature "") end to end:
 // validate → confirm plan + days → stamp EscrowPaymentID → hold one transfer per
@@ -33,8 +33,7 @@ func setupConfirmAdvanceDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, status TEXT,
 			payout_transfer_id TEXT DEFAULT '', commission_rate REAL DEFAULT 0, price REAL,
 			created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, id TEXT PRIMARY KEY, user_id TEXT, razorpay_account_id TEXT DEFAULT '',
-			created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, id TEXT PRIMARY KEY, user_id TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE platform_settings (key TEXT PRIMARY KEY, value TEXT)`,
 		`CREATE TABLE audit_logs (id TEXT PRIMARY KEY, user_id TEXT, action TEXT, entity_type TEXT,
 			entity_id TEXT, old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT,
@@ -67,7 +66,7 @@ func seedConfirmPlan(t *testing.T, db *gorm.DB, rzOrderID string, dayPrices []fl
 		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		planID.String(), "MP-conf1", custID.String(), chefID.String(), string(models.MealPlanAwaitingCustomer),
 		rzOrderID, "", total-32, 25.6, total, "INR").Error)
-	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, razorpay_account_id) VALUES (?,?,?)`,
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id) VALUES (?,?)`,
 		chefID.String(), chefUserID.String(), "acc_chef_conf").Error)
 	days := make([]models.MealPlanDay, 0, len(dayPrices))
 	dayIDs := make([]uuid.UUID, 0, len(dayPrices))
