@@ -9,8 +9,13 @@ describe('paymentSecuredByLine', () => {
     expect(paymentSecuredByLine('cashfree')).toBe('Payments secured by Cashfree (RBI-licensed).');
   });
 
-  it('still names Razorpay when Razorpay is the resolved gateway', () => {
-    expect(paymentSecuredByLine('razorpay')).toBe('Payments secured by Razorpay (RBI-licensed).');
+  // Inverted by #1086. SelectCheckoutGateway can no longer resolve to razorpay, so
+  // this value only reaches the client from a stale cache or a replayed response —
+  // and naming a processor that will not touch the money is the very defect above.
+  it('does not name Razorpay, which no longer takes any payment', () => {
+    expect(paymentSecuredByLine('razorpay')).toBe(
+      'Payments are processed by an RBI-licensed payment aggregator.',
+    );
   });
 
   it('does not claim RBI licensing for Stripe', () => {

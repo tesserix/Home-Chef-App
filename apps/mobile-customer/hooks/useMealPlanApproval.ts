@@ -52,17 +52,15 @@ export function useMealPlanApproval(
               { id: plan.id, approve },
               {
                 onSuccess: (res) => {
-                  // Approve (escrow on): the server minted a Razorpay advance order
-                  // for the accepted days — launch checkout. Payment happens here,
-                  // after approval. verify-payment then confirms + holds.
+                  // Approve (escrow on): the server minted an advance order for the
+                  // accepted days — launch checkout. Payment happens here, after
+                  // approval. verify-payment then confirms + holds.
                   if (approve && res?.paymentError) {
                     showAlert('Payment unavailable', res.paymentError);
                     return;
                   }
-                  // Cashfree opens its own sheet (a WebView, not the Razorpay
-                  // native one) and has no key id or client signature, so it gets
-                  // its own screen. The provider comes from the server — never
-                  // guessed here, since only the server knows which rail it minted.
+                  // The provider comes from the server — never guessed here, since
+                  // only the server knows which rail it minted.
                   if (approve && res?.provider === 'cashfree') {
                     router.push({
                       pathname: '/payment/cashfree',
@@ -77,19 +75,14 @@ export function useMealPlanApproval(
                     });
                     return;
                   }
+                  // An advance was minted on something other than Cashfree. Since
+                  // #1086 there is no second rail to open it on, so say so rather
+                  // than falling through to "Plan confirmed" on an unpaid plan.
                   if (approve && res?.razorpayOrderId) {
-                    const b = mealPlanAdvanceBreakdown(res.mealPlan);
-                    router.push({
-                      pathname: '/payment/checkout',
-                      params: {
-                        kind: 'mealplan',
-                        mealPlanId: plan.id,
-                        razorpayOrderId: res.razorpayOrderId,
-                        razorpayKeyId: res.razorpayKeyId ?? '',
-                        amount: String(b.amountPaise),
-                        currency: res.mealPlan.currency ?? 'INR',
-                      },
-                    });
+                    showAlert(
+                      'Payment unavailable',
+                      "We couldn't open the payment for this plan. Please try again.",
+                    );
                     return;
                   }
                   // Reject, or escrow-off approve (unpaid handshake → confirmed).

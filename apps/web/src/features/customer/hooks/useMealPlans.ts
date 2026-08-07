@@ -137,16 +137,16 @@ export function useCreateMealPlan() {
 }
 
 /**
- * Approve response. The server mints the Razorpay advance order and hands back
- * the id + key so the browser can open checkout; `paymentError` means the plan is
+ * Approve response. The server mints the advance order on Cashfree and hands back
+ * the handshake the browser opens checkout with; `paymentError` means the plan is
  * approved but the charge could not be started and should be retried.
  */
 export interface ApproveMealPlanResult {
+  /** The gateway's order id, whichever rail minted it. Absent → escrow is off. */
   razorpayOrderId?: string;
-  razorpayKeyId?: string;
   paymentError?: string;
   mealPlan: MealPlan;
-  /** Which gateway minted the advance. Absent on older servers → razorpay. */
+  /** Which gateway minted the advance. */
   provider?: string;
   /** Cashfree handshake. The session id is short-lived and re-minted per approval. */
   cashfreeOrderId?: string;
@@ -167,22 +167,13 @@ export function useApproveMealPlan() {
 
 /**
  * Confirms the advance after the gateway returns. Flips the plan to `confirmed`.
- * The Razorpay fields are omitted for Cashfree, which gives the client no payment
- * id or signature — the server re-fetches the capture from the gateway instead.
+ * The body is empty: Cashfree gives the client no payment id and no signature, so
+ * the server re-fetches the capture from the gateway and is the only authority.
  */
 export function useVerifyMealPlanPayment() {
   const qc = useQueryClient();
-  return useMutation<
-    unknown,
-    unknown,
-    {
-      id: string;
-      razorpayOrderId?: string;
-      razorpayPaymentId?: string;
-      razorpaySignature?: string;
-    }
-  >({
-    mutationFn: ({ id, ...body }) => apiClient.post(`/meal-plans/${id}/verify-payment`, body),
+  return useMutation<unknown, unknown, { id: string }>({
+    mutationFn: ({ id }) => apiClient.post(`/meal-plans/${id}/verify-payment`, {}),
     onSuccess: (_r, { id }) => {
       void qc.invalidateQueries({ queryKey: ['meal-plans'] });
       void qc.invalidateQueries({ queryKey: ['meal-plans', id] });

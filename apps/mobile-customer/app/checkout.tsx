@@ -1,8 +1,7 @@
-// Checkout screen — address selection, order summary, then Razorpay payment.
+// Checkout screen — address selection, order summary, then payment.
 //
 // This screen creates the order, then calls startOrderPayment (lib/payment),
-// which opens the NATIVE Razorpay checkout sheet (react-native-razorpay) and
-// routes to /payment/result. No WebView, no visible web page load.
+// which opens the Cashfree sheet and routes to /payment/result.
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
@@ -590,12 +589,11 @@ export default function CheckoutScreen() {
       // Order created — the note is now persisted server-side; drop the backup.
       clearNoteDraft();
 
-      // Steps 2–3: create the Razorpay payment and open the NATIVE checkout
-      // sheet. startOrderPayment handles the full-wallet (already-paid) shortcut
-      // and routes to /payment/result, which polls the authoritative payment
-      // status. Keep the button DISABLED through payment (cleared in finally) so a
-      // second tap can't create a duplicate order during the create→pay round-trip
-      // before the native sheet appears.
+      // Steps 2–3: create the payment and open the gateway. startOrderPayment
+      // handles the full-wallet (already-paid) shortcut and routes to
+      // /payment/result, which polls the authoritative payment status. Keep the
+      // button DISABLED through payment (cleared in finally) so a second tap can't
+      // create a duplicate order during the create→pay round-trip.
       // A short hold sits between the order and the gateway (#hold): nothing is
       // charged until it elapses, so a change of mind costs a tap rather than a
       // refund. Only on first placement — a retry from an unpaid order pays now.

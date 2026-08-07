@@ -1,8 +1,8 @@
 // Payment result screen.
 //
-// The client-side Razorpay callback is NOT authoritative — the session can
+// The client-side gateway callback is NOT authoritative — the session can
 // expire while the user is in the payment sheet, so the in-app verify call may
-// fail even though Razorpay captured the money. Instead of trusting the
+// fail even though the gateway captured the money. Instead of trusting the
 // callback params, this screen polls the order's real `paymentStatus` (which
 // the server sets via the synchronous verify OR the payment.captured webhook)
 // and shows the actual outcome. There are two genuinely different
@@ -42,8 +42,6 @@ const PRIMARY_RIPPLE = `${customerColors.canvas}33`;
 const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 interface PaymentParams {
-  razorpay_payment_id?: string;
-  razorpay_order_id?: string;
   order_id?: string; // the internal order id passed when launching checkout
   error?: string;
   tip?: string; // '1' when this is a post-delivery tip charge (#45)
@@ -64,7 +62,7 @@ const SLOW_POLL_MS = 15_000;
 export default function PaymentResult() {
   const router = useRouter();
   const params = useLocalSearchParams() as unknown as PaymentParams;
-  const orderId = params.order_id ?? params.razorpay_order_id ?? '';
+  const orderId = params.order_id ?? '';
 
   const [pastGrace, setPastGrace] = useState(false);
   const [retrying, setRetrying] = useState(false);

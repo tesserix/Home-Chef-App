@@ -1,14 +1,9 @@
 // Shared payment launch flow. Used by the cart checkout (first attempt) and by
 // "Retry payment" / "Pay now" on an unpaid order. Centralising it keeps the
-// create-order → native-sheet hand-off identical everywhere.
-//
-// Uses the react-native-razorpay NATIVE checkout sheet (not a WebView) so the
-// customer never sees a web page load — just our screens and the native sheet.
+// create-order → gateway hand-off identical everywhere.
 
-import RazorpayCheckout from 'react-native-razorpay';
 import { router } from 'expo-router';
 import { api } from './api';
-import { RAZORPAY_DISPLAY_CONFIG } from './razorpay-config';
 import { useCartStore } from '../store/cart-store';
 
 /** Caches a settled non-order charge invalidates. Both gateway screens replace()
@@ -27,7 +22,7 @@ export function chargeRefreshKeys(kind: string, chargeId: string): string[][] {
   }
 }
 
-export interface RazorpayPaymentData {
+export interface GatewayPaymentData {
   // "wallet" + paid:true when credit covers the full total — no gateway sheet.
   provider?: string;
   paid?: boolean;
@@ -35,14 +30,11 @@ export interface RazorpayPaymentData {
   loyaltyApplied?: number;
   /** Server-authoritative amount still due at the gateway. */
   payable?: number;
-  // Cashfree hands back a payment_session_id instead of an (order id, key id)
-  // pair, plus the environment — sandbox and production are different hosts, so
-  // unlike Razorpay's key prefix there is nothing for the client to infer it from.
+  // Cashfree hands back a payment_session_id, plus the environment — sandbox and
+  // production are different hosts and nothing in the session identifies which.
   cashfreePaymentSessionId?: string;
   cashfreeOrderId?: string;
   cashfreeEnv?: string;
-  razorpayOrderId: string;
-  razorpayKeyId: string;
   amount: number;
   currency: string;
   orderNumber?: string;
@@ -53,24 +45,13 @@ export interface RazorpayPaymentData {
   };
 }
 
-// react-native-razorpay ships no types — model the bits we use.
-interface RazorpaySuccess {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-}
-interface RazorpayError {
-  code?: number; // 2 = PAYMENT_CANCELLED (user dismissed the sheet)
-  description?: string;
-}
-
 // Hand-off slot for the resolved gateway payload while the customer sits in the
 // pre-payment hold (#hold). Route params are strings; this is a whole object,
 // and serialising it into the URL would put payment session ids in navigation
 // state. One slot is enough — a customer can only be paying for one thing.
-let pendingGateway: { orderId: string; data: RazorpayPaymentData } | null = null;
+let pendingGateway: { orderId: string; data: GatewayPaymentData } | null = null;
 
-export function takePendingGateway(orderId: string): RazorpayPaymentData | null {
+export function takePendingGateway(orderId: string): GatewayPaymentData | null {
   if (!pendingGateway || pendingGateway.orderId !== orderId) return null;
   const { data } = pendingGateway;
   pendingGateway = null;
@@ -88,7 +69,7 @@ export function clearPendingGateway(): void {
  */
 export async function launchGateway(
   orderId: string,
-  data: RazorpayPaymentData,
+  data: GatewayPaymentData,
   // From the hold screen, REPLACE — the hold must not survive in the back stack
   // for the customer to return to a countdown that has already elapsed.
   opts: { replace?: boolean } = {},
@@ -105,54 +86,16 @@ export async function launchGateway(
     return;
   }
 
-  const options = {
-    key: data.razorpayKeyId,
-    order_id: data.razorpayOrderId,
-    amount: data.amount,
-    currency: data.currency ?? 'INR',
-    name: 'Fe3dr',
-    description: 'Order payment',
-    prefill: {
-      name: data.prefill?.name ?? '',
-      email: data.prefill?.email ?? '',
-      contact: data.prefill?.phone ?? '',
-    },
-    // UPI-first ordering (GPay/PhonePe/BHIM on top), cards/netbanking below.
-    config: RAZORPAY_DISPLAY_CONFIG,
-    theme: { color: '#FF385C' },
-  };
-
-  try {
-    const result: RazorpaySuccess = await RazorpayCheckout.open(options);
-    // Fast-path verify. The result screen polls the server status as a backstop
-    // (webhook), so we swallow a verify failure here rather than surfacing it.
-    try {
-      await api.post(`/v1/payments/order/${orderId}/verify`, {
-        razorpayPaymentId: result.razorpay_payment_id,
-        razorpayOrderId: result.razorpay_order_id,
-        razorpaySignature: result.razorpay_signature,
-      });
-      useCartStore.getState().clearCart();
-    } catch {
-      // ignore — the result screen confirms via polling
-    }
-    router.replace(`/payment/result?order_id=${orderId}`);
-  } catch (err) {
-    const e = err as RazorpayError;
-    // User dismissed the sheet — return to where they were, instantly.
-    if (e?.code === 2 || /cancel/i.test(e?.description ?? '')) {
-      router.back();
-      return;
-    }
-    // Genuine failure — the result screen shows status + a Retry option.
-    router.replace(`/payment/result?order_id=${orderId}`);
-  }
+  // No second rail since #1086. A response the server minted on something other
+  // than Cashfree cannot be opened here, so send the customer to the result screen
+  // rather than silently doing nothing — it polls the real status and offers Retry.
+  router.replace(`/payment/result?order_id=${orderId}`);
 }
 
 /**
- * Create (or re-create) the Razorpay payment for an existing order, open the
- * NATIVE checkout sheet, and route to the result screen. Safe to call on a
- * pending order to retry — the server rejects already-paid orders with 400.
+ * Create (or re-create) the payment for an existing order, open the gateway, and
+ * route to the result screen. Safe to call on a pending order to retry — the
+ * server rejects already-paid orders with 400.
  *
  * The result screen is authoritative: it polls the order's real paymentStatus
  * (set by the verify below OR the payment.captured webhook), so a failed
@@ -179,11 +122,11 @@ export async function startOrderPayment(
   // a retry on an unpaid order should go straight to paying. 0 = no hold.
   opts: { holdSeconds?: number } = {},
 ): Promise<void> {
-  const resp = await api.post<{ data: RazorpayPaymentData }>(
+  const resp = await api.post<{ data: GatewayPaymentData }>(
     `/v1/payments/order/${orderId}/create`,
     credit,
   );
-  const data = resp.data.data ?? (resp.data as unknown as RazorpayPaymentData);
+  const data = resp.data.data ?? (resp.data as unknown as GatewayPaymentData);
 
   // Full-wallet order: store credit covered the total, so the server already
   // marked it paid — no gateway sheet. Go straight to the result poller.
