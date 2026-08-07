@@ -136,17 +136,6 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 		}
 	}
 
-	// Easy Split at capture: the chef's net share settles from the gateway
-	// straight to their vendor account, the remainder (commission, fees, GST,
-	// TDS, delivery money) stays with the platform merchant account. nil for
-	// any reason means the pre-existing full-capture + statement path.
-	var splits []services.CashfreeVendorSplit
-	splitPaise := 0
-	if split := services.BuildOrderSplit(database.DB, order, plan.CapturePaise, creditPaise); split != nil {
-		splits = []services.CashfreeVendorSplit{*split}
-		splitPaise = split.AmountPaise.Paise()
-	}
-
 	cfOrder, err := cf.CreateOrder(&services.CashfreeOrderRequest{
 		OrderID:     cfOrderID,
 		AmountPaise: services.CashfreeAmountFromPaise(plan.CapturePaise),
@@ -173,8 +162,9 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 			"order_number": order.OrderNumber,
 			"customer_id":  userID.String(),
 		},
+		// No order_splits: the chef's share is allocated after payment, when the
+		// release governor has decided the order may pay out (ADR-0003, #1091).
 		OrderNote: fmt.Sprintf("Fe3dr order %s", order.OrderNumber),
-		Splits:    splits,
 		// Per (order, capture amount): a retry re-derives the same key so Cashfree
 		// dedups it, while a genuinely re-priced order gets a distinct one.
 		IdempotencyKey: fmt.Sprintf("cf-order:%s:%d", order.ID, plan.CapturePaise),
@@ -229,10 +219,11 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 		"wallet_applied":            walletApplied,
 		"loyalty_applied":           loyaltyApplied,
 		"loyalty_points_spent":      quote.PointsAppliedPoints,
-		// Written on every mint, including back to 0: the stamp must describe
-		// the LATEST gateway order, or a re-checkout after Easy Split was
-		// switched off would still tell the statement path "already paid".
-		"gateway_split_paise": splitPaise,
+		// Cleared on every mint: the stamp describes the LATEST gateway order,
+		// and nothing has been split for one that has not been paid yet. Left
+		// behind by an earlier order it would tell the statement path "already
+		// paid" for money that never moved.
+		"gateway_split_paise": 0,
 	}); res.Error != nil {
 		// Losing this write would strand the customer's applied credit AND leave us
 		// unable to recognise the webhook for the order we just created.
@@ -242,7 +233,7 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 	}
 	order.RazorpayOrderID = cfOrder.OrderID
 	order.PaymentProvider = models.PaymentProviderCashfree
-	order.GatewaySplitPaise = splitPaise
+	order.GatewaySplitPaise = 0
 
 	// From here the order's fate stops depending on the client coming back:
 	// the durable poll asks the gateway itself until the answer is terminal.
