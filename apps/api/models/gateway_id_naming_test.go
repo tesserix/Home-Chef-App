@@ -18,6 +18,21 @@ var razorpayGatewayID = regexp.MustCompile(
 		`razorpay_order_id|razorpay_payment_id|razorpay_signature|` +
 		`razorpayOrderId|razorpayPaymentId|razorpaySignature`)
 
+// The migration that MOVES the old column has to name it, and so do its tests
+// (#1127). Everything else in apps/api must go through gateway_*.
+func isGatewayIDNamingExempt(path string) bool {
+	for _, exempt := range []string{
+		"gateway_id_naming_test.go",
+		"database/gateway_id_backfill_test.go",
+		"database/gateway_id_backfill_pg_test.go",
+	} {
+		if strings.HasSuffix(filepath.ToSlash(path), exempt) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestNoRazorpayNamedGatewayIDs(t *testing.T) {
 	root := ".."
 
@@ -29,7 +44,7 @@ func TestNoRazorpayNamedGatewayIDs(t *testing.T) {
 		if info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		if strings.HasSuffix(path, "gateway_id_naming_test.go") {
+		if isGatewayIDNamingExempt(path) {
 			return nil
 		}
 		body, err := os.ReadFile(path)
