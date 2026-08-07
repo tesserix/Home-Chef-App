@@ -31,9 +31,9 @@ import (
 // same wallet settlement seam, same refund coordinator. The only differences are
 // the ones the gateway forces:
 //
-//   - No gateway split. Cashfree captures the whole payable amount to the
-//     platform merchant account; the chef and rider are paid through the
-//     statement/payout path. See models.ProviderSupportsGatewaySplit.
+//   - No split at capture. Cashfree captures the whole payable amount to the
+//     platform merchant account; the chef's share leaves later, on release, via
+//     Easy Split (ADR-0003), and the remainder on the statement/payout path.
 //   - No client-side signature to verify. The authority is a server-side fetch
 //     of the order's payments.
 //   - Both ids land in the razorpay_order_id / razorpay_payment_id columns. That

@@ -161,10 +161,9 @@ func releaseReadySettings(t *testing.T, db *gorm.DB) {
 }
 
 // withPayoutMovementDisabled pins config.AppConfig for the duration of the test
-// so ReleaseOrderPayouts' gateway seam stays a pure no-op (OrderPayoutAutoReleaseEnabled
-// false) regardless of what an earlier test in this package left behind —
-// letting the sweep tests assert on hold-state/outbox effects without a live
-// Razorpay client.
+// so the gateway seam stays a pure no-op (OrderPayoutAutoReleaseEnabled false)
+// regardless of what an earlier test in this package left behind — letting the
+// sweep tests assert on hold-state/outbox effects without a live gateway.
 func withPayoutMovementDisabled(t *testing.T) {
 	t.Helper()
 	saved := config.AppConfig
@@ -175,11 +174,9 @@ func withPayoutMovementDisabled(t *testing.T) {
 // withPayoutMovementEnabled pins config.AppConfig so payoutMovementEnabled()
 // reads true — required for any test that wants runPayoutReleaseSweep to reach
 // ReleaseHold at all, now that the sweep bails up front when movement is off.
-// The gateway seam this flips on (ReleaseOrderPayouts) still runs as a pure
-// no-op for these tests: seedDeliveredOrder never sets razorpay_order_id, so
-// orderRazorpayID reads back "" and ReleaseOrderPayouts returns nil via its own
-// "not a gateway-charged regular order" branch, before it ever needs a live
-// Razorpay client.
+// The gateway seam this flips on still runs as a pure no-op for these tests:
+// seedDeliveredOrder never sets razorpay_order_id, so the split refuses the
+// order and falls back to the statement path before it needs a live gateway.
 func withPayoutMovementEnabled(t *testing.T) {
 	t.Helper()
 	saved := config.AppConfig
@@ -238,7 +235,7 @@ func TestRunPayoutReleaseSweep_ReleasesEligibleOrderExactlyOnce(t *testing.T) {
 		t.Fatalf("payout_hold_status = %q, want %q", updated.PayoutHoldStatus, models.PayoutHoldReleased)
 	}
 	if updated.PayoutSettledAt == nil {
-		t.Fatal("payout_settled_at must be stamped by ReleaseHold's settleRelease — bypassing it via ReleaseOrderPayouts never stamps it")
+		t.Fatal("payout_settled_at must be stamped by ReleaseHold's settleRelease — the gateway seam alone never stamps it")
 	}
 }
 
@@ -315,10 +312,10 @@ func TestRunPayoutReleaseSweep_MasterSwitchOffPublishesNothing(t *testing.T) {
 // payoutMovementEnabled()) is off, even though every other release-readiness
 // check on this order passes. Before the fix, ReleaseHold still committed the
 // release_eligible -> released transition and settleRelease still stamped
-// payout_settled_at, because releaseMoney's order branch (ReleaseOrderPayouts)
-// silently returns nil when the movement flag is off — so the row looked fully
-// settled while the Razorpay transfer stayed on_hold, permanently excluded from
-// every reconcile query keyed on `released AND payout_settled_at IS NULL`.
+// payout_settled_at, because releaseMoney's order branch silently returns nil
+// when the movement flag is off — so the row looked fully settled while no money
+// had moved, permanently excluded from every reconcile query keyed on
+// `released AND payout_settled_at IS NULL`.
 func TestRunPayoutReleaseSweep_MovementOffReleasesNothing(t *testing.T) {
 	withPayoutMovementDisabled(t)
 	db := newPayoutReleaseTestDB(t)

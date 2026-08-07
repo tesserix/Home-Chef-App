@@ -29,9 +29,9 @@ const (
 	PaymentProviderRazorpay = "razorpay"
 
 	// PaymentProviderCashfree — India. Cashfree PG. Captures the FULL order to
-	// the platform merchant account; chef/rider money is settled through the
-	// statement/payout path, NOT split at the gateway. See
-	// ProviderSupportsGatewaySplit for why.
+	// the platform merchant account; the chef's share is split on release via
+	// Easy Split (ADR-0003) and the remainder settles on the statement/payout
+	// path. Nothing is split at capture.
 	PaymentProviderCashfree = "cashfree"
 
 	// PaymentProviderStripe — international. Connect destination charges.
@@ -127,36 +127,6 @@ func UsesINRPaise(p string) bool {
 	default:
 		return true
 	}
-}
-
-// ProviderSupportsGatewaySplit reports whether this provider splits an order
-// across chef/rider payees AT THE GATEWAY, producing a transfer object with the
-// on_hold → release → reverse lifecycle that the escrow paths drive
-// (meal_plan_escrow, group_order_payout, order_payout, escrow_ledger_reconcile,
-// and the payout_hold state machine).
-//
-// TRUE for Razorpay only. Route gives every split a `transfer` with an id,
-// `on_hold`, `amount_reversed`, a PATCH to release and a POST to reverse — the
-// exact primitives that whole layer assumes.
-//
-// FALSE for Cashfree. Easy Split has no comparable object: it offers split-at-
-// order or split-after-payment, a date-based "settlement eligibility date" for
-// deferral, vendor-balance CREDIT/DEBIT transfers, and automatic pro-rata refund
-// deduction once a split has settled. There is no transfer id to hold, release
-// or partially reverse, so pretending otherwise would mean an escrow ledger that
-// reconciles against nothing. Cashfree therefore captures the full amount to the
-// platform and the chef/rider are paid through the ordinary statement/payout
-// path — the same route a Razorpay order takes when
-// ORDER_PAYOUT_AUTO_RELEASE_ENABLED is off.
-//
-// FALSE for Stripe: it uses destination charges + application fees, and its
-// reversal is a flag on the refund (ReverseTransfer), not a transfer lifecycle.
-//
-// Every gateway-transfer call site must be guarded on this. A no-op is the
-// CORRECT behaviour for a provider that answers false — but it must be a
-// deliberate, logged no-op, never a silent fallthrough into the Razorpay branch.
-func ProviderSupportsGatewaySplit(p string) bool {
-	return NormalizeProvider(p) == PaymentProviderRazorpay
 }
 
 // GatewayOrderIDColumn / GatewayPaymentIDColumn document a deliberate reuse.

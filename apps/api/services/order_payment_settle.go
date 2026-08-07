@@ -12,8 +12,8 @@ package services
 // transaction (CompletionBlockedStatuses, NotifyChefNewOrderTx,
 // CompleteOrderPaymentTx, CompleteRazorpayOrderTx, CompleteCashfreeOrderTx).
 // Task 2 adds the wallet-settlement cluster (OrderSettlements,
-// ApplyChefRecoveryDeduction, DebitOrderWallet, SettleWalletTopUps,
-// SettleOrderWallet). Task 3 adds the two gateway-settle cores
+// ApplyChefRecoveryDeduction, DebitOrderWallet, SettleOrderWallet). Task 3 adds
+// the two gateway-settle cores
 // (SettleCashfreeOrder, SettleRazorpayOrderFromPayment).
 
 import (
@@ -22,7 +22,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/homechef/api/database"
@@ -251,57 +250,6 @@ func DebitOrderWallet(order *models.Order) error {
 	return err
 }
 
-// SettleWalletTopUps funds the chef/driver portion that the gateway capture could
-// not cover, via direct transfers from the platform balance (#141). Failures are
-// logged but not fatal — the money is already captured and the reconciliation job
-// retries; failing here would wrongly tell the client the order is unpaid.
-func SettleWalletTopUps(order *models.Order, topUps []TransferSpec) {
-	rz := GetRazorpayFor(order.Mode)
-	if rz == nil {
-		return
-	}
-	settleWalletTopUpsWith(order.ID, order.OrderNumber, topUps, func(leg int, t TransferSpec) error {
-		_, err := rz.CreateTransfer(&DirectTransferRequest{
-			Account: t.Account, Amount: t.Amount, Currency: t.Currency, OnHold: t.OnHold, Notes: t.Notes,
-			// Per (order, leg-index, account) — the same identity as the processed_events claim
-			// (#554/#558); a retried settlement re-derives the same key so Razorpay dedups each
-			// chef/driver top-up, and two legs sharing one account stay independently keyed. #574.
-			IdempotencyKey: TopupIdempotencyKey(order.ID, leg, t.Account),
-		})
-		return err
-	})
-}
-
-// settleWalletTopUpsWith issues each platform-funded top-up transfer AT MOST ONCE per
-// (order, account), idempotently (#554). A retried VerifyPayment used to re-issue the
-// same real money transfer because CreateTransfer had no dedup. Now each (order,
-// account) is claimed in the processed_events ledger before the transfer; a repeat
-// settlement finds the claim and skips. On a transfer failure the claim is released so
-// the NEXT settlement re-attempts it — so a gateway blip retries without ever
-// double-paying. doTransfer is the gateway seam (real in prod, a fake in tests). A
-// crash between claim and a successful transfer strands that one top-up (recoverable
-// by the settlement reconcile — #398/#3), which is the safe side of the trade-off:
-// never a double transfer.
-func settleWalletTopUpsWith(orderID uuid.UUID, orderNumber string, topUps []TransferSpec, doTransfer func(leg int, t TransferSpec) error) {
-	// #558: key each leg by its index in the deterministic DirectTopUps list (stable across
-	// retries), so two legs sharing one Razorpay payout account stay independently idempotent.
-	for leg, t := range topUps {
-		firstTime, err := ClaimWalletTopUp(database.DB, orderID, leg, t.Account)
-		if err != nil {
-			log.Printf("wallet-topup: claim failed order=%s leg=%d account=%s: %v", orderNumber, leg, t.Account, err)
-			continue
-		}
-		if !firstTime {
-			continue // already transferred for this (order, leg, account) — no double
-		}
-		if err := doTransfer(leg, t); err != nil {
-			ReleaseWalletTopUp(database.DB, orderID, leg, t.Account) // let a retry re-attempt
-			log.Printf("wallet-topup: direct transfer failed order=%s leg=%d account=%s amount=%d: %v",
-				orderNumber, leg, t.Account, t.Amount, err)
-		}
-	}
-}
-
 // SettleOrderWallet settles the wallet-at-checkout slice once a gateway capture is
 // confirmed: debit the applied store credit and issue the platform-funded chef/driver
 // top-ups the capture couldn't cover (#141). Both are idempotent (DebitWallet keyed
@@ -336,23 +284,6 @@ func SettleOrderWallet(order *models.Order) {
 		CaptureBackgroundError(err)
 		return
 	}
-	// The chef/driver top-ups only exist to make up what a GATEWAY SPLIT could not
-	// cover: Route funds each settlement from the capture as far as it reaches, and
-	// the platform balance pays the rest. A provider that doesn't split at the
-	// gateway has no shortfall to top up — the whole amount was captured to the
-	// platform, and the chef/rider are paid through the statement/payout path. Running
-	// the top-ups anyway would pay them a second time out of the platform balance.
-	//
-	// The debit above still had to happen: the customer's credit was applied and
-	// spent regardless of which gateway took the remainder.
-	if !models.ProviderSupportsGatewaySplit(order.PaymentProvider) {
-		return
-	}
-	// The top-up plan must reconstruct the FULL credit applied — wallet plus the
-	// loyalty slice — or the chef/driver would be short-paid by the points portion.
-	appliedPaise := ToPaise(order.WalletApplied) + ToPaise(order.LoyaltyApplied)
-	plan := PlanWalletFunding(ToPaise(order.Total), appliedPaise, appliedPaise, OrderSettlements(database.DB, order))
-	SettleWalletTopUps(order, plan.DirectTopUps)
 }
 
 // SettleCashfreeOrder is the shared "the gateway says this is paid, so make the

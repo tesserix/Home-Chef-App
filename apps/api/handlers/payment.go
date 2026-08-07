@@ -172,9 +172,6 @@ func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Ord
 		services.NotifyPaymentSucceeded(database.DB, order.ID)
 	}
 
-	// Pay the chef/driver from the platform balance (the whole split is a top-up).
-	services.SettleWalletTopUps(order, plan.DirectTopUps)
-
 	c.JSON(http.StatusOK, gin.H{
 		"provider":      "wallet",
 		"paid":          true,
@@ -478,24 +475,15 @@ func claimRefundForProcessing(db *gorm.DB, orderID uuid.UUID) (bool, error) {
 	return res.RowsAffected == 1, res.Error
 }
 
-// crossGuardRefundHold drives the payout hold after a refund. A FULL refund
-// withholds/reverses the whole chef hold (#457) and runs UNCONDITIONALLY: its
-// cross-guard is idempotent (transitionHold's conditional WHERE) AND is the safety
-// net that must block the hold even when the persist that stamps refunded_at failed.
-// A PARTIAL refund claws back only refundAmount from the chef's transfer and leaves
-// the hold releasable (#549 — the chef eats the refunded amount, keeps the
-// remainder); that claw-back is NOT re-fire idempotent (it only caps at the transfer
-// total, not per refund instance), so it runs ONLY when the refund actually persisted
-// (persistOK). Otherwise a retry after a swallowed persist failure would reverse the
-// chef twice for one customer refund (#568).
+// crossGuardRefundHold drives the payout hold to the state a refund implies. A
+// FULL refund withholds/reverses the whole hold; a PARTIAL one leaves it
+// releasable — the chef eats the refunded amount and keeps the remainder (#549),
+// which the statement path already reflects, so there is nothing to move here.
 func crossGuardRefundHold(orderID uuid.UUID, refundAmount float64, reason string, fullRefund, persistOK bool) error {
 	if fullRefund {
 		return services.WithholdOrReverseOrderHoldForRefund(database.DB, orderID, reason)
 	}
-	if !persistOK {
-		return nil // #568: don't claw a partial that didn't persist — a retry would double-claw
-	}
-	return services.WithholdOrReverseOrderHoldForPartialRefund(database.DB, orderID, services.ToPaise(refundAmount), reason)
+	return nil
 }
 
 // POST /payments/order/:orderId/refund

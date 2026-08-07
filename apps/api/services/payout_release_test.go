@@ -8,8 +8,8 @@ package services
 //
 // Money movement stays behind OrderPayoutAutoReleaseEnabled (regular orders) and
 // MealPlanEscrowEnabled (meal-plan days); OFF ⇒ every action is a DB-only state
-// advance with NO money moved. GetRazorpay() returns nil in tests (no Secret
-// Manager), so even flag-ON tests reach the seam without a live gateway.
+// advance with NO money moved. No gateway client is configured in tests (no
+// Secret Manager), so even flag-ON tests reach the seam without one.
 
 import (
 	"testing"
@@ -205,7 +205,7 @@ func TestReleaseHold_FlagOff_AdvancesNoMoney(t *testing.T) {
 }
 
 // TestReleaseHold_FlagOn_ReachesSeam_NoCrash — flag ON with an unconfigured
-// gateway (GetRazorpay()==nil): ReleaseOrderPayouts no-ops cleanly, row released.
+// gateway: the release seam no-ops cleanly and the row is released.
 func TestReleaseHold_FlagOn_ReachesSeam_NoCrash(t *testing.T) {
 	saved := config.AppConfig
 	t.Cleanup(func() { config.AppConfig = saved })

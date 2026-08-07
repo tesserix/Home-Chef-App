@@ -39,17 +39,6 @@ func TestPreferredProvider_IsDistinctFromTheHistoricalFallback(t *testing.T) {
 		"the new-chef preference and the unstamped-row meaning must stay separate")
 }
 
-// Route-style transfer hold/release/reverse exists ONLY on Razorpay. Every escrow
-// call site is guarded on this, so a wrong answer here would either hand Razorpay
-// a Cashfree order id (400 on every release) or silently skip a real payout.
-func TestProviderSupportsGatewaySplit_OnlyRazorpay(t *testing.T) {
-	require.True(t, ProviderSupportsGatewaySplit(PaymentProviderRazorpay))
-	require.True(t, ProviderSupportsGatewaySplit(""), "unstamped rows are Razorpay orders")
-	require.False(t, ProviderSupportsGatewaySplit(PaymentProviderCashfree))
-	require.False(t, ProviderSupportsGatewaySplit(PaymentProviderStripe))
-	require.False(t, ProviderSupportsGatewaySplit(PaymentProviderWallet))
-}
-
 // Credit rails are INR-denominated: Cashfree takes them exactly as Razorpay does,
 // only Stripe does not. The old `!EqualFold(provider,"stripe")` spelling happened
 // to be right; naming Razorpay instead would have disabled wallet and loyalty on
