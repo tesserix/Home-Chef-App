@@ -120,8 +120,9 @@ explicitly (`ReverseTransfer`).
 | `ORDER_PAYOUT_AUTO_RELEASE_ENABLED` | OFF | Auto-release a delivered regular order's held chef/rider transfers (#217) | Sandbox-verify hold → release on delivery |
 | `WALLET_CHECKOUT_ENABLED` | OFF | Applying store credit at checkout (#141) | Verify direct-transfer top-ups in sandbox |
 
-See **`docs/RAZORPAY-SANDBOX-VERIFICATION.md`** for the step-by-step sign-off
-runbook (#218) to run before flipping any of these on.
+Sign-off runs against the **Cashfree sandbox** before any of these is flipped on.
+The Razorpay runbook that stood here described the Route hold/release lifecycle,
+dismantled in #1105, and was deleted rather than left to mislead (#1121).
 
 Tips (#45) and capacity (#48) are **not** flagged — tips are a standard charge
 (reuses the proven checkout) and caps move no money.
@@ -131,6 +132,6 @@ Tips (#45) and capacity (#48) are **not** flagged — tips are a standard charge
 ## 6. Open / tracked gaps (see GitHub issues)
 
 1. **Regular-order held-transfer release (#217)** — IMPLEMENTED, gated by `ORDER_PAYOUT_AUTO_RELEASE_ENABLED`; enable after sandbox (#218).
-2. **Group + escrow + order-release money flows need Razorpay-sandbox sign-off (#218)** before flipping their flags — see `docs/RAZORPAY-SANDBOX-VERIFICATION.md`.
+2. **Group + escrow + order-release money flows need Cashfree-sandbox sign-off (#218)** before flipping their flags.
 3. **Group orders now consume the à-la-carte cap** (reserve at lock, release on cancel, #219). **Meal-plan** orders book weekly-menu cells (separate inventory) — per-cell caps remain a distinct follow-up.
 4. **Escrow vs. UPI-Autopay model decision** for tiffin (#1/#2) is still open.

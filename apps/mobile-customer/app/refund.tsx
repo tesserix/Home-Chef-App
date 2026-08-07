@@ -29,7 +29,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '3. How and when refunds are paid',
     paragraphs: [
-      'Payments are processed by Razorpay, an RBI-licensed payment aggregator. Approved refunds are returned to your original payment method.',
+      'Payments are processed by Cashfree Payments, an RBI-licensed payment aggregator. Approved refunds are returned to your original payment method.',
       'Refunds are completed within 7 working days of approval, in line with the Reserve Bank of India Payment Aggregator Master Direction. The time it takes for the amount to appear in your account afterward depends on your bank or card issuer.',
     ],
   },

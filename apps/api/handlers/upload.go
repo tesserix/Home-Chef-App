@@ -71,11 +71,8 @@ func getOrCreateChefProfile(userID uuid.UUID) (*models.ChefProfile, error) {
 			UserID:       userID,
 			BusinessName: draftBusinessName(userID),
 			IsActive:     false,
-			// Cashfree-preferred (falling back to Razorpay when Cashfree has no
-			// credentials for this mode). Stamped explicitly rather than left to the
-			// column default: AutoMigrate is local-dev-only here, so the production
-			// column default is owned by tesserix-k8s and cannot be relied on to
-			// match this repo's intent.
+			// Stamped explicitly rather than left to the column default, so a chef's
+			// gateway is never an artefact of migration order.
 			PaymentProvider: services.DefaultChefPaymentProvider(models.ChefModeLive),
 		}
 		if err := database.DB.Create(&chef).Error; err != nil {
@@ -739,9 +736,7 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 	}
 
 	chef := models.ChefProfile{
-		UserID: userID,
-		// Cashfree-preferred; see DefaultChefPaymentProvider for why this degrades
-		// to Razorpay when Cashfree has no credentials for the mode.
+		UserID:             userID,
 		PaymentProvider:    services.DefaultChefPaymentProvider(models.ChefModeLive),
 		BusinessName:       req.BusinessName,
 		Description:        req.Description,

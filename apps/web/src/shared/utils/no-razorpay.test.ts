@@ -10,10 +10,8 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = resolve(__dirname, '../..');
 
-// The legal pages name Razorpay as a data recipient. That copy is factually wrong
-// too, but rewriting a privacy policy is a content change with its own review —
-// tracked in #1121, not smuggled in behind a grep.
-const CONTENT_ONLY = ['features/legal/pages', 'features/auth/pages/RegisterPage.tsx'];
+// Nothing is exempt: the legal pages were rewritten in #1121 and now name the
+// processor that actually handles the money.
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -24,9 +22,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe('the Razorpay checkout is gone from the web client', () => {
-  const files = sourceFiles(SRC).filter(
-    (f) => !CONTENT_ONLY.some((allowed) => f.includes(join(...allowed.split('/')))),
-  );
+  const files = sourceFiles(SRC);
 
   it('no module reaches for the Razorpay SDK or its payload', () => {
     const offenders = files.filter((f) => {
@@ -37,6 +33,18 @@ describe('the Razorpay checkout is gone from the web client', () => {
         code,
       );
     });
+    expect(offenders.map((f) => f.slice(SRC.length + 1))).toEqual([]);
+  });
+
+  // The SDK patterns above never matched prose, so the copy naming Razorpay as a
+  // data recipient sat behind an exemption and stayed wrong for three releases.
+  // These are the files where a bare mention is a factual claim to a user (#1121).
+  it('no user-facing copy names Razorpay as the payment processor', () => {
+    const copy = files.filter(
+      (f) => f.includes(join('features', 'legal', 'pages')) || f.endsWith('RegisterPage.tsx'),
+    );
+    expect(copy.length).toBeGreaterThan(0);
+    const offenders = copy.filter((f) => /razorpay/i.test(readFileSync(f, 'utf8')));
     expect(offenders.map((f) => f.slice(SRC.length + 1))).toEqual([]);
   });
 

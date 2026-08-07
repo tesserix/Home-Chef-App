@@ -269,7 +269,7 @@ export default function PrivacyPolicyPage() {
                 </thead>
                 <tbody className="divide-y divide-mist">
                   <tr>
-                    <td className="px-4 py-3 align-top font-medium">Razorpay (India)</td>
+                    <td className="px-4 py-3 align-top font-medium">Cashfree Payments (India)</td>
                     <td className="px-4 py-3 align-top">Name, email, phone, payment instrument, order total</td>
                     <td className="px-4 py-3 align-top">Process card / UPI / netbanking payments and refunds</td>
                   </tr>

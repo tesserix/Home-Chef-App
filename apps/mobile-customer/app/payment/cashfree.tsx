@@ -6,7 +6,7 @@
 // (including UPI intent on Android) and ships with an OTA update, so the gateway
 // can go live without a store release.
 //
-// Mirrors app/payment/checkout.tsx (the Razorpay sheet) so both gateways feel
+// Mirrors app/payment/checkout.tsx so both entry points feel
 // identical to the customer. Two things genuinely differ:
 //
 //  1. The environment must be passed explicitly — Cashfree splits sandbox from

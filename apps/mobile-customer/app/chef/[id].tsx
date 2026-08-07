@@ -617,7 +617,7 @@ export default function ChefDetailScreen() {
                 a warning: nothing bought here costs real money. */}
             {chef.mode === 'test' ? (
               <Text style={styles.testModeNote}>
-                TEST kitchen — payments use Razorpay test mode, no real money is charged.
+                TEST kitchen — payments use the gateway's test mode, no real money is charged.
               </Text>
             ) : null}
 

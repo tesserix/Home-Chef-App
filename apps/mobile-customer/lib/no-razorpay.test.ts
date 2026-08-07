@@ -12,10 +12,6 @@ import { join, resolve } from 'node:path';
 const ROOT = resolve(__dirname, '..');
 const SCANNED = ['app', 'components', 'hooks', 'lib', 'store', 'types'];
 
-// The legal screens name Razorpay as a data recipient. That copy is wrong too, but
-// rewriting a privacy policy is a content change with its own review (#1121).
-const CONTENT_ONLY = ['app/terms.tsx', 'app/privacy.tsx', 'app/refund.tsx'];
-
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const full = join(dir, entry);
@@ -25,9 +21,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe('the Razorpay checkout is gone from the customer app', () => {
-  const files = SCANNED.flatMap((d) => sourceFiles(join(ROOT, d))).filter(
-    (f) => !CONTENT_ONLY.some((allowed) => f.endsWith(join(...allowed.split('/')))),
-  );
+  const files = SCANNED.flatMap((d) => sourceFiles(join(ROOT, d)));
 
   it('no module imports the SDK or handles its payload', () => {
     const offenders = files.filter((f) =>
@@ -35,6 +29,15 @@ describe('the Razorpay checkout is gone from the customer app', () => {
         readFileSync(f, 'utf8'),
       ),
     );
+    expect(offenders.map((f) => f.slice(ROOT.length + 1))).toEqual([]);
+  });
+
+  // A bare mention in these screens is a factual claim to a user about who
+  // receives their data, which the SDK patterns above never caught (#1121).
+  it('no user-facing copy names Razorpay as the payment processor', () => {
+    const copy = files.filter((f) => /app\/(terms|privacy|refund)\.tsx$/.test(f.replace(/\\/g, '/')));
+    expect(copy.length).toBe(3);
+    const offenders = copy.filter((f) => /razorpay/i.test(readFileSync(f, 'utf8')));
     expect(offenders.map((f) => f.slice(ROOT.length + 1))).toEqual([]);
   });
 
