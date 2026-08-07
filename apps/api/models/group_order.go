@@ -218,8 +218,8 @@ type GroupOrderParticipant struct {
 	PaymentStatus     GroupParticipantPaymentStatus `gorm:"type:varchar(12);index;default:'pending'" json:"paymentStatus"`
 	// Gateway order id whichever rail took this share — Cashfree stamps its own id
 	// here, as orders do — so read it alongside PaymentProvider.
-	RazorpayOrderID   string                        `gorm:"" json:"razorpayOrderId,omitempty"`
-	RazorpayPaymentID string                        `gorm:"" json:"razorpayPaymentId,omitempty"`
+	GatewayOrderID   string                        `gorm:"" json:"gatewayOrderId,omitempty"`
+	GatewayPaymentID string                        `gorm:"" json:"gatewayPaymentId,omitempty"`
 	PaymentProvider   string                        `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider,omitempty"`
 	RefundTxnID       *uuid.UUID                    `gorm:"type:uuid" json:"refundTxnId,omitempty"`
 

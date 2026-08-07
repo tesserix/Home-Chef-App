@@ -29,7 +29,7 @@ func setupStuckRefundDB(t *testing.T) *gorm.DB {
 			status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'razorpay', total REAL DEFAULT 0,
 			wallet_applied REAL DEFAULT 0, refund_amount REAL DEFAULT 0, refund_id TEXT DEFAULT '', refund_reason TEXT,
 			refund_initiated_by TEXT, refunded_at DATETIME, payout_hold_status TEXT DEFAULT '',
-			razorpay_order_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+			gateway_order_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE order_items (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0)`,
 		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, order_id TEXT)`,
 		`CREATE TABLE group_orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT)`,

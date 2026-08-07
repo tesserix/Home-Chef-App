@@ -2,7 +2,7 @@ package services
 
 // meal_plan_day_failure_test.go — #393 slice A (meal-plan DAY freeze). A terminally
 // failed delivery on a per-day fulfilment order must not silently stall the plan: the
-// per-day order is a shell with no razorpay_order_id (RecordDeliveryFailure skips it),
+// per-day order is a shell with no gateway_order_id (RecordDeliveryFailure skips it),
 // so the day's money lives on the meal_plan_days row. This slice marks the day `failed`
 // (a NON-terminal status — the plan waits for admin day-resolution) and FREEZES the
 // day's payout hold to `disputed`. No money moves. Reuses the setupCrossguardDB harness
@@ -151,9 +151,9 @@ func TestMarkMealPlanDayFailed_TerminalDayNoOp(t *testing.T) {
 
 func TestTerminalizeDeliveryFailure_DayLinkedNonGatewayFreezesDay(t *testing.T) {
 	db := setupCrossguardDB(t)
-	// A per-day shell order: linked to a meal-plan day, no razorpay_order_id.
+	// A per-day shell order: linked to a meal-plan day, no gateway_order_id.
 	orderID, _ := seedCrossOrder(t, db, models.PayoutHoldNone, "delivering", nil)
-	require.NoError(t, db.Exec(`UPDATE orders SET razorpay_order_id = '' WHERE id = ?`, orderID.String()).Error)
+	require.NoError(t, db.Exec(`UPDATE orders SET gateway_order_id = '' WHERE id = ?`, orderID.String()).Error)
 	dayID := seedCrossDay(t, db, models.PayoutHoldNone, &orderID)
 	setDayStatus(t, db, dayID, models.MealPlanDayPrepared)
 	order := loadFailureOrder(t, db, orderID)
@@ -173,7 +173,7 @@ func TestTerminalizeDeliveryFailure_DayLinkedNonGatewayFreezesDay(t *testing.T) 
 func TestTerminalizeDeliveryFailure_DayIdempotentNoDoubleNotify(t *testing.T) {
 	db := setupCrossguardDB(t)
 	orderID, _ := seedCrossOrder(t, db, models.PayoutHoldNone, "delivering", nil)
-	require.NoError(t, db.Exec(`UPDATE orders SET razorpay_order_id = '' WHERE id = ?`, orderID.String()).Error)
+	require.NoError(t, db.Exec(`UPDATE orders SET gateway_order_id = '' WHERE id = ?`, orderID.String()).Error)
 	dayID := seedCrossDay(t, db, models.PayoutHoldNone, &orderID)
 	setDayStatus(t, db, dayID, models.MealPlanDayPrepared)
 	order := loadFailureOrder(t, db, orderID)

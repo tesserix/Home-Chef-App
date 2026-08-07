@@ -41,7 +41,7 @@ func TestReconcileOne_LegacyRazorpayOrder_Skips(t *testing.T) {
 	o := &models.Order{
 		OrderNumber:       "ORD-LEGACY-RZP",
 		PaymentProvider:   models.PaymentProviderRazorpay,
-		RazorpayPaymentID: "pay_legacy",
+		GatewayPaymentID: "pay_legacy",
 	}
 	drifts, ok := reconcileOne(o)
 	if ok {

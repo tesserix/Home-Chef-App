@@ -26,7 +26,7 @@ func setupDeliveryRetryDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
-			chef_id TEXT, status TEXT, razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
+			chef_id TEXT, status TEXT, gateway_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', delivery_id TEXT, refund_amount REAL DEFAULT 0,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		// order_id UNIQUE — the real constraint. No soft-delete, matching production.
@@ -68,7 +68,7 @@ func seedRetryOrder(t *testing.T, db *gorm.DB, status models.OrderStatus, gatewa
 	if gateway {
 		rzp = "order_rzp_" + id.String()[:8]
 	}
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, razorpay_order_id, chef_id, customer_id, delivery_id)
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, gateway_order_id, chef_id, customer_id, delivery_id)
 		VALUES (?,?,?,?,?,?)`, id.String(), string(status), rzp, uuid.NewString(), uuid.NewString(), id.String()).Error)
 	return id
 }

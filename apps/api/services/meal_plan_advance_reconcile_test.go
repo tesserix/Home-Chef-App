@@ -28,7 +28,7 @@ func seedStuckAdvancePlan(t *testing.T, db *gorm.DB, orderID string, dayPrices [
 		total += p
 	}
 	require.NoError(t, db.Exec(`INSERT INTO meal_plans
-		(id, meal_plan_number, customer_id, chef_id, status, razorpay_order_id, escrow_payment_id, subtotal, tax, total, currency, updated_at)
+		(id, meal_plan_number, customer_id, chef_id, status, gateway_order_id, escrow_payment_id, subtotal, tax, total, currency, updated_at)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
 		planID.String(), "MP-stuck", custID.String(), chefID.String(), string(models.MealPlanAwaitingCustomer),
 		orderID, "", total-32, 25.6, total, "INR", updatedAt).Error)

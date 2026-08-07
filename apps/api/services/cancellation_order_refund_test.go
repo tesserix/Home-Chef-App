@@ -27,10 +27,10 @@ func seedWalletFundedOrder(t *testing.T, db *gorm.DB, total, walletApplied float
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-W", CustomerID: uuid.New(), ChefID: uuid.New(),
 		Status: models.OrderStatusCancelled, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_wallet", Total: total, WalletApplied: walletApplied,
+		PaymentProvider: "cashfree", GatewayOrderID: "cf_ord_wallet", Total: total, WalletApplied: walletApplied,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
-		payment_provider, razorpay_order_id, total, wallet_applied, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		payment_provider, gateway_order_id, total, wallet_applied, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), o.ChefID.String(), string(o.Status),
 		string(models.PaymentCompleted), "cashfree", "cf_ord_wallet", total, walletApplied, 0.0).Error)
 	return o
@@ -79,8 +79,8 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT,
-			status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'cashfree', razorpay_payment_id TEXT DEFAULT '',
-			razorpay_order_id TEXT DEFAULT '',
+			status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'cashfree', gateway_payment_id TEXT DEFAULT '',
+			gateway_order_id TEXT DEFAULT '',
 			stripe_payment_intent_id TEXT DEFAULT '', total REAL DEFAULT 0, wallet_applied REAL DEFAULT 0, currency TEXT DEFAULT 'INR',
 			loyalty_applied REAL DEFAULT 0, loyalty_points_spent REAL DEFAULT 0,
 			wallet_refunded REAL DEFAULT 0, loyalty_refunded REAL DEFAULT 0,

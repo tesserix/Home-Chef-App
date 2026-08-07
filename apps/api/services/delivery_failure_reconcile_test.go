@@ -32,7 +32,7 @@ func setupDeliveryReconcileDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE deliveries (rider_name_enc text DEFAULT '', rider_phone_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT, status TEXT DEFAULT 'pending',
 			failure_reason TEXT DEFAULT '', attempt_number INTEGER DEFAULT 1, updated_at DATETIME, created_at DATETIME)`,
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
-			chef_id TEXT, status TEXT, razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
+			chef_id TEXT, status TEXT, gateway_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', refund_amount REAL DEFAULT 0, delivery_id TEXT,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, chef_id TEXT, customer_id TEXT,
@@ -65,7 +65,7 @@ func seedStranded(t *testing.T, db *gorm.DB, orderStatus models.OrderStatus, hol
 	if gateway {
 		rzp = "order_rzp_" + orderID.String()[:8]
 	}
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, razorpay_order_id, chef_id, customer_id, payout_hold_status)
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, gateway_order_id, chef_id, customer_id, payout_hold_status)
 		VALUES (?,?,?,?,?,?)`, orderID.String(), string(orderStatus), rzp, uuid.NewString(), uuid.NewString(), string(hold)).Error)
 	require.NoError(t, db.Exec(`INSERT INTO deliveries (id, order_id, status, updated_at) VALUES (?,?,?,?)`,
 		delID.String(), orderID.String(), string(delStatus), time.Now().Add(-age)).Error)
@@ -119,7 +119,7 @@ func TestReconcileDeliveryFailures_ResolvedOrderSkipped(t *testing.T) {
 }
 
 func TestReconcileDeliveryFailures_NonGatewaySkipped(t *testing.T) {
-	// A group order (no razorpay_order_id) has no freeze handler yet (#594) — the
+	// A group order (no gateway_order_id) has no freeze handler yet (#594) — the
 	// reconcile must not pick it every sweep and re-drive a froze=false no-op forever.
 	db := setupDeliveryReconcileDB(t)
 	orderID, _ := seedStranded(t, db, models.OrderStatusDelivering, models.PayoutHoldNone, false, models.DeliveryFailed, time.Hour)
@@ -145,15 +145,15 @@ func TestReconcileDeliveryFailures_DeliveredNotTouched(t *testing.T) {
 }
 
 // ── shell-order reconcile (#594): meal-plan-day + group shells have no
-// razorpay_order_id, so the gateway reconcile above excludes them. These sweeps key
+// gateway_order_id, so the gateway reconcile above excludes them. These sweeps key
 // off the shell aggregate (meal_plan_days.status / group_orders.status) instead. ──
 
-// seedStrandedDay inserts a meal-plan-day SHELL order (no razorpay_order_id) with a
+// seedStrandedDay inserts a meal-plan-day SHELL order (no gateway_order_id) with a
 // failed/returned delivery aged `age` ago and a meal_plan_days row in `dayStatus`.
 func seedStrandedDay(t *testing.T, db *gorm.DB, dayStatus models.MealPlanDayStatus, hold models.PayoutHoldStatus, delStatus models.DeliveryStatus, age time.Duration) (orderID, dayID uuid.UUID) {
 	t.Helper()
 	orderID, dayID, delID := uuid.New(), uuid.New(), uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, razorpay_order_id, chef_id, customer_id, payout_hold_status)
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, gateway_order_id, chef_id, customer_id, payout_hold_status)
 		VALUES (?,?,?,?,?,?)`, orderID.String(), string(models.OrderStatusDelivering), "", uuid.NewString(), uuid.NewString(), string(models.PayoutHoldNone)).Error)
 	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days (id, meal_plan_id, order_id, status, payout_hold_status)
 		VALUES (?,?,?,?,?)`, dayID.String(), uuid.NewString(), orderID.String(), string(dayStatus), string(hold)).Error)
@@ -162,12 +162,12 @@ func seedStrandedDay(t *testing.T, db *gorm.DB, dayStatus models.MealPlanDayStat
 	return orderID, dayID
 }
 
-// seedStrandedGroup inserts a consolidated GROUP SHELL order (no razorpay_order_id) with
+// seedStrandedGroup inserts a consolidated GROUP SHELL order (no gateway_order_id) with
 // a failed/returned delivery aged `age` ago and a group_orders row in `groupStatus`.
 func seedStrandedGroup(t *testing.T, db *gorm.DB, groupStatus models.GroupOrderStatus, hold models.PayoutHoldStatus, delStatus models.DeliveryStatus, age time.Duration) (orderID, groupID uuid.UUID) {
 	t.Helper()
 	orderID, groupID, delID := uuid.New(), uuid.New(), uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, razorpay_order_id, chef_id, customer_id, payout_hold_status)
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, gateway_order_id, chef_id, customer_id, payout_hold_status)
 		VALUES (?,?,?,?,?,?)`, orderID.String(), string(models.OrderStatusDelivering), "", uuid.NewString(), uuid.NewString(), string(models.PayoutHoldNone)).Error)
 	require.NoError(t, db.Exec(`INSERT INTO group_orders (id, host_id, chef_id, order_id, status, payout_hold_status)
 		VALUES (?,?,?,?,?,?)`, groupID.String(), uuid.NewString(), uuid.NewString(), orderID.String(), string(groupStatus), string(hold)).Error)
@@ -242,7 +242,7 @@ func TestReconcileMealPlanDayFailures_WithinGraceSkipped(t *testing.T) {
 }
 
 func TestReconcileMealPlanDayFailures_IgnoresGatewayOrder(t *testing.T) {
-	// A gateway order (razorpay_order_id set, no meal_plan_days row) is the gateway
+	// A gateway order (gateway_order_id set, no meal_plan_days row) is the gateway
 	// sweep's job — the day sweep must not touch it.
 	db := setupDeliveryReconcileDB(t)
 	orderID, _ := seedStranded(t, db, models.OrderStatusDelivering, models.PayoutHoldNone, true, models.DeliveryFailed, time.Hour)
@@ -310,7 +310,7 @@ func seedStrandedRetry(t *testing.T, db *gorm.DB, orderStatus models.OrderStatus
 	if gateway {
 		rzp = "order_rzp_" + orderID.String()[:8]
 	}
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, razorpay_order_id, chef_id, customer_id, payout_hold_status)
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, gateway_order_id, chef_id, customer_id, payout_hold_status)
 		VALUES (?,?,?,?,?,?)`, orderID.String(), string(orderStatus), rzp, uuid.NewString(), uuid.NewString(), string(hold)).Error)
 	require.NoError(t, db.Exec(`INSERT INTO deliveries (id, order_id, status, attempt_number, updated_at) VALUES (?,?,?,?,?)`,
 		delID.String(), orderID.String(), string(delStatus), attempt, time.Now().Add(-age)).Error)

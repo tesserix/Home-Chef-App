@@ -36,7 +36,7 @@ func setupReleaseDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
-			chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', razorpay_order_id TEXT DEFAULT '',
+			chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', gateway_order_id TEXT DEFAULT '',
 			payment_provider TEXT DEFAULT 'razorpay', total REAL DEFAULT 0,
 			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 			chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
@@ -74,7 +74,7 @@ func seedOrderHold(t *testing.T, db *gorm.DB, hold models.PayoutHoldStatus, deli
 	t.Helper()
 	id, chef := uuid.New(), uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders
-		(id, order_number, customer_id, chef_id, status, razorpay_order_id, total, payout_hold_status, delivered_at)
+		(id, order_number, customer_id, chef_id, status, gateway_order_id, total, payout_hold_status, delivered_at)
 		VALUES (?,?,?,?,?,?,?,?,?)`,
 		id.String(), "ORD-"+id.String()[:8], uuid.NewString(), chef.String(),
 		"delivered", "order_rzp_123", 250.0, string(hold), delivered).Error)

@@ -64,7 +64,7 @@ func seedCoordinatorOrder(t *testing.T, db *gorm.DB, total float64) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
-		payment_provider, razorpay_payment_id, total, refund_amount)
+		payment_provider, gateway_payment_id, total, refund_amount)
 		VALUES (?,?,?,?,?,?,?,?,?,0)`,
 		id.String(), "ORD-INTEROP", uuid.NewString(), uuid.NewString(), string(models.OrderStatusCancelled),
 		string(models.PaymentCompleted), "razorpay", "pay_interop", total).Error)

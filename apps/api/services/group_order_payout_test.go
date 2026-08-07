@@ -186,7 +186,7 @@ func TestSweepAndReconcile_CoverGroupOrders(t *testing.T) {
 }
 
 // TestNoPhantomConsolidatedOrderHold (Q1 regression) — delivering a group order parks
-// ONLY the group hold; the consolidated order (no razorpay_order_id) stays PayoutHoldNone
+// ONLY the group hold; the consolidated order (no gateway_order_id) stays PayoutHoldNone
 // and never enters the pending queue, locking the no-phantom-double-hold invariant.
 func TestNoPhantomConsolidatedOrderHold(t *testing.T) {
 	saved := config.AppConfig
@@ -195,8 +195,8 @@ func TestNoPhantomConsolidatedOrderHold(t *testing.T) {
 
 	db := setupHoldDB(t)
 	gid, oid := seedGroupOrder(t, db, models.PayoutHoldNone)
-	// The consolidated order carries NO razorpay_order_id (participants pay their own).
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
+	// The consolidated order carries NO gateway_order_id (participants pay their own).
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, gateway_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
 		oid.String(), uuid.NewString(), "delivered", "", "").Error)
 
 	withSweepDB(t, db, func() { MarkGroupOrderDelivered(oid) })

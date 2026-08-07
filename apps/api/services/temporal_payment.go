@@ -96,7 +96,7 @@ func ResolveOrderPayment(_ context.Context, orderID uuid.UUID) (workflows.Paymen
 	// No gateway session was ever created, so there is nothing to ask about.
 	// Expiring this is the stale sweep's long-standing job (it cancels these with
 	// zero gateway calls) and it is not urgent enough to duplicate here.
-	if order.RazorpayOrderID == "" {
+	if order.GatewayOrderID == "" {
 		return workflows.PaymentOutcomeInFlight, nil
 	}
 

@@ -27,11 +27,11 @@ func seedCreditFundedOrder(t *testing.T, db *gorm.DB, total, wallet, loyalty flo
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-C", CustomerID: uuid.New(), ChefID: uuid.New(),
 		Status: models.OrderStatusCancelled, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_credit",
+		PaymentProvider: "cashfree", GatewayOrderID: "cf_ord_credit",
 		Total: total, WalletApplied: wallet, LoyaltyApplied: loyalty,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
-		payment_provider, razorpay_order_id, total, wallet_applied, loyalty_applied,
+		payment_provider, gateway_order_id, total, wallet_applied, loyalty_applied,
 		wallet_refunded, loyalty_refunded, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), o.ChefID.String(), string(o.Status),
 		string(models.PaymentCompleted), "cashfree", "cf_ord_credit", total, wallet, loyalty,

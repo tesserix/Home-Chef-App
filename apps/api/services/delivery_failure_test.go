@@ -36,7 +36,7 @@ func loadOrderRefundAmount(t *testing.T, db *gorm.DB, orderID uuid.UUID) float64
 func loadFailureOrder(t *testing.T, db *gorm.DB, orderID uuid.UUID) *models.Order {
 	t.Helper()
 	var o models.Order
-	require.NoError(t, db.Raw(`SELECT id, chef_id, customer_id, razorpay_order_id FROM orders WHERE id = ?`,
+	require.NoError(t, db.Raw(`SELECT id, chef_id, customer_id, gateway_order_id FROM orders WHERE id = ?`,
 		orderID.String()).Scan(&o).Error)
 	return &o
 }
@@ -113,7 +113,7 @@ func TestRecordDeliveryFailure_Idempotent(t *testing.T) {
 func TestRecordDeliveryFailure_SkipsNonGatewayOrder(t *testing.T) {
 	db := setupCrossguardDB(t)
 	orderID, _ := seedCrossOrder(t, db, models.PayoutHoldNone, "delivering", nil)
-	require.NoError(t, db.Exec(`UPDATE orders SET razorpay_order_id = '' WHERE id = ?`, orderID.String()).Error)
+	require.NoError(t, db.Exec(`UPDATE orders SET gateway_order_id = '' WHERE id = ?`, orderID.String()).Error)
 	order := loadFailureOrder(t, db, orderID)
 	var froze bool
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {

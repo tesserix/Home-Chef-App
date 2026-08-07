@@ -267,7 +267,7 @@ func terminalize3PLDeliveryFailure(orderID uuid.UUID, providerCode, deliveryID s
 	}
 	if !froze {
 		// froze=false with no error means the order shape has no freeze handler yet —
-		// today that's a consolidated GROUP order (no razorpay_order_id, not a meal-plan
+		// today that's a consolidated GROUP order (no gateway_order_id, not a meal-plan
 		// day): RecordDeliveryFailure skips it and no group-failure mirror exists. Surface
 		// it loudly rather than silently 200-ack so the order isn't invisibly stranded
 		// (group-order failure freeze is a tracked follow-up).

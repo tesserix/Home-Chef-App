@@ -40,8 +40,8 @@ type Tip struct {
 	RiderUserID *uuid.UUID `gorm:"type:uuid;index" json:"riderUserId,omitempty"`
 
 	Status            TipStatus `gorm:"type:varchar(12);index;default:'pending'" json:"status"`
-	RazorpayOrderID   string    `gorm:"uniqueIndex" json:"razorpayOrderId,omitempty"`
-	RazorpayPaymentID string    `gorm:"" json:"razorpayPaymentId,omitempty"`
+	GatewayOrderID   string    `gorm:"uniqueIndex" json:"gatewayOrderId,omitempty"`
+	GatewayPaymentID string    `gorm:"" json:"gatewayPaymentId,omitempty"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`

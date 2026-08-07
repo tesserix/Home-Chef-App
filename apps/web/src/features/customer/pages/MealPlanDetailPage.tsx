@@ -116,7 +116,7 @@ export default function MealPlanDetailPage() {
         });
         return;
       }
-      if (!res.razorpayOrderId) {
+      if (!res.gatewayOrderId) {
         // Escrow off — approval alone confirms the plan, nothing to charge.
         toast.success('Plan confirmed.');
         return;

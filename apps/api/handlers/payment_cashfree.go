@@ -21,25 +21,17 @@ import (
 	"github.com/homechef/api/services"
 )
 
-// payment_cashfree.go — the Cashfree half of the order payment flow: create,
-// verify, and webhook. Split out of payment.go (already ~2k lines) because the
-// three legs are one cohesive flow and because the Cashfree differences are
-// easier to review as a block than interleaved with the Razorpay ones.
+// payment_cashfree.go — the order payment flow: create, verify, and webhook.
+// Split out of payment.go (already ~2k lines) because the three legs are one
+// cohesive flow.
 //
-// The money semantics are IDENTICAL to the Razorpay path — same credit quote,
-// same frozen commission rate, same completeOrderPaymentTx transition guard,
-// same wallet settlement seam, same refund coordinator. The only differences are
-// the ones the gateway forces:
+// Two properties the gateway forces, and that the rest of the money path assumes:
 //
 //   - No split at capture. Cashfree captures the whole payable amount to the
 //     platform merchant account; the chef's share leaves later, on release, via
 //     Easy Split (ADR-0003), and the remainder on the statement/payout path.
 //   - No client-side signature to verify. The authority is a server-side fetch
 //     of the order's payments.
-//   - Both ids land in the razorpay_order_id / razorpay_payment_id columns. That
-//     reuse is deliberate and documented on models.GatewayOrderIDColumn: it keeps
-//     the partial unique indexes, the reconcile cron, the meal-plan advance
-//     lookup and the tip settle path on ONE query each.
 
 // createCashfreePayment creates (or re-uses) a Cashfree order and hands the
 // client the payment_session_id its SDK opens checkout with.
@@ -91,7 +83,7 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 		return
 	}
 
-	cfOrderID := nextCashfreeOrderID(order.ID, order.RazorpayOrderID)
+	cfOrderID := nextCashfreeOrderID(order.ID, order.GatewayOrderID)
 
 	// Re-use an existing ACTIVE Cashfree order rather than minting a second one for
 	// the same purchase. This matters more than it looks: a payment_session_id is
@@ -100,8 +92,8 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 	// completed the FIRST session would generate a webhook for an order id we no
 	// longer store — money captured against an order nothing recognises. Reuse
 	// keeps exactly one live session per order.
-	if order.RazorpayOrderID != "" && order.RazorpayOrderID == cfOrderID {
-		if existing, ferr := cf.FetchOrder(order.RazorpayOrderID); ferr == nil {
+	if order.GatewayOrderID != "" && order.GatewayOrderID == cfOrderID {
+		if existing, ferr := cf.FetchOrder(order.GatewayOrderID); ferr == nil {
 			if existing.OrderStatus == services.CashfreeOrderPaid {
 				// Already paid at the gateway but our row says otherwise — the verify
 				// call and the webhook were both lost. Don't open a new checkout;
@@ -123,7 +115,7 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 			}
 		} else {
 			log.Printf("cashfree: could not read existing order %s for %s (%v) — creating a new one",
-				order.RazorpayOrderID, order.OrderNumber, ferr)
+				order.GatewayOrderID, order.OrderNumber, ferr)
 		}
 	}
 
@@ -202,7 +194,7 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
 		return
 	}
-	order.RazorpayOrderID = cfOrder.OrderID
+	order.GatewayOrderID = cfOrder.OrderID
 	order.PaymentProvider = models.PaymentProviderCashfree
 	order.GatewaySplitPaise = 0
 
@@ -289,28 +281,26 @@ func cashfreeSettleStatus(err error) int {
 
 // verifyCashfreePayment confirms a payment after the client's checkout closes.
 //
-// Unlike the Razorpay leg there is NO client-supplied signature to check, and no
-// client-supplied amount or payment id is trusted at all: the only inputs are the
-// order id (which must match what we stamped) and the gateway's own record. That
-// makes this strictly harder to spoof than a signature check — but it also means
-// the fetch is mandatory, so a gateway outage surfaces as a 502 rather than being
-// waved through. finishCashfreeFromGateway (the create-leg already-PAID
-// recovery) shares this exact status mapping via cashfreeSettleStatus, and
-// "gateway not configured" answers 503 — a configuration problem, not a
-// payment outcome — matching the sibling checks in createCashfreePayment and
-// verifyRazorpayPayment.
+// There is NO client-supplied signature to check, and no client-supplied amount
+// or payment id is trusted at all: the only inputs are the order id (which must
+// match what we stamped) and the gateway's own record. That makes this strictly
+// harder to spoof than a signature check — but it also means the fetch is
+// mandatory, so a gateway outage surfaces as a 502 rather than being waved
+// through. finishCashfreeFromGateway (the create-leg already-PAID recovery)
+// shares this exact status mapping via cashfreeSettleStatus, and "gateway not
+// configured" answers 503 — a configuration problem, not a payment outcome.
 func (h *PaymentHandler) verifyCashfreePayment(c *gin.Context, order *models.Order, cfOrderID string) {
 	if cfOrderID == "" {
 		// Fall back to the stamped id: a client that closed checkout without
 		// echoing the order id back still deserves a verify, and the stamped value
 		// is the trustworthy one anyway.
-		cfOrderID = order.RazorpayOrderID
+		cfOrderID = order.GatewayOrderID
 	}
 	if cfOrderID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "cashfreeOrderId is required"})
 		return
 	}
-	if order.RazorpayOrderID != cfOrderID {
+	if order.GatewayOrderID != cfOrderID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Order ID mismatch"})
 		return
 	}

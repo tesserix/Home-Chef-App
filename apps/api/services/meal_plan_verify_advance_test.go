@@ -24,7 +24,7 @@ func setupAdvanceDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_number TEXT,
-		razorpay_order_id TEXT, total REAL, escrow_payment_id TEXT, created_at DATETIME, updated_at DATETIME)`).Error)
+		gateway_order_id TEXT, total REAL, escrow_payment_id TEXT, created_at DATETIME, updated_at DATETIME)`).Error)
 	prev := database.DB
 	database.DB = db
 	t.Cleanup(func() { database.DB = prev })
@@ -37,10 +37,10 @@ func seedAdvancePlan(t *testing.T, db *gorm.DB, rzOrderID string, total float64)
 	t.Helper()
 	id := uuid.New()
 	require.NoError(t, db.Exec(
-		`INSERT INTO meal_plans (id, meal_plan_number, razorpay_order_id, total, escrow_payment_id)
+		`INSERT INTO meal_plans (id, meal_plan_number, gateway_order_id, total, escrow_payment_id)
 		 VALUES (?,?,?,?,?)`,
 		id.String(), "MP-"+id.String()[:8], rzOrderID, total, "").Error)
-	return models.MealPlan{ID: id, RazorpayOrderID: rzOrderID, Total: total}
+	return models.MealPlan{ID: id, GatewayOrderID: rzOrderID, Total: total}
 }
 
 func escrowPaymentIDOf(t *testing.T, db *gorm.DB, id uuid.UUID) string {

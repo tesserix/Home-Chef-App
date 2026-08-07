@@ -35,7 +35,7 @@ const opsChefDDL = `CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEX
 
 const opsOrderDDL = `CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT, chef_id TEXT, mode text DEFAULT 'live',
 	status TEXT DEFAULT 'delivered', payment_status TEXT DEFAULT 'paid',
-	payment_provider TEXT DEFAULT 'cashfree', razorpay_order_id TEXT DEFAULT '',
+	payment_provider TEXT DEFAULT 'cashfree', gateway_order_id TEXT DEFAULT '',
 	subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, total REAL DEFAULT 0,
 	tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0, tax_delivery REAL DEFAULT 0,
 	chef_tip REAL DEFAULT 0, driver_tip REAL DEFAULT 0, delivery_fee REAL DEFAULT 0,
@@ -114,7 +114,7 @@ func seedOpsOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, number string, sp
 	t.Helper()
 	id := uuid.New()
 	require.NoError(t, db.Exec(
-		`INSERT INTO orders (id, order_number, chef_id, status, payment_status, payment_provider, razorpay_order_id,
+		`INSERT INTO orders (id, order_number, chef_id, status, payment_status, payment_provider, gateway_order_id,
 		 subtotal, total, tax_food, commission_rate, delivery_address_state, gateway_split_paise, created_at, updated_at)
 		 VALUES (?, ?, ?, 'delivered', 'completed', 'cashfree', ?, 1000, 1180, 50, 15, 'KA', ?, ?, ?)`,
 		id.String(), number, chefID.String(), "cf_"+number, splitPaise,

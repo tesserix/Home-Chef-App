@@ -79,7 +79,7 @@ func newFixture(t *testing.T, opts ...fixtureOpt) *fixture {
 	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 		total REAL, refund_amount REAL DEFAULT 0, wallet_applied REAL DEFAULT 0,
-		payment_status TEXT, payment_provider TEXT, razorpay_payment_id TEXT,
+		payment_status TEXT, payment_provider TEXT, gateway_payment_id TEXT,
 		stripe_payment_intent_id TEXT DEFAULT '',
 		currency TEXT DEFAULT 'INR',
 		refunded_at DATETIME,
@@ -121,7 +121,7 @@ func (f *fixture) seedPaidOrder(total float64) *models.Order {
 	f.t.Helper()
 	o := &models.Order{ID: uuid.New(), Total: total}
 	require.NoError(f.t, f.db.Exec(
-		`INSERT INTO orders (id, total, refund_amount, payment_status, payment_provider, razorpay_payment_id)
+		`INSERT INTO orders (id, total, refund_amount, payment_status, payment_provider, gateway_payment_id)
 		 VALUES (?, ?, 0, 'completed', 'razorpay', 'pay_test')`,
 		o.ID.String(), total,
 	).Error)

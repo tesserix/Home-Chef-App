@@ -57,7 +57,7 @@ func RetryDeferredCancelRefunds() int {
 	cutoff := time.Now().Add(-deferredRefundGrace)
 	var orders []models.Order
 	if err := database.DB.
-		Where("status = ? AND refund_id LIKE ? AND razorpay_payment_id <> '' AND updated_at < ?",
+		Where("status = ? AND refund_id LIKE ? AND gateway_payment_id <> '' AND updated_at < ?",
 			models.OrderStatusCancelled, DeferredCancelRefundPrefix+"%", cutoff).
 		Limit(sweepBatchLimit).
 		Find(&orders).Error; err != nil {
@@ -90,7 +90,7 @@ func retryOneDeferredCancelRefund(orderID uuid.UUID) bool {
 		// mode/provider/order-id are part of the routing, not decoration: without them
 		// GatewayRefundAvailable reads a zero provider and every Cashfree order is
 		// skipped forever.
-		if e := lockTx.Select("id", "mode", "refund_id", "payment_provider", "razorpay_payment_id", "razorpay_order_id").
+		if e := lockTx.Select("id", "mode", "refund_id", "payment_provider", "gateway_payment_id", "gateway_order_id").
 			First(&o, "id = ?", orderID).Error; e != nil {
 			return e
 		}

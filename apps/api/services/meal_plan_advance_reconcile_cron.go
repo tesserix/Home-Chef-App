@@ -54,7 +54,7 @@ func reconcileMealPlanAdvances(db *gorm.DB, now time.Time) int {
 	var plans []models.MealPlan
 	cutoff := now.Add(-mealPlanAdvanceReconcileGrace)
 	if err := db.Preload("Days").
-		Where("status = ? AND razorpay_order_id <> '' AND (escrow_payment_id IS NULL OR escrow_payment_id = '') AND updated_at < ?",
+		Where("status = ? AND gateway_order_id <> '' AND (escrow_payment_id IS NULL OR escrow_payment_id = '') AND updated_at < ?",
 			models.MealPlanAwaitingCustomer, cutoff).
 		Find(&plans).Error; err != nil {
 		log.Printf("mealplan-advance-reconcile: query failed: %v", err)
@@ -79,7 +79,7 @@ func reconcileMealPlanAdvances(db *gorm.DB, now time.Time) int {
 		if confirmed {
 			confirmedN++
 			log.Printf("mealplan-advance-reconcile: confirmed plan %s from captured payment %s (order %s)",
-				p.ID, captured, p.RazorpayOrderID)
+				p.ID, captured, p.GatewayOrderID)
 		}
 	}
 	return confirmedN
@@ -93,9 +93,9 @@ func capturedMealPlanAdvance(p *models.MealPlan) (string, error) {
 	if cf == nil {
 		return "", fmt.Errorf("no %s gateway configured", models.NormalizeMode(p.Mode))
 	}
-	pay, err := cf.SuccessfulPayment(p.RazorpayOrderID)
+	pay, err := cf.SuccessfulPayment(p.GatewayOrderID)
 	if err != nil {
-		return "", fmt.Errorf("fetch payments for order %s: %w", p.RazorpayOrderID, err)
+		return "", fmt.Errorf("fetch payments for order %s: %w", p.GatewayOrderID, err)
 	}
 	if pay == nil {
 		return "", nil

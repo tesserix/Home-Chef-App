@@ -27,10 +27,10 @@ func seedTypedRefundOrder(t *testing.T, db *gorm.DB) *models.Order {
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-MP", CustomerID: uuid.New(), ChefID: uuid.New(),
 		Status: models.OrderStatusCancelled, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_typed", Total: 300,
+		PaymentProvider: "cashfree", GatewayOrderID: "cf_ord_typed", Total: 300,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
-		payment_provider, razorpay_order_id, total, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		payment_provider, gateway_order_id, total, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), o.ChefID.String(), string(o.Status),
 		string(models.PaymentCompleted), "cashfree", "cf_ord_typed", 300.0, 0.0).Error)
 	return o

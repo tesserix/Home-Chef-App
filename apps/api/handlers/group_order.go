@@ -698,12 +698,12 @@ func (h *GroupOrderHandler) PayGroupShare(c *gin.Context) {
 	}
 	database.DB.Model(&models.GroupOrderParticipant{}).Where("id = ?", me.ID).
 		Updates(map[string]any{
-			"razorpay_order_id": cfOrder.OrderID,
+			"gateway_order_id": cfOrder.OrderID,
 			"payment_provider":  models.PaymentProviderCashfree,
 		})
 	c.JSON(http.StatusCreated, gin.H{
 		"provider":                 models.PaymentProviderCashfree,
-		"razorpayOrderId":          cfOrder.OrderID,
+		"gatewayOrderId":          cfOrder.OrderID,
 		"cashfreeOrderId":          cfOrder.OrderID,
 		"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
 		"cashfreeEnv":              services.CashfreeEnvLabel(g.Mode),
@@ -730,7 +730,7 @@ func (h *GroupOrderHandler) VerifyGroupShare(c *gin.Context) {
 	// back from the gateway, bound by the order id we stored for this share, and
 	// by the share amount (#395·4) so an under-amount capture cannot settle it.
 	if me.PaymentStatus != models.GroupPayCompleted {
-		pay, cerr := services.VerifyCashfreeCharge(g.Mode, me.RazorpayOrderID, me.ShareAmount)
+		pay, cerr := services.VerifyCashfreeCharge(g.Mode, me.GatewayOrderID, me.ShareAmount)
 		if cerr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
 			return
@@ -739,7 +739,7 @@ func (h *GroupOrderHandler) VerifyGroupShare(c *gin.Context) {
 			Where("id = ? AND payment_status <> ?", me.ID, models.GroupPayCompleted).
 			Updates(map[string]any{
 				"payment_status":      models.GroupPayCompleted,
-				"razorpay_payment_id": pay.CFPaymentID.String(),
+				"gateway_payment_id": pay.CFPaymentID.String(),
 			}).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record payment"})
 			return

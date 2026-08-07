@@ -117,13 +117,13 @@ func ReconcileSettlements(ctx context.Context, windowStart, windowEnd time.Time)
 // is a skip, not a drift.
 // Dispatch is on PROVIDER first, then on the presence of a reference. Testing the
 // reference alone (the original shape) breaks the moment two gateways share the
-// razorpay_payment_id column: a Cashfree order is non-empty there, so it would be
+// gateway_payment_id column: a Cashfree order is non-empty there, so it would be
 // reconciled against Razorpay's API with a Cashfree payment id and report
 // DriftGatewayUnreachable on every single sweep — drowning the real findings.
 func reconcileOne(o *models.Order) ([]Drift, bool) {
 	switch models.NormalizeProvider(o.PaymentProvider) {
 	case models.PaymentProviderCashfree:
-		if o.RazorpayOrderID == "" {
+		if o.GatewayOrderID == "" {
 			return nil, false
 		}
 		return reconcileCashfree(o), true
@@ -153,10 +153,10 @@ func reconcileCashfree(o *models.Order) []Drift {
 		return nil // not configured — skip silently (logged once at startup)
 	}
 
-	payment, err := client.SuccessfulPayment(o.RazorpayOrderID)
+	payment, err := client.SuccessfulPayment(o.GatewayOrderID)
 	if err != nil {
 		return []Drift{driftFor(o, models.PaymentProviderCashfree, DriftGatewayUnreachable,
-			fmt.Sprintf("fetch payments for order %s: %v", o.RazorpayOrderID, err), 0, 0)}
+			fmt.Sprintf("fetch payments for order %s: %v", o.GatewayOrderID, err), 0, 0)}
 	}
 
 	var drifts []Drift
@@ -165,10 +165,10 @@ func reconcileCashfree(o *models.Order) []Drift {
 			"no SUCCESS payment on the gateway order", o.Total, 0))
 	}
 
-	refunds, err := client.OrderRefundedPaise(o.RazorpayOrderID)
+	refunds, err := client.OrderRefundedPaise(o.GatewayOrderID)
 	if err != nil {
 		return append(drifts, driftFor(o, models.PaymentProviderCashfree, DriftGatewayUnreachable,
-			fmt.Sprintf("fetch refunds for order %s: %v", o.RazorpayOrderID, err), 0, 0))
+			fmt.Sprintf("fetch refunds for order %s: %v", o.GatewayOrderID, err), 0, 0))
 	}
 
 	// An error-PROPAGATING per-line read, so a DB blip skips this order rather than

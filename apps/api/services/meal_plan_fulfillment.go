@@ -236,7 +236,7 @@ func isPreDispatchOrderStatus(s models.OrderStatus) bool {
 // started cooking, so this sweep must NOT guess refund-vs-release. It reuses the SAME
 // #393 delivery-failure freeze a genuinely failed delivery goes through
 // (TerminalizeDeliveryFailure → MarkMealPlanDayFailed, since the per-day shell order has no
-// razorpay_order_id and so skips the gateway path): the day flips to the NON-terminal
+// gateway_order_id and so skips the gateway path): the day flips to the NON-terminal
 // `failed` status, its payout hold freezes to `disputed`, and an admin confirms the actual
 // fault (customer/platform/chef) through the existing delivery-failure queue exactly as
 // #393 already does for a courier-reported failure. FailureOther maps to FaultAmbiguous

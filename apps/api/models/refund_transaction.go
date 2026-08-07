@@ -50,7 +50,7 @@ type RefundTransaction struct {
 
 	// ProviderRefundID is the gateway's id for the refund (e.g. rfnd_xxx), or
 	// "wallet:<txn-id>". Set on success. Never exposed — the gateway ids stay
-	// server-side (models.Order tags RazorpayPaymentID `json:"-"` for the same
+	// server-side (models.Order tags GatewayPaymentID `json:"-"` for the same
 	// reason).
 	ProviderRefundID string `gorm:"type:varchar(64)" json:"-"`
 

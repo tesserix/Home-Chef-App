@@ -67,11 +67,11 @@ func seedMixedPaymentOrder(t *testing.T, db *gorm.DB, total, walletApplied, loya
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-MIX", CustomerID: uuid.New(), ChefID: uuid.New(),
 		Status: models.OrderStatusPreparing, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "cashfree", RazorpayOrderID: gatewayOrderID,
+		PaymentProvider: "cashfree", GatewayOrderID: gatewayOrderID,
 		Total: total, WalletApplied: walletApplied, LoyaltyApplied: loyaltyApplied,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
-		payment_provider, razorpay_order_id, total, wallet_applied, loyalty_applied, refund_amount)
+		payment_provider, gateway_order_id, total, wallet_applied, loyalty_applied, refund_amount)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), o.ChefID.String(), string(o.Status),
 		string(models.PaymentCompleted), "cashfree", gatewayOrderID, total, walletApplied, loyaltyApplied, 0.0).Error)
@@ -95,7 +95,7 @@ func TestExecuteCancellationRefund_MixedPayment_SplitsWalletAndLoyaltyOffGateway
 	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	stale := &models.Order{ID: o.ID, CustomerID: o.CustomerID, OrderNumber: o.OrderNumber,
-		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_mix",
+		PaymentProvider: "cashfree", GatewayOrderID: "cf_ord_mix",
 		Total: 481.91, WalletApplied: 150.40, LoyaltyApplied: 3.85, RefundAmount: 0}
 	require.NoError(t, ExecuteCancellationRefund(stale, cr), "must not 502 on a mixed-payment refund")
 
@@ -127,7 +127,7 @@ func TestExecuteCancellationRefund_FullyCreditFunded_NoGatewayCall(t *testing.T)
 	spy := withCashfreeRefundSpy(t, http.StatusOK)
 
 	stale := &models.Order{ID: o.ID, CustomerID: o.CustomerID, OrderNumber: o.OrderNumber,
-		PaymentProvider: "razorpay", RazorpayPaymentID: "",
+		PaymentProvider: "razorpay", GatewayPaymentID: "",
 		Total: 200, WalletApplied: 150, LoyaltyApplied: 50, RefundAmount: 0}
 	require.NoError(t, ExecuteCancellationRefund(stale, cr), "a fully credit-funded refund needs no gateway payment")
 

@@ -71,7 +71,7 @@ type MealTrial struct {
 	Price           float64    `gorm:"default:0" json:"price"`
 	DurationDays    int        `gorm:"default:0" json:"durationDays"`
 	Status          string     `gorm:"type:varchar(16);not null;default:'pending'" json:"status"`
-	RazorpayOrderID string     `gorm:"" json:"razorpayOrderId,omitempty"`
+	GatewayOrderID string     `gorm:"" json:"gatewayOrderId,omitempty"`
 	StartsAt        *time.Time `gorm:"" json:"startsAt,omitempty"`
 	EndsAt          *time.Time `gorm:"" json:"endsAt,omitempty"`
 	CreatedAt       time.Time  `gorm:"autoCreateTime" json:"createdAt"`

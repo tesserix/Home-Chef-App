@@ -151,8 +151,8 @@ func TestPlanCashfreeTip_VendorStatusIsCaseInsensitive(t *testing.T) {
 const chefTipsDDL = `CREATE TABLE tips (mode TEXT DEFAULT 'live', test_session_id TEXT, cloned_from_id TEXT,
 	id TEXT PRIMARY KEY, order_id TEXT, customer_id TEXT, chef_user_id TEXT, rider_user_id TEXT,
 	amount REAL DEFAULT 0, chef_amount REAL DEFAULT 0, rider_amount REAL DEFAULT 0,
-	currency TEXT DEFAULT 'INR', status TEXT, razorpay_order_id TEXT DEFAULT '',
-	razorpay_payment_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`
+	currency TEXT DEFAULT 'INR', status TEXT, gateway_order_id TEXT DEFAULT '',
+	gateway_payment_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`
 
 func setupChefTipsDB(t *testing.T) *gorm.DB {
 	t.Helper()

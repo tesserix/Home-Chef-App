@@ -104,7 +104,7 @@ func markDeliveredPaid(t *testing.T, orderID uuid.UUID, payID string) {
 	t.Helper()
 	require.NoError(t, database.DB.Exec(
 		`UPDATE orders SET status = 'delivered', payment_status = 'completed',
-			payment_provider = 'cashfree', razorpay_payment_id = '', razorpay_order_id = ? WHERE id = ?`,
+			payment_provider = 'cashfree', gateway_payment_id = '', gateway_order_id = ? WHERE id = ?`,
 		payID, orderID.String()).Error)
 }
 

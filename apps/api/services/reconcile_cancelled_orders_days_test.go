@@ -24,7 +24,7 @@ func setOrderStatus(t *testing.T, db *gorm.DB, id uuid.UUID, status models.Order
 
 func clearOrderRazorpay(t *testing.T, db *gorm.DB, id uuid.UUID) {
 	t.Helper()
-	require.NoError(t, db.Exec(`UPDATE orders SET razorpay_order_id = '' WHERE id = ?`, id.String()).Error)
+	require.NoError(t, db.Exec(`UPDATE orders SET gateway_order_id = '' WHERE id = ?`, id.String()).Error)
 }
 
 func setDayStatus(t *testing.T, db *gorm.DB, id uuid.UUID, status models.MealPlanDayStatus) {

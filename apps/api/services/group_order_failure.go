@@ -2,7 +2,7 @@ package services
 
 // group_order_failure.go — #393/#594 slice A. Terminalize a failed delivery's MONEY state
 // for a GROUP order without moving money. The consolidated group Order is a shell with no
-// razorpay_order_id, so RecordDeliveryFailure (gateway-only) skips it and no meal_plan_days
+// gateway_order_id, so RecordDeliveryFailure (gateway-only) skips it and no meal_plan_days
 // row exists either — so a failed group delivery would otherwise strand unfrozen. This
 // slice marks the group `failed` (NON-terminal) and freezes its payout hold to `disputed`,
 // so the chef's held direct transfer is not released until an admin resolves the group.

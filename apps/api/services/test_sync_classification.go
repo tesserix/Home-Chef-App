@@ -139,8 +139,8 @@ var clonedTableColumns = map[string]map[string]syncClass{
 		"picked_up_at": classCopy, "delivered_at": classCopy, "cancelled_at": classCopy,
 		"cancel_reason": classCopy, "special_instructions": classCopy,
 		// Gateway identifiers — blanked so a replica can never move real money.
-		"stripe_payment_intent_id": classBlank, "razorpay_order_id": classBlank,
-		"razorpay_payment_id": classBlank, "refund_id": classBlank,
+		"stripe_payment_intent_id": classBlank, "gateway_order_id": classBlank,
+		"gateway_payment_id": classBlank, "refund_id": classBlank,
 		"refunded_at": classCopy, "refund_amount": classCopy, "refund_reason": classCopy,
 		"refund_initiated_by": classCopy, "created_at": classCopy, "updated_at": classCopy,
 		"deleted_at": classCopy, "payment_provider": classCopy, "tax_rate": classCopy,

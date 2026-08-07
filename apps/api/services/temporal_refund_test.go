@@ -52,8 +52,8 @@ func TestStartDeferredRefundFlow_NoOpOnZeroOrEmptyPayment(t *testing.T) {
 func TestGatewayRefundForWorkflow_CashfreeOrder_RefundsOnCashfree(t *testing.T) {
 	db := setupDeferredCancelRefundDB(t)
 	orderID := seedDeferredCancelOrder(t, db, "pending:gateway-retry:305400", time.Now().Add(-time.Hour))
-	require.NoError(t, db.Exec(`UPDATE orders SET payment_provider = 'cashfree', razorpay_payment_id = '',
-		razorpay_order_id = 'cf_ord_deferred' WHERE id = ?`, orderID.String()).Error)
+	require.NoError(t, db.Exec(`UPDATE orders SET payment_provider = 'cashfree', gateway_payment_id = '',
+		gateway_order_id = 'cf_ord_deferred' WHERE id = ?`, orderID.String()).Error)
 
 	var gotPath string
 	var gotBody map[string]any
@@ -91,8 +91,8 @@ func TestGatewayRefundForWorkflow_NilGateway_ReturnsError(t *testing.T) {
 
 	db := setupDeferredCancelRefundDB(t)
 	orderID := seedDeferredCancelOrder(t, db, "pending:gateway-retry:1000", time.Now().Add(-time.Hour))
-	require.NoError(t, db.Exec(`UPDATE orders SET payment_provider = 'cashfree', razorpay_payment_id = '',
-		razorpay_order_id = 'cf_ord_x' WHERE id = ?`, orderID.String()).Error)
+	require.NoError(t, db.Exec(`UPDATE orders SET payment_provider = 'cashfree', gateway_payment_id = '',
+		gateway_order_id = 'cf_ord_x' WHERE id = ?`, orderID.String()).Error)
 
 	_, err := GatewayRefundForWorkflow(context.Background(), orderID, "cf_ord_x", 1000)
 	require.Error(t, err)

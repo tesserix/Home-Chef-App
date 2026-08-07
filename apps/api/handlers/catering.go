@@ -770,12 +770,12 @@ func (h *CateringHandler) CreateDeposit(c *gin.Context) {
 		return
 	}
 	database.DB.Model(&request).Updates(map[string]any{
-		"razorpay_order_id": cfOrder.OrderID,
+		"gateway_order_id": cfOrder.OrderID,
 		"payment_provider":  models.PaymentProviderCashfree,
 	})
 	c.JSON(http.StatusCreated, gin.H{
 		"provider":                 models.PaymentProviderCashfree,
-		"razorpayOrderId":          cfOrder.OrderID,
+		"gatewayOrderId":          cfOrder.OrderID,
 		"cashfreeOrderId":          cfOrder.OrderID,
 		"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
 		"cashfreeEnv":              services.CashfreeEnvLabel(request.Mode),
@@ -815,7 +815,7 @@ func (h *CateringHandler) VerifyDeposit(c *gin.Context) {
 	// The client hands over no payment id or signature (#1086): the capture is read
 	// back from the gateway, bound by the order id stored at create time and by the
 	// deposit amount, so verify-without-create cannot confirm a booking for free.
-	pay, cerr := services.VerifyCashfreeCharge(request.Mode, request.RazorpayOrderID, request.DepositAmount)
+	pay, cerr := services.VerifyCashfreeCharge(request.Mode, request.GatewayOrderID, request.DepositAmount)
 	if cerr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Deposit payment not captured"})
 		return
@@ -824,7 +824,7 @@ func (h *CateringHandler) VerifyDeposit(c *gin.Context) {
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		request.Status = models.CateringStatusConfirmed
 		request.DepositStatus = "paid"
-		request.RazorpayPaymentID = pay.CFPaymentID.String()
+		request.GatewayPaymentID = pay.CFPaymentID.String()
 		request.DepositPaidAt = &now
 		// Write only the confirmation columns — a full Save would rewrite the
 		// customer's event details from a row read before the gateway round-trip.
@@ -832,7 +832,7 @@ func (h *CateringHandler) VerifyDeposit(c *gin.Context) {
 			Updates(map[string]any{
 				"status":              request.Status,
 				"deposit_status":      request.DepositStatus,
-				"razorpay_payment_id": request.RazorpayPaymentID,
+				"gateway_payment_id": request.GatewayPaymentID,
 				"deposit_paid_at":     now,
 			}).Error; err != nil {
 			return err

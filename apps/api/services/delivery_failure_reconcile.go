@@ -13,9 +13,9 @@ package services
 //
 // Runs REGARDLESS of the escrow flags — disputing a hold is plain DB state (no money
 // moves), so it must self-heal even pre-launch. Scoped to GATEWAY orders (a
-// razorpay_order_id, so TerminalizeDeliveryFailure can actually freeze them) that are NOT
+// gateway_order_id, so TerminalizeDeliveryFailure can actually freeze them) that are NOT
 // already frozen (hold still none/awaiting AND no pending delivery_failed issue) nor
-// resolved. Group/meal-plan-day shell orders (no razorpay_order_id) are excluded so the
+// resolved. Group/meal-plan-day shell orders (no gateway_order_id) are excluded so the
 // sweep never re-drives a froze=false no-op forever (their freeze handlers are tracked
 // separately).
 //
@@ -75,7 +75,7 @@ func reconcileStrandedDeliveryFailures() int {
 		Joins("JOIN orders ON orders.id = deliveries.order_id AND orders.deleted_at IS NULL").
 		Where("deliveries.status IN ?", []models.DeliveryStatus{models.DeliveryFailed, models.DeliveryReturned}).
 		Where("deliveries.updated_at < ?", cutoff).
-		Where("orders.razorpay_order_id <> ''").
+		Where("orders.gateway_order_id <> ''").
 		Where("orders.payout_hold_status IN ?", []models.PayoutHoldStatus{models.PayoutHoldNone, models.PayoutHoldAwaitingConfirmation}).
 		Where("orders.status NOT IN ?", []models.OrderStatus{models.OrderStatusRefunded, models.OrderStatusCancelled}).
 		Where("NOT EXISTS (SELECT 1 FROM order_issues oi WHERE oi.order_id = orders.id AND oi.reason = ? AND oi.status = ?)",
@@ -91,7 +91,7 @@ func reconcileStrandedDeliveryFailures() int {
 
 // reconcileStrandedMealPlanDayFailures freezes any meal-plan per-DAY shell order left
 // stranded by a freeze that never completed. The gateway sweep above excludes shells (no
-// razorpay_order_id); this one keys off the meal_plan_days row instead — a failed/returned
+// gateway_order_id); this one keys off the meal_plan_days row instead — a failed/returned
 // delivery whose day is not yet `failed` (nor terminally resolved) is a strand.
 // TerminalizeDeliveryFailure's fall-through freezes the DAY (MarkMealPlanDayFailed); once
 // `failed` the day drops out of terminalOrFailedDayStatuses next sweep, so it
@@ -105,7 +105,7 @@ func reconcileStrandedMealPlanDayFailures() int {
 		Joins("JOIN meal_plan_days ON meal_plan_days.order_id = orders.id").
 		Where("deliveries.status IN ?", []models.DeliveryStatus{models.DeliveryFailed, models.DeliveryReturned}).
 		Where("deliveries.updated_at < ?", cutoff).
-		Where("orders.razorpay_order_id = ''").
+		Where("orders.gateway_order_id = ''").
 		Where("meal_plan_days.status NOT IN ?", terminalOrFailedDayStatuses).
 		Order("deliveries.updated_at ASC").
 		Limit(sweepBatchLimit).Scan(&rows).Error
@@ -131,7 +131,7 @@ func reconcileStrandedGroupFailures() int {
 		Joins("JOIN group_orders ON group_orders.order_id = orders.id").
 		Where("deliveries.status IN ?", []models.DeliveryStatus{models.DeliveryFailed, models.DeliveryReturned}).
 		Where("deliveries.updated_at < ?", cutoff).
-		Where("orders.razorpay_order_id = ''").
+		Where("orders.gateway_order_id = ''").
 		Where("group_orders.status NOT IN ?", terminalOrFailedGroupStatuses).
 		Order("deliveries.updated_at ASC").
 		Limit(sweepBatchLimit).Scan(&rows).Error
@@ -155,7 +155,7 @@ const retryTimeoutGrace = 30 * time.Minute
 // alerted). #592. The durable signal is unambiguous: a `pending` Delivery row whose
 // attempt_number has reached the cap (a re-accepted retry moves off `pending`; a
 // cap-reached failure goes `failed`), on an order still `ready`, stale past the grace
-// window. Scoped to gateway orders (a razorpay_order_id, so the freeze can dispute the
+// window. Scoped to gateway orders (a gateway_order_id, so the freeze can dispute the
 // hold); not-frozen + not-resolved guards mirror the gateway sweep so it self-terminates.
 // Returns the number freshly frozen.
 //
@@ -177,7 +177,7 @@ func reconcileStrandedRetryTimeouts() int {
 		Where("deliveries.attempt_number >= ?", MaxDeliveryAttempts).
 		Where("deliveries.updated_at < ?", cutoff).
 		Where("orders.status = ?", models.OrderStatusReady).
-		Where("orders.razorpay_order_id <> ''").
+		Where("orders.gateway_order_id <> ''").
 		Where("orders.payout_hold_status IN ?", []models.PayoutHoldStatus{models.PayoutHoldNone, models.PayoutHoldAwaitingConfirmation}).
 		Where("NOT EXISTS (SELECT 1 FROM order_issues oi WHERE oi.order_id = orders.id AND oi.reason = ? AND oi.status = ?)",
 			models.IssueDeliveryFailed, models.IssuePending).

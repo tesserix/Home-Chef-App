@@ -29,9 +29,9 @@ func setupDeferredCancelRefundDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '',
 		id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT,
 		status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'cashfree', total REAL DEFAULT 0,
-		razorpay_payment_id TEXT DEFAULT '', refund_amount REAL DEFAULT 0, refund_id TEXT DEFAULT '', refund_reason TEXT,
+		gateway_payment_id TEXT DEFAULT '', refund_amount REAL DEFAULT 0, refund_id TEXT DEFAULT '', refund_reason TEXT,
 		refund_initiated_by TEXT, refunded_at DATETIME, payout_hold_status TEXT DEFAULT '',
-		razorpay_order_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
+		gateway_order_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
 	prev := database.DB
 	database.DB = db
 	t.Cleanup(func() { database.DB = prev })
@@ -40,13 +40,13 @@ func setupDeferredCancelRefundDB(t *testing.T) *gorm.DB {
 
 // seedDeferredCancelOrder inserts a cancelled order carrying a deferred-refund sentinel —
 // the shape RetryDeferredCancelRefunds' query matches (status=cancelled, refund_id LIKE
-// the sentinel prefix, razorpay_payment_id set, updated_at past the grace). The gateway
+// the sentinel prefix, gateway_payment_id set, updated_at past the grace). The gateway
 // order id is what a Cashfree refund is actually issued against.
 func seedDeferredCancelOrder(t *testing.T, db *gorm.DB, refundID string, updatedAt time.Time) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
-		total, razorpay_payment_id, razorpay_order_id, refund_amount, refund_id, refunded_at, updated_at)
+		total, gateway_payment_id, gateway_order_id, refund_amount, refund_id, refunded_at, updated_at)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		id.String(), "ORD-D", uuid.NewString(), uuid.NewString(), string(models.OrderStatusCancelled), string(models.PaymentRefunded),
 		3054.0, "pay_test123", "cf_ord_deferred", 3054.0, refundID, time.Now(), updatedAt).Error)

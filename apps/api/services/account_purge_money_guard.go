@@ -113,7 +113,7 @@ func AccountUnsettledMoney(db *gorm.DB, userID uuid.UUID) (UnsettledMoney, error
 			models.OrderStatusRejected,
 			models.OrderStatusRefunded,
 		}).
-		Where("COALESCE(razorpay_payment_id, '') <> '' OR COALESCE(wallet_applied, 0) > 0 OR COALESCE(loyalty_applied, 0) > 0").
+		Where("COALESCE(gateway_payment_id, '') <> '' OR COALESCE(wallet_applied, 0) > 0 OR COALESCE(loyalty_applied, 0) > 0").
 		Select("total, COALESCE(refund_amount, 0) as refund").Scan(&rows).Error; err != nil {
 		return out, fmt.Errorf("purge-guard: terminated orders for %s: %w", userID, err)
 	}

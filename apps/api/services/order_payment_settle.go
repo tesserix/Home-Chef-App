@@ -229,9 +229,9 @@ func SettleOrderWallet(order *models.Order) {
 // order paid" core (#872 step 2, Task 3), used by the Cashfree HTTP verify leg,
 // the already-PAID recovery in the create leg, AND the order-payment reconcile
 // cron — all three ask Cashfree the identical question against
-// order.RazorpayOrderID (the redundant caller-supplied order id parameter this
+// order.GatewayOrderID (the redundant caller-supplied order id parameter this
 // had in `handlers` is gone: both existing callers already guaranteed it equalled
-// order.RazorpayOrderID by the time they called it). Returns (false, reason) on
+// order.GatewayOrderID by the time they called it). Returns (false, reason) on
 // any gate failure.
 //
 // Every hard gate the Razorpay verify applies is applied here, through the same
@@ -251,9 +251,9 @@ func SettleCashfreeOrder(order *models.Order) (bool, string, error) {
 		return false, "Payment gateway not configured", ErrPaymentGatewayUnavailable
 	}
 
-	payment, err := cf.SuccessfulPayment(order.RazorpayOrderID)
+	payment, err := cf.SuccessfulPayment(order.GatewayOrderID)
 	if err != nil {
-		log.Printf("Failed to fetch Cashfree payments for order %s: %v", order.RazorpayOrderID, err)
+		log.Printf("Failed to fetch Cashfree payments for order %s: %v", order.GatewayOrderID, err)
 		return false, "Could not verify payment with the gateway — please try again in a moment",
 			fmt.Errorf("%w: %v", ErrPaymentGatewayFetchFailed, err)
 	}
@@ -278,11 +278,11 @@ func SettleCashfreeOrder(order *models.Order) (bool, string, error) {
 		status = "captured"
 	}
 	if valid, reason := ValidateCapturedPayment(
-		status, payment.OrderID, order.RazorpayOrderID,
+		status, payment.OrderID, order.GatewayOrderID,
 		payment.AmountPaise.Paise(), expectedPaise,
 	); !valid {
 		log.Printf("cashfree settle rejected order=%s: %s (paymentOrder=%s expected=%s amount=%d expectedPaise=%d)",
-			order.OrderNumber, reason, payment.OrderID, order.RazorpayOrderID,
+			order.OrderNumber, reason, payment.OrderID, order.GatewayOrderID,
 			payment.AmountPaise.Paise(), expectedPaise)
 		return false, reason, nil
 	}
