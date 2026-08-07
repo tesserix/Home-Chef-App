@@ -85,13 +85,16 @@ func EasySplitWindowFits(db *gorm.DB) bool {
 // safe because the split carries the order's own id as its idempotency key and
 // Cashfree reports a repeat as already-processed.
 func ReleaseOrderSplit(db *gorm.DB, orderID uuid.UUID, now time.Time) (bool, error) {
-	if db == nil || !EasySplitEnabled(db) {
+	if db == nil {
 		return false, nil
 	}
 
 	var order models.Order
 	if err := db.Preload("Chef").First(&order, "id = ?", orderID).Error; err != nil {
-		return false, err
+		// Not knowing whether to split is not a reason to block the release: the
+		// order settles through the payout rail, same as every other refusal here.
+		log.Printf("easy-split: could not read order %s (%v) — falling back to the payout rail", orderID, err)
+		return false, nil
 	}
 	// Already split — by an earlier release, or by a re-drive of this one. The
 	// chef has been paid; saying otherwise would pay them again on the other rail.
@@ -113,8 +116,13 @@ func ReleaseOrderSplit(db *gorm.DB, orderID uuid.UUID, now time.Time) (bool, err
 
 	creditPaise := ToPaise(order.WalletApplied) + ToPaise(order.LoyaltyApplied)
 	capturePaise := ToPaise(order.Total) - creditPaise
-	split := BuildOrderSplit(db, &order, capturePaise, creditPaise)
+	split, skipped := BuildOrderSplitWithReason(db, &order, capturePaise, creditPaise)
 	if split == nil {
+		// Recorded, not just logged: "why did this order not split?" is asked
+		// weeks later, by which time the chef's state has moved on (#1084).
+		LogSystemAudit(nil, "order.payout.easy_split_skipped", "order", orderID.String(), nil, map[string]any{
+			"reason": skipped, "orderNumber": order.OrderNumber,
+		})
 		return false, nil
 	}
 	cf := GetCashfreeFor(order.Mode)

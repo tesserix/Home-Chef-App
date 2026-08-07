@@ -68,24 +68,50 @@ func PlatformFeeFlatMinor(db *gorm.DB) (feeMinor int64, ok bool) {
 // (payout is withheld, so the money must stay at the platform), the fee
 // setting is unreadable, or the computed share rounds to nothing.
 func BuildOrderSplit(db *gorm.DB, order *models.Order, capturePaise, creditPaise int) *CashfreeVendorSplit {
-	if order == nil || !EasySplitEnabled(db) || creditPaise > 0 {
-		return nil
+	split, _ := BuildOrderSplitWithReason(db, order, capturePaise, creditPaise)
+	return split
+}
+
+// Why an order settled through the payout rail instead. Recorded against the
+// order so "why did this one not split?" is answered from what we stored, not
+// by re-running the decision against state that has since moved on (#1084).
+const (
+	EasySplitSkipNoOrder         = "no_order"
+	EasySplitSkipDisabled        = "not_enabled_for_chef"
+	EasySplitSkipCreditFunded    = "credit_funded"
+	EasySplitSkipVendorNotActive = "vendor_not_active"
+	EasySplitSkipFSSAIExpired    = "fssai_expired"
+	EasySplitSkipFeeUnreadable   = "platform_fee_unreadable"
+	EasySplitSkipNothingToPay    = "share_below_fee"
+)
+
+// BuildOrderSplitWithReason is BuildOrderSplit carrying the guard that refused.
+// The reason is empty exactly when a split is returned.
+func BuildOrderSplitWithReason(db *gorm.DB, order *models.Order, capturePaise, creditPaise int) (*CashfreeVendorSplit, string) {
+	if order == nil {
+		return nil, EasySplitSkipNoOrder
+	}
+	if !EasySplitEnabledForChef(db, &order.Chef) {
+		return nil, EasySplitSkipDisabled
+	}
+	if creditPaise > 0 {
+		return nil, EasySplitSkipCreditFunded
 	}
 	chef := &order.Chef
 	if chef.CashfreeVendorID == "" || !strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorActive) {
-		return nil
+		return nil, EasySplitSkipVendorNotActive
 	}
 	if IsChefFSSAIExpired(chef) {
-		return nil
+		return nil, EasySplitSkipFSSAIExpired
 	}
 	fee, ok := PlatformFeeFlatMinor(db)
 	if !ok {
-		return nil
+		return nil, EasySplitSkipFeeUnreadable
 	}
 
 	share := int64(ToPaise(ChefNetPayoutFor(order))) - fee
 	if share <= 0 {
-		return nil
+		return nil, EasySplitSkipNothingToPay
 	}
 	if share > int64(capturePaise) {
 		share = int64(capturePaise)
@@ -93,7 +119,25 @@ func BuildOrderSplit(db *gorm.DB, order *models.Order, capturePaise, creditPaise
 	return &CashfreeVendorSplit{
 		VendorID:    chef.CashfreeVendorID,
 		AmountPaise: CashfreeAmountFromPaise(int(share)),
+	}, ""
+}
+
+// EasySplitEnabledForChef resolves the rollout decision for one chef: their own
+// override if they carry one, the platform flag otherwise.
+//
+// Tri-state rather than a boolean because the first live enablement must be one
+// chef, not all of them — switching the rail moves where their money lands, and
+// a boolean has no way to say "not yet, and not because we said no".
+func EasySplitEnabledForChef(db *gorm.DB, chef *models.ChefProfile) bool {
+	if chef != nil {
+		switch strings.ToLower(strings.TrimSpace(chef.EasySplitMode)) {
+		case PayoutAutoOn:
+			return true
+		case PayoutAutoOff:
+			return false
+		}
 	}
+	return EasySplitEnabled(db)
 }
 
 // EasySplitVendorIDFor is the deterministic vendor id for a chef —

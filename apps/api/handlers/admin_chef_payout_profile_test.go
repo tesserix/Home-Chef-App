@@ -30,7 +30,9 @@ import (
 const profileChefDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text,
 	address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY,
 	business_name TEXT DEFAULT '', payout_method TEXT DEFAULT '', razorpay_settlement_status TEXT DEFAULT '',
-	payout_auto_release TEXT DEFAULT '', payout_auto_disburse TEXT DEFAULT '', updated_at DATETIME)`
+	payout_auto_release TEXT DEFAULT '', payout_auto_disburse TEXT DEFAULT '',
+	easy_split_mode TEXT DEFAULT '', cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
+	updated_at DATETIME)`
 
 const profileSettingsDDL = `CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT UNIQUE, value TEXT,
 	type TEXT DEFAULT 'string', updated_by TEXT, updated_at DATETIME)`
@@ -70,6 +72,8 @@ func profileRouter() *gin.Engine {
 	r.POST("/admin/chefs/:id/payout-methods/refresh", h.RefreshChefPayoutMethod)
 	r.POST("/admin/chefs/:id/payout-methods/test-bank", h.SeedChefTestBankAccount)
 	r.PUT("/admin/chefs/:id/disburse-automation", h.SetChefDisburseAutomation)
+	r.PUT("/admin/chefs/:id/easy-split-mode", h.SetChefEasySplitMode)
+	r.PUT("/admin/chefs/easy-split-mode", h.SetEasySplitModeBulk)
 	r.GET("/admin/payouts/settings", h.GetPayoutSettings)
 	r.PUT("/admin/payouts/settings", h.UpdatePayoutSettings)
 	return r
