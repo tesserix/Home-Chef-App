@@ -75,18 +75,16 @@ func TestHandleStripePaymentSucceeded_CompletesFailedOnRetry(t *testing.T) {
 	require.Equal(t, int64(1), countOutbox(t, db, services.SubjectChefNewOrder))
 }
 
-// Razorpay capture on a FAILED order (retry) completes it too.
-func TestHandlePaymentCaptured_CompletesFailedOnRetry(t *testing.T) {
+// A capture on a FAILED order (the customer retried and it went through)
+// completes it too.
+func TestHandleCashfreePaymentSuccess_CompletesFailedOnRetry(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
-	orderID := payOrder(t, db, cust, chef, "failed", 500, "rzp_cap_retry", "")
+	orderID := cfPayOrder(t, db, cust, chef, "failed", 500, "cf_cap_retry")
 
-	payload, err := json.Marshal(map[string]any{
-		"payment": map[string]any{"entity": map[string]any{"id": "pay_r", "order_id": "rzp_cap_retry", "amount": 50000, "method": "card"}},
-	})
-	require.NoError(t, err)
-	require.NoError(t, (&PaymentHandler{}).handlePaymentCaptured(payload, models.ChefModeLive))
+	require.NoError(t, (&PaymentHandler{}).handleCashfreePaymentSuccess(
+		capturedPayload("cf_cap_retry", "8801", 500), models.ChefModeLive))
 
 	require.Equal(t, string(models.PaymentCompleted), paymentStatusOf(t, db, orderID))
 }
@@ -105,18 +103,18 @@ func TestHandleStripePaymentFailed_DoesNotOverwriteCompleted(t *testing.T) {
 		"a completed order survives a stray payment_intent.payment_failed")
 }
 
-// Razorpay capture on a REFUNDED order must not re-stamp it completed (tightened guard).
-func TestHandlePaymentCaptured_DoesNotReStampRefunded(t *testing.T) {
+// A capture on a REFUNDED order must not re-stamp it completed (tightened guard).
+func TestHandleCashfreePaymentSuccess_DoesNotReStampRefunded(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
-	orderID := payOrder(t, db, cust, chef, "refunded", 500, "rzp_cap_ref", "")
+	orderID := cfPayOrder(t, db, cust, chef, "refunded", 500, "cf_cap_ref")
+	// The guarded UPDATE matches nothing, so the handler falls through to the
+	// FSSAI fallback — a real query that needs its table present.
+	addFssaiRequestsTable(t, db)
 
-	payload, err := json.Marshal(map[string]any{
-		"payment": map[string]any{"entity": map[string]any{"id": "pay_x", "order_id": "rzp_cap_ref", "amount": 50000, "method": "card"}},
-	})
-	require.NoError(t, err)
-	require.NoError(t, (&PaymentHandler{}).handlePaymentCaptured(payload, models.ChefModeLive))
+	require.NoError(t, (&PaymentHandler{}).handleCashfreePaymentSuccess(
+		capturedPayload("cf_cap_ref", "8802", 500), models.ChefModeLive))
 
 	require.Equal(t, string(models.PaymentRefunded), paymentStatusOf(t, db, orderID))
 }

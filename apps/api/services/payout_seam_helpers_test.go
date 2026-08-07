@@ -15,7 +15,22 @@ import (
 	"time"
 
 	"github.com/homechef/api/config"
+	"github.com/homechef/api/models"
 )
+
+// withRazorpayClient swaps the live-slot client under the cache mutex and restores it.
+func withRazorpayClient(t *testing.T, c *RazorpayClient) {
+	t.Helper()
+	razorpayMu.Lock()
+	prev := razorpayClients[models.ChefModeLive]
+	razorpayClients[models.ChefModeLive] = c
+	razorpayMu.Unlock()
+	t.Cleanup(func() {
+		razorpayMu.Lock()
+		razorpayClients[models.ChefModeLive] = prev
+		razorpayMu.Unlock()
+	})
+}
 
 // withRazorpayTestServer points GetRazorpay() at an httptest.Server so the advance
 // capture/refund calls execute against canned responses. Restores the previous client.

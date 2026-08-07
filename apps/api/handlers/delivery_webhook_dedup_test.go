@@ -11,6 +11,7 @@ package handlers
 //     with the claim KEPT — no 500 retry-storm (finding-2 guard).
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -90,7 +91,7 @@ func postDeliveryWebhook(t *testing.T, providerCode, secret string, body []byte)
 	r := gin.New()
 	r.POST("/webhooks/delivery/:provider", NewDeliveryProviderHandler().HandleWebhook)
 
-	req := httptest.NewRequest(http.MethodPost, "/webhooks/delivery/"+providerCode, bytesReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/delivery/"+providerCode, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Webhook-Signature", signDelivery(body, secret))
 	w := httptest.NewRecorder()
