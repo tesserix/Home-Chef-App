@@ -193,7 +193,7 @@ type Config struct {
 	// flow should be verified in the gateway sandbox before going live.
 	GroupOrdersEnabled bool
 	// OrderPayoutAutoReleaseEnabled gates auto-releasing a delivered regular
-	// order's held chef/rider Route transfers (#217). Default OFF — moves live
+	// order's held chef/rider payout (#217). Default OFF — moves live
 	// settlement; verify in the gateway sandbox (#218) before enabling.
 	OrderPayoutAutoReleaseEnabled bool
 	// MealPlanEscrowEnabled gates the tiffin meal-plan ESCROW money flow (#194):

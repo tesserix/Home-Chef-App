@@ -642,8 +642,8 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 		// and release the chef payout (#46). No-op otherwise.
 		services.MarkGroupOrderDelivered(delivery.OrderID)
 		// Park the regular order's payout in a customer-confirmation hold (#387) —
-		// delivery no longer releases funds. No-op for orders without a retired-gateway
-		// order id (meal-plan/group settle their own).
+		// delivery no longer releases funds. No-op for orders without a gateway order
+		// id (meal-plan/group settle their own).
 		if err := services.SetOrderHoldAwaitingConfirmation(database.DB, delivery.OrderID); err != nil {
 			log.Printf("payout-hold: park order %s on courier delivery failed: %v", delivery.OrderID, err)
 		}

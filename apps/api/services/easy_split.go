@@ -28,7 +28,7 @@ import (
 // paying the chef later is the safe, pre-existing behaviour.
 
 const (
-	// SettingEasySplitEnabled turns split-at-capture on. Default OFF.
+	// SettingEasySplitEnabled turns the split rail on. Default OFF.
 	SettingEasySplitEnabled = "easy_split_enabled"
 	// SettingPlatformFeeFlatMinor is the flat per-transaction platform fee in
 	// paise, deducted from the chef's split share. Absent means zero.
@@ -58,9 +58,9 @@ func PlatformFeeFlatMinor(db *gorm.DB) (feeMinor int64, ok bool) {
 // BuildOrderSplit decides the Easy Split allocation for one checkout, or nil
 // for a full platform capture.
 //
-// Splitting at capture is being replaced by split-after-payment gated on the
-// release governor, so that the maturation window and the block reasons still
-// apply — ADR-0003.
+// The allocation is created after payment, when the release governor lets the
+// order go, so the maturation window and the block reasons still apply —
+// ADR-0003, #1091.
 //
 // nil when: the flag is off, credit part-funds the order (the capture no
 // longer covers the chef's share, so the statement path must settle it), the
