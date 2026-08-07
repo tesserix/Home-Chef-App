@@ -121,14 +121,12 @@ type DeliveryPartner struct {
 	ReferredByID *uuid.UUID `gorm:"type:uuid" json:"referredById,omitempty"`
 
 	// Payment gateway linked accounts
-	StripeAccountID   string `gorm:"" json:"-"`
-	RazorpayAccountID string `gorm:"" json:"-"` // Razorpay Route linked account ID
-	// PaymentProvider controls how earnings are paid out. "razorpay" (India)
-	// or "stripe" (international). Defaults to razorpay so existing driver
-	// rows behave identically after the column is added.
+	StripeAccountID string `gorm:"" json:"-"`
+	// PaymentProvider controls how earnings are paid out. Column default stays
+	// as it was written; the schema change belongs to a tesserix-k8s PR (#1086).
 	PaymentProvider string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
 	// PayoutCountry is the ISO-3166 alpha-2 country for Stripe Connect
-	// onboarding and currency selection. Unused for Razorpay drivers.
+	// onboarding and currency selection.
 	PayoutCountry        string `gorm:"type:varchar(2);default:'IN'" json:"payoutCountry"`
 	StripeChargesEnabled bool   `gorm:"default:false" json:"stripeChargesEnabled"`
 	StripePayoutsEnabled bool   `gorm:"default:false" json:"stripePayoutsEnabled"`
