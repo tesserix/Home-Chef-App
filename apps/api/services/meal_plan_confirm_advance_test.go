@@ -11,10 +11,8 @@ package services
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	"github.com/google/uuid"
@@ -56,10 +54,9 @@ func setupConfirmAdvanceDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-// confirmAdvanceStub serves BOTH GET /payments/{id} (captured, bound to orderID/amount —
-// for VerifyMealPlanAdvance) AND POST /transfers (on-hold — for HoldChefPayouts),
-// counting transfer creates so a test can assert one hold per accepted day.
-func confirmAdvanceStub(t *testing.T, orderID string, amountPaise int, creates *int32) {
+// confirmAdvanceStub serves GET /payments/{id} (captured, bound to orderID/amount) for
+// VerifyMealPlanAdvance.
+func confirmAdvanceStub(t *testing.T, orderID string, amountPaise int) {
 	t.Helper()
 	withRazorpayTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -68,9 +65,6 @@ func confirmAdvanceStub(t *testing.T, orderID string, amountPaise int, creates *
 				"id": "pay_adv", "status": "captured", "captured": true,
 				"order_id": orderID, "amount": amountPaise,
 			})
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/transfers"):
-			n := atomic.AddInt32(creates, 1)
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": fmt.Sprintf("trf_hold_%d", n), "on_hold": true})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -133,12 +127,11 @@ func outboxCount(t *testing.T, db *gorm.DB, subject string) int {
 }
 
 // The webhook path (signature "") confirms a captured advance end to end: plan + days →
-// confirmed, EscrowPaymentID stamped, one hold transfer per accepted day, event emitted.
+// confirmed, EscrowPaymentID stamped, event emitted.
 func TestConfirmMealPlanAdvance_WebhookPath_ConfirmsHoldsStamps(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	var creates int32
-	confirmAdvanceStub(t, "order_conf1", 35200, &creates) // total 352.00 → 35200 paise
+	confirmAdvanceStub(t, "order_conf1", 35200) // total 352.00 → 35200 paise
 	plan, planID, dayIDs := seedConfirmPlan(t, db, "order_conf1", []float64{160, 160})
 
 	confirmed, err := ConfirmMealPlanAdvance(db, plan, "pay_adv", "") // webhook path: no signature
@@ -151,30 +144,26 @@ func TestConfirmMealPlanAdvance_WebhookPath_ConfirmsHoldsStamps(t *testing.T) {
 	for _, d := range dayIDs {
 		require.Equal(t, string(models.MealPlanDayConfirmed), confDayStatus(t, db, d), "accepted day → confirmed")
 	}
-	require.Equal(t, int32(2), atomic.LoadInt32(&creates), "one hold transfer per accepted day")
 	require.Equal(t, 1, outboxCount(t, db, SubjectMealPlanConfirmed), "confirmed event emitted once")
 }
 
 // A second call (client verify racing the webhook, or a webhook re-delivery) is a no-op:
-// no re-confirm, no second hold transfer, returns confirmed=false.
+// no re-confirm, no second event, returns confirmed=false.
 func TestConfirmMealPlanAdvance_Idempotent_NoDoubleHold(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	var creates int32
-	confirmAdvanceStub(t, "order_conf1", 35200, &creates)
+	confirmAdvanceStub(t, "order_conf1", 35200)
 	plan, planID, _ := seedConfirmPlan(t, db, "order_conf1", []float64{160, 160})
 
 	c1, err := ConfirmMealPlanAdvance(db, plan, "pay_adv", "")
 	require.NoError(t, err)
 	require.True(t, c1)
-	require.Equal(t, int32(2), atomic.LoadInt32(&creates))
 
 	// Re-run against a fresh in-memory struct (as a second delivery would load).
 	plan2, _, _ := seedConfirmPlanFrom(t, db, planID)
 	c2, err := ConfirmMealPlanAdvance(db, plan2, "pay_adv", "")
 	require.NoError(t, err)
 	require.False(t, c2, "already confirmed → no transition")
-	require.Equal(t, int32(2), atomic.LoadInt32(&creates), "no second hold transfer")
 	require.Equal(t, 1, outboxCount(t, db, SubjectMealPlanConfirmed), "event not re-emitted")
 }
 
@@ -192,19 +181,17 @@ func seedConfirmPlanFrom(t *testing.T, db *gorm.DB, planID uuid.UUID) (*models.M
 	return &plan, planID, ids
 }
 
-// Escrow OFF → pure no-op ack: nothing confirmed, no hold, no event.
+// Escrow OFF → pure no-op ack: nothing confirmed, no event.
 func TestConfirmMealPlanAdvance_EscrowOff_NoOp(t *testing.T) {
 	escrowFlag(t, false)
 	db := setupConfirmAdvanceDB(t)
-	var creates int32
-	confirmAdvanceStub(t, "order_conf1", 35200, &creates)
+	confirmAdvanceStub(t, "order_conf1", 35200)
 	plan, planID, _ := seedConfirmPlan(t, db, "order_conf1", []float64{160, 160})
 
 	confirmed, err := ConfirmMealPlanAdvance(db, plan, "pay_adv", "")
 	require.NoError(t, err)
 	require.False(t, confirmed)
 	require.Equal(t, string(models.MealPlanAwaitingCustomer), planField(t, db, planID, "status"), "unchanged")
-	require.Equal(t, int32(0), atomic.LoadInt32(&creates), "no hold when escrow off")
 }
 
 // A captured payment bound to a DIFFERENT gateway order must NOT confirm the plan — the
@@ -212,13 +199,11 @@ func TestConfirmMealPlanAdvance_EscrowOff_NoOp(t *testing.T) {
 func TestConfirmMealPlanAdvance_OrderMismatch_NoConfirm(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	var creates int32
-	confirmAdvanceStub(t, "order_OTHER", 35200, &creates) // payment belongs to another order
+	confirmAdvanceStub(t, "order_OTHER", 35200) // payment belongs to another order
 	plan, planID, _ := seedConfirmPlan(t, db, "order_conf1", []float64{160, 160})
 
 	confirmed, err := ConfirmMealPlanAdvance(db, plan, "pay_adv", "")
 	require.Error(t, err)
 	require.False(t, confirmed)
 	require.Equal(t, string(models.MealPlanAwaitingCustomer), planField(t, db, planID, "status"), "not confirmed on mismatch")
-	require.Equal(t, int32(0), atomic.LoadInt32(&creates))
 }

@@ -18,7 +18,6 @@ package services
 
 import (
 	"fmt"
-	"log"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -60,12 +59,9 @@ func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.Mea
 
 	amount := MealPlanRefundAmount(plan, day, percent)
 
-	// 0% (or a zero base): no customer refund; the chef keeps their full payout (release the
-	// held transfer) and the day is skipped (customer forfeits).
+	// 0% (or a zero base): no customer refund; the chef keeps their full payout and
+	// the day is skipped (customer forfeits).
 	if percent <= 0 || amount <= 0 {
-		if err := ReleaseDayPayout(tx, day); err != nil {
-			return fmt.Errorf("v2 refund day %s: release chef payout (none): %w", day.ID, err)
-		}
 		return terminalizeV2Day(tx, day, 0, dest, false)
 	}
 
@@ -83,16 +79,10 @@ func ExecuteMealPlanV2Refund(tx *gorm.DB, plan *models.MealPlan, day *models.Mea
 		Reason:     fmt.Sprintf("%d%% day refund", percent),
 	})
 
-	// Reverse the chef's held transfer by the refunded percentage; the chef keeps (100−P)% of
-	// their net payout as prep compensation. Best-effort on the gateway (a failed reverse is
-	// left as re-drivable drift for the payout-reconcile cron), never blocking the customer
-	// refund. No-op when the chef has no Route transfer for the day.
-	reverseChefTransferForV2(tx, plan, day, percent)
-
 	// Drive the day's hold OUT of the payout-release queue so a refunded day can never also be
 	// released to the chef (double-pay). Money-safe for every case; for Half, the chef's kept
 	// slice is settled by the payout-reconcile path — this only guarantees no auto-release.
-	if err := reverseRefundedDayHold(tx, day.ID, true); err != nil {
+	if err := reverseRefundedDayHold(tx, day.ID); err != nil {
 		return fmt.Errorf("v2 refund day %s: hold reversal: %w", day.ID, err)
 	}
 
@@ -184,33 +174,6 @@ func terminalizeV2DayWithGatewayRef(tx *gorm.DB, day *models.MealPlanDay, percen
 		"chef_refund_choice": day.ChefRefundChoice,
 		"refund_destination": day.RefundDestination,
 	}).Error
-}
-
-// reverseChefTransferForV2 reverses the chef's held Route transfer by the refunded percentage.
-// Best-effort: a failed reverse is logged and left for the payout-reconcile cron. No-op when the
-// day has no transfer (e.g. a chef without a Route account) or Razorpay is unavailable.
-func reverseChefTransferForV2(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, percent int) {
-	if day.PayoutTransferID == "" {
-		return
-	}
-	rz := GetRazorpayFor(plan.Mode)
-	if rz == nil {
-		return
-	}
-	percent = ClampRefundPercent(percent)
-	if percent <= 0 {
-		return
-	}
-	net := perDayNetPayout(plan, day, dayCommissionRate(tx, day))
-	reversePaise := 0 // 0 = full reverse at 100%
-	if percent < 100 {
-		reversePaise = ToPaise(Round2(net * float64(percent) / 100))
-	}
-	if _, err := rz.ReverseTransfer(day.PayoutTransferID, reversePaise); err != nil {
-		if !isAlreadyReversedErr(err) {
-			log.Printf("v2 refund: reverse transfer %s (%d%%) failed — reconcile cron will re-drive: %v", day.PayoutTransferID, percent, err)
-		}
-	}
 }
 
 // gatewayRefundToSource issues a partial refund of the plan's captured escrow payment back to the

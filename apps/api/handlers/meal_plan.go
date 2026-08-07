@@ -669,11 +669,9 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 				Updates(map[string]any{"confirmed_at": now, "subtotal": accepted, "total": accepted}).Error; err != nil {
 				return err
 			}
-			// Escrow (gated): refund the declined days, hold the chef's per-day payouts.
+			// Escrow (gated): refund the declined days. The chef is paid for the days
+			// they do cook through each day's shell order on the weekly statement.
 			if err := services.RefundDeclinedDays(tx, &plan, "chef could not cook this day"); err != nil {
-				return err
-			}
-			if err := services.HoldChefPayouts(tx, &plan, chefProfile.RazorpayAccountID); err != nil {
 				return err
 			}
 		} else {

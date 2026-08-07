@@ -771,10 +771,8 @@ func (h *GroupOrderHandler) maybeConsolidate(groupID uuid.UUID) (bool, error) {
 	}
 
 	now := time.Now()
-	chefAccount := ""
 	chefName := ""
 	if g.Chef != nil {
-		chefAccount = g.Chef.RazorpayAccountID
 		chefName = g.Chef.BusinessName
 	}
 
@@ -852,10 +850,6 @@ func (h *GroupOrderHandler) maybeConsolidate(groupID uuid.UUID) (bool, error) {
 		}
 		if err := tx.Model(&models.GroupOrder{}).Where("id = ?", g.ID).
 			Updates(map[string]any{"order_id": order.ID, "placed_at": now}).Error; err != nil {
-			return err
-		}
-		// Hold the chef payout (released on delivery).
-		if err := services.HoldGroupChefPayout(tx, &g, chefAccount); err != nil {
 			return err
 		}
 		// Feed the normal chef + dispatch pipeline.

@@ -53,10 +53,6 @@ func runReconciliationScan(ctx context.Context) {
 		}
 	}()
 
-	// Escrow conservation ledger (#398): gateway-vs-platform payout-hold drift. Read-only,
-	// self-alerting via PaymentDrift rows + Sentry. Pure no-op while no hold is parked (flags OFF).
-	RunEscrowLedgerReconcile()
-
 	start, end := previousISTDay(time.Now())
 	drifts, checked, err := ReconcileSettlements(ctx, start, end)
 	if err != nil {

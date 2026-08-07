@@ -48,9 +48,21 @@ func TestReconcileCancelledGroups_ClawsBackStrandedHold(t *testing.T) {
 	require.Equal(t, 0, reconcileCancelledGroups())
 }
 
+// A cancelled group with no transfer id is a target too: no group holds a transfer
+// since #1086, and a parked hold the admin queue can still release is the strand.
+func TestReconcileCancelledGroups_DrivesGroupWithNoTransferID(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+
+	id := seedCrossGroup(t, db, models.PayoutHoldAwaitingConfirmation, nil)
+	setGroupStatus(t, db, id, models.GroupOrderCancelled)
+
+	require.Equal(t, 1, reconcileCancelledGroups())
+	require.Equal(t, models.PayoutHoldReversed, loadGroupHold(t, db, id))
+}
+
 // Fix 1 — the scan skips rows it must not touch: already terminal-for-cancel
-// (withheld/reversed), non-cancelled groups, and cancelled groups with no held
-// transfer (no money stranded).
+// (withheld/reversed) and non-cancelled groups.
 func TestReconcileCancelledGroups_SkipsNonTargets(t *testing.T) {
 	flagsOff(t)
 	db := setupCrossguardDB(t)
@@ -62,14 +74,9 @@ func TestReconcileCancelledGroups_SkipsNonTargets(t *testing.T) {
 	// non-cancelled (seed leaves status=delivered) with a held transfer → skip
 	del := seedCrossGroup(t, db, models.PayoutHoldAwaitingConfirmation, nil)
 	setGroupTransfer(t, db, del, "t")
-	// cancelled but NO transfer → not money-stranded, skip
-	noTrf := seedCrossGroup(t, db, models.PayoutHoldAwaitingConfirmation, nil)
-	setGroupStatus(t, db, noTrf, models.GroupOrderCancelled)
-
 	require.Equal(t, 0, reconcileCancelledGroups())
 	require.Equal(t, models.PayoutHoldReversed, loadGroupHold(t, db, rev))
 	require.Equal(t, models.PayoutHoldAwaitingConfirmation, loadGroupHold(t, db, del))
-	require.Equal(t, models.PayoutHoldAwaitingConfirmation, loadGroupHold(t, db, noTrf))
 }
 
 // Fix 2 — a delivered event on a cancelled group must NOT flip it to delivered or

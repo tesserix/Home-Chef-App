@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -377,114 +376,6 @@ func verifyMealPlanCashfreeAdvance(tx *gorm.DB, plan *models.MealPlan) error {
 		Update("escrow_payment_id", paymentID).Error
 }
 
-// HoldChefPayouts creates one on-hold Route transfer per accepted day to the
-// chef's linked account and stamps PayoutTransferID on each day. Called inside
-// the confirm transaction. No-op when escrow is off.
-func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) error {
-	if !MealPlanEscrowActive() {
-		return nil
-	}
-	// Route on-hold transfers are a Razorpay mechanism and there is no Cashfree
-	// analogue — Cashfree Payouts pushes money, it cannot park it at the gateway.
-	// A Cashfree-funded plan therefore holds nothing: its days spawn shell orders
-	// like any other, and the chef is paid for the delivered ones through the
-	// weekly statement → payout batch → rail path, which already runs on Cashfree.
-	// Calling Razorpay here would fail outright, since no Razorpay payment exists
-	// to transfer from.
-	if plan.PaymentProvider == models.PaymentProviderCashfree {
-		return nil
-	}
-	rz := GetRazorpayFor(plan.Mode)
-	if rz == nil {
-		return fmt.Errorf("razorpay not configured")
-	}
-	if chefAccount == "" {
-		return fmt.Errorf("chef has no Razorpay linked account")
-	}
-	// SECURITY: never hold chef payouts for a plan whose advance wasn't captured
-	// — the on-hold transfers draw from the platform balance, so holding against
-	// an unpaid plan would pay the chef with the platform's own money.
-	if plan.EscrowPaymentID == "" {
-		return fmt.Errorf("cannot hold payouts: advance payment not captured for plan %s", plan.ID)
-	}
-	// #518: the held transfer must be the chef's NET (food + per-day GST − commission
-	// − TDS), the SAME basis as the order path, NOT the gross food price. Resolve the
-	// commission rate once for the whole plan so every day is held at one consistent
-	// rate.
-	rate := GetCommissionRate(tx)
-	for i := range plan.Days {
-		d := &plan.Days[i]
-		if d.PayoutTransferID != "" {
-			continue // already held (idempotent)
-		}
-		if !isPayableDayStatus(d.Status) {
-			continue
-		}
-		heldPaise := ToPaise(perDayNetPayout(plan, d, rate))
-		tr, err := rz.CreateTransfer(&DirectTransferRequest{
-			Account:  chefAccount,
-			Amount:   heldPaise,
-			Currency: plan.Currency,
-			OnHold:   true,
-			Notes:    map[string]string{"meal_plan_id": plan.ID.String(), "day_id": d.ID.String()},
-			// One hold per day (DB-guarded by PayoutTransferID); a retry re-derives the
-			// same per-day key so Razorpay dedups it. #574.
-			IdempotencyKey: HoldPayoutIdempotencyKey("mealplanday", d.ID),
-		})
-		if err != nil {
-			return fmt.Errorf("hold payout for day %s: %w", d.ID, err)
-		}
-		d.PayoutTransferID = tr.ID
-		d.CommissionRate = rate // #547: freeze the rate this transfer was sized at
-		if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", d.ID).
-			Updates(map[string]any{"payout_transfer_id": tr.ID, "commission_rate": rate}).Error; err != nil {
-			return err
-		}
-		auditTransferMovement(auditTransferHold, aggTypeMealPlanDay, d.ID, tr.ID, heldPaise, "meal-plan day confirmed — chef payout held")
-	}
-	return nil
-}
-
-// ReleaseDayPayout releases the held transfer for a delivered day. DB-guarded:
-// only acts if a transfer id is present. No-op when escrow is off. Since #387 the
-// delivery hook parks a hold instead of calling this; it remains the seam the
-// admin payout queue (#388) drives off release_eligible and the payout-reconcile
-// cron (#459) re-drives for drift rows.
-//
-// IDEMPOTENT RE-DRIVE (#459): ReleaseTransfer is a PATCH on_hold:false that
-// Razorpay treats as a no-op on an already-released transfer, but a partially-
-// applied release can still surface an "already released" gateway error. Tolerate
-// it (log + return nil) so a re-drive cannot loop forever. TRADEOFF: string-
-// matching the gateway message is the fragile part — the durable guard is the
-// reconcile only re-driving rows with payout_settled_at IS NULL (a settled day is
-// never re-driven); a single-transfer FetchTransfer on the client would let us
-// verify on-hold state instead (out of scope, noted as a follow-up).
-func ReleaseDayPayout(tx *gorm.DB, day *models.MealPlanDay) error {
-	if !MealPlanEscrowActive() || day.PayoutTransferID == "" {
-		return nil
-	}
-	rz := GetRazorpayFor(day.Mode)
-	if rz == nil {
-		return fmt.Errorf("razorpay not configured")
-	}
-	if _, err := rz.ReleaseTransfer(day.PayoutTransferID); err != nil {
-		if isAlreadyReleasedErr(err) {
-			log.Printf("meal-plan release: transfer %s already released (idempotent re-drive): %v", day.PayoutTransferID, err)
-			return nil
-		}
-		return fmt.Errorf("release payout %s: %w", day.PayoutTransferID, err)
-	}
-	auditTransferMovement(auditTransferRelease, aggTypeMealPlanDay, day.ID, day.PayoutTransferID, 0, "meal-plan day delivered — chef payout released")
-	// NOTE: the chef "payout released" notification is NOT emitted here. This seam
-	// is re-driven by the payout-reconcile cron (via settlePayout), and Razorpay's
-	// release PATCH is a silent 200 no-op on an already-released transfer, so a
-	// re-drive reaches this point again and would double-notify. The notification is
-	// fired from the once-only release_eligible→released transition instead — see
-	// the auto-release sweep (payout_mealplan_release_cron.go) calling
-	// notifyChefDayPayoutReleased after a successful ReleaseHold.
-	return nil
-}
-
 // notifyChefDayPayoutReleased stages the chef's "payout released" notification for
 // one tiffin day, resolving the chef's user id from the plan → chef profile. Uses
 // struct-loads (not a raw Scan into a bare uuid) so GORM handles the uuid columns
@@ -507,36 +398,6 @@ func notifyChefDayPayoutReleased(tx *gorm.DB, day *models.MealPlanDay) error {
 		"day_id":       day.ID.String(),
 		"dishName":     day.DishName,
 	})
-}
-
-// isAlreadyReleasedErr reports whether a gateway error indicates the transfer was
-// already released / no longer on hold — the idempotent re-drive case
-// ReleaseDayPayout tolerates so the reconcile cannot loop on a settled transfer.
-func isAlreadyReleasedErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "already released") ||
-		strings.Contains(msg, "already settled") ||
-		strings.Contains(msg, "not on hold") ||
-		strings.Contains(msg, "not_on_hold")
-}
-
-// isAlreadyReversedErr reports whether a gateway error indicates the transfer was
-// already reversed — the idempotent case the reverse seam tolerates so a residual
-// concurrent double-dispatch (#508) or a reconcile re-drive can't loop/fail on a
-// transfer that's already been clawed back.
-func isAlreadyReversedErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "already reversed") ||
-		strings.Contains(msg, "fully reversed") ||
-		strings.Contains(msg, "already refunded") ||
-		strings.Contains(msg, "not_reversible") ||
-		strings.Contains(msg, "not reversible")
 }
 
 // RefundDay refunds a single day to the customer's wallet for the FULL amount the
@@ -606,34 +467,6 @@ func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay
 		day.RefundTxnID = locked.RefundTxnID // reconcile the caller's struct to the DB truth
 		return nil                           // already refunded by a prior/concurrent writer
 	}
-	// Only a Razorpay-funded plan has a Route transfer to claw back; a Cashfree one
-	// never held anything (see HoldChefPayouts), so requiring the client here would
-	// fail a refund that has nothing to reverse. The customer credit below is the
-	// same either way — it is a wallet credit, not a gateway call.
-	var rz *RazorpayClient
-	if day.PayoutTransferID != "" {
-		if rz = GetRazorpayFor(day.Mode); rz == nil {
-			return fmt.Errorf("razorpay not configured")
-		}
-	}
-	// Attempt the gateway claw-back of the held transfer. The customer refund below
-	// MUST proceed even if this fails, so we DON'T abort — but we record whether it
-	// landed (reverseOK) so reverseRefundedDayHold can leave a failed claw-back as
-	// re-drivable drift for the reconcile cron rather than stamping it settled and
-	// stranding the chef's transfer (#398). An already-reversed transfer counts as
-	// success (idempotent), not drift.
-	reverseOK := true
-	if day.PayoutTransferID != "" {
-		if _, err := rz.ReverseTransfer(day.PayoutTransferID, 0); err != nil {
-			if !isAlreadyReversedErr(err) {
-				log.Printf("meal-plan refund: reverse transfer %s failed — leaving day hold as re-drivable drift for the reconcile cron: %v", day.PayoutTransferID, err)
-				reverseOK = false
-			}
-			// already-reversed → idempotent no-op, no new money moved (no audit row)
-		} else {
-			auditTransferMovement(auditTransferReverse, aggTypeMealPlanDay, day.ID, day.PayoutTransferID, 0, "meal-plan day refunded — chef payout clawed back")
-		}
-	}
 	// Credit the caller-chosen refund amount (perDayGross for a make-whole refund;
 	// perDaySkipRefund = food − platform fee for an approved skip) to the wallet.
 	txn, err := CreditWallet(tx, plan.CustomerID, amount, models.WalletSourceRefund, nil,
@@ -667,10 +500,8 @@ func refundDayAmount(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay
 		}
 	}
 	// #498/#398: drive the day's payout hold out of the releasable set so the admin
-	// queue can't release a refunded day (double-pay). STATE-ONLY — the claw-back was
-	// attempted above; reverseOK tells it whether to stamp terminal-settled or leave
-	// re-drivable drift for the reconcile cron on a failed reverse.
-	return reverseRefundedDayHold(tx, day.ID, reverseOK)
+	// queue can't release a refunded day (double-pay).
+	return reverseRefundedDayHold(tx, day.ID)
 }
 
 // ConfirmMealPlanAdvance validates a captured meal-plan advance payment and, on the
@@ -705,15 +536,7 @@ func ConfirmMealPlanAdvance(db *gorm.DB, plan *models.MealPlan, paymentID, signa
 	}); err != nil {
 		return false, err
 	}
-	if !confirmed {
-		return false, nil
-	}
-	// Hold OUTSIDE the confirm tx. Idempotent; on failure the plan is confirmed-but-
-	// unheld and the hold-reconcile cron completes it — money is never held-in-a-tx.
-	if err := HoldMealPlanPayouts(db, plan); err != nil {
-		return true, err
-	}
-	return true, nil
+	return confirmed, nil
 }
 
 // confirmMealPlanAdvanceDBTx is the LOCAL-only confirm (no external calls): validate the
@@ -762,23 +585,6 @@ func confirmMealPlanAdvanceDBTx(tx *gorm.DB, plan *models.MealPlan, paymentID, s
 		"meal_plan_id": plan.ID.String(), "meal_plan_no": plan.MealPlanNumber,
 		"approved": true, "customer_id": plan.CustomerID.String(), "chef_id": plan.ChefID.String(),
 	})
-}
-
-// HoldMealPlanPayouts holds the chef's per-day Route transfers for a confirmed plan,
-// OUTSIDE any confirm tx. It passes the plain db to HoldChefPayouts so each day's
-// transfer + payout_transfer_id stamp auto-commits independently — a mid-way failure
-// leaves the completed days held (no rollback, no orphaned transfer) and the
-// hold-reconcile cron finishes the rest. Idempotent via the per-day PayoutTransferID
-// guard + the escrow_payment_id gate. Requires plan.Days loaded. No-op when escrow off.
-func HoldMealPlanPayouts(db *gorm.DB, plan *models.MealPlan) error {
-	if !MealPlanEscrowActive() {
-		return nil
-	}
-	var chef models.ChefProfile
-	if err := db.Select("id", "razorpay_account_id").First(&chef, "id = ?", plan.ChefID).Error; err != nil {
-		return err
-	}
-	return HoldChefPayouts(db, plan, chef.RazorpayAccountID)
 }
 
 // RefundDeclinedDays refunds the days the chef declined (cherry-picked out) once

@@ -149,11 +149,10 @@ func reconcileOrders(status models.PayoutHoldStatus, settle settleFn) int {
 }
 
 // reconcileMealPlanDays re-drives drift meal-plan-day holds in the given status.
-// Guards on a present transfer id (the seam has nothing to release otherwise).
 func reconcileMealPlanDays(status models.PayoutHoldStatus, settle settleFn) int {
 	var ids []string
 	if err := database.DB.Model(&models.MealPlanDay{}).
-		Where("payout_hold_status = ? AND payout_settled_at IS NULL AND payout_transfer_id <> '' AND payout_settle_attempts < ?",
+		Where("payout_hold_status = ? AND payout_settled_at IS NULL AND payout_settle_attempts < ?",
 			status, payoutReconcileMaxAttempts).
 		Limit(sweepBatchLimit).Pluck("id", &ids).Error; err != nil {
 		log.Printf("payout-reconcile: query %s meal-plan days failed: %v", status, err)
@@ -163,11 +162,10 @@ func reconcileMealPlanDays(status models.PayoutHoldStatus, settle settleFn) int 
 }
 
 // reconcileGroupOrders re-drives drift group/office order holds in the given status.
-// Guards on a present transfer id (the seam has nothing to release otherwise).
 func reconcileGroupOrders(status models.PayoutHoldStatus, settle settleFn) int {
 	var ids []string
 	if err := database.DB.Model(&models.GroupOrder{}).
-		Where("payout_hold_status = ? AND payout_settled_at IS NULL AND payout_transfer_id <> '' AND payout_settle_attempts < ?",
+		Where("payout_hold_status = ? AND payout_settled_at IS NULL AND payout_settle_attempts < ?",
 			status, payoutReconcileMaxAttempts).
 		Limit(sweepBatchLimit).Pluck("id", &ids).Error; err != nil {
 		log.Printf("payout-reconcile: query %s group orders failed: %v", status, err)
@@ -217,11 +215,11 @@ func bumpSettleAttempt(aggType string, id uuid.UUID, cause error) {
 	log.Printf("payout-reconcile: %s %s settle failed (attempt %d): %v", aggType, id, attempts, cause)
 }
 
-// reconcileCancelledGroups claws back a stranded held transfer on a CANCELLED group
-// whose reverse never ran (#534). The released/reversed sweeps above only catch holds
-// already flipped to a terminal-in-flight status; a cancelled group left at
-// none/awaiting/… with a held transfer (crash after the cancel tx committed, no client
-// retry) is invisible to them, so the chef's held payout is never clawed back.
+// reconcileCancelledGroups drives a CANCELLED group's payout hold terminal when its
+// reverse never ran (#534). The released/reversed sweeps above only catch holds already
+// flipped to a terminal-in-flight status; a cancelled group left at none/awaiting/…
+// (crash after the cancel tx committed, no client retry) is invisible to them, so it
+// stays releasable and the admin queue can still pay a cancelled group.
 //
 // Uses ReverseGroupHoldForCancel (NOT the generic settleReverse): the gap rows haven't
 // transitioned yet, so they need the guarded transition (→ reversed) + settle, not just
@@ -232,7 +230,7 @@ func reconcileCancelledGroups() int {
 	var ids []string
 	if err := database.DB.Model(&models.GroupOrder{}).
 		Where(`status = ? AND payout_hold_status NOT IN ? AND payout_settled_at IS NULL
-		       AND payout_transfer_id <> '' AND payout_settle_attempts < ?`,
+		       AND payout_settle_attempts < ?`,
 			models.GroupOrderCancelled,
 			[]models.PayoutHoldStatus{models.PayoutHoldWithheld, models.PayoutHoldReversed},
 			payoutReconcileMaxAttempts).
@@ -302,16 +300,13 @@ func reconcileCancelledOrders() int {
 }
 
 // reconcileRefundedDays is reconcileCancelledOrders for the meal-plan-day aggregate:
-// a day refunded/cancelled but left at a parked hold with a held transfer (its
-// RefundDay cross-guard crashed before reverseRefundedDayHold). Scoped to days that
-// actually hold a transfer (payout_transfer_id <> ”). NOTE: a day whose reverse
-// FAILED (not crashed) is left at hold=reversed+unsettled by reverseRefundedDayHold
-// (#398) — that drift is re-driven by reconcileMealPlanDays(reversed), not here.
+// a day refunded/cancelled but left at a parked hold (its RefundDay cross-guard crashed
+// before reverseRefundedDayHold), which the admin queue would otherwise still release.
 func reconcileRefundedDays() int {
 	var ids []string
 	if err := database.DB.Model(&models.MealPlanDay{}).
 		Where(`status IN ? AND payout_hold_status IN ? AND payout_settled_at IS NULL
-		       AND payout_transfer_id <> '' AND payout_settle_attempts < ?`,
+		       AND payout_settle_attempts < ?`,
 			[]models.MealPlanDayStatus{models.MealPlanDayRefunded, models.MealPlanDayCancelled},
 			parkedActionableHolds, payoutReconcileMaxAttempts).
 		Limit(sweepBatchLimit).Pluck("id", &ids).Error; err != nil {

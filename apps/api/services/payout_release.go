@@ -37,7 +37,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
 
@@ -654,36 +653,20 @@ func settleReverse(db *gorm.DB, aggType string, id uuid.UUID) error {
 	return settlePayout(db, aggType, id)
 }
 
-// releaseMoney runs the post-commit, flag-gated release seam. Order → the Easy
-// Split release; meal-plan day → the held-transfer release. Both no-op when their
-// escrow flag is OFF or the gateway is unconfigured.
+// releaseMoney runs the post-commit, flag-gated release seam. Only the order
+// aggregate moves money here — the chef's share leaves through Easy Split. A
+// meal-plan day and a group order are paid on the statement path, so releasing
+// their hold is a state change alone.
 func releaseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
-	switch aggType {
-	case aggTypeOrder:
-		// The Easy Split rail runs first: this is the moment ADR-0003 moved the
-		// split to, so that every hold, block and clawback has already had its
-		// say before the chef's share leaves the platform account. An error here
-		// fails the release deliberately — a settled hold would never be
-		// re-driven, and the split would be lost.
-		if _, err := ReleaseOrderSplit(db, id, time.Now()); err != nil {
-			return fmt.Errorf("payout-release: split order %s: %w", id, err)
-		}
-	case aggTypeMealPlanDay:
-		var day models.MealPlanDay
-		if err := db.First(&day, "id = ?", id).Error; err != nil {
-			return fmt.Errorf("payout-release: load day %s: %w", id, err)
-		}
-		if err := ReleaseDayPayout(database.DB, &day); err != nil {
-			return fmt.Errorf("payout-release: release day payout %s: %w", id, err)
-		}
-	case aggTypeGroupOrder:
-		var g models.GroupOrder
-		if err := db.First(&g, "id = ?", id).Error; err != nil {
-			return fmt.Errorf("payout-release: load group order %s: %w", id, err)
-		}
-		if err := ReleaseGroupChefPayout(&g); err != nil {
-			return fmt.Errorf("payout-release: release group payout %s: %w", id, err)
-		}
+	if aggType != aggTypeOrder {
+		return nil
+	}
+	// The Easy Split rail is the moment ADR-0003 moved the split to, so that every
+	// hold, block and clawback has already had its say before the chef's share
+	// leaves the platform account. An error here fails the release deliberately —
+	// a settled hold would never be re-driven, and the split would be lost.
+	if _, err := ReleaseOrderSplit(db, id, time.Now()); err != nil {
+		return fmt.Errorf("payout-release: split order %s: %w", id, err)
 	}
 	return nil
 }
@@ -798,24 +781,11 @@ var parkedDayHolds = []models.PayoutHoldStatus{
 }
 
 // reverseRefundedDayHold drives a meal-plan-day's payout hold out of the releasable
-// set after RefundDay has refunded the customer AND attempted the gateway claw-back
-// of any held transfer (#498 Part C; #398). STATE-ONLY: it never runs reverseMoney
-// itself — RefundDay already issued the ReverseTransfer — it only records the terminal
-// state that matches whether that claw-back LANDED (reverseOK).
-//
-//   - reverseOK (claw-back succeeded, or there was no transfer): released → reversed
-//   - payout_settled_at stamped (terminal — the reconcile cron won't re-reverse an
-//     already-clawed-back transfer); eligible/awaiting/disputed → withheld (the
-//     on-hold transfer was freed).
-//   - !reverseOK (claw-back FAILED — the transfer is still live at the gateway): the
-//     day is left as RE-DRIVABLE DRIFT — released AND parked both → reversed with
-//     settled_at LEFT NULL — so reconcileMealPlanDays(reversed, settleReverse) retries
-//     the ReverseTransfer (attempt-capped + ALERT) instead of silently stranding the
-//     chef's held payout for a refunded day (#398 core defect: the old code stamped
-//     settled regardless of gateway success and hid the strand from every sweep).
-//
-// none/withheld/reversed → no-op.
-func reverseRefundedDayHold(tx *gorm.DB, dayID uuid.UUID, reverseOK bool) error {
+// set after RefundDay has refunded the customer (#498 Part C; #398). STATE-ONLY:
+// there is no gateway claw-back to make since the day never held a transfer, so the
+// terminal state is unconditional — released → reversed + settled, parked →
+// withheld, none/withheld/reversed → no-op.
+func reverseRefundedDayHold(tx *gorm.DB, dayID uuid.UUID) error {
 	res := tx.Model(&models.MealPlanDay{}).
 		Where("id = ? AND payout_hold_status = ?", dayID, models.PayoutHoldReleased).
 		Update("payout_hold_status", models.PayoutHoldReversed)
@@ -823,23 +793,16 @@ func reverseRefundedDayHold(tx *gorm.DB, dayID uuid.UUID, reverseOK bool) error 
 		return fmt.Errorf("payout-release: mark refunded day %s reversed: %w", dayID, res.Error)
 	}
 	if res.RowsAffected > 0 {
-		if reverseOK {
-			return stampPayoutSettled(tx, aggTypeMealPlanDay, dayID)
-		}
-		return nil // failed claw-back → reversed + unsettled drift; reconcile re-drives
+		return stampPayoutSettled(tx, aggTypeMealPlanDay, dayID)
 	}
-	// Parked (not yet released): a successful reverse freed the on-hold transfer →
-	// withheld; a failed reverse leaves the transfer live → reversed drift so the
-	// reconcile retries the claw-back (never withheld, which would hide it).
-	to := models.PayoutHoldWithheld
-	if !reverseOK {
-		to = models.PayoutHoldReversed
-	}
+	// Parked (not yet released): nothing was ever held at a gateway, so the hold is
+	// simply withheld — the day is off the releasable set and the customer has been
+	// made whole from the wallet.
 	res = tx.Model(&models.MealPlanDay{}).
 		Where("id = ? AND payout_hold_status IN ?", dayID, parkedDayHolds).
-		Update("payout_hold_status", to)
+		Update("payout_hold_status", models.PayoutHoldWithheld)
 	if res.Error != nil {
-		return fmt.Errorf("payout-release: mark refunded day %s %s: %w", dayID, to, res.Error)
+		return fmt.Errorf("payout-release: mark refunded day %s withheld: %w", dayID, res.Error)
 	}
 	return nil
 }
@@ -881,42 +844,11 @@ func ReverseHold(db *gorm.DB, aggType string, id uuid.UUID, reason string) error
 	return settleReverse(db, aggType, id)
 }
 
-// reverseMoney runs the post-commit, flag-gated reverse seam. Order → the Route
-// transfer claw-back; meal-plan day → a full ReverseTransfer of the held transfer
-// (guarded on the escrow flag + a present transfer id + a configured gateway).
+// reverseMoney runs the post-commit reverse seam. Nothing moves at a gateway on
+// any aggregate: the order rail settles on release through Easy Split, and the
+// meal-plan-day and group rails are paid on the statement path, which the refund
+// already adjusts (#1086). The hold state itself is the record.
 func reverseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
-	switch aggType {
-	case aggTypeOrder:
-		// Nothing to reverse at the gateway: the Easy Split rail settles on release
-		// and the remainder is paid on the statement path, which the refund already
-		// adjusts (#1086).
-	case aggTypeMealPlanDay:
-		var day models.MealPlanDay
-		if err := db.First(&day, "id = ?", id).Error; err != nil {
-			return fmt.Errorf("payout-release: load day %s: %w", id, err)
-		}
-		if MealPlanEscrowActive() && day.PayoutTransferID != "" && GetRazorpayFor(day.Mode) != nil {
-			if _, err := GetRazorpayFor(day.Mode).ReverseTransfer(day.PayoutTransferID, 0); err != nil {
-				if !isAlreadyReversedErr(err) {
-					return fmt.Errorf("payout-release: reverse day transfer %s: %w", day.PayoutTransferID, err)
-				}
-				// already reversed → idempotent no-op, no new money moved (no audit)
-			} else {
-				// This is the settle-machinery day claw-back (admin ReverseHold or the
-				// reconcile re-drive of a #398 drift row) — the order/group branches audit
-				// via their helpers, so the day branch must too (#397).
-				auditTransferMovement(auditTransferReverse, aggTypeMealPlanDay, id, day.PayoutTransferID, 0, "meal-plan day payout reversed (admin/reconcile-driven)")
-			}
-		}
-	case aggTypeGroupOrder:
-		var g models.GroupOrder
-		if err := db.First(&g, "id = ?", id).Error; err != nil {
-			return fmt.Errorf("payout-release: load group order %s: %w", id, err)
-		}
-		if err := ReverseGroupChefPayout(&g); err != nil { // flag-gated claw-back
-			return fmt.Errorf("payout-release: reverse group payout %s: %w", id, err)
-		}
-	}
 	return nil
 }
 
