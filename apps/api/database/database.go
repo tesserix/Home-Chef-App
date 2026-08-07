@@ -469,6 +469,14 @@ func Migrate() error {
 		}
 	}
 
+	// #1119 renamed the gateway id fields; AutoMigrate cannot rename, it only ADDS,
+	// so an existing database ends up with both columns and every historical id
+	// stranded in the one nothing selects. Repair it here, before the unique indexes
+	// below so they cover the recovered ids (#1127).
+	if err := migrateGatewayIDColumns(DB, gatewayIDColumnRenames()); err != nil {
+		return fmt.Errorf("gateway id column migration failed: %w", err)
+	}
+
 	// Payment-id uniqueness backstop (#395·1): a DB-level guard against ONE gateway
 	// payment being stamped on two orders (the app-logic binding alone can't stop it).
 	// PARTIAL indexes (WHERE col <> '') because wallet-only / unpaid / Stripe orders and
