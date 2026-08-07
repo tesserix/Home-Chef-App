@@ -13,7 +13,8 @@ import { api } from '../lib/api';
 // (/chef/payout), so an international chef had no way to get paid from the
 // phone at all.
 
-export type PaymentProvider = 'razorpay' | 'stripe';
+// Must match the API's IsSelectableChefProvider — anything else is a 400.
+export type PaymentProvider = 'cashfree' | 'stripe';
 
 export interface StripeConnectStatus {
   connected: boolean;

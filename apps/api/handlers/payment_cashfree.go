@@ -75,8 +75,8 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 	creditPaise := quote.WalletAppliedPaise + quote.PointsAppliedPaise
 	plan := services.PlanWalletFunding(totalPaise, creditPaise, creditPaise)
 
-	// Fully-credit-covered order: no gateway leg at all. Shared with the Razorpay
-	// path — it stamps provider=wallet, so nothing downstream looks for a Cashfree
+	// Fully-credit-covered order: no gateway leg at all. Shared with every
+	// checkout path — it stamps provider=wallet, so nothing downstream looks for a Cashfree
 	// payment that was never made.
 	if plan.FullWallet {
 		h.settleFullWalletOrder(c, order, plan, walletApplied, loyaltyApplied, quote.PointsAppliedPoints)
@@ -155,7 +155,7 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 	if err != nil {
 		// A failed order-create is now terminal for this checkout (#1086): there is
 		// no second gateway to hand off to, and quietly minting the charge
-		// somewhere else was the last path that could still produce a Razorpay
+		// somewhere else was the last path that could still produce a retired-gateway
 		// order. Open the breaker so the NEXT customer's checkout does not pay the
 		// same failed round-trip to rediscover a broken slot.
 		log.Printf("cashfree: order create failed for %s: %v", order.OrderNumber, err)
@@ -172,7 +172,7 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 		return
 	}
 
-	// Omit(clause.Associations) for the same reason the Razorpay path does: `order`
+	// Omit(clause.Associations) for the same reason every stamp path does: `order`
 	// carries preloaded Customer/Chef/Delivery, and without it GORM cascades an
 	// upsert into those rows on every payment stamp — and fails the whole update if
 	// any association column mismatches.
@@ -208,11 +208,11 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 
 // respondCashfreeSession writes the checkout hand-off payload.
 //
-// Shape mirrors the Razorpay response field-for-field where the concept exists
+// Shape is stable across gateways field-for-field where the concept exists
 // (provider, amount, payable, walletApplied, prefill) so the clients share one
 // branch of credit/summary handling and differ only in which SDK they open.
 // `mode` is included because the Cashfree SDKs need to be told SANDBOX vs
-// PRODUCTION explicitly — unlike Razorpay, where the key prefix carries it.
+// PRODUCTION explicitly — a gateway whose key prefix carries it would not need this.
 func (h *PaymentHandler) respondCashfreeSession(
 	c *gin.Context, order *models.Order, cf *services.CashfreeClient,
 	cfOrder *services.CashfreeOrderResponse, capturePaise int,
@@ -326,7 +326,7 @@ func (h *PaymentHandler) verifyCashfreePayment(c *gin.Context, order *models.Ord
 // `previous` is whatever is already stamped on the order. When it is a suffixed
 // retry of this same order (…-r2) that value is kept, so a second retry can tell
 // how many have happened without a counter column. When it belongs to a different
-// gateway entirely (a Razorpay id, because the chef's provider changed) it is
+// gateway entirely (a retired-gateway id, because the chef's provider changed) it is
 // ignored and the base is returned.
 func nextCashfreeOrderID(orderID uuid.UUID, previous string) string {
 	base := orderID.String()
@@ -352,7 +352,7 @@ func bumpCashfreeOrderID(current string) string {
 // --- Webhooks ---
 
 // cashfreeConsumer names this endpoint in the processed_events dedup ledger.
-// Distinct from the Razorpay consumer so the two gateways' event-id spaces cannot
+// Distinct from every other gateway's consumer so their event-id spaces cannot
 // collide — a shared consumer would let one gateway's event id suppress the
 // other's.
 const cashfreeConsumer = "webhook:cashfree"
@@ -375,7 +375,7 @@ const (
 // CashfreeWebhook handles Cashfree PG webhook events.
 // POST /webhooks/cashfree (no auth — verified via HMAC signature)
 //
-// Structurally identical to RazorpayWebhook: verify, dedup, dispatch, and release
+// The webhook contract is: verify, dedup, dispatch, and release
 // the dedup claim on a transient handler error so a redelivery can re-run. The
 // signature scheme differs (base64 HMAC over timestamp+rawBody, see
 // services.VerifyCashfreeWebhookMode) and the raw body must be used — a
@@ -443,7 +443,7 @@ func (h *PaymentHandler) CashfreeWebhook(c *gin.Context) {
 	if derr != nil {
 		// Transient failure: release the claim so a later redelivery re-runs,
 		// otherwise the dedup would strand the event. Still ACK 200, matching the
-		// Razorpay endpoint's contract.
+		// what a gateway expects of a webhook endpoint.
 		services.ReleaseWebhookEvent(database.DB, cashfreeConsumer, eventID)
 		log.Printf("cashfree webhook: handler error for %s (%s): %v", eventID, event.Type, derr)
 	}
@@ -563,7 +563,7 @@ func (h *PaymentHandler) handleCashfreePaymentSuccess(payload json.RawMessage, s
 
 	// A post-delivery tip is its own gateway order (#45); confirm it here too.
 	// Idempotent, and a harmless no-op when this order isn't a tip charge.
-	markTipPaidByRazorpayOrder(cfOrderID, cfPaymentID)
+	markTipPaidByGatewayOrder(cfOrderID, cfPaymentID)
 	return nil
 }
 

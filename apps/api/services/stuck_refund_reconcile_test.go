@@ -26,7 +26,7 @@ func setupStuckRefundDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT,
-			status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'razorpay', total REAL DEFAULT 0,
+			status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'cashfree', total REAL DEFAULT 0,
 			wallet_applied REAL DEFAULT 0, refund_amount REAL DEFAULT 0, refund_id TEXT DEFAULT '', refund_reason TEXT,
 			refund_initiated_by TEXT, refunded_at DATETIME, payout_hold_status TEXT DEFAULT '',
 			gateway_order_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,

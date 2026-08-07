@@ -9,7 +9,7 @@ import (
 // cashfree_inject.go — the narrow exported seam for injecting a Cashfree client,
 // so tests in OTHER packages (handlers) can drive the money path against an
 // httptest.Server with no live gateway and no GCP Secret Manager. Mirrors
-// razorpay_inject.go exactly; production never calls these — it goes through
+// the retired gateway's injector exactly; production never calls these — it goes through
 // GetCashfreeFor's Secret Manager path.
 
 // NewCashfreeTestClient builds a CashfreeClient whose API host is baseURL (an

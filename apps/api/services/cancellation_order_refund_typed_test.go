@@ -19,8 +19,8 @@ import (
 	"github.com/homechef/api/models"
 )
 
-// seedTypedRefundOrder seeds a paid Razorpay order that WOULD be generically refundable
-// (payment_status=completed + a razorpay payment id set), so the only thing stopping the
+// seedTypedRefundOrder seeds a paid the retired gateway order that WOULD be generically refundable
+// (payment_status=completed + a retired-gateway payment id set), so the only thing stopping the
 // gateway call is the typed-order guard under test.
 func seedTypedRefundOrder(t *testing.T, db *gorm.DB) *models.Order {
 	t.Helper()
@@ -73,7 +73,7 @@ func TestRefundOrderForCancellation_SkipsTypedGroupOrder(t *testing.T) {
 // through the generic path — the guard must not block ordinary cancellations.
 func TestRefundOrderForCancellation_PlainOrderStillRefunds(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	o := seedTypedRefundOrder(t, db) // paid razorpay order, but no typed back-ref inserted
+	o := seedTypedRefundOrder(t, db) // paid gateway order, but no typed back-ref inserted
 
 	spy := withCashfreeRefundSpy(t, http.StatusOK)
 

@@ -5,7 +5,7 @@
 // POST /v1/catering/quotes/:id/accept     → accept a quote
 // POST /v1/catering/quotes/:id/decline    → decline a quote
 // POST /v1/catering/requests/:id/cancel   → cancel a request
-// POST /v1/catering/requests/:id/deposit  → start the deposit charge (Razorpay)
+// POST /v1/catering/requests/:id/deposit  → start the deposit charge
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
@@ -188,7 +188,7 @@ export function useCancelCateringRequest() {
   });
 }
 
-// Starts the deposit charge — returns the Razorpay order to hand to the payment
+// Starts the deposit charge — returns the gateway order to hand to the payment
 // sheet. Verification happens in app/payment/checkout.tsx (kind=catering).
 export function useCreateCateringDeposit() {
   return useMutation<DepositCharge, Error, string>({

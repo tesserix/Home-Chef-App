@@ -19,7 +19,7 @@ import (
 
 // meal_subscription.go — customer tiffin meal-subscription endpoints (#2/#3/#280):
 // chef offer config (#4 API) + the customer subscribe / pause / resume / skip /
-// cancel lifecycle. The Razorpay UPI-Autopay mandate + first charge (#281) and the
+// cancel lifecycle. The UPI-Autopay mandate + first charge (#281) and the
 // daily auto-order generation (#282) layer on top of this foundation. Cancel auto-
 // fires the #42 win-back offer (#278).
 
@@ -235,7 +235,7 @@ func normaliseDayVariants(in map[string]string, days []int64) string {
 }
 
 // Subscribe creates a meal subscription. NOTE (#281): this foundation activates the
-// subscription directly; the Razorpay UPI-Autopay mandate + first charge gate
+// subscription directly; the UPI-Autopay mandate + first charge gate
 // activation in the billing phase.
 // POST /meal-subscriptions
 func (h *MealSubscriptionHandler) Subscribe(c *gin.Context) {
@@ -289,7 +289,7 @@ func (h *MealSubscriptionHandler) Subscribe(c *gin.Context) {
 	// the whole flow works end-to-end immediately (the daily-order generator #282
 	// and pause/resume/skip all key off `active`). OFF (prod default) → TRIALING,
 	// so we never generate uncharged daily orders before real recurring billing
-	// (Razorpay UPI-Autopay mandate, #281) is live; the `subscription.charged`
+	// (the UPI-Autopay mandate, #281) is live; the `subscription.charged`
 	// webhook (ActivateMealSubscriptionOnCharge) then flips it to active.
 	subStatus := models.MealSubStatusTrialing
 	if config.AppConfig != nil && config.AppConfig.MealSubscriptionAutoActivate {

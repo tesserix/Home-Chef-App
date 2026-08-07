@@ -12,7 +12,7 @@ import (
 
 // meal_subscription.go — the customer tiffin meal subscription (#2/#3). A customer
 // subscribes to a chef's published weekly fixed menu (#1) and is billed weekly or
-// monthly via Razorpay Subscriptions + UPI Autopay; orders are auto-generated each
+// monthly via gateway subscriptions + UPI Autopay; orders are auto-generated each
 // day at the chef's cutoff. DISTINCT from MealPlan (one-time advance booking) and
 // the chef/driver Subscription (platform SaaS billing) — do not overload those.
 
@@ -123,7 +123,7 @@ type MealSubscription struct {
 	TrialID          *uuid.UUID `gorm:"type:uuid" json:"trialId,omitempty"`
 	DefaultAddressID *uuid.UUID `gorm:"type:uuid" json:"defaultAddressId,omitempty"`
 
-	// Razorpay recurring (Phase 2). GatewaySubID is the Razorpay subscription id.
+	// Gateway recurring (Phase 2). GatewaySubID is the gateway's subscription id.
 	PaymentGateway string `gorm:"type:varchar(20);default:'cashfree'" json:"paymentGateway"`
 	GatewaySubID   string `gorm:"" json:"-"`
 

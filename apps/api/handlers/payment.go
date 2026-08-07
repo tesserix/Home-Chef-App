@@ -31,11 +31,11 @@ func NewPaymentHandler() *PaymentHandler {
 	return &PaymentHandler{}
 }
 
-// CreateOrderPayment creates a Razorpay order with Route transfers for an order.
+// CreateOrderPayment creates a retired-gateway order with Route transfers for an order.
 //
 // Payment flow:
 //
-//	Customer pays total → Razorpay splits automatically:
+//	Customer pays total → the gateway splits automatically:
 //	  - Chef gets: Subtotal + ChefTip (food cost + chef tip)
 //	  - Driver gets: DeliveryFee + DriverTip (delivery fee + driver tip)
 //	  - Fe3dr gets: ₹0 from orders (revenue comes only from subscriptions)
@@ -111,7 +111,7 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 	// and the gateway a later refund goes to cannot disagree. Anything selection
 	// cannot charge is refused rather than sent down a gateway's branch by
 	// default — that fallthrough is how a Cashfree order used to reach the
-	// Razorpay code and fail on an empty payment id.
+	// wrong gateway's code and fail on an empty payment id.
 	switch provider := services.SelectCheckoutGateway(order.Chef.PaymentProvider, order.Mode); provider {
 	case models.PaymentProviderStripe:
 		h.createStripePayment(c, &order, userID)
@@ -305,15 +305,20 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 		return
 	}
 
-	switch provider := models.NormalizeProvider(order.PaymentProvider); provider {
+	// IsKnownProvider, not NormalizeProvider: a row from the retired INR gateway
+	// coerces to cashfree, and verifying it would hand Cashfree an order id it
+	// never issued (#1132).
+	if !models.IsKnownProvider(order.PaymentProvider) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This order was paid through a gateway that is no longer in service — contact support"})
+		return
+	}
+	switch models.NormalizeProvider(order.PaymentProvider) {
 	case models.PaymentProviderStripe:
 		h.verifyStripePayment(c, &order, req.StripePaymentIntentID)
 	case models.PaymentProviderCashfree:
 		h.verifyCashfreePayment(c, &order, req.CashfreeOrderID)
 	default:
-		// Legacy Razorpay orders and anything unrecognised. No order can be
-		// captured on Razorpay since #1101, so there is nothing here to verify
-		// against it (#1086).
+		// Wallet: fully covered by store credit, so there is no capture to verify.
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This order was paid through a gateway that is no longer in service — contact support"})
 	}
 }
@@ -379,7 +384,7 @@ func (h *PaymentHandler) verifyStripePayment(c *gin.Context, order *models.Order
 }
 
 // InitiateRefund processes a refund for an order.
-// Refunds go back to the customer via Razorpay. Route transfers are auto-reversed.
+// Refunds go back to the customer at the gateway that captured them.
 //
 // Refund policies:
 //   - Chef initiates refund via their dashboard (chef is responsible for refund decisions)
@@ -680,7 +685,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			// credit, so on a persist failure refund_amount is CORRECT (the customer got the
 			// credit). Decrementing it back (the old releaseReservation) would ERASE a refund
 			// that actually happened → the next distinct refund over-refunds and collides the
-			// amount-based idempotency key (razorpay rejects → stuck; wallet silently
+			// amount-based idempotency key (the gateway rejects → stuck; wallet silently
 			// under-credits). The money-safe state is to leave the order STUCK at refunded with
 			// the ledger correct; reconcileStuckRefunds finalizes it (payment_status=refunded
 			// AND refunded_at IS NULL is the stuck-mid-refund signal). Same for FULL — its
@@ -715,7 +720,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	// (Total − WalletApplied) at the gateway, so the gateway can't refund more than
 	// that. Re-credit the wallet-covered slice as store credit and cap the gateway
 	// refund to the captured amount. NOTE: direct-transfer top-ups
-	// (settleWalletTopUps) are NOT auto-reversed by Razorpay Route the way
+	// (settleWalletTopUps) are NOT auto-reversed by the gateway's split the way
 	// payment-linked transfers are — reversing them needs a transfer-reversal call,
 	// tracked for the sandbox-verification follow-up before this flag goes live.
 	if order.WalletApplied > 0 && provider != "wallet" {
@@ -829,7 +834,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		refundID = r.ID
 		refundStatus = r.Status
 	default:
-		// A legacy razorpay row is the only way to land here since #1086 — there is
+		// A retired-gateway row is the only way to land here since #1086 — there is
 		// no client left to refund it on, and all of them are already refunded.
 		releaseReservation()
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "No refundable gateway payment for this order"})
@@ -924,7 +929,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 // confirmMealPlanAdvanceFromWebhook is the payment.captured fallback for a meal-plan
 // ADVANCE order — its gateway order id lives on meal_plans, not orders, so the regular
 // order UPDATE above never matches it. It confirms the plan + holds the chef payouts
-// durably server-side, so a lost client verify-payment (e.g. the RN Razorpay SDK
+// durably server-side, so a lost client verify-payment (e.g. the RN checkout SDK
 // returning dismiss on the success auto-redirect) can't strand a captured advance.
 // Returns confirmed=true only on the transition it performed; (false, nil) when there
 // is no pending meal-plan advance for this order (the common case: a regular order

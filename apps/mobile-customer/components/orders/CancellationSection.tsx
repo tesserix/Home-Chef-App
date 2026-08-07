@@ -78,7 +78,7 @@ const OWNING_FLOW: Partial<
 // that defaulted to WALLET, which made unspendable store credit the normal
 // outcome of a cancellation — wallet checkout (WALLET_CHECKOUT_ENABLED, #141) is
 // off in production, so that credit can't be applied to an order, and no refund
-// reached Razorpay. The server now derives the destination from the order's
+// reached the gateway. The server now derives the destination from the order's
 // payment (handlers/cancellation.go resolveRefundDestination), so the client
 // no longer sends one.
 // Money renders through lib/format.ts like every other figure in the app. The

@@ -22,7 +22,7 @@ func tipWrittenAt(tip float64) *time.Time {
 // chef_order_totals.go — pure money-math helpers for order cancellation and
 // partial refunds. Extracted from the cancel handlers so the recompute logic
 // (the part #8 cares about: subtotal/tax/total recompute after a line is
-// pulled) is unit-testable without a DB or the Razorpay gateway.
+// pulled) is unit-testable without a DB or a gateway.
 
 // lineRefundAmount returns the refund owed for cancelling a single order line:
 // the line's subtotal plus its proportional share of the order's FOOD GST

@@ -2,7 +2,7 @@ package workflows
 
 // refund.go — the durable deferred chef-cancel gateway-refund retry flow.
 // Started IMMEDIATELY when ChefOrderCancelHandler.CancelOrder can't reach
-// Razorpay synchronously (handlers/chef_order_cancel.go stamps a
+// the gateway synchronously (handlers/chef_order_cancel.go stamps a
 // "pending:gateway-retry:<paise>" sentinel into orders.refund_id and returns
 // 200 rather than blocking the cancel — see that file's header). This
 // workflow retries the SAME idempotency-keyed gateway refund with backoff
@@ -15,7 +15,7 @@ package workflows
 // keeps sweeping the sentinel until the gateway refund lands. Both paths call
 // the gateway with the identical stable key
 // (services.RefundFullIdempotencyKey(order.ID)), so a double-fire from either
-// side dedups at Razorpay — never a double refund.
+// side dedups at the gateway — never a double refund.
 
 import (
 	"context"

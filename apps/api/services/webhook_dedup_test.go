@@ -26,16 +26,16 @@ func setupDedupDB(t *testing.T) *gorm.DB {
 func TestClaimWebhookEvent_FirstThenReplay(t *testing.T) {
 	db := setupDedupDB(t)
 
-	first, err := ClaimWebhookEvent(db, "webhook:razorpay", "evt_1", "payment.captured")
+	first, err := ClaimWebhookEvent(db, "webhook:cashfree", "evt_1", "payment.captured")
 	require.NoError(t, err)
 	assert.True(t, first, "first claim of a fresh event must be firstTime=true")
 
-	replay, err := ClaimWebhookEvent(db, "webhook:razorpay", "evt_1", "payment.captured")
+	replay, err := ClaimWebhookEvent(db, "webhook:cashfree", "evt_1", "payment.captured")
 	require.NoError(t, err)
 	assert.False(t, replay, "identical (consumer,id) replay must be firstTime=false")
 
 	// A different id under the same consumer is independent.
-	other, err := ClaimWebhookEvent(db, "webhook:razorpay", "evt_2", "payment.captured")
+	other, err := ClaimWebhookEvent(db, "webhook:cashfree", "evt_2", "payment.captured")
 	require.NoError(t, err)
 	assert.True(t, other, "distinct event id must claim fresh")
 
@@ -64,7 +64,7 @@ func TestClaimWebhookEvent_Concurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			first, err := ClaimWebhookEvent(db, "webhook:razorpay", "evt_race", "payment.captured")
+			first, err := ClaimWebhookEvent(db, "webhook:cashfree", "evt_race", "payment.captured")
 			if err == nil && first {
 				atomic.AddInt32(&winners, 1)
 			}
@@ -77,7 +77,7 @@ func TestClaimWebhookEvent_Concurrent(t *testing.T) {
 
 	var rows int64
 	require.NoError(t, db.Model(&models.ProcessedEvent{}).
-		Where("consumer = ? AND msg_id = ?", "webhook:razorpay", "evt_race").Count(&rows).Error)
+		Where("consumer = ? AND msg_id = ?", "webhook:cashfree", "evt_race").Count(&rows).Error)
 	assert.Equal(t, int64(1), rows, "exactly one ledger row for the raced event")
 }
 

@@ -28,8 +28,8 @@ import (
 // withGatewayOrderCapture points the Cashfree slot at a stub answering the
 // create-order POST, capturing the paise amount actually sent to the gateway.
 //
-// This stubbed Razorpay until #1086 removed the Razorpay fallback; selection now
-// always resolves to Cashfree, so a Razorpay stub would leave every one of these
+// This stubbed the retired gateway until #1086 removed the retired gateway fallback; selection now
+// always resolves to Cashfree, so a retired-gateway stub would leave every one of these
 // tests 503-ing on an unconfigured gateway instead of exercising the charge.
 // Cashfree's wire amount is rupees-as-decimal, so it is converted back to paise
 // here — the assertions are about what the customer is charged, not the format.

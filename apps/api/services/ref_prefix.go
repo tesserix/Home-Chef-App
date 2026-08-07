@@ -17,7 +17,7 @@ import (
 //
 // It is sized for readability, not for any gateway field: the Cashfree order id
 // is a UUID we mint, never this number, so no payment leg is length-constrained
-// by a long kitchen name (#1086 retired the 40-char Razorpay `receipt`).
+// by a long kitchen name (#1086 retired the 40-char `receipt`).
 const chefRefPrefixMax = 24
 
 // ChefRefPrefix converts a kitchen's business name into the uppercase slug used

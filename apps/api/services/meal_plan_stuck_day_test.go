@@ -128,7 +128,7 @@ func TestCompleteFinishedPlans_CompletesFullyStuckConfirmedPlan(t *testing.T) {
 // the day stays confirmed — it is NEVER marked refunded without the money actually
 // being returned. The next sweep retries.
 func TestSweepStuckDays_RefundFailureDoesNotFalselyVoid(t *testing.T) {
-	escrowFlag(t, true) // MealPlanEscrowActive → RefundDay runs; GetRazorpay() is nil → it errors
+	escrowFlag(t, true) // MealPlanEscrowActive → RefundDay runs; no gateway client → it errors
 	db := setupStuckDayDB(t)
 	_, dayID := seedStuckPlanDay(t, db, models.MealPlanDayConfirmed, nil, time.Now().Add(-48*time.Hour))
 

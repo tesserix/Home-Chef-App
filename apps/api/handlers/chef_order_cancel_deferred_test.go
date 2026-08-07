@@ -1,7 +1,7 @@
 package handlers
 
 // chef_order_cancel_deferred_test.go — #766-followup. ChefOrderCancelHandler.CancelOrder
-// must never hard-block a chef's cancel on the synchronous Razorpay refund: the order
+// must never hard-block a chef's cancel on the synchronous the retired gateway refund: the order
 // always flips to cancelled + the full-refund obligation is reserved (payment_status /
 // refunded_at / refund_amount), regardless of whether the gateway call can complete right
 // now. When it can't (no gateway configured, or CreateRefund errors), the handler defers by

@@ -14,7 +14,7 @@ import (
 //
 // A chef's payment_provider is CONFIGURATION — it picks the rail the next order
 // is routed through — unlike an order's, which is the factual record of who took
-// the money and must never be restamped. Since #1086 razorpay can settle nothing,
+// the money and must never be restamped. Since #1086 the retired gateway can settle nothing,
 // so a chef left on it is a payout that silently cannot happen.
 //
 // Idempotent and re-run every boot, because AutoMigrate cannot express it and the

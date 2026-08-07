@@ -7,7 +7,7 @@ package handlers
 // RequireAdmin are asserted by the route-wiring check, not re-exercised per test.
 //
 // Flags default OFF, so every release/withhold/reverse here is a DB-only state
-// advance with no money moved (GetRazorpay() is nil without Secret Manager).
+// advance with no money moved (the retired gateway client is nil without Secret Manager).
 
 import (
 	"bytes"

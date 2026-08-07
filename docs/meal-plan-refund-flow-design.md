@@ -13,7 +13,7 @@
 
 **Status:** Draft for approval · **Scope:** meal-plan day-skip + whole-plan cancel, plus group-order refunds. On-demand à-la-carte orders are explicitly **out** of wallet refunds.
 
-Grounded in the current code: `handlers/meal_plan.go` (SkipMealPlanDay, CancelMealPlan, admin approve/reject-skip), `services/meal_plan_escrow.go` (RefundDay/refundDayAmount/RefundUndeliveredDays, perDayGross/perDaySkipRefund), `services/payout_release.go` (holds), `services/cancellation_order_refund.go` (`runCancellationGatewayRefund` provider switch: wallet | razorpay | stripe), `handlers/payment.go` (order refund `ToWallet`).
+Grounded in the current code: `handlers/meal_plan.go` (SkipMealPlanDay, CancelMealPlan, admin approve/reject-skip), `services/meal_plan_escrow.go` (RefundDay/refundDayAmount/RefundUndeliveredDays, perDayGross/perDaySkipRefund), `services/payout_release.go` (holds), `services/cancellation_order_refund.go` (`runCancellationGatewayRefund` provider switch: wallet | cashfree | stripe), `handlers/payment.go` (order refund `ToWallet`).
 
 ---
 
@@ -55,7 +55,7 @@ confirmed
                                    └─ accept · NONE ─► resolved_no_refund   (chef paid 100%, day skipped, customer forfeits)
 refund_pending_admin
   ├─ admin pays → WALLET  ─► refunded  (instant; chef gets food − refund)
-  └─ admin pays → SOURCE  ─► refunded  (Razorpay refund to card/UPI, ~5–7 business days per RBI)
+  └─ admin pays → SOURCE  ─► refunded  (Cashfree refund to card/UPI, ~5–7 business days per RBI)
 ```
 
 - **Auto path** skips chef+admin entirely (full refund → wallet).
@@ -76,7 +76,7 @@ refund_pending_admin
 
 - **Guard to add:** the order-refund `ToWallet` path (`handlers/payment.go`) rejects wallet for a standalone à-la-carte order — allowed only when the order is a meal-plan shell or a group order.
 - Wallet refund reuses `CreditWallet(WalletSourceRefund)` → dual-writes to the ledger (shadow) into the `user_wallet_refund` bucket.
-- Original-method refund reuses the existing `runCancellationGatewayRefund` provider switch (`razorpay` → `rz.Refund`); customer told "5–7 business days."
+- Original-method refund reuses the existing `runCancellationGatewayRefund` provider switch (`cashfree` → the gateway refund leg); customer told "5–7 business days."
 
 ---
 
@@ -97,7 +97,7 @@ refund_pending_admin
 5. **Skip, ≤12h, chef Decline** → day back to `confirmed`, cooked + delivered, customer charged.
 6. **Cancel plan, all days >12h** → all auto full refunds → wallet → plan `cancelled`.
 7. **Cancel plan, mixed** → early days auto-refund; imminent day → chef decides; plan cancels when all resolved.
-8. **Admin pays to original** → Razorpay refund, RBI 5–7 days messaging.
+8. **Admin pays to original** → Cashfree refund, RBI 5–7 days messaging.
 9. **On-demand order refund** → wallet blocked, source only.
 10. **Chef non-response** (late request) → after a chef-response window (`platform_settings`, default 24h) it **escalates to admin** (admin can decide full/half/none + pay). Never auto-refunds a late day (chef may have cooked).
 11. **Concurrency/idempotency** → reuse existing per-day locks + `dayRefundKey` idempotency; a day resolves exactly once.

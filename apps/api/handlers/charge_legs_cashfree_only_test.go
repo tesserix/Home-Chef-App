@@ -4,8 +4,8 @@ package handlers
 // (featured listing, catering deposit, group-order share) mint their charge on
 // Cashfree or refuse.
 //
-// Each of these used to end in a Razorpay leg reached whenever the resolved rail
-// was not Cashfree. Selection can no longer return razorpay, so that leg was
+// Each of these used to end in a retired-gateway leg reached whenever the resolved rail
+// was not Cashfree. Selection can no longer return the retired gateway, so that leg was
 // unreachable for an INR kitchen — but it was still reachable for a STRIPE one,
 // which would have been charged in the wrong currency on a gateway the chef is
 // not registered with. Refusing is the honest answer: none of these three flows
@@ -66,14 +66,14 @@ func setupChargeDB(t *testing.T) *gorm.DB {
 		id TEXT PRIMARY KEY, chef_id TEXT, status TEXT DEFAULT 'pending', amount REAL DEFAULT 0,
 		currency TEXT DEFAULT 'INR', duration INTEGER DEFAULT 30, starts_at DATETIME, expires_at DATETIME,
 		gateway_order_id TEXT DEFAULT '', gateway_payment_id TEXT DEFAULT '',
-		payment_provider TEXT DEFAULT 'razorpay', payment_method TEXT DEFAULT '',
+		payment_provider TEXT DEFAULT 'cashfree', payment_method TEXT DEFAULT '',
 		created_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE catering_requests (mode text DEFAULT 'live', test_session_id text, cloned_from_id text,
 		event_address_enc text DEFAULT '', contact_phone_enc text DEFAULT '',
 		id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, accepted_quote_id TEXT,
 		status TEXT DEFAULT 'accepted', deposit_amount REAL DEFAULT 0, deposit_status TEXT DEFAULT '',
 		gateway_order_id TEXT DEFAULT '', gateway_payment_id TEXT DEFAULT '',
-		payment_provider TEXT DEFAULT 'razorpay', deposit_paid_at DATETIME,
+		payment_provider TEXT DEFAULT 'cashfree', deposit_paid_at DATETIME,
 		event_type TEXT DEFAULT 'wedding', event_date DATETIME,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE catering_quotes (id TEXT PRIMARY KEY, request_id TEXT, chef_id TEXT,
@@ -90,7 +90,7 @@ func setupChargeDB(t *testing.T) *gorm.DB {
 		id TEXT PRIMARY KEY, group_order_id TEXT, user_id TEXT, role TEXT DEFAULT 'guest',
 		display_name TEXT DEFAULT '', share_amount REAL DEFAULT 0, payment_status TEXT DEFAULT 'pending',
 		gateway_order_id TEXT DEFAULT '', gateway_payment_id TEXT DEFAULT '',
-		payment_provider TEXT DEFAULT 'razorpay', joined_at DATETIME, updated_at DATETIME)`).Error)
+		payment_provider TEXT DEFAULT 'cashfree', joined_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE group_order_items (id TEXT PRIMARY KEY, group_order_id TEXT,
 		participant_id TEXT, created_at DATETIME, updated_at DATETIME)`).Error)
 	return db
@@ -151,7 +151,7 @@ func TestPurchaseFeaturedAd_MintsACashfreeCharge(t *testing.T) {
 }
 
 // A Stripe kitchen has no featured-listing implementation. It used to fall
-// through to the Razorpay leg and be charged in the wrong currency on a gateway
+// through to the retired gateway leg and be charged in the wrong currency on a gateway
 // it is not registered with.
 func TestPurchaseFeaturedAd_RefusesANonCashfreeRail(t *testing.T) {
 	db := setupChargeDB(t)

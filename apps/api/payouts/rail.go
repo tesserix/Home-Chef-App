@@ -10,7 +10,7 @@ import (
 //
 // PayeeAdapter brings domain amounts INTO the engine; Rail takes settled amounts
 // OUT of it. Keeping them as two interfaces is what lets the engine reason about
-// what is owed without knowing whether it will be paid by Cashfree, RazorpayX or
+// what is owed without knowing whether it will be paid by Cashfree or
 // a bank file — and lets a rail be swapped without touching the ledger.
 //
 // Like PayeeAdapter, implementations live outside this package (in services/,

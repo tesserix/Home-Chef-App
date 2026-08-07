@@ -44,9 +44,9 @@ func TestStartDeferredRefundFlow_NoOpOnZeroOrEmptyPayment(t *testing.T) {
 // (RefundFullIdempotencyKey) and the exact paise asked for — the double-refund
 // guarantee depends on that key never drifting.
 //
-// It used to reach straight for the Razorpay client, so the durable retry flow
+// It used to reach straight for the retired gateway client, so the durable retry flow
 // could never heal a deferred Cashfree refund; it errored until the workflow
-// expired and only the cron backstop ever paid the customer. The Razorpay-stub
+// expired and only the cron backstop ever paid the customer. The retired gateway-stub
 // version of this test went with the client in #1086 — the rule it pinned is
 // asserted here instead, on the only gateway an order can be charged on.
 func TestGatewayRefundForWorkflow_CashfreeOrder_RefundsOnCashfree(t *testing.T) {

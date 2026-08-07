@@ -288,7 +288,7 @@ func TestVerifyCashfreeWebhook_RejectsMissingHeaders(t *testing.T) {
 
 // --- Environment selection ---
 
-// The host follows the CREDENTIALS, not the slot — the same way Razorpay's key
+// The host follows the CREDENTIALS, not the slot — the same way the retired gateway's key
 // prefix decides its environment.
 //
 // This is what lets the live slot run sandbox keys and actually work, instead of
@@ -345,7 +345,7 @@ func TestCashfreePayoutBaseURL_FollowsCredentials(t *testing.T) {
 // --- Refunds ---
 
 // The refund_id must satisfy Cashfree's 3–40 alphanumeric window AND be the same
-// digest the Razorpay header carries, so one logical refund has one identity on
+// digest the retired gateway header carries, so one logical refund has one identity on
 // either gateway.
 func TestCashfreeRefundID_IsDeterministicAndWithinLimits(t *testing.T) {
 	logical := "refund:11111111-2222-3333-4444-555555555555:full"
@@ -358,7 +358,7 @@ func TestCashfreeRefundID_IsDeterministicAndWithinLimits(t *testing.T) {
 		require.True(t, (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'), "non-alphanumeric %q in refund_id", r)
 	}
 	require.Equal(t, id, cashfreeRefundID(logical), "same logical key ⇒ same refund_id")
-	require.Equal(t, normalizeIdempotencyKey(logical), id, "must match the Razorpay header digest")
+	require.Equal(t, normalizeIdempotencyKey(logical), id, "must match the platform-wide idempotency digest")
 	require.NotEqual(t, id, cashfreeRefundID(logical+":other"), "different operations ⇒ different ids")
 }
 
@@ -424,7 +424,7 @@ func TestCashfreeCreateRefund_SendsNormalizedIDAndRupeeAmount(t *testing.T) {
 	require.Equal(t, "/orders/order-9/refunds", gotPath, "Cashfree refunds are ORDER-scoped")
 	require.Equal(t, normalizeIdempotencyKey("refund:abc:full"), gotBody["refund_id"])
 	require.Equal(t, 140.25, gotBody["refund_amount"], "amount goes out as a rupee decimal")
-	require.Equal(t, "STANDARD", gotBody["refund_speed"], "defaults to STANDARD, matching Razorpay's 'normal'")
+	require.Equal(t, "STANDARD", gotBody["refund_speed"], "defaults to STANDARD, the ordinary bank-rail speed")
 	require.Equal(t, "pending", PlatformRefundStatus(res.RefundStatus))
 }
 
@@ -651,7 +651,7 @@ func TestInvalidateCashfreeFor_IsScopedToOneSlot(t *testing.T) {
 
 // Secret names must be per-slot and product-scoped, and the exported form must
 // agree with the internal one — a drift there is what once made admin-entered
-// Razorpay keys silently invisible to the app.
+// the retired gateway keys silently invisible to the app.
 func TestCashfreeSecretNames_ArePerSlotAndConsistent(t *testing.T) {
 	liveID, liveSecret, liveWH := CashfreeSecretNames(models.ChefModeLive)
 	testID, testSecret, testWH := CashfreeSecretNames(models.ChefModeTest)
@@ -673,7 +673,7 @@ func TestCashfreeSecretNames_ArePerSlotAndConsistent(t *testing.T) {
 }
 
 // An unconfigured slot returns nil, which every caller already handles — that is
-// the contract GetRazorpayFor has and the Cashfree paths rely on it.
+// the contract the retired gateway accessor has and the Cashfree paths rely on it.
 func TestGetCashfreeFor_NilWhenSlotUnconfigured(t *testing.T) {
 	withCashfreeClient(t, models.ChefModeTest, nil)
 	// No Secret Manager and no CASHFREE_* env in the test process, so the fetch

@@ -8,9 +8,9 @@ import (
 
 // Mode partitions the platform into two worlds that share one database.
 //
-// "live" is the real marketplace: real customers, real money, live Razorpay
+// "live" is the real marketplace: real customers, real money, live gateway
 // credentials. "test" is a sandbox kitchen — visible only to the test-mode
-// viewer allowlist, paid for with Razorpay test credentials, and excluded from
+// viewer allowlist, paid for with gateway test credentials, and excluded from
 // every real-money and reporting path.
 //
 // Mode appears in two places with two different meanings. On ChefProfile it is

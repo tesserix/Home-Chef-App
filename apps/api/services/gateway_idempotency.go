@@ -1,6 +1,6 @@
 package services
 
-// gateway_idempotency.go — #574. Stable idempotency keys for the Razorpay money-moving
+// gateway_idempotency.go — #574. Stable idempotency keys for the money-moving
 // POSTs so a timeout-AFTER-success retry is deduped by the gateway instead of issuing a
 // SECOND real refund/transfer.
 //
@@ -15,13 +15,13 @@ package services
 // paise, or destination account) — never from mutable gateway state that advances on a
 // successful call (which would change the key on retry and defeat dedup).
 //
-// Razorpay uses endpoint-specific headers with charset/length limits (verified against
-// razorpay.com/docs 2026-07): refunds → X-Refund-Idempotency (>=10 chars, [A-Za-z0-9-_],
+// Gateways use endpoint-specific headers with charset/length limits (verified against
+// vendor docs, 2026-07): refunds → X-Refund-Idempotency (>=10 chars, [A-Za-z0-9-_],
 // Normal + Instant), direct transfers → X-Transfer-Idempotency (4-36 chars,
 // [A-Za-z0-9-_ ]). Colons are illegal and a UUID alone is already 36 chars, so the
 // human-readable logical key is normalized to a 32-char hex digest that is valid for
 // BOTH endpoints. (Reversals — /transfers/{id}/reversals — do NOT support a gateway
-// idempotency key per Razorpay, so ReverseTransfer relies on the AmountReversed cap +
+// idempotency key, so ReverseTransfer relies on the AmountReversed cap +
 // local persist gate instead; tracked separately.)
 
 import (
@@ -33,7 +33,7 @@ import (
 )
 
 // normalizeIdempotencyKey maps an arbitrary logical operation string to a 32-char
-// lowercase hex token: within Razorpay's [A-Za-z0-9-_] charset and both the refund
+// lowercase hex token: within the [A-Za-z0-9-_] charset and both the refund
 // (>=10) and transfer (4-36) length windows. Deterministic, so a retry of the same
 // logical key produces the same header value.
 func normalizeIdempotencyKey(logical string) string {
@@ -71,7 +71,7 @@ func RefundPartialIdempotencyKey(orderID uuid.UUID, priorRefundedPaise int) stri
 // so a retried settlement re-derives the same key for each of the chef/driver top-ups.
 func TopupIdempotencyKey(orderID uuid.UUID, leg int, account string) string {
 	// #558: key per (order, leg-index, account). Keying on account alone silently skipped the
-	// second leg when a chef and driver share ONE Razorpay payout account (same person in both
+	// second leg when a chef and driver share ONE payout account (same person in both
 	// roles) — the deterministic leg index makes each leg independently idempotent.
 	return fmt.Sprintf("topup:%s:%d:%s", orderID, leg, account)
 }

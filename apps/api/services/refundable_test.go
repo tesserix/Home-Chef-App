@@ -36,7 +36,7 @@ func seedOrderRow(t *testing.T, db *gorm.DB, total, refundAmount float64) uuid.U
 	t.Helper()
 	id := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, total, refund_amount, payment_status, payment_provider)
-		VALUES (?,?,?,?,?)`, id.String(), total, refundAmount, "completed", "razorpay").Error)
+		VALUES (?,?,?,?,?)`, id.String(), total, refundAmount, "completed", models.PaymentProviderCashfree).Error)
 	return id
 }
 

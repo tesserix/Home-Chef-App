@@ -178,8 +178,8 @@ func main() {
 	// disbursement silently no-ops.
 	services.InitCashfreePayouts()
 
-	// Same for Stripe — payment provider for markets where Razorpay
-	// isn't available. All clients coexist; per-chef PaymentProvider
+	// Same for Stripe — the payment provider for markets Cashfree does not
+	// serve. All clients coexist; per-chef PaymentProvider
 	// decides which one handles a given order.
 	services.InitStripe()
 

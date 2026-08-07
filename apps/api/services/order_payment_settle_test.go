@@ -8,7 +8,7 @@ package services
 // CompleteCashfreeOrderTx / ApplyChefRecoveryDeduction
 // directly in `services` (their new, single home).
 //
-// #395 item 2 background: the Razorpay verify path computed `wasUnpaid` from
+// #395 item 2 background: the retired gateway verify path computed `wasUnpaid` from
 // the in-memory order and then ran an UNCONDITIONAL completion update, so a
 // payment.captured webhook winning the race (it IS conditional) left the
 // concurrent verify still in the notify branch → duplicate chef "new order"
@@ -21,7 +21,7 @@ package services
 // an UNCONDITIONAL completion UPDATE + an UNCONDITIONAL order.paid emit, so a
 // re-verify or a verify/webhook race double-emitted order.paid (and
 // double-pushed the chef "new order") — the same defect #553 fixed for
-// Razorpay. Both now route through the provider-generic
+// the retired gateway. Both now route through the provider-generic
 // CompleteOrderPaymentTx, whose guarded UPDATE fires the notify + event on
 // exactly one transition. These tests exercise that shared core with the
 // Stripe and wallet payloads — no live gateway needed.
@@ -53,7 +53,7 @@ func setupCompleteTxDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`CREATE TABLE orders (
 		id TEXT PRIMARY KEY, order_number TEXT, payment_status TEXT DEFAULT 'pending',
-		payment_method TEXT DEFAULT '', payment_provider TEXT DEFAULT 'razorpay',
+		payment_method TEXT DEFAULT '', payment_provider TEXT DEFAULT 'cashfree',
 		gateway_payment_id TEXT DEFAULT '', wallet_applied REAL DEFAULT 0, total REAL DEFAULT 0,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)

@@ -14,12 +14,16 @@ import (
 	"github.com/homechef/api/models"
 )
 
+// The name is no longer vocabulary anywhere in apps/api (#1132); these tests are
+// the removal's own regression suite, so they spell it out rather than import it.
+const retiredGateway = "razorpay"
+
 // The whole point of the phase: no input to the checkout selector produces
 // razorpay any more, including the stored value the existing estate carries.
 func TestSelectCheckoutGateway_NeverSelectsRazorpay(t *testing.T) {
 	healthyCashfree(t, models.ChefModeLive)
 
-	for _, configured := range []string{"", models.PaymentProviderRazorpay, models.PaymentProviderCashfree, "nonsense"} {
+	for _, configured := range []string{"", retiredGateway, models.PaymentProviderCashfree, "nonsense"} {
 		require.Equal(t, models.PaymentProviderCashfree,
 			SelectCheckoutGateway(configured, models.ChefModeLive), "configured=%q", configured)
 	}
@@ -67,15 +71,20 @@ func TestDefaultChefPaymentProvider_IsAlwaysCashfree(t *testing.T) {
 // Razorpay can no longer be configured on a chef — the strict validator is what
 // every admin and chef-facing provider switch goes through.
 func TestSelectableChefProviders_ExcludesRazorpay(t *testing.T) {
-	require.NotContains(t, models.SelectableChefProviders(), models.PaymentProviderRazorpay)
-	require.False(t, models.IsSelectableChefProvider(models.PaymentProviderRazorpay))
+	require.NotContains(t, models.SelectableChefProviders(), retiredGateway)
+	require.False(t, models.IsSelectableChefProvider(retiredGateway))
 	require.True(t, models.IsSelectableChefProvider(models.PaymentProviderCashfree))
 	require.True(t, models.IsSelectableChefProvider(models.PaymentProviderStripe))
 }
 
-// Stored razorpay rows keep their meaning: they are a factual record of the
-// gateway that took the money, and a refund still has to be routed there.
-func TestNormalizeProvider_StillReadsAStoredRazorpayRow(t *testing.T) {
-	require.Equal(t, models.PaymentProviderRazorpay,
-		models.NormalizeProvider(models.PaymentProviderRazorpay))
+// A stored row keeps the string in the database — it records which rail took the
+// money — but the name buys nothing in code: no client can call that gateway, so
+// it normalizes like any other unknown value and its ids are never presented to
+// Cashfree (#1132).
+func TestNormalizeProvider_ARetiredGatewayRowNoLongerNamesAGateway(t *testing.T) {
+	require.Equal(t, models.PaymentProviderCashfree, models.NormalizeProvider(retiredGateway))
+
+	legacy := models.Order{PaymentProvider: retiredGateway, GatewayPaymentID: "pay_legacy"}
+	require.False(t, legacy.GatewayRefundable(),
+		"a foreign payment id must never be offered to Cashfree as a refund reference")
 }

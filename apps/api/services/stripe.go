@@ -22,11 +22,11 @@ import (
 
 const stripeBaseURL = "https://api.stripe.com/v1"
 
-// stripeCacheTTL mirrors razorpayCacheTTL — admin key updates call
+// stripeCacheTTL bounds a cached client — admin key updates call
 // InvalidateStripe() so the next read picks up new keys immediately.
 const stripeCacheTTL = 5 * time.Minute
 
-// Stripe credentials live in GCP Secret Manager alongside the Razorpay ones.
+// Stripe credentials live in GCP Secret Manager alongside the Cashfree ones.
 // Product-scoped ("homechef-") keeps them separate from other tenants sharing
 // project tesseracthub-480811.
 const (
@@ -35,8 +35,8 @@ const (
 	secretStripeWebhookSecret  = "prod-homechef-stripe-webhook-secret"
 )
 
-// StripeClient handles all Stripe REST API interactions. Same shape as
-// RazorpayClient so the admin UI and payment handlers can treat them
+// StripeClient handles all Stripe REST API interactions. Same shape as the
+// Cashfree client so the admin UI and payment handlers can treat them
 // symmetrically.
 type StripeClient struct {
 	secretKey      string
@@ -81,7 +81,7 @@ func fetchStripeFromSM(ctx context.Context) (*StripeClient, error) {
 
 // GetStripe returns a Stripe client sourced from GCP Secret Manager. nil
 // when no credentials are configured — callers must handle that. Mirrors
-// GetRazorpay semantics, including cached-client fallback on SM outage.
+// GetCashfree semantics, including cached-client fallback on SM outage.
 func GetStripe() *StripeClient {
 	stripeMu.Lock()
 	defer stripeMu.Unlock()
@@ -481,14 +481,14 @@ func (c *StripeClient) HasWebhookSecret() bool {
 
 // HealthCheck validates the secret key with a lightweight authenticated call.
 // /v1/balance is the smallest valid request that still proves connectivity +
-// auth, mirroring what the Razorpay client does.
+// auth, mirroring what the Cashfree client does.
 func (c *StripeClient) HealthCheck() error {
 	_, err := c.doFormRequest("GET", "/balance", nil)
 	return err
 }
 
 // ToCents converts a decimal amount (e.g. 4.99 USD) to cents (499). Same
-// idea as ToPaise for Razorpay.
+// idea as ToPaise for INR.
 func ToCents(amount float64) int {
 	return int(amount * 100)
 }

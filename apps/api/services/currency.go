@@ -24,7 +24,7 @@ func currencyDecimals(code string) int {
 
 // ToMinor converts a major-unit amount (e.g. 499.50 USD) to its minor-unit
 // integer representation (49950 cents) using the currency's decimal
-// convention. Use this when handing amounts to Stripe/Razorpay.
+// convention. Use this when handing amounts to a gateway.
 func ToMinor(amount float64, currency string) int {
 	switch currencyDecimals(currency) {
 	case 0:

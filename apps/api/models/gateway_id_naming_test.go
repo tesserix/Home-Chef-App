@@ -68,6 +68,64 @@ func TestNoRazorpayNamedGatewayIDs(t *testing.T) {
 	}
 }
 
+// #1132 — the retired INR gateway is not vocabulary in apps/api any more. Its
+// client, config, webhook and charge legs are all gone, so every surviving
+// mention is either a comment describing a system that no longer exists or, worse,
+// a live default minting a row nothing can capture.
+//
+// Exempt are the files whose SUBJECT is the removal: the column migration that has
+// to name what it moves, and the regression suites that prove a stored row is
+// still handled safely.
+var retiredGatewayName = regexp.MustCompile(`(?i)razorpay`)
+
+func isRetiredGatewayNameExempt(path string) bool {
+	for _, exempt := range []string{
+		"models/gateway_id_naming_test.go",
+		"models/payment_provider_test.go",
+		"database/gateway_id_backfill.go",
+		"database/gateway_id_backfill_test.go",
+		"database/gateway_id_backfill_pg_test.go",
+		"database/chef_provider_repair_test.go",
+		"services/gateway_select_cashfree_only_test.go",
+		"handlers/tips_cashfree_only_test.go",
+	} {
+		if strings.HasSuffix(filepath.ToSlash(path), exempt) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestNoRetiredGatewayVocabulary(t *testing.T) {
+	var offenders []string
+	err := filepath.Walk("..", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") || isRetiredGatewayNameExempt(path) {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for i, line := range strings.Split(string(body), "\n") {
+			if retiredGatewayName.MatchString(line) {
+				offenders = append(offenders, filepath.ToSlash(path)+":"+itoa(i+1)+": "+strings.TrimSpace(line))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking apps/api: %v", err)
+	}
+
+	if len(offenders) > 0 {
+		t.Errorf("%d line(s) still name the retired gateway:\n%s",
+			len(offenders), strings.Join(offenders, "\n"))
+	}
+}
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"

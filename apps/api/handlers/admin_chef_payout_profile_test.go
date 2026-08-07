@@ -29,8 +29,7 @@ import (
 
 const profileChefDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text,
 	address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY,
-	business_name TEXT DEFAULT '', payout_method TEXT DEFAULT '', razorpay_settlement_status TEXT DEFAULT '',
-	payout_auto_release TEXT DEFAULT '', payout_auto_disburse TEXT DEFAULT '',
+	business_name TEXT DEFAULT '', payout_method TEXT DEFAULT '', payout_auto_release TEXT DEFAULT '', payout_auto_disburse TEXT DEFAULT '',
 	easy_split_mode TEXT DEFAULT '', cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
 	updated_at DATETIME)`
 
@@ -85,7 +84,7 @@ func TestGetChefPayoutProfile(t *testing.T) {
 
 	chefID := uuid.New()
 	require.NoError(t, db.Exec(
-		`INSERT INTO chef_profiles (id, mode, business_name, payout_method, razorpay_settlement_status) VALUES (?, 'test', 'Ammas Kitchen', 'bank_transfer', 'activated')`,
+		`INSERT INTO chef_profiles (id, mode, business_name, payout_method) VALUES (?, 'test', 'Ammas Kitchen', 'bank_transfer')`,
 		chefID.String()).Error)
 	verifiedAt := time.Now().UTC()
 	require.NoError(t, db.Exec(

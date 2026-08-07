@@ -99,7 +99,7 @@ Tracking Transparency — there is no tracking SDK to justify it.
 | Name | Yes | No | App Functionality | Order and delivery |
 | Phone number | Yes | No | App Functionality | Delivery contact |
 | Physical address | Yes | No | App Functionality | Delivery address |
-| Payment info | Yes | No | App Functionality | Razorpay checkout |
+| Payment info | Yes | No | App Functionality | Cashfree checkout |
 | Purchase history | Yes | No | App Functionality | Order history, reorder |
 | Customer support | Yes | No | App Functionality | Support tickets, order messaging |
 | Photos or videos | Yes | No | App Functionality | Photo attached to an order-issue report |
@@ -132,7 +132,7 @@ Same inventory as above, in Play's vocabulary.
 - **Is data encrypted in transit?** Yes — TLS everywhere.
 - **Can users request data deletion?** Yes — in-app *and* at
   <https://fe3dr.com/account-deletion>. Play requires both.
-- **Data shared with third parties:** Razorpay (payment info, to process
+- **Data shared with third parties:** Cashfree (payment info, to process
   payment) and the 3PL delivery provider (name, phone, delivery address, to
   perform delivery). Everything else is collected, not shared.
 - **Ads:** none. `com.google.android.gms.permission.AD_ID` is explicitly listed
@@ -201,7 +201,7 @@ stops order messaging in both directions.
 > the sign-in screen to see chefs and menus. An account is required only to
 > place an order, save a chef, or view order history.
 >
-> **Payments** are handled by Razorpay. All purchases are physical goods — real
+> **Payments** are handled by Cashfree. All purchases are physical goods — real
 > meals delivered to a physical address — so In-App Purchase does not apply
 > (guideline 3.1.1). There is no digital content in the app.
 >
@@ -255,7 +255,7 @@ Things a reviewer will not catch but you should know about:
   rejection — just lost users. Lowering it needs a real device build to verify.
 - **Operating entity mismatch.** The in-app Terms name *Tesserix Pty Ltd (ACN
   694 070 865), New South Wales, Australia*, while the service runs in India
-  under DPDP, RBI and FSSAI rules with Razorpay settlement. The store listing's
+  under DPDP, RBI and FSSAI rules with Cashfree settlement. The store listing's
   seller and the privacy policy's controller must name the entity that actually
   contracts with customers. Worth a look from whoever owns the legal side.
 - **Vendor app icon** was regenerated in-repo to stop both apps shipping

@@ -108,7 +108,7 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 			} else if cr.RefundDestination == "original" {
 				// #766-followup: a mixed-payment order (wallet + loyalty credit applied at
 				// checkout) only ever CAPTURES (Total − WalletApplied − LoyaltyApplied) at the
-				// gateway. Sending cr.RefundTotalPaise straight to Razorpay exceeds that
+				// gateway. Sending cr.RefundTotalPaise straight to the gateway exceeds that
 				// captured amount, gets rejected ("amount greater than amount captured"), 502s
 				// the endpoint, and the sweep re-sends the SAME wrong amount forever — the
 				// customer is never refunded. Split by funding rail instead: wallet + loyalty
@@ -174,7 +174,7 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 						return fmt.Errorf("original-method refund needs a captured gateway payment")
 					}
 					// Routed through the shared provider switch (gateway_refund.go) rather
-					// than calling Razorpay directly — this was one of the sites that would
+					// than calling one gateway directly — this was one of the sites that would
 					// have refused a Cashfree order outright.
 					resp, rErr := IssueOrderGatewayRefund(order, cardPaise,
 						map[string]string{"order_id": order.ID.String(), "scope": "cancellation", "reason": cr.VendorReason},

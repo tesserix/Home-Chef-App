@@ -31,7 +31,7 @@ type ChefPromotion struct {
 
 	// Payment. GatewayOrderID holds the gateway order id whichever rail took the
 	// money — Cashfree stamps its own id here, as orders do — so read it alongside
-	// PaymentProvider rather than assuming Razorpay.
+	// PaymentProvider rather than assuming a single gateway.
 	GatewayOrderID   string `gorm:"" json:"-"`
 	GatewayPaymentID string `gorm:"" json:"-"`
 	PaymentProvider   string `gorm:"type:varchar(20);default:'cashfree'" json:"paymentProvider,omitempty"`

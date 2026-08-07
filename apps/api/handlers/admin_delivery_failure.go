@@ -18,7 +18,7 @@ import (
 //
 // The categories are DISJOINT by construction: a gateway order or a chef self-delivery
 // opens a pending `delivery_failed` OrderIssue on its order; meal-plan days and group
-// orders (shell orders with no razorpay id → no OrderIssue) instead terminalize to
+// orders (shell orders with no gateway id → no OrderIssue) instead terminalize to
 // status=`failed`. So no row is double-surfaced.
 
 type orderDeliveryFailureRow struct {

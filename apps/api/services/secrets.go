@@ -150,8 +150,8 @@ func GetDriverSecret(ctx context.Context, driverID, field string) (string, error
 	return getSecret(ctx, driverSecretID(driverID, field))
 }
 
-// StorePlatformSecret stores a platform-level secret (e.g. Razorpay API keys).
-// The secretName is the full GCP Secret Manager secret ID (e.g. "prod-razorpay-key-id").
+// StorePlatformSecret stores a platform-level secret (e.g. gateway API keys).
+// The secretName is the full GCP Secret Manager secret ID (e.g. "prod-homechef-cashfree-app-id").
 func StorePlatformSecret(ctx context.Context, secretName, value string) error {
 	if secretClient == nil {
 		return fmt.Errorf("secret manager not initialized")

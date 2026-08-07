@@ -338,16 +338,16 @@ func TestLevyGatewayFeePenalty_Arithmetic(t *testing.T) {
 	require.Equal(t, models.ChefPenaltyGatewayFee, p.Kind)
 }
 
-// Cashfree only — a razorpay refund never levies, and creates zero rows.
+// Cashfree only — a retired-gateway refund never levies, and creates zero rows.
 func TestLevyGatewayFeePenalty_CashfreeOnly(t *testing.T) {
 	gatewayFeePolicy(t, true, 2, false)
 	db := setupPenaltyDB(t)
 	chefID, userID := uuid.New(), uuid.New()
 
-	require.Nil(t, levyFee(t, db, chefID, userID, uuid.New(), "razorpay", 250, "refund:order-a:full"))
+	require.Nil(t, levyFee(t, db, chefID, userID, uuid.New(), retiredGateway, 250, "refund:order-a:full"))
 	var count int64
 	require.NoError(t, db.Model(&models.ChefPenalty{}).Where("chef_id = ?", chefID).Count(&count).Error)
-	require.Equal(t, int64(0), count, "razorpay must not create a row")
+	require.Equal(t, int64(0), count, "a retired-gateway order must not create a row")
 
 	require.NotNil(t, levyFee(t, db, chefID, userID, uuid.New(), models.PaymentProviderCashfree, 250, "refund:order-b:full"))
 }

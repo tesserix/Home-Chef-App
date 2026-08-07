@@ -2,8 +2,8 @@ package handlers
 
 // tips_cashfree_test.go — the tip must ride the gateway the order rode.
 //
-// D-18: the tip flow was written against Razorpay Route and never moved when
-// payouts did, so it demanded a chef.razorpay_account_id that NO chef on the
+// D-18: the tip flow was written against the retired gateway's split product and never moved when
+// payouts did, so it demanded a linked account that NO chef on the
 // platform has. Every post-delivery tip answered 409 "This chef can't receive
 // tips right now" — a whole surface, unreachable, promising "100% goes straight
 // to your chef".

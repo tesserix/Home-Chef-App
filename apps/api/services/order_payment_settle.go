@@ -3,7 +3,7 @@ package services
 // order_payment_settle.go — the single implementation of "an order's payment is
 // captured, so make the order paid" (#872 step 2). Moved out of `handlers`
 // (#872 step 2, Task 1) so it can be called from three places instead of two:
-// the Cashfree/Razorpay HTTP verify legs (handlers) AND the order-payment
+// the Cashfree HTTP verify legs (handlers) AND the order-payment
 // reconcile cron (order_payment_reconcile_cron.go, this package) — which needed
 // this core and could not previously reach it, since `services` cannot import
 // `handlers`.
@@ -68,7 +68,7 @@ var CompletionBlockedStatuses = []models.PaymentStatus{models.PaymentCompleted, 
 
 // CompleteOrderPaymentTx flips an order pending→completed exactly ONCE and, only on
 // that single transition, notifies the chef and emits order.paid — the provider-generic
-// core shared by the Razorpay / Stripe / wallet / cron verify+settle paths (#395 item 2,
+// core shared by the gateway / wallet / cron verify+settle paths (#395 item 2,
 // #555, #872 step 2). Every one of them used to read `wasUnpaid` from the in-memory
 // order and then update unconditionally + emit order.paid unconditionally, so a webhook
 // or re-verify that completed the order underneath left a duplicate chef "new order"
@@ -234,7 +234,7 @@ func SettleOrderWallet(order *models.Order) {
 // order.GatewayOrderID by the time they called it). Returns (false, reason) on
 // any gate failure.
 //
-// Every hard gate the Razorpay verify applies is applied here, through the same
+// Every hard gate the HTTP verify applies is applied here, through the same
 // ValidateCapturedPayment: the payment must be captured, belong to THIS gateway
 // order, and cover the expected amount. Without that binding any successful
 // payment on the merchant account could be replayed to settle a different order
@@ -261,7 +261,7 @@ func SettleCashfreeOrder(order *models.Order) (bool, string, error) {
 		return false, "Payment not completed", nil
 	}
 
-	// Expected capture = Total − wallet − loyalty, identical to the Razorpay leg.
+	// Expected capture = Total − wallet − loyalty, identical to the HTTP verify leg.
 	// Both credit rails shrink the capture at checkout, so omitting either term
 	// rejects every credit-funded order with a false "amount does not match".
 	expectedPaise := ToPaise(order.Total) - ToPaise(order.WalletApplied) - ToPaise(order.LoyaltyApplied)
@@ -269,7 +269,7 @@ func SettleCashfreeOrder(order *models.Order) (bool, string, error) {
 		expectedPaise = 0
 	}
 
-	// ValidateCapturedPayment speaks Razorpay's "captured"; Cashfree's captured
+	// ValidateCapturedPayment speaks a gateway's "captured"; Cashfree's captured
 	// state is "SUCCESS". Normalising here — rather than loosening the shared gate
 	// or writing a second one — keeps ONE implementation of the binding checks
 	// that every settle path in the codebase is required to apply.

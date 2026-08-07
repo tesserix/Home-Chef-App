@@ -39,8 +39,8 @@ type CreditFlags struct {
 // their own currency — takes no credit at all, and both rails report disabled
 // rather than silently applying zero.
 //
-// The test is "is this provider denominated in INR paise", NOT "is this Razorpay".
-// Cashfree is an INR gateway and takes credit exactly as Razorpay does; it simply
+// The test is "is this provider denominated in INR paise", NOT "is this a particular gateway".
+// Cashfree is an INR gateway and takes credit exactly as any INR gateway does; it simply
 // captures the post-credit remainder rather than splitting it.
 func BuildCreditQuote(db *gorm.DB, order *models.Order, userID uuid.UUID, req CreditRequest, flags CreditFlags) (CreditQuote, error) {
 	inr := order.Currency == "" || strings.EqualFold(order.Currency, "INR")

@@ -1258,7 +1258,7 @@ func (h *AdminHandler) UpdateCashfreeGatewayKeys(c *gin.Context) {
 	slot := models.NormalizeMode(req.Mode)
 	// Read the slot's secret names from the SAME helper the client reads them
 	// with, so the slot an admin saves into and the slot the app loads from cannot
-	// drift apart. A drift of exactly this kind once made admin-entered Razorpay
+	// drift apart. A drift of exactly this kind once made admin-entered gateway
 	// keys silently invisible to the app.
 	appIDName, secretName, webhookName := services.CashfreeSecretNames(slot)
 	for secretName, value := range map[string]string{

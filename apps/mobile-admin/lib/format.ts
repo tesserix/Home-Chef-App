@@ -1,6 +1,6 @@
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 
-/** ₹1,23,456.78 — Indian-grouped rupees. HomeChef bills in INR (Razorpay). */
+/** ₹1,23,456.78 — Indian-grouped rupees. HomeChef bills in INR. */
 export function formatINR(amount: number | null | undefined): string {
   const n = typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
   const sign = n < 0 ? '-' : '';

@@ -3,8 +3,8 @@ package services
 // meal_subscription_billing.go — the customer meal-subscription billing math +
 // invoice generation (#281). Flat delivery fee; a skipped day (before cutoff) or a
 // missed day (chef no-show) credits the NEXT cycle (owner decision). The pure math
-// is unit-tested; the Razorpay recurring rail (CreateSubscription/UPI-Autopay
-// mandate) lives in razorpay.go and is owner-tested against the live gateway.
+// is unit-tested; the recurring rail (CreateSubscription/UPI-Autopay
+// mandate) lives in the gateway client and is owner-tested against the live gateway.
 
 import (
 	"fmt"
@@ -110,7 +110,7 @@ func mealInvoiceNumber() string {
 }
 
 // ActivateMealSubscriptionOnCharge handles a successful recurring charge from the
-// Razorpay `subscription.charged` webhook for a meal subscription: it flips a
+// the `subscription.charged` webhook for a meal subscription: it flips a
 // trialing/past_due sub to active, rolls the billing period forward, and generates
 // the cycle invoice (marked paid with the gateway payment id). Idempotent per
 // (subscription, period): a duplicate webhook for the same cycle is a no-op.

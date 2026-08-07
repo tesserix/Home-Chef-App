@@ -37,7 +37,7 @@ type RefundTransaction struct {
 	ID      uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	OrderID uuid.UUID `gorm:"type:uuid;not null;index" json:"orderId"`
 
-	// Provider is where the money went: "razorpay" | "stripe" | "wallet".
+	// Provider is where the money went: "cashfree" | "stripe" | "wallet".
 	// Wallet is a legitimate destination when there is no gateway payment to
 	// refund against — it is NOT the odd case; refunding a wallet-paid order to
 	// the wallet is correct. (The bug in #691 is a path that ignores this and
@@ -71,7 +71,7 @@ type RefundTransaction struct {
 
 	// ScopeID is the logical refund's identity — "cancel", "issue:<id>",
 	// "line:<id>", "admin:<id>". Charset-restricted [A-Za-z0-9_-] because
-	// Razorpay's X-Refund-Idempotency requires it (validated in the coordinator,
+	// the gateway's refund-idempotency header requires it (validated in the coordinator,
 	// not here — a model shouldn't reject data the DB accepts).
 	ScopeID string `gorm:"type:varchar(80);not null;index" json:"scopeId"`
 

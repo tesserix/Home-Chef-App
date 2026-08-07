@@ -21,7 +21,7 @@ import (
 // It did not, at first. runCancellationGatewayRefund HARDCODED RefundFullIdempotencyKey,
 // correct for its own caller (one full cancellation refund per order) and silently wrong the
 // moment the coordinator drives it: an issue refund and a cancellation refund would arrive
-// under the SAME key, Razorpay would dedup the second as a retry of the first, and the
+// under the SAME key, the retired gateway would dedup the second as a retry of the first, and the
 // customer would simply never receive it. No error, no trace — just missing money.
 func TestOrderRefundGateway_PassesTheCoordinatorsPerScopeKey_NotTheFullRefundKey(t *testing.T) {
 	db := setupCancelRefundDB(t)
@@ -62,7 +62,7 @@ func TestOrderRefundGateway_WalletFundedOrder_SplitsStoreCreditFromTheCapturedSl
 	require.Equal(t, 120.0, bal, "the wallet-funded ₹120 returns as store credit — ₹300 conserved")
 }
 
-// A wallet-PAID order has no provider payment at all. Routing it to Razorpay is the shape of
+// A wallet-PAID order has no provider payment at all. Routing it to the retired gateway is the shape of
 // the #691 bug in reverse, and the adapter exists to make it impossible.
 func TestOrderRefundGateway_WalletPaidOrder_NeverTouchesTheProvider(t *testing.T) {
 	db := setupCancelRefundDB(t)

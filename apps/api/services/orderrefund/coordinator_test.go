@@ -91,7 +91,7 @@ func TestCoordinator_Refund_ReservesThenCallsGatewayThenFinalizes(t *testing.T) 
 	require.True(t, res.FullRefund, "₹300 of ₹300 is a full refund")
 	require.Equal(t, 1, f.gateway.calls)
 	// Major units, not paise: minor-unit conversion is the Gateway's job now, because
-	// it is PROVIDER-specific (Razorpay paise vs Stripe's per-currency minor units vs a
+	// it is PROVIDER-specific (the retired gateway paise vs Stripe's per-currency minor units vs a
 	// wallet credit that has no minor unit at all). The coordinator speaks one currency-
 	// agnostic language and lets routing decide.
 	require.Equal(t, 300.0, f.gateway.lastAmount, "the gateway is handed the full amount owed")
@@ -104,7 +104,7 @@ func TestCoordinator_Refund_ReservesThenCallsGatewayThenFinalizes(t *testing.T) 
 }
 
 // The ledger row must exist BEFORE the gateway call, not after. If we only wrote
-// it on success, a crash mid-call would leave money moved at Razorpay and no
+// it on success, a crash mid-call would leave money moved at the retired gateway and no
 // record of it — unreconcilable.
 func TestCoordinator_LedgerRowIsPendingDuringTheGatewayCall(t *testing.T) {
 	f := newFixture(t)
@@ -204,7 +204,7 @@ func TestCoordinator_FailedLedgerRowDoesNotHoldTheCap(t *testing.T) {
 func TestCoordinator_GatewayFailure_MarksFailedAndReleasesTheReservation(t *testing.T) {
 	f := newFixture(t)
 	o := f.seedPaidOrder(300)
-	f.gateway.err = errors.New("razorpay: card network down")
+	f.gateway.err = errors.New("gateway: card network down")
 
 	_, err := f.coord.Refund(f.ctx, RefundCommand{
 		OrderID: o.ID, Reason: "r", Actor: "admin", ScopeID: "cancel",
@@ -312,7 +312,7 @@ func TestCoordinator_RetryAfterGatewayFailure_SameScope_Succeeds(t *testing.T) {
 	o := f.seedPaidOrder(300)
 
 	// First attempt: the gateway is down.
-	f.gateway.err = errors.New("razorpay: timeout")
+	f.gateway.err = errors.New("gateway: timeout")
 	_, err := f.coord.Refund(f.ctx, RefundCommand{
 		OrderID: o.ID, Reason: "r", Actor: "admin", ScopeID: "cancel",
 	})

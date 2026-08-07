@@ -3,16 +3,17 @@ import { describe, it, expect } from '@jest/globals';
 import { paymentSecuredByLine } from './payment-provider';
 
 describe('paymentSecuredByLine', () => {
-  // The live defect: checkout said "Razorpay" while the Cashfree sheet took the
+  // The live defect: checkout named one brand while the Cashfree sheet took the
   // money seconds later in the same flow.
   it('names Cashfree when Cashfree will take the payment', () => {
     expect(paymentSecuredByLine('cashfree')).toBe('Payments secured by Cashfree (RBI-licensed).');
   });
 
-  // Inverted by #1086. SelectCheckoutGateway can no longer resolve to razorpay, so
-  // this value only reaches the client from a stale cache or a replayed response —
-  // and naming a processor that will not touch the money is the very defect above.
-  it('does not name Razorpay, which no longer takes any payment', () => {
+  // Inverted by #1086. SelectCheckoutGateway can no longer resolve to the retired
+  // gateway, so this value only reaches the client from a stale cache or a replayed
+  // response — and naming a processor that will not touch the money is the defect
+  // above, exactly.
+  it('does not name the retired gateway, which takes no payment', () => {
     expect(paymentSecuredByLine('razorpay')).toBe(
       'Payments are processed by an RBI-licensed payment aggregator.',
     );

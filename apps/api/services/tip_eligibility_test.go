@@ -98,10 +98,10 @@ func TestTipEligibility_PickupOffersNoRiderTip(t *testing.T) {
 }
 
 // A tip is a NEW charge, minted on Cashfree whatever gateway the order it thanks
-// was stamped with (#1103). So a historical Razorpay order is judged by the chef's
-// Easy Split vendor, which a chef left on the old rail does not have.
-func TestTipEligibility_RazorpayOrderIsJudgedByTheCashfreeVendor(t *testing.T) {
-	o := deliveredOrder(string(models.PaymentProviderRazorpay))
+// was stamped with (#1103). So a historical row on the retired gateway is judged
+// by the chef's Easy Split vendor, which a chef left on the old rail lacks.
+func TestTipEligibility_LegacyOrderIsJudgedByTheCashfreeVendor(t *testing.T) {
+	o := deliveredOrder(retiredGateway)
 	withRider(o)
 	require.False(t, TipEligibilityFor(o).Chef, "no vendor, no Cashfree tip")
 	require.False(t, TipEligibilityFor(o).Rider)

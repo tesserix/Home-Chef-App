@@ -3,8 +3,8 @@ package orderrefund
 // fixture_test.go — test scaffolding for the coordinator (#689).
 //
 // The gateway is faked through the Gateway interface rather than an httptest
-// server. The existing service tests spin up httptest + SetRazorpayClient, which
-// is right for THEM (they exercise the real Razorpay client's request shaping).
+// server. The existing service tests spin up an httptest gateway, which
+// is right for THEM (they exercise the real the retired gateway client's request shaping).
 // The coordinator's job is the saga — ledger, cap, reservation lifecycle — so a
 // hand-rolled fake keeps those tests about the saga and lets us assert ordering
 // (`before`) that an httptest handler can't express as cleanly.
@@ -122,7 +122,7 @@ func (f *fixture) seedPaidOrder(total float64) *models.Order {
 	o := &models.Order{ID: uuid.New(), Total: total}
 	require.NoError(f.t, f.db.Exec(
 		`INSERT INTO orders (id, total, refund_amount, payment_status, payment_provider, gateway_payment_id)
-		 VALUES (?, ?, 0, 'completed', 'razorpay', 'pay_test')`,
+		 VALUES (?, ?, 0, 'completed', 'cashfree', 'pay_test')`,
 		o.ID.String(), total,
 	).Error)
 	return o
@@ -133,7 +133,7 @@ func (f *fixture) seedUnpaidOrder(total float64) *models.Order {
 	o := &models.Order{ID: uuid.New(), Total: total}
 	require.NoError(f.t, f.db.Exec(
 		`INSERT INTO orders (id, total, refund_amount, payment_status, payment_provider)
-		 VALUES (?, ?, 0, 'pending', 'razorpay')`,
+		 VALUES (?, ?, 0, 'pending', 'cashfree')`,
 		o.ID.String(), total,
 	).Error)
 	return o
@@ -142,7 +142,7 @@ func (f *fixture) seedUnpaidOrder(total float64) *models.Order {
 func (f *fixture) seedLedger(orderID uuid.UUID, amount float64, scope string, status models.RefundTxnStatus) {
 	f.t.Helper()
 	row := models.RefundTransaction{
-		ID: uuid.New(), OrderID: orderID, Provider: "razorpay",
+		ID: uuid.New(), OrderID: orderID, Provider: "cashfree",
 		ProviderPaymentID: "pay_test", Amount: amount, CurrencyCode: "INR",
 		Status: status, ScopeID: scope,
 		IdempotencyKey: "seed-" + scope + "-" + uuid.NewString(),

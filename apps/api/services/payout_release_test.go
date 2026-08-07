@@ -37,7 +37,7 @@ func setupReleaseDB(t *testing.T) *gorm.DB {
 	for _, s := range []string{
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 			chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', gateway_order_id TEXT DEFAULT '',
-			payment_provider TEXT DEFAULT 'razorpay', total REAL DEFAULT 0,
+			payment_provider TEXT DEFAULT 'cashfree', total REAL DEFAULT 0,
 			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 			chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 			fulfillment_type TEXT DEFAULT 'delivery', delivery_fee REAL DEFAULT 0, delivery_fee_final REAL,
@@ -189,7 +189,7 @@ func TestDisputedRow_NotActionable(t *testing.T) {
 }
 
 // TestReleaseHold_FlagOff_AdvancesNoMoney — flag OFF: release_eligible → released
-// is a pure DB advance that stages the hold_released event; GetRazorpay() is nil,
+// is a pure DB advance that stages the hold_released event; the retired gateway client is nil,
 // no panic.
 func TestReleaseHold_FlagOff_AdvancesNoMoney(t *testing.T) {
 	saved := config.AppConfig

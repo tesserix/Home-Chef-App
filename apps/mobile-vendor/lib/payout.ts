@@ -6,9 +6,9 @@
  * diverge live here: the API contract, the validation rules, and the payload
  * shape. The two screens differ only in chrome.
  *
- * UPI is not an accepted payout method (#767): Razorpay Route settles by
- * NEFT/IMPS to a bank account and has no VPA destination, so a chef who
- * nominated UPI could never be paid. Bank transfer is the only option.
+ * UPI is not an accepted payout method (#767): the Cashfree Easy Split vendor
+ * a chef is settled to holds a bank account, not a VPA, so a chef who nominated
+ * UPI could never be paid. Bank transfer is the only option.
  *
  * Sensitive values (account number) are POSTed straight to /chef/payout, which
  * stores them in GCP Secret Manager. They are deliberately never written to the

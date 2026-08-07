@@ -1,7 +1,7 @@
 package handlers
 
 // chef_order_cancel_refund_test.go — #576. The two chef-side refund paths that issued
-// the Razorpay CreateRefund BEFORE any atomic claim:
+// the retired gateway CreateRefund BEFORE any atomic claim:
 //
 //   - CancelOrderItem (per-line): the item flip had no `is_cancelled = false` guard, so
 //     two concurrent cancels of the SAME line both passed the stale preloaded check and

@@ -60,7 +60,7 @@ const SECTIONS: LegalSection[] = [
     heading: '4. Who we share it with',
     paragraphs: [
       'We do not sell your personal data. We share it only with the partners who help us run Fe3dr, and only for the purpose we collected it:',
-      '• Payment processors (Razorpay in India; Stripe for international cards) — to process payments and refunds.',
+      '• Payment processors (Cashfree Payments in India; Stripe for international cards) — to process payments and refunds.',
       '• The home chef — your first name, delivery address, dietary notes, and order items, so the chef can prepare and hand off your order.',
       '• The delivery partner — your first name, delivery address, and a masked phone number, so they can deliver and contact you if needed.',
       '• Cloud hosting, email, SMS, and push-notification providers — to run the application and deliver messages reliably.',

@@ -105,8 +105,8 @@ export interface DeliveryQuote {
    *  (`SelectCheckoutGateway`) — not the chef's stored column, which the selection
    *  may override. The RBI Payment Aggregator disclosure on checkout must name the
    *  aggregator that processes the charge, so it has to come from the same
-   *  resolution the charge itself uses. The screen hardcoded "Razorpay" while
-   *  Cashfree took the money seconds later in the same flow (#933). */
+   *  resolution the charge itself uses. The screen hardcoded a brand name while
+   *  a different gateway took the money seconds later in the same flow (#933). */
   paymentProvider?: string;
 }
 

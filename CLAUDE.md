@@ -263,7 +263,7 @@ Three native mobile apps (Customer, Vendor/Chef, Delivery Driver) for the Home C
 - Purpose: RESTful HTTP API with business logic, database operations, external integrations
 - Location: `apps/api/`
 - Contains: Go handlers, services, database models, middleware
-- Depends on: PostgreSQL, Redis (optional), NATS (optional), GCS, Razorpay, SendGrid, etc.
+- Depends on: PostgreSQL, Redis (optional), NATS (optional), GCS, Cashfree, SendGrid, etc.
 - Used by: All four frontends via HTTP requests
 - Purpose: React SPA with client-side routing, forms, state management, UI rendering
 - Locations: `apps/web` is **ACTIVE** — the customer web ordering app, built and deployed on every `main` commit since 2026-07-27 (it was paused 2026-06-11 and returned; its `SUNSET.md` is kept only for the history and its "paused" statements no longer hold). `apps/vendor-portal` and `apps/delivery-portal` are **sunset** — decommissioned, app-only now (see `SUNSET.md` in each, and issue #21).
@@ -287,7 +287,7 @@ Grepping this repo for an admin UI therefore returns nothing and that is expecte
 - Pattern: Factory singleton (`NewAuthHandler() *AuthHandler`), method receiver pattern
 - Responsibility: Only HTTP concerns, no business logic
 - Purpose: Business logic, orchestration, external integrations
-- Examples: `services/storage.go`, `services/notifications.go`, `services/razorpay.go`
+- Examples: `services/storage.go`, `services/notifications.go`, `services/cashfree.go`
 - Pattern: Module-level functions (no struct), package-level state (singleton client)
 - Responsibility: Complex logic, NATS publishing, email/payment APIs
 - Purpose: Data access abstraction over GORM

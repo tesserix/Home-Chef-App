@@ -15,7 +15,7 @@ import {
 
 // International payouts via Stripe Connect — the mobile counterpart of the
 // vendor portal's StripeConnectCard. Collapsed by default: most chefs are paid
-// into an Indian bank account through Razorpay and never need this, so it sits
+// into an Indian bank account through Cashfree and never need this, so it sits
 // under a disclosure row rather than competing with the bank-details form.
 //
 // KYC happens on Stripe's hosted pages. We open them in the system browser
@@ -35,7 +35,7 @@ export function StripeConnectCard() {
 
   const connected = data?.connected ?? false;
   const ready = Boolean(data?.connected && data.chargesEnabled && data.payoutsEnabled);
-  const activeProvider = data?.paymentProvider ?? 'razorpay';
+  const activeProvider = data?.paymentProvider ?? 'cashfree';
   const busy = createAccount.isPending || refreshLink.isPending;
 
   async function openOnboarding(url: string): Promise<void> {
@@ -68,9 +68,9 @@ export function StripeConnectCard() {
   }
 
   function onSwitchProvider(): void {
-    const next = activeProvider === 'stripe' ? 'razorpay' : 'stripe';
+    const next = activeProvider === 'stripe' ? 'cashfree' : 'stripe';
     showAlert(
-      next === 'stripe' ? 'Get paid through Stripe?' : 'Get paid through Razorpay?',
+      next === 'stripe' ? 'Get paid through Stripe?' : 'Get paid through Cashfree?',
       next === 'stripe'
         ? 'Future payouts will settle to your Stripe account instead of your Indian bank account.'
         : 'Future payouts will settle to your Indian bank account instead of Stripe.',
@@ -214,13 +214,13 @@ export function StripeConnectCard() {
                     <View style={styles.providerRow}>
                       <Text style={styles.fieldLabel}>Payouts settle via</Text>
                       <Text style={styles.providerValue}>
-                        {activeProvider === 'stripe' ? 'Stripe' : 'Razorpay'}
+                        {activeProvider === 'stripe' ? 'Stripe' : 'Cashfree'}
                       </Text>
                     </View>
                     <SecondaryButton
                       label={
                         activeProvider === 'stripe'
-                          ? 'Switch back to Razorpay'
+                          ? 'Switch back to Cashfree'
                           : 'Use Stripe for payouts'
                       }
                       disabled={setProvider.isPending}

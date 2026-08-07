@@ -3,8 +3,8 @@ package services
 import "github.com/homechef/api/services/money"
 
 // gateway_money.go — the gateway-neutral helpers every payment rail shares.
-// They lived in razorpay.go until #1086 removed that client; nothing here was
-// ever Razorpay-specific.
+// They lived in the retired gateway's client until #1086 deleted it; nothing here
+// was ever specific to that gateway.
 
 // isPlaceholderValue treats blank strings and the literal "placeholder"
 // (used as a seed value by Helm bootstrap) as "not configured".

@@ -12,7 +12,7 @@ import { useAlert } from '@homechef/mobile-shared/ui';
 // useMealPlanApproval — the ONE place the "approve & pay" / "reject the whole plan"
 // flow lives, so the plan-detail screen, the Home card, and the chef-page sheet all
 // behave identically (payment-after-approval; reject cancels the whole plan). Approve
-// (escrow on) mints a Razorpay advance order for the accepted days and launches
+// (escrow on) mints a Cashfree advance order for the accepted days and launches
 // checkout; reject cancels the plan outright. `onDone` runs after a non-checkout
 // outcome (reject, or escrow-off confirm) so each caller can close/pop as it likes.
 export interface MealPlanApproval {

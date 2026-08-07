@@ -61,20 +61,20 @@ Cause: pod count × pool > Postgres cap (e.g. a scale-up burst), or a leaked/lon
 
 ---
 
-## 3. Razorpay (payments) outage
+## 3. Cashfree (payments) outage
 
 **Detect:** Checkout/refund failures; `502 from gateway`; reconciliation cron logs `DriftGatewayUnreachable`.
 
 **Diagnose:**
 ```
-kubectl --context <prod> -n homechef logs <api-pod> | grep -iE "razorpay|refund|gateway"
+kubectl --context <prod> -n homechef logs <api-pod> | grep -iE "cashfree|refund|gateway"
 ```
-Confirm scope at the Razorpay status page — is it them or us (creds/secret)?
+Confirm scope at the Cashfree status page — is it them or us (creds/secret)?
 
 **Mitigate:**
 - Their outage → orders that don't need instant capture can proceed; surface a "payments temporarily unavailable" state. Do **not** mark orders paid without a gateway confirmation.
-- Refunds that failed mid-flight: the order keeps `refund_amount`; the **reconciliation cron** flags drift next run. Reconcile manually from the Razorpay dashboard once service returns.
-- Creds issue → re-sync the payment secret; `InvalidateRazorpay` happens on next secret fetch.
+- Refunds that failed mid-flight: the order keeps `refund_amount`; the **reconciliation cron** flags drift next run. Reconcile manually from the Cashfree dashboard once service returns.
+- Creds issue → re-sync the payment secret; `InvalidateCashfree` happens on next secret fetch.
 
 **Verify:** a test capture + refund succeed; reconciliation clean next morning.
 

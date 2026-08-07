@@ -3,14 +3,14 @@ package services
 // orderrefund_gateway.go — the provider-routing half of the refund coordinator (#690).
 //
 // The coordinator (services/orderrefund) owns the SAGA: reserve, move, finalize. It knows
-// nothing about Razorpay vs Stripe vs wallet, and it must not — that is what keeps it
+// nothing about Cashfree vs Stripe vs wallet, and it must not — that is what keeps it
 // importable from anywhere without dragging the provider clients along, and what keeps a
 // provider quirk from turning into a saga bug.
 //
 // This adapter owns DELIVERY: given "₹X is owed back on order Y", get ₹X to the customer.
 // That is genuinely more than one call, which is why it is not a one-line wrapper:
 //
-//   - PROVIDER ROUTING — wallet / stripe / razorpay, each with its own id, its own minor-unit
+// - PROVIDER ROUTING — wallet / stripe / cashfree, each with its own id, its own minor-unit
 //     rule, its own client. Forgetting this is #691, live today in order_issue.go.
 //   - THE WALLET-CAPTURE SPLIT (#141) — a wallet-funded order only CAPTURED
 //     (Total − WalletApplied) at the provider, so the provider physically cannot refund the

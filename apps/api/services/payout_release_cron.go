@@ -201,9 +201,9 @@ func runPayoutReleaseSweep(ctx context.Context) {
 	if err := db.Preload("Chef").
 		Where("status = ? AND payout_hold_status = ? AND payout_settled_at IS NULL",
 			models.OrderStatusDelivered, models.PayoutHoldReleaseEligible).
-		// Test orders never enter the real settlement engine. Their Route
-		// transfers live inside the Razorpay TEST account, so the split-payment
-		// path is genuinely exercised while nothing reaches a real bank.
+		// Test orders never enter the real settlement engine. Their splits live
+		// inside the gateway's TEST account, so the split-payment path is
+		// genuinely exercised while nothing reaches a real bank.
 		Scopes(ExcludeTestOrders).
 		Limit(sweepBatchLimit).Find(&orders).Error; err != nil {
 		log.Printf("payout-sweep: load orders: %v", err)

@@ -1,7 +1,7 @@
 package services
 
 // payout_seam_helpers_test.go — shared harness for the payout seams. The gateway
-// stubs that lived here went with the Razorpay client in #1086; the Cashfree seam
+// stubs that lived here went with the retired gateway client in #1086; the Cashfree seam
 // is stubbed by withCashfreeServer (cashfree_test.go).
 
 import (

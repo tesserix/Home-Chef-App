@@ -5,7 +5,7 @@ package models
 // awaiting_customer_confirmation instead of releasing funds. Only an explicit
 // customer confirmation advances it to release_eligible, and only when no open
 // OrderIssue disputes it. release_eligible moves NO money by itself — the real
-// Razorpay ReleaseTransfer is driven later, off release_eligible, by the admin
+// The transfer release is driven later, off release_eligible, by the admin
 // payout queue (#388).
 
 // PayoutHoldStatus is the lifecycle of a delivered order/day's held chef payout.
@@ -32,6 +32,6 @@ const (
 	PayoutHoldWithheld PayoutHoldStatus = "withheld"
 	// PayoutHoldReversed is set by the admin payout queue (#388) when an admin
 	// claws a released/eligible payout back to the platform (refund/chargeback).
-	// Terminal; the reverse drives Razorpay ReverseTransfer behind the escrow flag.
+	// Terminal; the reverse drives the gateway reversal behind the escrow flag.
 	PayoutHoldReversed PayoutHoldStatus = "reversed"
 )

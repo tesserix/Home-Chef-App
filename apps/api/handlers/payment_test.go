@@ -1,7 +1,7 @@
 package handlers
 
 // payment_test.go — backend verification for issue #6 (payment happy-path +
-// failure paths). The on-device WebView tap-through (Razorpay Standard Checkout)
+// failure paths). The on-device WebView tap-through (the retired gateway Standard Checkout)
 // and the live-key switch are manual/owner actions (#25). What we pin down here
 // is the server-side contract the device depends on, WITHOUT needing a live
 // gateway: ownership/IDOR, "already paid" guard, verify-step validation, refund
@@ -46,8 +46,7 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (mode text DEFAULT 'live', first_live_at datetime, active_test_session_id text, address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
-		payment_provider TEXT DEFAULT 'razorpay', razorpay_account_id TEXT DEFAULT '',
-		stripe_account_id TEXT DEFAULT '', stripe_charges_enabled INTEGER DEFAULT 0,
+		payment_provider TEXT DEFAULT 'cashfree', stripe_account_id TEXT DEFAULT '', stripe_charges_enabled INTEGER DEFAULT 0,
 		payout_country TEXT DEFAULT 'IN', payout_method TEXT DEFAULT '',
 		cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
 		created_at DATETIME, updated_at DATETIME
@@ -55,7 +54,7 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_number TEXT, customer_id TEXT, chef_id TEXT, delivery_id TEXT,
 		status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'pending',
-		payment_method TEXT DEFAULT '', payment_provider TEXT DEFAULT 'razorpay',
+		payment_method TEXT DEFAULT '', payment_provider TEXT DEFAULT 'cashfree',
 		subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, total REAL DEFAULT 0,
 		tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0, tax_delivery REAL DEFAULT 0,
 		chef_tip REAL DEFAULT 0, driver_tip REAL DEFAULT 0, delivery_fee REAL DEFAULT 0,
@@ -84,8 +83,7 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE delivery_partners (emergency_contact_enc text DEFAULT '', emergency_phone_enc text DEFAULT '', emergency_phone_bidx text DEFAULT '', 
-		id TEXT PRIMARY KEY, user_id TEXT, razorpay_account_id TEXT DEFAULT '',
-		created_at DATETIME, updated_at DATETIME
+		id TEXT PRIMARY KEY, user_id TEXT, created_at DATETIME, updated_at DATETIME
 	)`).Error)
 	// #394: InitiateRefund now checks whether the order is refund-managed by a typed
 	// escrow flow (meal-plan day / group order). The COUNT probes need the tables to
@@ -186,20 +184,27 @@ func payChef(t *testing.T, db *gorm.DB, userID uuid.UUID) uuid.UUID {
 	id := uuid.New()
 	require.NoError(t, db.Exec(
 		`INSERT INTO chef_profiles (id, user_id, business_name, payment_provider, payout_country, created_at, updated_at)
-		 VALUES (?, ?, 'Test Kitchen', 'razorpay', 'IN', ?, ?)`,
+		 VALUES (?, ?, 'Test Kitchen', 'cashfree', 'IN', ?, ?)`,
 		id.String(), userID.String(), time.Now(), time.Now()).Error)
 	return id
 }
 
 // payOrder inserts an order. paymentStatus drives the precondition branches.
-func payOrder(t *testing.T, db *gorm.DB, customerID, chefID uuid.UUID, paymentStatus string, total float64, rzOrderID, rzPaymentID string) uuid.UUID {
+func payOrder(t *testing.T, db *gorm.DB, customerID, chefID uuid.UUID, paymentStatus string, total float64, gatewayOrderID, gatewayPaymentID string) uuid.UUID {
+	t.Helper()
+	return payOrderOn(t, db, models.PaymentProviderCashfree, customerID, chefID, paymentStatus, total, gatewayOrderID, gatewayPaymentID)
+}
+
+// payOrderOn is payOrder with the provider stamp spelled out, for the paths that
+// turn on which rail took the money.
+func payOrderOn(t *testing.T, db *gorm.DB, provider string, customerID, chefID uuid.UUID, paymentStatus string, total float64, gatewayOrderID, gatewayPaymentID string) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
 	require.NoError(t, db.Exec(
 		`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status, payment_provider, subtotal, tax, total, currency, gateway_order_id, gateway_payment_id, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 'pending', ?, 'razorpay', ?, ?, ?, 'INR', ?, ?, ?, ?)`,
-		id.String(), "HC-"+id.String()[:8], customerID.String(), chefID.String(), paymentStatus,
-		total*0.9, total*0.1, total, rzOrderID, rzPaymentID, time.Now(), time.Now()).Error)
+		 VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, 'INR', ?, ?, ?, ?)`,
+		id.String(), "HC-"+id.String()[:8], customerID.String(), chefID.String(), paymentStatus, provider,
+		total*0.9, total*0.1, total, gatewayOrderID, gatewayPaymentID, time.Now(), time.Now()).Error)
 	return id
 }
 
@@ -291,9 +296,10 @@ func TestVerifyPayment_MissingFields_400(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
-	orderID := payOrder(t, db, cust, chef, "pending", 500, "rzp_order_x", "")
+	orderID := payOrder(t, db, cust, chef, "pending", 500, "", "")
 
-	// Empty razorpay fields → handler must reject (no silent pass).
+	// Nothing supplied and nothing stamped → the handler must reject rather than
+	// silently pass. (With an id stamped, verify deliberately falls back to it.)
 	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/verify", regVerify,
 		map[string]string{})
 	if w.Code != http.StatusBadRequest {
@@ -301,9 +307,9 @@ func TestVerifyPayment_MissingFields_400(t *testing.T) {
 	}
 }
 
-// The mismatch guard only ever fires on the Cashfree leg — payOrder stamps
-// provider 'razorpay', which since #1101 is refused before any id is compared,
-// so this asserted nothing about mismatches. Pointed at the live path (#1119).
+// The mismatch guard only ever fires on the Cashfree leg — payOrder used to stamp
+// the retired gateway, which since #1101 is refused before any id is compared, so
+// this asserted nothing about mismatches. Pointed at the live path (#1119).
 func TestVerifyPayment_OrderIDMismatch_400(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
@@ -318,14 +324,14 @@ func TestVerifyPayment_OrderIDMismatch_400(t *testing.T) {
 	require.Equal(t, "pending", paymentStatusOf(t, db, orderID))
 }
 
-// #1086 — no order can be captured on Razorpay any more, so there is nothing
+// #1086 — no order can be captured on the retired gateway any more, so there is nothing
 // for this endpoint to verify against it. The refusal must be explicit rather
 // than the request falling into a leg that settles an order on a retired rail.
-func TestVerifyPayment_RazorpayOrder_Refused(t *testing.T) {
+func TestVerifyPayment_RetiredGatewayOrder_Refused(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
-	orderID := payOrder(t, db, cust, chef, "pending", 500, "rzp_order_up", "")
+	orderID := payOrderOn(t, db, retiredGatewayStamp, cust, chef, "pending", 500, "legacy_order_up", "")
 
 	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/verify", regVerify,
 		map[string]string{})

@@ -3,7 +3,7 @@ package services
 // reconciliation.go — settlement reconciliation against payment gateways.
 //
 // Compares the platform's recorded payment/refund state for an order against
-// what the gateway (Razorpay / Stripe) reports, and flags drift. This catches
+// what the gateway (Cashfree / Stripe) reports, and flags drift. This catches
 // the dangerous failure modes: a refund that succeeded at the gateway but
 // wasn't recorded (or vice-versa), or a payment the platform marked paid that
 // the gateway never captured.
@@ -52,7 +52,7 @@ const (
 	// DriftFullRefundUnstamped: the gateway's cumulative amount_refunded reaches the
 	// captured total, but the order's refunded_at is still NULL — so the payout release
 	// guard never blocks it (#640). Arises when a refund is full only in AGGREGATE across
-	// channels (e.g. an in-app partial + an out-of-band Razorpay-dashboard refund), which
+	// channels (e.g. an in-app partial + an out-of-band gateway-dashboard refund), which
 	// no single app event stamps. The reconcile cron self-heals this via
 	// FinalizeGatewayFullRefund; the drift is still alerted so ops can reconcile books.
 	DriftFullRefundUnstamped DriftKind = "full_refund_unstamped"
@@ -118,7 +118,7 @@ func ReconcileSettlements(ctx context.Context, windowStart, windowEnd time.Time)
 // Dispatch is on PROVIDER first, then on the presence of a reference. Testing the
 // reference alone (the original shape) breaks the moment two gateways share the
 // gateway_payment_id column: a Cashfree order is non-empty there, so it would be
-// reconciled against Razorpay's API with a Cashfree payment id and report
+// reconciled against the wrong gateway's API with a Cashfree payment id and report
 // DriftGatewayUnreachable on every single sweep — drowning the real findings.
 func reconcileOne(o *models.Order) ([]Drift, bool) {
 	switch models.NormalizeProvider(o.PaymentProvider) {
@@ -133,7 +133,7 @@ func reconcileOne(o *models.Order) ([]Drift, bool) {
 		}
 		return reconcileStripe(o), true
 	default:
-		// Wallet is a ledger credit with no gateway; a legacy razorpay row has no
+		// Wallet is a ledger credit with no gateway; a retired-gateway row has no
 		// client left to ask since #1086. Both are skips, not drift.
 		return nil, false
 	}

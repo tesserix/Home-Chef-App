@@ -22,7 +22,7 @@ func setOrderStatus(t *testing.T, db *gorm.DB, id uuid.UUID, status models.Order
 	require.NoError(t, db.Exec(`UPDATE orders SET status = ? WHERE id = ?`, string(status), id.String()).Error)
 }
 
-func clearOrderRazorpay(t *testing.T, db *gorm.DB, id uuid.UUID) {
+func clearOrderGatewayIDs(t *testing.T, db *gorm.DB, id uuid.UUID) {
 	t.Helper()
 	require.NoError(t, db.Exec(`UPDATE orders SET gateway_order_id = '' WHERE id = ?`, id.String()).Error)
 }
@@ -85,7 +85,7 @@ func TestReconcileCancelledOrders_SkipsNonTargets(t *testing.T) {
 	del, _ := seedCrossOrder(t, db, models.PayoutHoldAwaitingConfirmation, string(models.OrderStatusDelivered), nil)
 	// refunded but no gateway charge (wallet-only) → no Route transfer stranded, skip
 	noRzp, _ := seedCrossOrder(t, db, models.PayoutHoldAwaitingConfirmation, string(models.OrderStatusRefunded), nil)
-	clearOrderRazorpay(t, db, noRzp)
+	clearOrderGatewayIDs(t, db, noRzp)
 
 	require.Equal(t, 0, reconcileCancelledOrders())
 	require.Equal(t, models.PayoutHoldWithheld, loadOrderHold(t, db, wh))

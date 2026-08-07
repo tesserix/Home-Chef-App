@@ -638,7 +638,7 @@
 
    That z-index is above every overlay on the page, so the launcher physically
    intercepted pointer events for anything sharing its corner: the sticky
-   "View Cart" bar on a chef's page, and — worse — Razorpay's checkout modal,
+   "View Cart" bar on a chef's page, and — worse — the gateway's checkout modal,
    which made it impossible to pay.
 
    Two corrections, neither of which touches the package:

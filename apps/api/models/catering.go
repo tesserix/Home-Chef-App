@@ -79,7 +79,7 @@ type CateringRequest struct {
 	AcceptedQuoteID *uuid.UUID `gorm:"type:uuid" json:"acceptedQuoteId,omitempty"`
 
 	// Deposit / advance payment (#55). DepositAmount is copied from the accepted
-	// quote on accept; the customer pays it via Razorpay to confirm the booking.
+	// quote on accept; the customer pays it at checkout to confirm the booking.
 	// DepositStatus: "none" (no quote accepted yet) | "pending" (accepted, awaiting
 	// payment) | "paid" (booking confirmed). The deposit is held by the platform;
 	// settlement to the chef on completion is a follow-up.

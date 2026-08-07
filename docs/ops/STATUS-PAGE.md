@@ -24,7 +24,7 @@ Public status at **`status.fe3dr.com`**. Goal: when something breaks, chefs see 
 |---|---|
 | Vendor app API | `/api/v1/mobile/min-version` |
 | Login / Auth | `auth.fe3dr.com/health` |
-| Payments | manual toggle (driven by Razorpay status) |
+| Payments | manual toggle (driven by Cashfree status) |
 | Push notifications | manual toggle |
 
 ## Incident template (post within 5 min of a P1)

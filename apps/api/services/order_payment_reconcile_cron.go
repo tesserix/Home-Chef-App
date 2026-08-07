@@ -124,17 +124,21 @@ func reconcileOrderPayments(db *gorm.DB, now time.Time) int {
 	for i := range orders {
 		order := &orders[i]
 
+		// IsKnownProvider, not NormalizeProvider: a retired-gateway row coerces to
+		// cashfree, and asking Cashfree about an order id it never issued could
+		// only settle the order against a rail the platform no longer operates.
+		if !models.IsKnownProvider(order.PaymentProvider) {
+			continue
+		}
+
 		var ok bool
 		var reason string
 		switch models.NormalizeProvider(order.PaymentProvider) {
 		case models.PaymentProviderCashfree:
 			ok, reason, _ = SettleCashfreeOrder(order)
 		default:
-			// Stripe, legacy Razorpay, anything unrecognised — not this cron's
-			// job. No order can be captured on Razorpay since #1101, so a
-			// legacy row is left exactly as it is rather than settled against a
-			// rail the platform no longer operates. Not a transient condition,
-			// so no log.
+			// Stripe and wallet are not this cron's job. Not a transient
+			// condition, so no log.
 			continue
 		}
 

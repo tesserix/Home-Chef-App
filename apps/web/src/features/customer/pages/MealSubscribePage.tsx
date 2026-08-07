@@ -14,7 +14,7 @@ import {
 } from '@/features/customer/hooks/useMealSubscription';
 
 // Configure + subscribe to a chef's daily tiffin (#283, web). Live price preview;
-// subscribe sets it up (the Razorpay UPI-Autopay mandate is the billing phase).
+// subscribe sets it up (the UPI-Autopay mandate is the billing phase).
 
 const DAYS = [
   { v: 1, l: 'Mon' }, { v: 2, l: 'Tue' }, { v: 3, l: 'Wed' }, { v: 4, l: 'Thu' },

@@ -552,8 +552,8 @@ export default function CheckoutPage() {
         await confirmCashfreePayment(order, paymentData);
       } else {
         // Never silently fall through to a gateway. This branch used to open
-        // Razorpay, so an unrecognised provider took the customer to a modal
-        // keyed on credentials the API no longer issues (#1086).
+        // the retired gateway, so an unrecognised provider took the customer to a
+        // modal keyed on credentials the API no longer issues (#1086).
         throw new Error(
           "We couldn't start the payment for this order. Please contact support.",
         );
@@ -591,7 +591,7 @@ export default function CheckoutPage() {
 
   // Open the Cashfree modal, then let the SERVER decide whether it was paid.
   //
-  // Unlike the Razorpay handler above there is no (payment_id, order_id,
+  // Unlike the client-signature gateways there is no (payment_id, order_id,
   // signature) triple to hand back — Cashfree's SDK returns no client-verifiable
   // proof. So the verify call posts only the order id, and the server reads the
   // captured payment from Cashfree itself. That is why this runs on ANY non-error
@@ -1351,10 +1351,10 @@ export default function CheckoutPage() {
                 <Shield className="h-5 w-5 text-herb" aria-hidden="true" />
                 Payment
               </h2>
-              {/* The aggregator's own glyph was hotlinked here — a Razorpay
-                  logo, requested from razorpay.com, on a screen Cashfree
-                  charges (#933, #1086). The disclosure below names the real
-                  processor; a mark fetched from a third party adds nothing. */}
+              {/* The aggregator's own glyph was hotlinked here — the wrong
+                  processor's logo, fetched from that processor, on a screen
+                  Cashfree charges (#933, #1086). The disclosure below names the
+                  real one; a mark pulled from a third party adds nothing. */}
               <div className="mt-4 flex items-center gap-3 rounded-lg border border-mist bg-paper p-4">
                 <div>
                   <p className="text-sm font-medium text-ink">

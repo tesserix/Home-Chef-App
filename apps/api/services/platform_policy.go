@@ -117,7 +117,7 @@ type PlatformPolicy struct {
 	// GatewayFeeLevy* recovers the payment gateway's transaction-fee loss on a chef-fault
 	// Cashfree refund (#885), deducted from the chef's next weekly settlement through the
 	// SAME mechanism as ChefCancelPenalty above (raise → optional grace → admin waiver →
-	// statement deduction). Cashfree only — Razorpay/Stripe fee recovery is a noted follow-up.
+	// statement deduction). Cashfree only — Stripe fee recovery is a noted follow-up.
 	GatewayFeeLevyEnabled bool `json:"gatewayFeeLevyEnabled"`
 	// GatewayFeeLevyPercent is a flat rate of the amount actually REFUNDED (never the order's
 	// original total) — a configured proxy for the gateway's real per-refund processing fee.

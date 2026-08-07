@@ -251,13 +251,13 @@ func TestStaleOrderSweep_CashfreeOrder_AsksCashfreeOnce(t *testing.T) {
 	require.Equal(t, string(models.OrderStatusPending), status)
 }
 
-// #1086 — a Razorpay order is an unrecognised provider now, and there is no
+// #1086 — a retired-gateway order is an unrecognised provider now, and there is no
 // client left to ask. The sweep's backstop must hold: an unknown answer is
 // never a cancel.
-func TestStaleOrderSweep_RazorpayOrder_NeverCancelled(t *testing.T) {
+func TestStaleOrderSweep_RetiredGatewayOrder_NeverCancelled(t *testing.T) {
 	db := setupCancelRefundDB(t)
 	now := time.Now()
-	o := seedStaleOrder(t, db, "razorpay", "order_rzp_legacy", models.ChefModeLive, now.Add(-staleOrderGrace))
+	o := seedStaleOrder(t, db, retiredGateway, "order_legacy", models.ChefModeLive, now.Add(-staleOrderGrace))
 
 	expired, _, _, skippedError := runStaleOrderScanWithDB(context.Background(), db, now)
 	require.Equal(t, 0, expired, "an order the sweep cannot ask about is never cancelled")
@@ -349,7 +349,7 @@ func TestStaleOrderSweep_CashfreeFailedThenPending_IsInFlight(t *testing.T) {
 	require.Equal(t, string(models.OrderStatusPending), status)
 }
 
-// Razorpay's `authorized` is money already held on the customer's card. It is
+// the retired gateway's `authorized` is money already held on the customer's card. It is
 // not `captured`, so the old probe returned "" for it and cancelled — the worst
 // version of this bug, since the hold is real money.
 // An unrecognised gateway state reads as in-flight, never as dead. A status

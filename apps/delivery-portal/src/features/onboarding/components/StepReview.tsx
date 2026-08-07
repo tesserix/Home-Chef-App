@@ -334,7 +334,7 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
         </div>
         <div className="text-sm">
           <p className="text-muted-foreground">
-            Plan selected. Payments handled securely via Razorpay.
+            Plan selected. Payments handled securely via Cashfree.
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             Billing starts only after you reach the minimum earnings threshold.

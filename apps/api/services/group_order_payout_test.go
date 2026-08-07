@@ -22,7 +22,7 @@ import (
 )
 
 // seedGroupOrder inserts a placed group order in the given hold state with a held
-// Route transfer and a linked consolidated order id (razorpay-less). Returns the
+// Route transfer and a linked consolidated order id (the retired gateway-less). Returns the
 // group order id and its consolidated order id.
 func seedGroupOrder(t *testing.T, db *gorm.DB, hold models.PayoutHoldStatus) (uuid.UUID, uuid.UUID) {
 	t.Helper()
@@ -45,7 +45,7 @@ func loadGroupOrder(t *testing.T, db *gorm.DB, id uuid.UUID) models.GroupOrder {
 
 // TestMarkGroupOrderDelivered_ParksHold_NoRelease — delivery parks the group hold in
 // awaiting_customer_confirmation + stamps delivered_at and releases NOTHING, with the
-// money flag BOTH off and on. GetRazorpay() is nil in tests, so any real release would
+// money flag BOTH off and on. the retired gateway client is nil in tests, so any real release would
 // error; we assert the hold parks cleanly and never releases.
 func TestMarkGroupOrderDelivered_ParksHold_NoRelease(t *testing.T) {
 	for _, flagOn := range []bool{false, true} {
@@ -111,7 +111,7 @@ func TestConfirmGroupOrderHold_Disputed(t *testing.T) {
 
 // TestReleaseHold_GroupOrder — ReleaseHold("group-order", id) on a release_eligible
 // group hold advances it to released; a re-release is ErrHoldNotEligible (409). Flag
-// off ⇒ state-only; flag on with GetRazorpay()==nil ⇒ seam reached, no crash.
+// off ⇒ state-only; flag on with the retired gateway client==nil ⇒ seam reached, no crash.
 func TestReleaseHold_GroupOrder(t *testing.T) {
 	saved := config.AppConfig
 	t.Cleanup(func() { config.AppConfig = saved })

@@ -30,7 +30,7 @@ func TestChefRefPrefix(t *testing.T) {
 }
 
 // A long name must be cut at a word boundary rather than mid-word, and must
-// never exceed the cap that keeps receipts inside Razorpay's 40-char limit.
+// never exceed the cap that keeps receipts inside the retired gateway's 40-char limit.
 func TestChefRefPrefix_LongNameCutAtWordBoundary(t *testing.T) {
 	got := ChefRefPrefix("Shri Krishna Rasoi Home Kitchen and Catering Services")
 	if len(got) > chefRefPrefixMax {

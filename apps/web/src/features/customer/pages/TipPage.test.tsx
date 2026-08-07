@@ -7,8 +7,8 @@ import { openCashfreeCheckout } from '@/shared/utils/cashfree';
 import TipPage from './TipPage';
 
 // A tip is minted on Cashfree whatever gateway the order was stamped with
-// (#1086). This page opened the Razorpay sheet with a Cashfree payload, so the
-// whole web tip surface was dead the moment the server's tip leg moved.
+// (#1086). This page opened the retired gateway's sheet with a Cashfree payload,
+// so the whole web tip surface was dead the moment the server's tip leg moved.
 
 vi.mock('@/shared/services/api-client', () => ({
   apiClient: { post: vi.fn(), get: vi.fn() },
@@ -56,7 +56,7 @@ describe('TipPage', () => {
   });
 
   // Cashfree hands back no client signature, so the server's own fetch is the
-  // only authority — the client must not post Razorpay-shaped fields at it.
+  // only authority — the client must not post client-signature fields at it.
   it('verifies against the server without client payment fields', async () => {
     renderTipPage();
     await userEvent.click(screen.getByRole('button', { name: /tip ₹50/i }));

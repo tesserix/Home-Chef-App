@@ -731,7 +731,7 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		// committed `refund_amount += reserved` in its OWN tx, so refund_amount is CORRECT
 		// here. Do NOT release the reservation: decrementing it back would ERASE a refund that
 		// actually happened → the next distinct refund over-refunds and collides the
-		// amount-based idempotency key (razorpay rejects → stuck; wallet silently
+		// amount-based idempotency key (the gateway rejects → stuck; wallet silently
 		// under-credits). Leave the order STUCK at refunded with the ledger correct;
 		// reconcileStuckRefunds finalizes it (payment_status=refunded AND refunded_at IS NULL).
 		// The cross-guard below still blocks the payout meanwhile. (The GATEWAY-error revert
@@ -1043,7 +1043,7 @@ func loadChefForUser(userID uuid.UUID) (models.ChefProfile, error) {
 	return chef, err
 }
 
-// roundPaise converts a rupee amount to paise (integer Razorpay unit)
+// roundPaise converts a rupee amount to paise (the integer INR unit)
 // using round-half-away-from-zero so refunds match what the customer
 // sees on their statement. Returns float64 only so callers can pick
 // their own int width.
