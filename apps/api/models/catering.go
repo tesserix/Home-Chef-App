@@ -87,8 +87,8 @@ type CateringRequest struct {
 	DepositStatus     string     `gorm:"type:varchar(12);default:'none'" json:"depositStatus"`
 	// Gateway order id whichever rail took the deposit — Cashfree stamps its own
 	// id here, as orders do — so read it alongside PaymentProvider.
-	RazorpayOrderID   string     `gorm:"" json:"-"`
-	RazorpayPaymentID string     `gorm:"" json:"-"`
+	GatewayOrderID   string     `gorm:"" json:"-"`
+	GatewayPaymentID string     `gorm:"" json:"-"`
 	PaymentProvider   string     `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider,omitempty"`
 	DepositPaidAt     *time.Time `gorm:"" json:"depositPaidAt,omitempty"`
 	CompletedAt       *time.Time `gorm:"" json:"completedAt,omitempty"`

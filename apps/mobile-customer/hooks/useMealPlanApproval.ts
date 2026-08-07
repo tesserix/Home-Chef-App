@@ -78,7 +78,7 @@ export function useMealPlanApproval(
                   // An advance was minted on something other than Cashfree. Since
                   // #1086 there is no second rail to open it on, so say so rather
                   // than falling through to "Plan confirmed" on an unpaid plan.
-                  if (approve && res?.razorpayOrderId) {
+                  if (approve && res?.gatewayOrderId) {
                     showAlert(
                       'Payment unavailable',
                       "We couldn't open the payment for this plan. Please try again.",

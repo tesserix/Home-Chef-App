@@ -28,7 +28,7 @@ func setupConfirmAdvanceDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_number TEXT, customer_id TEXT, chef_id TEXT,
-			status TEXT, razorpay_order_id TEXT, escrow_payment_id TEXT, subtotal REAL, tax REAL, total REAL,
+			status TEXT, gateway_order_id TEXT, escrow_payment_id TEXT, subtotal REAL, tax REAL, total REAL,
 			currency TEXT, confirmed_at DATETIME, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, status TEXT,
 			payout_transfer_id TEXT DEFAULT '', commission_rate REAL DEFAULT 0, price REAL,
@@ -63,7 +63,7 @@ func seedConfirmPlan(t *testing.T, db *gorm.DB, rzOrderID string, dayPrices []fl
 	}
 	total += 32 // GST + delivery, > sum of day prices (matches the real snapshot)
 	require.NoError(t, db.Exec(`INSERT INTO meal_plans
-		(id, meal_plan_number, customer_id, chef_id, status, razorpay_order_id, escrow_payment_id, subtotal, tax, total, currency)
+		(id, meal_plan_number, customer_id, chef_id, status, gateway_order_id, escrow_payment_id, subtotal, tax, total, currency)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		planID.String(), "MP-conf1", custID.String(), chefID.String(), string(models.MealPlanAwaitingCustomer),
 		rzOrderID, "", total-32, 25.6, total, "INR").Error)
@@ -80,7 +80,7 @@ func seedConfirmPlan(t *testing.T, db *gorm.DB, rzOrderID string, dayPrices []fl
 	}
 	plan := &models.MealPlan{
 		ID: planID, MealPlanNumber: "MP-conf1", CustomerID: custID, ChefID: chefID,
-		Status: models.MealPlanAwaitingCustomer, RazorpayOrderID: rzOrderID, Total: total, Days: days,
+		Status: models.MealPlanAwaitingCustomer, GatewayOrderID: rzOrderID, Total: total, Days: days,
 	}
 	return plan, planID, dayIDs
 }

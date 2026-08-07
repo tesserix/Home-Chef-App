@@ -2,7 +2,7 @@ package services
 
 // meal_plan_day_failure.go — #393 slice A. Terminalize a failed delivery's MONEY state
 // for a meal-plan DAY without moving money. The per-day fulfilment order is a shell with
-// no razorpay_order_id, so RecordDeliveryFailure (gateway-only) skips it and the day
+// no gateway_order_id, so RecordDeliveryFailure (gateway-only) skips it and the day
 // would otherwise stall the plan forever (allDaysTerminal never true). This slice marks
 // the day `failed` — a NON-terminal status the plan waits on — and freezes the day's
 // payout hold to `disputed`, so the chef is not paid until an admin resolves the day.

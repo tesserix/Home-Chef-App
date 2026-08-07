@@ -68,7 +68,7 @@ func expireMealPlans(now time.Time, status models.MealPlanStatus, cutoffWhere, r
 		// (money taken, chef unpaid, no refund). Ask the gateway first; if paid, confirm
 		// instead of expiring; if the gateway is unreachable, DEFER (never expire a plan
 		// we couldn't verify — the reconcile will handle it).
-		if status == models.MealPlanAwaitingCustomer && p.RazorpayOrderID != "" && p.EscrowPaymentID == "" &&
+		if status == models.MealPlanAwaitingCustomer && p.GatewayOrderID != "" && p.EscrowPaymentID == "" &&
 			rescueCapturedBeforeExpiry(&p) {
 			continue
 		}

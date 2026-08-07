@@ -143,7 +143,7 @@ export function useCreateMealPlan() {
  */
 export interface ApproveMealPlanResult {
   /** The gateway's order id, whichever rail minted it. Absent → escrow is off. */
-  razorpayOrderId?: string;
+  gatewayOrderId?: string;
   paymentError?: string;
   mealPlan: MealPlan;
   /** Which gateway minted the advance. */

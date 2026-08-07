@@ -225,7 +225,7 @@ func (c *Coordinator) reserveLedgerRow(tx *gorm.DB, cmd RefundCommand, key strin
 	}
 	row := models.RefundTransaction{
 		ID: uuid.New(), OrderID: cmd.OrderID, Provider: order.PaymentProvider,
-		ProviderPaymentID: order.RazorpayPaymentID, Amount: amount, CurrencyCode: "INR",
+		ProviderPaymentID: order.GatewayPaymentID, Amount: amount, CurrencyCode: "INR",
 		Status: models.RefundTxnPending, Reason: cmd.Reason,
 		IdempotencyKey: key, ScopeID: cmd.ScopeID, Actor: cmd.Actor,
 	}
@@ -337,7 +337,7 @@ func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResu
 		// couple every other caller to columns it never needed. Same transaction, same
 		// lock, so it is the same consistent snapshot.
 		var provider models.Order
-		if e = tx.Select("payment_provider", "razorpay_payment_id").
+		if e = tx.Select("payment_provider", "gateway_payment_id").
 			First(&provider, "id = ?", cmd.OrderID).Error; e != nil {
 			return e
 		}

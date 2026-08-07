@@ -37,11 +37,11 @@ func seedPaidPendingOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, _slot str
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-STRAND", CustomerID: uuid.New(), ChefID: chefID,
 		Status: models.OrderStatusPending, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_strand", Total: 250,
+		PaymentProvider: "cashfree", GatewayOrderID: "cf_ord_strand", Total: 250,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders
 		(id, order_number, customer_id, chef_id, status, payment_status, payment_provider,
-		 razorpay_order_id, total, refund_amount, scheduled_for, created_at, updated_at)
+		 gateway_order_id, total, refund_amount, scheduled_for, created_at, updated_at)
 		VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), chefID.String(),
 		string(models.OrderStatusPending), string(models.PaymentCompleted), "cashfree",

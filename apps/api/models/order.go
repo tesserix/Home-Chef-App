@@ -322,8 +322,8 @@ type Order struct {
 	// database.go's postMigrate block (#395·1) — a plain GORM uniqueIndex tag can't be used
 	// because wallet-only/unpaid/Stripe/meal-plan-day-shell orders share the empty default.
 	StripePaymentIntentID string     `gorm:"" json:"-"` // Stripe PaymentIntent ID (unique when set)
-	RazorpayOrderID       string     `gorm:"" json:"-"` // Razorpay order ID (unique when set)
-	RazorpayPaymentID     string     `gorm:"" json:"-"` // Razorpay payment ID (unique when set)
+	GatewayOrderID        string     `gorm:"" json:"-"` // Gateway order ID (unique when set)
+	GatewayPaymentID      string     `gorm:"" json:"-"` // Gateway payment ID (unique when set)
 	RefundID              string     `gorm:"" json:"-"` // Gateway refund ID (if refunded)
 	RefundedAt            *time.Time `gorm:"" json:"refundedAt,omitempty"`
 	RefundAmount          float64    `gorm:"default:0" json:"refundAmount"`

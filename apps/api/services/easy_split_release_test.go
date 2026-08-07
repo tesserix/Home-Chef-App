@@ -21,7 +21,7 @@ import (
 
 const releaseOrderDDL = `CREATE TABLE orders (
 	id TEXT PRIMARY KEY, order_number TEXT, chef_id TEXT, mode TEXT DEFAULT 'live',
-	payment_provider TEXT DEFAULT '', razorpay_order_id TEXT DEFAULT '',
+	payment_provider TEXT DEFAULT '', gateway_order_id TEXT DEFAULT '',
 	subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 	delivery_fee REAL DEFAULT 0, commission_rate REAL DEFAULT 0, total REAL DEFAULT 0,
 	wallet_applied REAL DEFAULT 0, loyalty_applied REAL DEFAULT 0,
@@ -53,7 +53,7 @@ func seedReleaseOrder(t *testing.T, db *gorm.DB, paidAt time.Time) *models.Order
 	order.ChefID = order.Chef.ID
 	order.Mode = models.ChefModeLive
 	order.PaymentProvider = models.PaymentProviderCashfree
-	order.RazorpayOrderID = "cf-" + order.ID.String()[:8]
+	order.GatewayOrderID = "cf-" + order.ID.String()[:8]
 
 	require.NoError(t, db.Exec(
 		`INSERT INTO chef_profiles (id, user_id, payout_country, cashfree_vendor_id, cashfree_vendor_status)
@@ -61,11 +61,11 @@ func seedReleaseOrder(t *testing.T, db *gorm.DB, paidAt time.Time) *models.Order
 		order.Chef.ID.String(), uuid.New().String(), "IN",
 		order.Chef.CashfreeVendorID, order.Chef.CashfreeVendorStatus).Error)
 	require.NoError(t, db.Exec(
-		`INSERT INTO orders (id, order_number, chef_id, mode, payment_provider, razorpay_order_id,
+		`INSERT INTO orders (id, order_number, chef_id, mode, payment_provider, gateway_order_id,
 		  subtotal, tax, chef_tip, delivery_fee, commission_rate, total, created_at, updated_at)
 		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		order.ID.String(), order.OrderNumber, order.ChefID.String(), order.Mode,
-		order.PaymentProvider, order.RazorpayOrderID,
+		order.PaymentProvider, order.GatewayOrderID,
 		order.Subtotal, order.Tax, order.ChefTip, order.DeliveryFee, order.CommissionRate,
 		order.Total, paidAt, paidAt).Error)
 	return order
@@ -96,7 +96,7 @@ func TestReleaseOrderSplit_SplitsWhenTheGovernorHasReleasedTheOrder(t *testing.T
 	db := setupReleaseSplitDB(t)
 	order := seedReleaseOrder(t, db, time.Now().Add(-2*time.Hour))
 	calls := withSplitGateway(t, func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/easy-split/orders/"+order.RazorpayOrderID+"/split", r.URL.Path)
+		require.Equal(t, "/easy-split/orders/"+order.GatewayOrderID+"/split", r.URL.Path)
 		_, _ = w.Write([]byte(`{"status":"OK"}`))
 	})
 
@@ -221,7 +221,7 @@ func TestReleaseMoney_SplitsTheOrderItReleases(t *testing.T) {
 	db := setupReleaseSplitDB(t)
 	order := seedReleaseOrder(t, db, time.Now().Add(-2*time.Hour))
 	calls := withSplitGateway(t, func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/easy-split/orders/"+order.RazorpayOrderID+"/split", r.URL.Path)
+		require.Equal(t, "/easy-split/orders/"+order.GatewayOrderID+"/split", r.URL.Path)
 		_, _ = w.Write([]byte(`{"status":"OK"}`))
 	})
 

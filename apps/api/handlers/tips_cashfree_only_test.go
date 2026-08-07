@@ -62,8 +62,8 @@ func setupTipChargeDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE tips (mode text DEFAULT 'live', test_session_id text, cloned_from_id text,
 		id TEXT PRIMARY KEY, order_id TEXT, customer_id TEXT, chef_user_id TEXT, rider_user_id TEXT,
 		amount REAL DEFAULT 0, chef_amount REAL DEFAULT 0, rider_amount REAL DEFAULT 0,
-		currency TEXT DEFAULT 'INR', status TEXT, razorpay_order_id TEXT DEFAULT '',
-		razorpay_payment_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`).Error)
+		currency TEXT DEFAULT 'INR', status TEXT, gateway_order_id TEXT DEFAULT '',
+		gateway_payment_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`).Error)
 	return db
 }
 
@@ -94,7 +94,7 @@ func createTip(customerID, orderID uuid.UUID, body any) *httptest.ResponseRecord
 func seedPendingTip(t *testing.T, db *gorm.DB, customerID uuid.UUID, amount float64, gatewayOrderID string) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO tips (id, order_id, customer_id, amount, status, razorpay_order_id, created_at, updated_at)
+	require.NoError(t, db.Exec(`INSERT INTO tips (id, order_id, customer_id, amount, status, gateway_order_id, created_at, updated_at)
 		VALUES (?,?,?,?,?,?,?,?)`,
 		id.String(), uuid.NewString(), customerID.String(), amount, models.TipPending, gatewayOrderID,
 		time.Now(), time.Now()).Error)
@@ -145,7 +145,7 @@ func TestCreateOrderTip_UnregisteredChefIsRefusedForTheRealReason(t *testing.T) 
 	require.Contains(t, w.Body.String(), "payout account isn't active")
 }
 
-// Verification asks the gateway, never the client: no razorpayPaymentId is
+// Verification asks the gateway, never the client: no gatewayPaymentId is
 // required, and a legacy gateway order id does not route back to Razorpay.
 func TestVerifyTip_LegacyOrderIDIsVerifiedAgainstCashfree(t *testing.T) {
 	db := setupTipChargeDB(t)
@@ -156,7 +156,7 @@ func TestVerifyTip_LegacyOrderIDIsVerifiedAgainstCashfree(t *testing.T) {
 	w := verifyTip(customerID, tipID)
 
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
-	require.NotContains(t, w.Body.String(), "razorpayPaymentId")
+	require.NotContains(t, w.Body.String(), "gatewayPaymentId")
 	require.Contains(t, w.Body.String(), "Payment not completed")
 }
 

@@ -59,10 +59,10 @@ func SetOrderHoldDisputed(tx *gorm.DB, orderID uuid.UUID) error {
 // terminalization of the order, so the caller emits the failure notification exactly
 // once. Idempotent — a re-fired failure finds the existing pending issue and returns
 // froze=false without opening a second issue or re-disputing. Regular gateway orders
-// only; meal-plan/group consolidated orders (no razorpay_order_id) settle through their
+// only; meal-plan/group consolidated orders (no gateway_order_id) settle through their
 // own paths and are terminalized by a later slice (returns froze=false).
 func RecordDeliveryFailure(tx *gorm.DB, order *models.Order, reason models.DeliveryFailureReason, reportedBy string) (bool, error) {
-	if order.RazorpayOrderID == "" {
+	if order.GatewayOrderID == "" {
 		return false, nil
 	}
 	// #594: serialize concurrent freezes on the same order — two distinct terminal webhooks
@@ -115,7 +115,7 @@ func RecordDeliveryFailure(tx *gorm.DB, order *models.Order, reason models.Deliv
 // money moves. Two freeze paths, tried in order for the two order shapes:
 //   - a regular gateway order → RecordDeliveryFailure opens the delivery_failed issue +
 //     disputes the ORDER hold;
-//   - a meal-plan per-day shell (no razorpay_order_id, money on the meal_plan_days row) →
+//   - a meal-plan per-day shell (no gateway_order_id, money on the meal_plan_days row) →
 //     MarkMealPlanDayFailed marks the DAY failed + disputes the DAY hold.
 //
 // meta is merged into the notification payload (e.g. delivery_id for the courier path,

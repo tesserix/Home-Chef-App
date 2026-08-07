@@ -61,7 +61,7 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		chef_tip REAL DEFAULT 0, driver_tip REAL DEFAULT 0, delivery_fee REAL DEFAULT 0,
 		chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 		delivery_address_state TEXT DEFAULT '',
-		currency TEXT DEFAULT 'INR', razorpay_order_id TEXT DEFAULT '', razorpay_payment_id TEXT DEFAULT '',
+		currency TEXT DEFAULT 'INR', gateway_order_id TEXT DEFAULT '', gateway_payment_id TEXT DEFAULT '',
 		stripe_payment_intent_id TEXT DEFAULT '', refund_id TEXT DEFAULT '', refund_amount REAL DEFAULT 0,
 		refund_reason TEXT DEFAULT '', refund_initiated_by TEXT DEFAULT '', refunded_at DATETIME,
 		payout_hold_status TEXT DEFAULT '', wallet_applied REAL DEFAULT 0,
@@ -196,7 +196,7 @@ func payOrder(t *testing.T, db *gorm.DB, customerID, chefID uuid.UUID, paymentSt
 	t.Helper()
 	id := uuid.New()
 	require.NoError(t, db.Exec(
-		`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status, payment_provider, subtotal, tax, total, currency, razorpay_order_id, razorpay_payment_id, created_at, updated_at)
+		`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status, payment_provider, subtotal, tax, total, currency, gateway_order_id, gateway_payment_id, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, 'pending', ?, 'razorpay', ?, ?, ?, 'INR', ?, ?, ?, ?)`,
 		id.String(), "HC-"+id.String()[:8], customerID.String(), chefID.String(), paymentStatus,
 		total*0.9, total*0.1, total, rzOrderID, rzPaymentID, time.Now(), time.Now()).Error)
@@ -281,7 +281,7 @@ func TestVerifyPayment_OrderNotFound_404(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	w := callPay(cust, http.MethodPost, "/payments/order/"+uuid.New().String()+"/verify", regVerify,
-		map[string]string{"razorpayPaymentId": "pay_1", "razorpayOrderId": "ord_1", "razorpaySignature": "sig"})
+		map[string]string{})
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("want 404, got %d (%s)", w.Code, w.Body.String())
 	}
@@ -301,18 +301,21 @@ func TestVerifyPayment_MissingFields_400(t *testing.T) {
 	}
 }
 
+// The mismatch guard only ever fires on the Cashfree leg — payOrder stamps
+// provider 'razorpay', which since #1101 is refused before any id is compared,
+// so this asserted nothing about mismatches. Pointed at the live path (#1119).
 func TestVerifyPayment_OrderIDMismatch_400(t *testing.T) {
 	db := setupPayDB(t)
 	cust := payUser(t, db, "customer")
 	chef := payChef(t, db, payUser(t, db, "chef"))
-	orderID := payOrder(t, db, cust, chef, "pending", 500, "rzp_order_REAL", "")
+	orderID := cfPayOrder(t, db, cust, chef, "pending", 500, "cf_order_REAL")
 
-	// Client supplies a razorpay order id that doesn't match the stored one.
+	// A forged order id must never reach the gateway fetch.
 	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/verify", regVerify,
-		map[string]string{"razorpayPaymentId": "pay_1", "razorpayOrderId": "rzp_order_FORGED", "razorpaySignature": "sig"})
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("want 400 order-id mismatch, got %d (%s)", w.Code, w.Body.String())
-	}
+		map[string]string{"cashfreeOrderId": "cf_order_FORGED"})
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), "Order ID mismatch")
+	require.Equal(t, "pending", paymentStatusOf(t, db, orderID))
 }
 
 // #1086 — no order can be captured on Razorpay any more, so there is nothing
@@ -325,7 +328,7 @@ func TestVerifyPayment_RazorpayOrder_Refused(t *testing.T) {
 	orderID := payOrder(t, db, cust, chef, "pending", 500, "rzp_order_up", "")
 
 	w := callPay(cust, http.MethodPost, "/payments/order/"+orderID.String()+"/verify", regVerify,
-		map[string]string{"razorpayPaymentId": "pay_up_1", "razorpayOrderId": "rzp_order_up", "razorpaySignature": ""})
+		map[string]string{})
 
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 	require.Equal(t, "pending", paymentStatusOf(t, db, orderID))

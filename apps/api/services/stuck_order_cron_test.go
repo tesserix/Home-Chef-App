@@ -21,11 +21,11 @@ func seedAbandonedOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, status mode
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-STUCK", CustomerID: uuid.New(), ChefID: chefID,
 		Status: status, PaymentStatus: models.PaymentCompleted,
-		PaymentProvider: "cashfree", RazorpayOrderID: "cf_ord_stuck", Total: 250,
+		PaymentProvider: "cashfree", GatewayOrderID: "cf_ord_stuck", Total: 250,
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders
 		(id, order_number, customer_id, chef_id, status, payment_status, payment_provider,
-		 razorpay_order_id, total, refund_amount, created_at, updated_at)
+		 gateway_order_id, total, refund_amount, created_at, updated_at)
 		VALUES (?,?,?,?,?,?,?,?,?,0,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), chefID.String(),
 		string(status), string(models.PaymentCompleted), "cashfree",

@@ -267,9 +267,9 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 }
 
 // VerifyPayment verifies a payment after checkout on the client. The request
-// body differs by provider — Razorpay sends razorpayPaymentId/OrderId/Signature,
-// Stripe sends stripePaymentIntentId — so we look at the already-stamped
-// order.payment_provider first to pick the code path.
+// body differs by provider — Stripe sends stripePaymentIntentId, Cashfree only
+// an order id — so we look at the already-stamped order.payment_provider first
+// to pick the code path.
 // POST /payments/order/:orderId/verify
 func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
@@ -281,10 +281,6 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 	}
 
 	var req struct {
-		// Razorpay
-		RazorpayPaymentID string `json:"razorpayPaymentId"`
-		RazorpayOrderID   string `json:"razorpayOrderId"`
-		RazorpaySignature string `json:"razorpaySignature"`
 		// Stripe
 		StripePaymentIntentID string `json:"stripePaymentIntentId"`
 		// Cashfree. Only the order id — there is no client-side payment id or
@@ -761,7 +757,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		refundID = "wallet:" + txn.ID.String()
 		refundStatus = "processed"
 	case models.PaymentProviderCashfree:
-		if order.RazorpayOrderID == "" {
+		if order.GatewayOrderID == "" {
 			// Cashfree refunds are issued against the ORDER, not the payment — so
 			// the gateway order id is what's required here.
 			releaseReservation()
@@ -774,7 +770,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 			return
 		}
-		r, err := cf.CreateRefund(order.RazorpayOrderID, &services.CashfreeRefundRequest{
+		r, err := cf.CreateRefund(order.GatewayOrderID, &services.CashfreeRefundRequest{
 			AmountPaise: services.CashfreeAmountFromPaise(services.ToPaise(refundAmount)),
 			Note:        fmt.Sprintf("refund-%s: %s", order.OrderNumber, req.Reason),
 			// Same prior-refunded basis as every other branch (#611): the atomic
@@ -939,7 +935,7 @@ func (h *PaymentHandler) confirmMealPlanAdvanceFromWebhook(orderID string) (bool
 	}
 	var plan models.MealPlan
 	err := database.DB.Preload("Days").
-		Where("razorpay_order_id = ? AND status = ?", orderID, models.MealPlanAwaitingCustomer).
+		Where("gateway_order_id = ? AND status = ?", orderID, models.MealPlanAwaitingCustomer).
 		First(&plan).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil // not a pending meal-plan advance — nothing to do

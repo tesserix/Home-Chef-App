@@ -27,7 +27,7 @@ func TestResolveRefundDestination_RazorpayPaid_GoesToOriginal(t *testing.T) {
 	order := &models.Order{
 		ID:                uuid.New(),
 		PaymentProvider:   "razorpay",
-		RazorpayPaymentID: "pay_TEQWrxHzKeC1gA",
+		GatewayPaymentID: "pay_TEQWrxHzKeC1gA",
 	}
 
 	require.Equal(t, "original", resolveRefundDestination(order),
@@ -38,7 +38,7 @@ func TestResolveRefundDestination_ProviderCaseInsensitive(t *testing.T) {
 	order := &models.Order{
 		ID:                uuid.New(),
 		PaymentProvider:   "Razorpay",
-		RazorpayPaymentID: "pay_TEQGrsIslhLEFI",
+		GatewayPaymentID: "pay_TEQGrsIslhLEFI",
 	}
 
 	require.Equal(t, "original", resolveRefundDestination(order),
@@ -75,7 +75,7 @@ func TestResolveRefundDestination_IgnoresClientPreference(t *testing.T) {
 	order := &models.Order{
 		ID:                uuid.New(),
 		PaymentProvider:   "razorpay",
-		RazorpayPaymentID: "pay_TEQBJGrRLOPJKy",
+		GatewayPaymentID: "pay_TEQBJGrRLOPJKy",
 	}
 
 	// Whatever an older client sends, the destination is derived from the order.

@@ -81,7 +81,7 @@ func recordCancellationRefundLedger(tx *gorm.DB, in cancellationRefundLedgerInpu
 		ID:                uuid.New(),
 		OrderID:           in.Order.ID,
 		Provider:          provider,
-		ProviderPaymentID: in.Order.RazorpayPaymentID,
+		ProviderPaymentID: in.Order.GatewayPaymentID,
 		ProviderRefundID:  refundID,
 		Amount:            Round2(in.Amount),
 		CurrencyCode:      "INR",

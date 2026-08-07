@@ -53,7 +53,7 @@ func setupBookingDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) {
 			created_at datetime, updated_at datetime)`,
 		`CREATE TABLE meal_plans (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY, meal_plan_number text, customer_id text, chef_id text,
 			status text, start_date datetime, end_date datetime, subtotal real DEFAULT 0, tax real DEFAULT 0,
-			total real DEFAULT 0, currency text, escrow_payment_id text, razorpay_order_id text,
+			total real DEFAULT 0, currency text, escrow_payment_id text, gateway_order_id text,
 			chef_respond_by datetime, customer_approve_by datetime, confirmed_at datetime, cancelled_at datetime,
 			cancel_reason text, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id text PRIMARY KEY,

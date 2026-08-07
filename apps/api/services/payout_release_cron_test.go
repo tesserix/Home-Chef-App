@@ -55,8 +55,8 @@ const payoutReleaseOrdersDDL = `CREATE TABLE orders (mode text DEFAULT 'live', t
 	accepted_at datetime, prepared_at datetime, picked_up_at datetime, delivered_at datetime,
 	cancelled_at datetime, cancel_reason text, special_instructions text,
 	ready_photo_url text, handover_photo_url text,
-	payment_provider text, stripe_payment_intent_id text, razorpay_order_id text,
-	razorpay_payment_id text, refund_id text, refunded_at datetime, refund_amount real DEFAULT 0,
+	payment_provider text, stripe_payment_intent_id text, gateway_order_id text,
+	gateway_payment_id text, refund_id text, refunded_at datetime, refund_amount real DEFAULT 0,
 	refund_reason text, refund_initiated_by text,
 	payout_hold_status text DEFAULT '', customer_confirmed_at datetime,
 	payout_settled_at datetime, payout_settle_attempts integer DEFAULT 0,
@@ -176,7 +176,7 @@ func withPayoutMovementDisabled(t *testing.T) {
 // reads true — required for any test that wants runPayoutReleaseSweep to reach
 // ReleaseHold at all, now that the sweep bails up front when movement is off.
 // The gateway seam this flips on still runs as a pure no-op for these tests:
-// seedDeliveredOrder never sets razorpay_order_id, so the split refuses the
+// seedDeliveredOrder never sets gateway_order_id, so the split refuses the
 // order and falls back to the statement path before it needs a live gateway.
 func withPayoutMovementEnabled(t *testing.T) {
 	t.Helper()

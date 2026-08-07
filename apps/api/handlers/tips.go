@@ -144,7 +144,7 @@ func (h *TipHandler) GetChefTips(c *gin.Context) {
 func markTipPaidTx(tx *gorm.DB, tip *models.Tip, paymentID string) error {
 	res := tx.Model(&models.Tip{}).
 		Where("id = ? AND status <> ?", tip.ID, models.TipPaid).
-		Updates(map[string]any{"status": models.TipPaid, "razorpay_payment_id": paymentID})
+		Updates(map[string]any{"status": models.TipPaid, "gateway_payment_id": paymentID})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -172,7 +172,7 @@ func markTipPaidTx(tx *gorm.DB, tip *models.Tip, paymentID string) error {
 // Razorpay order id (idempotent). Called from handlePaymentCaptured.
 func markTipPaidByRazorpayOrder(rzOrderID, paymentID string) {
 	var tip models.Tip
-	if err := database.DB.Where("razorpay_order_id = ?", rzOrderID).First(&tip).Error; err != nil {
+	if err := database.DB.Where("gateway_order_id = ?", rzOrderID).First(&tip).Error; err != nil {
 		return // not a tip charge
 	}
 	if tip.Status == models.TipPaid {
@@ -308,7 +308,7 @@ func (h *TipHandler) createCashfreeTip(c *gin.Context, order *models.Order, tip 
 	}
 
 	// Same column the order path stores its Cashfree id in — see payment_cashfree.go.
-	tip.RazorpayOrderID = cfOrder.OrderID
+	tip.GatewayOrderID = cfOrder.OrderID
 	if err := database.DB.Create(tip).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record tip"})
 		return
@@ -342,9 +342,9 @@ func (h *TipHandler) verifyCashfreeTip(c *gin.Context, tip *models.Tip) bool {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return false
 	}
-	payment, err := cf.SuccessfulPayment(tip.RazorpayOrderID)
+	payment, err := cf.SuccessfulPayment(tip.GatewayOrderID)
 	if err != nil {
-		log.Printf("tip: fetch cashfree payments for %s failed: %v", tip.RazorpayOrderID, err)
+		log.Printf("tip: fetch cashfree payments for %s failed: %v", tip.GatewayOrderID, err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Could not verify the tip payment — please try again in a moment"})
 		return false
 	}
@@ -352,7 +352,7 @@ func (h *TipHandler) verifyCashfreeTip(c *gin.Context, tip *models.Tip) bool {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not completed"})
 		return false
 	}
-	if payment.OrderID != tip.RazorpayOrderID {
+	if payment.OrderID != tip.GatewayOrderID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Order ID mismatch"})
 		return false
 	}
@@ -360,7 +360,7 @@ func (h *TipHandler) verifyCashfreeTip(c *gin.Context, tip *models.Tip) bool {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount does not match the tip amount"})
 		return false
 	}
-	tip.RazorpayPaymentID = payment.CFPaymentID.String()
+	tip.GatewayPaymentID = payment.CFPaymentID.String()
 	return true
 }
 
@@ -369,7 +369,7 @@ func (h *TipHandler) verifyCashfreeTip(c *gin.Context, tip *models.Tip) bool {
 // implementation, whichever gateway confirmed it.
 func (h *TipHandler) settleTip(c *gin.Context, tip *models.Tip) {
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		return markTipPaidTx(tx, tip, tip.RazorpayPaymentID)
+		return markTipPaidTx(tx, tip, tip.GatewayPaymentID)
 	}); err != nil {
 		log.Printf("tip: mark paid %s failed: %v", tip.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record tip"})

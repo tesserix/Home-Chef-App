@@ -33,11 +33,11 @@ import (
 // from the empty (pre-delivery) state, so a replayed delivered event is a no-op.
 func SetOrderHoldAwaitingConfirmation(db *gorm.DB, orderID uuid.UUID) error {
 	var order models.Order
-	if err := db.Select("id", "razorpay_order_id", "payout_hold_status").
+	if err := db.Select("id", "gateway_order_id", "payout_hold_status").
 		First(&order, "id = ?", orderID).Error; err != nil {
 		return fmt.Errorf("payout-hold: load order %s: %w", orderID, err)
 	}
-	if order.RazorpayOrderID == "" {
+	if order.GatewayOrderID == "" {
 		return nil // not a gateway-charged regular order
 	}
 	res := db.Model(&models.Order{}).

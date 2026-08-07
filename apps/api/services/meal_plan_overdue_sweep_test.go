@@ -19,7 +19,7 @@ import (
 	"github.com/homechef/api/models"
 )
 
-// insertOverdueOrder inserts a bare order row (no razorpay_order_id — a meal-plan-day
+// insertOverdueOrder inserts a bare order row (no gateway_order_id — a meal-plan-day
 // shell, mirroring generateDayOrder) in the given status.
 func insertOverdueOrder(t *testing.T, db *gorm.DB, status models.OrderStatus) uuid.UUID {
 	t.Helper()

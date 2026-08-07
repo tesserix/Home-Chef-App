@@ -68,7 +68,7 @@ func setupDeliveryStatusDB(t *testing.T) *gorm.DB {
 		id TEXT PRIMARY KEY, order_number TEXT, customer_id TEXT, chef_id TEXT, delivery_id TEXT,
 		status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'pending',
 		subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, total REAL DEFAULT 0,
-		razorpay_order_id TEXT DEFAULT '', razorpay_payment_id TEXT DEFAULT '',
+		gateway_order_id TEXT DEFAULT '', gateway_payment_id TEXT DEFAULT '',
 		picked_up_at DATETIME, delivered_at DATETIME,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)

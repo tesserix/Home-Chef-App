@@ -191,7 +191,7 @@ func gatewayRefundToSource(plan *models.MealPlan, amount float64, reason, idemKe
 	if len(note) > 100 {
 		note = note[:100]
 	}
-	resp, err := cf.CreateRefund(plan.RazorpayOrderID, &CashfreeRefundRequest{
+	resp, err := cf.CreateRefund(plan.GatewayOrderID, &CashfreeRefundRequest{
 		AmountPaise:    cashfreeAmount(ToPaise(amount)),
 		Note:           note,
 		IdempotencyKey: idemKey,

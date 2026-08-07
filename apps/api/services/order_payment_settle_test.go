@@ -54,7 +54,7 @@ func setupCompleteTxDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE orders (
 		id TEXT PRIMARY KEY, order_number TEXT, payment_status TEXT DEFAULT 'pending',
 		payment_method TEXT DEFAULT '', payment_provider TEXT DEFAULT 'razorpay',
-		razorpay_payment_id TEXT DEFAULT '', wallet_applied REAL DEFAULT 0, total REAL DEFAULT 0,
+		gateway_payment_id TEXT DEFAULT '', wallet_applied REAL DEFAULT 0, total REAL DEFAULT 0,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT,

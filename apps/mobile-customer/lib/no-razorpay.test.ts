@@ -31,7 +31,7 @@ describe('the Razorpay checkout is gone from the customer app', () => {
 
   it('no module imports the SDK or handles its payload', () => {
     const offenders = files.filter((f) =>
-      /react-native-razorpay|RazorpayCheckout|RAZORPAY_DISPLAY_CONFIG|checkout\.razorpay\.com|razorpay_payment_id|razorpayKeyId|razorpaySignature/.test(
+      /react-native-razorpay|RazorpayCheckout|RAZORPAY_DISPLAY_CONFIG|checkout\.razorpay\.com|razorpay_payment_id|razorpayKeyId|razorpaySignature|razorpayOrderId|razorpayPaymentId/.test(
         readFileSync(f, 'utf8'),
       ),
     );

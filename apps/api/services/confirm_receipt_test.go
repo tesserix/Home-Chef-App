@@ -39,7 +39,7 @@ func TestAutoConfirmOrderReceipt_AlreadyConfirmed_NoOp(t *testing.T) {
 	id := uuid.New()
 	now := time.Now()
 	require.NoError(t, db.Exec(
-		`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status, customer_confirmed_at) VALUES (?,?,?,?,?,?)`,
+		`INSERT INTO orders (id, customer_id, status, gateway_order_id, payout_hold_status, customer_confirmed_at) VALUES (?,?,?,?,?,?)`,
 		id.String(), uuid.NewString(), "delivered", "order_rzp_123", string(models.PayoutHoldReleaseEligible), now,
 	).Error)
 
@@ -55,7 +55,7 @@ func TestSendConfirmReceiptReminder_SkipsConfirmed(t *testing.T) {
 	id := uuid.New()
 	now := time.Now()
 	require.NoError(t, db.Exec(
-		`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status, customer_confirmed_at) VALUES (?,?,?,?,?,?)`,
+		`INSERT INTO orders (id, customer_id, status, gateway_order_id, payout_hold_status, customer_confirmed_at) VALUES (?,?,?,?,?,?)`,
 		id.String(), uuid.NewString(), "delivered", "order_rzp_123", string(models.PayoutHoldReleaseEligible), now,
 	).Error)
 

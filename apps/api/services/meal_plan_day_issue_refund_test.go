@@ -2,7 +2,7 @@ package services
 
 // meal_plan_day_issue_refund_test.go — #618 slice 2. A customer QUALITY issue on a
 // DELIVERED meal-plan day is reported against the day's per-day fulfilment SHELL order
-// (no razorpay_order_id; the day carries its payout hold on meal_plan_days, not the
+// (no gateway_order_id; the day carries its payout hold on meal_plan_days, not the
 // shell). RefundIssueToWalletWithPolicy must reconcile the DAY when it claws the chef:
 //   - FULL clawback   → whole day withheld, day.refund_txn_id stamped, shell → refunded
 //   - PARTIAL clawback → whole day withheld (a single-unit day forfeits its payout on any
@@ -10,7 +10,7 @@ package services
 //   - PARTIAL goodwill → day left releasable (chef keeps the payout, platform absorbs)
 //
 // Uses setupCrossguardDB (orders + meal_plan_days + order_issues + wallets). The shell is
-// seeded with NO razorpay_order_id — the faithful day-shell shape that makes the order
+// seeded with NO gateway_order_id — the faithful day-shell shape that makes the order
 // partial-claw a no-op (the exact hole this slice plugs). Flags OFF, GetRazorpay()==nil,
 // so every transition is a pure DB state advance.
 
@@ -25,7 +25,7 @@ import (
 	"github.com/homechef/api/models"
 )
 
-// seedDayShellIssue inserts a delivered meal-plan-day SHELL order (razorpay_order_id
+// seedDayShellIssue inserts a delivered meal-plan-day SHELL order (gateway_order_id
 // EMPTY), its parent plan + linked day (in dayHold, with a held transfer), and a pending
 // OrderIssue on the shell carrying MealPlanDayID. Returns the shell order id, day id,
 // customer id and the issue.
@@ -33,7 +33,7 @@ func seedDayShellIssue(t *testing.T, db *gorm.DB, dayHold models.PayoutHoldStatu
 	t.Helper()
 	orderID, customer, chef, planID, dayID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders
-		(id, order_number, customer_id, chef_id, status, razorpay_order_id, total, payout_hold_status, delivered_at)
+		(id, order_number, customer_id, chef_id, status, gateway_order_id, total, payout_hold_status, delivered_at)
 		VALUES (?,?,?,?,?,?,?,?,?)`,
 		orderID.String(), "ORD-"+orderID.String()[:8], customer.String(), chef.String(),
 		"delivered", "", total, "", time.Now().Add(-10*time.Hour)).Error)

@@ -82,8 +82,8 @@ func TestIsSelectableChefProvider_StrictAndExcludesWallet(t *testing.T) {
 // payment id), Razorpay refunds a PAYMENT, Stripe a PaymentIntent.
 func TestGatewayRefundReference_PerProviderObject(t *testing.T) {
 	base := Order{
-		RazorpayOrderID:       "cf_or_rzp_order",
-		RazorpayPaymentID:     "pay_rzp",
+		GatewayOrderID:       "cf_or_rzp_order",
+		GatewayPaymentID:     "pay_rzp",
 		StripePaymentIntentID: "pi_stripe",
 	}
 
@@ -113,15 +113,15 @@ func TestGatewayRefundReference_PerProviderObject(t *testing.T) {
 // Cashfree order with only an order id must answer TRUE — answering false is what
 // would have silently stopped refunding those customers.
 func TestGatewayRefundable_CashfreeOrderWithOnlyAnOrderIDIsRefundable(t *testing.T) {
-	cf := Order{PaymentProvider: PaymentProviderCashfree, RazorpayOrderID: "cf-order-1"}
+	cf := Order{PaymentProvider: PaymentProviderCashfree, GatewayOrderID: "cf-order-1"}
 	require.True(t, cf.GatewayRefundable())
 
 	// A Razorpay order needs the PAYMENT id — an order id alone is not refundable,
 	// because the money may never have been captured.
-	rzpOrderOnly := Order{PaymentProvider: PaymentProviderRazorpay, RazorpayOrderID: "order_x"}
+	rzpOrderOnly := Order{PaymentProvider: PaymentProviderRazorpay, GatewayOrderID: "order_x"}
 	require.False(t, rzpOrderOnly.GatewayRefundable())
 
-	rzpPaid := Order{PaymentProvider: PaymentProviderRazorpay, RazorpayPaymentID: "pay_x"}
+	rzpPaid := Order{PaymentProvider: PaymentProviderRazorpay, GatewayPaymentID: "pay_x"}
 	require.True(t, rzpPaid.GatewayRefundable())
 
 	require.False(t, (&Order{}).GatewayRefundable(), "an unpaid order has nothing to refund")

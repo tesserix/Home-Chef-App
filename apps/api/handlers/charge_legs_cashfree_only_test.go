@@ -65,14 +65,14 @@ func setupChargeDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE chef_promotions (mode text DEFAULT 'live', test_session_id text, cloned_from_id text,
 		id TEXT PRIMARY KEY, chef_id TEXT, status TEXT DEFAULT 'pending', amount REAL DEFAULT 0,
 		currency TEXT DEFAULT 'INR', duration INTEGER DEFAULT 30, starts_at DATETIME, expires_at DATETIME,
-		razorpay_order_id TEXT DEFAULT '', razorpay_payment_id TEXT DEFAULT '',
+		gateway_order_id TEXT DEFAULT '', gateway_payment_id TEXT DEFAULT '',
 		payment_provider TEXT DEFAULT 'razorpay', payment_method TEXT DEFAULT '',
 		created_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE catering_requests (mode text DEFAULT 'live', test_session_id text, cloned_from_id text,
 		event_address_enc text DEFAULT '', contact_phone_enc text DEFAULT '',
 		id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, accepted_quote_id TEXT,
 		status TEXT DEFAULT 'accepted', deposit_amount REAL DEFAULT 0, deposit_status TEXT DEFAULT '',
-		razorpay_order_id TEXT DEFAULT '', razorpay_payment_id TEXT DEFAULT '',
+		gateway_order_id TEXT DEFAULT '', gateway_payment_id TEXT DEFAULT '',
 		payment_provider TEXT DEFAULT 'razorpay', deposit_paid_at DATETIME,
 		event_type TEXT DEFAULT 'wedding', event_date DATETIME,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
@@ -89,7 +89,7 @@ func setupChargeDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE group_order_participants (display_name_enc text DEFAULT '',
 		id TEXT PRIMARY KEY, group_order_id TEXT, user_id TEXT, role TEXT DEFAULT 'guest',
 		display_name TEXT DEFAULT '', share_amount REAL DEFAULT 0, payment_status TEXT DEFAULT 'pending',
-		razorpay_order_id TEXT DEFAULT '', razorpay_payment_id TEXT DEFAULT '',
+		gateway_order_id TEXT DEFAULT '', gateway_payment_id TEXT DEFAULT '',
 		payment_provider TEXT DEFAULT 'razorpay', joined_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE group_order_items (id TEXT PRIMARY KEY, group_order_id TEXT,
 		participant_id TEXT, created_at DATETIME, updated_at DATETIME)`).Error)
@@ -214,7 +214,7 @@ func TestCreateCateringDeposit_RefusesANonCashfreeRail(t *testing.T) {
 	require.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
 
 	var stamped string
-	require.NoError(t, db.Raw(`SELECT razorpay_order_id FROM catering_requests WHERE id = ?`,
+	require.NoError(t, db.Raw(`SELECT gateway_order_id FROM catering_requests WHERE id = ?`,
 		reqID.String()).Scan(&stamped).Error)
 	require.Empty(t, stamped, "a refused deposit must not stamp a gateway order id")
 }
@@ -266,7 +266,7 @@ func TestPayGroupShare_RefusesANonCashfreeRail(t *testing.T) {
 	require.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
 
 	var stamped string
-	require.NoError(t, db.Raw(`SELECT razorpay_order_id FROM group_order_participants WHERE id = ?`,
+	require.NoError(t, db.Raw(`SELECT gateway_order_id FROM group_order_participants WHERE id = ?`,
 		partID.String()).Scan(&stamped).Error)
 	require.Empty(t, stamped, "a refused share must not stamp a gateway order id")
 }

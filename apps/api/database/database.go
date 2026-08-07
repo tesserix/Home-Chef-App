@@ -484,10 +484,10 @@ func Migrate() error {
 	// reconciliation cron (refund_mismatch / conservation) backstops until it's cleaned and
 	// the index is re-attempted on the next boot.
 	paymentIDIndexes := []string{
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_razorpay_order_id ON orders (razorpay_order_id) WHERE razorpay_order_id <> ''`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_razorpay_payment_id ON orders (razorpay_payment_id) WHERE razorpay_payment_id <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_gateway_order_id ON orders (gateway_order_id) WHERE gateway_order_id <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_gateway_payment_id ON orders (gateway_payment_id) WHERE gateway_payment_id <> ''`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_stripe_payment_intent_id ON orders (stripe_payment_intent_id) WHERE stripe_payment_intent_id <> ''`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_plans_razorpay_order_id ON meal_plans (razorpay_order_id) WHERE razorpay_order_id <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_plans_gateway_order_id ON meal_plans (gateway_order_id) WHERE gateway_order_id <> ''`,
 	}
 	for _, stmt := range paymentIDIndexes {
 		if err := DB.Exec(stmt).Error; err != nil {

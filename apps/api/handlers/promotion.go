@@ -127,13 +127,13 @@ func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 	// Stamped together: a row recording a Cashfree order against 'razorpay' would
 	// be verified against the wrong gateway.
 	database.DB.Model(&promo).Updates(map[string]any{
-		"razorpay_order_id": cfOrder.OrderID,
+		"gateway_order_id": cfOrder.OrderID,
 		"payment_provider":  models.PaymentProviderCashfree,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"promotionId":              promo.ID,
 		"provider":                 models.PaymentProviderCashfree,
-		"razorpayOrderId":          cfOrder.OrderID,
+		"gatewayOrderId":          cfOrder.OrderID,
 		"cashfreeOrderId":          cfOrder.OrderID,
 		"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
 		"cashfreeEnv":              services.CashfreeEnvLabel(chef.Mode),
@@ -177,7 +177,7 @@ func (h *PromotionHandler) ConfirmFeaturedAd(c *gin.Context) {
 	// SECURITY: the client supplies no payment id (#1086) — the capture is read
 	// back from the gateway and bound to THIS promotion's order id and amount, so a
 	// chef cannot activate a paid listing with some other captured charge.
-	pay, cerr := services.VerifyCashfreeCharge(chef.Mode, promo.RazorpayOrderID, promo.Amount)
+	pay, cerr := services.VerifyCashfreeCharge(chef.Mode, promo.GatewayOrderID, promo.Amount)
 	if cerr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
 		return
@@ -190,7 +190,7 @@ func (h *PromotionHandler) ConfirmFeaturedAd(c *gin.Context) {
 	// Activate promotion
 	database.DB.Model(&promo).Updates(map[string]interface{}{
 		"status":              models.PromotionActive,
-		"razorpay_payment_id": paymentID,
+		"gateway_payment_id": paymentID,
 		"starts_at":           now,
 		"expires_at":          expiresAt,
 	})

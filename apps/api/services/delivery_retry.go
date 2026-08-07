@@ -40,7 +40,7 @@ var ErrDeliveryStateChanged = errors.New("delivery state changed before retry co
 // (no money moved), false when it terminalized (money frozen for admin resolution). On the
 // retry path the delivery row and its order are reset here — the caller must NOT then
 // persist the stale (failed) struct. The terminal path loads the order fresh (not from a
-// possibly-stale delivery.Order) so the gateway freeze sees the real razorpay_order_id.
+// possibly-stale delivery.Order) so the gateway freeze sees the real gateway_order_id.
 func RetryOrTerminalizeFailedDelivery(db *gorm.DB, delivery *models.Delivery, reason models.DeliveryFailureReason, reportedBy string) (bool, error) {
 	// A retry is allowed only while an attempt remains (the failed attempt was < cap).
 	if delivery.AttemptNumber < MaxDeliveryAttempts {

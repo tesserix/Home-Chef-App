@@ -474,12 +474,12 @@ func mealPlanGatewayHandshake(resp gin.H, plan *models.MealPlan, sessionID strin
 	}
 	resp["provider"] = provider
 	// This column is the generic gateway order id, and the existing customer apps read
-	// razorpayOrderId to decide the plan has an advance at all.
-	resp["razorpayOrderId"] = plan.RazorpayOrderID
+	// gatewayOrderId to decide the plan has an advance at all.
+	resp["gatewayOrderId"] = plan.GatewayOrderID
 	if provider != models.PaymentProviderCashfree {
 		return
 	}
-	resp["cashfreeOrderId"] = plan.RazorpayOrderID
+	resp["cashfreeOrderId"] = plan.GatewayOrderID
 	resp["cashfreePaymentSessionId"] = sessionID
 	if cf := services.GetCashfreeFor(plan.Mode); cf != nil {
 		resp["cashfreeAppId"] = cf.GetAppID()
@@ -547,7 +547,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 		// order and only while still awaiting_customer with none minted yet
 		// (idempotent against a double-approve / retry).
 		res := database.DB.Model(&models.MealPlan{}).
-			Where("id = ? AND status = ? AND (razorpay_order_id IS NULL OR razorpay_order_id = '')",
+			Where("id = ? AND status = ? AND (gateway_order_id IS NULL OR gateway_order_id = '')",
 				plan.ID, models.MealPlanAwaitingCustomer).
 			Updates(map[string]any{
 				"subtotal":              accSub,
@@ -579,14 +579,14 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})
 				return
 			}
-			if cur.Status == models.MealPlanAwaitingCustomer && cur.RazorpayOrderID != "" && cur.EscrowPaymentID == "" {
+			if cur.Status == models.MealPlanAwaitingCustomer && cur.GatewayOrderID != "" && cur.EscrowPaymentID == "" {
 				resp := gin.H{}
 				// A Cashfree payment_session_id is short-lived, so a resumed approval
 				// cannot replay the one minted earlier — re-read the order for a live one.
 				var sessionID string
 				if cur.PaymentProvider == models.PaymentProviderCashfree {
 					if cf := services.GetCashfreeFor(cur.Mode); cf != nil {
-						if cfOrder, ferr := cf.FetchOrder(cur.RazorpayOrderID); ferr == nil {
+						if cfOrder, ferr := cf.FetchOrder(cur.GatewayOrderID); ferr == nil {
 							sessionID = cfOrder.PaymentSessionID
 						}
 					}
@@ -612,10 +612,10 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 			// records a Cashfree order against 'razorpay' would refund on the wrong rail.
 			database.DB.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
 				Updates(map[string]any{
-					"razorpay_order_id": orderID,
+					"gateway_order_id": orderID,
 					"payment_provider":  plan.PaymentProvider,
 				})
-			plan.RazorpayOrderID = orderID
+			plan.GatewayOrderID = orderID
 			mealPlanGatewayHandshake(resp, &plan, sessionID)
 		}
 		plan.ProjectForCustomer()

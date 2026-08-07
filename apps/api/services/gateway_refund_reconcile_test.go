@@ -67,7 +67,7 @@ func TestReconcileCashfree_FullRefundUnstamped_Detected(t *testing.T) {
 	setupStuckRefundDB(t) // provides order_items for PerLineRefundedTotal (0 here)
 	cannedCashfreeOrder(t, 100000, 100000)
 
-	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-640", RazorpayOrderID: "cf_ord_x", Total: 1000}
+	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-640", GatewayOrderID: "cf_ord_x", Total: 1000}
 	drifts := reconcileCashfree(o)
 
 	require.Len(t, drifts, 1)
@@ -81,7 +81,7 @@ func TestReconcileCashfree_PerLineFullyRecorded_NoFalsePositive(t *testing.T) {
 	db := setupStuckRefundDB(t)
 	cannedCashfreeOrder(t, 100000, 60000) // gateway refunded the ₹600 per-line only
 
-	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-PL", RazorpayOrderID: "cf_ord_x", Total: 400}
+	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-PL", GatewayOrderID: "cf_ord_x", Total: 400}
 	// ₹600 per-line cancel, fully recorded on order_items.
 	require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, is_cancelled, refund_amount) VALUES (?,?,?,?)`,
 		uuid.NewString(), o.ID.String(), true, 600.0).Error)
@@ -95,7 +95,7 @@ func TestReconcileCashfree_GenuineMismatch_Flagged(t *testing.T) {
 	setupStuckRefundDB(t)
 	cannedCashfreeOrder(t, 100000, 70000) // gateway shows ₹700 refunded
 
-	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-MM", RazorpayOrderID: "cf_ord_x", Total: 1000, RefundAmount: 600}
+	o := &models.Order{ID: uuid.New(), OrderNumber: "ORD-MM", GatewayOrderID: "cf_ord_x", Total: 1000, RefundAmount: 600}
 	drifts := reconcileCashfree(o)
 
 	require.Len(t, drifts, 1)

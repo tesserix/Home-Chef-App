@@ -2,7 +2,7 @@ package services
 
 // group_order_failure_test.go — #393/#594. A failed/returned delivery on a GROUP order's
 // consolidated Order currently freezes nothing: the consolidated order has no
-// razorpay_order_id (RecordDeliveryFailure skips it) and no meal_plan_days row
+// gateway_order_id (RecordDeliveryFailure skips it) and no meal_plan_days row
 // (MarkMealPlanDayFailed skips it), so TerminalizeDeliveryFailure returned froze=false and
 // the group stranded — money-safe (hold stays none) but the participants are never
 // refunded and no admin is alerted. Slice A mirrors the meal-plan-day freeze: mark the
@@ -137,9 +137,9 @@ func TestMarkGroupOrderFailed_TerminalNoOp(t *testing.T) {
 
 func TestTerminalizeDeliveryFailure_GroupOrderFreezesGroup(t *testing.T) {
 	db := setupCrossguardDB(t)
-	// A group consolidated order: no razorpay_order_id, linked to a group order.
+	// A group consolidated order: no gateway_order_id, linked to a group order.
 	orderID, _ := seedCrossOrder(t, db, models.PayoutHoldNone, "delivering", nil)
-	require.NoError(t, db.Exec(`UPDATE orders SET razorpay_order_id = '' WHERE id = ?`, orderID.String()).Error)
+	require.NoError(t, db.Exec(`UPDATE orders SET gateway_order_id = '' WHERE id = ?`, orderID.String()).Error)
 	gid := seedCrossGroup(t, db, models.PayoutHoldNone, &orderID)
 	setGroupStatus(t, db, gid, models.GroupOrderConfirmed)
 	order := loadFailureOrder(t, db, orderID)

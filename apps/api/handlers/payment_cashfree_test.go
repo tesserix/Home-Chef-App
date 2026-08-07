@@ -49,13 +49,13 @@ func withCashfreeGateway(t *testing.T, handler http.HandlerFunc) {
 }
 
 // cfPayOrder inserts a Cashfree order: provider=cashfree with the gateway order
-// id in the SHARED razorpay_order_id column (models.GatewayOrderIDColumn).
+// id in the SHARED gateway_order_id column (models.GatewayOrderIDColumn).
 func cfPayOrder(t *testing.T, db *gorm.DB, customerID, chefID uuid.UUID, paymentStatus string, total float64, cfOrderID string) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
 	require.NoError(t, db.Exec(
 		`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status, payment_provider,
-			subtotal, tax, total, currency, razorpay_order_id, created_at, updated_at)
+			subtotal, tax, total, currency, gateway_order_id, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, 'pending', ?, 'cashfree', ?, ?, ?, 'INR', ?, ?, ?)`,
 		id.String(), "HC-"+id.String()[:8], customerID.String(), chefID.String(), paymentStatus,
 		total*0.9, total*0.1, total, cfOrderID, time.Now(), time.Now()).Error)
@@ -353,7 +353,7 @@ func TestFinishCashfreeFromGateway_UpstreamFetchFailure502(t *testing.T) {
 		ID:              uuid.New(),
 		OrderNumber:     "HC-recover-1",
 		Total:           500,
-		RazorpayOrderID: "cf-order-recover-1",
+		GatewayOrderID: "cf-order-recover-1",
 	}
 	cfOrder := &services.CashfreeOrderResponse{
 		OrderID:     "cf-order-recover-1",

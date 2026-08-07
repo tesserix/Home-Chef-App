@@ -302,14 +302,14 @@ func VerifyMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan) error {
 	if !MealPlanEscrowActive() {
 		return nil
 	}
-	if plan.RazorpayOrderID == "" {
+	if plan.GatewayOrderID == "" {
 		return fmt.Errorf("no advance order on this plan")
 	}
 	cf := GetCashfreeFor(plan.Mode)
 	if cf == nil {
 		return fmt.Errorf("cashfree not configured")
 	}
-	pay, err := cf.SuccessfulPayment(plan.RazorpayOrderID)
+	pay, err := cf.SuccessfulPayment(plan.GatewayOrderID)
 	if err != nil {
 		return fmt.Errorf("fetch cashfree advance payment: %w", err)
 	}

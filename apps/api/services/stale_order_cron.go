@@ -174,7 +174,7 @@ func staleOrderPaymentState(order *models.Order) (state gatewayPaymentState, cap
 		if cf == nil {
 			return gatewayNoPayment, "", fmt.Errorf("no cashfree gateway configured for mode %q", order.Mode)
 		}
-		payments, err := cf.FetchOrderPayments(order.RazorpayOrderID)
+		payments, err := cf.FetchOrderPayments(order.GatewayOrderID)
 		if err != nil {
 			return gatewayNoPayment, "", err
 		}
@@ -238,7 +238,7 @@ func runStaleOrderScanWithDB(ctx context.Context, db *gorm.DB, now time.Time) (e
 		}
 		order := stale[i]
 
-		hasGatewayOrderID := order.RazorpayOrderID != ""
+		hasGatewayOrderID := order.GatewayOrderID != ""
 		var state gatewayPaymentState
 		var capturedPaymentID string
 		var gatewayErr error
@@ -249,19 +249,19 @@ func runStaleOrderScanWithDB(ctx context.Context, db *gorm.DB, now time.Time) (e
 		switch decideStaleOrderAction(hasGatewayOrderID, state, gatewayErr) {
 		case staleOrderSkipCaptured:
 			log.Printf("stale-order: CAPTURED PAYMENT — order %s (gateway order %s, provider %s, mode %s) has a captured payment %s but is still payment_status=pending; leaving it pending, not settling",
-				order.OrderNumber, order.RazorpayOrderID, order.PaymentProvider, order.Mode, capturedPaymentID)
+				order.OrderNumber, order.GatewayOrderID, order.PaymentProvider, order.Mode, capturedPaymentID)
 			skippedCaptured++
 			continue
 
 		case staleOrderSkipInFlight:
 			log.Printf("stale-order: PAYMENT IN FLIGHT — order %s (gateway order %s, provider %s, mode %s) has an unresolved attempt at the gateway; leaving it pending rather than cancelling under a live charge",
-				order.OrderNumber, order.RazorpayOrderID, order.PaymentProvider, order.Mode)
+				order.OrderNumber, order.GatewayOrderID, order.PaymentProvider, order.Mode)
 			skippedInFlight++
 			continue
 
 		case staleOrderSkipError:
 			log.Printf("stale-order: gateway answer unknown for order %s (gateway order %s, provider %s, mode %s): %v; leaving it pending for retry",
-				order.OrderNumber, order.RazorpayOrderID, order.PaymentProvider, order.Mode, gatewayErr)
+				order.OrderNumber, order.GatewayOrderID, order.PaymentProvider, order.Mode, gatewayErr)
 			skippedError++
 			continue
 

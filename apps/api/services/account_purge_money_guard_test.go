@@ -20,7 +20,7 @@ func purgeGuardDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE ledger_entries (
 		id text PRIMARY KEY, transaction_id text, account_kind text, user_id text,
 		direction text, amount_minor integer, currency text, created_at datetime)`).Error)
-	// #948: the guard reads razorpay_payment_id / wallet_applied / loyalty_applied to
+	// #948: the guard reads gateway_payment_id / wallet_applied / loyalty_applied to
 	// tell a real capture from a per-day order that only INHERITED payment_status.
 	// Rebuild orders from the model so this fixture cannot drift from what it reads.
 	require.NoError(t, db.Exec(`DROP TABLE IF EXISTS orders`).Error)
@@ -86,7 +86,7 @@ func insertGuardOrder(t *testing.T, db *gorm.DB, u uuid.UUID,
 	t.Helper()
 	require.NoError(t, db.Exec(
 		`INSERT INTO orders (id, customer_id, status, payment_status, subtotal, total, refund_amount,
-		   razorpay_payment_id, wallet_applied, loyalty_applied)
+		   gateway_payment_id, wallet_applied, loyalty_applied)
 		 VALUES (?,?,?,?,0,?,?,?,?,?)`,
 		uuid.NewString(), u.String(), status, "completed", total, refund,
 		payID, walletApplied, loyaltyApplied).Error)

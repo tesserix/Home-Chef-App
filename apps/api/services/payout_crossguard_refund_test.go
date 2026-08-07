@@ -38,7 +38,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
-			chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', razorpay_order_id TEXT DEFAULT '',
+			chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', gateway_order_id TEXT DEFAULT '',
 			payment_provider TEXT DEFAULT 'razorpay', total REAL DEFAULT 0,
 			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 			chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
@@ -69,8 +69,8 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE group_order_participants (display_name_enc text DEFAULT '', id TEXT PRIMARY KEY, group_order_id TEXT, user_id TEXT,
 			role TEXT DEFAULT 'guest', display_name TEXT DEFAULT '', share_amount REAL DEFAULT 0,
-			payment_status TEXT DEFAULT 'pending', razorpay_order_id TEXT DEFAULT '',
-			razorpay_payment_id TEXT DEFAULT '', refund_txn_id TEXT, joined_at DATETIME, updated_at DATETIME)`,
+			payment_status TEXT DEFAULT 'pending', gateway_order_id TEXT DEFAULT '',
+			gateway_payment_id TEXT DEFAULT '', refund_txn_id TEXT, joined_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, chef_id TEXT, customer_id TEXT,
 			reason TEXT, description TEXT, photo_urls TEXT, affected_item_ids TEXT,
 			requested_amount REAL DEFAULT 0, refund_amount REAL DEFAULT 0, status TEXT DEFAULT 'pending',
@@ -108,7 +108,7 @@ func seedCrossOrder(t *testing.T, db *gorm.DB, hold models.PayoutHoldStatus, sta
 	t.Helper()
 	id, customer := uuid.New(), uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders
-		(id, order_number, customer_id, chef_id, status, razorpay_order_id, total, payout_hold_status, delivered_at, refunded_at)
+		(id, order_number, customer_id, chef_id, status, gateway_order_id, total, payout_hold_status, delivered_at, refunded_at)
 		VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		id.String(), "ORD-"+id.String()[:8], customer.String(), uuid.NewString(),
 		status, "order_rzp_123", 250.0, string(hold), time.Now().Add(-30*time.Hour), refundedAt).Error)

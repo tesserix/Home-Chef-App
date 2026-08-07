@@ -6,7 +6,7 @@ package handlers
 //
 // The charge legs went Cashfree-only in #1102, so every one of these rows is now
 // stamped cashfree — but the verify endpoints still demanded a
-// razorpayPaymentId as a REQUIRED field, which no client can supply for a
+// gatewayPaymentId as a REQUIRED field, which no client can supply for a
 // Cashfree charge. The group-share leg was worse: its Cashfree branch confirmed
 // the capture and then never marked the participant paid, so the group could
 // never consolidate.
@@ -98,7 +98,7 @@ func TestVerifyGroupShare_UnderAmountCaptureDoesNotSettleTheShare(t *testing.T) 
 func stampShare(t *testing.T, db *gorm.DB, partID uuid.UUID, gatewayOrderID string) {
 	t.Helper()
 	require.NoError(t, db.Exec(
-		`UPDATE group_order_participants SET razorpay_order_id = ?, payment_provider = ? WHERE id = ?`,
+		`UPDATE group_order_participants SET gateway_order_id = ?, payment_provider = ? WHERE id = ?`,
 		gatewayOrderID, models.PaymentProviderCashfree, partID.String()).Error)
 }
 
@@ -127,7 +127,7 @@ func TestVerifyCateringDeposit_CapturedDepositConfirmsTheBooking(t *testing.T) {
 	customerID := payUser(t, db, "customer")
 	reqID := seedCateringDeposit(t, db, customerID, chefID)
 	require.NoError(t, db.Exec(
-		`UPDATE catering_requests SET razorpay_order_id = ?, payment_provider = ? WHERE id = ?`,
+		`UPDATE catering_requests SET gateway_order_id = ?, payment_provider = ? WHERE id = ?`,
 		"cat-abc", models.PaymentProviderCashfree, reqID.String()).Error)
 	verifyStub(t, capture("cat-abc", 500))
 
@@ -150,7 +150,7 @@ func TestVerifyCateringDeposit_UncapturedDepositIsRefused(t *testing.T) {
 	customerID := payUser(t, db, "customer")
 	reqID := seedCateringDeposit(t, db, customerID, chefID)
 	require.NoError(t, db.Exec(
-		`UPDATE catering_requests SET razorpay_order_id = ?, payment_provider = ? WHERE id = ?`,
+		`UPDATE catering_requests SET gateway_order_id = ?, payment_provider = ? WHERE id = ?`,
 		"cat-abc", models.PaymentProviderCashfree, reqID.String()).Error)
 	verifyStub(t, `[]`)
 
@@ -206,7 +206,7 @@ func seedPendingPromotion(t *testing.T, db *gorm.DB, chefID uuid.UUID, gatewayOr
 	t.Helper()
 	id := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO chef_promotions
-		(id, chef_id, status, amount, currency, duration, razorpay_order_id, payment_provider, created_at, updated_at)
+		(id, chef_id, status, amount, currency, duration, gateway_order_id, payment_provider, created_at, updated_at)
 		VALUES (?, ?, ?, ?, 'INR', 30, ?, ?, ?, ?)`,
 		id.String(), chefID.String(), models.PromotionPending, amount, gatewayOrderID,
 		models.PaymentProviderCashfree, time.Now(), time.Now()).Error)

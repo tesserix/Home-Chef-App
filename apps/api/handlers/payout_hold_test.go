@@ -30,7 +30,7 @@ func setupHoldHandlerDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, customer_id TEXT, status TEXT,
-			razorpay_order_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
+			gateway_order_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			customer_confirmed_at DATETIME, refunded_at DATETIME,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE meal_plan_days (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
@@ -95,7 +95,7 @@ func TestConfirmOrderReceived_OwnerReleaseEligible(t *testing.T) {
 	db := setupHoldHandlerDB(t)
 	customerID := uuid.New()
 	orderID := uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, gateway_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
 		orderID.String(), customerID.String(), "delivered", "order_rzp_1", string(models.PayoutHoldAwaitingConfirmation)).Error)
 
 	w := httptest.NewRecorder()
@@ -114,7 +114,7 @@ func TestConfirmOrderReceived_OpenIssueDisputes(t *testing.T) {
 	db := setupHoldHandlerDB(t)
 	customerID := uuid.New()
 	orderID := uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, gateway_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
 		orderID.String(), customerID.String(), "delivered", "order_rzp_1", string(models.PayoutHoldAwaitingConfirmation)).Error)
 	require.NoError(t, db.Exec(`INSERT INTO order_issues (id, order_id, status) VALUES (?,?,?)`,
 		uuid.NewString(), orderID.String(), string(models.IssuePending)).Error)
@@ -134,7 +134,7 @@ func TestConfirmOrderReceived_NonOwner403(t *testing.T) {
 	db := setupHoldHandlerDB(t)
 	ownerID := uuid.New()
 	orderID := uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, gateway_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
 		orderID.String(), ownerID.String(), "delivered", "order_rzp_1", string(models.PayoutHoldAwaitingConfirmation)).Error)
 
 	w := httptest.NewRecorder()
@@ -152,7 +152,7 @@ func TestConfirmOrderReceived_Idempotent(t *testing.T) {
 	db := setupHoldHandlerDB(t)
 	customerID := uuid.New()
 	orderID := uuid.New()
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, gateway_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
 		orderID.String(), customerID.String(), "delivered", "order_rzp_1", string(models.PayoutHoldAwaitingConfirmation)).Error)
 
 	router := confirmRouter(customerID)

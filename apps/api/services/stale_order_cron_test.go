@@ -38,11 +38,11 @@ func seedStaleOrder(t *testing.T, db *gorm.DB, provider, gatewayOrderID, mode st
 	o := &models.Order{
 		ID: uuid.New(), OrderNumber: "ORD-STALE", CustomerID: uuid.New(), ChefID: uuid.New(),
 		Status: models.OrderStatusPending, PaymentStatus: models.PaymentPending,
-		PaymentProvider: provider, RazorpayOrderID: gatewayOrderID, Total: 300, ModePartition: models.ModePartition{Mode: mode},
+		PaymentProvider: provider, GatewayOrderID: gatewayOrderID, Total: 300, ModePartition: models.ModePartition{Mode: mode},
 	}
 	require.NoError(t, db.Exec(`INSERT INTO orders
 		(id, order_number, customer_id, chef_id, status, payment_status, payment_provider,
-		 razorpay_order_id, total, mode, created_at, updated_at)
+		 gateway_order_id, total, mode, created_at, updated_at)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
 		o.ID.String(), o.OrderNumber, o.CustomerID.String(), o.ChefID.String(),
 		string(models.OrderStatusPending), string(models.PaymentPending), provider,

@@ -33,7 +33,7 @@ describe('the Razorpay checkout is gone from the web client', () => {
       const code = readFileSync(f, 'utf8');
       // Comments explaining why Cashfree differs from the rail it replaced are
       // history worth keeping; a live reference is not.
-      return /window\.Razorpay|new Razorpay|RazorpayOptions|RazorpayPaymentResponse|openRazorpayCheckout|razorpay_payment_id|razorpayKeyId|razorpaySignature/.test(
+      return /window\.Razorpay|new Razorpay|RazorpayOptions|RazorpayPaymentResponse|openRazorpayCheckout|razorpay_payment_id|razorpayKeyId|razorpaySignature|razorpayOrderId|razorpayPaymentId/.test(
         code,
       );
     });

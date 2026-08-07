@@ -204,7 +204,7 @@ export function useMealPlan(id: string | undefined) {
 export interface CreateMealPlanResponse {
   mealPlan: MealPlan;
   escrowEnabled?: boolean;
-  razorpayOrderId?: string;
+  gatewayOrderId?: string;
   paymentError?: string;
   /** Which gateway minted the advance. */
   provider?: string;

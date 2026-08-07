@@ -47,7 +47,7 @@ func TestTerminalizeDeliveryFailure_IdempotentNoDoubleEvent(t *testing.T) {
 func TestTerminalizeDeliveryFailure_NonGatewayOrderSkips(t *testing.T) {
 	db := setupCrossguardDB(t)
 	orderID, _ := seedCrossOrder(t, db, models.PayoutHoldNone, "delivering", nil)
-	require.NoError(t, db.Exec(`UPDATE orders SET razorpay_order_id = '' WHERE id = ?`, orderID.String()).Error)
+	require.NoError(t, db.Exec(`UPDATE orders SET gateway_order_id = '' WHERE id = ?`, orderID.String()).Error)
 	order := loadFailureOrder(t, db, orderID)
 
 	froze, err := TerminalizeDeliveryFailure(db, order, models.FailureCustomerUnavailable, "courier", nil)

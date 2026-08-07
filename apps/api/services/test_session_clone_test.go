@@ -147,21 +147,21 @@ func TestClonedOrdersCarryNoGatewayIdentifiers(t *testing.T) {
 
 	type row struct {
 		ID                string
-		RazorpayOrderID   string
-		RazorpayPaymentID string
+		GatewayOrderID   string
+		GatewayPaymentID string
 		ClonedFromID      *string
 		TestSessionID     *string
 	}
 	var rows []row
 	require.NoError(t, db.Raw(
-		`SELECT id, razorpay_order_id, razorpay_payment_id, cloned_from_id, test_session_id
+		`SELECT id, gateway_order_id, gateway_payment_id, cloned_from_id, test_session_id
 		 FROM orders WHERE mode = ? AND cloned_from_id IS NOT NULL`, models.ChefModeTest).
 		Scan(&rows).Error)
 	require.NotEmpty(t, rows, "the clone must have produced at least one order")
 
 	for _, r := range rows {
-		require.Empty(t, r.RazorpayOrderID, "cloned order %s kept a gateway order id", r.ID)
-		require.Empty(t, r.RazorpayPaymentID, "cloned order %s kept a gateway payment id", r.ID)
+		require.Empty(t, r.GatewayOrderID, "cloned order %s kept a gateway order id", r.ID)
+		require.Empty(t, r.GatewayPaymentID, "cloned order %s kept a gateway payment id", r.ID)
 		require.NotNil(t, r.ClonedFromID, "a clone must record its origin")
 		require.NotNil(t, r.TestSessionID, "a clone must be tied to its session")
 		require.Equal(t, session.ID.String(), *r.TestSessionID)
@@ -338,11 +338,11 @@ func TestCloneRefusesAnUnclassifiedColumn(t *testing.T) {
 // Classification is not merely advisory — a blanked column must come out empty
 // even if the caller forgets the override entirely.
 func TestClassificationBlanksGatewayIDsWithoutAnOverride(t *testing.T) {
-	live := []string{"id", "order_number", "razorpay_order_id", "mode"}
+	live := []string{"id", "order_number", "gateway_order_id", "mode"}
 	cols, classes, err := classifyColumns("orders", live)
 	require.NoError(t, err)
 	require.ElementsMatch(t, live, cols)
-	require.Equal(t, classBlank, classes["razorpay_order_id"])
+	require.Equal(t, classBlank, classes["gateway_order_id"])
 	require.Equal(t, classDerive, classes["order_number"])
 	require.Equal(t, classPartition, classes["mode"])
 }

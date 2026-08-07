@@ -56,7 +56,7 @@ func seedCashfreeOrderHold(t *testing.T, db *gorm.DB) uuid.UUID {
 	// Two hours old: past Cashfree's sync delay, inside the split window.
 	now := time.Now().Add(-2 * time.Hour)
 	require.NoError(t, db.Exec(`INSERT INTO orders
-		(id, order_number, customer_id, chef_id, status, razorpay_order_id, payment_provider,
+		(id, order_number, customer_id, chef_id, status, gateway_order_id, payment_provider,
 		 total, subtotal, commission_rate, payout_hold_status, delivered_at, created_at, updated_at)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		id.String(), "ORD-"+id.String()[:8], uuid.NewString(), chef.String(), "delivered",

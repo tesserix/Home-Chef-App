@@ -118,8 +118,8 @@ func CloneChefIntoSession(tx *gorm.DB, chefID uuid.UUID, session *models.ChefTes
 		[]any{chefID, models.ChefModeLive, since},
 		map[string]any{
 			"order_number":        sqlExpr("t.order_number || '-T" + shortID(session.ID) + "'"),
-			"razorpay_order_id":   "",
-			"razorpay_payment_id": "",
+			"gateway_order_id":   "",
+			"gateway_payment_id": "",
 			"payout_transfer_id":  "",
 			"refund_id":           "",
 		}, "")

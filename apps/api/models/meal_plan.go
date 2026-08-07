@@ -123,11 +123,11 @@ type MealPlan struct {
 
 	// Escrow links (#194): the upfront capture that funds the held chef payouts.
 	EscrowPaymentID string `gorm:"" json:"escrowPaymentId,omitempty"`
-	// Covered by a PARTIAL unique index (WHERE razorpay_order_id <> '') in database.go's
+	// Covered by a PARTIAL unique index (WHERE gateway_order_id <> '') in database.go's
 	// postMigrate block (#395·1) — unique when set, empty for an unpaid/handshake plan.
 	// Holds the gateway order id whichever rail took the money: Cashfree stamps its
 	// own order id here exactly as orders do, so read it with PaymentProvider.
-	RazorpayOrderID string `gorm:"" json:"razorpayOrderId,omitempty"`
+	GatewayOrderID string `gorm:"" json:"gatewayOrderId,omitempty"`
 	// Which gateway actually captured the advance. Stored, never inferred: a plan
 	// captured on Cashfree must refund on Cashfree, and the reverse strands the money.
 	PaymentProvider string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider,omitempty"`

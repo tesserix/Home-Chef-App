@@ -16,7 +16,7 @@ import (
 //     Cashfree order. Not an error, not a log line — the customer just never
 //     gets their money.
 //   - `default: // razorpay` sends a Cashfree order down the Razorpay branch,
-//     which reads an empty RazorpayPaymentID and fails at the gateway.
+//     which reads an empty GatewayPaymentID and fails at the gateway.
 //
 // So the provider string is now a closed vocabulary with predicates that say
 // what a provider CAN DO rather than which one it IS. Call sites ask
@@ -115,27 +115,21 @@ func UsesINRPaise(p string) bool {
 	}
 }
 
-// GatewayOrderIDColumn / GatewayPaymentIDColumn document a deliberate reuse.
+// GatewayOrderIDColumn / GatewayPaymentIDColumn name the one pair of columns
+// every gateway's ids land in.
 //
-// Order.RazorpayOrderID / .RazorpayPaymentID (and MealPlan, GroupOrder, Tip,
+// Order.GatewayOrderID / .GatewayPaymentID (and MealPlan, GroupOrder, Tip,
 // Catering, FeaturedListing) hold the GATEWAY's order and payment ids —
-// whichever gateway that is. A Cashfree order's `order_id` and `cf_payment_id`
-// go in the same two columns.
+// whichever gateway that is; PaymentProvider says whose id it is.
 //
-// The names are historical and the reuse is intentional, not laziness. Those
-// columns carry partial unique indexes (WHERE col <> ”, see database.go's
-// postMigrate), and they are read by the reconciliation cron, the meal-plan
-// advance lookup, the group-order settle path and the escrow ledger. Adding a
-// parallel cashfree_order_id to six models would fork every one of those
-// queries — and a fork is precisely how a payment goes missing. One column plus
-// PaymentProvider to say whose id it is keeps a single code path.
-//
-// A rename to gateway_order_id / gateway_payment_id is the right eventual
-// cleanup; it is a mechanical migration + rename, deliberately not bundled with
-// adding a gateway.
+// Sharing one pair is the point. They carry partial unique indexes (WHERE col
+// <> '', see database.go's postMigrate) and are read by the reconciliation
+// cron, the meal-plan advance lookup, the group-order settle path and the
+// escrow ledger. A parallel cashfree_order_id on six models would fork every
+// one of those queries — and a fork is precisely how a payment goes missing.
 const (
-	GatewayOrderIDColumn   = "razorpay_order_id"
-	GatewayPaymentIDColumn = "razorpay_payment_id"
+	GatewayOrderIDColumn   = "gateway_order_id"
+	GatewayPaymentIDColumn = "gateway_payment_id"
 )
 
 // GatewayRefundReference returns the id a refund must be issued against for this
@@ -157,20 +151,20 @@ func (o *Order) GatewayRefundReference() string {
 	}
 	switch NormalizeProvider(o.PaymentProvider) {
 	case PaymentProviderCashfree:
-		return o.RazorpayOrderID
+		return o.GatewayOrderID
 	case PaymentProviderStripe:
 		return o.StripePaymentIntentID
 	case PaymentProviderWallet:
 		return ""
 	default:
-		return o.RazorpayPaymentID
+		return o.GatewayPaymentID
 	}
 }
 
 // GatewayRefundable reports whether a refund can actually be issued to this
 // order's original payment method.
 //
-// This replaces the `order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == ""`
+// This replaces the `order.PaymentProvider != "razorpay" || order.GatewayPaymentID == ""`
 // guard that appeared at five call sites. That guard was correct when Razorpay
 // was the only INR gateway and actively wrong the moment a second one existed: a
 // Cashfree order has a perfectly refundable payment, and the old test would have

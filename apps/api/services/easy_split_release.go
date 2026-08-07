@@ -101,7 +101,7 @@ func ReleaseOrderSplit(db *gorm.DB, orderID uuid.UUID, now time.Time) (bool, err
 	if order.GatewaySplitPaise > 0 {
 		return true, nil
 	}
-	if order.PaymentProvider != models.PaymentProviderCashfree || order.RazorpayOrderID == "" {
+	if order.PaymentProvider != models.PaymentProviderCashfree || order.GatewayOrderID == "" {
 		return false, nil
 	}
 	if !EasySplitWindowFits(db) {
@@ -130,7 +130,7 @@ func ReleaseOrderSplit(db *gorm.DB, orderID uuid.UUID, now time.Time) (bool, err
 		return false, nil
 	}
 
-	if err := cf.SplitOrderAfterPayment(order.RazorpayOrderID,
+	if err := cf.SplitOrderAfterPayment(order.GatewayOrderID,
 		[]CashfreeVendorSplit{*split}, orderID.String()); err != nil {
 		if errors.Is(err, ErrEasySplitRetryable) {
 			return false, err

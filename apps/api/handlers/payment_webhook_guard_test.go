@@ -19,7 +19,7 @@ import (
 
 func setStripeIntent(t *testing.T, db *gorm.DB, orderID uuid.UUID, piID string) {
 	t.Helper()
-	require.NoError(t, db.Exec(`UPDATE orders SET stripe_payment_intent_id = ?, payment_provider = 'stripe', razorpay_order_id = '' WHERE id = ?`,
+	require.NoError(t, db.Exec(`UPDATE orders SET stripe_payment_intent_id = ?, payment_provider = 'stripe', gateway_order_id = '' WHERE id = ?`,
 		piID, orderID.String()).Error)
 }
 

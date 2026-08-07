@@ -26,7 +26,7 @@ func seedAwaitingOrder(t *testing.T, db *gorm.DB, age time.Duration) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
 	delivered := time.Now().Add(-age)
-	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status, delivered_at) VALUES (?,?,?,?,?,?)`,
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, gateway_order_id, payout_hold_status, delivered_at) VALUES (?,?,?,?,?,?)`,
 		id.String(), uuid.NewString(), "delivered", "order_rzp_123",
 		string(models.PayoutHoldAwaitingConfirmation), delivered).Error)
 	return id

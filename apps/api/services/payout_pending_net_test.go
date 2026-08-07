@@ -23,7 +23,7 @@ func seedOrderHoldNet(t *testing.T, db *gorm.DB, hold models.PayoutHoldStatus, d
 	t.Helper()
 	id, chef := uuid.New(), uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders
-		(id, order_number, customer_id, chef_id, status, razorpay_order_id, total, subtotal, tax,
+		(id, order_number, customer_id, chef_id, status, gateway_order_id, total, subtotal, tax,
 		 chef_tip, commission_rate, payout_hold_status, delivered_at)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		id.String(), "ORD-"+id.String()[:8], uuid.NewString(), chef.String(),

@@ -139,7 +139,7 @@ func runPayoutReconcileScan(_ context.Context) {
 func reconcileOrders(status models.PayoutHoldStatus, settle settleFn) int {
 	var ids []string
 	if err := database.DB.Model(&models.Order{}).
-		Where("payout_hold_status = ? AND payout_settled_at IS NULL AND razorpay_order_id <> '' AND payout_settle_attempts < ?",
+		Where("payout_hold_status = ? AND payout_settled_at IS NULL AND gateway_order_id <> '' AND payout_settle_attempts < ?",
 			status, payoutReconcileMaxAttempts).
 		Limit(sweepBatchLimit).Pluck("id", &ids).Error; err != nil {
 		log.Printf("payout-reconcile: query %s orders failed: %v", status, err)
@@ -276,7 +276,7 @@ func reconcileCancelledOrders() int {
 	var ids []string
 	if err := database.DB.Model(&models.Order{}).
 		Where(`(status IN ? OR refunded_at IS NOT NULL) AND payout_hold_status IN ?
-		       AND payout_settled_at IS NULL AND razorpay_order_id <> '' AND payout_settle_attempts < ?`,
+		       AND payout_settled_at IS NULL AND gateway_order_id <> '' AND payout_settle_attempts < ?`,
 			[]models.OrderStatus{models.OrderStatusCancelled, models.OrderStatusRefunded},
 			parkedActionableHolds, payoutReconcileMaxAttempts).
 		Limit(sweepBatchLimit).Pluck("id", &ids).Error; err != nil {

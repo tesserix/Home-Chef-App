@@ -60,12 +60,12 @@ func reconcilePaymentRow(t *testing.T, db *gorm.DB, id interface{ String() strin
 	t.Helper()
 	row := struct {
 		PaymentStatus     string
-		RazorpayPaymentID string
+		GatewayPaymentID string
 	}{}
 	require.NoError(t, db.Raw(
-		`SELECT payment_status, razorpay_payment_id FROM orders WHERE id = ?`, id.String(),
+		`SELECT payment_status, gateway_payment_id FROM orders WHERE id = ?`, id.String(),
 	).Scan(&row).Error)
-	return row.PaymentStatus, row.RazorpayPaymentID
+	return row.PaymentStatus, row.GatewayPaymentID
 }
 
 const reconcileGraceElapsed = 10 * time.Minute // safely past the 5-minute grace
