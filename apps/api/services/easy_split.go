@@ -58,6 +58,10 @@ func PlatformFeeFlatMinor(db *gorm.DB) (feeMinor int64, ok bool) {
 // BuildOrderSplit decides the Easy Split allocation for one checkout, or nil
 // for a full platform capture.
 //
+// Splitting at capture is being replaced by split-after-payment gated on the
+// release governor, so that the maturation window and the block reasons still
+// apply — ADR-0003.
+//
 // nil when: the flag is off, credit part-funds the order (the capture no
 // longer covers the chef's share, so the statement path must settle it), the
 // chef has no ACTIVE vendor registration, the chef's FSSAI licence has lapsed
