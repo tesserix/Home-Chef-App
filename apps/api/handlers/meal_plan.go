@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"sort"
@@ -433,7 +432,7 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 	// confirmed days (see ApproveMealPlan) — NOT at create. The request reaches the
 	// chef with nothing charged; the advance order is created + collected only on
 	// approval, for exactly the days the chef committed to. So create returns the
-	// plan only (no razorpay order).
+	// plan only (no gateway order).
 	c.JSON(http.StatusCreated, gin.H{"mealPlan": plan, "escrowEnabled": config.AppConfig.MealPlanEscrowEnabled})
 }
 
@@ -463,37 +462,32 @@ func (h *MealPlanHandler) GetMealPlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
-// mealPlanGatewayHandshake fills in whatever the client needs to open checkout for
-// this plan's advance. The two gateways hand back different things: Cashfree a
-// payment_session_id plus the environment (sandbox and production are different
-// hosts, and nothing in the session lets the client infer which), Razorpay its key
-// id alongside the order id. Keyed off the provider stored on the plan so a resumed
-// approval always offers the rail that actually minted the order.
+// mealPlanGatewayHandshake fills in what the client needs to open checkout for this
+// plan's advance: the payment_session_id plus the environment, since sandbox and
+// production are different hosts and nothing in the session lets the client infer
+// which. A plan whose stored provider is not Cashfree gets the ids only — there is
+// no rail left to open checkout on (#1086).
 func mealPlanGatewayHandshake(resp gin.H, plan *models.MealPlan, sessionID string) {
 	provider := plan.PaymentProvider
 	if provider == "" {
-		provider = models.PaymentProviderRazorpay
+		provider = models.PaymentProviderCashfree
 	}
 	resp["provider"] = provider
-	// Kept for every provider: this column is the generic gateway order id, and the
-	// existing customer apps read razorpayOrderId to decide the plan has an advance.
+	// This column is the generic gateway order id, and the existing customer apps read
+	// razorpayOrderId to decide the plan has an advance at all.
 	resp["razorpayOrderId"] = plan.RazorpayOrderID
-
-	if provider == models.PaymentProviderCashfree {
-		resp["cashfreeOrderId"] = plan.RazorpayOrderID
-		resp["cashfreePaymentSessionId"] = sessionID
-		if cf := services.GetCashfreeFor(plan.Mode); cf != nil {
-			resp["cashfreeAppId"] = cf.GetAppID()
-			env := "PRODUCTION"
-			if cf.IsSandbox() {
-				env = "SANDBOX"
-			}
-			resp["cashfreeEnv"] = env
-		}
+	if provider != models.PaymentProviderCashfree {
 		return
 	}
-	if rz := services.GetRazorpayFor(plan.Mode); rz != nil {
-		resp["razorpayKeyId"] = rz.GetKeyID()
+	resp["cashfreeOrderId"] = plan.RazorpayOrderID
+	resp["cashfreePaymentSessionId"] = sessionID
+	if cf := services.GetCashfreeFor(plan.Mode); cf != nil {
+		resp["cashfreeAppId"] = cf.GetAppID()
+		env := "PRODUCTION"
+		if cf.IsSandbox() {
+			env = "SANDBOX"
+		}
+		resp["cashfreeEnv"] = env
 	}
 }
 
@@ -531,7 +525,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 	defer release()
 
 	// Load the chef for the recipient User.ID (events target User.ID, not
-	// ChefProfile.ID) and the Razorpay linked account (escrow payouts).
+	// ChefProfile.ID) and the linked payout account (escrow payouts).
 	var chefProfile models.ChefProfile
 	database.DB.First(&chefProfile, "id = ?", plan.ChefID)
 	chefUserID := chefProfile.UserID
@@ -539,7 +533,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 	now := time.Now()
 
 	// Escrow-on APPROVE does not confirm yet: it snapshots the accepted-days charge
-	// (food + GST + per-accepted-day delivery), mints the Razorpay advance order,
+	// (food + GST + per-accepted-day delivery), mints the advance order,
 	// and hands the client checkout. The plan STAYS awaiting_customer until the
 	// payment verifies — VerifyMealPlanPayment then flips it to confirmed and holds
 	// the chef payouts. (Escrow-OFF approve is the unpaid handshake → confirmed
@@ -576,7 +570,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 		if res.RowsAffected == 0 {
 			// The guarded snapshot didn't apply — RESUME vs CONFLICT. If the plan is
 			// still awaiting_customer with an advance order already minted but NOT yet
-			// paid (escrow_payment_id blank), the customer backed out of Razorpay and is
+			// paid (escrow_payment_id blank), the customer backed out of checkout and is
 			// retrying: hand back the SAME order to resume checkout, rather than 409
 			// (which would strand a minted-but-unpaid advance and block re-payment).
 			// Any other state (paid/confirmed/cancelled) is a genuine conflict.
@@ -1084,11 +1078,6 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 	})
 }
 
-type verifyMealPlanPaymentRequest struct {
-	RazorpayPaymentID string `json:"razorpayPaymentId"`
-	RazorpaySignature string `json:"razorpaySignature"`
-}
-
 // VerifyMealPlanPayment — POST /meal-plans/:id/verify-payment. Confirms the
 // customer's advance payment was captured and stamps the escrow payment id.
 // No-op acknowledgement when escrow is off.
@@ -1099,21 +1088,14 @@ func (h *MealPlanHandler) VerifyMealPlanPayment(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
 		return
 	}
-	// Body is optional: Cashfree gives the client no payment id or signature to send,
-	// so the server verifies from the gateway instead. Both fields stay required in
-	// substance for Razorpay — VerifyMealPlanAdvance rejects a capture that does not
-	// bind to this plan's order and amount either way.
-	var req verifyMealPlanPaymentRequest
-	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	// Validate the captured advance (order + amount + Checkout signature), confirm the
-	// plan in a fast local tx, and hold the chef payouts outside it — the SAME durable
-	// seam the payment.captured webhook + the Temporal workflow use, so a client verify
-	// and a webhook confirm can never diverge. Idempotent + status-guarded; escrow-off
-	// is a no-op ack.
-	if _, err := services.ConfirmMealPlanAdvance(database.DB, &plan, req.RazorpayPaymentID, req.RazorpaySignature); err != nil {
+	// Nothing in the body is read: the client is given no payment id or signature it
+	// could send, so the server verifies the capture from the gateway instead.
+	//
+	// Validate the captured advance (order + amount), confirm the plan in a fast local
+	// tx, and hold the chef payouts outside it — the SAME durable seam the webhook and
+	// the Temporal workflow use, so a client verify and a webhook confirm can never
+	// diverge. Idempotent + status-guarded; escrow-off is a no-op ack.
+	if _, err := services.ConfirmMealPlanAdvance(database.DB, &plan); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment verification failed"})
 		return
 	}

@@ -5,12 +5,13 @@ package services
 // meal-plan advance durably (handlers/payment.go), and so does the client verify path;
 // this sweep is the last line for the rare DOUBLE miss (webhook AND client both lost):
 // it finds plans stuck in awaiting_customer WITH an advance order minted but no
-// escrow_payment_id, asks Razorpay whether that order was actually paid, and confirms
+// escrow_payment_id, asks the gateway whether that order was actually paid, and confirms
 // via the SAME ConfirmMealPlanAdvance seam if so. No-op when escrow is off. A grace
 // window keeps it from racing a just-approved plan's normal confirm path.
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -44,10 +45,10 @@ func reconcileMealPlanAdvances(db *gorm.DB, now time.Time) int {
 	if !MealPlanEscrowActive() {
 		return 0
 	}
-	// No top-level client: each plan is reconciled against the gateway that took
-	// its advance, so a live plan and a test plan in the same sweep talk to
-	// different Razorpay accounts. Bail only when neither slot is configured.
-	if GetRazorpayFor(models.ChefModeLive) == nil && GetRazorpayFor(models.ChefModeTest) == nil {
+	// No top-level client: each plan is reconciled against its own mode's slot, so a
+	// live plan and a test plan in the same sweep talk to different merchant
+	// accounts. Bail only when neither slot is configured.
+	if GetCashfreeFor(models.ChefModeLive) == nil && GetCashfreeFor(models.ChefModeTest) == nil {
 		return 0
 	}
 	var plans []models.MealPlan
@@ -62,21 +63,15 @@ func reconcileMealPlanAdvances(db *gorm.DB, now time.Time) int {
 	confirmedN := 0
 	for i := range plans {
 		p := &plans[i]
-		rz := GetRazorpayFor(p.Mode)
-		if rz == nil {
-			log.Printf("mealplan-advance-reconcile: no %s gateway configured for plan %s; skipping", models.NormalizeMode(p.Mode), p.ID)
-			continue
-		}
-		pays, err := rz.FetchOrderPayments(p.RazorpayOrderID)
+		captured, err := capturedMealPlanAdvance(p)
 		if err != nil {
-			log.Printf("mealplan-advance-reconcile: fetch payments for order %s failed: %v", p.RazorpayOrderID, err)
+			log.Printf("mealplan-advance-reconcile: gateway check for plan %s failed: %v", p.ID, err)
 			continue
 		}
-		captured := capturedPaymentFor(pays, p.RazorpayOrderID)
 		if captured == "" {
 			continue // unpaid — leave it; the expiry sweep cancels an abandoned plan
 		}
-		confirmed, txErr := ConfirmMealPlanAdvance(db, p, captured, "")
+		confirmed, txErr := ConfirmMealPlanAdvance(db, p)
 		if txErr != nil {
 			log.Printf("mealplan-advance-reconcile: confirm plan %s failed: %v", p.ID, txErr)
 			continue
@@ -90,14 +85,22 @@ func reconcileMealPlanAdvances(db *gorm.DB, now time.Time) int {
 	return confirmedN
 }
 
-// capturedPaymentFor returns the id of a captured payment bound to orderID, or "".
-func capturedPaymentFor(pays []PaymentResponse, orderID string) string {
-	for _, pay := range pays {
-		if pay.Status == "captured" && pay.OrderID == orderID {
-			return pay.ID
-		}
+// capturedMealPlanAdvance returns the gateway payment id of the capture on this plan's
+// own advance order, or "" when the gateway reports none. Shared with the expiry
+// rescue, which asks the identical question a moment before expiring a plan.
+func capturedMealPlanAdvance(p *models.MealPlan) (string, error) {
+	cf := GetCashfreeFor(p.Mode)
+	if cf == nil {
+		return "", fmt.Errorf("no %s gateway configured", models.NormalizeMode(p.Mode))
 	}
-	return ""
+	pay, err := cf.SuccessfulPayment(p.RazorpayOrderID)
+	if err != nil {
+		return "", fmt.Errorf("fetch payments for order %s: %w", p.RazorpayOrderID, err)
+	}
+	if pay == nil {
+		return "", nil
+	}
+	return pay.CFPaymentID.String(), nil
 }
 
 func StartMealPlanAdvanceReconcileCron(ctx context.Context) {

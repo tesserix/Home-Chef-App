@@ -3,14 +3,11 @@ package services
 // meal_plan_advance_reconcile_test.go — #395·3. The last-line reconcile that recovers a
 // meal-plan advance whose client verify AND payment.captured webhook were both lost:
 // money captured at the gateway, plan stuck awaiting_customer, chef payout never held.
-// It asks Razorpay whether the plan's advance order was paid and, if so, confirms via
+// It asks the gateway whether the plan's advance order was paid and, if so, confirms via
 // ConfirmMealPlanAdvance. Also covers the grace window (don't race a just-approved plan)
 // and the unpaid case (leave an abandoned plan for the expiry sweep).
 
 import (
-	"encoding/json"
-	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -20,31 +17,6 @@ import (
 
 	"github.com/homechef/api/models"
 )
-
-// reconcileStub serves GET /orders/{id}/payments (the reconcile's discovery call) and
-// GET /payments/{id} (VerifyMealPlanAdvance's re-bind). `capturedItem` toggles whether
-// the order has a captured payment.
-func reconcileStub(t *testing.T, orderID string, amountPaise int, capturedItem bool) {
-	t.Helper()
-	withRazorpayTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		pay := map[string]any{
-			"id": "pay_rec", "status": "captured", "captured": true,
-			"order_id": orderID, "amount": amountPaise,
-		}
-		switch {
-		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/orders/") && strings.HasSuffix(r.URL.Path, "/payments"):
-			items := []map[string]any{}
-			if capturedItem {
-				items = append(items, pay)
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"count": len(items), "items": items})
-		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/payments/"):
-			_ = json.NewEncoder(w).Encode(pay)
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
-}
 
 // seedStuckAdvancePlan inserts an awaiting_customer plan with an advance order + accepted
 // days, blank escrow_payment_id, and the given updated_at (to drive the grace window).
@@ -73,20 +45,20 @@ func seedStuckAdvancePlan(t *testing.T, db *gorm.DB, orderID string, dayPrices [
 func TestReconcileMealPlanAdvances_ConfirmsStuckCapturedPlan(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	reconcileStub(t, "order_rec1", 35200, true)
+	withCashfreeOrderPayments(t, "order_rec1", 35200, CashfreePaymentSuccess)
 	planID := seedStuckAdvancePlan(t, db, "order_rec1", []float64{160, 160}, time.Now().Add(-time.Hour))
 
 	n := reconcileMealPlanAdvances(db, time.Now())
 	require.Equal(t, 1, n, "the stuck captured plan was confirmed")
 	require.Equal(t, string(models.MealPlanConfirmed), planField(t, db, planID, "status"))
-	require.Equal(t, "pay_rec", planField(t, db, planID, "escrow_payment_id"))
+	require.Equal(t, "4242", planField(t, db, planID, "escrow_payment_id"))
 }
 
 // An order with no captured payment → left alone (an abandoned plan expires elsewhere).
 func TestReconcileMealPlanAdvances_UnpaidLeftAlone(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	reconcileStub(t, "order_rec2", 35200, false) // no captured payment on the order
+	withCashfreeOrderPayments(t, "order_rec2", 35200, "") // no captured payment on the order
 	planID := seedStuckAdvancePlan(t, db, "order_rec2", []float64{160, 160}, time.Now().Add(-time.Hour))
 
 	n := reconcileMealPlanAdvances(db, time.Now())
@@ -99,7 +71,7 @@ func TestReconcileMealPlanAdvances_UnpaidLeftAlone(t *testing.T) {
 func TestReconcileMealPlanAdvances_GraceWindow_SkipsFreshPlan(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	reconcileStub(t, "order_rec3", 35200, true)
+	withCashfreeOrderPayments(t, "order_rec3", 35200, CashfreePaymentSuccess)
 	planID := seedStuckAdvancePlan(t, db, "order_rec3", []float64{160, 160}, time.Now()) // just approved
 
 	n := reconcileMealPlanAdvances(db, time.Now())

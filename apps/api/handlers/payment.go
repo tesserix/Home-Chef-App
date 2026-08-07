@@ -933,7 +933,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 // Returns confirmed=true only on the transition it performed; (false, nil) when there
 // is no pending meal-plan advance for this order (the common case: a regular order
 // that was already completed). Errors are transient so the webhook layer redelivers.
-func (h *PaymentHandler) confirmMealPlanAdvanceFromWebhook(orderID, paymentID string) (bool, error) {
+func (h *PaymentHandler) confirmMealPlanAdvanceFromWebhook(orderID string) (bool, error) {
 	if !services.MealPlanEscrowActive() {
 		return false, nil
 	}
@@ -948,7 +948,7 @@ func (h *PaymentHandler) confirmMealPlanAdvanceFromWebhook(orderID, paymentID st
 		return false, err
 	}
 	// ConfirmMealPlanAdvance manages its own confirm tx + holds payouts outside it.
-	return services.ConfirmMealPlanAdvance(database.DB, &plan, paymentID, "")
+	return services.ConfirmMealPlanAdvance(database.DB, &plan)
 }
 
 // confirmFssaiRequestFromWebhook is the payment-captured fallback for an FSSAI

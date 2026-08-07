@@ -520,7 +520,7 @@ func (h *PaymentHandler) handleCashfreePaymentSuccess(payload json.RawMessage, s
 		// order id lives on meal_plans. Confirming it here is what stops a dropped
 		// client verify from stranding a captured advance: money taken, plan left
 		// awaiting_customer, chef payout never held.
-		confirmed, mpErr := h.confirmMealPlanAdvanceFromWebhook(cfOrderID, cfPaymentID)
+		confirmed, mpErr := h.confirmMealPlanAdvanceFromWebhook(cfOrderID)
 		if mpErr != nil {
 			log.Printf("cashfree payment success: meal-plan advance confirm failed for order %s: %v", cfOrderID, mpErr)
 			return mpErr // transient → release the claim so a redelivery re-runs

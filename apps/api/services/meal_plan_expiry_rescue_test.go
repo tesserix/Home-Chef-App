@@ -20,7 +20,7 @@ import (
 func TestRescueCapturedBeforeExpiry_ConfirmsCaptured(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	reconcileStub(t, "order_rescue", 35200, true) // gateway shows captured
+	withCashfreeOrderPayments(t, "order_rescue", 35200, CashfreePaymentSuccess) // gateway shows captured
 	planID := seedStuckAdvancePlan(t, db, "order_rescue", []float64{160, 160}, time.Now())
 
 	var plan models.MealPlan
@@ -29,14 +29,14 @@ func TestRescueCapturedBeforeExpiry_ConfirmsCaptured(t *testing.T) {
 	rescued := rescueCapturedBeforeExpiry(&plan)
 	require.True(t, rescued, "a captured plan must be rescued (not expired)")
 	require.Equal(t, string(models.MealPlanConfirmed), planField(t, db, planID, "status"), "confirmed instead of expired")
-	require.Equal(t, "pay_rec", planField(t, db, planID, "escrow_payment_id"))
+	require.Equal(t, "4242", planField(t, db, planID, "escrow_payment_id"))
 }
 
 // A gateway-confirmed UNPAID plan is not rescued (returns false → sweep expires it).
 func TestRescueCapturedBeforeExpiry_UnpaidNotRescued(t *testing.T) {
 	escrowFlag(t, true)
 	db := setupConfirmAdvanceDB(t)
-	reconcileStub(t, "order_unpaid", 35200, false) // no captured payment
+	withCashfreeOrderPayments(t, "order_unpaid", 35200, "") // no captured payment
 	planID := seedStuckAdvancePlan(t, db, "order_unpaid", []float64{160, 160}, time.Now())
 
 	var plan models.MealPlan
