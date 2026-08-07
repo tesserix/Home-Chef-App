@@ -170,33 +170,13 @@ func (h *PaymentHandler) createCashfreePayment(c *gin.Context, order *models.Ord
 		IdempotencyKey: fmt.Sprintf("cf-order:%s:%d", order.ID, plan.CapturePaise),
 	})
 	if err != nil {
-		// LAST-RESORT GATEWAY FALLBACK.
-		//
-		// services.SelectCheckoutGateway already skips Cashfree when the slot has no
-		// credentials, but "has credentials" is not "credentials work". Cashfree
-		// separates sandbox from production by HOSTNAME, so a live slot holding test
-		// credentials resolves to a perfectly valid client that then 401s against
-		// api.cashfree.com — the normal state while a merchant account is still in
-		// review. Without this branch, making Cashfree the preferred provider would
-		// turn that into a hard failure on every real checkout.
-		//
-		// Nothing has been stamped on the order yet (the gateway call comes before
-		// the payment-column write), so handing off to Razorpay is clean: it stamps
-		// payment_provider=razorpay itself, and the order ends up wholly on one
-		// gateway. Deliberately NOT retried on Cashfree — a credential problem does
-		// not fix itself within one request.
-		log.Printf("cashfree: order create failed for %s (%v) — falling back to razorpay for this checkout",
-			order.OrderNumber, err)
-		// Open the breaker so the NEXT customer's checkout skips Cashfree instead
-		// of paying the same failed round-trip to rediscover this. Now that
-		// Cashfree is the platform default, without this a broken slot would cost
-		// every single order an extra gateway call on the critical path.
+		// A failed order-create is now terminal for this checkout (#1086): there is
+		// no second gateway to hand off to, and quietly minting the charge
+		// somewhere else was the last path that could still produce a Razorpay
+		// order. Open the breaker so the NEXT customer's checkout does not pay the
+		// same failed round-trip to rediscover a broken slot.
+		log.Printf("cashfree: order create failed for %s: %v", order.OrderNumber, err)
 		services.NoteCashfreeGatewayFailure(order.Mode)
-		if services.GetRazorpayFor(order.Mode) != nil {
-			h.createRazorpayPayment(c, order, userID, creditReq)
-			return
-		}
-		log.Printf("cashfree: no razorpay fallback available for %s either", order.OrderNumber)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
 		return
 	}
