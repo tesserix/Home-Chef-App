@@ -42,111 +42,13 @@ func groupNetPayout(g *models.GroupOrder, rate float64) float64 {
 	return Round2(gross - commission - tds)
 }
 
-// HoldGroupChefPayout creates the single on-hold Route transfer to the chef and
-// stamps PayoutTransferID. Idempotent (skips when already held or no account).
-// Flag-gated on payoutMovementEnabled() (#456): with escrow OFF at launch this
-// moves no live money — the group hold is driven purely as DB state, exactly like
-// order/meal-plan-day, until the flag flips.
-func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) error {
-	if !payoutMovementEnabled() {
-		return nil
-	}
-	if g.PayoutTransferID != "" || chefAccount == "" {
-		return nil
-	}
-	// NET (food + tax − commission − TDS), the same basis as the order/day paths —
-	// NOT the gross chef slice (#546). Rate resolved once, like HoldChefPayouts.
-	rate := GetCommissionRate(tx)
-	amt := groupNetPayout(g, rate)
-	if amt <= 0 {
-		return nil
-	}
-	rz := GetRazorpayFor(g.Mode)
-	if rz == nil {
-		return fmt.Errorf("razorpay not configured")
-	}
-	heldPaise := ToPaise(amt)
-	tr, err := rz.CreateTransfer(&DirectTransferRequest{
-		Account: chefAccount, Amount: heldPaise, Currency: g.Currency, OnHold: true,
-		Notes: map[string]string{"group_order_id": g.ID.String()},
-		// One hold per group (DB-guarded by PayoutTransferID); a retry re-derives the
-		// same per-group key so Razorpay dedups it. #574.
-		IdempotencyKey: HoldPayoutIdempotencyKey("group", g.ID),
-	})
-	if err != nil {
-		return fmt.Errorf("hold group payout: %w", err)
-	}
-	g.PayoutTransferID = tr.ID
-	g.CommissionRate = rate // #547: freeze the rate this transfer was sized at
-	if err := tx.Model(&models.GroupOrder{}).Where("id = ?", g.ID).
-		Updates(map[string]any{"payout_transfer_id": tr.ID, "commission_rate": rate}).Error; err != nil {
-		return err
-	}
-	auditTransferMovement(auditTransferHold, aggTypeGroupOrder, g.ID, tr.ID, heldPaise, "group order confirmed — chef payout held")
-	return nil
-}
-
-// ReleaseGroupChefPayout releases the held transfer. Since #456 no delivery path
-// calls this directly (delivery parks a hold instead); it is the seam the admin
-// payout queue drives off release_eligible. Flag-gated on payoutMovementEnabled()
-// (#456 P0 stop-the-bleed) — OFF ⇒ no money moves.
-func ReleaseGroupChefPayout(g *models.GroupOrder) error {
-	if !payoutMovementEnabled() {
-		return nil
-	}
-	if g.PayoutTransferID == "" {
-		return nil
-	}
-	rz := GetRazorpayFor(g.Mode)
-	if rz == nil {
-		return nil // gateway unconfigured — nothing to release
-	}
-	if _, err := rz.ReleaseTransfer(g.PayoutTransferID); err != nil {
-		if isAlreadyReleasedErr(err) {
-			return nil // idempotent re-drive — no new money moved, no audit
-		}
-		return fmt.Errorf("release group payout %s: %w", g.PayoutTransferID, err)
-	}
-	auditTransferMovement(auditTransferRelease, aggTypeGroupOrder, g.ID, g.PayoutTransferID, 0, "group order delivered — chef payout released")
-	return nil
-}
-
-// ReverseGroupChefPayout claws the held transfer back to the platform on cancel.
-// Flag-gated on payoutMovementEnabled() (#456) — OFF ⇒ no money moves. Returns a real
-// gateway error (tolerating an already-reversed transfer) so settlePayout does NOT
-// stamp payout_settled_at on a failed claw-back — the reconcile cron then re-drives it
-// (#508). Previously it swallowed the error, silently stranding a chef net-paid.
-func ReverseGroupChefPayout(g *models.GroupOrder) error {
-	if !payoutMovementEnabled() {
-		return nil
-	}
-	if g.PayoutTransferID == "" {
-		return nil
-	}
-	rz := GetRazorpayFor(g.Mode)
-	if rz == nil {
-		return nil
-	}
-	if _, err := rz.ReverseTransfer(g.PayoutTransferID, 0); err != nil {
-		if isAlreadyReversedErr(err) {
-			return nil // idempotent re-drive — no new money moved, no audit
-		}
-		return fmt.Errorf("group-order: reverse payout %s: %w", g.PayoutTransferID, err)
-	}
-	auditTransferMovement(auditTransferReverse, aggTypeGroupOrder, g.ID, g.PayoutTransferID, 0, "group order cancelled/refunded — chef payout clawed back")
-	return nil
-}
-
 // ReverseGroupHoldForCancel drives a CANCELLED group order's chef payout hold to
-// reversed and claws back the held direct transfer (#456 W-A — replaces the old
-// unconditional pre-tx ReverseGroupChefPayout in the cancel handler). Self-guards on
-// status==cancelled, so it is safe to call on BOTH the cancel success path AND the
-// already-cancelled conflict/retry path (crash-window recovery) and NEVER reverses a
-// delivered group. The status transition is a guarded conditional UPDATE (idempotent:
-// a second call no-ops once the hold is terminal), and settleReverse runs the
-// flag-gated reverse seam (ReverseGroupChefPayout, keyed on PayoutTransferID) +
-// stamps payout_settled_at. The group chef transfer is a DIRECT transfer that the
-// participant wallet refunds do NOT auto-reverse, so this explicit reverse is required.
+// reversed (#456 W-A). Self-guards on status==cancelled, so it is safe to call on
+// BOTH the cancel success path AND the already-cancelled conflict/retry path
+// (crash-window recovery) and NEVER reverses a delivered group. The transition is a
+// guarded conditional UPDATE (idempotent: a second call no-ops once the hold is
+// terminal), and settleReverse stamps payout_settled_at. The chef is paid for a
+// group order on the statement path, which this reversed hold keeps it off.
 func ReverseGroupHoldForCancel(db *gorm.DB, groupID uuid.UUID, reason string) error {
 	var g models.GroupOrder
 	if err := db.Select("status", "payout_hold_status").First(&g, "id = ?", groupID).Error; err != nil {

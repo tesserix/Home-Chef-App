@@ -119,19 +119,3 @@ func TestStampPayoutSettled_ConditionalOnce(t *testing.T) {
 	require.NotNil(t, second)
 	require.WithinDuration(t, *first, *second, time.Millisecond, "second stamp must not overwrite the original timestamp")
 }
-
-// ReleaseDayPayout re-drive is idempotent: two calls both return nil (no error).
-//
-// The harness bound: GetRazorpay() is nil when MealPlanEscrowEnabled is off, so the
-// call no-ops at the flag guard — this test asserts the no-error CONTRACT the
-// reconcile depends on (a re-drive of a released day never errors), not gateway-level
-// dedupe. The durable idempotency guard is payout_settled_at IS NULL (a settled day
-// is never re-picked); the gateway "already released" tolerance is the second layer.
-func TestReleaseDayPayout_IdempotentRedrive(t *testing.T) {
-	db := setupHoldDB(t)
-	day := &models.MealPlanDay{ID: uuid.New(), PayoutTransferID: "trf_redrive_1"}
-
-	// Escrow flag off (default nil config) → ReleaseDayPayout is a no-op guard.
-	require.NoError(t, ReleaseDayPayout(db, day))
-	require.NoError(t, ReleaseDayPayout(db, day), "re-driving a released day must not error")
-}

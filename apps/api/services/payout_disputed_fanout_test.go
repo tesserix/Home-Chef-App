@@ -203,7 +203,7 @@ func TestMarkRefundedDayHold_Withheld(t *testing.T) {
 	} {
 		dayID := seedCrossDay(t, db, hold, nil)
 		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-			return reverseRefundedDayHold(tx, dayID, true)
+			return reverseRefundedDayHold(tx, dayID)
 		}))
 		require.Equal(t, models.PayoutHoldWithheld, loadDayHold(t, db, dayID), "%s → withheld", hold)
 	}
@@ -217,7 +217,7 @@ func TestMarkRefundedDayHold_ReleasedReversedAndSettled(t *testing.T) {
 	dayID := seedCrossDay(t, db, models.PayoutHoldReleased, nil)
 
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-		return reverseRefundedDayHold(tx, dayID, true)
+		return reverseRefundedDayHold(tx, dayID)
 	}))
 	require.Equal(t, models.PayoutHoldReversed, loadDayHold(t, db, dayID))
 	var settled *time.Time

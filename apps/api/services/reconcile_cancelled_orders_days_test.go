@@ -120,6 +120,20 @@ func TestReconcileRefundedDays_DrivesStrandedHold(t *testing.T) {
 	require.Equal(t, 0, reconcileRefundedDays())
 }
 
+// A refunded day with no transfer id is now a target too: no day holds a transfer
+// since #1086, and a parked hold the admin queue can still release is the strand.
+func TestReconcileRefundedDays_DrivesDayWithNoTransferID(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+
+	id := seedCrossDay(t, db, models.PayoutHoldAwaitingConfirmation, nil)
+	setDayStatus(t, db, id, models.MealPlanDayRefunded)
+	clearDayTransfer(t, db, id)
+
+	require.Equal(t, 1, reconcileRefundedDays())
+	require.Equal(t, models.PayoutHoldWithheld, loadDayHold(t, db, id))
+}
+
 func TestReconcileRefundedDays_SkipsNonTargets(t *testing.T) {
 	flagsOff(t)
 	db := setupCrossguardDB(t)
@@ -129,13 +143,7 @@ func TestReconcileRefundedDays_SkipsNonTargets(t *testing.T) {
 	setDayStatus(t, db, rev, models.MealPlanDayRefunded)
 	// delivered (not refunded/cancelled) → skip
 	del := seedCrossDay(t, db, models.PayoutHoldAwaitingConfirmation, nil) // seed leaves status=delivered
-	// refunded but no held transfer → nothing stranded, skip
-	noTrf := seedCrossDay(t, db, models.PayoutHoldAwaitingConfirmation, nil)
-	setDayStatus(t, db, noTrf, models.MealPlanDayRefunded)
-	clearDayTransfer(t, db, noTrf)
-
 	require.Equal(t, 0, reconcileRefundedDays())
 	require.Equal(t, models.PayoutHoldReversed, loadDayHold(t, db, rev))
 	require.Equal(t, models.PayoutHoldAwaitingConfirmation, loadDayHold(t, db, del))
-	require.Equal(t, models.PayoutHoldAwaitingConfirmation, loadDayHold(t, db, noTrf))
 }

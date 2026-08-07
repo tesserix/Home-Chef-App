@@ -105,15 +105,3 @@ func TestSettlePayout_MealPlanDayAndGroup(t *testing.T) {
 	require.NoError(t, db.Raw(`SELECT payout_settled_at FROM group_orders WHERE id = ?`, groupID.String()).Scan(&grpAt).Error)
 	require.True(t, grpAt.Valid, "released group order settled")
 }
-
-func TestIsAlreadyReversedErr(t *testing.T) {
-	require.False(t, isAlreadyReversedErr(nil))
-	for _, msg := range []string{"transfer already reversed", "Fully Reversed", "not_reversible"} {
-		require.True(t, isAlreadyReversedErr(errorString(msg)), msg)
-	}
-	require.False(t, isAlreadyReversedErr(errorString("network timeout")))
-}
-
-type errorString string
-
-func (e errorString) Error() string { return string(e) }
