@@ -967,6 +967,9 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			// so Cashfree dedups it — here natively, since the key becomes the
 			// refund_id itself rather than a header. #574.
 			IdempotencyKey: services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(priorRefunded)),
+			// Without this the platform refunds the chef's share out of its own
+			// balance on an Easy Split order, with nothing left to recover it from.
+			Splits: services.BuildRefundSplits(&order, services.ToPaise(priorRefunded), services.ToPaise(refundAmount)),
 		})
 		if err != nil {
 			log.Printf("Failed to create Cashfree refund for order %s: %v", order.OrderNumber, err)
