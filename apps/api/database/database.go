@@ -477,6 +477,10 @@ func Migrate() error {
 		return fmt.Errorf("gateway id column migration failed: %w", err)
 	}
 
+	if err := dropRetiredGatewayColumns(DB, retiredGatewayColumns()); err != nil {
+		return fmt.Errorf("retired gateway column drop failed: %w", err)
+	}
+
 	if err := normalizeConfiguredProviders(DB); err != nil {
 		return err
 	}

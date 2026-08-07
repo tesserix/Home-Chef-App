@@ -85,6 +85,8 @@ func isRetiredGatewayNameExempt(path string) bool {
 		"database/gateway_id_backfill.go",
 		"database/gateway_id_backfill_test.go",
 		"database/gateway_id_backfill_pg_test.go",
+		"database/retired_gateway_columns.go",
+		"database/retired_gateway_columns_test.go",
 		"database/chef_provider_repair_test.go",
 		"services/gateway_select_cashfree_only_test.go",
 		"handlers/tips_cashfree_only_test.go",
