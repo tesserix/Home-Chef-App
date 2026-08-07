@@ -689,6 +689,10 @@ type CashfreeRefundRequest struct {
 	// IdempotencyKey is the LOGICAL operation id. json:"-" — it becomes both the
 	// refund_id and the x-idempotency-key header, never a body field of its own.
 	IdempotencyKey string `json:"-"`
+	// Splits charges part of the refund back to an Easy Split vendor. Omitted
+	// entirely for a full-capture order, where the platform bears the whole
+	// refund because it received the whole payment. See BuildRefundSplits.
+	Splits []CashfreeRefundSplit `json:"refund_splits,omitempty"`
 }
 
 // CashfreeRefund is the created (or fetched) refund.
