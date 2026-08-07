@@ -29,6 +29,9 @@ const (
 	// CashfreeVendorInBankValidation is undocumented but real: the sandbox
 	// returns it while penny-dropping the account (#1082).
 	CashfreeVendorInBankValidation = "IN_BANK_VALIDATION"
+	// CashfreeVendorBankValidationFailed is a refusal, not a stage: the penny
+	// drop bounced and nothing about it resolves on its own (#1083).
+	CashfreeVendorBankValidationFailed = "BANK_VALIDATION_FAILED"
 )
 
 type CashfreeVendorBank struct {
