@@ -17,12 +17,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCartStore } from "@/app/store/cart-store";
-import { useAuth } from "@/app/providers/AuthProvider";
 import { apiClient } from "@/shared/services/api-client";
 import { useFormatPrice } from "@/shared/utils/format-price";
 import { loadStripeJs } from "@/shared/utils/load-stripe";
 import { openCashfreeCheckout } from "@/shared/utils/cashfree";
-import { resolveCssVarColor } from "@/shared/utils/css-color";
 import { Button } from "@/shared/components/ui";
 import { earliestBakeryFulfillment } from "@homechef/mobile-shared/bakery";
 import type { Order, Address } from "@/shared/types";
@@ -127,7 +125,6 @@ function slotDayLabel(dateStr: string): string {
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const cart = useCartStore();
   const fp = useFormatPrice();
   const queryClient = useQueryClient();
@@ -299,11 +296,9 @@ export default function CheckoutPage() {
   const gatewayName =
     quote?.paymentProvider === "cashfree"
       ? "Cashfree"
-      : quote?.paymentProvider === "razorpay"
-        ? "Razorpay"
-        : quote?.paymentProvider === "stripe"
-          ? "Stripe"
-          : null;
+      : quote?.paymentProvider === "stripe"
+        ? "Stripe"
+        : null;
   // What the chef actually offers. Both come from the quote the page already
   // fetches, so there is no second round-trip. offersDelivery is the computed
   // capability CreateOrder gates on (chef self-delivers OR a 3PL provider is
@@ -509,17 +504,8 @@ export default function CheckoutPage() {
       });
 
       // Step 2: Ask the backend to prepare a payment. The response shape
-      // varies by provider — `provider: "razorpay"` returns a Razorpay
-      // order id + key id; `provider: "stripe"` returns a PaymentIntent
+      // varies by provider — `provider: "stripe"` returns a PaymentIntent
       // clientSecret + publishable key.
-      type RazorpayPayment = {
-        provider: "razorpay";
-        paid?: boolean;
-        razorpayOrderId: string;
-        razorpayKeyId: string;
-        amount: number;
-        currency: string;
-      };
       type StripePayment = {
         provider: "stripe";
         paid?: boolean;
@@ -550,7 +536,7 @@ export default function CheckoutPage() {
       // is what is charged. Posting an amount is what would let the screen show
       // one figure while the gateway took another.
       const paymentData = await apiClient.post<
-        RazorpayPayment | CashfreePayment | StripePayment | WalletPayment
+        CashfreePayment | StripePayment | WalletPayment
       >(`/payments/order/${order.id}/create`, credit);
 
       if (paymentData.provider === "wallet" || paymentData.paid) {
@@ -565,7 +551,12 @@ export default function CheckoutPage() {
       } else if (paymentData.provider === "cashfree") {
         await confirmCashfreePayment(order, paymentData);
       } else {
-        await confirmRazorpayPayment(order, paymentData);
+        // Never silently fall through to a gateway. This branch used to open
+        // Razorpay, so an unrecognised provider took the customer to a modal
+        // keyed on credentials the API no longer issues (#1086).
+        throw new Error(
+          "We couldn't start the payment for this order. Please contact support.",
+        );
       }
     } catch (e: unknown) {
       // Surface a promo failure specifically (e.g. the code was exhausted between
@@ -597,54 +588,6 @@ export default function CheckoutPage() {
     }
   };
 
-  const confirmRazorpayPayment = async (
-    order: Order,
-    paymentData: {
-      razorpayOrderId: string;
-      razorpayKeyId: string;
-      amount: number;
-      currency: string;
-    },
-  ) => {
-    if (!window.Razorpay) {
-      toast.error("Payment gateway is loading. Please try again.");
-      return;
-    }
-    const options: RazorpayOptions = {
-      key: paymentData.razorpayKeyId,
-      amount: paymentData.amount,
-      currency: paymentData.currency,
-      name: "Fe3dr",
-      description: `Order from ${cart.chef?.businessName || "Home Chef"}`,
-      order_id: paymentData.razorpayOrderId,
-      prefill: {
-        name: user?.name || "",
-        email: user?.email || "",
-      },
-      // Resolve --herb at runtime so a theme change ripples to Razorpay's
-      // hosted checkout. Falls back to a static herb-equivalent hex if the
-      // CSS var is unavailable (SSR / older browsers without oklch).
-      theme: { color: resolveCssVarColor("--herb", "#3e6b3c") },
-      handler: async (response) => {
-        try {
-          await apiClient.post(`/payments/order/${order.id}/verify`, {
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpayOrderId: response.razorpay_order_id,
-            razorpaySignature: response.razorpay_signature,
-          });
-          cart.clearCart();
-          toast.success("Payment successful!");
-          navigate(`/orders/${order.id}`);
-        } catch {
-          toast.error("Payment verification failed. Please contact support.");
-        }
-      },
-      modal: {
-        ondismiss: () => toast.error("Payment cancelled"),
-      },
-    };
-    new window.Razorpay(options).open();
-  };
 
   // Open the Cashfree modal, then let the SERVER decide whether it was paid.
   //
@@ -1408,16 +1351,11 @@ export default function CheckoutPage() {
                 <Shield className="h-5 w-5 text-herb" aria-hidden="true" />
                 Payment
               </h2>
+              {/* The aggregator's own glyph was hotlinked here — a Razorpay
+                  logo, requested from razorpay.com, on a screen Cashfree
+                  charges (#933, #1086). The disclosure below names the real
+                  processor; a mark fetched from a third party adds nothing. */}
               <div className="mt-4 flex items-center gap-3 rounded-lg border border-mist bg-paper p-4">
-                <img
-                  src="https://razorpay.com/assets/razorpay-glyph.svg"
-                  alt="Razorpay"
-                  width={24}
-                  height={24}
-                  loading="lazy"
-                  decoding="async"
-                  className="h-6 w-6 shrink-0"
-                />
                 <div>
                   <p className="text-sm font-medium text-ink">
                     {gatewayName

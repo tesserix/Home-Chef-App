@@ -9,9 +9,11 @@
 // so an unknown or missing value must never fall back to guessing a brand: it
 // drops to wording that is true regardless.
 
+// Razorpay is deliberately absent (#1086): it can no longer take a payment, so a
+// stale or replayed `razorpay` drops to the neutral wording rather than naming a
+// processor that will not touch the money — which is the defect above, inverted.
 const DISPLAY_NAMES: Record<string, string> = {
   cashfree: 'Cashfree',
-  razorpay: 'Razorpay',
   stripe: 'Stripe',
 };
 

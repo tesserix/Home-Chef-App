@@ -4,7 +4,6 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { Button } from '@/shared/components/ui';
-import { openRazorpayCheckout } from '@/shared/utils/razorpay';
 import { openCashfreeCheckout } from '@/shared/utils/cashfree';
 import {
   apiErrorMessage,
@@ -117,30 +116,15 @@ export default function MealPlanDetailPage() {
         });
         return;
       }
-      if (!res.razorpayOrderId || !res.razorpayKeyId) {
+      if (!res.razorpayOrderId) {
         // Escrow off — approval alone confirms the plan, nothing to charge.
         toast.success('Plan confirmed.');
         return;
       }
-      openRazorpayCheckout({
-        data: {
-          razorpayOrderId: res.razorpayOrderId,
-          razorpayKeyId: res.razorpayKeyId,
-          amount: Math.round((res.mealPlan?.total ?? plan.total) * 100),
-          currency: plan.currency ?? 'INR',
-        },
-        description: `Meal plan ${plan.mealPlanNumber}`,
-        onVerified: async (resp) => {
-          await verify.mutateAsync({
-            id,
-            razorpayOrderId: resp.razorpay_order_id,
-            razorpayPaymentId: resp.razorpay_payment_id,
-            razorpaySignature: resp.razorpay_signature,
-          });
-          toast.success('Paid — your plan is confirmed.');
-        },
-        onDismiss: () => setPaying(false),
-      });
+      // An advance was minted but no Cashfree session came back. Since #1086
+      // there is no second rail to fall back to, so say so instead of leaving
+      // the customer on a screen that looks like it is still working.
+      throw new Error('Could not open the payment for this plan.');
     } catch (err) {
       toast.error(apiErrorMessage(err) || 'Could not start the payment. Please try again.');
     } finally {

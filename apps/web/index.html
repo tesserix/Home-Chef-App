@@ -5,12 +5,12 @@
 
     <!--
       Content Security Policy — narrowly scoped allowlist.
-      script-src: self for our Vite bundles + Razorpay Checkout SDK.
+      script-src: self for our Vite bundles + the Cashfree Checkout SDK.
       style-src 'unsafe-inline' is required for runtime-injected styles
       (Tailwind utility classes via JIT, Radix UI portal styles, etc.).
       connect-src covers our API + WebSockets + identity BFF.
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-IuIFVLrle2VVlRh5Awd5R2tmobZwk9pnuQ45xrMXu2k=' https://checkout.razorpay.com https://*.razorpay.com https://sdk.cashfree.com https://*.cashfree.com https://accounts.google.com https://apis.google.com https://www.gstatic.com https://*.firebaseapp.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://storage.googleapis.com https://*.razorpay.com https://*.cashfree.com https://lh3.googleusercontent.com https:; connect-src 'self' https://accounts.google.com https://api.fe3dr.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com wss://api.fe3dr.com wss://fe3dr.com https://lumberjack.razorpay.com https://*.razorpay.com https://sdk.cashfree.com https://*.cashfree.com; frame-src https://api.razorpay.com https://*.razorpay.com https://*.cashfree.com https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self' https://*.cashfree.com https://*.razorpay.com" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-IuIFVLrle2VVlRh5Awd5R2tmobZwk9pnuQ45xrMXu2k=' https://sdk.cashfree.com https://*.cashfree.com https://accounts.google.com https://apis.google.com https://www.gstatic.com https://*.firebaseapp.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://storage.googleapis.com https://*.cashfree.com https://lh3.googleusercontent.com https:; connect-src 'self' https://accounts.google.com https://api.fe3dr.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com wss://api.fe3dr.com wss://fe3dr.com https://sdk.cashfree.com https://*.cashfree.com; frame-src https://*.cashfree.com https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self' https://*.cashfree.com" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
 
@@ -83,8 +83,6 @@
          when the user has explicitly chosen Light. -->
     <script>(function(){try{var t=localStorage.getItem('hc-theme');var d=t==='dark'||(t==='auto'||!t)&&window.matchMedia('(prefers-color-scheme: dark)').matches;var r=document.documentElement;r.classList.toggle('dark',d);r.classList.toggle('light',!d);r.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
 
-    <!-- Razorpay Checkout SDK -->
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   </head>
   <body>
     <div id="root"></div>

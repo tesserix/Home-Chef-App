@@ -197,7 +197,7 @@ export function useMealPlan(id: string | undefined) {
   });
 }
 
-/** The create response: when escrow is on the server returns a Razorpay order to
+/** The create response: when escrow is on the server mints a gateway order to
  *  collect the full advance before the chef is notified; when it's off only the
  *  plan comes back (unpaid handshake). `paymentError` flags an escrow-on plan the
  *  server couldn't attach a payment order to. */
@@ -205,9 +205,8 @@ export interface CreateMealPlanResponse {
   mealPlan: MealPlan;
   escrowEnabled?: boolean;
   razorpayOrderId?: string;
-  razorpayKeyId?: string;
   paymentError?: string;
-  /** Which gateway minted the advance. Absent on older servers → treat as razorpay. */
+  /** Which gateway minted the advance. */
   provider?: string;
   /** Cashfree handshake. The session id is short-lived and re-minted per approval. */
   cashfreeOrderId?: string;
@@ -226,7 +225,7 @@ export interface MealPlanAdvanceBreakdown {
 
 /** The EXACT advance a customer is charged for a created plan, split for display.
  *  Uses the SERVER `plan.total` (food + GST + per-day delivery) — never the food-only
- *  selection sum — so the amount shown before checkout equals the Razorpay charge to
+ *  selection sum — so the amount shown before checkout equals the gateway charge to
  *  the paise (#402: the booking footer shows food only; the server adds GST + delivery).
  *  Delivery is derived (total − food − GST) since the server folds it into total.
  *  When escrow is off the server returns total == subtotal, so gst/delivery are 0. */
@@ -279,28 +278,6 @@ export function useCreateMealPlan() {
     mutationFn: (body: { chefId: string; days: CreateMealPlanDay[] }) =>
       api
         .post<CreateMealPlanResponse>('/v1/meal-plans', body)
-        .then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
-  });
-}
-
-/** Confirm the advance payment for a meal plan after Razorpay checkout (escrow). */
-export function useVerifyMealPlanPayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: {
-      id: string;
-      razorpayPaymentId: string;
-      razorpaySignature: string;
-    }) =>
-      api
-        .post<{ mealPlan: MealPlan }>(
-          `/v1/meal-plans/${vars.id}/verify-payment`,
-          {
-            razorpayPaymentId: vars.razorpayPaymentId,
-            razorpaySignature: vars.razorpaySignature,
-          },
-        )
         .then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
   });
@@ -390,9 +367,9 @@ export function canCancelMealPlan(plan: Pick<MealPlan, 'status' | 'days'>): bool
 export function useFinalizeMealPlan() {
   const qc = useQueryClient();
   return useMutation({
-    // Approve (escrow on) returns the Razorpay advance order for the accepted days
-    // so the app can launch checkout — payment now happens AFTER approval, not at
-    // create. Reject (and escrow-off approve) return just the plan.
+    // Approve (escrow on) returns the advance order for the accepted days so the
+    // app can launch checkout — payment now happens AFTER approval, not at create.
+    // Reject (and escrow-off approve) return just the plan.
     mutationFn: (vars: { id: string; approve: boolean }) =>
       api
         .put<CreateMealPlanResponse>(
