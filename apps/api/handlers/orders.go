@@ -1269,7 +1269,7 @@ func (h *OrderHandler) GetOrderInvoicePDF(c *gin.Context) {
 // Security: verifies the authenticated customer owns the order before upgrading (T-04-03).
 func (h *OrderHandler) TrackOrderWS(c *gin.Context) {
 	orderID := c.Param("id")
-	deliveryID, ok := resolveTrackedDeliveryID(c)
+	deliveryID, fulfillment, ok := resolveTrackedDeliveryID(c)
 	if !ok {
 		return
 	}
@@ -1298,7 +1298,7 @@ func (h *OrderHandler) TrackOrderWS(c *gin.Context) {
 	}()
 
 	// Subscribe to core NATS (not JetStream) for live location fan-out.
-	stop, err := subscribeTracking(orderID, deliveryID, func(data []byte) {
+	stop, err := subscribeTracking(orderID, deliveryID, trackingAwaitsDriver(fulfillment), func(data []byte) {
 		select {
 		case writeCh <- data:
 		default:

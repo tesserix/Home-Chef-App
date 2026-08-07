@@ -70,6 +70,7 @@ import {
 import { startOrderPayment } from "../lib/payment";
 import { friendlyErrorMessage } from "../lib/errors";
 import { paymentSecuredByLine } from "../lib/payment-provider";
+import { getEtaLine } from "../lib/orderSteps";
 import { useFormDraft } from "@homechef/mobile-shared/hooks";
 import { AddressLabelSelect } from "../components/address/AddressLabelSelect";
 import type { Address } from "../types/customer";
@@ -2102,7 +2103,7 @@ export default function CheckoutScreen() {
               style={{ marginTop: 1 }}
             />
             <Text className="text-sm text-charcoal-soft flex-1 leading-5">
-              Estimated delivery 30–45 min after the chef accepts.
+              {getEtaLine(fulfillment)}
             </Text>
           </View>
           <Text className="text-xs text-charcoal-soft leading-5">
