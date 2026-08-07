@@ -18,6 +18,10 @@ const (
 	EntryCreditAdjustment     EntryKind = "credit.adjustment"
 	EntryCreditPayoutReversed EntryKind = "credit.payout_reversed"
 	EntryCreditReserveRelease EntryKind = "credit.reserve_release"
+	// EntryCreditRecoveryCollected discharges the part of a debt that was
+	// actually withheld from a payout. Without it a debt is re-derived in full
+	// and re-collected from every later payout — see CollectRecoveryDeduction.
+	EntryCreditRecoveryCollected EntryKind = "credit.recovery_collected"
 
 	// Debits — amounts withheld from the payee.
 	EntryDebitPayout     EntryKind = "debit.payout"

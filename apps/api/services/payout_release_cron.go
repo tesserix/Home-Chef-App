@@ -117,19 +117,12 @@ func BuildReleaseInput(db *gorm.DB, order *models.Order, now time.Time) (payouts
 		return payouts.ReleaseInput{}, err
 	}
 
-	// LANDMINE: this is one of TWO uncoordinated places that act on the same
-	// non-discharging recovery debt (services/payout_recovery.go — nothing
-	// anywhere writes a resolving ledger entry, so ApplyRecoveryDeduction
-	// re-derives the SAME full outstanding balance every time it is called).
-	// The other is handlers/payment.go's applyChefRecoveryDeduction, which
-	// already reduced this same chef's gross transfer for a PRIOR order at
-	// checkout. Neither site knows the other exists or discharges anything, so
-	// today the debt can be independently deducted-from-transfer here-and-there
-	// AND block-release here, against the identical outstanding figure. No
-	// penalty/ledger writer may ship until exactly one of these two mechanisms
-	// actually collects-and-discharges the debt and the other defers to it —
-	// do not add a third site, and do not wire a discharging writer to only one
-	// of the two without also fixing the other.
+	// Reads, never collects (#1079). ApplyChefRecoveryDeduction is the only site
+	// that withholds money and therefore the only one that discharges; this
+	// figure exists to tell the governor whether to block, and once the debt is
+	// collected there it stops appearing here. Do not swap this for
+	// CollectRecoveryDeduction — a debt collected by merely evaluating a release
+	// is a debt the chef never actually paid.
 	gross := payouts.Money{Minor: int64(ToPaise(ChefNetPayoutFor(order))), Currency: payouts.CurrencyINR}
 	_, deducted, err := ApplyRecoveryDeduction(db, order.ChefID, gross, now)
 	if err != nil {
@@ -319,7 +312,7 @@ type PayoutBlockEvent struct {
 // a recovery balance, the new-chef ramp, above the review threshold) and must
 // always surface, even alongside a suppressed reason.
 var payoutBlockNoiseReasons = map[payouts.BlockReason]bool{
-	payouts.BlockNotMatured:     true,
+	payouts.BlockNotMatured:    true,
 	payouts.BlockAutomationOff: true,
 }
 
