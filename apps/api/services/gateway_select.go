@@ -15,18 +15,15 @@ import (
 //  1. What gateway should a NEW kitchen be created with? →
 //     models.PreferredChefPaymentProvider (Cashfree).
 //  2. What gateway should THIS checkout actually use? → SelectCheckoutGateway,
-//     which prefers Cashfree for every INR kitchen and degrades to Razorpay
-//     rather than failing when Cashfree has no usable credentials for the mode.
+//     which is Cashfree for every INR kitchen and Stripe for the international
+//     ones. There is no third answer since #1086.
 //
-// The degradation is not defensive padding; it is load-bearing given how Cashfree
-// separates environments. Cashfree picks sandbox-vs-production by HOSTNAME, so a
-// set of test credentials authenticates against sandbox.cashfree.com and returns
-// 401 against api.cashfree.com. A platform whose live Cashfree slot is not yet
-// provisioned with real live keys — the normal state while the merchant account is
-// still in review — would therefore 503 every live checkout the moment Cashfree
-// became the default. Falling back to Razorpay keeps real money flowing while the
-// live slot is finished, which is exactly what "Cashfree preferred, Razorpay still
-// an option" has to mean in practice.
+// The slot-health machinery below survives the Razorpay removal because Cashfree
+// picks sandbox-vs-production by HOSTNAME: test credentials authenticate against
+// sandbox.cashfree.com and 401 against api.cashfree.com, so a slot can be fully
+// configured and still not work. It no longer changes WHICH gateway is chosen —
+// it names the failure for the operator instead of leaving a run of unexplained
+// 500s on the checkout endpoint.
 
 // SelectCheckoutGateway resolves the provider for a new payment on an order in
 // the given mode.
@@ -57,15 +54,15 @@ func SelectCheckoutGateway(configured, mode string) string {
 	// the order, and refunds, reconciliation and payout guards all read that. A
 	// chef moving to Cashfree today does not disturb a single order taken
 	// yesterday.
-	if cashfreeUsableFor(mode) {
-		return models.PaymentProviderCashfree
+	//
+	// There is no longer a fallback (#1086). An unusable slot now fails at the
+	// Cashfree call — loudly, where the failure is — instead of quietly minting
+	// an order on a gateway the platform is retiring and would have to refund
+	// and reconcile separately for the rest of its life.
+	if !cashfreeUsableFor(mode) {
+		log.Printf("gateway-select: cashfree[%s] is unusable — this checkout will fail rather than fall back", mode)
 	}
-
-	// Loud on purpose. A silent downgrade would mean the platform quietly
-	// stopped using its preferred gateway and nobody noticed until a
-	// reconciliation looked odd.
-	log.Printf("gateway-select: cashfree[%s] unusable — falling back to razorpay for this checkout", mode)
-	return models.PaymentProviderRazorpay
+	return models.PaymentProviderCashfree
 }
 
 // cashfreeGatewayBreaker records a slot that has just failed to create an order,
@@ -74,10 +71,8 @@ func SelectCheckoutGateway(configured, mode string) string {
 // This exists because of a real, current state: credentials can be present and
 // still not work. Cashfree separates sandbox from production by hostname, so a
 // live slot holding test credentials resolves to a perfectly valid client that
-// then 401s. With Cashfree as the platform default, EVERY checkout would spend a
-// gateway round-trip discovering that before falling back — added latency on the
-// customer's critical path, and an error log line per order that would bury real
-// failures.
+// then 401s. Without the breaker EVERY checkout would spend a gateway round-trip
+// rediscovering that, and log a line per order that would bury real failures.
 //
 // Deliberately short: this is a circuit breaker, not a health cache. A slot that
 // starts working (real live keys are entered) must be picked up within a minute
@@ -88,16 +83,12 @@ const cashfreeGatewayCooldown = 90 * time.Second
 
 // cashfreeUsableFor reports whether Cashfree should be tried for this mode.
 //
-// "Configured" is NOT the same as "will work", and the difference is visible to
-// customers. The delivery quote calls this to decide which payment aggregator to
-// name in the RBI PA disclosure on the checkout screen — a regulatory statement
-// about who processes the money. If this answered optimistically and the charge
-// then fell back to Razorpay, the page would have named the wrong aggregator.
-//
+// "Configured" is NOT the same as "will work": a slot holding the wrong
+// environment's credentials resolves to a perfectly valid client that then 401s.
 // So a slot is only usable once it has been PROVED usable: presence, then the
-// breaker, then a real health check whose result is cached for the same cooldown
+// breaker, then a real health check whose result is cached for the cooldown
 // window. The check costs one cheap authenticated request per mode per 90s, not
-// one per checkout, and it is what makes the quote and the charge agree.
+// one per checkout.
 func cashfreeUsableFor(mode string) bool {
 	c := GetCashfreeFor(mode)
 	if c == nil {
@@ -134,10 +125,10 @@ type cashfreeHealthResult struct {
 var cashfreeHealth sync.Map // mode -> cashfreeHealthResult
 
 // NoteCashfreeGatewayFailure opens the breaker for a mode after a failed order
-// creation, so subsequent checkouts skip straight to the fallback.
+// creation, so subsequent checkouts do not re-probe a slot known to be down.
 //
 // Called only from the create path, and only on a failure that has already been
-// handled — it changes which gateway later customers are offered, never the
+// handled — it suppresses the repeated probe for later checkouts, never the
 // outcome of the payment in front of us.
 func NoteCashfreeGatewayFailure(mode string) {
 	mode = models.NormalizeMode(mode)
@@ -150,21 +141,11 @@ func NoteCashfreeGatewayFailure(mode string) {
 }
 
 // DefaultChefPaymentProvider is the provider to stamp on a newly created chef
-// profile.
-//
-// It returns the preferred gateway only when that gateway is actually configured
-// for the chef's mode; otherwise Razorpay. Stamping a provider the platform cannot
-// serve would leave a brand-new kitchen unable to take a payment until an admin
-// noticed — and the chef, not the admin, is the one who sees the failure.
-//
-// Note this reads the LIVE slot for a live chef and the TEST slot for a test one,
-// so a platform with only sandbox Cashfree credentials creates test kitchens on
-// Cashfree and live kitchens on Razorpay. That is the correct behaviour, not a
-// compromise: it is precisely the state of a merchant account still in review.
-func DefaultChefPaymentProvider(mode string) string {
-	if models.PreferredChefPaymentProvider == models.PaymentProviderCashfree &&
-		cashfreeUsableFor(mode) {
-		return models.PaymentProviderCashfree
-	}
-	return models.PaymentProviderRazorpay
+// profile — the preferred one, which since #1086 is the only one an INR kitchen
+// can charge on. It used to consult the slot's health and stamp Razorpay when
+// Cashfree was unusable; there is nothing to stamp instead now, and a mode whose
+// slot is unprovisioned is an operator problem to fix rather than a reason to
+// create kitchens on a retiring gateway.
+func DefaultChefPaymentProvider(_ string) string {
+	return models.PreferredChefPaymentProvider
 }

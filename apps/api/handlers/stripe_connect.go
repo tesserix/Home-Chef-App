@@ -462,7 +462,7 @@ func (h *StripeConnectHandler) SetPaymentProvider(c *gin.Context) {
 	// hide a misconfiguration the operator needs to see.
 	if !models.IsSelectableChefProvider(req.Provider) {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "provider must be one of 'razorpay', 'cashfree' or 'stripe'",
+			"error": "provider must be one of 'cashfree' or 'stripe'",
 		})
 		return
 	}
@@ -477,20 +477,12 @@ func (h *StripeConnectHandler) SetPaymentProvider(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Complete Stripe onboarding before switching to Stripe"})
 		return
 	}
-	if req.Provider == models.PaymentProviderRazorpay && chef.RazorpayAccountID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Complete Razorpay payout setup before switching to Razorpay"})
-		return
-	}
 	// Cashfree deliberately has NO account-onboarding precondition. It captures to
 	// the platform merchant account and splits nothing at the gateway, so there is
 	// no per-chef payee to register first — the chef's money is settled through the
 	// statement/payout path. Requiring a linked account here would block the
 	// provider from ever being selectable.
 	//
-	// The trade-off is real and worth stating: switching a chef to Cashfree takes
-	// their orders OUT of the Route escrow/hold machinery (see
-	// models.ProviderSupportsGatewaySplit), so their payouts become
-	// statement-driven. That is an operational decision, not a silent side effect.
 	if req.Provider == models.PaymentProviderCashfree {
 		if services.GetCashfreeFor(chef.Mode) == nil {
 			c.JSON(http.StatusBadRequest, gin.H{

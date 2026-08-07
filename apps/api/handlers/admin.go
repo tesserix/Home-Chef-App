@@ -1369,10 +1369,10 @@ func cashfreeSlotWarning(slot, environment, appID string) string {
 	// credentials return 401 — so live checkout would fail outright rather than
 	// quietly capture nothing.
 	//
-	// This is a normal interim state while a merchant account is still in review,
-	// which is why it is a WARNING and the save is still allowed (mirroring
-	// razorpaySlotWarning). SelectCheckoutGateway is what keeps real orders
-	// flowing meanwhile, by degrading those checkouts to Razorpay.
+	// It stays a WARNING rather than a rejection because an operator part-way
+	// through entering credentials must be able to save. There is no longer a
+	// second gateway to carry checkout while the slot is wrong (#1086), so the
+	// warning is the only signal before live orders start failing.
 	testAppID := strings.HasPrefix(strings.ToUpper(appID), "TEST")
 	switch {
 	case !models.IsTestMode(slot) && testAppID:

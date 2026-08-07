@@ -107,12 +107,10 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 		order.CommissionRate = rate // same request uses the frozen rate
 	}
 
-	// Pick the gateway from the chef's configured provider, degrading to Razorpay
-	// when the configured one has no credentials for this order's mode (see
-	// services.SelectCheckoutGateway — this is what keeps live checkout working
-	// while the preferred gateway's live slot is still being provisioned). The
-	// branch taken is also what stamps order.payment_provider, so the gateway that
-	// takes the money and the gateway a later refund goes to cannot disagree.
+	// Resolve the gateway from the chef's configured provider. The branch taken is
+	// also what stamps order.payment_provider, so the gateway that takes the money
+	// and the gateway a later refund goes to cannot disagree. The razorpay arm is
+	// unreachable since #1086 and is deleted with the rest of that gateway.
 	switch provider := services.SelectCheckoutGateway(order.Chef.PaymentProvider, order.Mode); provider {
 	case models.PaymentProviderStripe:
 		h.createStripePayment(c, &order, userID)
