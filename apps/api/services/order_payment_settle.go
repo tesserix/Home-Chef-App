@@ -10,11 +10,11 @@ package services
 //
 // This file grows across the extraction: Task 1 moves the guarded completion
 // transaction (CompletionBlockedStatuses, NotifyChefNewOrderTx,
-// CompleteOrderPaymentTx, CompleteRazorpayOrderTx, CompleteCashfreeOrderTx).
+// CompleteOrderPaymentTx, CompleteCashfreeOrderTx).
 // Task 2 adds the wallet-settlement cluster (OrderSettlements,
 // ApplyChefRecoveryDeduction, DebitOrderWallet, SettleOrderWallet). Task 3 adds
 // the two gateway-settle cores
-// (SettleCashfreeOrder, SettleRazorpayOrderFromPayment).
+// (SettleCashfreeOrder).
 
 import (
 	"errors"
@@ -114,25 +114,8 @@ func CompleteOrderPaymentTx(tx *gorm.DB, order *models.Order, updates, event map
 	return true, nil
 }
 
-// CompleteRazorpayOrderTx is the Razorpay-specific wrapper over CompleteOrderPaymentTx
-// (#395). The caller's post-tx steps (referral reward, saga, wallet DEBIT) are
-// idempotently keyed; the wallet TOP-UP transfer is NOT (see #395 follow-up) — but this
-// helper does not invoke it, and on a raced (RowsAffected==0) verify the top-up
-// recomputes the same deterministic split, so this does not add a double-transfer path.
-func CompleteRazorpayOrderTx(tx *gorm.DB, order *models.Order, method, paymentID string, amountPaise int) (bool, error) {
-	return CompleteOrderPaymentTx(tx, order,
-		map[string]interface{}{"payment_method": method, "razorpay_payment_id": paymentID},
-		map[string]interface{}{
-			"order_id":     order.ID.String(),
-			"order_number": order.OrderNumber,
-			"amount":       FromPaise(amountPaise),
-			"method":       method,
-			"provider":     "razorpay",
-		})
-}
-
 // CompleteCashfreeOrderTx is the Cashfree wrapper over the provider-generic
-// CompleteOrderPaymentTx, mirroring CompleteRazorpayOrderTx. The guarded UPDATE
+// CompleteOrderPaymentTx. The guarded UPDATE
 // inside CompleteOrderPaymentTx is what makes exactly one of a racing
 // verify/webhook/cron trio perform the pending→completed transition, so the chef push
 // and order.paid event fire once.
@@ -331,75 +314,4 @@ func SettleCashfreeOrder(order *models.Order) (bool, string, error) {
 	// (see its provider guard).
 	SettleOrderWallet(order)
 	return true, "", nil
-}
-
-// SettleRazorpayOrderFromPayment is Razorpay's counterpart to SettleCashfreeOrder
-// (#872 step 2, Task 3): the same binding-gate-then-complete-then-settle shape,
-// but it takes an ALREADY-FETCHED PaymentResponse rather than fetching it itself,
-// because HOW it is fetched differs by caller — the HTTP verify leg fetches by the
-// client-supplied payment id (rz.FetchPayment, unchanged, same Razorpay endpoint
-// hit as before this extraction); the reconcile cron has no client-supplied id, so
-// it discovers the captured payment via rz.FetchOrderPayments(order.RazorpayOrderID)
-// and passes in whichever entry is captured and bound to this order. Unifying on
-// FetchOrderPayments for both callers was considered and rejected: it would change
-// which Razorpay endpoint the HTTP verify leg calls and could match a DIFFERENT
-// captured payment than the one the client is claiming when an order has multiple
-// attempts — a real behavior change on the money-critical path.
-//
-// Message-text note: this routes the underpayment/binding-mismatch rejections
-// through ValidateCapturedPayment, so they now return the SAME generic strings
-// Cashfree already does ("Payment not captured", "Payment does not belong to this
-// order", "Payment amount does not match the expected amount") instead of the
-// bespoke ones the old inline handler check built. No test asserts on the old
-// exact text, only on HTTP status code and resulting payment_status — this
-// unifies the codebase onto ONE binding-gate implementation, and additionally
-// means a Razorpay rejection now gets ValidateCapturedPayment's log line for
-// free (a strict improvement for the cron's loud-underpayment requirement, not a
-// regression).
-func SettleRazorpayOrderFromPayment(order *models.Order, payment *PaymentResponse) (bool, string) {
-	// The gateway only captured (Total − WalletApplied − LoyaltyApplied): both
-	// store credit AND loyalty points are applied at checkout and shrink the
-	// capture identically (see CreateOrderPayment: creditPaise = wallet + points →
-	// plan.CapturePaise).
-	expectedPaise := ToPaise(order.Total) - ToPaise(order.WalletApplied) - ToPaise(order.LoyaltyApplied)
-	if expectedPaise < 0 {
-		expectedPaise = 0
-	}
-	if valid, reason := ValidateCapturedPayment(
-		payment.Status, payment.OrderID, order.RazorpayOrderID,
-		payment.Amount, expectedPaise,
-	); !valid {
-		log.Printf("razorpay settle rejected order=%s: %s (paymentOrder=%s expected=%s amount=%d expectedPaise=%d)",
-			order.OrderNumber, reason, payment.OrderID, order.RazorpayOrderID, payment.Amount, expectedPaise)
-		return false, reason
-	}
-
-	// Mark the order paid and stage the chef push + order.paid event atomically
-	// (transactional outbox). Payment already captured at the gateway, so a DB
-	// hiccup must not fail the caller — it's logged + sent to Sentry and the
-	// reconciliation cron catches any drift.
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		_, err := CompleteRazorpayOrderTx(tx, order, payment.Method, payment.ID, payment.Amount)
-		return err
-	}); err != nil {
-		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
-		CaptureBackgroundError(err)
-	} else {
-		// Referral reward (#38) on the referee's first paid order — idempotent,
-		// so a later webhook/cron for the same order won't double-pay.
-		MaybeGrantReward(database.DB, order.ID)
-		// Start the durable order saga (#122) — gated, idempotent, no-op when off.
-		StartOrderSaga(order.ID)
-		NotifyPaymentSucceeded(database.DB, order.ID)
-		// End the durable payment poll now rather than on its next tick.
-		// Best-effort: the poll reaches the same answer by itself.
-		SignalPaymentResolved(order.ID)
-	}
-
-	// Wallet-at-checkout settlement (#141): now that the gateway capture is
-	// confirmed, debit the applied store credit and top up the chef/driver portion
-	// the capture couldn't cover, from the platform balance. Idempotent; a no-op
-	// without credit.
-	SettleOrderWallet(order)
-	return true, ""
 }

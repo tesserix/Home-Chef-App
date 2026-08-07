@@ -115,11 +115,9 @@ func ResolveOrderPayment(_ context.Context, orderID uuid.UUID) (workflows.Paymen
 		switch models.NormalizeProvider(order.PaymentProvider) {
 		case models.PaymentProviderCashfree:
 			ok, msg, _ = SettleCashfreeOrder(&order)
-		case models.PaymentProviderRazorpay:
-			ok, msg = settleRazorpayFromDiscovery(&order)
 		default:
-			// Stripe and anything unrecognised: not this flow's job, exactly as
-			// the reconcile cron treats them.
+			// Stripe, legacy Razorpay, anything unrecognised: not this flow's
+			// job, exactly as the reconcile cron treats them.
 			return workflows.PaymentOutcomeGone, nil
 		}
 		if !ok {

@@ -315,66 +315,11 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 	case models.PaymentProviderCashfree:
 		h.verifyCashfreePayment(c, &order, req.CashfreeOrderID)
 	default:
-		h.verifyRazorpayPayment(c, &order, req.RazorpayPaymentID, req.RazorpayOrderID, req.RazorpaySignature)
+		// Legacy Razorpay orders and anything unrecognised. No order can be
+		// captured on Razorpay since #1101, so there is nothing here to verify
+		// against it (#1086).
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This order was paid through a gateway that is no longer in service — contact support"})
 	}
-}
-
-// verifyRazorpayPayment does the two client-verifiable checks itself — required
-// fields, the order-id binding, and (once the payment is fetched) the Checkout
-// signature — then hands the fetched, gateway-confirmed payment to
-// services.SettleRazorpayOrderFromPayment for the binding gate, completion
-// transaction, and wallet settlement (#872 step 2, Task 3: that core is now
-// shared with the Cashfree verify leg and the order-payment reconcile cron).
-//
-// The signature check runs AFTER the fetch now (previously it ran after the
-// captured/binding/amount checks) — a deliberate, harmless reordering: the
-// client-verifiable check no longer needs to wait on the gateway-authoritative
-// one that moved into the shared core.
-//
-// The mandatory rz.FetchPayment fetch failing (transport error, timeout, 5xx,
-// unparseable response) now answers 502, matching Cashfree's same "mandatory
-// server fetch failing is retryable" contract (#872 final item) — this is the
-// one status code this task changes on the Razorpay leg (was 500).
-func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Order, paymentID, rzOrderID, signature string) {
-	if paymentID == "" || rzOrderID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "razorpayPaymentId and razorpayOrderId are required"})
-		return
-	}
-	if order.RazorpayOrderID != rzOrderID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Order ID mismatch"})
-		return
-	}
-
-	rz := services.GetRazorpayFor(order.Mode)
-	if rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-		return
-	}
-
-	payment, err := rz.FetchPayment(paymentID)
-	if err != nil {
-		log.Printf("Failed to fetch Razorpay payment %s: %v", paymentID, err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Could not verify payment with the gateway — please try again in a moment"})
-		return
-	}
-
-	// Verify the Checkout signature (order_id|payment_id) the client received
-	// from Razorpay. Enforced when present (the customer app always sends it);
-	// tolerated-if-absent since the binding + amount checks inside
-	// SettleRazorpayOrderFromPayment are the hard gate and don't rely on the
-	// client.
-	if signature != "" && !services.VerifyPaymentSignatureFor(order.Mode, rzOrderID, paymentID, signature) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
-		return
-	}
-
-	ok, msg := services.SettleRazorpayOrderFromPayment(order, payment)
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
 }
 
 func (h *PaymentHandler) verifyStripePayment(c *gin.Context, order *models.Order, piID string) {
