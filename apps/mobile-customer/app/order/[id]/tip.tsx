@@ -26,7 +26,7 @@ const CHIP_RIPPLE = `${customerColors.coral.DEFAULT}1F`;
 const CTA_RIPPLE = `${customerColors.canvas}33`;
 
 // Post-delivery tip screen (#45): pick an amount for the chef and/or rider;
-// 100% pass-through. Creates the charge then opens the shared Razorpay sheet.
+// 100% pass-through. Creates the charge then opens the Cashfree payment sheet.
 export default function TipScreen() {
   const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -53,33 +53,15 @@ export default function TipScreen() {
       { orderId: id, chefAmount: chefTip, riderAmount: riderTip },
       {
         onSuccess: (data) => {
-          // A tip rides the same gateway as the order it thanks, so the server
-          // may hand back either shape. Cashfree gives a payment session and no
-          // key id; Razorpay the reverse.
-          if (data.cashfreePaymentSessionId) {
-            router.replace({
-              pathname: '/payment/cashfree',
-              params: {
-                kind: 'tip',
-                tipId: data.tipId,
-                orderId: id,
-                paymentSessionId: data.cashfreePaymentSessionId,
-                cashfreeOrderId: data.cashfreeOrderId ?? '',
-                env: data.mode ?? '',
-              },
-            });
-            return;
-          }
           router.replace({
-            pathname: '/payment/checkout',
+            pathname: '/payment/cashfree',
             params: {
               kind: 'tip',
               tipId: data.tipId,
               orderId: id,
-              razorpayOrderId: data.razorpayOrderId,
-              razorpayKeyId: data.razorpayKeyId,
-              amount: String(data.amount),
-              currency: data.currency ?? 'INR',
+              paymentSessionId: data.cashfreePaymentSessionId,
+              cashfreeOrderId: data.cashfreeOrderId,
+              env: data.cashfreeEnv,
             },
           });
         },
