@@ -317,7 +317,7 @@ type Order struct {
 	// provider-specific ID below. Inherited from ChefProfile.PaymentProvider
 	// at order creation time so late-switching a chef doesn't invalidate
 	// already-placed orders.
-	PaymentProvider string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
+	PaymentProvider string `gorm:"type:varchar(20);default:'cashfree'" json:"paymentProvider"`
 	// Gateway ids. Each is covered by a PARTIAL unique index (WHERE col <> '') created in
 	// database.go's postMigrate block (#395·1) — a plain GORM uniqueIndex tag can't be used
 	// because wallet-only/unpaid/Stripe/meal-plan-day-shell orders share the empty default.

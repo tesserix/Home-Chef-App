@@ -89,7 +89,7 @@ type CateringRequest struct {
 	// id here, as orders do — so read it alongside PaymentProvider.
 	GatewayOrderID   string     `gorm:"" json:"-"`
 	GatewayPaymentID string     `gorm:"" json:"-"`
-	PaymentProvider   string     `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider,omitempty"`
+	PaymentProvider   string     `gorm:"type:varchar(20);default:'cashfree'" json:"paymentProvider,omitempty"`
 	DepositPaidAt     *time.Time `gorm:"" json:"depositPaidAt,omitempty"`
 	CompletedAt       *time.Time `gorm:"" json:"completedAt,omitempty"`
 	CancelledAt       *time.Time `gorm:"" json:"cancelledAt,omitempty"`

@@ -220,7 +220,7 @@ type GroupOrderParticipant struct {
 	// here, as orders do — so read it alongside PaymentProvider.
 	GatewayOrderID   string                        `gorm:"" json:"gatewayOrderId,omitempty"`
 	GatewayPaymentID string                        `gorm:"" json:"gatewayPaymentId,omitempty"`
-	PaymentProvider   string                        `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider,omitempty"`
+	PaymentProvider   string                        `gorm:"type:varchar(20);default:'cashfree'" json:"paymentProvider,omitempty"`
 	RefundTxnID       *uuid.UUID                    `gorm:"type:uuid" json:"refundTxnId,omitempty"`
 
 	JoinedAt  time.Time `gorm:"autoCreateTime" json:"joinedAt"`
