@@ -96,16 +96,10 @@ type Config struct {
 	// instead of a raw provider URL.
 	PublicAPIBaseURL string
 
-	// Razorpay
-	RazorpayKeyID         string
-	RazorpayKeySecret     string
-	RazorpayWebhookSecret string
-
-	// Cashfree — second India gateway. Local-dev fallback only: production
-	// reads these from GCP Secret Manager (see services.CashfreeSecretNames).
-	// LIVE slot only, mirroring the Razorpay env vars — one set of env vars
-	// cannot describe two environments, and serving them to the test slot would
-	// point sandbox orders at live credentials.
+	// Cashfree — the India gateway. Local-dev fallback only: production reads
+	// these from GCP Secret Manager (see services.CashfreeSecretNames). LIVE slot
+	// only — one set of env vars cannot describe two environments, and serving
+	// them to the test slot would point sandbox orders at live credentials.
 	CashfreeAppID         string
 	CashfreeSecretKey     string
 	CashfreeWebhookSecret string
@@ -196,16 +190,16 @@ type Config struct {
 	LoyaltyCheckoutEnabled bool
 	// GroupOrdersEnabled gates the group / office orders feature (#46): shared
 	// cart, split payment, and consolidation. Default OFF — the multi-payer money
-	// flow should be verified in the Razorpay sandbox before going live.
+	// flow should be verified in the gateway sandbox before going live.
 	GroupOrdersEnabled bool
 	// OrderPayoutAutoReleaseEnabled gates auto-releasing a delivered regular
 	// order's held chef/rider Route transfers (#217). Default OFF — moves live
-	// settlement; verify in the Razorpay sandbox (#218) before enabling.
+	// settlement; verify in the gateway sandbox (#218) before enabling.
 	OrderPayoutAutoReleaseEnabled bool
 	// MealPlanEscrowEnabled gates the tiffin meal-plan ESCROW money flow (#194):
 	// upfront advance capture, refund of declined/expired days, and per-day payout
 	// release on delivery. Default OFF — the negotiation handshake (#195/#196) works
-	// without it; flip on only after the Razorpay escrow paths are sandbox-verified.
+	// without it; flip on only after the escrow paths are sandbox-verified.
 	MealPlanEscrowEnabled bool
 	// LedgerShadowEnabled dual-writes every wallet credit/debit into the double-entry
 	// ledger (same DB tx) so the ledger can be reconciled against the legacy float
@@ -226,7 +220,7 @@ type Config struct {
 	WalletPaymentFlowEnabled bool
 	// MealSubscriptionAutoActivate gates whether a new tiffin subscription starts
 	// ACTIVE (so the daily-order generator + pause/resume/skip work end-to-end) vs
-	// TRIALING. Default OFF: real recurring CHARGING (Razorpay UPI-Autopay mandate,
+	// TRIALING. Default OFF: real recurring CHARGING (UPI-Autopay mandate,
 	// #281) isn't wired yet, so an auto-activated sub would generate daily orders
 	// WITHOUT auto-charging the customer. Turn ON in test/staging to exercise the
 	// full flow; keep OFF in prod until #281 billing is live.
@@ -242,9 +236,9 @@ type Config struct {
 	// customer-reachable cancel path.
 	MealSubscriptionsEnabled bool
 	// CateringDepositEnabled gates the catering deposit/advance money flow (#55):
-	// creating a Razorpay deposit order to confirm a catering booking. Default OFF —
+	// creating a gateway deposit order to confirm a catering booking. Default OFF —
 	// the request → quote → accept flow works without it; flip on only after the
-	// Razorpay deposit path is sandbox-verified (#218).
+	// deposit path is sandbox-verified (#218).
 	CateringDepositEnabled bool
 	// OrderSagaEnabled gates orchestrating the post-payment order lifecycle as a
 	// durable Temporal saga (#122): notify chef → await accept → await ready →
@@ -276,7 +270,7 @@ type Config struct {
 	PickupReadyFlowEnabled bool
 	// DeferredRefundFlowEnabled gates firing the durable Temporal retry
 	// (workflows.DeferredRefundWorkflow) the instant a chef-cancel gateway
-	// refund is deferred (Razorpay unreachable/erroring), instead of waiting
+	// refund is deferred (gateway unreachable/erroring), instead of waiting
 	// for the next services.RetryDeferredCancelRefunds cron tick (up to ~12
 	// minutes). On by default; set DEFERRED_REFUND_FLOW_ENABLED=false to
 	// hard-disable. The cron sweep remains the fallback either way, so
@@ -520,11 +514,6 @@ func Load() {
 		AppleServicesClientID:       getEnv("APPLE_SERVICES_CLIENT_ID", ""),
 		AppleServicesClientIDVendor: getEnv("APPLE_SERVICES_CLIENT_ID_VENDOR", ""),
 		AppleSignInPrivateKey:       applePrivateKey,
-
-		// Razorpay
-		RazorpayKeyID:         getEnv("RAZORPAY_KEY_ID", ""),
-		RazorpayKeySecret:     getEnv("RAZORPAY_KEY_SECRET", ""),
-		RazorpayWebhookSecret: getEnv("RAZORPAY_WEBHOOK_SECRET", ""),
 
 		// Cashfree
 		CashfreeAppID:         getEnv("CASHFREE_APP_ID", ""),

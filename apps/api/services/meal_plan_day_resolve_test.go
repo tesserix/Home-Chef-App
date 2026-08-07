@@ -121,8 +121,6 @@ func TestResolveMealPlanDayFailure_PlatformFault_RefundsAndCompletes_FlagsOff(t 
 
 func TestResolveMealPlanDayFailure_ChefFault_FlagsOn_CreditsWalletAndWithholds(t *testing.T) {
 	escrowFlag(t, true)
-	t.Cleanup(func() { SetRazorpayClient(nil) })
-	SetRazorpayClient(NewRazorpayTestClient("", "key", "secret", "whsec"))
 	db := setupCrossguardDB(t)
 	cust := uuid.New()
 	planID := seedResolvePlan(t, db, cust, 120, 12)

@@ -168,17 +168,13 @@ func TestOrderPaymentReconcile_InsideGraceWindow_NeverAsksTheGateway(t *testing.
 
 // ── Scenario 8: provider routing, both directions ────────────────────────────
 
-func TestOrderPaymentReconcile_CashfreeOrder_NeverRoutedToRazorpay(t *testing.T) {
+func TestOrderPaymentReconcile_CashfreeOrder_SettlesOnCashfree(t *testing.T) {
 	db := setupReconcileDB(t)
 	now := time.Now()
 	o := seedStaleOrder(t, db, "cashfree", "cf_order_routing", models.ChefModeLive, now.Add(-reconcileGraceElapsed))
 	o.Total = 300
 
-	var razorpayHits, cashfreeHits int32
-	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&razorpayHits, 1)
-		w.WriteHeader(http.StatusInternalServerError)
-	})
+	var cashfreeHits int32
 	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&cashfreeHits, 1)
 		_, _ = w.Write([]byte(`[{"cf_payment_id":1010,"order_id":"cf_order_routing","payment_status":"SUCCESS","payment_amount":300.00,"payment_group":"upi"}]`))
@@ -186,7 +182,6 @@ func TestOrderPaymentReconcile_CashfreeOrder_NeverRoutedToRazorpay(t *testing.T)
 
 	settled := reconcileOrderPayments(db, now)
 	require.Equal(t, 1, settled)
-	require.Equal(t, int32(0), atomic.LoadInt32(&razorpayHits), "a cashfree order must never hit the razorpay gateway")
 	require.Equal(t, int32(1), atomic.LoadInt32(&cashfreeHits))
 
 	paymentStatus, _ := reconcilePaymentRow(t, db, o.ID)
@@ -210,9 +205,9 @@ func TestOrderPaymentReconcile_CancelledOrder_NeverSelectedZeroGatewayHits(t *te
 	).Error)
 
 	var hits int32
-	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&hits, 1)
-		_, _ = w.Write([]byte(`{"items":[{"id":"pay_x","order_id":"order_rzp_cancelled_backfill","status":"captured","amount":30000,"method":"upi"}]}`))
+		_, _ = w.Write([]byte(`[{"cf_payment_id":777,"order_id":"order_rzp_cancelled_backfill","payment_status":"SUCCESS","payment_amount":300.00,"payment_group":"upi"}]`))
 	})
 
 	settled := reconcileOrderPayments(db, now)
@@ -222,18 +217,6 @@ func TestOrderPaymentReconcile_CancelledOrder_NeverSelectedZeroGatewayHits(t *te
 	paymentStatus, _ := reconcilePaymentRow(t, db, o.ID)
 	require.Equal(t, string(models.PaymentFailed), paymentStatus, "untouched — not this cron's job")
 }
-
-// Note: a "top-level bail when nothing is configured at all" scenario is
-// deliberately NOT exercised here. Calling GetRazorpayFor(live) with an empty
-// cache and no Secret Manager falls into a pre-existing dev-fallback branch
-// (services/razorpay.go's fetchRazorpayFromSM) that dereferences the
-// package-global config.AppConfig — nil in this package's test binary unless
-// another test happens to have set it. That is a latent gap in a file outside
-// this task's scope (services/razorpay.go isn't in files_modified), not
-// something this cron introduces, so it is left for a separate fix rather than
-// patched here. Every scenario above that touches Razorpay seeds the live slot
-// via withRazorpayServerFor specifically to stay clear of that branch, exactly
-// as the sibling stale_order_cron_test.go's own coverage does.
 
 // ── #1086: a Razorpay order is not this cron's business any more ────────────
 //
@@ -246,18 +229,15 @@ func TestOrderPaymentReconcile_RazorpayOrder_LeftAloneWithZeroGatewayHits(t *tes
 	o := seedStaleOrder(t, db, "razorpay", "order_rzp_legacy", models.ChefModeLive, now.Add(-reconcileGraceElapsed))
 	o.Total = 300
 
-	var razorpayHits int32
-	withRazorpayServerFor(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&razorpayHits, 1)
-		_, _ = w.Write([]byte(`{"items":[{"id":"pay_legacy","order_id":"order_rzp_legacy","status":"captured","amount":30000,"method":"upi"}]}`))
-	})
+	var cashfreeHits int32
 	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&cashfreeHits, 1)
 		_, _ = w.Write([]byte(`[]`))
 	})
 
 	settled := reconcileOrderPayments(db, now)
 	require.Equal(t, 0, settled)
-	require.Equal(t, int32(0), atomic.LoadInt32(&razorpayHits), "the retired gateway must never be asked")
+	require.Equal(t, int32(0), atomic.LoadInt32(&cashfreeHits), "a legacy razorpay order is never cross-checked on Cashfree")
 
 	paymentStatus, gatewayPaymentID := reconcilePaymentRow(t, db, o.ID)
 	require.Equal(t, string(models.PaymentPending), paymentStatus, "a legacy order is left exactly as it was")

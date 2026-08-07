@@ -9,7 +9,7 @@ package handlers
 // chef is actually paid through is their Cashfree Easy Split vendor and the
 // Cashfree Payouts beneficiary, both registered further down the same handler.
 // What survives here is the part no rail change can move — UPI is refused, and
-// the save must not reach Razorpay at all.
+// the response advertises no Route settlement the chef could act on.
 //
 // DDL reuse: chefProfilesGuardDDL / chefGuardAuditDDL (chef_fulfillment_guard_test.go);
 // setupDB (internal_users_test.go) provides the users table the handler preloads.
@@ -28,24 +28,7 @@ import (
 
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
-	"github.com/homechef/api/services"
 )
-
-// razorpayTripwire is a stub gateway that records every request reaching it.
-// Nothing in this handler may call one.
-func razorpayTripwire(t *testing.T) *[]string {
-	t.Helper()
-	var calls []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls = append(calls, r.Method+" "+r.URL.Path)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"acc_123","activation_status":"activated"}`))
-	}))
-	t.Cleanup(srv.Close)
-	services.SetRazorpayClient(services.NewRazorpayTestClient(srv.URL, "k", "s", ""))
-	t.Cleanup(func() { services.SetRazorpayClient(nil) })
-	return &calls
-}
 
 // setupChefPayoutSettlementDB wires users + chef_profiles + audit_logs and
 // seeds one chef/user pair, returning the db handle plus both ids.
@@ -110,24 +93,10 @@ func bankTransferPayload() map[string]any {
 	}
 }
 
-// The whole point of #1086: saving bank details registers a Cashfree
-// destination and nothing else. A stray Route call here would mint a linked
-// account nobody reads and hold the chef's row locked for four round-trips.
-func TestSavePayoutDetails_NeverContactsRazorpay(t *testing.T) {
-	_, userID, _ := setupChefPayoutSettlementDB(t)
-	calls := razorpayTripwire(t)
-
-	w := postPayout(t, userID, bankTransferPayload())
-	require.Equal(t, http.StatusOK, w.Code)
-	require.Empty(t, *calls, "saving payout details must not reach Razorpay")
-}
-
 // The chef's screen reads the Cashfree verdict (#1082). A Route connection flag
 // alongside it could only ever contradict it.
 func TestSavePayoutDetails_ResponseCarriesNoRouteFields(t *testing.T) {
 	_, userID, _ := setupChefPayoutSettlementDB(t)
-	razorpayTripwire(t)
-
 	w := postPayout(t, userID, bankTransferPayload())
 	require.Equal(t, http.StatusOK, w.Code)
 

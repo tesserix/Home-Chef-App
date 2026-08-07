@@ -33,8 +33,6 @@ func TestPerDaySkipRefund(t *testing.T) {
 
 func TestResolveMealPlanDaySkip_Approve_CreditsPartialAndWithholds(t *testing.T) {
 	escrowFlag(t, true)
-	t.Cleanup(func() { SetRazorpayClient(nil) })
-	SetRazorpayClient(NewRazorpayTestClient("", "key", "secret", "whsec"))
 	db := setupCrossguardDB(t)
 	cust := uuid.New()
 	planID := seedResolvePlan(t, db, cust, 200, 20)

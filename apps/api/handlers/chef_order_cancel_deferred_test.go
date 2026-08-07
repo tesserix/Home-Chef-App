@@ -4,7 +4,7 @@ package handlers
 // must never hard-block a chef's cancel on the synchronous Razorpay refund: the order
 // always flips to cancelled + the full-refund obligation is reserved (payment_status /
 // refunded_at / refund_amount), regardless of whether the gateway call can complete right
-// now. When it can't (GetRazorpay()==nil, or CreateRefund errors), the handler defers by
+// now. When it can't (no gateway configured, or CreateRefund errors), the handler defers by
 // stamping a "pending:gateway-retry:<paise>" sentinel into refund_id and still returns 200
 // — services.RetryDeferredCancelRefunds (deferred_cancel_refund_test.go, services package)
 // is what re-issues the gateway call later.
@@ -22,7 +22,6 @@ import (
 
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
-	"github.com/homechef/api/services"
 )
 
 func regChefCancelOrder(r *gin.Engine, h *ChefOrderCancelHandler) {
@@ -95,22 +94,21 @@ func TestCancelOrder_GatewayFailure_CancelsAndDefersRefund(t *testing.T) {
 	require.Equal(t, 500.0, refundAmount, "the full order total is reserved as owed, gateway outcome notwithstanding")
 }
 
-// TestCancelOrder_GatewayNil_CancelsAndDefers — same contract when Razorpay is entirely
-// unconfigured (GetRazorpay() returns nil), the other early-block condition being replaced.
+// TestCancelOrder_GatewayNil_CancelsAndDefers — same contract when the gateway is
+// entirely unconfigured, the other early-block condition being replaced.
 func TestCancelOrder_GatewayNil_CancelsAndDefers(t *testing.T) {
 	db := setupPayDB(t)
 	for _, col := range []string{"cancelled_at DATETIME", "cancel_reason TEXT DEFAULT ''"} {
 		require.NoError(t, db.Exec(`ALTER TABLE orders ADD COLUMN `+col).Error)
 	}
-	// GetRazorpay() with no cached client falls through to a live Secret Manager fetch,
+	// A gateway lookup with no cached client falls through to a live Secret Manager fetch,
 	// which needs a non-nil config.AppConfig for its dev-fallback check — set an empty one
-	// so the fetch fails cleanly (no real credentials) and GetRazorpay returns nil, instead
+	// so the fetch fails cleanly (no real credentials) and the lookup returns nil, instead
 	// of panicking on a nil config in this test binary.
 	pinSingleConn(t, db)
 	prevCfg := config.AppConfig
 	config.AppConfig = &config.Config{Environment: "test"}
 	t.Cleanup(func() { config.AppConfig = prevCfg })
-	services.SetRazorpayClient(nil)
 	cust := payUser(t, db, "customer")
 	chefUser := payUser(t, db, "chef")
 	chef := payChef(t, db, chefUser)

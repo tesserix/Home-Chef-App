@@ -163,14 +163,11 @@ func main() {
 		log.Println("PII column encryption initialized")
 	}
 
-	// Warm up the Razorpay client. Credentials are fetched lazily from GCP
-	// Secret Manager on first use (and refreshed every razorpayCacheTTL), so
-	// this is just a best-effort pre-fetch to log any config gap at startup.
-	services.InitRazorpay()
-
-	// Same for Cashfree — the second India gateway. Probes BOTH credential
-	// slots (live + test) so a missing sandbox key is visible at startup rather
-	// than at a test kitchen's first checkout.
+	// Warm up Cashfree — the India gateway. Credentials are fetched lazily from
+	// GCP Secret Manager on first use, so this is a best-effort pre-fetch to log
+	// any config gap at startup. Probes BOTH credential slots (live + test) so a
+	// missing sandbox key is visible at startup rather than at a test kitchen's
+	// first checkout.
 	services.InitCashfree()
 
 	// Cashfree PAYOUTS — a separate product from the gateway above, with its own

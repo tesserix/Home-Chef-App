@@ -22,8 +22,6 @@ import (
 // RefundDay is handed a stale in-memory struct whose RefundTxnID is still nil.
 func TestRefundDay_AlreadyRefundedInDB_StaleStruct_NoDoubleCredit(t *testing.T) {
 	escrowFlag(t, true)
-	t.Cleanup(func() { SetRazorpayClient(nil) })
-	SetRazorpayClient(NewRazorpayTestClient("", "key", "secret", "whsec"))
 	db := setupCrossguardDB(t)
 
 	cust := uuid.New()
@@ -54,8 +52,6 @@ func TestRefundDay_AlreadyRefundedInDB_StaleStruct_NoDoubleCredit(t *testing.T) 
 // re-read must not block the happy path.
 func TestRefundDay_UnrefundedInDB_RefundsNormally(t *testing.T) {
 	escrowFlag(t, true)
-	t.Cleanup(func() { SetRazorpayClient(nil) })
-	SetRazorpayClient(NewRazorpayTestClient("", "key", "secret", "whsec"))
 	db := setupCrossguardDB(t)
 
 	cust := uuid.New()

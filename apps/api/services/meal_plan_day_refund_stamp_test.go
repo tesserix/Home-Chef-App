@@ -18,8 +18,6 @@ import (
 
 func TestRefundDay_StampsLinkedShellOrderRefunded(t *testing.T) {
 	escrowFlag(t, true)
-	t.Cleanup(func() { SetRazorpayClient(nil) })
-	SetRazorpayClient(NewRazorpayTestClient("", "key", "secret", "whsec"))
 	db := setupCrossguardDB(t)
 
 	cust := uuid.New()
@@ -63,8 +61,6 @@ func TestRefundDay_StampsLinkedShellOrderRefunded(t *testing.T) {
 // touching any order row.
 func TestRefundDay_NilOrderID_NoOrderStamp(t *testing.T) {
 	escrowFlag(t, true)
-	t.Cleanup(func() { SetRazorpayClient(nil) })
-	SetRazorpayClient(NewRazorpayTestClient("", "key", "secret", "whsec"))
 	db := setupCrossguardDB(t)
 
 	cust := uuid.New()

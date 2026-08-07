@@ -15,13 +15,9 @@ import (
 // chefRefPrefixMax caps the slug so a reference stays readable rather than
 // carrying a kitchen's full trading name.
 //
-// It is deliberately NOT sized to Razorpay's 40-character `receipt` limit. Doing
-// that would have forced a 16-char cap, which mangles ordinary names — "Amma's
-// Ka Kitchen" would truncate to "AMMA-S-KA", since the apostrophe alone costs
-// three characters. Payments are protected instead by clampReceipt in
-// razorpay.go, which trims at the API boundary and keeps the unique tail. So a
-// long kitchen name costs some of the prefix ON THE RECEIPT ONLY; the
-// customer-facing number keeps it in full.
+// It is sized for readability, not for any gateway field: the Cashfree order id
+// is a UUID we mint, never this number, so no payment leg is length-constrained
+// by a long kitchen name (#1086 retired the 40-char Razorpay `receipt`).
 const chefRefPrefixMax = 24
 
 // ChefRefPrefix converts a kitchen's business name into the uppercase slug used

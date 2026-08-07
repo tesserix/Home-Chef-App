@@ -4,7 +4,7 @@ package services
 // refund crossguard both fan out from the order aggregate to any meal-plan-day /
 // group-order whose order_id matches, and RefundDay drives its own day hold out of
 // the releasable set. Reuses the setupCrossguardDB harness (flags OFF ⇒ pure DB
-// state advance; money seams hit GetRazorpay()==nil).
+// state advance; no gateway is configured in tests, so the money seams no-op).
 
 import (
 	"testing"
@@ -228,7 +228,6 @@ func TestMarkRefundedDayHold_ReleasedReversedAndSettled(t *testing.T) {
 // Integration: RefundDay (escrow ON) drives the day hold out of the releasable set.
 func TestRefundDay_DrivesDayHoldWithheld(t *testing.T) {
 	escrowOn(t)
-	withRazorpayClient(t, &RazorpayClient{fetchedAt: time.Now()})
 	db := setupCrossguardDB(t)
 	plan, day := seedRefundablePlanDay(t, db, models.PayoutHoldReleaseEligible)
 

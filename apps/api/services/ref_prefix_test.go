@@ -1,7 +1,6 @@
 package services
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 )
@@ -60,41 +59,5 @@ func TestChefRef_FallsBackWhenUnnamed(t *testing.T) {
 	}
 	if got := ChefRef("Amma Ka Kitchen", "HC26072808359105"); got != "AMMA-KA-KITCHEN-HC26072808359105" {
 		t.Errorf("got %q", got)
-	}
-}
-
-// The money-critical invariant: Razorpay rejects a receipt over 40 characters,
-// which fails order creation — the customer cannot pay. Several call sites add
-// their own prefix on top of an already kitchen-prefixed number, so check the
-// worst combination survives the boundary clamp intact.
-func TestChefRef_WorstCaseReceiptSurvivesClamp(t *testing.T) {
-	number := fmt.Sprintf("HC%s%04d", "0601021504", 9999)
-	longest := ChefRef(strings.Repeat("Kitchen ", 10), number)
-	for _, prefix := range []string{"", "TIP-", "refund-", "GRP-"} {
-		receipt := clampReceipt(prefix + longest)
-		if len(receipt) > razorpayReceiptMax {
-			t.Errorf("receipt %q is %d chars, over Razorpay's %d limit",
-				receipt, len(receipt), razorpayReceiptMax)
-		}
-		// Reconciliation matches on the unique number, so it must survive.
-		if !strings.HasSuffix(receipt, number) {
-			t.Errorf("clamped receipt %q lost the order number %q", receipt, number)
-		}
-	}
-}
-
-// And if someone later adds a longer prefix anyway, the boundary clamp must keep
-// the unique tail rather than truncating it away into a collision.
-func TestClampReceipt_KeepsUniqueTail(t *testing.T) {
-	long := "some-very-long-prefix-" + strings.Repeat("x", 30) + "-UNIQUE12345"
-	got := clampReceipt(long)
-	if len(got) != razorpayReceiptMax {
-		t.Fatalf("want %d chars, got %d", razorpayReceiptMax, len(got))
-	}
-	if !strings.HasSuffix(got, "UNIQUE12345") {
-		t.Errorf("clamp dropped the unique tail: %q", got)
-	}
-	if short := "AMMA-KA-KITCHEN-HC1"; clampReceipt(short) != short {
-		t.Errorf("a short receipt must pass through untouched")
 	}
 }
