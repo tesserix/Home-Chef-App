@@ -96,22 +96,20 @@ func TestTipEligibility_PickupOffersNoRiderTip(t *testing.T) {
 	require.True(t, TipEligibilityFor(o).Chef)
 }
 
-func TestTipEligibility_RazorpayJudgesEachLegSeparately(t *testing.T) {
+// A tip is a NEW charge, minted on Cashfree whatever gateway the order it thanks
+// was stamped with (#1103). So a historical Razorpay order is judged by the chef's
+// Easy Split vendor — a Route linked account promises a tip the handler refuses.
+func TestTipEligibility_RazorpayOrderIsJudgedByTheCashfreeVendor(t *testing.T) {
 	o := deliveredOrder(string(models.PaymentProviderRazorpay))
-	require.False(t, TipEligibilityFor(o).Chef, "no linked account, no chef tip")
-	require.False(t, TipEligibilityFor(o).Rider, "no delivery, no rider tip")
-
 	o.Chef.RazorpayAccountID = "acc_chef"
-	require.True(t, TipEligibilityFor(o).Chef)
-	require.False(t, TipEligibilityFor(o).Rider)
-
 	withRider(o, "acc_rider")
-	require.True(t, TipEligibilityFor(o).Rider)
-}
-
-func TestTipEligibility_RiderWithoutALinkedAccountIsNotTippable(t *testing.T) {
-	o := withRider(deliveredOrder(string(models.PaymentProviderRazorpay)), "")
+	require.False(t, TipEligibilityFor(o).Chef, "a Route account cannot receive a Cashfree tip")
 	require.False(t, TipEligibilityFor(o).Rider)
+
+	o.Chef.CashfreeVendorID = "vend_1"
+	o.Chef.CashfreeVendorStatus = CashfreeVendorActive
+	require.True(t, TipEligibilityFor(o).Chef, "the chef's vendor is what the tip actually reaches")
+	require.False(t, TipEligibilityFor(o).Rider, "a third-party rider still has no Easy Split route")
 }
 
 func TestTipEligibility_OnlyDeliveredOrdersAreTippable(t *testing.T) {
@@ -124,10 +122,11 @@ func TestTipEligibility_OnlyDeliveredOrdersAreTippable(t *testing.T) {
 		models.OrderStatusCancelled,
 		models.OrderStatusRefunded,
 	} {
-		o := deliveredOrder(string(models.PaymentProviderRazorpay))
+		o := deliveredOrder(string(models.PaymentProviderCashfree))
 		o.Status = st
-		o.Chef.RazorpayAccountID = "acc_chef"
-		withRider(o, "acc_rider")
+		o.FulfillmentType = models.FulfillmentChefDelivery
+		o.Chef.CashfreeVendorID = "vend_1"
+		o.Chef.CashfreeVendorStatus = CashfreeVendorActive
 		require.False(t, TipEligibilityFor(o).Any(), "status %s must not be tippable", st)
 	}
 }

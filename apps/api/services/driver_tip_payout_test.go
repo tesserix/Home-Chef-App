@@ -83,47 +83,13 @@ func TestComputeOrderEarnings_DriverTipCarriesNoCommission(t *testing.T) {
 	require.InDelta(t, 25.0, withTip.Gross-plain.Gross, 0.001)
 }
 
-// A chef-delivered order has no delivery partner, so nothing must be booked to
-// one — and the fee and tip the chef already earned must not be paid twice.
-func TestOrderSettlements_DriverLegIsEmptyWhenTheChefDelivered(t *testing.T) {
-	db := setupOrderSettlementsDB(t)
-	order := tippedOrder(models.FulfillmentChefDelivery, 25)
-	order.OrderNumber = "HC-DT1"
-	order.Chef.RazorpayAccountID = "acc_chef"
-
-	settlements := OrderSettlements(db, order)
-
-	require.Len(t, settlements, 2)
-	require.Equal(t, "acc_chef", settlements[0].Account)
-	require.Zero(t, settlements[1].Amount,
-		"the chef already earned the fee and the tip; booking them again pays twice")
-}
-
-// A 3PL leg is unchanged: the driver is still paid their fee and their tip.
-func TestOrderSettlements_DriverLegKeepsTheTipOnAThirdPartyDelivery(t *testing.T) {
-	db := setupOrderSettlementsDB(t)
-	order := tippedOrder(models.FulfillmentDelivery, 25)
-	order.OrderNumber = "HC-DT2"
-	order.Chef.RazorpayAccountID = "acc_chef"
-	order.Delivery = &models.Delivery{}
-	order.Delivery.DeliveryPartner.RazorpayAccountID = "acc_driver"
-
-	settlements := OrderSettlements(db, order)
-
-	require.Equal(t, "acc_driver", settlements[1].Account)
-	require.Equal(t, ToPaise(65), settlements[1].Amount, "fee ₹40 + tip ₹25")
-}
-
 // Money conservation, in paise: every rupee the customer paid is accounted for
 // by exactly one party. A driver tip that reaches neither the chef nor a driver
 // is the defect this issue names.
 func TestDriverTip_IsConservedAcrossTheLegs(t *testing.T) {
-	db := setupOrderSettlementsDB(t)
 	order := tippedOrder(models.FulfillmentChefDelivery, 25)
 	order.OrderNumber = "HC-DT3"
-	order.Chef.RazorpayAccountID = "acc_chef"
 
-	settlements := OrderSettlements(db, order)
 	earnings := ComputeOrderEarnings(EarningsInput{
 		ItemRevenue: order.Subtotal, Tax: ChefAttributableTax(order), ChefTip: order.ChefTip,
 		DriverTip: order.DriverTip, DeliveryFee: order.EffectiveDeliveryFee(),
@@ -131,7 +97,7 @@ func TestDriverTip_IsConservedAcrossTheLegs(t *testing.T) {
 		DeliveryState: order.DeliveryAddressState,
 	}, order.Chef.State)
 
-	chefPaise := settlements[0].Amount + settlements[1].Amount
+	chefPaise := ToPaise(ChefNetPayoutFor(order))
 	platformPaise := ToPaise(earnings.PlatformCommission) + ToPaise(earnings.TDS)
 	tippedTotal := order.Subtotal + ChefAttributableTax(order) + order.ChefTip +
 		order.EffectiveDeliveryFee() + order.DriverTip
