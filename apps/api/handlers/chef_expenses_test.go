@@ -78,6 +78,7 @@ func setupExpenseDB(t *testing.T) *gorm.DB {
 			delivery_fee_final     REAL,
 			fulfillment_type       TEXT DEFAULT 'delivery',
 			chef_tip               REAL DEFAULT 0,
+			driver_tip             REAL DEFAULT 0,
 			delivery_address_state TEXT,
 			commission_rate        REAL DEFAULT 0,
 			gateway_split_paise    INTEGER DEFAULT 0,

@@ -65,8 +65,12 @@ type EarningsInput struct {
 	ChefEarnsDeliveryFee bool
 	// Tax is the order's food GST. The chef receives it, so it enters the chef's
 	// gross (and thus TDS base) — unlike DeliveryFee, which is the driver's (#390).
-	Tax           float64
-	ChefTip       float64
+	Tax     float64
+	ChefTip float64
+	// DriverTip is the checkout-time tip for whoever carried the order. It is the
+	// chef's only when ChefEarnsDeliveryFee — the chef drove it themselves — and
+	// is otherwise the driver's, settled on their own leg (#1081).
+	DriverTip     float64
 	DeliveryState string
 	// CommissionRate is the resolved flat commission rate for this order; 0/unset
 	// uses DefaultCommissionRate. Callers resolve it from PlatformSettings via
@@ -154,9 +158,13 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 	// Gross is the chef's income: food revenue + food GST (Tax) + chef tip, plus
 	// the delivery fee when the chef carried the leg. A 3PL/platform leg is the
 	// driver's money and stays out (#390).
+	// A driver tip follows the leg it thanks: the chef's when they drove it
+	// themselves, the driver's otherwise (#1081). It enters gross exactly as the
+	// chef tip does — the same money, from the same customer, to the same person
+	// on a chef-delivered order — so the two cannot be taxed differently.
 	chefDelivery := 0.0
 	if in.ChefEarnsDeliveryFee {
-		chefDelivery = in.DeliveryFee
+		chefDelivery = in.DeliveryFee + in.DriverTip
 	}
 	gross := Round2(itemRevenue + in.Tax + in.ChefTip + chefDelivery)
 
@@ -219,8 +227,16 @@ func (t *EarningsTotals) Add(e OrderEarnings) {
 // ComputeOrderEarnings(order).NetPayout, the exact number on the settlement
 // statement.
 //
-//	gross = Subtotal + Tax + ChefTip (less any chef-funded promo the chef bears);
+//	gross = Subtotal + Tax + ChefTip (less any chef-funded promo the chef bears),
+//	        plus the delivery fee AND the driver tip when the chef drove the leg;
 //	net   = gross − commission − TDS.
+//
+// The driver tip is the chef's only on a leg they carried (#1081). Before that
+// it was booked solely to the delivery partner's account, which a chef-delivered
+// order does not have — so the tip the customer paid reached nobody. It enters
+// gross the same way the chef tip does: neither attracts commission, both sit in
+// the TDS base, and the two must not diverge when they are the same person's
+// money on the same order.
 //
 // The commission rate is read from the FROZEN order.CommissionRate (stamped at
 // checkout), so a mid-flight admin rate change cannot make the statement disagree
@@ -271,6 +287,7 @@ func ChefNetPayoutFor(order *models.Order) float64 {
 		ItemRevenue:          order.Subtotal,
 		Tax:                  ChefAttributableTax(order),
 		ChefTip:              order.ChefTip,
+		DriverTip:            order.DriverTip,
 		DeliveryFee:          order.EffectiveDeliveryFee(),
 		ChefEarnsDeliveryFee: order.ChefEarnsDeliveryFee(),
 		ChefFundedDiscount:   order.ChefFundedDiscount,
