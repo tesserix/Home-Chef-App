@@ -364,14 +364,14 @@ func TestBlockedChefs_ListsAFailedVendorWithItsReason(t *testing.T) {
 
 	var body struct {
 		Chefs []struct {
-			SettlementStatus string                      `json:"settlementStatus"`
-			Registration     services.PayoutRegistration `json:"registration"`
+			VendorStatus string                      `json:"vendorStatus"`
+			Registration services.PayoutRegistration `json:"registration"`
 		} `json:"chefs"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	require.Len(t, body.Chefs, 1)
-	require.Equal(t, services.CashfreeVendorBankValidationFailed, body.Chefs[0].SettlementStatus,
-		"operators get the raw gateway status (#1082)")
+	require.Equal(t, services.CashfreeVendorBankValidationFailed, body.Chefs[0].VendorStatus,
+		"the admin table reads vendorStatus; under any other key the operator sees no gateway reason at all (#1122)")
 	require.Equal(t, services.PayoutRegistrationFailed, body.Chefs[0].Registration.State)
 	require.NotEmpty(t, body.Chefs[0].Registration.Message, "must say what to fix")
 }

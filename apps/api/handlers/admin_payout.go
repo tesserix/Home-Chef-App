@@ -301,7 +301,7 @@ func (h *AdminPayoutHandler) GetBlockedChefs(c *gin.Context) {
 			"chefId":       ch.ID,
 			"businessName": ch.BusinessName,
 			// Operators see the raw gateway status; chefs never do (#1082).
-			"settlementStatus":  ch.CashfreeVendorStatus,
+			"vendorStatus":      ch.CashfreeVendorStatus,
 			"registration":      services.PayoutRegistrationFor(&chefs[i]),
 			"payoutAutoRelease": ch.PayoutAutoRelease,
 		})
