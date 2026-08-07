@@ -20,10 +20,11 @@ func deliveredOrder(provider string) *models.Order {
 	}
 }
 
-func withRider(o *models.Order, acct string) *models.Order {
+// A third-party rider carried it: a DeliveryPartner has no Easy Split vendor,
+// so there is no route to them whatever else is true of the order.
+func withRider(o *models.Order) *models.Order {
 	id := uuid.New()
 	o.Delivery = &models.Delivery{DeliveryPartnerID: &id}
-	o.Delivery.DeliveryPartner.RazorpayAccountID = acct
 	return o
 }
 
@@ -51,9 +52,9 @@ func TestTipEligibility_CashfreeStatusIsCaseInsensitive(t *testing.T) {
 }
 
 func TestTipEligibility_CashfreeOffersNoRiderTipOnAThirdPartyDelivery(t *testing.T) {
-	// A DeliveryPartner carries only a Razorpay linked account, so Easy Split has
-	// no route to them — the screen must not show the rider section.
-	o := withRider(deliveredOrder(string(models.PaymentProviderCashfree)), "acc_rider")
+	// Easy Split has no route to a DeliveryPartner — the screen must not show the
+	// rider section.
+	o := withRider(deliveredOrder(string(models.PaymentProviderCashfree)))
 	o.Chef.CashfreeVendorID = "vend_1"
 	o.Chef.CashfreeVendorStatus = CashfreeVendorActive
 	require.True(t, TipEligibilityFor(o).Chef)
@@ -101,7 +102,7 @@ func TestTipEligibility_PickupOffersNoRiderTip(t *testing.T) {
 // Easy Split vendor, which a chef left on the old rail does not have.
 func TestTipEligibility_RazorpayOrderIsJudgedByTheCashfreeVendor(t *testing.T) {
 	o := deliveredOrder(string(models.PaymentProviderRazorpay))
-	withRider(o, "acc_rider")
+	withRider(o)
 	require.False(t, TipEligibilityFor(o).Chef, "no vendor, no Cashfree tip")
 	require.False(t, TipEligibilityFor(o).Rider)
 

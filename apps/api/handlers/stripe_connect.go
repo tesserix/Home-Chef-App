@@ -402,43 +402,6 @@ func (h *StripeConnectHandler) RefreshDriverOnboardingLink(c *gin.Context) {
 	})
 }
 
-// SetDriverPaymentProvider — driver counterpart of SetPaymentProvider.
-// PUT /delivery/payment-provider
-func (h *StripeConnectHandler) SetDriverPaymentProvider(c *gin.Context) {
-	userID, _ := middleware.GetUserID(c)
-
-	var req struct {
-		Provider string `json:"provider" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	req.Provider = strings.ToLower(req.Provider)
-	if req.Provider != "razorpay" && req.Provider != "stripe" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "provider must be 'razorpay' or 'stripe'"})
-		return
-	}
-
-	var driver models.DeliveryPartner
-	if err := database.DB.Where("user_id = ?", userID).First(&driver).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Driver profile not found"})
-		return
-	}
-
-	if req.Provider == "stripe" && driver.StripeAccountID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Complete Stripe onboarding before switching to Stripe"})
-		return
-	}
-	if req.Provider == "razorpay" && driver.RazorpayAccountID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Complete Razorpay payout setup before switching to Razorpay"})
-		return
-	}
-
-	database.DB.Model(&driver).Update("payment_provider", req.Provider)
-	c.JSON(http.StatusOK, gin.H{"paymentProvider": req.Provider})
-}
-
 // SetPaymentProvider lets a chef toggle which gateway their orders settle
 // through. Used when a chef switches regions or when the platform wants to
 // migrate a chef between providers. The chef must have completed onboarding
