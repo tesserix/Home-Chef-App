@@ -28,25 +28,9 @@ import (
 	"github.com/homechef/api/services"
 )
 
-// The dispatch predicate itself: a Cashfree order must never be routed to the
-// Razorpay leg, which is what made the chef's missing Route account fatal.
-func TestTipProviderDispatch_CashfreeOrderTakesTheCashfreeLeg(t *testing.T) {
-	for _, tc := range []struct {
-		provider string
-		wantCF   bool
-	}{
-		{models.PaymentProviderCashfree, true},
-		{models.PaymentProviderRazorpay, false},
-		{"", false}, // legacy rows default to Razorpay
-	} {
-		got := models.NormalizeProvider(tc.provider) == models.PaymentProviderCashfree
-		require.Equal(t, tc.wantCF, got, "provider %q", tc.provider)
-	}
-}
-
-// The Cashfree tip id is what VerifyTip dispatches on, so its prefix is load
-// bearing: a tip whose id does not carry it would be verified as a Razorpay
-// payment and rejected for a missing razorpayPaymentId.
+// The tip's gateway order id is derived from the tip id, so a retry lands on the
+// same Cashfree order rather than minting a parallel charge. Cashfree constrains
+// the format, and an id it rejects would fail the charge outright.
 func TestCashfreeTipOrderID_CarriesTheDispatchPrefix(t *testing.T) {
 	id := "tip-" + strings.ReplaceAll("0f5a366c-c73e-e626-d6e7-14323a021c80", "-", "")
 	require.True(t, strings.HasPrefix(id, "tip-"))

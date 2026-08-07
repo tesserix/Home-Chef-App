@@ -4,16 +4,17 @@ import { ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
 import { Button } from '@/shared/components/ui';
-import { openRazorpayCheckout } from '@/shared/utils/razorpay';
+import { openCashfreeCheckout } from '@/shared/utils/cashfree';
 
 // Post-delivery tip (#45) — web parity. 100% pass-through to the chef and/or
-// rider via the shared Razorpay web checkout.
+// rider via the shared Cashfree web checkout.
 const PRESETS = [20, 50, 100];
 
 interface CreateTipResponse {
   tipId: string;
-  razorpayOrderId: string;
-  razorpayKeyId: string;
+  cashfreeOrderId: string;
+  cashfreePaymentSessionId: string;
+  cashfreeEnv?: string;
   amount: number;
   currency: string;
 }
@@ -34,14 +35,12 @@ export default function TipPage() {
         `/payments/order/${id}/tip`,
         { chefAmount: chef, riderAmount: rider }
       );
-      openRazorpayCheckout({
+      // Cashfree hands back no client signature, so the server's own fetch of the
+      // captured payment is the only authority for "was this paid".
+      await openCashfreeCheckout({
         data,
-        description: 'Tip for your chef / rider',
-        onVerified: async (resp) => {
-          await apiClient.post(`/payments/tip/${data.tipId}/verify`, {
-            razorpayPaymentId: resp.razorpay_payment_id,
-            razorpayOrderId: resp.razorpay_order_id,
-          });
+        onSettled: async () => {
+          await apiClient.post(`/payments/tip/${data.tipId}/verify`);
           toast.success('Tip sent — thank you!');
           navigate(`/orders/${id}`);
         },

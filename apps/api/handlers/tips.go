@@ -17,10 +17,10 @@ import (
 )
 
 // tips.go — post-delivery tips for chefs / riders (#45). The customer tips after
-// delivery; one Razorpay charge Route-splits 100% to the chef and/or rider linked
-// accounts (no platform commission, no tax). Charge → client verify (and/or
-// webhook) → mark paid + notify. Checkout-time tips (Order.ChefTip/DriverTip) are
-// a separate, pre-existing concept and are untouched here.
+// delivery; one Cashfree charge Easy-Splits 100% to the chef's vendor account (no
+// platform commission, no tax). Charge → client verify (and/or webhook) → mark
+// paid + notify. Checkout-time tips (Order.ChefTip/DriverTip) are a separate,
+// pre-existing concept and are untouched here.
 
 const (
 	minTipAmount = 1.0    // ₹1 minimum per charge
@@ -53,8 +53,8 @@ type createTipRequest struct {
 }
 
 // CreateOrderTip — POST /payments/order/:orderId/tip. Validates the order is
-// delivered + owned by the customer, resolves the chef/rider linked accounts,
-// and creates a Razorpay order that Route-splits the tip 100% to them.
+// delivered + owned by the customer, resolves the chef's payout account, and
+// creates a Cashfree order that splits the tip 100% to them.
 func (h *TipHandler) CreateOrderTip(c *gin.Context) {
 	customerID, _ := middleware.GetUserID(c)
 	orderID, err := uuid.Parse(c.Param("orderId"))
@@ -86,96 +86,12 @@ func (h *TipHandler) CreateOrderTip(c *gin.Context) {
 
 	tip := models.Tip{ModePartition: models.ModePartition{Mode: order.Mode, TestSessionID: order.TestSessionID}, OrderID: order.ID, CustomerID: customerID, Currency: "INR", Status: models.TipPending}
 
-	// A tip rides the SAME gateway as the order it thanks — a test-mode order's
-	// tip must not become a real charge, and a Cashfree order's tip cannot be
-	// routed by Razorpay.
-	//
-	// This dispatch is the fix for the tip surface being unreachable platform-wide:
-	// the flow was written against Razorpay Route and never moved when payouts did,
-	// so it demanded a chef.razorpay_account_id that NO chef on the platform has.
-	// Every attempt answered 409 "This chef can't receive tips right now".
-	if models.NormalizeProvider(order.PaymentProvider) == models.PaymentProviderCashfree {
-		h.createCashfreeTip(c, &order, &tip, req, customerID)
-		return
-	}
-
-	rz := services.GetRazorpayFor(order.Mode)
-	if rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-		return
-	}
-
-	var transfers []services.TransferSpec
-
-	if req.ChefAmount > 0 {
-		acct := order.Chef.RazorpayAccountID
-		if acct == "" {
-			c.JSON(http.StatusConflict, gin.H{"error": "This chef can't receive tips right now"})
-			return
-		}
-		transfers = append(transfers, services.TransferSpec{
-			Account: acct, Amount: services.ToPaise(req.ChefAmount), Currency: "INR", OnHold: false,
-			Notes: map[string]string{"purpose": "tip", "beneficiary": "chef", "order_id": order.ID.String()},
-		})
-		tip.ChefAmount = req.ChefAmount
-		chefUserID := order.Chef.UserID
-		tip.ChefUserID = &chefUserID
-	}
-
-	if req.RiderAmount > 0 {
-		if order.Delivery == nil || order.Delivery.DeliveryPartnerID == nil || order.Delivery.DeliveryPartner.RazorpayAccountID == "" {
-			c.JSON(http.StatusConflict, gin.H{"error": "This delivery has no rider to tip"})
-			return
-		}
-		transfers = append(transfers, services.TransferSpec{
-			Account: order.Delivery.DeliveryPartner.RazorpayAccountID, Amount: services.ToPaise(req.RiderAmount),
-			Currency: "INR", OnHold: false,
-			Notes: map[string]string{"purpose": "tip", "beneficiary": "rider", "order_id": order.ID.String()},
-		})
-		tip.RiderAmount = req.RiderAmount
-		riderUserID := order.Delivery.DeliveryPartner.UserID
-		tip.RiderUserID = &riderUserID
-	}
-
-	tip.Amount = tip.ChefAmount + tip.RiderAmount
-	if len(transfers) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nothing to tip"})
-		return
-	}
-
-	rzOrder, err := rz.CreateOrder(&services.OrderRequest{
-		Amount:    services.ToPaise(tip.Amount),
-		Currency:  "INR",
-		Receipt:   "TIP-" + order.OrderNumber,
-		Notes:     map[string]string{"purpose": "tip", "order_id": order.ID.String(), "customer_id": customerID.String()},
-		Transfers: transfers,
-	})
-	if err != nil {
-		log.Printf("tip: create razorpay order for %s failed: %v", order.OrderNumber, err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Could not start the tip payment"})
-		return
-	}
-	tip.RazorpayOrderID = rzOrder.ID
-
-	if err := database.DB.Create(&tip).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record tip"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"tipId":           tip.ID,
-		"razorpayOrderId": rzOrder.ID,
-		"razorpayKeyId":   rz.GetKeyID(),
-		"amount":          rzOrder.Amount, // paise — fed straight to the checkout sheet
-		"amountRupees":    tip.Amount,
-		"currency":        "INR",
-	})
-}
-
-type verifyTipRequest struct {
-	RazorpayPaymentID string `json:"razorpayPaymentId"`
-	RazorpayOrderID   string `json:"razorpayOrderId"`
-	RazorpaySignature string `json:"razorpaySignature"`
+	// A tip is a new charge, so it is minted on Cashfree whatever gateway the
+	// order it thanks was stamped with (#1086). The old dispatch sent every
+	// non-Cashfree order to Razorpay Route, which demanded a
+	// chef.razorpay_account_id that NO chef on the platform has — the whole tip
+	// surface answered 409 "This chef can't receive tips right now".
+	h.createCashfreeTip(c, &order, &tip, req, customerID)
 }
 
 // VerifyTip — POST /payments/tip/:tipId/verify. Confirms the tip charge captured
@@ -188,12 +104,6 @@ func (h *TipHandler) VerifyTip(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tip ID"})
 		return
 	}
-	var req verifyTipRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
 	var tip models.Tip
 	if err := database.DB.Where("id = ? AND customer_id = ?", tipID, customerID).First(&tip).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Tip not found"})
@@ -204,66 +114,12 @@ func (h *TipHandler) VerifyTip(c *gin.Context) {
 		return
 	}
 
-	// A Cashfree tip has no client-supplied payment id or signature to check —
-	// the authority is a server-side fetch, exactly as the order path's Cashfree
-	// leg works. Dispatch before touching any Razorpay-shaped field.
-	if strings.HasPrefix(tip.RazorpayOrderID, "tip-") {
-		if !h.verifyCashfreeTip(c, &tip) {
-			return
-		}
-		h.settleTip(c, &tip)
+	// A tip has no client-supplied payment id or signature to check — the
+	// authority is a server-side fetch from the gateway that holds the charge.
+	if !h.verifyCashfreeTip(c, &tip) {
 		return
 	}
-
-	rz := services.GetRazorpayFor(tip.Mode)
-	if rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-		return
-	}
-	if req.RazorpayPaymentID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "razorpayPaymentId is required"})
-		return
-	}
-	payment, err := rz.FetchPayment(req.RazorpayPaymentID)
-	if err != nil {
-		log.Printf("tip: fetch payment %s failed: %v", req.RazorpayPaymentID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
-		return
-	}
-	if payment.Status != "captured" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Payment not captured, status: %s", payment.Status)})
-		return
-	}
-	if payment.OrderID != tip.RazorpayOrderID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Order ID mismatch"})
-		return
-	}
-	// SECURITY (#395·4): bind the captured amount + Checkout signature to THIS tip,
-	// mirroring the main-order VerifyPayment. Without these a mismatched/under-amount
-	// captured payment on the tip's razorpay order (payment.Amount comes from
-	// Razorpay, unforgeable) could settle the tip in full, and a captured payment
-	// from another order could be reused. Signature enforced when present (the app
-	// always sends it); the amount check is the hard gate and never trusts the client.
-	if payment.Amount < services.ToPaise(tip.Amount) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount does not match the tip amount"})
-		return
-	}
-	if req.RazorpaySignature != "" &&
-		!services.VerifyPaymentSignature(tip.RazorpayOrderID, req.RazorpayPaymentID, req.RazorpaySignature) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
-		return
-	}
-
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		return markTipPaidTx(tx, &tip, req.RazorpayPaymentID)
-	}); err != nil {
-		log.Printf("tip: mark paid %s failed: %v", tip.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record tip"})
-		return
-	}
-	tip.Status = models.TipPaid
-	tip.RazorpayPaymentID = req.RazorpayPaymentID
-	c.JSON(http.StatusOK, gin.H{"tip": tip, "paymentVerified": true})
+	h.settleTip(c, &tip)
 }
 
 // GetChefTips — GET /chef/tips. Tips the authed chef has received (paid only).
@@ -331,8 +187,7 @@ func markTipPaidByRazorpayOrder(rzOrderID, paymentID string) {
 
 // --- Cashfree tip leg ---
 //
-// The Razorpay leg above splits a tip with Route linked accounts. Cashfree's
-// equivalent is Easy Split: the tip is charged as its own gateway order whose
+// The tip is charged as its own gateway order whose Easy Split
 // order_splits allocate 100% of the chef's share to the chef's vendor account,
 // so the money settles to the chef directly and never sits on the platform's
 // balance. Same promise the screen makes — "100% goes straight to your chef,
@@ -469,10 +324,12 @@ func (h *TipHandler) createCashfreeTip(c *gin.Context, order *models.Order, tip 
 		"cashfreeOrderId":          cfOrder.OrderID,
 		"cashfreePaymentSessionId": cfOrder.PaymentSessionID,
 		"cashfreeAppId":            cf.GetAppID(),
-		"mode":                     env,
-		"amount":                   tipPaise,
-		"amountRupees":             tip.Amount,
-		"currency":                 "INR",
+		"cashfreeEnv":              env,
+		// mode is the same value under the name the mobile client reads.
+		"mode":         env,
+		"amount":       tipPaise,
+		"amountRupees": tip.Amount,
+		"currency":     "INR",
 	})
 }
 

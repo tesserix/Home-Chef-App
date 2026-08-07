@@ -5,18 +5,15 @@ import { api } from '../lib/api';
 // the chef and/or rider; the caller then opens the sheet for whichever gateway
 // the server used and verifies via /payments/tip/:id/verify.
 //
-// The tip rides the SAME gateway as the order it thanks, so exactly one of the
-// two shapes below comes back: Cashfree returns a payment session and no key id
-// (Easy Split routes the whole tip to the chef's vendor account), Razorpay the
-// reverse. Both are optional here because the server, not the client, decides.
+// A tip is a new charge, so it is always minted on Cashfree (#1086) — Easy Split
+// routes the whole tip to the chef's vendor account. There is no key id to hand
+// to a checkout sheet; the payment session is opened directly.
 export interface CreateTipResponse {
   tipId: string;
-  provider?: string;
-  razorpayOrderId?: string;
-  razorpayKeyId?: string;
-  cashfreeOrderId?: string;
-  cashfreePaymentSessionId?: string;
-  mode?: string;
+  provider: string;
+  cashfreeOrderId: string;
+  cashfreePaymentSessionId: string;
+  cashfreeEnv: string;
   amount: number;
   currency: string;
 }
