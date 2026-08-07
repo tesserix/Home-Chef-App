@@ -140,6 +140,30 @@ func EasySplitEnabledForChef(db *gorm.DB, chef *models.ChefProfile) bool {
 	return EasySplitEnabled(db)
 }
 
+// EasySplitChefBlocker answers "would an order for this chef split today?" —
+// empty when it would, otherwise the guard that refuses. The order-shaped
+// guards (credit funding, share below fee) cannot be judged without an order,
+// so this is the standing state only: the rollout decision, the vendor
+// registration, the licence, and the fee setting.
+func EasySplitChefBlocker(db *gorm.DB, chef *models.ChefProfile) string {
+	if chef == nil {
+		return EasySplitSkipNoOrder
+	}
+	if !EasySplitEnabledForChef(db, chef) {
+		return EasySplitSkipDisabled
+	}
+	if chef.CashfreeVendorID == "" || !strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorActive) {
+		return EasySplitSkipVendorNotActive
+	}
+	if IsChefFSSAIExpired(chef) {
+		return EasySplitSkipFSSAIExpired
+	}
+	if _, ok := PlatformFeeFlatMinor(db); !ok {
+		return EasySplitSkipFeeUnreadable
+	}
+	return ""
+}
+
 // EasySplitVendorIDFor is the deterministic vendor id for a chef —
 // re-registration updates the same vendor instead of minting a parallel one.
 func EasySplitVendorIDFor(chefID uuid.UUID) string {

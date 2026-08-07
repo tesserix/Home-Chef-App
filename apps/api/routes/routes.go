@@ -1213,6 +1213,10 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/chefs/:id/disburse-automation", payoutPerm, payoutRailHandler.SetChefDisburseAutomation)
 			admin.PUT("/chefs/:id/easy-split-mode", payoutPerm, payoutRailHandler.SetChefEasySplitMode)
 			admin.PUT("/chefs/easy-split-mode", payoutPerm, payoutRailHandler.SetEasySplitModeBulk)
+			// Reads behind the Easy Split control surface in tesserix-home (#1085):
+			// who can be split-paid, and which rail settled each paid order.
+			admin.GET("/payouts/easy-split/roster", payoutPerm, payoutRailHandler.GetEasySplitRoster)
+			admin.GET("/payouts/easy-split/orders", payoutPerm, payoutRailHandler.GetEasySplitOrders)
 			// Per-chef payout surface: destination + the rail's verdict on it,
 			// a status re-read, and the sandbox-only test bank account seeder.
 			admin.GET("/chefs/:id/payout-profile", payoutPerm, payoutRailHandler.GetChefPayoutProfile)
