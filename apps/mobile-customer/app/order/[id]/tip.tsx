@@ -40,6 +40,7 @@ export default function TipScreen() {
   // the previous behaviour.
   const chefTippable = order?.tipEligibility?.chef !== false;
   const riderTippable = order?.tipEligibility?.rider !== false;
+  const chefDelivered = order?.fulfillmentType === 'chef_delivery';
 
   // Never send an amount for a leg that is not on screen.
   const chefTip = chefTippable ? chefAmount : 0;
@@ -114,11 +115,9 @@ export default function TipScreen() {
           no platform cut.
         </Text>
 
-        {/* Each leg is offered only when it can actually be paid (#1029). The
-            rider picker in particular is never payable on a Cashfree order —
-            Easy Split has no route to a delivery partner at all — so offering
-            it there guaranteed a 409 after the customer had chosen an amount.
-            `undefined` (older API) keeps both pickers, as before. */}
+        {/* Each leg is offered only when it can actually be paid (#1029), from
+            the server's own eligibility so the screen cannot promise what the
+            handler refuses. `undefined` (older API) keeps both pickers. */}
         {chefTippable ? (
           <TipPicker
             label="Your chef"
@@ -128,8 +127,12 @@ export default function TipScreen() {
         ) : null}
         {riderTippable ? (
           <TipPicker
-            label="Your rider"
-            caption="Only if a rider delivered your order"
+            label={chefDelivered ? 'The delivery' : 'Your rider'}
+            caption={
+              chefDelivered
+                ? 'Your chef delivered this order themselves'
+                : 'Only if a rider delivered your order'
+            }
             amount={riderAmount}
             onChange={setRiderAmount}
           />

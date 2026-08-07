@@ -267,10 +267,18 @@ func (h *TipHandler) VerifyTip(c *gin.Context) {
 }
 
 // GetChefTips — GET /chef/tips. Tips the authed chef has received (paid only).
+//
+// The rider leg counts when the chef carried the order themselves (#1080):
+// that money reaches their account, so a list that only reads chef_amount shows
+// a chef income they cannot account for. On a third-party delivery the rider is
+// someone else and rider_user_id will not match, so nothing leaks.
 func (h *TipHandler) GetChefTips(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 	var tips []models.Tip
-	database.DB.Where("chef_user_id = ? AND status = ? AND chef_amount > 0", userID, models.TipPaid).
+	database.DB.
+		Where("status = ?", models.TipPaid).
+		Where(database.DB.Where("chef_user_id = ? AND chef_amount > 0", userID).
+			Or("rider_user_id = ? AND rider_amount > 0", userID)).
 		Preload("Order").Order("created_at DESC").Limit(100).Find(&tips)
 	c.JSON(http.StatusOK, gin.H{"data": tips})
 }
@@ -333,9 +341,64 @@ func markTipPaidByRazorpayOrder(rzOrderID, paymentID string) {
 // The chef's share is the WHOLE chef tip: a tip carries no commission and no tax
 // (INV-6), so unlike BuildOrderSplit there is no fee to subtract.
 
+// cashfreeTipPlan is where each leg of a tip settles. Both legs name the same
+// vendor on a chef-delivered order, because the chef carried it.
+type cashfreeTipPlan struct {
+	VendorID    string
+	ChefAmount  float64
+	RiderAmount float64
+	ChefUserID  *uuid.UUID
+	RiderUserID *uuid.UUID
+}
+
+func (p cashfreeTipPlan) Total() float64 { return p.ChefAmount + p.RiderAmount }
+
+// planCashfreeTip resolves a tip's beneficiaries, or the HTTP status and message
+// explaining why it cannot be paid. A zero status means the plan is payable.
+//
+// The rider leg is gated on the ORDER's fulfilment type, not on a global flag
+// (#1080): today every delivery is chef_delivery and the chef is the driver, so
+// the rider's tip has a real destination. The day a fleet exists, an order
+// carried by a DeliveryPartner still has no Cashfree route and must keep its
+// refusal rather than quietly paying the rider's tip to the kitchen.
+func planCashfreeTip(order *models.Order, req createTipRequest) (cashfreeTipPlan, int, string) {
+	if req.RiderAmount > 0 && order.FulfillmentType != models.FulfillmentChefDelivery {
+		return cashfreeTipPlan{}, http.StatusConflict, "Rider tips aren't available on this payment method yet"
+	}
+	if req.ChefAmount <= 0 && req.RiderAmount <= 0 {
+		return cashfreeTipPlan{}, http.StatusBadRequest, "Nothing to tip"
+	}
+
+	chef := &order.Chef
+	if chef.CashfreeVendorID == "" || !strings.EqualFold(chef.CashfreeVendorStatus, services.CashfreeVendorActive) {
+		// A real, explainable state — the chef's payout registration is not live —
+		// rather than the blanket message the Razorpay leg used to give everyone.
+		return cashfreeTipPlan{}, http.StatusConflict,
+			"This chef's payout account isn't active yet, so tips can't reach them"
+	}
+
+	plan := cashfreeTipPlan{VendorID: chef.CashfreeVendorID}
+	userID := chef.UserID
+	if req.ChefAmount > 0 {
+		plan.ChefAmount = req.ChefAmount
+		plan.ChefUserID = &userID
+	}
+	if req.RiderAmount > 0 {
+		plan.RiderAmount = req.RiderAmount
+		plan.RiderUserID = &userID
+	}
+	return plan, 0, ""
+}
+
 // createCashfreeTip charges a tip through Cashfree and hands the client a
 // checkout session. Mirrors respondCashfreeSession's payload so the app opens
 // the tip sheet with exactly the branch it already uses for an order.
+//
+// Both legs ride ONE gateway order with a single split line: they settle to the
+// same vendor, so a second charge would double the gateway fee to reach the same
+// account, and Cashfree takes one split per vendor. The legs stay independently
+// traceable on our side — the tip row keeps chef_amount and rider_amount apart,
+// which is what the two tip-received notifications are raised from.
 func (h *TipHandler) createCashfreeTip(c *gin.Context, order *models.Order, tip *models.Tip, req createTipRequest, customerID uuid.UUID) {
 	cf := services.GetCashfreeFor(order.Mode)
 	if cf == nil {
@@ -343,32 +406,17 @@ func (h *TipHandler) createCashfreeTip(c *gin.Context, order *models.Order, tip 
 		return
 	}
 
-	// Rider tips have no Cashfree route: DeliveryPartner carries only a Razorpay
-	// linked account. Say that plainly rather than reusing the chef's message,
-	// which is what made the original defect read as a chef-account problem.
-	if req.RiderAmount > 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "Rider tips aren't available on this payment method yet"})
-		return
-	}
-	if req.ChefAmount <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nothing to tip"})
+	plan, status, msg := planCashfreeTip(order, req)
+	if status != 0 {
+		c.JSON(status, gin.H{"error": msg})
 		return
 	}
 
-	chef := &order.Chef
-	if chef.CashfreeVendorID == "" || !strings.EqualFold(chef.CashfreeVendorStatus, services.CashfreeVendorActive) {
-		// A real, explainable state — the chef's payout registration is not live —
-		// rather than the blanket message the Razorpay leg used to give everyone.
-		c.JSON(http.StatusConflict, gin.H{
-			"error": "This chef's payout account isn't active yet, so tips can't reach them",
-		})
-		return
-	}
-
-	tip.ChefAmount = req.ChefAmount
-	chefUserID := chef.UserID
-	tip.ChefUserID = &chefUserID
-	tip.Amount = req.ChefAmount
+	tip.ChefAmount = plan.ChefAmount
+	tip.ChefUserID = plan.ChefUserID
+	tip.RiderAmount = plan.RiderAmount
+	tip.RiderUserID = plan.RiderUserID
+	tip.Amount = plan.Total()
 
 	tipPaise := services.ToPaise(tip.Amount)
 	// Deterministic order id keyed on the tip, so a retry lands on the SAME
@@ -388,7 +436,7 @@ func (h *TipHandler) createCashfreeTip(c *gin.Context, order *models.Order, tip 
 		},
 		// 100% to the chef — the platform keeps nothing.
 		Splits: []services.CashfreeVendorSplit{{
-			VendorID:    chef.CashfreeVendorID,
+			VendorID:    plan.VendorID,
 			AmountPaise: services.CashfreeAmountFromPaise(tipPaise),
 		}},
 		Tags: map[string]string{
