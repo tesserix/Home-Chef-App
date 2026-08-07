@@ -145,8 +145,7 @@ type ChefProfile struct {
 	FeaturedUntil *time.Time `gorm:"" json:"featuredUntil,omitempty"`
 
 	// Payment gateway linked accounts
-	StripeAccountID   string `gorm:"" json:"-"`
-	RazorpayAccountID string `gorm:"" json:"-"` // Razorpay Route linked account ID
+	StripeAccountID string `gorm:"" json:"-"`
 	// PaymentProvider picks which gateway a customer's order gets routed
 	// through: "cashfree" or "razorpay" (India), "stripe" (international).
 	//
@@ -167,34 +166,6 @@ type ChefProfile struct {
 	// trip Stripe on every page view. Refreshed on webhook + on demand.
 	StripeChargesEnabled bool `gorm:"default:false" json:"stripeChargesEnabled"`
 	StripePayoutsEnabled bool `gorm:"default:false" json:"stripePayoutsEnabled"`
-
-	// RazorpayProductID is the route product configuration on the linked
-	// account — the object the settlement bank account hangs off. Without it
-	// the account can receive transfers but has no payout destination.
-	RazorpayProductID string `gorm:"default:''" json:"-"`
-
-	// RazorpaySettlementStatus mirrors Razorpay's activation_status for that
-	// configuration. Only "activated" means a released transfer can actually
-	// reach the chef's bank; anything else is a chef silently going unpaid,
-	// which is why the admin queue reads this field.
-	RazorpaySettlementStatus string `gorm:"default:''" json:"razorpaySettlementStatus"`
-
-	// RazorpaySettlementRequirements is the raw requirements array from a
-	// needs_clarification review, kept verbatim so the admin surface can show
-	// which field Razorpay objected to and where to resolve it.
-	RazorpaySettlementRequirements string `gorm:"type:text;default:''" json:"-"`
-
-	// RazorpayStakeholderCreated mirrors
-	// SettlementRegistrationResult.StakeholderCreated: whether the individual
-	// behind RazorpayAccountID has been attached at Razorpay. Kept as its own
-	// column, not inferred from RazorpayAccountID being non-empty — a
-	// stakeholder failure right after a fresh account creation used to leave
-	// the account id persisted with no stakeholder, and every later retry
-	// skipped both steps forever because the code only ever attempted the
-	// stakeholder call for a brand-new account (review finding 3). Feeds
-	// SettlementRegistration.ExistingStakeholderCreated on the next save so a
-	// retry keeps re-attempting only the stakeholder step until it succeeds.
-	RazorpayStakeholderCreated bool `gorm:"default:false" json:"-"`
 
 	// PayoutAutoRelease is the admin's per-chef automation switch: "on",
 	// "off", or "" to follow payout.auto_release_default. A tri-state rather

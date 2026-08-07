@@ -280,10 +280,7 @@ export default function PayoutScreen() {
               <View style={styles.currentBannerHeader}>
                 <Text style={styles.currentBannerLabel}>Currently using Bank transfer</Text>
                 {(() => {
-                  const chip = payoutStatusChip(
-                    data.payoutRegistration,
-                    Boolean(data.razorpayConnected),
-                  );
+                  const chip = payoutStatusChip(data.payoutRegistration);
                   const tint = CHIP_TINTS[chip.tone];
                   return (
                     <View style={[styles.statusChip, { backgroundColor: tint.bg }]}>

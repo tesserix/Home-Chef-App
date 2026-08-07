@@ -281,25 +281,28 @@ func (h *AdminPayoutHandler) SetPayoutAutomation(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"payoutAutoRelease": req.Value})
 }
 
-// GetBlockedChefs lists chefs who cannot currently be paid, with Razorpay's
-// own requirements so the blockage is actionable rather than merely visible
-// (#747).
+// GetBlockedChefs lists chefs who cannot currently be paid, with the reason so
+// the blockage is actionable rather than merely visible (#747). Keyed on the
+// Cashfree vendor since #1086 — the Route activation_status it read before was
+// never written for any chef, so this listed the whole platform.
 func (h *AdminPayoutHandler) GetBlockedChefs(c *gin.Context) {
 	var chefs []models.ChefProfile
 	if err := database.DB.
-		Where("razorpay_settlement_status IS NULL OR razorpay_settlement_status <> ?", "activated").
+		Where("cashfree_vendor_id IS NULL OR cashfree_vendor_id = '' OR LOWER(cashfree_vendor_status) <> ?",
+			strings.ToLower(services.CashfreeVendorActive)).
 		Find(&chefs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load"})
 		return
 	}
 
 	out := make([]gin.H, 0, len(chefs))
-	for _, ch := range chefs {
+	for i, ch := range chefs {
 		out = append(out, gin.H{
-			"chefId":            ch.ID,
-			"businessName":      ch.BusinessName,
-			"settlementStatus":  ch.RazorpaySettlementStatus,
-			"requirements":      ch.RazorpaySettlementRequirements,
+			"chefId":       ch.ID,
+			"businessName": ch.BusinessName,
+			// Operators see the raw gateway status; chefs never do (#1082).
+			"settlementStatus":  ch.CashfreeVendorStatus,
+			"registration":      services.PayoutRegistrationFor(&chefs[i]),
 			"payoutAutoRelease": ch.PayoutAutoRelease,
 		})
 	}

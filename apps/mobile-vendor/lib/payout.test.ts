@@ -97,41 +97,44 @@ describe('summarisePayout', () => {
 // one from a gateway status string it does not own.
 describe('payoutStatusChip', () => {
   it('shows direct settlement once the server says verified', () => {
-    const chip = payoutStatusChip({ state: 'verified', message: 'Verified — payouts active' }, false);
+    const chip = payoutStatusChip({ state: 'verified', message: 'Verified — payouts active' });
     expect(chip.tone).toBe('success');
     expect(chip.label).toBe('Verified — payouts active');
   });
 
   it('shows the server message while verification is pending', () => {
-    const chip = payoutStatusChip({ state: 'pending', message: 'Pending verification' }, false);
+    const chip = payoutStatusChip({ state: 'pending', message: 'Pending verification' });
     expect(chip.tone).toBe('pending');
     expect(chip.label).toBe('Pending verification');
   });
 
   it('does not describe a failed registration as in progress', () => {
-    const chip = payoutStatusChip(
-      { state: 'failed', message: "Couldn't verify — please check your details" },
-      true,
-    );
+    const chip = payoutStatusChip({
+      state: 'failed',
+      message: "Couldn't verify — please check your details",
+    });
     expect(chip.tone).toBe('error');
     expect(chip.label).toBe("Couldn't verify — please check your details");
-  });
-
-  it('falls back to the Route state when the server sends no verdict', () => {
-    expect(payoutStatusChip(undefined, true).tone).toBe('success');
-    expect(payoutStatusChip(undefined, false).tone).toBe('pending');
   });
 
   // The wording is the server's, so it can be corrected without shipping an
   // app release. A locally-invented label would drift from it.
   it('renders the server wording rather than one of its own', () => {
-    const chip = payoutStatusChip({ state: 'pending', message: 'Almost there' }, true);
+    const chip = payoutStatusChip({ state: 'pending', message: 'Almost there' });
     expect(chip.label).toBe('Almost there');
   });
 
-  // 'none' means no details on file yet, which is not a settlement verdict.
-  it('ignores a "none" verdict and reports the Route state', () => {
-    const chip = payoutStatusChip({ state: 'none', message: 'Add your bank details' }, true);
-    expect(chip.label).toBe('Connected · ready for payouts');
+  // 'none' means no details on file yet — telling the chef to add them beats
+  // an "Activation pending" that suggests someone else is working on it.
+  it('passes on the "add your details" prompt', () => {
+    const chip = payoutStatusChip({ state: 'none', message: 'Add your bank details' });
+    expect(chip.tone).toBe('pending');
+    expect(chip.label).toBe('Add your bank details');
+  });
+
+  it('is pending when the server sends no verdict at all', () => {
+    const chip = payoutStatusChip(undefined);
+    expect(chip.tone).toBe('pending');
+    expect(chip.label).toBe('Activation pending');
   });
 });

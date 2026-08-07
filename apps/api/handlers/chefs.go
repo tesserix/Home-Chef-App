@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -2524,8 +2523,6 @@ func (h *ChefHandler) GetPayoutDetails(c *gin.Context) {
 		"bankAccountNumber": maskBankAccount(bankAccountNumber),
 		"bankIFSC":          bankIFSC,
 		"upiId":             maskEmail(upiID),
-		"razorpayConnected": chef.RazorpayAccountID != "",
-		"razorpayAccountId": maskID(chef.RazorpayAccountID),
 		"stripeConnected":   chef.StripeAccountID != "",
 		"stripeAccountId":   maskID(chef.StripeAccountID),
 		"paymentProvider":   chef.PaymentProvider,
@@ -2545,7 +2542,7 @@ var panPattern = regexp.MustCompile(`^[A-Z]{5}[0-9]{4}[A-Z]$`)
 // SavePayoutDetails saves the chef's payout information.
 // Sensitive fields (account number, UPI ID) are stored in GCP Secret Manager.
 // Only masked values are stored in the database for display purposes.
-// Also creates a Razorpay Route linked account so payments split directly to the chef.
+// Also registers the bank account with Cashfree so order money can reach it.
 func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
@@ -2569,12 +2566,11 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		return
 	}
 
-	// UPI is not an accepted payout destination (#767). Razorpay Route settles
-	// by NEFT/IMPS to a bank account and has no VPA destination, so a chef who
-	// nominated UPI could never be paid — accepting it only strands their
-	// earnings behind an "onboarded" facade. Reject anything but bank_transfer
-	// at the edge; UPI stays available for collection (customers paying), never
-	// for disbursement.
+	// UPI is not an accepted payout destination (#767). Neither Easy Split nor
+	// the Payouts rail disburses to a VPA, so a chef who nominated UPI could
+	// never be paid — accepting it only strands their earnings behind an
+	// "onboarded" facade. Reject anything but bank_transfer at the edge; UPI
+	// stays available for collection (customers paying), never for disbursement.
 	if req.PayoutMethod != "bank_transfer" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payoutMethod must be 'bank_transfer'; UPI payouts are not supported"})
 		return
@@ -2587,24 +2583,14 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 
 	var chef models.ChefProfile
 	var vendorID string
-	var settlementResult *services.SettlementRegistrationResult
-	var settlementErr error
 
-	// The chef read, the RegisterSettlementAccount call, and the persist of
-	// whatever it returns all run inside one transaction that locks this
-	// chef's row (SELECT ... FOR UPDATE) — the same pattern
-	// claimMenuItemImageSlot (handlers/menu.go) uses for the same class of
-	// race. RegisterSettlementAccount is synchronous (see below) and this
-	// action can be double-clicked or client-retried; two near-simultaneous
-	// requests both reading RazorpayAccountID=="" would otherwise both call
-	// POST /v2/accounts, each minting a FULL linked account (stakeholder +
-	// live bank settlement) at Razorpay — an orphaned duplicate whose money
-	// can never be merged back. The lock makes a concurrent request block
-	// until this one's transaction (read, up to 4 sequential gateway calls,
-	// persist) commits, so it observes the freshly-committed
-	// RazorpayAccountID/RazorpayProductID and reuses them instead of minting
-	// a second account (review finding 1; concurrency proof in
-	// chef_payout_race_test.go).
+	// The chef read and the payout-column write run inside one transaction that
+	// locks this chef's row (SELECT ... FOR UPDATE) — the same pattern
+	// claimMenuItemImageSlot (handlers/menu.go) uses for the same class of race.
+	// This action can be double-clicked or client-retried, and the vendor
+	// registration below reads what this transaction committed; without the lock
+	// two near-simultaneous saves could interleave and register the loser's bank
+	// details against the winner's row.
 	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Preload("User").Where("user_id = ?", userID).First(&chef).Error; err != nil {
@@ -2649,10 +2635,8 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 
 		// Store sensitive fields in GCP Secret Manager asynchronously
 		// (Secret Manager creation can take several seconds on first call).
-		// Fire-and-forget and independent of tx, so starting it here (rather
-		// than after the transaction commits) preserves the original timing:
-		// it runs concurrently with the synchronous gateway calls below
-		// instead of serialized after them.
+		// Fire-and-forget and independent of tx, so it runs concurrently with
+		// the synchronous vendor registrations below rather than after them.
 		go func() {
 			ctx := context.Background()
 			secretFields := map[string]string{
@@ -2671,72 +2655,6 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 			log.Printf("Secrets stored in Secret Manager for vendor %s", vendorID)
 		}()
 
-		// Register (or update) the chef's Razorpay Route settlement
-		// destination.
-		//
-		// Synchronous, not a goroutine: this call — not the account-creation
-		// step above it — decides whether the chef can ever be paid, so its
-		// outcome has to reach the response the chef is looking at right
-		// now. A goroutine's error is invisible to them; they would see
-		// "Payout details saved" and have no idea their bank details were
-		// rejected until an order fails to settle days later. The extra
-		// request latency (at most 4 sequential gateway calls on first
-		// registration, 1 on every re-save since the account/product are
-		// reused) is worth paying on this low-traffic settings action for
-		// that visibility.
-		//
-		// ExistingAccountID/ExistingProductID reuse whatever this chef
-		// already has (read under the lock above, so it reflects any
-		// concurrent request that already committed) so re-saving bank
-		// details never mints a second linked account.
-		rz := services.GetRazorpayFor(chef.Mode)
-		contactName := chef.User.FirstName + " " + chef.User.LastName
-		settlementResult, settlementErr = services.RegisterSettlementAccount(rz, services.SettlementRegistration{
-			ExistingAccountID:          chef.RazorpayAccountID,
-			ExistingProductID:          chef.RazorpayProductID,
-			ExistingStakeholderCreated: chef.RazorpayStakeholderCreated,
-			Email:                      chef.User.Email,
-			Phone:                      chef.User.Phone,
-			LegalName:                  chef.BusinessName,
-			ContactName:                contactName,
-			BusinessType:               "individual",
-			Account: services.SettlementAccount{
-				BeneficiaryName: req.BankAccountName,
-				AccountNumber:   req.BankAccountNumber,
-				IFSC:            req.BankIFSC,
-			},
-		})
-
-		// RegisterSettlementAccount returns whatever it managed to create
-		// even on a partial failure (e.g. the account exists but the
-		// product request failed) — persist it regardless of settlementErr,
-		// or a retry mints a duplicate account instead of resuming.
-		if settlementResult != nil {
-			reqJSON, jErr := json.Marshal(settlementResult.Requirements)
-			if jErr != nil {
-				log.Printf("payout-settlement: failed to marshal requirements for vendor %s: %v", vendorID, jErr)
-				services.CaptureBackgroundError(jErr)
-				reqJSON = []byte("[]")
-			}
-			settlementUpdates := map[string]any{
-				"razorpay_account_id":              settlementResult.AccountID,
-				"razorpay_product_id":              settlementResult.ProductID,
-				"razorpay_stakeholder_created":     settlementResult.StakeholderCreated,
-				"razorpay_settlement_status":       settlementResult.ActivationStatus,
-				"razorpay_settlement_requirements": string(reqJSON),
-			}
-			if uErr := tx.Model(&models.ChefProfile{}).Where("id = ?", chef.ID).Updates(settlementUpdates).Error; uErr != nil {
-				log.Printf("payout-settlement: failed to persist settlement result for vendor %s: %v", vendorID, uErr)
-				services.CaptureBackgroundError(uErr)
-			} else {
-				chef.RazorpayAccountID = settlementResult.AccountID
-				chef.RazorpayProductID = settlementResult.ProductID
-				chef.RazorpayStakeholderCreated = settlementResult.StakeholderCreated
-				chef.RazorpaySettlementStatus = settlementResult.ActivationStatus
-				chef.RazorpaySettlementRequirements = string(reqJSON)
-			}
-		}
-
 		return nil
 	})
 
@@ -2749,31 +2667,14 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		return
 	}
 
-	settlementErrorCode := ""
-	switch {
-	case settlementErr == nil:
-		log.Printf("payout-settlement: registered vendor %s (account=%s status=%s)", vendorID, chef.RazorpayAccountID, chef.RazorpaySettlementStatus)
-	case errors.Is(settlementErr, services.ErrNoSettlementAccount):
-		// Safety net: bank details are required above, so this should not fire —
-		// but if a registration ever reports no settlement destination, the
-		// response must not silently look like a payable account was configured.
-		settlementErrorCode = "no_settlement_account"
-		log.Printf("payout-settlement: vendor %s has no Route settlement destination", vendorID)
-	default:
-		settlementErrorCode = "settlement_registration_failed"
-		log.Printf("payout-settlement: registration failed for vendor %s: %v", vendorID, settlementErr)
-		services.CaptureBackgroundError(settlementErr)
-	}
-
-	// Register the same destination with the Cashfree Payouts rail, so the chef
-	// is payable by the disbursement engine as well as by Route.
+	// Register the destination with the Cashfree Payouts rail, so the chef is
+	// payable by the disbursement engine.
 	//
-	// AFTER the transaction, not inside it: the tx above already carries up to
-	// four sequential Razorpay calls, and adding a second gateway's round-trip
-	// would hold the chef row locked for the duration of both. Still synchronous
-	// within the request, for the reason the Route block states — a chef whose
-	// bank details were rejected has to learn it from the screen they are looking
-	// at, not from an unsettled payout days later.
+	// AFTER the transaction, not inside it: a gateway round-trip inside the tx
+	// would hold the chef's row locked for its whole duration. Still synchronous
+	// within the request — a chef whose bank details were rejected has to learn
+	// it from the screen they are looking at, not from an unsettled payout days
+	// later.
 	//
 	// The instrument is passed from the request rather than read back from
 	// Secret Manager, because the secrets above are stored in a fire-and-forget
@@ -2833,16 +2734,13 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 	})
 
 	resp := gin.H{
-		"message":                  "Payout details saved",
-		"payoutMethod":             chef.PayoutMethod,
-		"bankAccountName":          req.BankAccountName,
-		"bankAccountNumber":        maskBankAccount(req.BankAccountNumber),
-		"bankIFSC":                 req.BankIFSC,
-		"upiId":                    maskEmail(req.UpiID),
-		"razorpayConnected":        chef.RazorpayAccountID != "",
-		"razorpayAccountId":        maskID(chef.RazorpayAccountID),
-		"razorpaySettlementStatus": chef.RazorpaySettlementStatus,
-		"panOnFile":                chef.PanNumber != "",
+		"message":           "Payout details saved",
+		"payoutMethod":      chef.PayoutMethod,
+		"bankAccountName":   req.BankAccountName,
+		"bankAccountNumber": maskBankAccount(req.BankAccountNumber),
+		"bankIFSC":          req.BankIFSC,
+		"upiId":             maskEmail(req.UpiID),
+		"panOnFile":         chef.PanNumber != "",
 		// Registration ran synchronously above, so this is the live verdict, in
 		// the chef's own words — Cashfree's status strings are gateway
 		// vocabulary and never leave the server (#1082).
@@ -2850,11 +2748,6 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 	}
 	if easySplitErrorCode != "" {
 		resp["payoutRegistrationError"] = easySplitErrorCode
-	}
-	if settlementErrorCode != "" {
-		// Present even for the UPI case: the response must not read as an
-		// unqualified success when the chef has no way to be paid yet.
-		resp["razorpaySettlementError"] = settlementErrorCode
 	}
 	if payoutMethodErrorCode != "" {
 		// Same reasoning for the payout rail: a chef whose beneficiary was

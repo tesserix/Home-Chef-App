@@ -42,7 +42,6 @@ interface PayoutResponse {
   bankAccountNumber: string;
   bankIFSC: string;
   upiId: string;
-  razorpayConnected: boolean;
   stripeConnected: boolean;
   pendingPayout?: number;
   lastPayout?: LastPayout | null;
