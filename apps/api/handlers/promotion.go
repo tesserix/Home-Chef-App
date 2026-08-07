@@ -148,9 +148,7 @@ func (h *PromotionHandler) ConfirmFeaturedAd(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
 	var req struct {
-		PromotionID       string `json:"promotionId" binding:"required"`
-		RazorpayPaymentID string `json:"razorpayPaymentId" binding:"required"`
-		RazorpayOrderID   string `json:"razorpayOrderId" binding:"required"`
+		PromotionID string `json:"promotionId" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -176,39 +174,15 @@ func (h *PromotionHandler) ConfirmFeaturedAd(c *gin.Context) {
 		return
 	}
 
-	// Verify payment. SECURITY: bind the fetched payment to THIS promotion's
-	// order + amount, and FAIL CLOSED when the gateway is unconfigured. The prior
-	// `if rz != nil` with no order/amount binding let a chef activate a paid
-	// featured listing for free by passing any captured payment id (a ₹1 charge).
-	// Cashfree gives the client no payment id or signature, so the capture is read
-	// back from the gateway and bound by the order id, which is the promo's own UUID.
-	paymentID := req.RazorpayPaymentID
-	if promo.PaymentProvider == models.PaymentProviderCashfree {
-		pay, cerr := services.VerifyCashfreeCharge(chef.Mode, promo.RazorpayOrderID, promo.Amount)
-		if cerr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
-			return
-		}
-		paymentID = pay.CFPaymentID.String()
-	} else {
-		// Mirrors VerifyPayment (payment.go).
-		rz := services.GetRazorpayFor(chef.Mode)
-		if rz == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-			return
-		}
-		payment, err := rz.FetchPayment(req.RazorpayPaymentID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
-			return
-		}
-		if ok, msg := services.ValidateCapturedPayment(
-			payment.Status, payment.OrderID, promo.RazorpayOrderID,
-			payment.Amount, services.ToPaise(promo.Amount)); !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
-			return
-		}
+	// SECURITY: the client supplies no payment id (#1086) — the capture is read
+	// back from the gateway and bound to THIS promotion's order id and amount, so a
+	// chef cannot activate a paid listing with some other captured charge.
+	pay, cerr := services.VerifyCashfreeCharge(chef.Mode, promo.RazorpayOrderID, promo.Amount)
+	if cerr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
+		return
 	}
+	paymentID := pay.CFPaymentID.String()
 
 	now := time.Now()
 	expiresAt := now.AddDate(0, 1, 0)

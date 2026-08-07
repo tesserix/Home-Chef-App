@@ -182,14 +182,11 @@ export function useLeaveGroup(groupId: string | undefined) {
 }
 
 export interface GroupPayResponse {
-  razorpayOrderId: string;
-  razorpayKeyId: string;
-  amount: number;
+  amount: number; // paise
   currency: string;
-  /** Which gateway minted this charge. Absent on older servers → razorpay. */
-  provider?: string;
+  provider: string;
   cashfreeOrderId?: string;
-  cashfreePaymentSessionId?: string;
+  cashfreePaymentSessionId: string;
   /** SANDBOX | PRODUCTION — different hosts, the client cannot infer it. */
   cashfreeEnv?: string;
 }

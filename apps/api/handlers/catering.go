@@ -803,15 +803,6 @@ func (h *CateringHandler) VerifyDeposit(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request ID"})
 		return
 	}
-	var req struct {
-		RazorpayPaymentID string `json:"razorpayPaymentId" binding:"required"`
-		RazorpayOrderID   string `json:"razorpayOrderId"`
-		RazorpaySignature string `json:"razorpaySignature"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
 	var request models.CateringRequest
 	if err := database.DB.Where("id = ? AND customer_id = ?", requestID, userID).First(&request).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Catering request not found"})
@@ -821,54 +812,29 @@ func (h *CateringHandler) VerifyDeposit(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "Deposit already confirmed", "data": request.ToResponse()})
 		return
 	}
-	// Cashfree hands the client no payment id or signature, so the capture is read
-	// back from the gateway and bound by the order id — the request's own UUID.
-	if request.PaymentProvider == models.PaymentProviderCashfree {
-		pay, cerr := services.VerifyCashfreeCharge(request.Mode, request.RazorpayOrderID, request.DepositAmount)
-		if cerr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Deposit payment not captured"})
-			return
-		}
-		// Both rails converge on the same confirmation below; the gateway fetch has
-		// already done for Cashfree what the checks in the else-branch do for Razorpay.
-		req.RazorpayPaymentID = pay.CFPaymentID.String()
-	} else {
-		rz := services.GetRazorpayFor(request.Mode)
-		if rz == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-			return
-		}
-		payment, err := rz.FetchPayment(req.RazorpayPaymentID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
-			return
-		}
-		// SECURITY: the deposit order must have been created first (CreateDeposit
-		// stamps razorpay_order_id), and the fetched payment must be captured, bind to
-		// THAT order, and cover the deposit amount. Without this, calling verify
-		// without create — or reusing any captured payment on the merchant account
-		// (a ₹1 charge) — would confirm the booking for free.
-		if ok, msg := services.ValidateCapturedPayment(
-			payment.Status, payment.OrderID, request.RazorpayOrderID,
-			payment.Amount, services.ToPaise(request.DepositAmount)); !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
-			return
-		}
-		// Verify the Checkout signature when the client sends it (the binding + amount
-		// checks above are the hard gate and don't depend on the client).
-		if req.RazorpaySignature != "" &&
-			!services.VerifyPaymentSignature(request.RazorpayOrderID, req.RazorpayPaymentID, req.RazorpaySignature) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
-			return
-		}
+	// The client hands over no payment id or signature (#1086): the capture is read
+	// back from the gateway, bound by the order id stored at create time and by the
+	// deposit amount, so verify-without-create cannot confirm a booking for free.
+	pay, cerr := services.VerifyCashfreeCharge(request.Mode, request.RazorpayOrderID, request.DepositAmount)
+	if cerr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Deposit payment not captured"})
+		return
 	}
 	now := time.Now()
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		request.Status = models.CateringStatusConfirmed
 		request.DepositStatus = "paid"
-		request.RazorpayPaymentID = req.RazorpayPaymentID
+		request.RazorpayPaymentID = pay.CFPaymentID.String()
 		request.DepositPaidAt = &now
-		if err := tx.Save(&request).Error; err != nil {
+		// Write only the confirmation columns — a full Save would rewrite the
+		// customer's event details from a row read before the gateway round-trip.
+		if err := tx.Model(&models.CateringRequest{}).Where("id = ?", request.ID).
+			Updates(map[string]any{
+				"status":              request.Status,
+				"deposit_status":      request.DepositStatus,
+				"razorpay_payment_id": request.RazorpayPaymentID,
+				"deposit_paid_at":     now,
+			}).Error; err != nil {
 			return err
 		}
 		// Notify the chef the booking is confirmed (best-effort via the outbox).

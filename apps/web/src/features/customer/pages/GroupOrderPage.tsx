@@ -4,12 +4,11 @@ import { ChevronLeft, Plus, Trash2, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
 import { Button } from '@/shared/components/ui';
-import { openRazorpayCheckout } from '@/shared/utils/razorpay';
 import { openCashfreeCheckout } from '@/shared/utils/cashfree';
 import type { MenuItem, Address } from '@/shared/types';
 
 // Group / office orders (#46) — web parity. Shared cart hub: add your own items,
-// host locks + collects, each participant pays their split share via Razorpay.
+// host locks + collects, each participant pays their split share via Cashfree.
 
 interface GroupParticipant {
   id: string;
@@ -49,14 +48,11 @@ interface GroupDetail {
   joinToken?: string;
 }
 interface GroupPayResponse {
-  razorpayOrderId: string;
-  razorpayKeyId: string;
   amount: number;
   currency: string;
-  /** Which gateway minted the share. Absent on older servers → razorpay. */
-  provider?: string;
+  provider: string;
   cashfreeOrderId?: string;
-  cashfreePaymentSessionId?: string;
+  cashfreePaymentSessionId: string;
   /** SANDBOX | PRODUCTION — different hosts, the client cannot infer it. */
   cashfreeEnv?: string;
 }
@@ -141,32 +137,16 @@ export default function GroupOrderPage() {
       const pd = await apiClient.post<GroupPayResponse>(`/group-orders/${id}/pay`, {});
       // Cashfree hands back no payment id or signature, so verify carries no body
       // — the server re-reads the capture from the gateway and binds it by order id.
-      if (pd.provider === 'cashfree' && pd.cashfreePaymentSessionId) {
-        await openCashfreeCheckout({
-          data: {
-            cashfreePaymentSessionId: pd.cashfreePaymentSessionId,
-            cashfreeOrderId: pd.cashfreeOrderId ?? '',
-            cashfreeEnv: pd.cashfreeEnv,
-            amount: pd.amount,
-            currency: pd.currency,
-          },
-          onSettled: async () => {
-            await apiClient.post(`/group-orders/${id}/pay/verify`, {});
-            invalidate();
-            toast.success('Share paid!');
-          },
-          onDismiss: () => toast.error('Payment cancelled'),
-        });
-        return;
-      }
-      openRazorpayCheckout({
-        data: pd,
-        description: 'Your group order share',
-        onVerified: async (resp) => {
-          await apiClient.post(`/group-orders/${id}/pay/verify`, {
-            razorpayPaymentId: resp.razorpay_payment_id,
-            razorpayOrderId: resp.razorpay_order_id,
-          });
+      await openCashfreeCheckout({
+        data: {
+          cashfreePaymentSessionId: pd.cashfreePaymentSessionId,
+          cashfreeOrderId: pd.cashfreeOrderId ?? '',
+          cashfreeEnv: pd.cashfreeEnv,
+          amount: pd.amount,
+          currency: pd.currency,
+        },
+        onSettled: async () => {
+          await apiClient.post(`/group-orders/${id}/pay/verify`, {});
           invalidate();
           toast.success('Share paid!');
         },
