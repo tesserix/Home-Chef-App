@@ -58,7 +58,12 @@ import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { FilterSheet } from '../../components/home/FilterSheet';
-import { CATERING_ENABLED, TIFFIN_ENABLED, WALLET_ENABLED } from '../../lib/features';
+import {
+  CATERING_ENABLED,
+  CHEFS_MAP_ENABLED,
+  TIFFIN_ENABLED,
+  WALLET_ENABLED,
+} from '../../lib/features';
 import { collectCuisineArt, type CuisineArt } from '../../lib/cuisine-art';
 import { ActiveMealPlanCard } from '../../components/meal-plan/ActiveMealPlanCard';
 import { useIsGuest } from '../../hooks/useRequireAccount';
@@ -313,23 +318,26 @@ export default function HomeScreen() {
             )}
           </Pressable>
         ) : null}
-        <Pressable
-          onPress={() => router.push('/chefs-map')}
-          accessibilityRole="button"
-          accessibilityLabel="View chefs on a map"
-          android_ripple={{ color: ROW_RIPPLE, borderless: true, radius: 20 }}
-        >
-          {({ pressed }) => (
-            <View
-              style={[
-                styles.mapButton,
-                pressed && Platform.OS === 'ios' && styles.pressedIOS,
-              ]}
-            >
-              <Map size={18} color={customerColors.charcoal.DEFAULT} />
-            </View>
-          )}
-        </Pressable>
+        {/* Map hidden until a Maps SDK key exists — see CHEFS_MAP_ENABLED. */}
+        {CHEFS_MAP_ENABLED ? (
+          <Pressable
+            onPress={() => router.push('/chefs-map')}
+            accessibilityRole="button"
+            accessibilityLabel="View chefs on a map"
+            android_ripple={{ color: ROW_RIPPLE, borderless: true, radius: 20 }}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.mapButton,
+                  pressed && Platform.OS === 'ios' && styles.pressedIOS,
+                ]}
+              >
+                <Map size={18} color={customerColors.charcoal.DEFAULT} />
+              </View>
+            )}
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={() => router.push('/notifications')}
           accessibilityRole="button"
