@@ -1,11 +1,12 @@
 import React from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { ChevronLeft, MapPin } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useChefs } from '../hooks/useChefs';
+import { CHEFS_MAP_ENABLED } from '../lib/features';
 
 // Fallback when no chef has coordinates yet (Bengaluru centre). The map recenters
 // on the first located chef when one exists.
@@ -46,6 +47,15 @@ function FloatingBackButton() {
 
 export default function ChefsMapScreen() {
   const { data, isLoading } = useChefs({ limit: 50 });
+
+  // Hiding the home-screen button does not close this route: a deep link
+  // (`homechef-customer://chefs-map`) still lands here, and a deep-linked
+  // MapView crashes Android just as hard — there is no manifest API key. Bounce
+  // to the tabs before anything below can construct one. This is a gate, not a
+  // deletion; flip CHEFS_MAP_ENABLED and the screen below works unchanged.
+  // Placed after the hook so hook order stays stable across renders.
+  if (!CHEFS_MAP_ENABLED) return <Redirect href="/(tabs)" />;
+
   const located = (data?.data ?? []).filter(
     (c) => typeof c.latitude === 'number' && typeof c.longitude === 'number' && (c.latitude !== 0 || c.longitude !== 0)
   );
