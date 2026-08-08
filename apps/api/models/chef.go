@@ -507,8 +507,13 @@ type ChefProfileResponse struct {
 	// cannot be ordered from right now. Set only on the reduced closed payload
 	// (see ToClosedResponse); empty and omitted everywhere else, where the
 	// ordinary open/closed presentation already says enough.
-	UnavailableMessage string    `json:"unavailableMessage,omitempty"`
-	CreatedAt          time.Time `json:"createdAt"`
+	UnavailableMessage string `json:"unavailableMessage,omitempty"`
+	// TestMode marks a sandbox kitchen so the app can badge it. Set ONLY for a
+	// viewer the test-mode allowlist admits — for everyone else the kitchen is
+	// already collapsed to the closed payload, and saying "test" there would
+	// disclose the very thing that payload exists to withhold.
+	TestMode  bool      `json:"testMode,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // ClosedForMaintenanceMessage is what a customer reads on a kitchen an admin has

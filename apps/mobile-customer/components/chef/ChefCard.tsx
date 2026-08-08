@@ -63,6 +63,12 @@ export function ChefCard({ chef }: ChefCardProps) {
 
   const hasImage = Boolean(chef.imageUrl);
 
+  // The API serves a reduced payload — name and photo, nothing actionable, plus
+  // this message — for a kitchen this customer may not order from: under
+  // maintenance (#794), or in test mode with the customer off the allowlist
+  // (#1163). Its detail route 404s, so the card must not be tappable at all.
+  const unorderable = Boolean(chef.unavailableMessage);
+
   // Real-time availability presentation (server-computed). The dot + word reflect
   // the SAME gates the order path enforces (accepting + live schedule + daily
   // cutoff + platform hours), so an "Open" card can no longer be rejected at
@@ -94,15 +100,22 @@ export function ChefCard({ chef }: ChefCardProps) {
       <View style={styles.innerClip}>
         <Pressable
           onPress={handlePress}
-          accessibilityLabel={`View ${chef.name}`}
+          disabled={unorderable}
+          accessibilityLabel={
+            unorderable ? `${chef.name} — unavailable` : `View ${chef.name}`
+          }
           accessibilityRole="button"
-          android_ripple={{ color: CARD_RIPPLE, borderless: false }}
+          accessibilityState={{ disabled: unorderable }}
+          android_ripple={
+            unorderable ? undefined : { color: CARD_RIPPLE, borderless: false }
+          }
         >
           {({ pressed }) => (
             <View
               style={[
                 styles.card,
                 pressed && Platform.OS === 'ios' && styles.cardPressed,
+                unorderable && styles.cardUnorderable,
               ]}
             >
               {/* --- Photo area: 4:3, full-width --- */}
@@ -274,6 +287,14 @@ export function ChefCard({ chef }: ChefCardProps) {
                   </Text>
                 </View>
 
+                {/* Server-supplied reason, rendered verbatim — the customer is
+                    owed one, and a bare dimmed card is not it. */}
+                {unorderable && (
+                  <Text style={styles.unavailable} numberOfLines={2}>
+                    {chef.unavailableMessage}
+                  </Text>
+                )}
+
                 {/* Outside this chef's delivery range — they're listed because
                     they offer pickup. Restrained text, matching the card's
                     chrome-light style. Only shown when the app knows the
@@ -311,6 +332,10 @@ const styles = StyleSheet.create({
   cardPressed: {
     opacity: 0.95,
     transform: [{ scale: 0.97 }],
+  },
+  // Dimmed enough to read as inert, not so far that the name stops being legible.
+  cardUnorderable: {
+    opacity: 0.55,
   },
 
   // --- Photo --- 4:3 aspect ratio
@@ -497,5 +522,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: customerColors.charcoal.soft,
     marginTop: 2,
+  },
+  unavailable: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    lineHeight: 16,
+    color: customerColors.charcoal.soft,
+    marginTop: 4,
   },
 });

@@ -316,6 +316,12 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		}
 	}
 
+	// Last word on how a test kitchen appears, deliberately after every
+	// enrichment above: badges and availability are computed for the whole page,
+	// and any of them would otherwise re-open a card the visibility rule closed.
+	applyTestModePresentation(chefs, responses,
+		services.GetTestModePolicy().MayViewTestChefs(viewerEmail(c)))
+
 	c.JSON(http.StatusOK, gin.H{
 		"data": responses,
 		"pagination": gin.H{
@@ -437,6 +443,9 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 	}
 
 	resp := chef.ToPublicResponse(schedules)
+	// Reached only when the viewer is allowlisted — anyone else took the reduced
+	// branch above — so this badges the kitchen without disclosing anything.
+	resp.TestMode = chef.IsTestMode()
 	resp.ProBadge = services.IsChefPremium(chef.ID) // Verified-Pro badge (#44)
 	// Delivery capability: the chef opted into self-delivery OR a 3PL is live. When
 	// on, DeliverableToYou (below) decides per-customer reach using the chef's
@@ -494,6 +503,27 @@ func viewerEmail(c *gin.Context) string {
 		}
 	}
 	return ""
+}
+
+// applyTestModePresentation settles how each test-mode kitchen on a listing page
+// is presented, in place.
+//
+// Outside the allowlist the card collapses to the closed payload — the name
+// survives, everything actionable does not, and the app draws it disabled. The
+// SQL scope alone is not enough: it only removes BORN-test kitchens, so an
+// established kitchen an admin flipped to test would otherwise list as fully
+// open and orderable (#1163).
+func applyTestModePresentation(chefs []models.ChefProfile, responses []models.ChefProfileResponse, allowed bool) {
+	for i := range chefs {
+		if i >= len(responses) || !chefs[i].IsTestMode() {
+			continue
+		}
+		if allowed {
+			responses[i].TestMode = true
+			continue
+		}
+		responses[i] = chefs[i].ToClosedResponse()
+	}
 }
 
 // chefVisibleTo applies the test-mode visibility rule to a single loaded chef.
