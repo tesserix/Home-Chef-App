@@ -75,7 +75,7 @@ func setupEntitlementDB(t *testing.T) *gorm.DB {
 			orders_count INTEGER DEFAULT 0, gross_revenue REAL DEFAULT 0,
 			platform_commission REAL DEFAULT 0, cgst REAL DEFAULT 0, sgst REAL DEFAULT 0,
 			igst REAL DEFAULT 0, tds REAL DEFAULT 0, penalty_deductions REAL DEFAULT 0,
-			bonus_additions REAL DEFAULT 0, net_payout REAL DEFAULT 0,
+			bonus_additions REAL DEFAULT 0, recovery_deductions REAL DEFAULT 0, net_payout REAL DEFAULT 0,
 			status TEXT, paid_at DATETIME, payout_ref TEXT, created_at DATETIME
 		)`).Error)
 	return db
