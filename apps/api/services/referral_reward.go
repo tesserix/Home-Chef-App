@@ -62,16 +62,13 @@ func MaybeGrantReward(db *gorm.DB, orderID uuid.UUID) {
 		return
 	}
 
-	// Fraud guard: the referrer and referee must not share a device (best-effort
-	// FCM-token dedupe — the most common self-referral signal we have).
-	if ref.RefereeDevice != "" {
-		var referrer models.User
-		if err := db.Select("fcm_token").First(&referrer, "id = ?", ref.ReferrerUserID).Error; err == nil {
-			if referrer.FCMToken != "" && referrer.FCMToken == ref.RefereeDevice {
-				rejectReferral(db, &ref, "device shared with referrer")
-				return
-			}
-		}
+	// Fraud guard: the referrer and referee must not share a handset — the most
+	// common self-referral signal we have. Keyed on the device registry rather
+	// than a shared FCM token (#1164), which missed a rotated token or an
+	// install that declined notifications.
+	if shared, err := SharesDevice(db, ref.ReferrerUserID, ref.RefereeUserID); err == nil && shared {
+		rejectReferral(db, &ref, "device shared with referrer")
+		return
 	}
 
 	// The rewards are POINTS; the budget cap is money. Convert at the live redeem

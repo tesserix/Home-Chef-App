@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
@@ -161,14 +162,15 @@ func reconcileChefFCMTopics(userID interface{}, prev, next models.ChefNotificati
 		{topic: "chef-promo", wasOn: prev.Promo, nowOn: next.Promo},
 	}
 
-	// Look up the user's FCM token. If they haven't registered one
-	// yet (e.g. notification permission denied) there's nothing to do.
-	uid, ok := userID.(interface{ String() string })
+	// A preference is the account's, not one handset's, so every device the
+	// chef is signed in on has to be (un)subscribed (#1164). No registered
+	// device (e.g. notification permission denied) means there's nothing to do.
+	uid, ok := userID.(uuid.UUID)
 	if !ok {
 		return
 	}
-	var user models.User
-	if err := database.DB.Where("id = ?", uid.String()).First(&user).Error; err != nil || user.FCMToken == "" {
+	tokens, err := services.ActiveDeviceTokens(database.DB, uid)
+	if err != nil || len(tokens) == 0 {
 		return
 	}
 
@@ -176,15 +178,17 @@ func reconcileChefFCMTopics(userID interface{}, prev, next models.ChefNotificati
 		if s.wasOn == s.nowOn {
 			continue
 		}
-		var err error
-		if s.nowOn {
-			err = services.SubscribeToFCMTopic(user.FCMToken, s.topic)
-		} else {
-			err = services.UnsubscribeFromFCMTopic(user.FCMToken, s.topic)
-		}
-		if err != nil {
-			log.Printf("fcm topic reconcile failed (token=…%s topic=%s on=%v): %v",
-				lastN(user.FCMToken, 6), s.topic, s.nowOn, err)
+		for _, token := range tokens {
+			var err error
+			if s.nowOn {
+				err = services.SubscribeToFCMTopic(token, s.topic)
+			} else {
+				err = services.UnsubscribeFromFCMTopic(token, s.topic)
+			}
+			if err != nil {
+				log.Printf("fcm topic reconcile failed (token=…%s topic=%s on=%v): %v",
+					lastN(token, 6), s.topic, s.nowOn, err)
+			}
 		}
 	}
 }

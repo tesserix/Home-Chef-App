@@ -12,6 +12,7 @@ import axios, {
 } from 'axios';
 import { clearTokens } from '../utils/storage';
 import { clearStoredSession, refreshSession } from '../auth/bff-session';
+import { deviceIdSync } from '../auth/device-identity';
 
 export interface UpgradeRequiredPayload {
   minVersion?: string;
@@ -116,6 +117,12 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
       // remembered-device token so a trusted device skips the challenge.
       if (clientApp) {
         config.headers['X-Client-App'] = clientApp;
+      }
+      // Names the install so per-device push registration and the new-device
+      // sign-in notice key on this device rather than the account (#1164).
+      const deviceId = deviceIdSync();
+      if (deviceId) {
+        config.headers['X-Device-Id'] = deviceId;
       }
       const deviceToken = getDeviceToken?.();
       if (deviceToken) {

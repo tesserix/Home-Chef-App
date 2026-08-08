@@ -30,6 +30,15 @@ type UpsertUserRequest struct {
 	// to apps/api. Forwarded as a JSON boolean; omitting it (e.g., from the
 	// social-login / OIDC callback path) defaults to false on the API side.
 	MarketingConsent bool `json:"marketing_consent"`
+	// Device metadata for the install this sign-in came from, so apps/api can
+	// register it and warn the owner about one they haven't used before
+	// (#1164). All optional — older clients send none of it.
+	DeviceID    string `json:"device_id,omitempty"`
+	Platform    string `json:"platform,omitempty"`
+	DeviceLabel string `json:"device_label,omitempty"`
+	AppVersion  string `json:"app_version,omitempty"`
+	// IP is the caller's address as seen by the BFF, never a client-supplied value.
+	IP string `json:"ip,omitempty"`
 }
 
 type UpsertUserResponse struct {

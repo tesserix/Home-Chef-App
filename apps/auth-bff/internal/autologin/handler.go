@@ -21,6 +21,7 @@ func (h *Handler) post(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_body"})
 		return
 	}
+	req.IP = c.ClientIP()
 	resp, err := h.d.AutoLogin(c.Request.Context(), req)
 	switch {
 	case errors.Is(err, ErrTenantNotAllowed):

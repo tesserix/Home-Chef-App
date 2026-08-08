@@ -39,6 +39,13 @@ type Deps struct {
 type Request struct {
 	IDToken          string `json:"id_token" binding:"required"`
 	ExpectedTenantID string `json:"expected_tenant_id" binding:"required"`
+	// Device metadata forwarded to apps/api's device registry (#1164).
+	DeviceID    string `json:"device_id"`
+	Platform    string `json:"platform"`
+	DeviceLabel string `json:"device_label"`
+	AppVersion  string `json:"app_version"`
+	// IP is filled from the connection by the handler, never from the body.
+	IP string `json:"-"`
 }
 
 type Response struct {
@@ -104,6 +111,11 @@ func (d *Deps) AutoLogin(ctx context.Context, req Request) (*Response, error) {
 		Avatar:        tok.Picture,
 		EmailVerified: tok.EmailVerified,
 		Role:          role,
+		DeviceID:      req.DeviceID,
+		Platform:      req.Platform,
+		DeviceLabel:   req.DeviceLabel,
+		AppVersion:    req.AppVersion,
+		IP:            req.IP,
 	})
 	if err != nil {
 		return nil, err

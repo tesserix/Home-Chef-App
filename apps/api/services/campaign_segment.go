@@ -103,7 +103,10 @@ func SegmentReachable(db *gorm.DB, c SegmentCriteria, channel string) ([]uuid.UU
 
 	col := "email_enabled"
 	if channel == models.CampaignChannelPush {
-		q = q.Where("fcm_token <> ''")
+		// Reachable means at least one live device, not the legacy single
+		// users.fcm_token column (#1164).
+		q = q.Where(`EXISTS (SELECT 1 FROM user_devices d
+			WHERE d.user_id = users.id AND d.revoked_at IS NULL AND d.fcm_token <> '')`)
 		col = "push_enabled"
 	} else {
 		q = q.Where("email <> ''")

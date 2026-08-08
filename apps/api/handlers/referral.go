@@ -119,15 +119,13 @@ func (h *ReferralHandler) AcceptReferral(c *gin.Context) {
 		return
 	}
 
-	// Best-effort device snapshot for fraud dedupe.
-	var user models.User
-	database.DB.Select("fcm_token").First(&user, "id = ?", userID)
-
 	ref, err := services.AcceptReferral(database.DB, services.AcceptReferralInput{
 		RefereeUserID: userID,
 		Code:          req.Code,
-		Device:        user.FCMToken,
-		IP:            c.ClientIP(),
+		// Best-effort device snapshot for the audit trail; the shared-handset
+		// fraud check itself reads the device registry (#1164).
+		Device: c.GetHeader(HdrDeviceID),
+		IP:     c.ClientIP(),
 	})
 	if err != nil {
 		switch {

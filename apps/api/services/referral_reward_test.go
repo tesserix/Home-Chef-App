@@ -50,6 +50,7 @@ func setupRewardDB(t *testing.T) *gorm.DB {
 		require.NoError(t, db.Exec(s).Error)
 	}
 	orig := database.DB
+	createUserDevicesTable(t, db)
 	database.DB = db
 	t.Cleanup(func() { database.DB = orig })
 	return db
@@ -163,8 +164,13 @@ func TestMaybeGrantReward_Disabled(t *testing.T) {
 func TestMaybeGrantReward_DeviceDedupe(t *testing.T) {
 	db := setupRewardDB(t)
 	referrer, referee := uuid.New(), uuid.New()
-	// Referrer and referee share a device token → self-referral signal.
-	require.NoError(t, db.Exec(`INSERT INTO users (id, fcm_token) VALUES (?, 'SHARED-DEVICE')`, referrer.String()).Error)
+	// Referrer and referee are signed in on the same handset → self-referral
+	// signal. Keyed on the device registry since #1164.
+	require.NoError(t, db.Exec(`INSERT INTO users (id) VALUES (?)`, referrer.String()).Error)
+	for _, uid := range []uuid.UUID{referrer, referee} {
+		_, err := RecordDevice(db, RecordDeviceInput{UserID: uid, DeviceID: "SHARED-DEVICE", App: "customer"})
+		require.NoError(t, err)
+	}
 	refID := seedPendingReferral(t, db, referrer, referee, "SHARED-DEVICE")
 	orderID := seedPaidOrder(t, db, referee)
 

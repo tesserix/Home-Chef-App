@@ -1,5 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 
+import { describeDevice, getDeviceId } from "./device-identity";
+
 const SESSION_KEY = "hc_session_token";
 
 // Keep the BFF session token readable across restarts / pre-unlock launches so
@@ -89,10 +91,20 @@ export async function autoLogin(
   if (!idToken) {
     throw new Error("autoLogin: idToken is empty");
   }
+  // Naming the install lets the API keep this device's push token alongside the
+  // user's others and warn them about a sign-in they don't recognise (#1164).
+  const device = describeDevice();
   const r = await fetch(`${bffUrl}/auth/auto-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id_token: idToken, expected_tenant_id: expectedTenantId }),
+    body: JSON.stringify({
+      id_token: idToken,
+      expected_tenant_id: expectedTenantId,
+      device_id: await getDeviceId(),
+      platform: device.platform,
+      device_label: device.label,
+      app_version: device.appVersion,
+    }),
   });
   if (!r.ok) {
     // Try to extract the BFF's structured error body (e.g.

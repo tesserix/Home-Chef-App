@@ -22,6 +22,7 @@ import (
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 func setupCampaignHandlerDB(t *testing.T) *gorm.DB {
@@ -50,6 +51,7 @@ func setupCampaignHandlerDB(t *testing.T) *gorm.DB {
 	orig := database.DB
 	database.DB = db
 	t.Cleanup(func() { database.DB = orig })
+	createUserDevicesTable(t, db)
 	return db
 }
 
@@ -75,9 +77,11 @@ func adminReq(t *testing.T, method, path string, register func(*gin.Engine), bod
 
 func TestAdminCreateAndPreviewCampaign(t *testing.T) {
 	db := setupCampaignHandlerDB(t)
-	// one reachable customer
+	// one reachable customer — push reachability reads the device registry (#1164)
+	reachable := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO users (id, email, role, is_active, fcm_token, marketing_consent) VALUES (?,?,?,?,?,?)`,
-		uuid.New().String(), "a@ex.com", "customer", 1, "tok", 1).Error)
+		reachable.String(), "a@ex.com", "customer", 1, "tok", 1).Error)
+	require.NoError(t, services.SetDeviceToken(db, reachable, "phone", "customer", "tok"))
 
 	h := &AdminHandler{}
 

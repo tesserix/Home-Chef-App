@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/homechef/api/config"
@@ -15,18 +16,35 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// Connection-pool defaults, sized for the shared Cloud SQL db-f1-micro.
-// Postgres caps total connections (~100 default) across EVERY client, and
-// Knative can run up to maxScale pods — so each pod must stay modest. 20 open
-// keeps 5 pods at ~100 worst-case, and idle conns are released after
-// connMaxIdleTime so a quiet pod doesn't hoard slots. Override via env for
-// load-tuning without a redeploy.
+// Connection-pool defaults. These are client connections to PgBouncer, which
+// multiplexes them onto far fewer Postgres backends, so the per-pod budget is
+// bounded by the pooler's max_client_conn rather than by max_connections.
+// Override via env for load-tuning without a redeploy.
 const (
 	defaultMaxOpenConns = 20
 	defaultMaxIdleConns = 5
 	connMaxLifetime     = 30 * time.Minute
 	connMaxIdleTime     = 5 * time.Minute
 )
+
+// Named prepared statements — pgx's default — are per-server-connection state,
+// which PgBouncer's transaction pooling hands to a different client on the next
+// transaction. Exec mode names nothing, so a pod can sit behind the pooler.
+const queryExecModeParam = "default_query_exec_mode"
+
+func poolerSafeDSN(dsn string) string {
+	if dsn == "" || strings.Contains(dsn, queryExecModeParam) {
+		return dsn
+	}
+	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+		sep := "?"
+		if strings.Contains(dsn, "?") {
+			sep = "&"
+		}
+		return dsn + sep + queryExecModeParam + "=exec"
+	}
+	return dsn + " " + queryExecModeParam + "=exec"
+}
 
 // envInt reads a positive int from env, falling back to def on unset/invalid.
 func envInt(key string, def int) int {
@@ -68,7 +86,7 @@ func Connect() error {
 	}
 
 	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), gormConfig)
+	DB, err = gorm.Open(postgres.Open(poolerSafeDSN(dsn)), gormConfig)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -79,8 +97,6 @@ func Connect() error {
 		return fmt.Errorf("failed to get database instance: %w", err)
 	}
 
-	// Connection pool — right-sized for the shared db-f1-micro so multiple
-	// Knative pods can't collectively exhaust Postgres' connection cap.
 	maxOpen := envInt("DB_MAX_OPEN_CONNS", defaultMaxOpenConns)
 	maxIdle := envInt("DB_MAX_IDLE_CONNS", defaultMaxIdleConns)
 	sqlDB.SetMaxOpenConns(maxOpen)
@@ -150,6 +166,8 @@ func Migrate() error {
 		&models.User{},
 		&models.CustomerProfile{},
 		&models.PreferenceOption{},
+		// One row per app install, so push reaches every signed-in device (#1164).
+		&models.UserDevice{},
 
 		// Chef
 		&models.ChefProfile{},

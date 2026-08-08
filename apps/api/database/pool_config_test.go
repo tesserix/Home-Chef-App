@@ -2,19 +2,18 @@ package database
 
 // pool_config_test.go — backend-testable slice of issue #64 (network resilience
 // + cold-start/load). The actual load/burst behaviour is verified under a load
-// test, but the connection-pool *sizing* is a silent-regression risk: Postgres
-// caps total connections across all pods, so the tuned 20/5 per-pod budget and
-// its env override must not drift. These guard the parsing/fallback that decide
-// the pool size before any DB is opened.
+// test, but the connection-pool *sizing* is a silent-regression risk: every pod
+// multiplies the per-pod budget against the pooler's client-connection cap, so
+// the tuned 20/5 default and its env override must not drift. These guard the
+// parsing/fallback that decide the pool size before any DB is opened.
 
 import (
 	"testing"
 )
 
 func TestPoolDefaults_StayTuned(t *testing.T) {
-	// The "20/5 per pod" budget is a deliberate Cloud SQL db-f1-micro tuning
-	// (keeps ~5 pods under the ~100 connection cap). A change here should be
-	// intentional, not accidental.
+	// The "20/5 per pod" budget keeps 20 pods under PgBouncer's 1000
+	// max_client_conn. A change here should be intentional, not accidental.
 	if defaultMaxOpenConns != 20 {
 		t.Errorf("defaultMaxOpenConns drifted: got %d, want 20", defaultMaxOpenConns)
 	}

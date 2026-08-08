@@ -201,6 +201,10 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 		Email:            getStr(claims, "email"),
 		Role:             role,
 		MarketingConsent: entry.MarketingConsent,
+		DeviceID:         browserDeviceID(c),
+		Platform:         "web",
+		DeviceLabel:      browserLabel(c.GetHeader("User-Agent")),
+		IP:               c.ClientIP(),
 	})
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "upsert_failed"})
