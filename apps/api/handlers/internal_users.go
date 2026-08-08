@@ -63,6 +63,33 @@ type UpsertUserRequest struct {
 	// TODO(CW-01b): expose a separate /users/:id/preferences endpoint for
 	// updating consent post-registration.
 	MarketingConsent bool `json:"marketing_consent"`
+	// Device describes the install this sign-in came from (#1164). Optional —
+	// clients older than the multi-device change send none of it, and a
+	// sighting with no DeviceID is simply dropped.
+	DeviceID    string `json:"device_id"`
+	Platform    string `json:"platform"`
+	DeviceLabel string `json:"device_label"`
+	AppVersion  string `json:"app_version"`
+	IP          string `json:"ip"`
+}
+
+// loginDeviceNotifier runs the device sighting off the request path: a sign-in
+// must not wait on geolocation or on the mail provider. A var so tests can
+// observe the sighting without racing the goroutine.
+var loginDeviceNotifier = func(db *gorm.DB, u models.User, in services.LoginSighting) {
+	go services.NoteLoginDevice(db, u, in)
+}
+
+func (req UpsertUserRequest) sighting(firstLogin bool) services.LoginSighting {
+	return services.LoginSighting{
+		DeviceID:   req.DeviceID,
+		App:        req.Role,
+		Platform:   req.Platform,
+		Label:      req.DeviceLabel,
+		AppVersion: req.AppVersion,
+		IP:         req.IP,
+		FirstLogin: firstLogin,
+	}
 }
 
 // UpsertUserResponse returns the canonical user_id (UUID string) so the BFF
@@ -106,6 +133,7 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 	}
 
 	var u models.User
+	firstLogin := false
 	res := h.DB.Where("gip_uid = ?", req.GIPUid).First(&u)
 	switch {
 	case errors.Is(res.Error, gorm.ErrRecordNotFound):
@@ -148,6 +176,7 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 					c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 					return
 				}
+				loginDeviceNotifier(h.DB, u, req.sighting(false))
 				c.JSON(http.StatusOK, UpsertUserResponse{UserID: u.ID.String()})
 				return
 			}
@@ -182,6 +211,7 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
+		firstLogin = true
 	case res.Error != nil:
 		c.JSON(http.StatusBadGateway, gin.H{"error": res.Error.Error()})
 		return
@@ -203,6 +233,7 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 			return
 		}
 	}
+	loginDeviceNotifier(h.DB, u, req.sighting(firstLogin))
 	c.JSON(http.StatusOK, UpsertUserResponse{UserID: u.ID.String()})
 }
 

@@ -67,6 +67,7 @@ func setupCampaignDB(t *testing.T) *gorm.DB {
 		require.NoError(t, db.Exec(s).Error)
 	}
 	orig := database.DB
+	createUserDevicesTable(t, db)
 	database.DB = db
 	t.Cleanup(func() { database.DB = orig })
 	return db
@@ -96,6 +97,12 @@ func seedCampaignUser(t *testing.T, db *gorm.DB, u seedUser) uuid.UUID {
 		`INSERT INTO users (id, email, role, is_active, fcm_token, marketing_consent, created_at) VALUES (?,?,?,?,?,?,?)`,
 		id.String(), email, string(u.role), 1, u.fcm, boolInt(u.consent), created,
 	).Error)
+	// Push reachability reads the device registry, not users.fcm_token (#1164).
+	// The token is made per-user because one FCM token addresses one install:
+	// reusing a literal across seeded users would reassign it to the last one.
+	if u.fcm != "" {
+		require.NoError(t, SetDeviceToken(db, id, "seed-device", "customer", u.fcm+"-"+id.String()))
+	}
 	if u.city != "" {
 		require.NoError(t, db.Exec(`INSERT INTO addresses (id, user_id, city) VALUES (?,?,?)`, uuid.New().String(), id.String(), u.city).Error)
 	}

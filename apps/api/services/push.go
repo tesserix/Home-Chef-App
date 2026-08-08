@@ -14,10 +14,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/oauth2/google"
+	"gorm.io/gorm"
+
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
-	"github.com/homechef/api/models"
-	"golang.org/x/oauth2/google"
 )
 
 // ErrPushTokenInvalid marks a token FCM has PERMANENTLY rejected: the device
@@ -80,16 +81,47 @@ func isInvalidTokenResponse(statusCode int, body []byte) bool {
 	return statusCode == http.StatusNotFound && strings.Contains(env.Error.Message, "registration token")
 }
 
-// clearInvalidFCMToken drops a token FCM has rejected so the row stops poisoning
-// every future send. Best-effort: failing to clear must not turn a handled
-// terminal case back into a retry.
-func clearInvalidFCMToken(userID uuid.UUID, reason error) {
+// clearInvalidFCMToken drops the one token FCM has rejected so the row stops
+// poisoning every future send, leaving the account's other devices deliverable.
+// Best-effort: failing to clear must not turn a handled terminal case back into
+// a retry.
+func clearInvalidFCMToken(db *gorm.DB, userID uuid.UUID, token string, reason error) {
 	log.Printf("Push: clearing invalid FCM token for user %s (%v)", userID, reason)
-	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).
-		Update("fcm_token", "").Error; err != nil {
+	if err := DropDeviceToken(db, userID, token); err != nil {
 		log.Printf("Push: failed to clear invalid FCM token for user %s: %v", userID, err)
 		CaptureBackgroundError(err)
 	}
+}
+
+// fanOutPush delivers to every device the account is signed in on (#1164).
+//
+// Three rules, each earned from the single-token behaviour this replaces:
+// one device's dead token is pruned and does not fail the send; one device's
+// transient failure does not abort delivery to the others; and a transient
+// failure is never mistaken for a dead token, since pruning on a blip costs the
+// user push until the app happens to re-register.
+func fanOutPush(db *gorm.DB, userID uuid.UUID, send func(token string) error) error {
+	tokens, err := ActiveDeviceTokens(db, userID)
+	if err != nil {
+		return fmt.Errorf("push: loading devices for user %s: %w", userID, err)
+	}
+	if len(tokens) == 0 {
+		log.Printf("Push skipped: user %s has no registered device", userID)
+		return nil
+	}
+
+	var lastErr error
+	for _, token := range tokens {
+		switch err := send(token); {
+		case err == nil:
+		case errors.Is(err, ErrPushTokenInvalid):
+			clearInvalidFCMToken(db, userID, token, err)
+		default:
+			log.Printf("Push failed for user %s on one device: %v", userID, err)
+			lastErr = err
+		}
+	}
+	return lastErr
 }
 
 // PushService handles sending push notifications via FCM HTTP v1 API
@@ -251,70 +283,51 @@ func (s *PushService) sendToToken(token, title, body string, data map[string]str
 	})
 }
 
-// SendPushNotification sends a push notification to a single user by looking up their FCM token
+// SendPushNotification notifies every device the user is signed in on.
+//
+// A dead token is dropped and reported as success so the consumer doesn't retry
+// an impossible send into the DLQ; the app re-registers on its next launch.
 func SendPushNotification(userID uuid.UUID, title, body string, data map[string]string) error {
 	if database.DB == nil {
 		return nil // DB not initialised (e.g. unit tests) — push is best-effort, never fatal
 	}
-	var user models.User
-	if err := database.DB.Select("id, fcm_token").First(&user, "id = ?", userID).Error; err != nil {
-		return fmt.Errorf("push: user %s not found: %w", userID, err)
-	}
-
-	if user.FCMToken == "" {
-		log.Printf("Push skipped: user %s has no FCM token", userID)
-		return nil
-	}
-
-	err := GetPushService().sendToToken(user.FCMToken, title, body, data)
-	if errors.Is(err, ErrPushTokenInvalid) {
-		// Terminal, and now handled: drop the dead token and report success so
-		// the consumer doesn't retry an impossible send into the DLQ. The app
-		// re-registers a fresh token on its next launch.
-		clearInvalidFCMToken(userID, err)
-		return nil
-	}
-	return err
+	svc := GetPushService()
+	return fanOutPush(database.DB, userID, func(token string) error {
+		return svc.sendToToken(token, title, body, data)
+	})
 }
 
 // SendActionablePush sends a push notification with platform-specific action metadata.
 // Use for vendor new-order notifications that need lock-screen Accept/Reject buttons.
 // androidChannelID: e.g. "new-orders"; iosCategory: e.g. "new_order"
 func SendActionablePush(userID uuid.UUID, title, body, androidChannelID, iosCategory string, data map[string]string) error {
-	var user models.User
-	if err := database.DB.Select("id, fcm_token").First(&user, "id = ?", userID).Error; err != nil {
-		return fmt.Errorf("push: user %s not found: %w", userID, err)
-	}
-	if user.FCMToken == "" {
-		log.Printf("Push skipped: user %s has no FCM token", userID)
+	if database.DB == nil {
 		return nil
 	}
-	err := GetPushService().sendFCMMessage(&fcmMessageBody{
-		Token:        user.FCMToken,
-		Notification: &fcmNotification{Title: title, Body: body},
-		Data:         data,
-		Android: &fcmAndroid{
-			Priority: "high",
-			Notification: &fcmAndroidNotif{
-				ChannelID: androidChannelID,
-				Sound:     "default",
-				Priority:  "PRIORITY_MAX",
-			},
-		},
-		APNS: &fcmAPNS{
-			Payload: &fcmAPNSPayload{
-				APS: &fcmAPS{
-					Category: iosCategory,
-					Sound:    "default",
+	svc := GetPushService()
+	return fanOutPush(database.DB, userID, func(token string) error {
+		return svc.sendFCMMessage(&fcmMessageBody{
+			Token:        token,
+			Notification: &fcmNotification{Title: title, Body: body},
+			Data:         data,
+			Android: &fcmAndroid{
+				Priority: "high",
+				Notification: &fcmAndroidNotif{
+					ChannelID: androidChannelID,
+					Sound:     "default",
+					Priority:  "PRIORITY_MAX",
 				},
 			},
-		},
+			APNS: &fcmAPNS{
+				Payload: &fcmAPNSPayload{
+					APS: &fcmAPS{
+						Category: iosCategory,
+						Sound:    "default",
+					},
+				},
+			},
+		})
 	})
-	if errors.Is(err, ErrPushTokenInvalid) {
-		clearInvalidFCMToken(userID, err)
-		return nil
-	}
-	return err
 }
 
 // SubscribeToFCMTopic adds the device token to a topic so it receives
@@ -381,28 +394,24 @@ func iidTopicCall(method, token, topic string) error {
 	return nil
 }
 
-// SendPushToMultiple sends a push notification to multiple users
+// SendPushToMultiple sends a push notification to multiple users, reaching
+// every device each of them is signed in on.
+//
+// One user's failure must not abort the rest and must not re-drive a retry that
+// would re-notify everyone already delivered to, so errors are collected rather
+// than returned early.
 func SendPushToMultiple(userIDs []uuid.UUID, title, body string, data map[string]string) error {
-	var users []models.User
-	if err := database.DB.Select("id, fcm_token").Where("id IN ? AND fcm_token != ''", userIDs).Find(&users).Error; err != nil {
-		return fmt.Errorf("push: failed to query users: %w", err)
+	if database.DB == nil {
+		return nil
 	}
-
 	svc := GetPushService()
 	var lastErr error
-	for _, u := range users {
-		if u.FCMToken == "" {
-			continue
-		}
-		err := svc.sendToToken(u.FCMToken, title, body, data)
-		if errors.Is(err, ErrPushTokenInvalid) {
-			// One dead token must not fail the whole fan-out (and re-drive a
-			// retry that would re-notify everyone else). Prune it and move on.
-			clearInvalidFCMToken(u.ID, err)
-			continue
-		}
+	for _, userID := range userIDs {
+		err := fanOutPush(database.DB, userID, func(token string) error {
+			return svc.sendToToken(token, title, body, data)
+		})
 		if err != nil {
-			log.Printf("Push failed for user %s: %v", u.ID, err)
+			log.Printf("Push failed for user %s: %v", userID, err)
 			lastErr = err
 		}
 	}

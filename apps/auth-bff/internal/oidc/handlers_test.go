@@ -33,10 +33,12 @@ type fakeAPI struct {
 	resp     *apiclient.UpsertUserResponse
 	err      error
 	captured bool
+	lastReq  apiclient.UpsertUserRequest
 }
 
 func (f *fakeAPI) UpsertUser(ctx context.Context, req apiclient.UpsertUserRequest) (*apiclient.UpsertUserResponse, error) {
 	f.captured = true
+	f.lastReq = req
 	return f.resp, f.err
 }
 
@@ -137,7 +139,9 @@ func TestExchange_Happy(t *testing.T) {
 	// (homechef-products.yaml: admin-portal → hc_admin_session), not the
 	// shared hc_session name — that's exactly the isolation this handler
 	// exists to preserve (see productregistry.App.SessionCookie).
-	assert.Contains(t, w.Header().Get("Set-Cookie"), "hc_admin_session=sess-blob")
+	// Joined, not Get(): the exchange also sets the browser device cookie, and
+	// Get returns whichever Set-Cookie happens to come first.
+	assert.Contains(t, strings.Join(w.Header().Values("Set-Cookie"), " "), "hc_admin_session=sess-blob")
 }
 
 func TestExchange_AdminEmailNotInAllowlist_403(t *testing.T) {

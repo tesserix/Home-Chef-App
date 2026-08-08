@@ -90,6 +90,7 @@ func setupAccountDB(t *testing.T) *gorm.DB {
 		delivery_partner_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`).Error)
 
 	prev := database.DB
+	createUserDevicesTable(t, db)
 	database.DB = db
 	t.Cleanup(func() { database.DB = prev })
 	return db

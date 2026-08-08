@@ -249,10 +249,11 @@ func TestSendCampaign(db *gorm.DB, campaignID, userID uuid.UUID) error {
 		return err
 	}
 	var u models.User
-	if err := db.Select("id", "email", "fcm_token").First(&u, "id = ?", userID).Error; err != nil {
+	if err := db.Select("id", "email").First(&u, "id = ?", userID).Error; err != nil {
 		return err
 	}
-	if c.SendPush && u.FCMToken != "" {
+	if c.SendPush {
+		// SendPushNotification is a no-op when no device is registered.
 		_ = SendPushNotification(userID, c.PushTitle, c.PushBody, map[string]string{"type": "campaign_test"})
 	}
 	if c.SendEmail && u.Email != "" {

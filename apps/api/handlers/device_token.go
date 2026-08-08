@@ -3,11 +3,15 @@ package handlers
 import (
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 // fcmTokenRe matches the allowed charset of an FCM registration token (long,
@@ -22,6 +26,16 @@ const (
 	fcmTokenMinLen = 100
 	fcmTokenMaxLen = 4096
 )
+
+// HdrDeviceID carries the client's stable per-install identifier. Absent on
+// clients older than #1164 — see legacyDeviceID.
+const HdrDeviceID = "X-Device-Id"
+
+// legacyDeviceID is the device id assumed for a client that sends no
+// X-Device-Id. It matches the id the schema backfill gave the token migrated
+// out of users.fcm_token, so an old app keeps updating its own row instead of
+// accumulating a new one per request.
+func legacyDeviceID(userID uuid.UUID) string { return "legacy-" + userID.String() }
 
 // DeviceTokenHandler manages the authenticated user's push (FCM) device token.
 // All three mobile apps (customer, vendor, delivery) register their token here
@@ -74,18 +88,17 @@ func (h *DeviceTokenHandler) UpdateDeviceToken(c *gin.Context) {
 		return
 	}
 
-	if err := database.DB.Model(&user).Update("fcm_token", token).Error; err != nil {
+	// Per-device, so a second phone no longer displaces the first (#1164).
+	// SetDeviceToken also reassigns a token that has resurfaced under another
+	// account, which is what stops a re-used handset delivering to its previous
+	// owner.
+	deviceID := strings.TrimSpace(c.GetHeader(HdrDeviceID))
+	if deviceID == "" {
+		deviceID = legacyDeviceID(userID)
+	}
+	if err := services.SetDeviceToken(database.DB, userID, deviceID, middleware.ClientAppFrom(c), token); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save device token"})
 		return
-	}
-
-	// A device only ever belongs to one account. Clear this token from any
-	// other user row so a re-installed / re-used device (same FCM token) never
-	// keeps delivering pushes to a previous account.
-	if token != "" {
-		database.DB.Model(&models.User{}).
-			Where("fcm_token = ? AND id <> ?", token, userID).
-			Update("fcm_token", "")
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})

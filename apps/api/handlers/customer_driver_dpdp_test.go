@@ -37,6 +37,7 @@ func setupCustomerDPDPDB(t *testing.T) *gorm.DB {
 			deleted_at  DATETIME
 		)
 	`).Error)
+	createUserDevicesTable(t, db)
 	return db
 }
 

@@ -43,11 +43,17 @@ func identityDocTypes() []models.DocumentType {
 type customerCascade struct{}
 
 func (customerCascade) OnDeactivate(tx *gorm.DB, userID uuid.UUID) error {
-	// Stop push and marketing while paused. The FCM token is cleared rather
-	// than kept so a paused account stops receiving notifications immediately.
-	return tx.Model(&models.User{}).
+	// Stop push and marketing while paused. Tokens are cleared rather than kept
+	// so a paused account stops receiving notifications immediately — on every
+	// device it is signed in on, not just the most recent one (#1164).
+	if err := tx.Model(&models.User{}).
 		Where("id = ?", userID).
-		Updates(map[string]any{"fcm_token": "", "marketing_consent": false}).Error
+		Updates(map[string]any{"fcm_token": "", "marketing_consent": false}).Error; err != nil {
+		return err
+	}
+	return tx.Model(&models.UserDevice{}).
+		Where("user_id = ?", userID).
+		Update("fcm_token", "").Error
 }
 
 func (c customerCascade) OnDelete(tx *gorm.DB, userID uuid.UUID) error {
