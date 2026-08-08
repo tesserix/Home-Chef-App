@@ -427,6 +427,11 @@ func (h *AdminPayoutRailHandler) PrepareStatementPayout(c *gin.Context) {
 // the same account would 409 from the second chef on. Rotating by chef id keeps
 // collisions away until the accounts are exhausted, and the 409 handler turns
 // the eventual collision into a readable rejection rather than a mystery.
+// The holder every one of Cashfree's sandbox accounts is registered to. Easy
+// Split name-matches the penny drop, so sending the kitchen's own name is the
+// documented "account holder name matching failed" rejection (#1160).
+const cashfreeSandboxAccountHolder = "John Doe"
+
 var cashfreeSandboxTestAccounts = []struct{ account, ifsc string }{
 	{"00011020001772", "HDFC0000001"},
 	{"026291800001191", "YESB0000262"},
@@ -859,11 +864,7 @@ func (h *AdminPayoutRailHandler) SeedChefTestBankAccount(c *gin.Context) {
 		return
 	}
 
-	accountName := strings.TrimSpace(chef.BusinessName)
-	if accountName == "" {
-		accountName = "Test Chef"
-	}
-
+	accountName := cashfreeSandboxAccountHolder
 	testAccount, testIFSC := sandboxTestAccountFor(chef.ID)
 
 	// Synchronous, unlike the chef's own save: the entire point of this action is
