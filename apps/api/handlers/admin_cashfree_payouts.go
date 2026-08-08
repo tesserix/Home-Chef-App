@@ -417,10 +417,10 @@ func (h *AdminPayoutRailHandler) PrepareStatementPayout(c *gin.Context) {
 
 // --- Per-chef payout profile ---
 
-// Cashfree's documented sandbox test bank accounts that simulate SUCCESSFUL
-// transfers (docs → Payouts → Test Data). Registering one against the sandbox
-// rail yields a VERIFIED beneficiary, which is what lets the whole
-// prepare → approve → execute flow run end to end with no real chef data.
+// Cashfree's sandbox test bank accounts that succeed on BOTH rails a seeded
+// chef uses: the Payouts beneficiary and the Easy Split vendor's penny drop.
+// Payouts documents six successes, Easy Split only these three — seeding one of
+// the other three strands the chef at BANK_VALIDATION_FAILED forever (#1158).
 //
 // A table rather than one account because the sandbox enforces one beneficiary
 // per account/IFSC across the whole merchant account — seeding every chef with
@@ -430,10 +430,7 @@ func (h *AdminPayoutRailHandler) PrepareStatementPayout(c *gin.Context) {
 var cashfreeSandboxTestAccounts = []struct{ account, ifsc string }{
 	{"00011020001772", "HDFC0000001"},
 	{"026291800001191", "YESB0000262"},
-	{"1233943142", "ICIC0000009"},
-	{"388108022658", "ICIC0000009"},
 	{"000890289871772", "SCBL0036078"},
-	{"000100289877623", "SBIN0008752"},
 }
 
 func sandboxTestAccountFor(chefID uuid.UUID) (account, ifsc string) {
