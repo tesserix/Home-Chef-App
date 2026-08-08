@@ -60,6 +60,7 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 		delivery_fee_final REAL,
 		chef_tip REAL DEFAULT 0, delivery_address_state TEXT DEFAULT '',
 		commission_rate REAL DEFAULT 0, payout_hold_status TEXT DEFAULT '',
+		gateway_split_paise INTEGER DEFAULT 0,
 		delivered_at DATETIME, refunded_at DATETIME,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
