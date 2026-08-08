@@ -40,6 +40,7 @@ func setupSessionDB(t *testing.T) *gorm.DB {
 			total REAL DEFAULT 0, payout_settled_at DATETIME, payout_hold_status TEXT DEFAULT '',
 			gateway_order_id TEXT DEFAULT '', gateway_payment_id TEXT DEFAULT '',
 			payout_transfer_id TEXT DEFAULT '', refund_id TEXT DEFAULT '',
+			billed_statement_id TEXT,
 			mode TEXT DEFAULT 'live', test_session_id TEXT, cloned_from_id TEXT,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE menu_items (id TEXT PRIMARY KEY, chef_id TEXT, name TEXT DEFAULT '',
@@ -120,10 +121,10 @@ func seedChefWithData(t *testing.T, db *gorm.DB) uuid.UUID {
 	}
 	// One order inside the 30-day window, one well outside it.
 	require.NoError(t, db.Exec(
-		`INSERT INTO orders (id, chef_id, order_number, status, total, gateway_order_id, gateway_payment_id, mode, created_at)
-		 VALUES (?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO orders (id, chef_id, order_number, status, total, gateway_order_id, gateway_payment_id, billed_statement_id, mode, created_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		uuid.New().String(), chefID.String(), "HC-1", "delivered", 500.0,
-		"order_live_1", "pay_live_1", "live", time.Now().AddDate(0, 0, -5)).Error)
+		"order_live_1", "pay_live_1", uuid.New().String(), "live", time.Now().AddDate(0, 0, -5)).Error)
 	require.NoError(t, db.Exec(
 		`INSERT INTO orders (id, chef_id, order_number, status, total, mode, created_at)
 		 VALUES (?,?,?,?,?,?,?)`,

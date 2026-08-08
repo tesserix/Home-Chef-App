@@ -169,6 +169,28 @@ func TestClonedOrdersCarryNoGatewayIdentifiers(t *testing.T) {
 	}
 }
 
+// billed_statement_id is a uuid in Postgres, so the '' a blanked text column
+// gets is not a value it can hold — the flip died on it in production. Emptiness
+// for a foreign key is NULL.
+func TestClonedOrdersDropTheStatementLinkAsNull(t *testing.T) {
+	db := setupSessionDB(t)
+	chefID := seedChefWithData(t, db)
+	session := &models.ChefTestSession{ID: uuid.New(), ChefID: chefID, SessionNo: 1}
+	_, err := CloneChefIntoSession(db, chefID, session, 30)
+	require.NoError(t, err)
+
+	var billed []struct{ BilledStatementID *string }
+	require.NoError(t, db.Raw(
+		`SELECT billed_statement_id FROM orders WHERE mode = ? AND cloned_from_id IS NOT NULL`,
+		models.ChefModeTest).Scan(&billed).Error)
+	require.NotEmpty(t, billed, "the clone must have produced at least one order")
+
+	for _, r := range billed {
+		require.Nil(t, r.BilledStatementID,
+			"a clone must not point at the statement its source was billed on")
+	}
+}
+
 // The single biggest correctness risk in this feature. Cloning 118 orders must
 // not fire 118 order-created pushes at a real customer, enqueue 118 NATS
 // events, or start 118 Temporal workflows.

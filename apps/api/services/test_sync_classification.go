@@ -42,6 +42,10 @@ const (
 	// refunded against a real payment.
 	classBlank
 
+	// classBlankNull — classBlank for a column whose type has no empty value:
+	// a uuid foreign key cannot hold '', so emptiness is NULL.
+	classBlankNull
+
 	// classDerive — the value is computed from the original rather than copied.
 	// Used where a column is globally unique and a verbatim copy would collide
 	// with its own source (order_number).
@@ -166,9 +170,9 @@ var clonedTableColumns = map[string]map[string]syncClass{
 		"delivery_fee_source":      classCopy, "chef_tip_at": classCopy,
 		"stale_reminder_count": classCopy, "last_stale_reminder_at": classCopy,
 		"settled_net_payout": classCopy, "gateway_split_paise": classCopy,
-		// Blanked, not copied: it points at a real weekly statement the clone was
+		// Dropped, not copied: it points at a real weekly statement the clone was
 		// never billed on, and carrying it would tie a replica to real payout.
-		"billed_statement_id": classBlank,
+		"billed_statement_id": classBlankNull,
 		"mode":                classPartition, "test_session_id": classPartition, "cloned_from_id": classPartition,
 	},
 }

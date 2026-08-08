@@ -208,6 +208,8 @@ func cloneRows(tx *gorm.DB, table string, session *models.ChefTestSession, where
 			// relying on the caller remembering an override — a forgotten
 			// override would silently ship a live payment id into test.
 			selects = append(selects, "''")
+		case classBlankNull:
+			selects = append(selects, "NULL")
 		case classDerive:
 			// Derived columns MUST be supplied by the caller. Falling back to a
 			// verbatim copy would reintroduce the collision the class exists to
