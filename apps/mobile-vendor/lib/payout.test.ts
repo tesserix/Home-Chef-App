@@ -6,6 +6,7 @@ import {
   summarisePayout,
   validatePayoutInput,
   payoutStatusChip,
+  payoutBannerKind,
   type PayoutFormValues,
 } from './payout';
 
@@ -136,5 +137,25 @@ describe('payoutStatusChip', () => {
     const chip = payoutStatusChip(undefined);
     expect(chip.tone).toBe('pending');
     expect(chip.label).toBe('Activation pending');
+  });
+});
+
+// #1122 — the chef who has never configured payouts is the one who most needs
+// to be told so, and was the only one shown nothing: the banner carrying the
+// status chip rendered solely for payoutMethod === 'bank_transfer'.
+describe('payoutBannerKind', () => {
+  it('shows the saved bank account once one is on file', () => {
+    expect(payoutBannerKind('bank_transfer')).toBe('current');
+  });
+
+  it('prompts setup when no payout method has ever been saved', () => {
+    expect(payoutBannerKind('')).toBe('setup');
+    expect(payoutBannerKind(undefined)).toBe('setup');
+  });
+
+  // A chef who nominated UPI cannot be paid on Easy Split (#767) and needs the
+  // migration nudge, not the generic setup prompt.
+  it('keeps the legacy UPI nudge distinct from first-time setup', () => {
+    expect(payoutBannerKind('upi')).toBe('legacy_upi');
   });
 });

@@ -70,6 +70,20 @@ export function payoutStatusChip(
   return { label: registration.message, tone };
 }
 
+export type PayoutBannerKind = 'current' | 'legacy_upi' | 'setup';
+
+/**
+ * Which banner heads the payout screen (#1122).
+ *
+ * 'setup' exists because a chef who has never saved a payout method used to get
+ * no banner and therefore no status chip — the one chef who cannot be paid was
+ * the only one told nothing.
+ */
+export function payoutBannerKind(payoutMethod: string | undefined): PayoutBannerKind {
+  if (payoutMethod === 'bank_transfer') return 'current';
+  return payoutMethod ? 'legacy_upi' : 'setup';
+}
+
 /** POST /chef/payout body. */
 export interface SavePayoutPayload {
   payoutMethod: PayoutMethod;
