@@ -27,22 +27,52 @@ placeholder Google client id.
 
 | Name | Used by | Notes |
 |---|---|---|
-| `GOOGLE_MAPS_API_KEY` | customer | Injected by `app.config.ts` → `lib/maps-config.js`. **Without it `react-native-maps` crashes with "API key not found"** the moment a map renders — that is order tracking and the chefs map, both gone. |
 | `NODE_AUTH_TOKEN` | both | Reads `@tesserix/*` from GitHub Packages during `eas-build-pre-install`. |
 
-Provision the Maps key in project `tesseracthub-480811`:
+### Google Maps: no key exists, and the map is disabled because of it
 
-1. Restrict it to **Maps SDK for Android** and **Maps SDK for iOS** only.
-2. Add an Android application restriction for `com.tesserix.homechef.customer`
-   with the SHA-1 of **both** the EAS release keystore (`eas credentials -p
-   android`) **and** the Play App Signing certificate (Play Console → Setup →
-   App signing). Miss the second and the map works in internal testing and
-   breaks in production.
-3. Store it as GCP secret `prod-homechef-google-maps-api-key`, then
+`GOOGLE_MAPS_API_KEY` is **not** an EAS secret in any environment, and must not
+be invented into one from what is currently in GCP.
+
+- **No Maps SDK key exists** in project `tesseracthub-480811`. Neither
+  `maps-android-backend.googleapis.com` nor `maps-ios-backend.googleapis.com`
+  is an enabled service, so no valid key can even be minted right now.
+- **`prod-homechef-google-maps-api-key` is NOT that key.** It holds
+  `homechef-routes-api`, restricted to `routes.googleapis.com` with no
+  application restriction — a server-side Routes key. **Do not** put it in EAS,
+  `app.json`, or `app.config.ts`. A mobile key ships inside the binary in
+  plaintext, so anyone who unzips the APK could pull it out and bill Routes API
+  calls to the project. An earlier version of this document told you to do
+  exactly that; do not reinstate it.
+- Because the var is unset, `withMapsKey` (`apps/mobile-customer/lib/maps-config.js:29`)
+  no-ops and the built Android manifest carries no `com.google.android.geo.API_KEY`.
+  Any `MapView` inflation then throws `RuntimeException: API key not found`.
+- Consequently the chefs map is disabled behind `CHEFS_MAP_ENABLED` in
+  `apps/mobile-customer/lib/features.ts` — the header button is not rendered and
+  `/chefs-map` redirects to the tabs, so a deep link cannot crash the app. Order
+  tracking's `DeliveryMap` is a separate surface behind its own `showMap` gate
+  and is out of scope here.
+
+To actually enable maps later:
+
+1. Enable `maps-android-backend.googleapis.com` (and the iOS backend only if the
+   iOS provider ever moves off Apple MapKit — `PROVIDER_DEFAULT` on iOS is
+   MapKit today and needs no key).
+2. Mint a **new** key restricted to **Maps SDK for Android**, with an Android
+   application restriction for `com.tesserix.homechef.customer` carrying the
+   SHA-1 of **both** the EAS release keystore (`eas credentials -p android`)
+   **and** the Play App Signing certificate (Play Console → Setup → App
+   signing). Miss the second and the map works in internal testing and breaks in
+   production.
+3. Store it as a **new, separate** GCP secret — not the Routes one — then
    `eas secret:create --name GOOGLE_MAPS_API_KEY`.
+4. Flip `CHEFS_MAP_ENABLED` to `true`. That also restores guest browsability:
+   `apps/mobile-customer/lib/guest-routes.ts` derives the map's guest route from
+   the same flag.
 
 The key ships inside the binary — that is normal and unavoidable for mobile
-Maps keys. Restriction is what secures it, not secrecy.
+Maps keys. Restriction is what secures it, not secrecy, which is exactly why
+step 2 is non-negotiable and why an unrestricted server key can never be used.
 
 ### Backend env for Sign in with Apple revocation
 
