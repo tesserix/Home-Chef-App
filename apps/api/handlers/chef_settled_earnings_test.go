@@ -34,7 +34,8 @@ func setupSettledEarningsDB(t *testing.T) (*gorm.DB, models.ChefProfile) {
 		delivery_fee REAL DEFAULT 0, delivery_fee_final REAL, chef_tip REAL DEFAULT 0,
 		fulfillment_type TEXT DEFAULT 'delivery',
 		delivery_address_state TEXT, commission_rate REAL DEFAULT 0,
-		payout_hold_status TEXT, created_at DATETIME, delivered_at DATETIME,
+		payout_hold_status TEXT, gateway_split_paise INTEGER DEFAULT 0,
+		created_at DATETIME, delivered_at DATETIME,
 		refunded_at DATETIME, deleted_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, mode TEXT)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE chef_penalties (id TEXT PRIMARY KEY, chef_id TEXT,
@@ -63,6 +64,9 @@ type settledOrderSeed struct {
 	refundedAt      *time.Time
 	deletedAt       *time.Time
 	status          string
+	// splitPaise is what Easy Split actually settled to the chef's vendor account
+	// at capture; 0 means the order settles on the weekly-statement rail instead.
+	splitPaise int
 }
 
 func seedSettledOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, s settledOrderSeed) uuid.UUID {
@@ -82,11 +86,12 @@ func seedSettledOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, s settledOrde
 	id := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, chef_id, status, mode,
 		subtotal, tax, tax_food, tax_service, delivery_fee, chef_tip, fulfillment_type,
-		delivery_address_state, created_at, delivered_at, refunded_at, deleted_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'Maharashtra', ?, ?, ?, ?)`,
+		delivery_address_state, created_at, delivered_at, refunded_at, deleted_at,
+		gateway_split_paise)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'Maharashtra', ?, ?, ?, ?, ?)`,
 		id.String(), "HC-"+id.String()[:6], chefID.String(), s.status, s.mode,
 		s.subtotal, s.taxFood, s.taxFood, s.deliveryFee, s.tip, s.fulfillmentType,
-		s.createdAt, s.deliveredAt, s.refundedAt, s.deletedAt).Error)
+		s.createdAt, s.deliveredAt, s.refundedAt, s.deletedAt, s.splitPaise).Error)
 	return id
 }
 

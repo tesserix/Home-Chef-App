@@ -60,6 +60,10 @@ type earningsOrderRow struct {
 	// is the #703 lowered-at-accept figure the customer was actually charged.
 	FulfillmentType  string   `gorm:"column:fulfillment_type"`
 	DeliveryFeeFinal *float64 `gorm:"column:delivery_fee_final"`
+	// GatewaySplitPaise is what Easy Split actually settled to this chef's vendor
+	// account at capture (#1087). Non-zero means the money has already moved and
+	// this is the figure, not the recomputation of it.
+	GatewaySplitPaise int64 `gorm:"column:gateway_split_paise"`
 }
 
 // earningsOrderResponse is the per-order breakdown shape on the wire.
@@ -179,7 +183,7 @@ func chefSettledEarnings(
 		       tax_food, tax_service, chef_funded_discount,
 		       delivery_fee, delivery_fee_final, fulfillment_type,
 		       chef_tip, delivery_address_state, commission_rate,
-		       payout_hold_status
+		       payout_hold_status, COALESCE(gateway_split_paise, 0) AS gateway_split_paise
 		FROM   orders
 		WHERE  chef_id       = ?
 		AND    status        = 'delivered'
@@ -212,7 +216,9 @@ func chefSettledEarnings(
 	var totals earningsTotals
 	for _, row := range rows {
 		breakdown := computeOrderBreakdown(row, chef.State, commissionRate)
-		breakdown.applyPenalty(penalties[row.OrderID])
+		if !breakdown.applySettledSplit(row.GatewaySplitPaise) {
+			breakdown.applyPenalty(penalties[row.OrderID])
+		}
 		orderItems = append(orderItems, breakdown)
 
 		totals.GrossRevenue += breakdown.Gross
@@ -244,6 +250,25 @@ func chefSettledEarnings(
 	totals.Held = round2(totals.Held)
 	totals.Released = round2(totals.Released)
 	return totals, orderItems, nil
+}
+
+// applySettledSplit replaces the computed net with what Easy Split actually paid
+// this chef at capture, reporting whether it did (#1087).
+//
+// The two differ by the flat platform fee, and by the capture cap when the share
+// exceeds what was collected — so the recomputation is not the money that
+// arrived. A levy is deliberately NOT netted off a settled row: nothing was
+// withheld from a transfer that already completed, and the levy is collected
+// from a later payout as a recovery deduction (#1092).
+func (r *earningsOrderResponse) applySettledSplit(splitPaise int64) bool {
+	if splitPaise <= 0 {
+		return false
+	}
+	r.NetPayout = round2(float64(splitPaise) / 100)
+	// Escrow buckets describe money the platform is still holding. A split order
+	// never entered escrow, so it belongs in neither.
+	r.PayoutHoldStatus = ""
+	return true
 }
 
 // applyPenalty nets a cancellation levy off this row. Never negative: a levy
