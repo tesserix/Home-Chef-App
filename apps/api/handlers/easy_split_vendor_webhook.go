@@ -54,7 +54,9 @@ func (h *PaymentHandler) handleCashfreeVendorStatus(raw json.RawMessage) error {
 	}
 
 	var chef models.ChefProfile
-	if err := database.DB.First(&chef, "cashfree_vendor_id = ?", vendorID).Error; err != nil {
+	// Matched against the partition each chef is in, so a sandbox webhook finds
+	// the kitchen that registered in sandbox rather than nothing at all (#1145).
+	if err := database.DB.First(&chef, models.SQLVendorID+" = ?", vendorID).Error; err != nil {
 		log.Printf("cashfree vendor webhook: no chef for vendor %s — ignoring", vendorID)
 		return nil
 	}

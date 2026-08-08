@@ -31,6 +31,7 @@ const profileChefDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'live', fi
 	address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY,
 	business_name TEXT DEFAULT '', payout_method TEXT DEFAULT '', payout_auto_release TEXT DEFAULT '', payout_auto_disburse TEXT DEFAULT '',
 	easy_split_mode TEXT DEFAULT '', cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
+	cashfree_test_vendor_id TEXT DEFAULT '', cashfree_test_vendor_status TEXT DEFAULT '',
 	updated_at DATETIME)`
 
 const profileSettingsDDL = `CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT UNIQUE, value TEXT,

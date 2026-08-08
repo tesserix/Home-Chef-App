@@ -28,6 +28,7 @@ func setupEasySplitReconcileDB(t *testing.T) *gorm.DB {
 		business_name text DEFAULT '', pan_number text DEFAULT '',
 		payout_method text DEFAULT '',
 		cashfree_vendor_id text DEFAULT '', cashfree_vendor_status text DEFAULT '',
+	cashfree_test_vendor_id text DEFAULT '', cashfree_test_vendor_status text DEFAULT '',
 		updated_at datetime, deleted_at datetime
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE users (id text PRIMARY KEY, email text, phone text, deleted_at datetime)`).Error)

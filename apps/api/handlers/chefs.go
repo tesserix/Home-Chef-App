@@ -2508,7 +2508,7 @@ func (h *ChefHandler) GetPayoutDetails(c *gin.Context) {
 	// bank account, each view of this screen nudges the stored verdict
 	// current, so "verification in progress" flips to verified without an
 	// admin touch. Fire-and-forget — the next fetch shows the fresh value.
-	if chef.CashfreeVendorID != "" && !strings.EqualFold(chef.CashfreeVendorStatus, services.CashfreeVendorActive) {
+	if chef.VendorID() != "" && !strings.EqualFold(chef.VendorStatus(), services.CashfreeVendorActive) {
 		chefCopy := chef
 		go func() {
 			if _, err := services.RefreshEasySplitVendor(context.Background(), database.DB, &chefCopy); err != nil {

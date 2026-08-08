@@ -25,6 +25,7 @@ const transitionChefDDL = `CREATE TABLE chef_profiles (
 	id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '', mode TEXT DEFAULT 'live',
 	payout_method TEXT DEFAULT '', pan_number TEXT DEFAULT '',
 	cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
+	cashfree_test_vendor_id TEXT DEFAULT '', cashfree_test_vendor_status TEXT DEFAULT '',
 	created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`
 
 const transitionAuditDDL = `CREATE TABLE audit_logs (

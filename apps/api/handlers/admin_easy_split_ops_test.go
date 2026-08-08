@@ -30,6 +30,7 @@ const opsChefDDL = `CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEX
 	business_name TEXT DEFAULT '', state TEXT DEFAULT '', payout_country TEXT DEFAULT 'IN',
 	payout_method TEXT DEFAULT '', easy_split_mode TEXT DEFAULT '',
 	cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
+	cashfree_test_vendor_id TEXT DEFAULT '', cashfree_test_vendor_status TEXT DEFAULT '',
 	fssai_override_until DATETIME, is_active INTEGER DEFAULT 1,
 	created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`
 

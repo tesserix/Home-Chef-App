@@ -48,8 +48,8 @@ func TipEligibilityFor(order *models.Order) models.TipEligibility {
 	//
 	// Not keyed on the order's gateway: a tip is a new charge, always minted on
 	// Cashfree (#1103), so a historical order on the retired gateway is judged the same way.
-	vendorOK := order.Chef.CashfreeVendorID != "" &&
-		strings.EqualFold(order.Chef.CashfreeVendorStatus, CashfreeVendorActive)
+	vendorOK := order.Chef.VendorID() != "" &&
+		strings.EqualFold(order.Chef.VendorStatus(), CashfreeVendorActive)
 	return models.TipEligibility{
 		Chef:  vendorOK,
 		Rider: vendorOK && order.FulfillmentType == models.FulfillmentChefDelivery,

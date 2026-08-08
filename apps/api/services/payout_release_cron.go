@@ -142,8 +142,8 @@ func BuildReleaseInput(db *gorm.DB, order *models.Order, now time.Time) (payouts
 		// since #1086: Route's activation_status was never written for any
 		// chef, so this gate — non-overridable in the governor — blocked every
 		// order it ever saw.
-		SettlementActivated: order.Chef.CashfreeVendorID != "" &&
-			strings.EqualFold(order.Chef.CashfreeVendorStatus, CashfreeVendorActive) &&
+		SettlementActivated: order.Chef.VendorID() != "" &&
+			strings.EqualFold(order.Chef.VendorStatus(), CashfreeVendorActive) &&
 			order.Chef.PayoutMethod == "bank_transfer",
 		RefundOpen:          order.RefundedAt != nil,
 		RecoveryBalance:     deducted,

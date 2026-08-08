@@ -65,6 +65,7 @@ const chefProfilesGuardDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'liv
 	payout_auto_release text DEFAULT '', payout_auto_disburse text DEFAULT '',
 	easy_split_mode text DEFAULT '',
 	cashfree_vendor_id text DEFAULT '', cashfree_vendor_status text DEFAULT '',
+	cashfree_test_vendor_id text DEFAULT '', cashfree_test_vendor_status text DEFAULT '',
 	payout_method text DEFAULT '', bank_account_number text DEFAULT '',
 	bank_ifsc text DEFAULT '', bank_account_name text DEFAULT '', upi_id text DEFAULT '',
 	pan_number text DEFAULT '', fssai_license_number text DEFAULT '', gstin text DEFAULT '',

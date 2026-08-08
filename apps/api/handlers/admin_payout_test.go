@@ -70,6 +70,7 @@ const payoutChefProfilesDDL = `CREATE TABLE chef_profiles (mode text DEFAULT 'li
 	id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
 	description TEXT DEFAULT '', accepting_orders INTEGER DEFAULT 1,
 	cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
+	cashfree_test_vendor_id TEXT DEFAULT '', cashfree_test_vendor_status TEXT DEFAULT '',
 	payout_auto_release TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`
 
 func setupPayoutHandlerDB(t *testing.T) *gorm.DB {

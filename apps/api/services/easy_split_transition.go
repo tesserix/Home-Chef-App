@@ -60,19 +60,22 @@ func ApplyEasySplitVendorStatusWithReason(db *gorm.DB, chef *models.ChefProfile,
 	if next == "" {
 		return false
 	}
-	prev := strings.ToUpper(strings.TrimSpace(chef.CashfreeVendorStatus))
+	// Everything here reads and writes the partition the chef is in, so a
+	// sandbox registration can never become the live payout identity (#1145).
+	idCol, statusCol := chef.VendorColumns()
+	prev := strings.ToUpper(strings.TrimSpace(chef.VendorStatus()))
 	if vendorID == "" {
-		vendorID = chef.CashfreeVendorID
+		vendorID = chef.VendorID()
 	}
-	if next == prev && vendorID == chef.CashfreeVendorID {
+	if next == prev && vendorID == chef.VendorID() {
 		return false
 	}
 
 	// Conditional on the value being replaced: two callers racing the same
 	// transition, only one gets a row.
 	res := db.Model(&models.ChefProfile{}).
-		Where("id = ? AND COALESCE(cashfree_vendor_status, '') = ?", chef.ID, chef.CashfreeVendorStatus).
-		Updates(map[string]any{"cashfree_vendor_id": vendorID, "cashfree_vendor_status": next})
+		Where("id = ? AND COALESCE("+statusCol+", '') = ?", chef.ID, chef.VendorStatus()).
+		Updates(map[string]any{idCol: vendorID, statusCol: next})
 	if res.Error != nil {
 		log.Printf("easy-split: persisting status %s for chef %s failed: %v", next, chef.ID, res.Error)
 		return false
@@ -81,8 +84,7 @@ func ApplyEasySplitVendorStatusWithReason(db *gorm.DB, chef *models.ChefProfile,
 		return false
 	}
 
-	chef.CashfreeVendorID = vendorID
-	chef.CashfreeVendorStatus = next
+	chef.SetVendorIdentity(vendorID, next)
 	LogSystemAudit(nil, "chef.payout.vendor_status", "chef", chef.ID.String(),
 		map[string]any{"status": prev}, map[string]any{"status": next, "vendorId": vendorID})
 

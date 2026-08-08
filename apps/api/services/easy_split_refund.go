@@ -39,7 +39,7 @@ func BuildRefundSplits(order *models.Order, priorRefundedPaise, refundPaise int)
 	if order == nil || order.GatewaySplitPaise <= 0 || refundPaise <= 0 {
 		return nil
 	}
-	vendorID := order.Chef.CashfreeVendorID
+	vendorID := order.Chef.VendorID()
 	if vendorID == "" {
 		return nil
 	}
