@@ -25,6 +25,30 @@ func TestPayoutAutomation_MasterSwitchOffBeatsEverything(t *testing.T) {
 	}
 }
 
+// A kitchen being used as a sandbox must not auto-release its LIVE payouts.
+// Nobody is watching that partition — the chef's app renders the test one — so
+// real money would leave the platform against orders no human is looking at.
+// The suspension is DERIVED from mode rather than stored, which is what makes
+// it resume by itself the moment the kitchen returns to live: there is no
+// parked flag to forget to clear.
+func TestPayoutAutomation_TestModeKitchenNeverReleasesLiveMoney(t *testing.T) {
+	db := setupPlatformSettingsDB(t)
+	setSetting(t, db, "payout.sweep_enabled", "true")
+	setSetting(t, db, "payout.auto_release_default", "on")
+
+	chef := &models.ChefProfile{PayoutAutoRelease: PayoutAutoOn}
+	chef.Mode = models.ChefModeTest
+	if PayoutAutomationEnabled(db, chef) {
+		t.Fatal("a kitchen in test mode must not auto-release live payouts")
+	}
+
+	// Returning to live restores automation with nothing to restore.
+	chef.Mode = models.ChefModeLive
+	if !PayoutAutomationEnabled(db, chef) {
+		t.Fatal("automation must resume by itself once the kitchen is live again")
+	}
+}
+
 func TestPayoutAutomation_ChefOnWithMasterOn(t *testing.T) {
 	db := setupPlatformSettingsDB(t)
 	setSetting(t, db, "payout.sweep_enabled", "true")

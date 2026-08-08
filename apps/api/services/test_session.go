@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -85,6 +86,23 @@ func plural(n int64, one, many string) string {
 // Each flip opens a NEW session rather than reusing the last one, so the
 // evidence from a previous investigation is never overwritten by the next.
 func OpenTestSession(db *gorm.DB, chefID, adminID uuid.UUID, reason string, windowDays int) (*models.ChefTestSession, error) {
+	return openTestSession(db, chefID, adminID, reason, windowDays, false)
+}
+
+// ForceOpenTestSession moves a kitchen into test mode even with live work in
+// flight, recording what was in flight on the session.
+//
+// A kitchen that trades every day is never entirely settled, so refusing on any
+// blocker means an established kitchen can never be sandboxed. Forcing is safe
+// because nothing live is rewritten: the live rows stay exactly as they are,
+// and the suspensions that keep them from moving unobserved — payout
+// auto-release, meal-plan fulfilment — are DERIVED from the chef's mode, so
+// returning to live resumes them with no flag to forget to clear.
+func ForceOpenTestSession(db *gorm.DB, chefID, adminID uuid.UUID, reason string, windowDays int) (*models.ChefTestSession, error) {
+	return openTestSession(db, chefID, adminID, reason, windowDays, true)
+}
+
+func openTestSession(db *gorm.DB, chefID, adminID uuid.UUID, reason string, windowDays int, force bool) (*models.ChefTestSession, error) {
 	if windowDays <= 0 {
 		windowDays = models.DefaultTestCloneWindowDays
 	}
@@ -98,8 +116,12 @@ func OpenTestSession(db *gorm.DB, chefID, adminID uuid.UUID, reason string, wind
 		if chef.IsTestMode() {
 			return fmt.Errorf("test-session: chef %s is already in test mode", chefID)
 		}
+		forced := ""
 		if blockers := TestFlipBlockers(tx, chefID); len(blockers) > 0 {
-			return fmt.Errorf("%w: %v", ErrFlipBlocked, blockers)
+			if !force {
+				return fmt.Errorf("%w: %v", ErrFlipBlocked, blockers)
+			}
+			forced = strings.Join(blockers, ", ")
 		}
 
 		var maxNo int
@@ -116,6 +138,7 @@ func OpenTestSession(db *gorm.DB, chefID, adminID uuid.UUID, reason string, wind
 			Status:          models.TestSessionOpen,
 			Reason:          reason,
 			OrderWindowDays: windowDays,
+			ForcedBlockers:  forced,
 			OpenedByID:      adminID,
 			OpenedAt:        time.Now(),
 			CloneSummary:    "{}",

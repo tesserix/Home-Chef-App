@@ -65,6 +65,25 @@ func dayAwaitingOrder(s models.MealPlanDayStatus) bool {
 	return s == models.MealPlanDayConfirmed || s == models.MealPlanDayPrepared
 }
 
+// fulfillmentParked reports whether a plan sits in a partition the chef is not
+// currently working in — a live plan while the kitchen is being used as a
+// sandbox, or a leftover test plan after the session closed.
+//
+// Such a plan must stop moving on its own: the chef's app renders the other
+// partition, so a day order generated here is one nobody can cook, and the
+// sweeps would then void it as stranded and refund a real customer for a day
+// that was never offered. Parking is DERIVED from the two modes, so the return
+// to live resumes fulfilment with no flag to clear. Unverifiable reads park too
+// — parking is reversible, an auto-refund is not.
+func fulfillmentParked(p *models.MealPlan) bool {
+	var chef models.ChefProfile
+	if err := database.DB.Select("mode").First(&chef, "id = ?", p.ChefID).Error; err != nil {
+		log.Printf("meal-plan-fulfillment: parking plan %s — cannot read chef %s mode: %v", p.ID, p.ChefID, err)
+		return true
+	}
+	return models.NormalizeMode(chef.Mode) != models.NormalizeMode(p.Mode)
+}
+
 func generateDueDayOrders() {
 	now := time.Now()
 	var plans []models.MealPlan
@@ -76,6 +95,9 @@ func generateDueDayOrders() {
 	}
 	for i := range plans {
 		p := &plans[i]
+		if fulfillmentParked(p) {
+			continue
+		}
 		addr, hasAddr := defaultAddress(p.CustomerID)
 		// The chef's schedule anchors each day's cook-start (MealPlanDayStartIST);
 		// no rows → per-slot defaults. Loaded once per plan.
@@ -152,6 +174,9 @@ func sweepStuckDays() {
 	}
 	for i := range plans {
 		p := &plans[i]
+		if fulfillmentParked(p) {
+			continue
+		}
 		for j := range p.Days {
 			d := &p.Days[j]
 			// Sweep `prepared` days too (see dayAwaitingOrder): a day cooked ahead of
@@ -257,6 +282,9 @@ func sweepOverdueDayOrders() {
 	}
 	for i := range plans {
 		p := &plans[i]
+		if fulfillmentParked(p) {
+			continue
+		}
 		for j := range p.Days {
 			d := &p.Days[j]
 			if d.OrderID == nil || !d.Date.Before(cutoff) || isTerminalOrFailedDayStatus(d.Status) {
@@ -341,23 +369,23 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 				Mode:          models.NormalizeMode(p.Mode),
 				TestSessionID: p.TestSessionID,
 			},
-			OrderNumber:               mealPlanOrderNumber(chefBusinessName(p.ChefID)),
-			CustomerID:                p.CustomerID,
-			ChefID:                    p.ChefID,
-			Status:                    models.OrderStatusPending,
-			PaymentStatus:             paymentStatus,
-			Currency:                  p.Currency,
-			Subtotal:                  d.Price,
-			PlatformFee:               dayPlatformFee,
-			Tax:                       dayTax,
-			TaxRate:                   dayTaxRate,
+			OrderNumber:   mealPlanOrderNumber(chefBusinessName(p.ChefID)),
+			CustomerID:    p.CustomerID,
+			ChefID:        p.ChefID,
+			Status:        models.OrderStatusPending,
+			PaymentStatus: paymentStatus,
+			Currency:      p.Currency,
+			Subtotal:      d.Price,
+			PlatformFee:   dayPlatformFee,
+			Tax:           dayTax,
+			TaxRate:       dayTaxRate,
 			// A meal plan taxes the FOOD only (MealPlanFeeTotals), so the whole of
 			// dayTax sits on the food line. Saying so explicitly rather than leaving
 			// the snapshot empty is what keeps this day order's receipt, its refund
 			// and the chef's earnings on the same per-supply basis as every other
 			// order — an empty snapshot falls back to the single-supply model.
-			TaxFood:     dayTax,
-			TaxRateFood: dayTaxRate,
+			TaxFood:                   dayTax,
+			TaxRateFood:               dayTaxRate,
 			DeliveryFee:               dayDelivery,
 			Total:                     dayTotal,
 			DeliveryAddressLine1:      addr.Line1,

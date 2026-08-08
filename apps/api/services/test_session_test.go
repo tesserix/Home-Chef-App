@@ -32,7 +32,7 @@ func setupSessionDB(t *testing.T) *gorm.DB {
 			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE chef_test_sessions (id TEXT PRIMARY KEY, chef_id TEXT, session_no INTEGER,
 			status TEXT DEFAULT 'open', reason TEXT DEFAULT '', order_window_days INTEGER DEFAULT 30,
-			cloned_at DATETIME, clone_summary TEXT DEFAULT '{}',
+			cloned_at DATETIME, clone_summary TEXT DEFAULT '{}', forced_blockers TEXT DEFAULT '',
 			opened_by_id TEXT, opened_at DATETIME, closed_by_id TEXT, closed_at DATETIME,
 			purged_at DATETIME, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, chef_id TEXT, customer_id TEXT,
@@ -152,6 +152,46 @@ func TestFlipBlockedWhileOrdersInFlight(t *testing.T) {
 	var chef models.ChefProfile
 	require.NoError(t, db.First(&chef, "id = ?", chefID).Error)
 	require.False(t, chef.IsTestMode(), "a refused flip must leave the kitchen live")
+}
+
+// A kitchen that trades every day always has something in flight, so a blanket
+// refusal means an established kitchen can never be sandboxed at all. A forced
+// flip parks the live work rather than refusing, and records what it parked:
+// a flip whose consequences were never written down cannot be audited later.
+func TestForcedFlipParksInFlightWorkAndRecordsIt(t *testing.T) {
+	db := setupSessionDB(t)
+	chefID := seedLiveChef(t, db)
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, chef_id, status, mode, created_at) VALUES (?,?,?,?,?)`,
+		uuid.New().String(), chefID.String(), "preparing", "live", time.Now()).Error)
+
+	s, err := ForceOpenTestSession(db, chefID, uuid.New(), "sandbox the payout rails", 30)
+	require.NoError(t, err, "a forced flip must not be refused by blockers")
+	require.Contains(t, s.ForcedBlockers, "active order",
+		"the session must record what was in flight when it was forced past")
+
+	var chef models.ChefProfile
+	require.NoError(t, db.First(&chef, "id = ?", chefID).Error)
+	require.True(t, chef.IsTestMode(), "a forced flip must put the kitchen in test mode")
+
+	// The live order is left exactly as it was. Parking is derived from the
+	// chef's mode, so returning to live restores it with nothing to restore.
+	var status string
+	require.NoError(t, db.Raw(
+		`SELECT status FROM orders WHERE chef_id = ? AND mode = 'live'`,
+		chefID.String()).Scan(&status).Error)
+	require.Equal(t, "preparing", status, "a forced flip must not rewrite live work")
+}
+
+// An UNforced flip records nothing, so a non-empty forced_blockers is proof the
+// flip was forced rather than clean.
+func TestCleanFlipRecordsNoForcedBlockers(t *testing.T) {
+	db := setupSessionDB(t)
+	chefID := seedLiveChef(t, db)
+
+	s, err := OpenTestSession(db, chefID, uuid.New(), "nothing in flight", 30)
+	require.NoError(t, err)
+	require.Empty(t, s.ForcedBlockers)
 }
 
 func TestFlipAllowedOnceSettled(t *testing.T) {

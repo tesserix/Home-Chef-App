@@ -46,8 +46,10 @@ func setupStuckDayDB(t *testing.T) *gorm.DB {
 func seedStuckPlanDay(t *testing.T, db *gorm.DB, dayStatus models.MealPlanDayStatus, orderID *string, dayDate time.Time) (planID, dayID uuid.UUID) {
 	t.Helper()
 	planID, dayID = uuid.New(), uuid.New()
+	chefID := uuid.NewString()
+	seedLiveChefRow(t, db, chefID)
 	require.NoError(t, db.Exec(`INSERT INTO meal_plans (id, meal_plan_number, customer_id, chef_id, status, subtotal, tax, total)
-		VALUES (?,?,?,?,?,?,?,?)`, planID.String(), "MP-"+planID.String()[:8], uuid.NewString(), uuid.NewString(),
+		VALUES (?,?,?,?,?,?,?,?)`, planID.String(), "MP-"+planID.String()[:8], uuid.NewString(), chefID,
 		string(models.MealPlanActive), 200.0, 20.0, 240.0).Error)
 	var ord any
 	if orderID != nil {

@@ -28,7 +28,8 @@ func NewTestModeHandler() *TestModeHandler { return &TestModeHandler{} }
 // recent orders into it; test→live closes the session and returns the kitchen to
 // its untouched live data. Refused with 409 and a structured blocker list when
 // the kitchen still has orders or payouts in flight, so the UI can say exactly
-// what is in the way.
+// what is in the way — or, with {"force":true}, parks that work instead and
+// records it on the session.
 func (h *TestModeHandler) SetChefMode(c *gin.Context) {
 	chefID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -39,6 +40,10 @@ func (h *TestModeHandler) SetChefMode(c *gin.Context) {
 		Mode            string `json:"mode"`
 		Reason          string `json:"reason"`
 		OrderWindowDays int    `json:"orderWindowDays"`
+		// Force parks the kitchen's in-flight live work rather than refusing the
+		// flip. A trading kitchen is never fully settled, so without it an
+		// established kitchen could never be sandboxed at all.
+		Force bool `json:"force"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -66,7 +71,11 @@ func (h *TestModeHandler) SetChefMode(c *gin.Context) {
 		return
 	}
 
-	session, err := services.OpenTestSession(database.DB, chefID, adminID, req.Reason, req.OrderWindowDays)
+	open := services.OpenTestSession
+	if req.Force {
+		open = services.ForceOpenTestSession
+	}
+	session, err := open(database.DB, chefID, adminID, req.Reason, req.OrderWindowDays)
 	if err != nil {
 		if errors.Is(err, services.ErrFlipBlocked) {
 			c.JSON(http.StatusConflict, gin.H{
@@ -82,6 +91,7 @@ func (h *TestModeHandler) SetChefMode(c *gin.Context) {
 		"reason":    req.Reason,
 		"sessionNo": session.SessionNo,
 		"sessionId": session.ID.String(),
+		"forced":    session.ForcedBlockers,
 	})
 	c.JSON(http.StatusOK, gin.H{"mode": models.ChefModeTest, "session": session})
 }
