@@ -45,7 +45,11 @@ type WeeklyStatement struct {
 	// added onto this settlement — the credit mirror of PenaltyDeductions.
 	// NetPayout is AFTER this addition.
 	BonusAdditions float64 `gorm:"default:0" json:"bonusAdditions"`
-	NetPayout      float64 `gorm:"default:0" json:"netPayout"`
+	// RecoveryDeductions is outstanding chef debt collected off this settlement
+	// (#1092) — the statement's explanation for a transfer smaller than the week's
+	// earnings. NetPayout is AFTER it.
+	RecoveryDeductions float64 `gorm:"default:0" json:"recoveryDeductions"`
+	NetPayout          float64 `gorm:"default:0" json:"netPayout"`
 
 	// Payout disbursement tracking (admin). Statements are computed weekly by
 	// the cron; disbursement is currently MANUAL (payout-rail automation is

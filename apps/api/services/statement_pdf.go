@@ -152,21 +152,46 @@ func addStatementSummary(m core.Maroto, stmt *models.WeeklyStatement, commission
 	}
 
 	m.AddRow(6, col.New(12).Add(text.New("SETTLEMENT SUMMARY", props.Text{Size: 8, Style: fontstyle.Bold, Color: &props.Color{Red: 90, Green: 90, Blue: 90}})))
-	rows := []core.Row{
-		line("Gross revenue", stmt.GrossRevenue, false, false),
-		line(fmt.Sprintf("Platform commission (%.0f%%)", commissionRate*100), stmt.PlatformCommission, false, true),
+	rows := make([]core.Row, 0, 8)
+	for _, l := range statementSummaryLines(stmt, commissionRate) {
+		rows = append(rows, line(l.Label, l.Amount, l.Bold, l.Negative))
 	}
-	if stmt.IGST > 0 {
-		rows = append(rows, line(fmt.Sprintf("GST · IGST (%.0f%%)", RateGST*100), stmt.IGST, false, true))
-	} else {
-		rows = append(rows, line(fmt.Sprintf("GST · CGST+SGST (%.0f%%)", RateGST*100), stmt.CGST+stmt.SGST, false, true))
-	}
-	rows = append(rows,
-		line(fmt.Sprintf("TDS u/s 194-O (%.0f%%)", RateTDS*100), stmt.TDS, false, true),
-		line("NET PAYOUT", stmt.NetPayout, true, false),
-	)
 	m.AddRows(rows...)
 	m.AddRow(4, col.New(12).Add(spacer()))
+}
+
+type statementSummaryLine struct {
+	Label          string
+	Amount         float64
+	Bold, Negative bool
+}
+
+// statementSummaryLines is the settlement summary the chef reads, in order.
+//
+// Every adjustment that moved NetPayout gets its own line when it is non-zero
+// (#1092), because a payout that differs from gross-less-commission-and-tax with
+// nothing on the page to explain it reads as an error by the platform.
+func statementSummaryLines(stmt *models.WeeklyStatement, commissionRate float64) []statementSummaryLine {
+	lines := []statementSummaryLine{
+		{Label: "Gross revenue", Amount: stmt.GrossRevenue},
+		{Label: fmt.Sprintf("Platform commission (%.0f%%)", commissionRate*100), Amount: stmt.PlatformCommission, Negative: true},
+	}
+	if stmt.IGST > 0 {
+		lines = append(lines, statementSummaryLine{Label: fmt.Sprintf("GST · IGST (%.0f%%)", RateGST*100), Amount: stmt.IGST, Negative: true})
+	} else {
+		lines = append(lines, statementSummaryLine{Label: fmt.Sprintf("GST · CGST+SGST (%.0f%%)", RateGST*100), Amount: stmt.CGST + stmt.SGST, Negative: true})
+	}
+	lines = append(lines, statementSummaryLine{Label: fmt.Sprintf("TDS u/s 194-O (%.0f%%)", RateTDS*100), Amount: stmt.TDS, Negative: true})
+	if stmt.PenaltyDeductions > 0 {
+		lines = append(lines, statementSummaryLine{Label: "Cancellation fees", Amount: stmt.PenaltyDeductions, Negative: true})
+	}
+	if stmt.BonusAdditions > 0 {
+		lines = append(lines, statementSummaryLine{Label: "Bonuses and rewards", Amount: stmt.BonusAdditions})
+	}
+	if stmt.RecoveryDeductions > 0 {
+		lines = append(lines, statementSummaryLine{Label: "Recovery of outstanding balance", Amount: stmt.RecoveryDeductions, Negative: true})
+	}
+	return append(lines, statementSummaryLine{Label: "NET PAYOUT", Amount: stmt.NetPayout, Bold: true})
 }
 
 func addStatementOrders(m core.Maroto, lines []OrderEarnings) {

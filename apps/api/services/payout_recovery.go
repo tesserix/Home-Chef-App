@@ -26,13 +26,12 @@ import (
 //   - CollectRecoveryDeduction COLLECTS. It is called only where money is
 //     actually withheld, and writes the resolving entry that pays the debt down.
 //
-// Adding a third site, or making the reader collect, reintroduces the bug this
-// file used to document: the same debt charged to a chef on every payout.
+// Adding a third entry point, or making the reader collect, reintroduces the bug
+// this file used to document: the same debt charged to a chef on every payout.
 //
-// Still open: a collected recovery has no line on the weekly statement, so a
-// chef whose transfer was reduced sees a statement that does not explain the
-// gap. #1092 — it needs a recovery_deductions column, which lives in
-// tesserix-k8s.
+// Order settlement and the weekly statement (statement_recovery.go, #1092) both
+// collect, and both do it through CollectRecoveryDeduction — the shared ledger is
+// what stops the second one finding a debt the first already discharged.
 
 // ApplyRecoveryDeduction reduces a gross payout by the chef's outstanding
 // recovery balance, without collecting it.

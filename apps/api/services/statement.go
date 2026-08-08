@@ -153,6 +153,13 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			log.Printf("weekly-statement: bonus credit failed for chef=%s week=%s (bonuses stay pending): %v",
 				chefID, weekStart.Format("2006-01-02"), bErr)
 		}
+		// #1092: collect any outstanding debt off the settled figure, last, so the
+		// recovery line reflects what is left after levies and credits. Shares the
+		// ledger with the per-order collection site, so the debt is paid once.
+		if _, rErr := ApplyChefRecoveryToStatement(database.DB, stmt); rErr != nil {
+			log.Printf("weekly-statement: recovery collection failed for chef=%s week=%s (debt stays owed): %v",
+				chefID, weekStart.Format("2006-01-02"), rErr)
+		}
 		// Push the payout AFTER deductions — the number the chef will actually receive.
 		if err := sendStatementReadyPush(b.userID, weekStart, weekEnd, stmt.NetPayout); err != nil {
 			log.Printf("weekly-statement: push failed for chef=%s: %v", chefID, err)
