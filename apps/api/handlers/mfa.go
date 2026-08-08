@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -171,7 +172,7 @@ func (h *MFAHandler) RequestEmailEnrollment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Your account email is invalid. Please contact support."})
 		return
 	}
-	code, err := services.IssueOTP(c.Request.Context(), services.PurposeMFAEnroll, userID.String(), email)
+	code, err := services.IssueOTP(c.Request.Context(), services.PurposeMFAEnroll, userID.String(), email, "")
 	if err != nil {
 		c.JSON(otpStatus(err), gin.H{"error": err.Error()})
 		return
@@ -198,7 +199,7 @@ func (h *MFAHandler) VerifyEmailEnrollment(c *gin.Context) {
 		return
 	}
 	email := services.NormalizeEmail(user.Email)
-	if err := services.RedeemOTP(c.Request.Context(), services.PurposeMFAEnroll, userID.String(), email, req.Code); err != nil {
+	if err := services.RedeemOTP(c.Request.Context(), services.PurposeMFAEnroll, userID.String(), email, "", req.Code); err != nil {
 		c.JSON(otpStatus(err), gin.H{"error": err.Error(), "field": "code"})
 		return
 	}
@@ -346,6 +347,24 @@ func (h *MFAHandler) RegenerateBackupCodes(c *gin.Context) {
 
 // ---- login challenge --------------------------------------------------------
 
+// challengeDevice scopes a login challenge to the handset that raised it.
+//
+// Without it, two devices on one account share a single code: the second to ask
+// overwrites the first's code, and either is told to wait out the other's resend
+// cooldown. The device that cannot get in then looks dead rather than
+// challenged (#1164 finding 3). Empty for clients predating the header, which
+// keeps the old account-wide behaviour for them.
+//
+// Scoped alongside the app, not by it alone, so two installs of the same app
+// still get their own challenge.
+func challengeDevice(c *gin.Context) string {
+	deviceID := strings.TrimSpace(c.GetHeader(HdrDeviceID))
+	if deviceID == "" {
+		return ""
+	}
+	return middleware.ClientAppFrom(c) + ":" + deviceID
+}
+
 // Challenge sends a login code on the requested channel.
 func (h *MFAHandler) Challenge(c *gin.Context) {
 	userID, user, ok := currentUser(c)
@@ -379,7 +398,7 @@ func (h *MFAHandler) Challenge(c *gin.Context) {
 		return
 	}
 
-	code, err := services.IssueOTP(c.Request.Context(), services.PurposeMFALogin, userID.String(), subject)
+	code, err := services.IssueOTP(c.Request.Context(), services.PurposeMFALogin, userID.String(), subject, challengeDevice(c))
 	if err != nil {
 		c.JSON(otpStatus(err), gin.H{"error": err.Error()})
 		return
@@ -456,7 +475,7 @@ func (h *MFAHandler) Verify(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "field": "channel"})
 			return
 		}
-		if err := services.RedeemOTP(c.Request.Context(), services.PurposeMFALogin, userID.String(), subject, req.Code); err != nil {
+		if err := services.RedeemOTP(c.Request.Context(), services.PurposeMFALogin, userID.String(), subject, challengeDevice(c), req.Code); err != nil {
 			c.JSON(otpStatus(err), gin.H{"error": err.Error(), "field": "code"})
 			return
 		}

@@ -46,11 +46,11 @@ func TestOTPPurposeIsolation_EnrollCannotSatisfyLogin(t *testing.T) {
 	ctx := context.Background()
 	uid, email := "user-1", "chef@fe3dr.com"
 
-	code, err := IssueOTP(ctx, PurposeMFAEnroll, uid, email)
+	code, err := IssueOTP(ctx, PurposeMFAEnroll, uid, email, "")
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
-	if err := RedeemOTP(ctx, PurposeMFAEnroll, uid, email, code); err != nil {
+	if err := RedeemOTP(ctx, PurposeMFAEnroll, uid, email, "", code); err != nil {
 		t.Fatalf("redeem: %v", err)
 	}
 	if !OTPVerified(ctx, PurposeMFAEnroll, uid, email) {
@@ -64,7 +64,7 @@ func TestOTPPurposeIsolation_EnrollCannotSatisfyLogin(t *testing.T) {
 func TestOTPKeysAreDistinctPerPurpose(t *testing.T) {
 	seen := map[string]OTPPurpose{}
 	for _, p := range []OTPPurpose{PurposeOnboardingEmail, PurposeMFAEnroll, PurposeMFALogin} {
-		k := otpKey(p, "code", "u", "s")
+		k := otpKey(p, "code", "u", "s", "")
 		if other, dup := seen[k]; dup {
 			t.Fatalf("purposes %q and %q share key %q", other, p, k)
 		}
@@ -75,10 +75,10 @@ func TestOTPKeysAreDistinctPerPurpose(t *testing.T) {
 // The legacy onboarding key shape must not move: a deploy that changes it
 // invalidates every in-flight verification and locks users mid-signup.
 func TestOnboardingKeysKeepLegacyShape(t *testing.T) {
-	if got, want := otpKey(PurposeOnboardingEmail, "code", "u1", "a@b.com"), "email_otp:code:u1:a@b.com"; got != want {
+	if got, want := otpKey(PurposeOnboardingEmail, "code", "u1", "a@b.com", ""), "email_otp:code:u1:a@b.com"; got != want {
 		t.Fatalf("legacy code key drifted: got %q want %q", got, want)
 	}
-	if got, want := otpKey(PurposeOnboardingEmail, "ok", "u1", "a@b.com"), "email_otp:ok:u1:a@b.com"; got != want {
+	if got, want := otpKey(PurposeOnboardingEmail, "ok", "u1", "a@b.com", ""), "email_otp:ok:u1:a@b.com"; got != want {
 		t.Fatalf("legacy verified key drifted: got %q want %q", got, want)
 	}
 }
@@ -88,18 +88,18 @@ func TestOTPRedeem_WrongCodeThenAttemptCeiling(t *testing.T) {
 	ctx := context.Background()
 	uid, sub := "user-1", "chef@fe3dr.com"
 
-	code, err := IssueOTP(ctx, PurposeMFALogin, uid, sub)
+	code, err := IssueOTP(ctx, PurposeMFALogin, uid, sub, "")
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
 	bad := wrongCode(code)
 	for i := 0; i < otpMaxAttempts; i++ {
-		if err := RedeemOTP(ctx, PurposeMFALogin, uid, sub, bad); !errors.Is(err, ErrOTPMismatch) {
+		if err := RedeemOTP(ctx, PurposeMFALogin, uid, sub, "", bad); !errors.Is(err, ErrOTPMismatch) {
 			t.Fatalf("attempt %d: want ErrOTPMismatch, got %v", i+1, err)
 		}
 	}
 	// Ceiling reached — the challenge is destroyed, so even the right code fails.
-	if err := RedeemOTP(ctx, PurposeMFALogin, uid, sub, code); !errors.Is(err, ErrOTPAttemptLimit) {
+	if err := RedeemOTP(ctx, PurposeMFALogin, uid, sub, "", code); !errors.Is(err, ErrOTPAttemptLimit) {
 		t.Fatalf("want ErrOTPAttemptLimit, got %v", err)
 	}
 	if OTPVerified(ctx, PurposeMFALogin, uid, sub) {
@@ -112,14 +112,14 @@ func TestOTPIssue_ResendCooldown(t *testing.T) {
 	ctx := context.Background()
 	uid, sub := "user-1", "chef@fe3dr.com"
 
-	if _, err := IssueOTP(ctx, PurposeMFALogin, uid, sub); err != nil {
+	if _, err := IssueOTP(ctx, PurposeMFALogin, uid, sub, ""); err != nil {
 		t.Fatalf("first issue: %v", err)
 	}
-	if _, err := IssueOTP(ctx, PurposeMFALogin, uid, sub); !errors.Is(err, ErrOTPCooldown) {
+	if _, err := IssueOTP(ctx, PurposeMFALogin, uid, sub, ""); !errors.Is(err, ErrOTPCooldown) {
 		t.Fatalf("want ErrOTPCooldown, got %v", err)
 	}
 	mr.FastForward(otpResendCooldown + time.Second)
-	if _, err := IssueOTP(ctx, PurposeMFALogin, uid, sub); err != nil {
+	if _, err := IssueOTP(ctx, PurposeMFALogin, uid, sub, ""); err != nil {
 		t.Fatalf("after cooldown: %v", err)
 	}
 }
@@ -130,12 +130,12 @@ func TestOTPIssue_SendWindowCap(t *testing.T) {
 	uid, sub := "user-1", "chef@fe3dr.com"
 
 	for i := 0; i < otpMaxSends; i++ {
-		if _, err := IssueOTP(ctx, PurposeMFALogin, uid, sub); err != nil {
+		if _, err := IssueOTP(ctx, PurposeMFALogin, uid, sub, ""); err != nil {
 			t.Fatalf("send %d: %v", i+1, err)
 		}
 		mr.FastForward(otpResendCooldown + time.Second)
 	}
-	if _, err := IssueOTP(ctx, PurposeMFALogin, uid, sub); !errors.Is(err, ErrOTPSendLimit) {
+	if _, err := IssueOTP(ctx, PurposeMFALogin, uid, sub, ""); !errors.Is(err, ErrOTPSendLimit) {
 		t.Fatalf("want ErrOTPSendLimit, got %v", err)
 	}
 }
@@ -145,12 +145,12 @@ func TestOTPExpiry(t *testing.T) {
 	ctx := context.Background()
 	uid, sub := "user-1", "chef@fe3dr.com"
 
-	code, err := IssueOTP(ctx, PurposeMFALogin, uid, sub)
+	code, err := IssueOTP(ctx, PurposeMFALogin, uid, sub, "")
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
 	mr.FastForward(otpTTL + time.Second)
-	if err := RedeemOTP(ctx, PurposeMFALogin, uid, sub, code); !errors.Is(err, ErrOTPExpired) {
+	if err := RedeemOTP(ctx, PurposeMFALogin, uid, sub, "", code); !errors.Is(err, ErrOTPExpired) {
 		t.Fatalf("want ErrOTPExpired, got %v", err)
 	}
 }
@@ -177,7 +177,7 @@ func TestOTPVerified_FailsClosedForLoginWhenRedisDown(t *testing.T) {
 func TestOTPCodeShape(t *testing.T) {
 	withMiniredis(t)
 	ctx := context.Background()
-	code, err := IssueOTP(ctx, PurposeMFALogin, "u", "s")
+	code, err := IssueOTP(ctx, PurposeMFALogin, "u", "s", "")
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
