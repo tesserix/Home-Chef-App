@@ -1,9 +1,11 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type PlatformSettings struct {
@@ -46,6 +48,16 @@ type Notification struct {
 	CreatedAt time.Time  `gorm:"autoCreateTime" json:"createdAt"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
+// BeforeSave keeps Data a legal jsonb value. Most callers set no payload, and
+// the empty string Postgres receives is not JSON — the whole notice was lost to
+// a 22P02 the caller only logged (#1153).
+func (n *Notification) BeforeSave(*gorm.DB) error {
+	if strings.TrimSpace(n.Data) == "" {
+		n.Data = "{}"
+	}
+	return nil
 }
 
 type Transaction struct {
