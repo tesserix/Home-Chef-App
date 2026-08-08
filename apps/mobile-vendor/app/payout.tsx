@@ -30,7 +30,12 @@ import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
-import { payoutStatusChip, type PayoutDetailsResponse } from '../lib/payout';
+import {
+  payoutBannerKind,
+  payoutStatusChip,
+  type PayoutDetailsResponse,
+  type PayoutRegistration,
+} from '../lib/payout';
 
 // ---- Data types -----------------------------------------------------------
 
@@ -60,6 +65,16 @@ const CHIP_TINTS = {
   pending: { bg: theme.colors.amber.tint, fg: theme.colors.ink.DEFAULT },
   error: { bg: theme.colors.destructive.tint, fg: theme.colors.destructive.DEFAULT },
 } as const;
+
+function StatusChip({ registration }: { registration?: PayoutRegistration }) {
+  const chip = payoutStatusChip(registration);
+  const tint = CHIP_TINTS[chip.tone];
+  return (
+    <View style={[styles.statusChip, { backgroundColor: tint.bg }]}>
+      <Text style={[styles.statusChipLabel, { color: tint.fg }]}>{chip.label}</Text>
+    </View>
+  );
+}
 
 function useSavePayout() {
   const queryClient = useQueryClient();
@@ -133,6 +148,8 @@ export default function PayoutScreen() {
   // Track whether a successful save has already cleared the dirty state so
   // the back handler doesn't re-prompt after the toast confirms success.
   const savedRef = useRef(false);
+
+  const bannerKind = payoutBannerKind(data?.payoutMethod);
 
   useEffect(() => {
     if (!data) return;
@@ -275,31 +292,21 @@ export default function PayoutScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Currently-saved method summary */}
-          {data?.payoutMethod === 'bank_transfer' ? (
+          {bannerKind === 'current' ? (
             <View style={styles.currentBanner}>
               <View style={styles.currentBannerHeader}>
                 <Text style={styles.currentBannerLabel}>Currently using Bank transfer</Text>
-                {(() => {
-                  const chip = payoutStatusChip(data.payoutRegistration);
-                  const tint = CHIP_TINTS[chip.tone];
-                  return (
-                    <View style={[styles.statusChip, { backgroundColor: tint.bg }]}>
-                      <Text style={[styles.statusChipLabel, { color: tint.fg }]}>
-                        {chip.label}
-                      </Text>
-                    </View>
-                  );
-                })()}
+                <StatusChip registration={data?.payoutRegistration} />
               </View>
-              {data.bankAccountNumber ? (
+              {data?.bankAccountNumber ? (
                 <Text style={styles.currentBannerSub}>
                   {data.bankAccountName} · {data.bankAccountNumber}
                 </Text>
               ) : null}
             </View>
-          ) : data?.payoutMethod ? (
-            // Legacy UPI row (#767): UPI can no longer be paid on Route — nudge
-            // the chef to add a bank account so they aren't silently unpayable.
+          ) : bannerKind === 'legacy_upi' ? (
+            // Legacy UPI row (#767): an Easy Split vendor holds a bank account,
+            // not a VPA — nudge the chef so they aren't silently unpayable.
             <View style={styles.currentBanner}>
               <Text style={styles.currentBannerLabel}>
                 UPI payouts are no longer supported
@@ -308,7 +315,17 @@ export default function PayoutScreen() {
                 Add your bank account below to keep receiving payouts.
               </Text>
             </View>
-          ) : null}
+          ) : (
+            <View style={styles.currentBanner}>
+              <View style={styles.currentBannerHeader}>
+                <Text style={styles.currentBannerLabel}>No payout account yet</Text>
+                <StatusChip registration={data?.payoutRegistration} />
+              </View>
+              <Text style={styles.currentBannerSub}>
+                Add your bank account below so order money can reach you.
+              </Text>
+            </View>
+          )}
 
           {/* Bank account fields — UPI payouts are not supported (#767) */}
           <Text style={styles.sectionLabel}>BANK ACCOUNT</Text>
