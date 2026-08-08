@@ -99,7 +99,8 @@ var clonedTableColumns = map[string]map[string]syncClass{
 		"dietary_tags": classCopy, "allergens": classCopy, "menu_item_id": classCopy,
 		"created_at": classCopy, "updated_at": classCopy, "is_combo": classCopy,
 		"combo_components": classCopy,
-		"mode":             classPartition, "test_session_id": classPartition, "cloned_from_id": classPartition,
+		"portion_size":     classCopy, "serves": classCopy,
+		"mode": classPartition, "test_session_id": classPartition, "cloned_from_id": classPartition,
 	},
 	"daily_menus": {
 		"id": classCopy, "chef_id": classCopy, "date": classCopy,
@@ -117,6 +118,7 @@ var clonedTableColumns = map[string]map[string]syncClass{
 		"image_url": classCopy, "dietary_tags": classCopy, "allergens": classCopy,
 		"menu_item_id": classCopy, "sort_order": classCopy, "created_at": classCopy,
 		"updated_at": classCopy, "is_combo": classCopy, "combo_components": classCopy,
+		"portion_size": classCopy, "serves": classCopy,
 		"mode": classPartition, "test_session_id": classPartition, "cloned_from_id": classPartition,
 	},
 	"orders": {
@@ -156,7 +158,18 @@ var clonedTableColumns = map[string]map[string]syncClass{
 		"loyalty_applied": classCopy, "loyalty_points_spent": classCopy,
 		"wallet_refunded": classCopy, "loyalty_refunded": classCopy,
 		"payout_transfer_id": classBlank,
-		"mode":               classPartition, "test_session_id": classPartition, "cloned_from_id": classPartition,
+		// The per-component tax breakdown, alongside the tax/tax_rate above.
+		"tax_food": classCopy, "tax_delivery": classCopy, "tax_service": classCopy,
+		"tax_rate_food": classCopy, "tax_rate_delivery": classCopy, "tax_rate_service": classCopy,
+		"tax_inclusive": classCopy, "tax_service_inclusive": classCopy,
+		"tax_delivery_by_platform": classCopy,
+		"delivery_fee_source":      classCopy, "chef_tip_at": classCopy,
+		"stale_reminder_count": classCopy, "last_stale_reminder_at": classCopy,
+		"settled_net_payout": classCopy, "gateway_split_paise": classCopy,
+		// Blanked, not copied: it points at a real weekly statement the clone was
+		// never billed on, and carrying it would tie a replica to real payout.
+		"billed_statement_id": classBlank,
+		"mode":                classPartition, "test_session_id": classPartition, "cloned_from_id": classPartition,
 	},
 }
 
