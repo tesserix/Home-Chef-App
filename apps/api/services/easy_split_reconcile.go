@@ -78,9 +78,9 @@ func easySplitReconcileCandidates(db *gorm.DB, limit int) ([]models.ChefProfile,
 	var chefs []models.ChefProfile
 	err := db.Preload("User").
 		Where("COALESCE(payout_method, '') <> ''").
-		Where("UPPER(COALESCE(cashfree_vendor_status, '')) NOT IN ?",
+		Where("UPPER("+models.SQLVendorStatus+") NOT IN ?",
 			[]string{CashfreeVendorActive, CashfreeVendorDeleted, CashfreeVendorBankValidationFailed}).
-		Where("COALESCE(cashfree_vendor_status, '') = '' OR updated_at > ?",
+		Where(models.SQLVendorStatus+" = '' OR updated_at > ?",
 			time.Now().Add(-easySplitDeadAfter)).
 		Limit(limit).
 		Find(&chefs).Error
@@ -115,7 +115,7 @@ func ReconcileEasySplitVendors(ctx context.Context, db *gorm.DB, limit int) (act
 			vendor *CashfreeVendorResponse
 			err    error
 		)
-		if chef.CashfreeVendorID == "" {
+		if chef.VendorID() == "" {
 			// Never registered, or the save-path goroutine failed. Bank details
 			// live in Secret Manager, which is what the admin variant reads.
 			vendor, err = EnsureEasySplitVendor(ctx, db, chef)

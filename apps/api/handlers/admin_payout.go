@@ -288,7 +288,7 @@ func (h *AdminPayoutHandler) SetPayoutAutomation(c *gin.Context) {
 func (h *AdminPayoutHandler) GetBlockedChefs(c *gin.Context) {
 	var chefs []models.ChefProfile
 	if err := database.DB.
-		Where("cashfree_vendor_id IS NULL OR cashfree_vendor_id = '' OR LOWER(cashfree_vendor_status) <> ?",
+		Where(models.SQLVendorID+" = '' OR LOWER("+models.SQLVendorStatus+") <> ?",
 			strings.ToLower(services.CashfreeVendorActive)).
 		Find(&chefs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load"})
@@ -301,7 +301,7 @@ func (h *AdminPayoutHandler) GetBlockedChefs(c *gin.Context) {
 			"chefId":       ch.ID,
 			"businessName": ch.BusinessName,
 			// Operators see the raw gateway status; chefs never do (#1082).
-			"vendorStatus":      ch.CashfreeVendorStatus,
+			"vendorStatus":      ch.VendorStatus(),
 			"registration":      services.PayoutRegistrationFor(&chefs[i]),
 			"payoutAutoRelease": ch.PayoutAutoRelease,
 		})

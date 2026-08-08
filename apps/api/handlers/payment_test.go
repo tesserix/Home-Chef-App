@@ -49,6 +49,7 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		payment_provider TEXT DEFAULT 'cashfree', stripe_account_id TEXT DEFAULT '', stripe_charges_enabled INTEGER DEFAULT 0,
 		payout_country TEXT DEFAULT 'IN', payout_method TEXT DEFAULT '',
 		cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
+	cashfree_test_vendor_id TEXT DEFAULT '', cashfree_test_vendor_status TEXT DEFAULT '',
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE orders (mode text DEFAULT 'live', test_session_id text, cloned_from_id text, delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 

@@ -98,7 +98,7 @@ func BuildOrderSplitWithReason(db *gorm.DB, order *models.Order, capturePaise, c
 		return nil, EasySplitSkipCreditFunded
 	}
 	chef := &order.Chef
-	if chef.CashfreeVendorID == "" || !strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorActive) {
+	if chef.VendorID() == "" || !strings.EqualFold(chef.VendorStatus(), CashfreeVendorActive) {
 		return nil, EasySplitSkipVendorNotActive
 	}
 	if IsChefFSSAIExpired(chef) {
@@ -117,7 +117,7 @@ func BuildOrderSplitWithReason(db *gorm.DB, order *models.Order, capturePaise, c
 		share = int64(capturePaise)
 	}
 	return &CashfreeVendorSplit{
-		VendorID:    chef.CashfreeVendorID,
+		VendorID:    chef.VendorID(),
 		AmountPaise: CashfreeAmountFromPaise(int(share)),
 	}, ""
 }
@@ -152,7 +152,7 @@ func EasySplitChefBlocker(db *gorm.DB, chef *models.ChefProfile) string {
 	if !EasySplitEnabledForChef(db, chef) {
 		return EasySplitSkipDisabled
 	}
-	if chef.CashfreeVendorID == "" || !strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorActive) {
+	if chef.VendorID() == "" || !strings.EqualFold(chef.VendorStatus(), CashfreeVendorActive) {
 		return EasySplitSkipVendorNotActive
 	}
 	if IsChefFSSAIExpired(chef) {
@@ -258,7 +258,7 @@ func RefreshEasySplitVendor(_ context.Context, db *gorm.DB, chef *models.ChefPro
 	if cf == nil {
 		return nil, fmt.Errorf("easy-split: cashfree is not configured for the chef's %q mode", chef.Mode)
 	}
-	id := chef.CashfreeVendorID
+	id := chef.VendorID()
 	if id == "" {
 		id = EasySplitVendorIDFor(chef.ID)
 	}

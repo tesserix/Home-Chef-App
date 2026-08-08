@@ -99,7 +99,7 @@ func (h *AdminPayoutRailHandler) GetEasySplitRoster(c *gin.Context) {
 		agg := byChef[chef.ID.String()]
 		rows = append(rows, easySplitRosterRow{
 			ChefID: chef.ID.String(), BusinessName: chef.BusinessName, Mode: chef.Mode,
-			VendorID: chef.CashfreeVendorID, VendorStatus: chef.CashfreeVendorStatus,
+			VendorID: chef.VendorID(), VendorStatus: chef.VendorStatus(),
 			EasySplitMode: chef.EasySplitMode,
 			Effective:     services.EasySplitEnabledForChef(db, chef),
 			Payable:       blocker == "", Blocker: blocker,

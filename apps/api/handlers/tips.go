@@ -225,14 +225,14 @@ func planCashfreeTip(order *models.Order, req createTipRequest) (cashfreeTipPlan
 	}
 
 	chef := &order.Chef
-	if chef.CashfreeVendorID == "" || !strings.EqualFold(chef.CashfreeVendorStatus, services.CashfreeVendorActive) {
+	if chef.VendorID() == "" || !strings.EqualFold(chef.VendorStatus(), services.CashfreeVendorActive) {
 		// A real, explainable state — the chef's payout registration is not live —
 		// rather than the blanket message the retired gateway leg used to give everyone.
 		return cashfreeTipPlan{}, http.StatusConflict,
 			"This chef's payout account isn't active yet, so tips can't reach them"
 	}
 
-	plan := cashfreeTipPlan{VendorID: chef.CashfreeVendorID}
+	plan := cashfreeTipPlan{VendorID: chef.VendorID()}
 	userID := chef.UserID
 	if req.ChefAmount > 0 {
 		plan.ChefAmount = req.ChefAmount

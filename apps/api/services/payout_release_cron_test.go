@@ -66,6 +66,7 @@ const payoutReleaseChefProfilesDDL = `CREATE TABLE chef_profiles (mode text DEFA
 	address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '',
 	id text PRIMARY KEY, user_id text, business_name text, state text DEFAULT '',
 	cashfree_vendor_id text DEFAULT '', cashfree_vendor_status text DEFAULT '',
+	cashfree_test_vendor_id text DEFAULT '', cashfree_test_vendor_status text DEFAULT '',
 	payout_method text DEFAULT '',
 	payout_auto_release text DEFAULT '')`
 

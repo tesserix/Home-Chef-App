@@ -33,6 +33,7 @@ const releaseChefDDL = `CREATE TABLE chef_profiles (
 	payout_method TEXT DEFAULT '', payout_country TEXT DEFAULT 'IN',
 	easy_split_mode TEXT DEFAULT '',
 	cashfree_vendor_id TEXT DEFAULT '', cashfree_vendor_status TEXT DEFAULT '',
+	cashfree_test_vendor_id TEXT DEFAULT '', cashfree_test_vendor_status TEXT DEFAULT '',
 	created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`
 
 func setupReleaseSplitDB(t *testing.T) *gorm.DB {

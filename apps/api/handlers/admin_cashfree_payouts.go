@@ -544,8 +544,8 @@ func (h *AdminPayoutRailHandler) GetChefPayoutProfile(c *gin.Context) {
 			"enabled":   services.EasySplitEnabled(database.DB),
 			"mode":      chef.EasySplitMode,
 			"effective": services.EasySplitEnabledForChef(database.DB, &chef),
-			"vendorId":  chef.CashfreeVendorID,
-			"status":    chef.CashfreeVendorStatus,
+			"vendorId":  chef.VendorID(),
+			"status":    chef.VendorStatus(),
 		},
 	})
 }

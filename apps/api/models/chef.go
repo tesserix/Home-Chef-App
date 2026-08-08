@@ -187,8 +187,16 @@ type ChefProfile struct {
 	// money; the payout rail moves money it already holds.
 	// Both are gateway-internal: a chef reads services.PayoutRegistrationFor
 	// instead, and operators get the raw string from the admin API (#1082).
+	// The pair below is the LIVE registration. Sandbox and production vendor IDs
+	// are separate Cashfree namespaces, so a kitchen borrowed as a sandbox keeps
+	// its sandbox registration apart — otherwise the return to live would carry a
+	// vendor ID the live account has never heard of, marked ACTIVE (#1145).
+	// Read both through VendorID/VendorStatus, never the fields directly.
 	CashfreeVendorID     string `gorm:"default:''" json:"-"`
 	CashfreeVendorStatus string `gorm:"default:''" json:"-"`
+
+	CashfreeTestVendorID     string `gorm:"default:''" json:"-"`
+	CashfreeTestVendorStatus string `gorm:"default:''" json:"-"`
 
 	// Payout details
 	PayoutMethod      string `gorm:"default:''" json:"-"`
@@ -351,6 +359,56 @@ func (c *ChefProfile) OffersBakery() bool {
 
 // IsTestMode reports whether this kitchen currently inhabits the test partition.
 func (c *ChefProfile) IsTestMode() bool { return IsTestMode(c.Mode) }
+
+// VendorID and VendorStatus resolve the Cashfree Easy Split registration for
+// the partition this kitchen is currently in — the one and only way to read it.
+// A sandbox vendor ID means nothing to the production account, so a kitchen
+// borrowed for debugging must never inherit the other partition's registration
+// (#1145).
+func (c *ChefProfile) VendorID() string {
+	if c.IsTestMode() {
+		return c.CashfreeTestVendorID
+	}
+	return c.CashfreeVendorID
+}
+
+func (c *ChefProfile) VendorStatus() string {
+	if c.IsTestMode() {
+		return c.CashfreeTestVendorStatus
+	}
+	return c.CashfreeVendorStatus
+}
+
+// VendorColumns names the id and status columns backing the current partition,
+// so a write targets the same pair the reads resolve to.
+func (c *ChefProfile) VendorColumns() (idCol, statusCol string) {
+	if c.IsTestMode() {
+		return "cashfree_test_vendor_id", "cashfree_test_vendor_status"
+	}
+	return "cashfree_vendor_id", "cashfree_vendor_status"
+}
+
+// SQLVendorID and SQLVendorStatus are VendorID/VendorStatus expressed in SQL,
+// for the queries that must filter on the registration of whichever partition
+// each row is in. Kept beside the accessors so the two cannot disagree.
+const (
+	SQLVendorID = `CASE WHEN LOWER(COALESCE(chef_profiles.mode, 'live')) = 'test' ` +
+		`THEN COALESCE(chef_profiles.cashfree_test_vendor_id, '') ` +
+		`ELSE COALESCE(chef_profiles.cashfree_vendor_id, '') END`
+
+	SQLVendorStatus = `CASE WHEN LOWER(COALESCE(chef_profiles.mode, 'live')) = 'test' ` +
+		`THEN COALESCE(chef_profiles.cashfree_test_vendor_status, '') ` +
+		`ELSE COALESCE(chef_profiles.cashfree_vendor_status, '') END`
+)
+
+// SetVendorIdentity writes the pair for the current partition in memory.
+func (c *ChefProfile) SetVendorIdentity(id, status string) {
+	if c.IsTestMode() {
+		c.CashfreeTestVendorID, c.CashfreeTestVendorStatus = id, status
+		return
+	}
+	c.CashfreeVendorID, c.CashfreeVendorStatus = id, status
+}
 
 // IsBornTest reports whether this kitchen has never been live. A born-test
 // kitchen is hidden from customers outright — nobody has heard of it, so it

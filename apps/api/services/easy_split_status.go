@@ -38,18 +38,18 @@ func (r PayoutRegistration) Verified() bool { return r.State == PayoutRegistrati
 // pending, not failed: telling a chef their details are wrong when Cashfree has
 // merely added a state sends them to support over nothing.
 func PayoutRegistrationFor(chef *models.ChefProfile) PayoutRegistration {
-	if chef == nil || chef.CashfreeVendorID == "" {
+	if chef == nil || chef.VendorID() == "" {
 		return PayoutRegistration{
 			State:   PayoutRegistrationNone,
 			Message: "Add your bank details to start receiving payouts",
 		}
 	}
 	switch {
-	case strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorActive):
+	case strings.EqualFold(chef.VendorStatus(), CashfreeVendorActive):
 		return PayoutRegistration{State: PayoutRegistrationVerified, Message: "Verified — payouts active"}
-	case strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorBlocked),
-		strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorDeleted),
-		strings.EqualFold(chef.CashfreeVendorStatus, CashfreeVendorBankValidationFailed):
+	case strings.EqualFold(chef.VendorStatus(), CashfreeVendorBlocked),
+		strings.EqualFold(chef.VendorStatus(), CashfreeVendorDeleted),
+		strings.EqualFold(chef.VendorStatus(), CashfreeVendorBankValidationFailed):
 		return PayoutRegistration{
 			State:   PayoutRegistrationFailed,
 			Message: "Couldn't verify — please check your details",
