@@ -183,6 +183,12 @@ func EnsurePayoutMethodWith(
 	if regErr != nil && !errors.Is(regErr, payouts.ErrBeneficiaryRejected) {
 		return nil, regErr
 	}
+	// The computed id is a request. When the account was already registered the
+	// rail answers with the id it holds, and a transfer addressed to anything else
+	// 404s (#1151).
+	if res.BeneficiaryID != "" {
+		beneficiaryID = res.BeneficiaryID
+	}
 
 	method := payouts.PayoutMethod{
 		TenantID:          PayoutTenantID,
