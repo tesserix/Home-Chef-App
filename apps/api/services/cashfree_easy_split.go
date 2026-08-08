@@ -122,7 +122,8 @@ func (c *CashfreeClient) CreateVendor(req *CashfreeVendorRequest) (*CashfreeVend
 		if status >= 400 {
 			// Mid-validation the sandbox refuses updates outright. The vendor is
 			// registered — report its live state instead of a phantom failure.
-			log.Printf("cashfree[%s]: vendor %s update refused (%d) — returning current state", c.mode, req.VendorID, status)
+			log.Printf("cashfree[%s]: vendor %s update refused, returning current state: %v",
+				c.mode, req.VendorID, cashfreeError(status, resp))
 			return c.FetchVendor(req.VendorID)
 		}
 	}
