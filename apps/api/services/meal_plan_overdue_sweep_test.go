@@ -35,8 +35,10 @@ func insertOverduePlanDay(t *testing.T, db *gorm.DB, planStatus models.MealPlanS
 	dayStatus models.MealPlanDayStatus, dayDate time.Time, orderID *uuid.UUID) (planID, dayID uuid.UUID) {
 	t.Helper()
 	planID, dayID = uuid.New(), uuid.New()
+	chefID := uuid.NewString()
+	seedLiveChefRow(t, db, chefID)
 	require.NoError(t, db.Exec(`INSERT INTO meal_plans (id, meal_plan_number, customer_id, chef_id, status)
-		VALUES (?,?,?,?,?)`, planID.String(), "MP-"+planID.String()[:8], uuid.NewString(), uuid.NewString(), string(planStatus)).Error)
+		VALUES (?,?,?,?,?)`, planID.String(), "MP-"+planID.String()[:8], uuid.NewString(), chefID, string(planStatus)).Error)
 	var ord any
 	if orderID != nil {
 		ord = orderID.String()

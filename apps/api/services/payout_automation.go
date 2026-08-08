@@ -65,6 +65,13 @@ func PayoutAutomationEnabled(db *gorm.DB, chef *models.ChefProfile) bool {
 	if chef == nil {
 		return false
 	}
+	// A kitchen operating as a sandbox is not being watched on its live
+	// partition — the chef's app renders the test one — so its live payouts wait
+	// for the return to live rather than moving unobserved. Derived from mode on
+	// purpose: there is no parked flag that can be left set.
+	if chef.IsTestMode() {
+		return false
+	}
 	switch chef.PayoutAutoRelease {
 	case PayoutAutoOn:
 		return true

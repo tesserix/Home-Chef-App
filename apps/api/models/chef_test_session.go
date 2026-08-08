@@ -42,6 +42,11 @@ type ChefTestSession struct {
 	// contents are self-describing even after the default changes.
 	OrderWindowDays int `gorm:"default:30" json:"orderWindowDays"`
 
+	// ForcedBlockers names the live work that was in flight when an admin forced
+	// this flip through, e.g. "9 active orders, 18 unsettled payouts". Empty on a
+	// clean flip, so a non-empty value is the audit trail for a forced one.
+	ForcedBlockers string `gorm:"type:text;default:''" json:"forcedBlockers,omitempty"`
+
 	ClonedAt *time.Time `gorm:"" json:"clonedAt,omitempty"`
 
 	// CloneSummary is a per-table row count as a JSON object, e.g.
