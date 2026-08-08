@@ -59,10 +59,12 @@ import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { FilterSheet } from '../../components/home/FilterSheet';
 import { CATERING_ENABLED, TIFFIN_ENABLED, WALLET_ENABLED } from '../../lib/features';
+import { collectCuisineArt, type CuisineArt } from '../../lib/cuisine-art';
 import { ActiveMealPlanCard } from '../../components/meal-plan/ActiveMealPlanCard';
 import { useIsGuest } from '../../hooks/useRequireAccount';
 import { type SheetHandle } from '@homechef/mobile-shared/ui';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
+import { useHiddenActiveOrders } from '../../hooks/useHiddenActiveOrders';
 import {
   useUnreadCount,
   useNotificationSocket,
@@ -96,9 +98,9 @@ function walletChipLabel(n: number): string {
     : `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// The category rail. Icons rather than photography: illustrated category art is
-// a design deliverable we do not have, and a row of stock food photos reads as
-// filler. A tinted circle with one glyph is honest, scannable, and on-brand.
+// The category rail. Each tile shows a real kitchen's photo from the listing
+// below it (see lib/cuisine-art), falling back to this glyph while a category
+// has nothing under it — never stock photography.
 const CUISINES = [
   { label: 'All', Icon: UtensilsCrossed },
   { label: 'North Indian', Icon: CookingPot },
@@ -108,6 +110,8 @@ const CUISINES = [
   { label: 'Italian', Icon: Pizza },
   { label: 'Healthy', Icon: Salad },
 ] as const;
+
+const CUISINE_LABELS = CUISINES.map((c) => c.label);
 
 // Counts how many secondary filters are active (non-default) so the badge
 // on the Filters pill reflects the applied state.
@@ -157,7 +161,11 @@ export default function HomeScreen() {
   // ALL active orders, not a slice: the tracker renders only the most recent one
   // and needs the true remainder for its "N more active orders" row. Slicing to 3
   // dated from the collapsible stack, which drew a card per order.
-  const visibleActiveOrders = activeOrders;
+  // Hiding is per-order-per-stage, so a dismissed card returns the moment the
+  // chef advances it. Derived here, not inside the stack, so the list's bottom
+  // padding relaxes with the card instead of holding a gap for nothing.
+  const { visible: visibleActiveOrders, hide: hideActiveOrder } =
+    useHiddenActiveOrders(activeOrders);
 
   // Live stage changes on the active-order card (#716). The notification stream
   // is user-scoped, so one socket covers every card in the stack — no orderId.
@@ -219,6 +227,16 @@ export default function HomeScreen() {
 
   const { data, isLoading, isFetching, refetch } = useChefs(filters);
   const chefs = data?.data ?? [];
+
+  // Category art accumulates across fetches and is never dropped, so filtering
+  // to one cuisine can't blank the rest of the rail. A ref, not state: the map
+  // only ever grows alongside a render that is already happening.
+  const cuisineArt = useRef<CuisineArt>({});
+  cuisineArt.current = collectCuisineArt(
+    chefs,
+    cuisineArt.current,
+    CUISINE_LABELS,
+  );
 
   // Staggered card entrances (reduced-motion gated). No bounce — ease-out-quart.
   const reduceMotion = useReducedMotion();
@@ -386,6 +404,7 @@ export default function HomeScreen() {
       >
         {CUISINES.map(({ label: cuisine, Icon: CuisineIcon }) => {
           const isSelected = selectedCuisine === cuisine;
+          const art = cuisineArt.current[cuisine];
           return (
             // iOS Pressable inner-View pattern: visual styles stay on the
             // inner View. `style` here is a static object (not a function),
@@ -416,16 +435,26 @@ export default function HomeScreen() {
                       isSelected && styles.cuisineTileSelected,
                     ]}
                   >
-                    <CuisineIcon
-                      size={24}
-                      strokeWidth={1.75}
-                      color={
-                        isSelected
-                          ? customerColors.coral.pressed
-                          : customerColors.charcoal.soft
-                      }
-                      accessibilityElementsHidden
-                    />
+                    {art ? (
+                      <Image
+                        source={{ uri: art }}
+                        style={styles.cuisineTilePhoto}
+                        contentFit="cover"
+                        transition={150}
+                        accessibilityElementsHidden
+                      />
+                    ) : (
+                      <CuisineIcon
+                        size={24}
+                        strokeWidth={1.75}
+                        color={
+                          isSelected
+                            ? customerColors.coral.pressed
+                            : customerColors.charcoal.soft
+                        }
+                        accessibilityElementsHidden
+                      />
+                    )}
                   </View>
                   <Text
                     numberOfLines={1}
@@ -738,7 +767,7 @@ export default function HomeScreen() {
             style={[styles.activeOrderAnchor, { bottom: orderStackBottom }]}
             pointerEvents="box-none"
           >
-            <ActiveOrderStack orders={visibleActiveOrders} />
+            <ActiveOrderStack orders={visibleActiveOrders} onHide={hideActiveOrder} />
           </View>
         )}
 
@@ -966,6 +995,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: customerColors.surface.soft,
+    overflow: 'hidden',
+  },
+  cuisineTilePhoto: {
+    width: '100%',
+    height: '100%',
   },
   cuisineTileSelected: {
     backgroundColor: customerColors.coral.tint ?? customerColors.surface.soft,

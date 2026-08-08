@@ -60,6 +60,10 @@ interface ApiChefProfile {
   latitude?: number;
   longitude?: number;
   mode?: 'live' | 'test';
+  // testMode: the listing's own answer, set only for a viewer the test-mode
+  // allowlist admits. `mode` is never on the public payload, so this is in
+  // practice the only signal the app gets (#1163).
+  testMode?: boolean;
   foodSafetyBadge?: boolean;
   offersPickup?: boolean;
   offersSelfDelivery?: boolean;
@@ -123,7 +127,7 @@ export function mapChef(c: ApiChefProfile): Chef {
     minimumOrder: c.minimumOrder,
     deliveryFee: c.deliveryFee,
     deliveryFeeFlat: c.deliveryFeeFlat,
-    mode: c.mode === 'test' ? 'test' : 'live',
+    mode: c.testMode || c.mode === 'test' ? 'test' : 'live',
     foodSafetyBadge: Boolean(c.foodSafetyBadge),
     offersPickup: c.offersPickup,
     offersSelfDelivery: c.offersSelfDelivery,

@@ -78,6 +78,13 @@ describe('mapChef', () => {
     expect(mapChef({ id: 'c' }).unavailableMessage).toBeUndefined();
   });
 
+  it('badges a test kitchen from the API testMode flag (#1163)', () => {
+    // The API only sets testMode for an allowlisted tester; every other viewer
+    // gets the closed payload with the flag stripped, so the badge is safe.
+    expect(mapChef({ id: 'c', testMode: true }).mode).toBe('test');
+    expect(mapChef({ id: 'c' }).mode).toBe('live');
+  });
+
   it('prefers banner > kitchen photo > avatar for the card image', () => {
     expect(
       mapChef({ id: 'c', bannerImage: 'b.jpg', kitchenPhotos: ['k.jpg'], profileImage: 'p.jpg' }).imageUrl,
