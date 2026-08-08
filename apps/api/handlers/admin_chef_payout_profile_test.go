@@ -301,3 +301,32 @@ func TestSeedChefTestBankAccount_RailUnconfigured(t *testing.T) {
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/admin/chefs/"+chefID.String()+"/payout-methods/test-bank", nil))
 	require.Equal(t, http.StatusConflict, w.Code)
 }
+
+// The platform's cut of every order is the flat commission rate — already
+// configured, already frozen onto each order, already netted off inside
+// ChefNetPayoutFor before a split is built. The settings endpoint must report
+// it, because an operator looking at an empty "flat platform fee" box otherwise
+// reads it as the platform taking nothing and invents a second figure.
+func TestGetPayoutSettings_ReportsTheCommissionRateOrdersAlreadyUse(t *testing.T) {
+	db := setupChefPayoutProfileDB(t)
+	r := profileRouter()
+
+	read := func() float64 {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/admin/payouts/settings", nil))
+		require.Equal(t, http.StatusOK, w.Code)
+		var resp struct {
+			CommissionRatePercent float64 `json:"commissionRatePercent"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		return resp.CommissionRatePercent
+	}
+
+	// Unconfigured falls back to the launch default rather than reading as zero.
+	require.InDelta(t, services.DefaultCommissionRate*100, read(), 0.001)
+
+	require.NoError(t, db.Exec(
+		`INSERT INTO platform_settings (id, key, value, type) VALUES (?, 'payout.commission_rate', '0.085', 'number')`,
+		uuid.New().String()).Error)
+	require.InDelta(t, 8.5, read(), 0.001)
+}
