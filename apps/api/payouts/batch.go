@@ -104,7 +104,7 @@ type Batch struct {
 
 	// IdempotencyKey is derived from the batch identity and sent to the rail.
 	// It is what GetPayoutByReference is queried with after an ambiguous call.
-	IdempotencyKey string `gorm:"type:varchar(64);uniqueIndex" json:"idempotencyKey"`
+	IdempotencyKey string `gorm:"type:varchar(128);uniqueIndex" json:"idempotencyKey"`
 
 	// Decision records why the batch went where it did.
 	Decision    Decision `gorm:"type:smallint" json:"decision"`

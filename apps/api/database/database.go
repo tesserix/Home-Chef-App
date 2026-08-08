@@ -411,6 +411,11 @@ func Migrate() error {
 		`ALTER TABLE users DROP CONSTRAINT IF EXISTS idx_users_email`,
 		`DROP INDEX IF EXISTS users_email_key`,
 		`DROP INDEX IF EXISTS idx_users_email`,
+		// A chef batch's idempotency key is 68 characters and a delivery partner's
+		// 76, so the original varchar(64) refused every insert with a 22001 and no
+		// Cashfree payout could be prepared at all (#1156). AutoMigrate never
+		// widens an existing column — do it here.
+		`ALTER TABLE payout_batches ALTER COLUMN idempotency_key TYPE varchar(128)`,
 		// 3PL deliveries have no internal delivery partner. The model field is
 		// now *uuid.UUID (nullable), but AutoMigrate never drops an existing
 		// NOT NULL constraint — do it here so provider-fulfilled deliveries can
