@@ -18,9 +18,17 @@ describe('isGuestBrowsable', () => {
     expect(isGuestBrowsable(['chefbook', '[slug]'])).toBe(true);
   });
 
-  it('lets a guest browse the map and dish search', () => {
-    expect(isGuestBrowsable(['chefs-map'])).toBe(true);
+  it('lets a guest browse dish search', () => {
     expect(isGuestBrowsable(['search-dishes'])).toBe(true);
+  });
+
+  // The chefs map is out of the browse surface while `CHEFS_MAP_ENABLED` is
+  // false: no Maps SDK key exists for this project, so the screen throws
+  // "API key not found" on Android the moment its MapView inflates. Handing a
+  // signed-out reviewer a route that crashes is worse than not offering it.
+  // Flipping the flag back to true restores this to `true` with no edit here.
+  it('keeps a guest off the chefs map while the map is flag-disabled', () => {
+    expect(isGuestBrowsable(['chefs-map'])).toBe(false);
   });
 
   // App Review expects the policies to be readable before anyone signs up.

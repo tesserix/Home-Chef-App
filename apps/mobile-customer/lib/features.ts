@@ -52,3 +52,29 @@ export const REFERRAL_ENABLED: boolean = true;
  * Re-verify what actually blocks messaging before flipping this.
  */
 export const MESSAGING_ENABLED: boolean = false;
+
+/**
+ * The chefs map (`app/chefs-map.tsx`) — kitchens plotted on a Google map.
+ * Off because no Maps SDK key exists for this project, not because the screen
+ * is unfinished.
+ *
+ * GCP `tesseracthub-480811` has exactly one maps-adjacent key,
+ * `homechef-routes-api`, held in the secret `prod-homechef-google-maps-api-key`
+ * and restricted to `routes.googleapis.com`. It is a SERVER key and is NOT
+ * usable here — shipping it in a public binary hands anyone who unzips the APK
+ * a billable Routes API key. `maps-android-backend.googleapis.com` is not an
+ * enabled service, so no valid key can be minted today either. With no
+ * `GOOGLE_MAPS_API_KEY` in any EAS environment, `withMapsKey`
+ * (`lib/maps-config.js`) no-ops and the Android manifest carries no
+ * `com.google.android.geo.API_KEY` — inflating a `MapView` then throws
+ * `RuntimeException: API key not found`.
+ *
+ * Unblock: enable `maps-android-backend.googleapis.com`, mint a NEW key
+ * restricted to Maps SDK for Android + the `com.tesserix.homechef.customer`
+ * SHA-1s, publish it as `GOOGLE_MAPS_API_KEY` via `eas secret:create`, then
+ * flip this to `true`. See `docs/store-release/README.md`.
+ *
+ * Scope: this gates the chefs map only. `DeliveryMap` in order tracking is a
+ * separate surface behind its own `showMap` gate and is untouched by this flag.
+ */
+export const CHEFS_MAP_ENABLED: boolean = false;
