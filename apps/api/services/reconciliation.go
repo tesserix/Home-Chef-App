@@ -112,6 +112,10 @@ func ReconcileSettlements(ctx context.Context, windowStart, windowEnd time.Time)
 	return drifts, checked, nil
 }
 
+// Overridden in tests to assert which credential slot an order is reconciled
+// against without reaching Secret Manager.
+var cashfreeClientFor = GetCashfreeFor
+
 // reconcileOne reconciles a single order. The bool is false when the order
 // can't be reconciled (no gateway reference or provider not configured) — that
 // is a skip, not a drift.
@@ -146,9 +150,10 @@ func reconcileOne(o *models.Order) ([]Drift, bool) {
 // captured-amount basis and the error-propagating per-line read are shared with
 // reconcileStripe, so a drift means the same thing whichever gateway produced it.
 func reconcileCashfree(o *models.Order) []Drift {
-	// Live slot on purpose: reconciliation covers real money only, and its queries
-	// exclude the test partition.
-	client := GetCashfree()
+	// The slot the order was actually paid on. ReconcileSettlements sweeps every
+	// partition, so asking the live account about a sandbox order would report
+	// DriftPaymentNotCaptured on money that was captured — on the test slot.
+	client := cashfreeClientFor(o.Mode)
 	if client == nil {
 		return nil // not configured — skip silently (logged once at startup)
 	}

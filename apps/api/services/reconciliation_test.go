@@ -54,6 +54,37 @@ func TestReconcileOne_LegacyGatewayOrder_Skips(t *testing.T) {
 	}
 }
 
+// A test-partition order was paid with the TEST slot's credentials, so it can
+// only be reconciled against the test merchant account. Asking the live account
+// about it returns no such order, and the sweep reports DriftPaymentNotCaptured
+// on money that was in fact captured — a false finding on every sandbox order,
+// which is what the drift report exists to not do. models.ModePartition states
+// the rule: a money operation reads the row's own Mode, never the chef's
+// current one.
+func TestReconcileCashfree_AsksTheSlotTheOrderWasPaidOn(t *testing.T) {
+	for _, mode := range []string{models.ChefModeTest, models.ChefModeLive} {
+		t.Run(mode, func(t *testing.T) {
+			orig := cashfreeClientFor
+			t.Cleanup(func() { cashfreeClientFor = orig })
+
+			asked := ""
+			cashfreeClientFor = func(m string) *CashfreeClient {
+				asked = m
+				return nil // unconfigured slot — reconcileCashfree skips, no network
+			}
+
+			o := &models.Order{OrderNumber: "ORD-MODE", GatewayOrderID: "cf_order_1"}
+			o.Mode = mode
+			if drifts := reconcileCashfree(o); drifts != nil {
+				t.Errorf("drifts = %v, want nil when the slot is unconfigured", drifts)
+			}
+			if asked != mode {
+				t.Errorf("reconciled against the %q slot, want %q", asked, mode)
+			}
+		})
+	}
+}
+
 func TestReconcileOne_NoGatewayRef_Skips(t *testing.T) {
 	// An order with no gateway reference can't be reconciled — the bool must be
 	// false (a skip, not a drift) without touching any gateway.
