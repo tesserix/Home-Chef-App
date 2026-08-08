@@ -383,6 +383,16 @@ func (c *CashfreePayoutClient) CreateBeneficiary(ctx context.Context, req payout
 		log.Printf("cashfree-payouts[%s]: beneficiary %s conflicted — reading it back", c.mode, req.BeneficiaryID)
 		got, fErr := c.FetchBeneficiary(ctx, req.BeneficiaryID)
 		if errors.Is(fErr, payouts.ErrRailNotFound) {
+			// The conflict was on the INSTRUMENT: this account is already
+			// registered under another id. Cashfree cannot register it twice and
+			// cannot update a beneficiary, so the incumbent is adopted — it is the
+			// same bank account, and refusing would leave the payee unpayable for
+			// good (#1151).
+			if adopted, aErr := c.FetchBeneficiaryByInstrument(ctx, req.Instrument); aErr == nil {
+				log.Printf("cashfree-payouts[%s]: adopting existing beneficiary %s for the same account",
+					c.mode, adopted.BeneficiaryID)
+				return adopted, nil
+			}
 			detail := cashfreePayoutErrorDetail(resp)
 			return payouts.BeneficiaryResult{
 				Status: payouts.MethodInvalid,
@@ -429,6 +439,38 @@ func (c *CashfreePayoutClient) FetchBeneficiary(ctx context.Context, beneficiary
 	var out cfBeneficiaryResponse
 	if err := json.Unmarshal(resp, &out); err != nil {
 		return payouts.BeneficiaryResult{}, fmt.Errorf("cashfree-payouts: parse beneficiary: %w", err)
+	}
+	return payouts.BeneficiaryResult{
+		BeneficiaryID: out.BeneficiaryID,
+		Status:        cashfreeBeneficiaryStatus(out.BeneficiaryStatus),
+	}, nil
+}
+
+// FetchBeneficiaryByInstrument reads back whichever beneficiary holds this
+// account. Cashfree keys the lookup on the account and IFSC together — the
+// account number alone matches a different bank's account.
+func (c *CashfreePayoutClient) FetchBeneficiaryByInstrument(ctx context.Context, in payouts.Instrument) (payouts.BeneficiaryResult, error) {
+	if in.Kind != payouts.MethodBankAccount || in.AccountNumber == "" || in.IFSC == "" {
+		return payouts.BeneficiaryResult{}, payouts.ErrRailNotFound
+	}
+	path := "/beneficiary?bank_account_number=" + url.QueryEscape(in.AccountNumber) +
+		"&bank_ifsc=" + url.QueryEscape(in.IFSC)
+	resp, status, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return payouts.BeneficiaryResult{}, err
+	}
+	if status == http.StatusNotFound {
+		return payouts.BeneficiaryResult{}, payouts.ErrRailNotFound
+	}
+	if status >= 400 {
+		return payouts.BeneficiaryResult{}, cashfreePayoutError(status, resp)
+	}
+	var out cfBeneficiaryResponse
+	if err := json.Unmarshal(resp, &out); err != nil {
+		return payouts.BeneficiaryResult{}, fmt.Errorf("cashfree-payouts: parse beneficiary: %w", err)
+	}
+	if out.BeneficiaryID == "" {
+		return payouts.BeneficiaryResult{}, payouts.ErrRailNotFound
 	}
 	return payouts.BeneficiaryResult{
 		BeneficiaryID: out.BeneficiaryID,
