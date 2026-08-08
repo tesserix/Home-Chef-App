@@ -35,6 +35,13 @@ func TestEveryChefDrawsAnAccountBothRailsAccept(t *testing.T) {
 	}
 }
 
+func TestSeededHolderIsTheNameCashfreeExpects(t *testing.T) {
+	// Easy Split name-matches the penny drop; Payouts does not. Sending the
+	// kitchen's own name against Cashfree's test account is the documented
+	// "account holder name matching failed" case (#1160).
+	require.Equal(t, "John Doe", cashfreeSandboxAccountHolder)
+}
+
 func TestSaffronDrawsAnAccountEasySplitVerifies(t *testing.T) {
 	// The kitchen that surfaced this: it hashed to SBIN0008752, documented
 	// "Failed at the bank", so its vendor could never leave BANK_VALIDATION_FAILED.
