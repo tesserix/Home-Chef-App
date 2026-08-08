@@ -919,20 +919,32 @@ func (h *AdminPayoutRailHandler) SeedChefTestBankAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// payoutSettingsPayload is the single shape both the read and the write answer
+// with, so an operator never sees the settings change between saving and
+// reloading them.
+func payoutSettingsPayload() gin.H {
+	capMinor, capUnreadable := services.PayoutAutoDisburseCap(database.DB)
+	feeMinor, feeOK := services.PlatformFeeFlatMinor(database.DB)
+	return gin.H{
+		"autoDisburseEnabled": services.PayoutAutoDisburseEnabled(database.DB),
+		"autoCapMinor":        capMinor,
+		"autoCapUnreadable":   capUnreadable,
+		"easySplitEnabled":    services.EasySplitEnabled(database.DB),
+		// The platform's actual cut: the flat commission every order already
+		// freezes and ChefNetPayoutFor already nets off before a split is built.
+		// Reported so an empty flat fee reads as "nothing extra on top" rather
+		// than "the platform takes nothing" (#1122).
+		"commissionRatePercent": services.GetCommissionRate(database.DB) * 100,
+		"platformFeeFlatMinor":  feeMinor,
+		"platformFeeUnreadable": !feeOK,
+	}
+}
+
 // GetPayoutSettings / UpdatePayoutSettings expose the auto-disburse flag.
 //
 // GET/PUT /admin/payouts/settings
 func (h *AdminPayoutRailHandler) GetPayoutSettings(c *gin.Context) {
-	capMinor, capUnreadable := services.PayoutAutoDisburseCap(database.DB)
-	feeMinor, feeOK := services.PlatformFeeFlatMinor(database.DB)
-	c.JSON(http.StatusOK, gin.H{
-		"autoDisburseEnabled":   services.PayoutAutoDisburseEnabled(database.DB),
-		"autoCapMinor":          capMinor,
-		"autoCapUnreadable":     capUnreadable,
-		"easySplitEnabled":      services.EasySplitEnabled(database.DB),
-		"platformFeeFlatMinor":  feeMinor,
-		"platformFeeUnreadable": !feeOK,
-	})
+	c.JSON(http.StatusOK, payoutSettingsPayload())
 }
 
 func upsertPayoutSetting(key, value, kind string, actorID uuid.UUID) error {
@@ -1028,14 +1040,5 @@ func (h *AdminPayoutRailHandler) UpdatePayoutSettings(c *gin.Context) {
 			nil, map[string]any{"platformFeeFlatMinor": *req.PlatformFeeFlatMinor})
 	}
 
-	capMinor, capUnreadable := services.PayoutAutoDisburseCap(database.DB)
-	feeMinor, feeOK := services.PlatformFeeFlatMinor(database.DB)
-	c.JSON(http.StatusOK, gin.H{
-		"autoDisburseEnabled":   services.PayoutAutoDisburseEnabled(database.DB),
-		"autoCapMinor":          capMinor,
-		"autoCapUnreadable":     capUnreadable,
-		"easySplitEnabled":      services.EasySplitEnabled(database.DB),
-		"platformFeeFlatMinor":  feeMinor,
-		"platformFeeUnreadable": !feeOK,
-	})
+	c.JSON(http.StatusOK, payoutSettingsPayload())
 }
