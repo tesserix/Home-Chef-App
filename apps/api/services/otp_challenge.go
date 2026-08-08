@@ -46,36 +46,45 @@ const (
 	otpMaxAttempts    = 5
 )
 
-// otpKey builds the Redis key for one (purpose, kind, user, subject) tuple.
-// `kind` is one of code / ok / att / cd / snd. The subject is the email address
-// or phone number the code was sent to, so enrolling a second channel cannot
-// clobber the first one's challenge.
-func otpKey(p OTPPurpose, kind, uid, subject string) string {
+// otpKey builds the Redis key for one (purpose, kind, user, subject, device)
+// tuple. `kind` is one of code / ok / att / cd / snd. The subject is the email
+// address or phone number the code was sent to, so enrolling a second channel
+// cannot clobber the first one's challenge.
+//
+// An empty device is account-wide and keeps the pre-#1164 key shape, which is
+// what clients that predate the X-Device-Id header send.
+func otpKey(p OTPPurpose, kind, uid, subject, device string) string {
 	if p == PurposeOnboardingEmail {
 		// Frozen shape — see the file comment.
 		return fmt.Sprintf("email_otp:%s:%s:%s", kind, uid, subject)
 	}
-	return fmt.Sprintf("otp:%s:%s:%s:%s", p, kind, uid, subject)
+	if device == "" {
+		return fmt.Sprintf("otp:%s:%s:%s:%s", p, kind, uid, subject)
+	}
+	return fmt.Sprintf("otp:%s:%s:%s:%s:%s", p, kind, uid, subject, device)
 }
 
 // IssueOTP generates a code and stores it under the given purpose, applying the
 // resend cooldown and the hourly send cap. It does NOT deliver the code —
 // delivery differs per channel, and keeping it out means a delivery failure is
 // the caller's to report rather than something swallowed here.
-func IssueOTP(ctx context.Context, p OTPPurpose, uid, subject string) (string, error) {
+func IssueOTP(ctx context.Context, p OTPPurpose, uid, subject, device string) (string, error) {
 	r := GetRedisClient()
 	if r == nil || !r.IsConnected() {
 		return "", ErrOTPUnavailable
 	}
 
-	ok, err := r.SetNX(ctx, otpKey(p, "cd", uid, subject), "1", otpResendCooldown)
+	ok, err := r.SetNX(ctx, otpKey(p, "cd", uid, subject, device), "1", otpResendCooldown)
 	if err != nil {
 		return "", ErrOTPUnavailable
 	}
 	if !ok {
 		return "", ErrOTPCooldown
 	}
-	if sends, err := r.IncrAndExpire(ctx, otpKey(p, "snd", uid, subject), otpSendWindow); err == nil && sends > otpMaxSends {
+	// The send cap is deliberately account-wide: a device id comes from the
+	// client, so a per-device budget would let a rotating id mail bomb the
+	// address this cap exists to protect.
+	if sends, err := r.IncrAndExpire(ctx, otpKey(p, "snd", uid, subject, ""), otpSendWindow); err == nil && sends > otpMaxSends {
 		return "", ErrOTPSendLimit
 	}
 
@@ -83,19 +92,19 @@ func IssueOTP(ctx context.Context, p OTPPurpose, uid, subject string) (string, e
 	if err != nil {
 		return "", ErrOTPUnavailable
 	}
-	if err := r.Set(ctx, otpKey(p, "code", uid, subject), code, otpTTL); err != nil {
+	if err := r.Set(ctx, otpKey(p, "code", uid, subject, device), code, otpTTL); err != nil {
 		return "", ErrOTPUnavailable
 	}
 	// Reset the attempt counter with the new code, so a fresh challenge is not
 	// born already at the ceiling from a previous one.
-	_ = r.Set(ctx, otpKey(p, "att", uid, subject), "0", otpTTL)
+	_ = r.Set(ctx, otpKey(p, "att", uid, subject, device), "0", otpTTL)
 	return code, nil
 }
 
 // RedeemOTP checks a submitted code and, on success, writes the verified marker.
 // Attempts are counted before the comparison so a wrong-code flood burns the
 // budget rather than probing indefinitely.
-func RedeemOTP(ctx context.Context, p OTPPurpose, uid, subject, code string) error {
+func RedeemOTP(ctx context.Context, p OTPPurpose, uid, subject, device, code string) error {
 	code = strings.TrimSpace(code)
 	if len(code) != 6 {
 		return ErrOTPMismatch
@@ -105,21 +114,34 @@ func RedeemOTP(ctx context.Context, p OTPPurpose, uid, subject, code string) err
 		return ErrOTPUnavailable
 	}
 
-	if attempts, err := r.IncrAndExpire(ctx, otpKey(p, "att", uid, subject), otpTTL); err == nil && attempts > otpMaxAttempts {
-		_ = r.Del(ctx, otpKey(p, "code", uid, subject))
+	// The client reads its device id from the keychain asynchronously, so the
+	// request that asked for the code can predate the header while the one
+	// redeeming it carries it. Fall back to the account-wide slot rather than
+	// telling the user their correct code is wrong.
+	if device != "" {
+		if v, err := r.Get(ctx, otpKey(p, "code", uid, subject, device)); err != nil || v == "" {
+			device = ""
+		}
+	}
+
+	if attempts, err := r.IncrAndExpire(ctx, otpKey(p, "att", uid, subject, device), otpTTL); err == nil && attempts > otpMaxAttempts {
+		_ = r.Del(ctx, otpKey(p, "code", uid, subject, device))
 		return ErrOTPAttemptLimit
 	}
-	stored, err := r.Get(ctx, otpKey(p, "code", uid, subject))
+	stored, err := r.Get(ctx, otpKey(p, "code", uid, subject, device))
 	if err != nil || stored == "" {
 		return ErrOTPExpired
 	}
 	if subtle.ConstantTimeCompare([]byte(stored), []byte(code)) != 1 {
 		return ErrOTPMismatch
 	}
-	if err := r.Set(ctx, otpKey(p, "ok", uid, subject), "1", otpVerifiedTTL); err != nil {
+	// The verified marker stays account-wide. It records that the user proved
+	// this channel, which is not a per-device fact, and the two readers of it
+	// (enrollment, onboarding) are account-wide flows.
+	if err := r.Set(ctx, otpKey(p, "ok", uid, subject, ""), "1", otpVerifiedTTL); err != nil {
 		return ErrOTPUnavailable
 	}
-	_ = r.Del(ctx, otpKey(p, "code", uid, subject))
+	_ = r.Del(ctx, otpKey(p, "code", uid, subject, device))
 	return nil
 }
 
@@ -136,7 +158,7 @@ func OTPVerified(ctx context.Context, p OTPPurpose, uid, subject string) bool {
 		log.Printf("otp: Redis unavailable, denying %s for user=%s (failing closed)", p, uid)
 		return false
 	}
-	v, err := r.Get(ctx, otpKey(p, "ok", uid, subject))
+	v, err := r.Get(ctx, otpKey(p, "ok", uid, subject, ""))
 	return err == nil && v == "1"
 }
 
@@ -147,5 +169,5 @@ func ClearOTPVerified(ctx context.Context, p OTPPurpose, uid, subject string) {
 	if r == nil || !r.IsConnected() {
 		return
 	}
-	_ = r.Del(ctx, otpKey(p, "ok", uid, subject))
+	_ = r.Del(ctx, otpKey(p, "ok", uid, subject, ""))
 }

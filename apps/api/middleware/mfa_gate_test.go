@@ -150,6 +150,34 @@ func TestMFAGate_TrustedDevicePasses(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
+// The whole point of #1164: a second handset is challenged, not fatal to the
+// first. Trusting it must leave the original device passing, and the original's
+// token must not have been quietly reissued underneath it.
+func TestMFAGate_SecondDeviceIsChallengedWithoutEvictingTheFirst(t *testing.T) {
+	db, uid := gateDB(t), uuid.New()
+	gateRedis(t)
+	enrol(t, db, uid)
+
+	phone, err := services.IssueTrustedDevice(db, uid, "customer", "iPhone", "ios")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, run(t, db, true, &uid, "/api/v1/orders", "customer", phone).Code)
+
+	// The tablet has no token yet, so it is challenged rather than served.
+	require.Equal(t, http.StatusForbidden,
+		run(t, db, true, &uid, "/api/v1/orders", "customer", "").Code)
+
+	tablet, err := services.IssueTrustedDevice(db, uid, "customer", "iPad", "ios")
+	require.NoError(t, err)
+	require.NotEqual(t, phone, tablet)
+
+	require.Equal(t, http.StatusOK, run(t, db, true, &uid, "/api/v1/orders", "customer", tablet).Code)
+	require.Equal(t, http.StatusOK, run(t, db, true, &uid, "/api/v1/orders", "customer", phone).Code)
+
+	devices, err := services.ListTrustedDevices(db, uid)
+	require.NoError(t, err)
+	require.Len(t, devices, 2)
+}
+
 // Trust must not cross apps even with a genuine token.
 func TestMFAGate_TrustDoesNotCrossApps(t *testing.T) {
 	db, uid := gateDB(t), uuid.New()

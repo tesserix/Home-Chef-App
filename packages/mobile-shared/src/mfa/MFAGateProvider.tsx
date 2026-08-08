@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { AxiosInstance } from 'axios';
 
 import { MFAChallengeScreen } from './MFAChallengeScreen';
+import { getDeviceId } from '../auth/device-identity';
 import { loadDeviceToken } from './device-token';
 import type { MFAChannel } from './api';
 
@@ -66,10 +67,13 @@ export function MFAGateProvider({
 }: MFAGateProviderProps) {
   const [pending, setPending] = useState<PendingChallenge | null>(null);
 
-  // Warm the in-memory device token before anything can fire a request, so a
-  // remembered device is not challenged again on every cold start.
+  // Warm both device credentials before anything can fire a request. The token
+  // stops a remembered device being challenged again on every cold start; the id
+  // scopes the challenge itself, and a relaunch with a stored session never goes
+  // through sign-in, which is the only other place it gets warmed.
   useEffect(() => {
     void loadDeviceToken();
+    void getDeviceId();
   }, []);
 
   const requireMFA = useCallback((challenge: PendingChallenge) => {
