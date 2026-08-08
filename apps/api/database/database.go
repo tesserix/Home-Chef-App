@@ -508,6 +508,10 @@ func Migrate() error {
 		return err
 	}
 
+	if err := adoptLegacyDeviceTokens(DB); err != nil {
+		return err
+	}
+
 	// #1125 — a row inserted without an explicit provider must not claim a gateway
 	// that can no longer take money. Stated here rather than left to AutoMigrate,
 	// which is not reliable about changing an EXISTING column's default. Existing
