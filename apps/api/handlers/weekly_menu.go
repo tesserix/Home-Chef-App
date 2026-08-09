@@ -59,11 +59,18 @@ func (h *ChefHandler) GetMyWeeklyMenu(c *gin.Context) {
 		return
 	}
 
+	// weekly_menus and weekly_menu_items are both mode-partitioned, so an
+	// unscoped read returns the live grid AND the sandbox one interleaved — the
+	// chef sees every cell twice and cannot tell which is which. Same rule as
+	// GetChefMenuItems; it was simply never applied here.
 	var menu models.WeeklyMenu
-	database.DB.Where("chef_id = ?", chef.ID).FirstOrInit(&menu)
+	database.DB.Where("chef_id = ?", chef.ID).
+		Scopes(services.ChefOwnModeScope(chef.ID)).FirstOrInit(&menu)
 	menu.ChefID = chef.ID
 	var items []models.WeeklyMenuItem
-	database.DB.Where("chef_id = ?", chef.ID).Order("day_of_week, slot, variant").Find(&items)
+	database.DB.Where("chef_id = ?", chef.ID).
+		Scopes(services.ChefOwnModeScope(chef.ID)).
+		Order("day_of_week, slot, variant").Find(&items)
 
 	c.JSON(http.StatusOK, gin.H{
 		"isPublished": menu.IsPublished,
@@ -187,13 +194,20 @@ func (h *ChefHandler) GetPublicWeeklyMenu(c *gin.Context) {
 		return
 	}
 
+	// Mode scope, for the same reason as GetChefMenu: weekly_menu_items is
+	// partitioned, so without it a customer is served the live grid plus the
+	// sandbox one and every tiffin dish appears twice. Tiffin is the headline
+	// feature, which makes this the most visible surface it could have hit.
 	var menu models.WeeklyMenu
-	if err := database.DB.Where("chef_id = ? AND is_published = ?", chefID, true).First(&menu).Error; err != nil {
+	if err := database.DB.Where("chef_id = ? AND is_published = ?", chefID, true).
+		Scopes(services.ChefOwnModeScope(chefID)).First(&menu).Error; err != nil {
 		c.JSON(http.StatusOK, gin.H{"isPublished": false, "items": []models.WeeklyMenuItem{}})
 		return
 	}
 	var items []models.WeeklyMenuItem
-	database.DB.Where("chef_id = ?", chefID).Order("day_of_week, slot, variant").Find(&items)
+	database.DB.Where("chef_id = ?", chefID).
+		Scopes(services.ChefOwnModeScope(chefID)).
+		Order("day_of_week, slot, variant").Find(&items)
 	c.JSON(http.StatusOK, gin.H{"isPublished": true, "publishedAt": menu.PublishedAt, "items": items})
 }
 
