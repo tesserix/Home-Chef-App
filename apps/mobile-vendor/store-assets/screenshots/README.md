@@ -8,39 +8,29 @@ against production), signed in as `vendor@fe3dr.com` → *Saffron Home Kitchen*.
 
 | File | Screen | Notes |
 |---|---|---|
-| — | Dashboard | **Missing — blocked.** See below. |
+| `01-dashboard.png` | Dashboard | Live kitchen, real activity, two meal-plan orders awaiting acceptance. |
 | `02-orders-history.png` | Orders → History | Every order is from the same customer ("Priya"), and rejected/cancelled rows are visible. Usable, not flattering. |
 | `03-menu.png` | Menu | **No dish photos** — every item renders the placeholder glyph. Weak as a hero shot for a food app. |
 | `04-earnings.png` | Earnings | Strongest shot. Commission / GST / TDS breakdown reads credibly for India. |
 | `05-more.png` | More | Clean; shows the app's breadth. |
 
-## The dashboard shot is blocked by test mode
+## Test mode — resolved 2026-08-09
 
-*Saffron Home Kitchen* is `testMode: true`, so the Dashboard renders a large
-amber banner:
+*Saffron Home Kitchen* was `testMode: true`, which made the Dashboard render a
+large amber banner reading *"Orders and earnings shown here are not real, and
+customers cannot order from you right now."* That blocked the Dashboard
+screenshot **and** was a live Vendor submission risk in its own right — an App
+Store reviewer signing into the demo account would have read it as a non-final
+build (guideline 2.1).
 
-> **TEST MODE** — The Fe3dr team is running tests on your kitchen to investigate
-> an issue. **Orders and earnings shown here are not real, and customers cannot
-> order from you right now.** … Reference: test session 1
+The kitchen was returned to Live via the admin console (HomeChef → Chefs →
+*Return to Live*); verified `mode: live`, `acceptingOrders: true`. The Dashboard
+was then recaptured. **Saffron now takes real payments** — if it is ever moved
+back to test mode, this screenshot goes stale and the banner returns.
 
-Two consequences:
-
-1. The Dashboard — the single most important vendor screenshot — cannot be
-   captured until the kitchen is live.
-2. More seriously, **an App Store reviewer signing into the demo account sees
-   this banner**, which reads as a non-final build (guideline 2.1). This makes
-   taking the kitchen live a blocker for the Vendor submission itself, not just
-   for screenshots.
-
-Fix, then re-capture the Dashboard:
-
-```
-PATCH /admin/chefs/e150c72a-42e2-4beb-8cb1-389666dd813c/mode
-{"mode": "live", "reason": "App Store review"}
-```
-
-Requires an internal-pool admin (`RequirePool(PoolInternal)` + `RequireAdmin`).
-Note this makes the kitchen take **real** payments.
+The FSSAI "registration is ready" card was dismissed before capture: its
+registration number (`1213232312`) is placeholder-looking seed data and does not
+belong in a public store listing.
 
 ## Also worth fixing before capture
 
