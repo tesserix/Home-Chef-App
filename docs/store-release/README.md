@@ -252,14 +252,59 @@ For **Fe3dr Vendor**, add:
 
 ### Demo accounts
 
-Both stores require working credentials that reach the full app.
+Both stores require working credentials that reach the full app. These exist on
+production and were verified end to end on 2026-08-09 (GIP sign-in → BFF
+`/auth/auto-login` → authenticated API reads).
 
-- [ ] Customer demo account — email + password, onboarding already completed
-- [ ] Vendor demo account — approved chef, published menu, at least one order
+| Account | Email | Password | Pool |
+|---|---|---|---|
+| Vendor / chef | `vendor@fe3dr.com` | `Fe3drDemo!2026` | `HomeChef-Business-8s8ql` |
+| Customer 1 — Priya Sharma | `customer01@fe3dr.com` | `Fe3drDemo!2026` | `HomeChef-Customer-rqg8a` |
+| Customer 2 — Rahul Verma | `customer02@fe3dr.com` | `Fe3drDemo!2026` | `HomeChef-Customer-rqg8a` |
+| Customer 3 — Ananya Iyer | `customer03@fe3dr.com` | `Fe3drDemo!2026` | `HomeChef-Customer-rqg8a` |
 
-> **Status:** not yet created. The E2E users (`e2e-test@fe3dr.com`,
-> `e2e-admin@fe3dr.com`) are marked temporary and slated for removal, so do not
-> submit those — create dedicated review accounts.
+- [x] **Vendor** — resolves to *Saffron Home Kitchen* (Indiranagar, Bengaluru),
+  `verified: true`, published menu with categories, profile + banner + 4 kitchen
+  photos, 6 orders, 8 reviews, rating 4.63, operating hours set,
+  `acceptingOrders: true`. Meets "approved chef, published menu, ≥1 order".
+  Native Sign in with Apple confirmed working on the Vendor app.
+- [x] **Customer** — `customer01` has a default Bengaluru address (Domlur,
+  560071, `isDefault: true`), which is what makes the chef list resolve for a
+  reviewer outside India. See the test-mode warning below before submitting.
+
+Do not submit the E2E users (`e2e-test@fe3dr.com`, `e2e-admin@fe3dr.com`) —
+they are temporary and slated for removal.
+
+### Test mode blocks the Customer submission
+
+Every chef on production is `testMode: true`, and there are only two. Outside
+the test-mode allowlist a test kitchen collapses to `ToClosedResponse()` — name
+and photo, no menu, no prices, not orderable
+(`applyTestModePresentation`, `apps/api/handlers/chefs.go:516`). The reviewer
+sees a populated marketplace only because `customer01@fe3dr.com` was added to
+the allowlist in admin; it is **not** in `DefaultTestModePolicy`
+(`apps/api/services/test_mode_policy.go:39`).
+
+Three consequences, all Customer-only — the Vendor app is unaffected, since a
+chef's own app does not go through listing visibility:
+
+1. `apps/mobile-customer/app/chef/[id].tsx:620` renders *"TEST kitchen —
+   payments use the gateway's test mode, no real money is charged."* A reviewer
+   reads that as a demo or non-final build — **guideline 2.1**. This is the most
+   likely Customer rejection and it is self-inflicted.
+2. The second kitchen, *My Kitchen* (Mangaluru), is junk seed data — its
+   description is keyboard mash repeated ~20 times, no images, 0 orders, closed.
+   Guideline 4.3 / 2.1, and it halves an already-small marketplace.
+3. The whole listing depends on one allowlist row. Anyone editing the test-mode
+   policy in admin during the review window empties the reviewer's marketplace.
+
+Before submitting Customer: take at least one kitchen live
+(`PATCH /admin/chefs/:id/mode` with `{"mode":"live","reason":"…"}`) and remove
+*My Kitchen*. Note there is **no hard-delete endpoint for chefs** — the
+available action is `PUT /admin/chefs/:id/suspend`, which sets `is_active:
+false` and is reversible. All `/admin/*` routes require an internal-pool admin
+(`RequirePool(PoolInternal)` + `RequireAdmin`), so the seeded business/customer
+accounts cannot perform them.
 
 ---
 
@@ -316,3 +361,34 @@ eas submit --platform android --profile production
 production profile, so build numbers advance on their own — do not bump them by
 hand. Android submits to the `internal` track first; promote in the Play
 Console once the internal build is verified.
+
+### Screenshot builds
+
+Store screenshots come from the `prod-sim` profile — a release-mode simulator
+build pointed at production, so there is no Expo dev overlay and the data is
+real:
+
+```bash
+cd apps/mobile-vendor
+eas build --platform ios --profile prod-sim
+```
+
+`prod-sim` must carry `"environment": "production"`. EAS only maps a profile to
+the production environment when the profile is *named* `production`; anything
+else defaults to `preview`, and `NODE_AUTH_TOKEN` exists **only** in the
+production environment. Without the explicit key the build dies in
+`eas-build-pre-install` after ~40s, unable to read `@tesserix/*` from GitHub
+Packages. The vendor profile was fixed on 2026-08-09; the customer profile has
+no `prod-sim` and will need the same key when one is added.
+
+Capture on the 6.9" device (iPhone 17 Pro Max, 1320 × 2868) — with
+`supportsTablet: false` in both apps, that is the only size App Store Connect
+requires:
+
+```bash
+U=$(xcrun simctl list devices available | grep "iPhone 17 Pro Max" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+xcrun simctl boot "$U"
+xcrun simctl install "$U" /path/to/FeedrVendor.app
+xcrun simctl launch "$U" com.tesserix.homechef.vendor
+xcrun simctl io "$U" screenshot shot.png
+```
