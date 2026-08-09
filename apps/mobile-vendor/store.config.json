@@ -2,13 +2,32 @@
   "configVersion": 0,
   "apple": {
     "copyright": "2026 Tesserix Pty Ltd",
-    "categories": ["BUSINESS", "FOOD_AND_DRINK"],
+    "version": "1.0.0",
+    "categories": [
+      "BUSINESS",
+      "FOOD_AND_DRINK"
+    ],
     "info": {
-      "en-US": {
+      "en-GB": {
         "title": "Fe3dr Vendor: Sell Food",
         "subtitle": "Run your home kitchen",
         "description": "The companion app for home chefs selling on Fe3dr.\n\nTake orders, publish your menu, and get paid — from the kitchen, on your phone. Fe3dr Vendor is for FSSAI-licensed home chefs who already sell on Fe3dr; you will need an approved chef account to sign in.\n\nORDERS\n• New orders arrive with a push notification\n• Accept or decline, and set your own prep time\n• Mark ready, hand to a rider, or deliver yourself\n• Confirm delivery with an OTP from the customer\n\nYOUR MENU\n• Add dishes with photos, prices, dietary tags and allergens\n• Set a fixed weekly menu for tiffin customers, with veg and non-veg options for each day\n• Publish a different menu for each date when you want to cook something else\n• Build thalis and combos from dishes you already have\n• Choose which days each dish is available\n\nCAPACITY AND HOURS\n• Cap how many portions you will cook per slot, so you never oversell\n• Set your kitchen hours and pause when you need a day off\n• Choose delivery, pickup, or both\n\nEARNINGS\n• See what you have earned, per order and per week\n• Track payouts through to your bank account\n• Commission and deductions shown in full, with nothing hidden\n\nGETTING SET UP\n• Guided onboarding for your kitchen details and documents\n• Upload your FSSAI licence and identity documents from your phone\n• Track your approval status as you go\n\nAvailable in English and Hindi. Fe3dr operates in India.\n\nQuestions? support@fe3dr.com",
-        "keywords": "chef,tiffin,seller,orders,menu,earnings,payout,cook,business,dabba,fssai,catering,meal,sales",
+        "keywords": [
+          "chef",
+          "tiffin",
+          "seller",
+          "orders",
+          "menu",
+          "earnings",
+          "payout",
+          "cook",
+          "business",
+          "dabba",
+          "fssai",
+          "catering",
+          "meal",
+          "sales"
+        ],
         "releaseNotes": "The first release of Fe3dr Vendor.\n\n• Accept orders and track them through to delivery\n• Build your menu — à la carte, weekly tiffin, or per-date\n• Set portion caps and kitchen hours\n• Follow your earnings and payouts\n• English and Hindi",
         "promoText": "Take orders, publish your menu, and follow your earnings — the Fe3dr companion app for home chefs.",
         "privacyPolicyUrl": "https://fe3dr.com/privacy",
@@ -31,7 +50,11 @@
       "violenceCartoonOrFantasy": "NONE",
       "violenceRealistic": "NONE",
       "violenceRealisticProlongedGraphicOrSadistic": "NONE",
-      "seventeenPlus": false
+      "seventeenPlus": false,
+      "ageRatingOverride": "NONE",
+      "kidsAgeBand": null,
+      "koreaAgeRatingOverride": "NONE",
+      "lootBox": false
     },
     "release": {
       "automaticRelease": false,
