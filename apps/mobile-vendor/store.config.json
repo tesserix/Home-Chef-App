@@ -41,7 +41,7 @@
       "firstName": "Mahesh",
       "lastName": "Sangawar",
       "email": "support@fe3dr.com",
-      "phone": "TODO",
+      "phone": "+61414606846",
       "demoUsername": "vendor@fe3dr.com",
       "demoPassword": "Fe3drDemo!2026",
       "notes": "Fe3dr Vendor is the companion app for home chefs selling on Fe3dr, a marketplace for home-cooked food in India.\n\nThis app REQUIRES AN APPROVED CHEF ACCOUNT — there is no public sign-up that reaches the main app, because a chef must pass FSSAI licence and identity checks before they can sell. The demo account below is pre-approved with a published menu and at least one order, so every screen is reachable.\n\nIt manages an existing real-world business relationship between the chef and the platform. It is not a standalone product and has no consumer-facing purchase flow, so In-App Purchase does not apply (guideline 3.1.1). Chefs are paid out to their bank account; they never pay through the app.\n\nLOCATION is requested once, during onboarding, only to autofill the kitchen address. It is optional — the address can be typed instead — and the app never uses location in the background.\n\nCAMERA AND PHOTOS are used for dish photos and for uploading the FSSAI licence and identity documents.\n\nACCOUNT DELETION: More > Settings > Pause or delete account. Confirm by typing the account email. Also available at https://fe3dr.com/account-deletion.\n\nThe app is offered in India only. The interface is available in English and Hindi."
