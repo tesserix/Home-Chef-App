@@ -24,6 +24,7 @@
     "prod-sim": {
       "developmentClient": false,
       "distribution": "internal",
+      "environment": "production",
       "ios": {
         "resourceClass": "m-medium",
         "simulator": true
