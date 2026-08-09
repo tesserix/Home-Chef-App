@@ -2,13 +2,31 @@
   "configVersion": 0,
   "apple": {
     "copyright": "2026 Tesserix Pty Ltd",
-    "categories": ["FOOD_AND_DRINK", "LIFESTYLE"],
+    "version": "1.0.0",
+    "categories": [
+      "FOOD_AND_DRINK",
+      "LIFESTYLE"
+    ],
     "info": {
-      "en-US": {
+      "en-GB": {
         "title": "Fe3dr: Homemade Food",
         "subtitle": "Tiffin & meals from home cooks",
         "description": "Real home cooking, from a kitchen near you.\n\nFe3dr connects you with FSSAI-licensed home chefs cooking the food they actually cook for their own families — dal chawal, biryani, thalis, regional dishes you will not find on a restaurant menu. Order a single meal or set up a weekly tiffin.\n\nWHY FE3DR\n• Home chefs, not cloud kitchens — every chef is a licensed individual with a name and a story\n• Cooked to order, not held under a heat lamp\n• Daily menus that change, because home cooks cook what is fresh\n• Delivery or pickup, whichever suits you\n\nORDER YOUR WAY\n• Browse chefs near you and see today's menu\n• À la carte for a one-off meal\n• Weekly tiffin plans for lunch or dinner, with veg and non-veg options per day\n• Group orders — share a link, everyone adds their dishes, one checkout\n• Skip days, pause, or cancel your plan whenever you need to\n\nKNOW WHERE YOUR FOOD IS\n• Live order status from accepted to on the way\n• Map tracking once your order is out for delivery\n• Your exact address stays private — chefs see your area, not your door\n\nEAT WITH CONFIDENCE\n• Every chef is FSSAI licensed and verified before they can sell\n• Dietary tags and declared allergens on every dish\n• Ratings and reviews from people who actually ordered\n• Report or block anyone, any time\n\nPAY SIMPLY\n• UPI, cards, netbanking and wallets via Cashfree\n• Wallet credit and refunds handled in-app\n• No subscription fee to browse or order\n\nFe3dr is available in India. Prices are set by the chefs themselves — you are paying a cook, not a chain.\n\nQuestions? support@fe3dr.com",
-        "keywords": "dabba,ghar,khana,homecook,mealplan,lunch,dinner,veg,thali,biryani,kitchen,curry,subscription",
+        "keywords": [
+          "dabba",
+          "ghar",
+          "khana",
+          "homecook",
+          "mealplan",
+          "lunch",
+          "dinner",
+          "veg",
+          "thali",
+          "biryani",
+          "kitchen",
+          "curry",
+          "subscription"
+        ],
         "releaseNotes": "The first release of Fe3dr.\n\n• Browse and order from home chefs near you\n• Weekly tiffin plans with per-day veg and non-veg choices\n• Group orders — one link, one checkout\n• Live order tracking on a map\n• Delivery or pickup",
         "promoText": "Home-cooked food from licensed home chefs near you. Order a single meal or set up a weekly tiffin.",
         "privacyPolicyUrl": "https://fe3dr.com/privacy",
@@ -31,19 +49,23 @@
       "violenceCartoonOrFantasy": "NONE",
       "violenceRealistic": "NONE",
       "violenceRealisticProlongedGraphicOrSadistic": "NONE",
-      "seventeenPlus": false
+      "seventeenPlus": false,
+      "ageRatingOverride": "NONE",
+      "kidsAgeBand": null,
+      "koreaAgeRatingOverride": "NONE",
+      "lootBox": false
     },
     "release": {
       "automaticRelease": false,
       "phasedRelease": true
     },
     "review": {
-      "firstName": "TODO",
-      "lastName": "TODO",
+      "firstName": "Mahesh",
+      "lastName": "Sangawar",
       "email": "support@fe3dr.com",
-      "phone": "TODO",
-      "demoUsername": "TODO-review-account@fe3dr.com",
-      "demoPassword": "TODO",
+      "phone": "+61414606846",
+      "demoUsername": "customer01@fe3dr.com",
+      "demoPassword": "Fe3drDemo!2026",
       "notes": "Fe3dr is a marketplace for home-cooked food in India. Food is prepared by independent, FSSAI-licensed home chefs and delivered by third-party partners.\n\nIMPORTANT FOR REVIEW — SEEING CHEFS: chefs are shown by delivery reach, so a device located outside India will see an empty list. To see the marketplace populated, sign in with the demo account below: it has a saved Indian delivery address already set as default, and the chef list resolves against that address rather than device location. Do not grant location permission; the app does not need it to show chefs.\n\nYou do not need an account to browse. Tap 'Browse without an account' on the sign-in screen to see chefs and menus. An account is required only to place an order, save a chef, or view order history.\n\nPAYMENTS are handled by Cashfree. All purchases are physical goods — real meals delivered to a physical address — so In-App Purchase does not apply (guideline 3.1.1). There is no digital content in the app.\n\nREPORTING AND BLOCKING: tap the ... menu on any chef post or review to report it or block its author. Blocked accounts are managed at Profile > Blocked accounts.\n\nACCOUNT DELETION: Profile > Pause or delete account. Confirm by typing the account email. Also available at https://fe3dr.com/account-deletion.\n\nThe app is offered in India only."
     }
   }
