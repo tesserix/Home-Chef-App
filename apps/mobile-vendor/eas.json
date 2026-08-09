@@ -29,6 +29,9 @@
         "resourceClass": "m-medium",
         "simulator": true
       },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://vendors.fe3dr.com/api/v1",
         "EXPO_PUBLIC_BFF_URL": "https://vendors.fe3dr.com",
