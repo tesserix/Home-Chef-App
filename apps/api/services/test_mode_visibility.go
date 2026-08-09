@@ -1,6 +1,8 @@
 package services
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -119,5 +121,34 @@ func ChefOwnModeScope(chefID uuid.UUID) func(*gorm.DB) *gorm.DB {
 		return db.Where(
 			"mode = COALESCE((SELECT mode FROM chef_profiles WHERE id = ?), ?)",
 			chefID, models.ChefModeLive)
+	}
+}
+
+// MatchOwningChefModeScope is ChefOwnModeScope for queries that span kitchens,
+// correlating each row against ITS OWN chef rather than one fixed id. `alias` is
+// the table's name in the caller's query.
+//
+// Needed because a cross-chef query cannot take a chefID argument: dish search
+// reads menu_items for every visible kitchen at once, and each row must be
+// judged against the mode of the kitchen that owns it.
+//
+// Why the chef's CURRENT mode and not CustomerVisibleModes, which is the scope
+// the other customer-facing reads use: for orders, a cloned row replicates a
+// real customer's order and must never resurface, so clones are excluded
+// outright. Menu items invert that — CloneChefIntoSession copies the whole menu
+// into the sandbox (test_session_clone.go), so the clones ARE the sandbox
+// kitchen's menu. Excluding them would leave an allowlisted tester browsing a
+// test kitchen with no dishes at all.
+//
+// Safe without a viewer check because kitchen-level visibility is already
+// enforced upstream by TestChefVisibility / chefVisibleTo: a viewer who may not
+// see a test kitchen never reaches its menu, and one who may should see the
+// sandbox menu rather than the live one.
+func MatchOwningChefModeScope(alias string) func(*gorm.DB) *gorm.DB {
+	clause := fmt.Sprintf(
+		"%[1]s.mode = COALESCE((SELECT mode FROM chef_profiles WHERE id = %[1]s.chef_id), ?)",
+		alias)
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where(clause, models.ChefModeLive)
 	}
 }
