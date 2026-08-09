@@ -34,7 +34,7 @@ import { useOrderTracking } from '../../../hooks/useOrderTracking';
 import { useOrderTrackingWS } from '../../../hooks/useOrderTrackingWS';
 import { useOrderStatusWS } from '../../../hooks/useOrderStatusWS';
 import { getChipLabel, getStatusLine } from '../../../lib/orderSteps';
-import { MESSAGING_ENABLED } from '../../../lib/features';
+import { MESSAGING_ENABLED, DELIVERY_MAP_ENABLED } from '../../../lib/features';
 import type { Order } from '../../../types/customer';
 import { formatMoney } from '../../../lib/format';
 import { useCancellationRequest } from '../../../hooks/useCancellation';
@@ -319,7 +319,13 @@ export default function OrderDetailScreen() {
     effectiveDriverLng !== 0;
   const isEnRoute =
     order.status === 'picked_up' || order.status === 'delivering';
-  const showMap = isActiveOrder && (isEnRoute || driverIsLive);
+  // DELIVERY_MAP_ENABLED first: with no Maps SDK key the Android manifest has no
+  // com.google.android.geo.API_KEY, and DeliveryMap's PROVIDER_DEFAULT resolves
+  // to Google Maps there — inflating it throws "API key not found" and takes out
+  // the order screen exactly when the customer cares most. Falling through leaves
+  // the photo + status treatment already used before dispatch.
+  const showMap =
+    DELIVERY_MAP_ENABLED && isActiveOrder && (isEnRoute || driverIsLive);
 
   // 3PL (Shadowfax) live-tracking page. The Unified API gives no raw rider GPS,
   // so when a hosted tracking URL is present on an active order we offer a

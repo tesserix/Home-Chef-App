@@ -74,7 +74,31 @@ export const MESSAGING_ENABLED: boolean = false;
  * SHA-1s, publish it as `GOOGLE_MAPS_API_KEY` via `eas secret:create`, then
  * flip this to `true`. See `docs/store-release/README.md`.
  *
- * Scope: this gates the chefs map only. `DeliveryMap` in order tracking is a
- * separate surface behind its own `showMap` gate and is untouched by this flag.
+ * Scope: this gates the chefs map only. Order tracking's `DeliveryMap` is a
+ * separate surface — see DELIVERY_MAP_ENABLED below.
  */
 export const CHEFS_MAP_ENABLED: boolean = false;
+
+/**
+ * Live delivery map in order tracking (`components/tracking/DeliveryMap.tsx`).
+ *
+ * Off for the same reason as CHEFS_MAP_ENABLED — no Maps SDK key exists, so the
+ * Android manifest carries no `com.google.android.geo.API_KEY` and inflating a
+ * `MapView` throws `RuntimeException: API key not found`.
+ *
+ * This one was previously ungated, which was a live Android crash rather than a
+ * missing feature: `DeliveryMap` uses `PROVIDER_DEFAULT`, which resolves to
+ * Google Maps on Android, and it renders as soon as an order goes en route —
+ * the busiest post-purchase screen there is. iOS was unaffected, since
+ * `PROVIDER_DEFAULT` there is Apple MapKit and needs no key.
+ *
+ * Gated for the first release because live rider tracking depends on the 3PL
+ * integration, which is not going live yet — so there is no rider position to
+ * plot even with a key. Order status still updates in full; the order screen
+ * falls back to the photo + status treatment it already uses before dispatch.
+ *
+ * Unblock: same steps as CHEFS_MAP_ENABLED, plus 3PL live tracking. Flip this
+ * and re-add the "Map tracking" line to the store description, which was
+ * removed to match.
+ */
+export const DELIVERY_MAP_ENABLED: boolean = false;
