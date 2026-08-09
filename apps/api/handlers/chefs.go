@@ -366,10 +366,15 @@ func (h *ChefHandler) SearchDishes(c *gin.Context) {
 	// it is both available AND admin-approved (is_approved), consistent with the
 	// chef-detail menu (GetChefMenu) and order creation (CreateOrder). An unapproved
 	// dish never appears in search, on a chef's page, or as an orderable item.
+	// Correlated rather than fixed-chef: this query spans every visible kitchen,
+	// so each dish is judged against the mode of the kitchen that owns it.
+	// Without it, sandbox dishes cloned into a test session are searchable by
+	// real customers.
 	base := database.DB.Model(&models.MenuItem{}).
 		Where("is_available = ? AND is_approved = ?", true, true).
 		Where("(name ILIKE ? OR description ILIKE ?)", "%"+q+"%", "%"+q+"%").
-		Where("chef_id IN (?)", visibleChefs)
+		Where("chef_id IN (?)", visibleChefs).
+		Scopes(services.MatchOwningChefModeScope("menu_items"))
 
 	// Optional diet filter (#41) — case-insensitive match on a dietary tag.
 	if dietary := strings.TrimSpace(c.Query("dietary")); dietary != "" {
@@ -581,8 +586,15 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 	// is_approved gate: a dish is invisible to customers until an admin approves its
 	// menu_item_new request (approval flips is_approved → true, auto-surfacing it).
 	// Enforced in all three customer paths — here, SearchDishes, and CreateOrder.
+	//
+	// ChefOwnModeScope is enforced in the same three places, for a different
+	// reason: menu_items is mode-partitioned and CloneChefIntoSession copies the
+	// whole menu into a test session, so an unscoped read returns the live menu
+	// AND the sandbox copy — every dish twice. Without it Saffron Home Kitchen
+	// served customers 32 items where the chef's own app showed 16.
 	schedClause, schedArg := services.MenuScheduleClause(services.TodayWeekday())
 	query := database.DB.Where("chef_id = ? AND is_available = ? AND is_approved = ?", chefID, true, true).
+		Scopes(services.ChefOwnModeScope(chefID)).
 		Where(schedClause, schedArg).
 		Preload("Images").
 		// Add-ons + combo composition (#52) so the customer can pick modifiers

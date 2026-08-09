@@ -380,8 +380,15 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		var menuItem models.MenuItem
 		// is_approved gate: an unapproved dish is never orderable, even via a direct
 		// API call — matches its invisibility in GetChefMenu / SearchDishes.
+		//
+		// ChefOwnModeScope closes the same hole on the money path: menu_items is
+		// mode-partitioned, so without it a customer could order a sandbox dish by
+		// id — a real order, against a real address, for food that exists only to
+		// debug with. The two read paths hid such dishes from the UI; this is what
+		// stops a direct API call reaching one.
 		if err := database.DB.Where("id = ? AND chef_id = ? AND is_available = ? AND is_approved = ?",
 			item.MenuItemID, req.ChefID, true, true).
+			Scopes(services.ChefOwnModeScope(req.ChefID)).
 			Where(schedClause, schedArg).First(&menuItem).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Menu item %s not found or unavailable", item.MenuItemID)})
 			return

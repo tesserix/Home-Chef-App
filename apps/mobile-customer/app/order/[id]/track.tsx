@@ -8,7 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, router, useIsFocused } from 'expo-router';
+import { useLocalSearchParams, router, useIsFocused, Redirect } from 'expo-router';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -18,6 +18,7 @@ import { DeliveryMap } from '../../../components/tracking/DeliveryMap';
 import { OrderTimeline } from '../../../components/orders/OrderTimeline';
 import { getStepIndex, getStatusLine } from '../../../lib/orderSteps';
 import { HAIRLINE } from '../../../lib/hairline';
+import { DELIVERY_MAP_ENABLED } from '../../../lib/features';
 
 // Progress dot row — coral dots for active/passed, hairline for future.
 // Count of 4 mirrors the OrderTimeline step count so they stay in sync.
@@ -52,6 +53,14 @@ export default function TrackOrderScreen() {
     }
     return undefined;
   }, [tracking?.status, id]);
+
+  // This screen is a full-bleed DeliveryMap, so it cannot degrade gracefully the
+  // way the order screen does — send the deep link back to the order instead.
+  // The entry point (the map card on order/[id]) is already hidden by the same
+  // flag, so this only catches links, notifications and restored routes.
+  // Placed after the hooks so hook order stays stable across renders, matching
+  // the guard in app/chefs-map.tsx.
+  if (!DELIVERY_MAP_ENABLED) return <Redirect href={`/order/${id}`} />;
 
   if (isLoading || !tracking) {
     return (

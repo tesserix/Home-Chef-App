@@ -21,11 +21,36 @@
         "RCT_USE_PREBUILT_RNCORE": "0"
       }
     },
+    "prod-sim": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "environment": "production",
+      "ios": {
+        "resourceClass": "m-medium",
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://fe3dr.com/api",
+        "EXPO_PUBLIC_BFF_URL": "https://fe3dr.com",
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Customer-rqg8a",
+        "EXPO_PUBLIC_WALLET_CHECKOUT_ENABLED": "true",
+        "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-cv5p1hdpt7ftkg0t1l8fmjhjhd8aq5rp.apps.googleusercontent.com"
+      }
+    },
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "ios": { "resourceClass": "m-medium" },
-      "android": { "buildType": "apk" },
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "http://localhost:8090/api",
         "EXPO_PUBLIC_BFF_URL": "http://localhost:8090",
@@ -38,7 +63,9 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
-      "ios": { "resourceClass": "m-medium" },
+      "ios": {
+        "resourceClass": "m-medium"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://fe3dr.com/api",
         "EXPO_PUBLIC_BFF_URL": "https://fe3dr.com",
@@ -49,7 +76,9 @@
     "production": {
       "channel": "production",
       "autoIncrement": true,
-      "ios": { "resourceClass": "m-medium" },
+      "ios": {
+        "resourceClass": "m-medium"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://fe3dr.com/api",
         "EXPO_PUBLIC_BFF_URL": "https://fe3dr.com",
