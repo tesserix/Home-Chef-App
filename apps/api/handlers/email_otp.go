@@ -84,14 +84,16 @@ func (h *EmailOTPHandler) RequestOTP(c *gin.Context) {
 		return
 	}
 
-	var existing models.User
-	if err := database.DB.Where("email = ? AND id != ?", email, userID).First(&existing).Error; err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "This email is already registered with another account.", "field": "email"})
+	user, err := loadUser(userID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
 		return
 	}
 
-	var user models.User
-	_ = database.DB.Where("id = ?", userID).First(&user).Error
+	if takenInPool(database.DB.Where("email = ?", email), user) {
+		c.JSON(http.StatusConflict, gin.H{"error": "This email is already registered with another account.", "field": "email"})
+		return
+	}
 
 	if err := services.RequestEmailOTP(c.Request.Context(), userID.String(), email, user.FirstName); err != nil {
 		c.JSON(otpStatus(err), gin.H{"error": err.Error(), "field": "email"})
