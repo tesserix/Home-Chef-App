@@ -1,61 +1,42 @@
-// Art for the Home category rail, sourced from the kitchens themselves.
+// Art for the Home category rail — one curated photo per cuisine.
 //
-// The rail used to be tinted circles with a lucide glyph, because illustrated
-// category art was a deliverable we did not have and stock food photos read as
-// filler. Real chef photography is neither: it is this city's actual food, it
-// costs no new asset, and it makes the rail look like the product rather than a
-// wireframe. The glyph stays as the fallback for a category with nothing under
-// it yet.
+// The rail first drew tinted glyphs, then borrowed a chef's banner for every
+// category that chef was tagged with, which put a bowl of chole under
+// "Chinese". Curated photography is the only version that can't be wrong: each
+// tile shows the food its label promises, in the same square crop.
 
-/** The subset of a chef the rail needs — keeps this pure and trivially testable. */
-interface ArtSource {
-  cuisine?: string;
-  imageUrl?: string;
-}
+export const CUISINE_CATEGORIES = [
+  'All',
+  'North Indian',
+  'South Indian',
+  'Chinese',
+  'Continental',
+  'Italian',
+  'Healthy',
+] as const;
 
-export type CuisineArt = Record<string, string>;
+export type CuisineCategory = (typeof CUISINE_CATEGORIES)[number];
 
-/** The rail's leftmost tile, which stands for the whole list rather than one cuisine. */
-const ALL = 'All';
-
-function cuisineNames(chef: ArtSource): string[] {
-  return (chef.cuisine ?? '')
-    .split('·')
-    .map((c) => c.trim().toLowerCase())
-    .filter(Boolean);
-}
+// Unsplash ids, each opened and checked to show the dish named beside it.
+const PHOTO_IDS: Record<CuisineCategory, string> = {
+  All: 'photo-1680993032090-1ef7ea9b51e5', // steel thali — dal, sabzi, rice, puri
+  'North Indian': 'photo-1631452180519-c014fe946bc7', // paneer butter masala with roti
+  'South Indian': 'photo-1694849789325-914b71ab4075', // masala dosa with chutney
+  Chinese: 'photo-1585032226651-759b368d7246', // hakka noodles, top-down
+  Continental: 'photo-1598515214211-89d3c73ae83b', // grilled chicken with buttered veg
+  Italian: 'photo-1565299624946-b28f40a0ae38', // wood-fired pizza, sliced
+  Healthy: 'photo-1512621776951-a57141f2eefd', // salad bowl with avocado
+};
 
 /**
- * Folds the chefs on screen into the category → photo map, additively.
+ * Square crop for the circular rail tile, at the pixel size actually drawn.
  *
- * `seen` is never overwritten: the first photo a category gets is the one it
- * keeps, so filtering to one cuisine cannot blank the rest of the rail, and a
- * refetch cannot shuffle it. Returns `seen` itself when nothing new arrived, so
- * a render can depend on the result.
+ * The crop is what keeps the rail aligned — every tile is framed the same way,
+ * whatever the source photo's aspect. Unknown category returns nothing, so the
+ * caller keeps its glyph fallback.
  */
-export function collectCuisineArt(
-  chefs: ArtSource[],
-  seen: CuisineArt,
-  categories: readonly string[],
-): CuisineArt {
-  let next: CuisineArt | null = null;
-  const claim = (category: string, url: string) => {
-    if (seen[category] || next?.[category]) return;
-    next = next ?? { ...seen };
-    next[category] = url;
-  };
-
-  for (const chef of chefs) {
-    const url = chef.imageUrl;
-    if (!url) continue;
-    claim(ALL, url);
-    const names = cuisineNames(chef);
-    for (const category of categories) {
-      if (category !== ALL && names.includes(category.toLowerCase())) {
-        claim(category, url);
-      }
-    }
-  }
-
-  return next ?? seen;
+export function cuisineArtUri(category: string, sizePx: number): string | undefined {
+  const id = PHOTO_IDS[category as CuisineCategory];
+  if (!id) return undefined;
+  return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${sizePx}&h=${sizePx}&q=70`;
 }
