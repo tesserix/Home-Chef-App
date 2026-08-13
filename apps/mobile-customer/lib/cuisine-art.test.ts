@@ -1,75 +1,24 @@
 import { describe, it, expect } from '@jest/globals';
 
-import { collectCuisineArt } from './cuisine-art';
+import { CUISINE_CATEGORIES, cuisineArtUri } from './cuisine-art';
 
-const CUISINES = ['All', 'North Indian', 'South Indian', 'Chinese'];
-
-function chef(name: string, cuisine: string, imageUrl?: string) {
-  return { name, cuisine, imageUrl };
-}
-
-describe('collectCuisineArt', () => {
-  it('gives each category the first real photo listed under it', () => {
-    const art = collectCuisineArt(
-      [
-        chef('Anita', 'North Indian · Chinese', 'anita.jpg'),
-        chef('Ravi', 'South Indian', 'ravi.jpg'),
-      ],
-      {},
-      CUISINES,
-    );
-
-    expect(art['North Indian']).toBe('anita.jpg');
-    expect(art['Chinese']).toBe('anita.jpg');
-    expect(art['South Indian']).toBe('ravi.jpg');
+describe('cuisineArtUri', () => {
+  it('gives every rail category a photo', () => {
+    for (const category of CUISINE_CATEGORIES) {
+      expect(cuisineArtUri(category, 168)).toMatch(/^https:\/\/images\.unsplash\.com\/photo-/);
+    }
   });
 
-  it('fronts the whole rail with the first photo on the page', () => {
-    const art = collectCuisineArt([chef('Anita', 'Chinese', 'anita.jpg')], {}, CUISINES);
-    expect(art.All).toBe('anita.jpg');
+  it('gives every category a photo of its own, so no two tiles look alike', () => {
+    const uris = CUISINE_CATEGORIES.map((c) => cuisineArtUri(c, 168));
+    expect(new Set(uris).size).toBe(CUISINE_CATEGORIES.length);
   });
 
-  it('never drops a photo it already had', () => {
-    // Selecting a category refetches a narrowed list; without this the other
-    // tiles would blank out every time the customer filters.
-    const art = collectCuisineArt(
-      [chef('Ravi', 'South Indian', 'ravi.jpg')],
-      { Chinese: 'anita.jpg' },
-      CUISINES,
-    );
-    expect(art.Chinese).toBe('anita.jpg');
-    expect(art['South Indian']).toBe('ravi.jpg');
+  it('crops square at the requested size, so every tile is framed alike', () => {
+    expect(cuisineArtUri('Chinese', 168)).toContain('fit=crop&w=168&h=168');
   });
 
-  it('keeps the first photo rather than churning on every refetch', () => {
-    const art = collectCuisineArt(
-      [chef('Meera', 'Chinese', 'meera.jpg')],
-      { Chinese: 'anita.jpg' },
-      CUISINES,
-    );
-    expect(art.Chinese).toBe('anita.jpg');
-  });
-
-  it('returns the same object when nothing new arrived', () => {
-    // Referential stability — this feeds a render, and a fresh object every
-    // fetch would re-render the rail for no reason.
-    const seen = { Chinese: 'anita.jpg', All: 'anita.jpg' };
-    expect(collectCuisineArt([chef('Ravi', 'Chinese')], seen, CUISINES)).toBe(seen);
-    expect(collectCuisineArt([], seen, CUISINES)).toBe(seen);
-  });
-
-  it('ignores a chef with no photo', () => {
-    expect(collectCuisineArt([chef('Ravi', 'Chinese')], {}, CUISINES)).toEqual({});
-  });
-
-  it('matches the category name case-insensitively, not as a substring', () => {
-    // "Indian" must not soak up "North Indian"; "chinese" must still match.
-    const art = collectCuisineArt(
-      [chef('Anita', 'north indian', 'anita.jpg')],
-      {},
-      CUISINES,
-    );
-    expect(art['North Indian']).toBe('anita.jpg');
-    expect(art['South Indian']).toBeUndefined();
+  it('has no photo for a category it does not know, leaving the glyph fallback', () => {
+    expect(cuisineArtUri('Mughlai', 168)).toBeUndefined();
   });
 });

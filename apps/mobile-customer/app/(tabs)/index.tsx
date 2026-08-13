@@ -47,6 +47,7 @@ import {
   Soup,
   UtensilsCrossed,
   Wallet,
+  type LucideIcon,
 } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { AddressSwitcher } from '../../components/address/AddressSwitcher';
@@ -64,7 +65,11 @@ import {
   TIFFIN_ENABLED,
   WALLET_ENABLED,
 } from '../../lib/features';
-import { collectCuisineArt, type CuisineArt } from '../../lib/cuisine-art';
+import {
+  CUISINE_CATEGORIES,
+  cuisineArtUri,
+  type CuisineCategory,
+} from '../../lib/cuisine-art';
 import { ActiveMealPlanCard } from '../../components/meal-plan/ActiveMealPlanCard';
 import { useIsGuest } from '../../hooks/useRequireAccount';
 import { type SheetHandle } from '@homechef/mobile-shared/ui';
@@ -103,20 +108,22 @@ function walletChipLabel(n: number): string {
     : `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// The category rail. Each tile shows a real kitchen's photo from the listing
-// below it (see lib/cuisine-art), falling back to this glyph while a category
-// has nothing under it — never stock photography.
-const CUISINES = [
-  { label: 'All', Icon: UtensilsCrossed },
-  { label: 'North Indian', Icon: CookingPot },
-  { label: 'South Indian', Icon: Soup },
-  { label: 'Chinese', Icon: Drumstick },
-  { label: 'Continental', Icon: Sandwich },
-  { label: 'Italian', Icon: Pizza },
-  { label: 'Healthy', Icon: Salad },
-] as const;
+// The category rail. Each tile shows that cuisine's own photo (see
+// lib/cuisine-art); the glyph is the fallback for a photo that fails to load.
+// Typed by category, so a new category can't ship without an icon.
+const CUISINE_ICONS: Record<CuisineCategory, LucideIcon> = {
+  All: UtensilsCrossed,
+  'North Indian': CookingPot,
+  'South Indian': Soup,
+  Chinese: Drumstick,
+  Continental: Sandwich,
+  Italian: Pizza,
+  Healthy: Salad,
+};
 
-const CUISINE_LABELS = CUISINES.map((c) => c.label);
+// The tile is 56pt; request it at 3x so the crop stays sharp on every device.
+const CUISINE_TILE = 56;
+const CUISINE_ART_PX = CUISINE_TILE * 3;
 
 // Counts how many secondary filters are active (non-default) so the badge
 // on the Filters pill reflects the applied state.
@@ -232,16 +239,6 @@ export default function HomeScreen() {
 
   const { data, isLoading, isFetching, refetch } = useChefs(filters);
   const chefs = data?.data ?? [];
-
-  // Category art accumulates across fetches and is never dropped, so filtering
-  // to one cuisine can't blank the rest of the rail. A ref, not state: the map
-  // only ever grows alongside a render that is already happening.
-  const cuisineArt = useRef<CuisineArt>({});
-  cuisineArt.current = collectCuisineArt(
-    chefs,
-    cuisineArt.current,
-    CUISINE_LABELS,
-  );
 
   // Staggered card entrances (reduced-motion gated). No bounce — ease-out-quart.
   const reduceMotion = useReducedMotion();
@@ -410,9 +407,10 @@ export default function HomeScreen() {
         style={styles.chipRow}
         accessibilityRole="tablist"
       >
-        {CUISINES.map(({ label: cuisine, Icon: CuisineIcon }) => {
+        {CUISINE_CATEGORIES.map((cuisine) => {
           const isSelected = selectedCuisine === cuisine;
-          const art = cuisineArt.current[cuisine];
+          const CuisineIcon = CUISINE_ICONS[cuisine];
+          const art = cuisineArtUri(cuisine, CUISINE_ART_PX);
           return (
             // iOS Pressable inner-View pattern: visual styles stay on the
             // inner View. `style` here is a static object (not a function),
@@ -443,6 +441,18 @@ export default function HomeScreen() {
                       isSelected && styles.cuisineTileSelected,
                     ]}
                   >
+                    {/* The glyph sits underneath, so a photo that is slow or
+                        fails to load leaves the old tile rather than a hole. */}
+                    <CuisineIcon
+                      size={24}
+                      strokeWidth={1.75}
+                      color={
+                        isSelected
+                          ? customerColors.coral.pressed
+                          : customerColors.charcoal.soft
+                      }
+                      accessibilityElementsHidden
+                    />
                     {art ? (
                       <Image
                         source={{ uri: art }}
@@ -451,18 +461,7 @@ export default function HomeScreen() {
                         transition={150}
                         accessibilityElementsHidden
                       />
-                    ) : (
-                      <CuisineIcon
-                        size={24}
-                        strokeWidth={1.75}
-                        color={
-                          isSelected
-                            ? customerColors.coral.pressed
-                            : customerColors.charcoal.soft
-                        }
-                        accessibilityElementsHidden
-                      />
-                    )}
+                    ) : null}
                   </View>
                   <Text
                     numberOfLines={1}
@@ -997,21 +996,28 @@ const styles = StyleSheet.create({
   // The circular category tile. Selected takes the brand tint rather than a
   // fill — one accent per screen, and the coral fill is spoken for by the CTA.
   cuisineTile: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: CUISINE_TILE,
+    height: CUISINE_TILE,
+    borderRadius: CUISINE_TILE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: customerColors.surface.soft,
     overflow: 'hidden',
   },
+  // Fills the circle over the glyph — square source, square crop, so every
+  // tile is framed identically whatever the photo's aspect.
   cuisineTilePhoto: {
-    width: '100%',
-    height: '100%',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
+  // Selected reads as a ring around the photo — the tint only shows while the
+  // photo is still the glyph fallback.
   cuisineTileSelected: {
     backgroundColor: customerColors.coral.tint ?? customerColors.surface.soft,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: customerColors.coral.pressed,
   },
   // iOS-only pressed treatment — opacity only (no scale) so the underline
