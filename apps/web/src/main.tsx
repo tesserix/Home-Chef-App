@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
+import { initAnalytics } from './lib/analytics';
 import './styles/globals.css';
 
 const rootElement = document.getElementById('root');
@@ -26,6 +27,8 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
     }
   });
 }
+
+initAnalytics();
 
 createRoot(rootElement).render(
   <StrictMode>

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Analytics } from "./analytics";
 import { GeistSans } from 'geist/font/sans';
 import { Inter } from 'next/font/google';
 import {
@@ -119,6 +120,7 @@ export default function RootLayout({
           // Static, build-time JSON — no user input flows through here.
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
+        <Analytics />
       </body>
     </html>
   );
