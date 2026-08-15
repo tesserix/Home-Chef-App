@@ -15,7 +15,7 @@
 # ships >= Go 1.26.4 (see docs/base-image-go-1.26.4.patch).
 
 # ─── builder ────────────────────────────────────────────────────────────
-FROM golang:1.26.5-alpine AS builder
+FROM golang:1.26.6-alpine AS builder
 # git for `go mod` over git+ssh, ca-certs for module proxy TLS,
 # tzdata for tests that load zoneinfo — same set base-go-builder
 # pre-installs.
