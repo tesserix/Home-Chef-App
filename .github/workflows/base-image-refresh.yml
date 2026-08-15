@@ -36,6 +36,8 @@ jobs:
           # return.
           - homechef-api-build.yml
           - homechef-web-landing-build.yml
+          - homechef-auth-bff-build.yml
+          - homechef-vendor-portal-build.yml
     steps:
       - name: Log trigger context
         run: |
