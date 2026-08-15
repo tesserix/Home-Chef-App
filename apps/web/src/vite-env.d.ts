@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_GIP_AUTH_DOMAIN: string;
   readonly VITE_GIP_TENANT_ID: string;
   readonly VITE_GOOGLE_CLIENT_ID: string;
+  readonly VITE_OPENPANEL_CLIENT_ID: string;
+  readonly VITE_OPENPANEL_API_URL: string;
 }
 
 interface ImportMeta {
