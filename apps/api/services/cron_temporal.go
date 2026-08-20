@@ -2,11 +2,13 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
 
 	apitemporal "github.com/homechef/api/temporal"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/workflow"
 )
@@ -20,6 +22,10 @@ type cronJob struct {
 	interval time.Duration
 	run      func(context.Context)
 	ticker   func(context.Context) // legacy in-process fallback
+}
+
+var retiredCronJobs = map[string]string{
+	"meal-plan-hold-reconcile": "escrow day-transfer layer removed in #1106",
 }
 
 func cronJobs() []cronJob {
@@ -115,6 +121,10 @@ func CronJobActivity(ctx context.Context, name string) error {
 			return nil
 		}
 	}
+	if reason, retired := retiredCronJobs[name]; retired {
+		log.Printf("Cron: retired job %q acknowledged: %s", name, reason)
+		return nil
+	}
 	return fmt.Errorf("cron: unknown job %q", name)
 }
 
@@ -145,6 +155,9 @@ func StartCronJobs(ctx context.Context) {
 		log.Printf("Cron: Temporal schedule setup failed (%v) — falling back to in-process tickers", err)
 		startTickers(ctx)
 		return
+	}
+	if err := pauseRetiredCronSchedules(ctx, temporalRT.Client().ScheduleClient()); err != nil {
+		log.Printf("Cron: retired schedule cleanup failed: %v", err)
 	}
 	log.Println("Cron: running via Temporal Schedules (exactly-once)")
 }
@@ -177,6 +190,24 @@ func ensureSchedules(ctx context.Context) error {
 		if err != nil {
 			log.Printf("Cron: schedule %q already present or not created: %v", j.name, err)
 		}
+	}
+	return nil
+}
+
+func pauseRetiredCronSchedules(ctx context.Context, schedules client.ScheduleClient) error {
+	for name, reason := range retiredCronJobs {
+		id := "homechef-cron-" + name
+		err := schedules.GetHandle(ctx, id).Pause(ctx, client.SchedulePauseOptions{
+			Note: "retired: " + reason,
+		})
+		if err == nil {
+			continue
+		}
+		var notFound *serviceerror.NotFound
+		if errors.As(err, &notFound) {
+			continue
+		}
+		return fmt.Errorf("pause retired cron schedule %q: %w", id, err)
 	}
 	return nil
 }
