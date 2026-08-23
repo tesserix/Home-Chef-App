@@ -26,18 +26,20 @@ import (
 //   - Create auto-assigns an AWB when omitted; we read it back as ExternalDeliveryID.
 //   - Track/webhook expose status + a hosted customer_track_url, never rider GPS.
 type shadowfaxClient struct {
-	baseURL    string
-	apiKey     string
-	apiSecret  string
-	httpClient *http.Client
+	baseURL     string
+	apiKey      string
+	apiSecret   string
+	httpClient  *http.Client
+	validateURL func(context.Context, string) error
 }
 
 func newShadowfaxClient(p *models.DeliveryProvider) *shadowfaxClient {
 	return &shadowfaxClient{
-		baseURL:    strings.TrimRight(p.APIBaseURL, "/"),
-		apiKey:     p.APIKey,
-		apiSecret:  p.APISecret,
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		baseURL:     strings.TrimRight(p.APIBaseURL, "/"),
+		apiKey:      string(p.APIKey),
+		apiSecret:   string(p.APISecret),
+		httpClient:  NewPublicHTTPSClient(15 * time.Second),
+		validateURL: ValidatePublicHTTPSURL,
 	}
 }
 
@@ -144,6 +146,9 @@ func (c *shadowfaxClient) TrackTask(ctx context.Context, externalID string) (*Tr
 // (when non-nil). It centralizes auth, encoding, and non-2xx handling so the
 // per-method helpers stay focused on payload/field mapping.
 func (c *shadowfaxClient) do(ctx context.Context, method, path string, body any, out any) error {
+	if err := c.validateURL(ctx, c.baseURL); err != nil {
+		return fmt.Errorf("shadowfax: unsafe API base URL: %w", err)
+	}
 	var reader io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)

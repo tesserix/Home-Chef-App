@@ -1,197 +1,98 @@
 diff --git a/dist/index.js b/dist/index.js
-index 213c823fee3b48225cc7d38cbac0ade571732e4d..199183ddf79ad37963069c40b42c4e0ea89ba708 100644
+index c6b0aea734f91dc88d0ca02495c60f21db907ca4..54c8185113122ffbd0a15e568d560bc1fc62eb81 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -426,6 +426,29 @@ var cssVarTokenMap = {
-   "--input": "input",
-   "--ring": "ring"
- };
-+// HomeChef brand mapping for React Native (no DOM). Keep in sync with
-+// patches/@tesserix__native.patch src/utils/getThemeColor.ts. Accent: Persimmon #C2410C.
-+const homeChefBrandMap = {
-+  "--background": "#FBFAF7",
-+  "--foreground": "#1A1A18",
-+  "--card": "#FFFFFF",
-+  "--card-foreground": "#1A1A18",
-+  "--popover": "#FFFFFF",
-+  "--popover-foreground": "#1A1A18",
-+  "--primary": "#C2410C",
-+  "--primary-foreground": "#FFFFFF",
-+  "--secondary": "#1A1A18",
-+  "--secondary-foreground": "#FFFFFF",
-+  "--muted": "#F0EDE8",
-+  "--muted-foreground": "#6B6B66",
-+  "--accent": "#C2410C",
-+  "--accent-foreground": "#FFFFFF",
-+  "--destructive": "#B22B0E",
-+  "--destructive-foreground": "#FFFFFF",
-+  "--border": "#E8E5DE",
-+  "--input": "#E8E5DE",
-+  "--ring": "#C2410C"
-+};
- function getThemeColor(cssVar, fallback) {
-   const tokenKey = cssVarTokenMap[cssVar];
-   if (typeof document !== "undefined" && tokenKey) {
-@@ -464,6 +487,11 @@ function getThemeColor(cssVar, fallback) {
-       console.warn(`Failed to read CSS variable ${cssVar}:`, e);
-     }
-   }
-+  // React Native path: project HomeChef brand tokens.
-+  const brand = homeChefBrandMap[cssVar];
-+  if (brand) {
-+    return brand;
-+  }
-   return fallback;
- }
- function useStorybookThemeVersion() {
-@@ -534,10 +562,10 @@ var Button = React106__default.default.forwardRef(
-       ...fullWidth && { width: "100%" },
+@@ -444,10 +444,10 @@ var Button = React106__default.default.forwardRef(
        ...disabled && { opacity: 0.5 }
      };
--    const primaryColor = getThemeColor("--primary", "#3b82f6");
--    const errorColor = getThemeColor("--destructive", "#ef4444");
--    const successColor = getThemeColor("--primary", "#10b981");
--    const secondaryColor = getThemeColor("--secondary", "#6b7280");
-+    const primaryColor = getThemeColor("--primary", "#C2410C");
-+    const errorColor = getThemeColor("--destructive", "#B22B0E");
-+    const successColor = getThemeColor("--primary", "#C2410C");
-+    const secondaryColor = getThemeColor("--secondary", "#1A1A18");
-     const foregroundColor = getThemeColor("--primary-foreground", "#ffffff");
-     const schemeColor = resolvedColorScheme === "primary" ? primaryColor : resolvedColorScheme === "error" ? errorColor : resolvedColorScheme === "success" ? successColor : secondaryColor;
-     const variantStyles = variant === "solid" ? { backgroundColor: schemeColor } : variant === "outline" ? {
+     const variantStyles = variant === "solid" ? {
+-      backgroundColor: resolvedColorScheme === "primary" ? "#3b82f6" : resolvedColorScheme === "error" ? "#ef4444" : resolvedColorScheme === "success" ? "#10b981" : "#6b7280"
++      backgroundColor: resolvedColorScheme === "primary" ? "#C2410C" : resolvedColorScheme === "error" ? "#B22B0E" : resolvedColorScheme === "success" ? "#C2410C" : "#1A1A18"
+     } : variant === "outline" ? {
+       borderWidth: 1,
+-      borderColor: resolvedColorScheme === "primary" ? "#3b82f6" : resolvedColorScheme === "error" ? "#ef4444" : resolvedColorScheme === "success" ? "#10b981" : "#6b7280",
++      borderColor: resolvedColorScheme === "primary" ? "#C2410C" : resolvedColorScheme === "error" ? "#B22B0E" : resolvedColorScheme === "success" ? "#C2410C" : "#1A1A18",
+       backgroundColor: "transparent"
+     } : {
+       backgroundColor: "transparent"
+@@ -455,7 +455,7 @@ var Button = React106__default.default.forwardRef(
+     const textStyles = {
+       fontSize: sizeStyle.fontSize,
+       fontWeight: String(typography.fontWeight.medium),
+-      color: variant === "solid" ? "#ffffff" : resolvedColorScheme === "primary" ? "#3b82f6" : resolvedColorScheme === "error" ? "#ef4444" : resolvedColorScheme === "success" ? "#10b981" : "#6b7280"
++      color: variant === "solid" ? "#ffffff" : resolvedColorScheme === "primary" ? "#C2410C" : resolvedColorScheme === "error" ? "#B22B0E" : resolvedColorScheme === "success" ? "#C2410C" : "#1A1A18"
+     };
+     return /* @__PURE__ */ React106__default.default.createElement(
+       reactNative.TouchableOpacity,
 diff --git a/dist/index.mjs b/dist/index.mjs
-index ce7721ad66dc1575e31e9054741534ee94a8b294..17f6d160dee8085e22bb431e4004295ef70cc605 100644
+index 4f3bba9d4294b29e71be19bbfc7f4e0299ccef8b..ce8d242eb43c10885e2fe712d4cf25f2b7ee281a 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -420,6 +420,29 @@ var cssVarTokenMap = {
-   "--input": "input",
-   "--ring": "ring"
- };
-+// HomeChef brand mapping for React Native (no DOM). Keep in sync with
-+// patches/@tesserix__native.patch src/utils/getThemeColor.ts. Accent: Persimmon #C2410C.
-+const homeChefBrandMap = {
-+  "--background": "#FBFAF7",
-+  "--foreground": "#1A1A18",
-+  "--card": "#FFFFFF",
-+  "--card-foreground": "#1A1A18",
-+  "--popover": "#FFFFFF",
-+  "--popover-foreground": "#1A1A18",
-+  "--primary": "#C2410C",
-+  "--primary-foreground": "#FFFFFF",
-+  "--secondary": "#1A1A18",
-+  "--secondary-foreground": "#FFFFFF",
-+  "--muted": "#F0EDE8",
-+  "--muted-foreground": "#6B6B66",
-+  "--accent": "#C2410C",
-+  "--accent-foreground": "#FFFFFF",
-+  "--destructive": "#B22B0E",
-+  "--destructive-foreground": "#FFFFFF",
-+  "--border": "#E8E5DE",
-+  "--input": "#E8E5DE",
-+  "--ring": "#C2410C"
-+};
- function getThemeColor(cssVar, fallback) {
-   const tokenKey = cssVarTokenMap[cssVar];
-   if (typeof document !== "undefined" && tokenKey) {
-@@ -458,6 +481,11 @@ function getThemeColor(cssVar, fallback) {
-       console.warn(`Failed to read CSS variable ${cssVar}:`, e);
-     }
-   }
-+  // React Native path: project HomeChef brand tokens.
-+  const brand = homeChefBrandMap[cssVar];
-+  if (brand) {
-+    return brand;
-+  }
-   return fallback;
- }
- function useStorybookThemeVersion() {
-@@ -528,10 +556,10 @@ var Button = React106.forwardRef(
-       ...fullWidth && { width: "100%" },
+@@ -438,10 +438,10 @@ var Button = React106.forwardRef(
        ...disabled && { opacity: 0.5 }
      };
--    const primaryColor = getThemeColor("--primary", "#3b82f6");
--    const errorColor = getThemeColor("--destructive", "#ef4444");
--    const successColor = getThemeColor("--primary", "#10b981");
--    const secondaryColor = getThemeColor("--secondary", "#6b7280");
-+    const primaryColor = getThemeColor("--primary", "#C2410C");
-+    const errorColor = getThemeColor("--destructive", "#B22B0E");
-+    const successColor = getThemeColor("--primary", "#C2410C");
-+    const secondaryColor = getThemeColor("--secondary", "#1A1A18");
-     const foregroundColor = getThemeColor("--primary-foreground", "#ffffff");
-     const schemeColor = resolvedColorScheme === "primary" ? primaryColor : resolvedColorScheme === "error" ? errorColor : resolvedColorScheme === "success" ? successColor : secondaryColor;
-     const variantStyles = variant === "solid" ? { backgroundColor: schemeColor } : variant === "outline" ? {
+     const variantStyles = variant === "solid" ? {
+-      backgroundColor: resolvedColorScheme === "primary" ? "#3b82f6" : resolvedColorScheme === "error" ? "#ef4444" : resolvedColorScheme === "success" ? "#10b981" : "#6b7280"
++      backgroundColor: resolvedColorScheme === "primary" ? "#C2410C" : resolvedColorScheme === "error" ? "#B22B0E" : resolvedColorScheme === "success" ? "#C2410C" : "#1A1A18"
+     } : variant === "outline" ? {
+       borderWidth: 1,
+-      borderColor: resolvedColorScheme === "primary" ? "#3b82f6" : resolvedColorScheme === "error" ? "#ef4444" : resolvedColorScheme === "success" ? "#10b981" : "#6b7280",
++      borderColor: resolvedColorScheme === "primary" ? "#C2410C" : resolvedColorScheme === "error" ? "#B22B0E" : resolvedColorScheme === "success" ? "#C2410C" : "#1A1A18",
+       backgroundColor: "transparent"
+     } : {
+       backgroundColor: "transparent"
+@@ -449,7 +449,7 @@ var Button = React106.forwardRef(
+     const textStyles = {
+       fontSize: sizeStyle.fontSize,
+       fontWeight: String(fontWeight.medium),
+-      color: variant === "solid" ? "#ffffff" : resolvedColorScheme === "primary" ? "#3b82f6" : resolvedColorScheme === "error" ? "#ef4444" : resolvedColorScheme === "success" ? "#10b981" : "#6b7280"
++      color: variant === "solid" ? "#ffffff" : resolvedColorScheme === "primary" ? "#C2410C" : resolvedColorScheme === "error" ? "#B22B0E" : resolvedColorScheme === "success" ? "#C2410C" : "#1A1A18"
+     };
+     return /* @__PURE__ */ React106.createElement(
+       TouchableOpacity,
 diff --git a/src/components/Button/Button.tsx b/src/components/Button/Button.tsx
-index c33dff5a69a865c432028bd1d608c0afa671ff5c..7a325b27492b3fa49ffa7454b829b40b688d638e 100644
+index 71001be99daf6a282f3fa01e572679dbe465d632..e50265d05174a880271e43f9ecba18104c951c3c 100644
 --- a/src/components/Button/Button.tsx
 +++ b/src/components/Button/Button.tsx
-@@ -83,11 +83,13 @@ export const Button = React.forwardRef<React.ElementRef<typeof TouchableOpacity>
-       ...(disabled && { opacity: 0.5 }),
+@@ -83,18 +83,18 @@ export const Button = React.forwardRef<React.ElementRef<typeof TouchableOpacity>
+     const variantStyles: ViewStyle =
+       variant === 'solid'
+         ? {
+-            backgroundColor: resolvedColorScheme === 'primary' ? '#3b82f6' :
+-              resolvedColorScheme === 'error' ? '#ef4444' :
+-              resolvedColorScheme === 'success' ? '#10b981' :
+-              '#6b7280',
++            backgroundColor: resolvedColorScheme === 'primary' ? '#C2410C' :
++              resolvedColorScheme === 'error' ? '#B22B0E' :
++              resolvedColorScheme === 'success' ? '#C2410C' :
++              '#1A1A18',
+           }
+         : variant === 'outline'
+         ? {
+             borderWidth: 1,
+-            borderColor: resolvedColorScheme === 'primary' ? '#3b82f6' :
+-              resolvedColorScheme === 'error' ? '#ef4444' :
+-              resolvedColorScheme === 'success' ? '#10b981' :
+-              '#6b7280',
++            borderColor: resolvedColorScheme === 'primary' ? '#C2410C' :
++              resolvedColorScheme === 'error' ? '#B22B0E' :
++              resolvedColorScheme === 'success' ? '#C2410C' :
++              '#1A1A18',
+             backgroundColor: 'transparent',
+           }
+         : {
+@@ -107,10 +107,10 @@ export const Button = React.forwardRef<React.ElementRef<typeof TouchableOpacity>
+       color:
+         variant === 'solid'
+           ? '#ffffff'
+-          : resolvedColorScheme === 'primary' ? '#3b82f6' :
+-          resolvedColorScheme === 'error' ? '#ef4444' :
+-          resolvedColorScheme === 'success' ? '#10b981' :
+-          '#6b7280',
++          : resolvedColorScheme === 'primary' ? '#C2410C' :
++          resolvedColorScheme === 'error' ? '#B22B0E' :
++          resolvedColorScheme === 'success' ? '#C2410C' :
++          '#1A1A18',
      }
  
--    // Get theme colors (uses CSS variables in Storybook, fallback to hardcoded values in native)
--    const primaryColor = getThemeColor('--primary', '#3b82f6')
--    const errorColor = getThemeColor('--destructive', '#ef4444')
--    const successColor = getThemeColor('--primary', '#10b981')
--    const secondaryColor = getThemeColor('--secondary', '#6b7280')
-+    // Get theme colors (uses CSS variables in Storybook, falls through to
-+    // HomeChef brand map in getThemeColor for native; fallback hexes kept
-+    // brand-correct as defense-in-depth in case the cssVar lookup is missed.)
-+    const primaryColor = getThemeColor('--primary', '#C2410C')
-+    const errorColor = getThemeColor('--destructive', '#B22B0E')
-+    const successColor = getThemeColor('--primary', '#C2410C')
-+    const secondaryColor = getThemeColor('--secondary', '#1A1A18')
-     const foregroundColor = getThemeColor('--primary-foreground', '#ffffff')
- 
-     const schemeColor =
-diff --git a/src/utils/getThemeColor.ts b/src/utils/getThemeColor.ts
-index 7afc4732e187e765295d57815954238f62967962..de2de53458c86794c305afcf63d7786211be65ec 100644
---- a/src/utils/getThemeColor.ts
-+++ b/src/utils/getThemeColor.ts
-@@ -1,5 +1,32 @@
- import { getThemeColors, oklchToRgba, themes, type ColorMode, type ThemeName } from '@tesserix/tokens'
- 
-+// HomeChef brand mapping for React Native (no DOM). When this library is
-+// consumed by the HomeChef mobile apps, getThemeColor cannot read CSS vars,
-+// so we project the brand tokens directly. Keep in sync with
-+// apps/mobile-*/tailwind.config.js and Home-Chef-App/CLAUDE.md design context.
-+// Accent: Persimmon #C2410C (warm editorial orange).
-+const homeChefBrandMap: Record<string, string> = {
-+  '--background': '#FBFAF7',
-+  '--foreground': '#1A1A18',
-+  '--card': '#FFFFFF',
-+  '--card-foreground': '#1A1A18',
-+  '--popover': '#FFFFFF',
-+  '--popover-foreground': '#1A1A18',
-+  '--primary': '#C2410C',
-+  '--primary-foreground': '#FFFFFF',
-+  '--secondary': '#1A1A18',
-+  '--secondary-foreground': '#FFFFFF',
-+  '--muted': '#F0EDE8',
-+  '--muted-foreground': '#6B6B66',
-+  '--accent': '#C2410C',
-+  '--accent-foreground': '#FFFFFF',
-+  '--destructive': '#B22B0E',
-+  '--destructive-foreground': '#FFFFFF',
-+  '--border': '#E8E5DE',
-+  '--input': '#E8E5DE',
-+  '--ring': '#C2410C',
-+}
-+
- const cssVarTokenMap = {
-   '--background': 'background',
-   '--foreground': 'foreground',
-@@ -77,5 +104,14 @@ export function getThemeColor(cssVar: string, fallback: string): string {
-       // Fall back to default if CSS var reading fails
-     }
-   }
-+
-+  // React Native path: no DOM, no Storybook globals. Project HomeChef brand
-+  // tokens so components render with the correct palette instead of the
-+  // generic web fallbacks (#3b82f6 etc.) baked into individual components.
-+  const brand = homeChefBrandMap[cssVar]
-+  if (brand) {
-+    return brand
-+  }
-+
-   return fallback
- }
+     return (

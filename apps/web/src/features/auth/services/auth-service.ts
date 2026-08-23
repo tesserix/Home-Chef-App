@@ -239,9 +239,11 @@ export async function logout(): Promise<void> {
     // best-effort
   }
   try {
+    const csrfToken = await fetchCsrfToken();
     await fetch(`${BFF_FETCH_BASE}/auth/logout`, {
       method: 'POST',
       credentials: 'include',
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : undefined,
     });
   } catch {
     // ignore

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,6 +57,40 @@ func TestHandler_BearerToken_Proxies(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Empty(t, capturedAuth, "Authorization must not be forwarded upstream")
 	assert.Empty(t, capturedCookie, "Cookie must not be forwarded upstream")
+}
+
+func TestHandler_OversizedBody_Returns413WithoutCallingUpstream(t *testing.T) {
+	k := make([]byte, 32)
+	_, _ = rand.Read(k)
+	mgr, err := session.NewManager(session.Config{EncryptKey: k, MaxAge: time.Hour})
+	require.NoError(t, err)
+	signer := headerproxy.NewSigner(headerproxy.SignerConfig{Key: []byte("test-signing-key-32-bytes-pad!!!")})
+	enc, err := mgr.Encode(newTestPayload())
+	require.NoError(t, err)
+
+	called := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Any("/api/v1/*proxyPath", Handler(&Deps{
+		APIBaseURL:   upstream.URL,
+		Sessions:     mgr,
+		Signer:       signer,
+		MaxBodyBytes: 4,
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/orders", strings.NewReader("12345"))
+	req.Header.Set("Authorization", "Bearer "+enc)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
+	assert.JSONEq(t, `{"error":"request_too_large"}`, w.Body.String())
+	assert.False(t, called, "oversized bodies must be rejected before proxying")
 }
 
 func TestHandler_SessionCookie_Proxies(t *testing.T) {
@@ -281,6 +316,25 @@ func TestHandler_CookieAuth_NoOriginPOST_Rejected(t *testing.T) {
 	assert.False(t, called, "upstream must never be called for an unsafe request with no Origin")
 }
 
+func TestHandler_CookieAuth_UnsafeRequestRequiresMatchingCSRFToken(t *testing.T) {
+	var called bool
+	mgr, r, _ := newOriginTestFixtures(t, &called)
+	enc, err := mgr.Encode(newTestPayload())
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/orders", nil)
+	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	req.AddCookie(&http.Cookie{Name: "hc_csrf", Value: "cookie-token"})
+	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("X-CSRF-Token", "wrong-token")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"csrf_rejected"}`, w.Body.String())
+	assert.False(t, called, "upstream must never be called when double-submit tokens differ")
+}
+
 func TestHandler_BearerAuth_ForeignOrigin_StillProxies(t *testing.T) {
 	var called bool
 	mgr, r, _ := newOriginTestFixtures(t, &called)
@@ -494,7 +548,9 @@ func TestHandler_CookieAuth_HttpsOriginBehindPlaintextHop_Proxies(t *testing.T) 
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/orders", nil)
 	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	req.AddCookie(&http.Cookie{Name: "hc_csrf", Value: "csrf-token"})
 	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("X-CSRF-Token", "csrf-token")
 	req.Header.Set("X-Forwarded-Proto", "http") // what the edge actually sends
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

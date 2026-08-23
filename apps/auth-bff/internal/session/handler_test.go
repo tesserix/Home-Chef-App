@@ -112,6 +112,9 @@ func TestHandler_Refresh_ExtendsExp(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
 	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	req.AddCookie(&http.Cookie{Name: "hc_csrf", Value: "refresh-token"})
+	req.Header.Set("Origin", "http://example.com")
+	req.Header.Set("X-CSRF-Token", "refresh-token")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -294,6 +297,9 @@ func TestHandler_Refresh_SetsHostSpecificCookie(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
 	req.Host = "vendors.fe3dr.com"
 	req.AddCookie(&http.Cookie{Name: "hc_vendor_session", Value: enc})
+	req.AddCookie(&http.Cookie{Name: "hc_csrf", Value: "refresh-token"})
+	req.Header.Set("Origin", "https://vendors.fe3dr.com")
+	req.Header.Set("X-CSRF-Token", "refresh-token")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -315,10 +321,50 @@ func TestHandler_CSRF_ReturnsTokenAndCookie(t *testing.T) {
 	tok, _ := body["csrf_token"].(string)
 	require.NotEmpty(t, tok)
 	assert.Len(t, tok, 64) // 32 bytes hex
+	assert.Equal(t, tok, body["csrfToken"], "browser clients consume the camelCase field")
 
 	cookie := w.Header().Get("Set-Cookie")
 	assert.Contains(t, cookie, "hc_csrf="+tok)
 	assert.Contains(t, cookie, "SameSite=Strict")
+}
+
+func TestHandler_Refresh_CookieSessionRequiresCSRFToken(t *testing.T) {
+	h, mgr := newTestHandler(t)
+	r := gin.New()
+	h.Register(r)
+
+	p := &Payload{UID: "u1", Email: "a@b.com", Role: "customer", Pool: "customer",
+		IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	enc, err := mgr.Encode(p)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: enc})
+	req.AddCookie(&http.Cookie{Name: "hc_csrf", Value: "cookie-token"})
+	req.Header.Set("Origin", "http://example.com")
+	req.Header.Set("X-CSRF-Token", "wrong-token")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"csrf_rejected"}`, w.Body.String())
+}
+
+func TestHandler_Logout_CookieSessionRejectsForeignOrigin(t *testing.T) {
+	h, mgr := newTestHandler(t)
+	r := gin.New()
+	h.Register(r)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: mgr.CookieName(), Value: "ambient-session"})
+	req.AddCookie(&http.Cookie{Name: "hc_csrf", Value: "csrf-token"})
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("X-CSRF-Token", "csrf-token")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"origin_rejected"}`, w.Body.String())
 }
 
 // #671: the CSRF cookie's Secure flag must follow the manager's env-driven config — HTTPS-only in

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +19,16 @@ import (
 )
 
 type StaffHandler struct{}
+
+func staffInvitationBaseURL(role models.StaffRole) string {
+	if role == models.StaffRoleFleetManager || role == models.StaffRoleDeliveryOps {
+		return deliveryPortalBaseURL()
+	}
+	if value := os.Getenv("ADMIN_PORTAL_BASE_URL"); value != "" {
+		return strings.TrimRight(value, "/")
+	}
+	return "https://admin.fe3dr.com"
+}
 
 func NewStaffHandler() *StaffHandler {
 	return &StaffHandler{}
@@ -338,15 +350,7 @@ func (h *StaffHandler) CreateInvitation(c *gin.Context) {
 	// Load inviter for response
 	database.DB.Preload("InvitedBy").First(&invitation, "id = ?", invitation.ID)
 
-	// Determine base URL for invite link
-	baseURL := c.GetHeader("Origin")
-	if baseURL == "" {
-		baseURL = "https://admin.fe3dr.com"
-		// Use delivery portal URL for delivery roles
-		if req.StaffRole == models.StaffRoleFleetManager || req.StaffRole == models.StaffRoleDeliveryOps {
-			baseURL = "https://delivery.fe3dr.com"
-		}
-	}
+	baseURL := staffInvitationBaseURL(req.StaffRole)
 
 	// Send invitation email
 	inviterName := ""
@@ -412,14 +416,9 @@ func (h *StaffHandler) ListInvitations(c *gin.Context) {
 		return
 	}
 
-	baseURL := c.GetHeader("Origin")
-	if baseURL == "" {
-		baseURL = "https://admin.fe3dr.com"
-	}
-
 	responses := make([]models.StaffInvitationResponse, len(invitations))
 	for i, inv := range invitations {
-		responses[i] = inv.ToResponse(baseURL, false)
+		responses[i] = inv.ToResponse(staffInvitationBaseURL(inv.StaffRole), false)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -469,7 +468,11 @@ func (h *StaffHandler) ResendInvitation(c *gin.Context) {
 	}
 
 	// Generate new token and reset expiry
-	token, _ := generateSecureToken(32)
+	token, err := generateSecureToken(32)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate invitation token"})
+		return
+	}
 	invitation.Token = token
 	invitation.Status = models.InvitationPending
 	invitation.ExpiresAt = time.Now().AddDate(0, 0, 7)
@@ -479,10 +482,7 @@ func (h *StaffHandler) ResendInvitation(c *gin.Context) {
 		return
 	}
 
-	baseURL := c.GetHeader("Origin")
-	if baseURL == "" {
-		baseURL = "https://admin.fe3dr.com"
-	}
+	baseURL := staffInvitationBaseURL(invitation.StaffRole)
 
 	c.JSON(http.StatusOK, invitation.ToResponse(baseURL, true))
 }

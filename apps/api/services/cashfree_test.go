@@ -295,8 +295,8 @@ func TestVerifyCashfreeWebhook_RejectsMissingHeaders(t *testing.T) {
 // producing a valid client that 401s against production and silently sends every
 // checkout to the fallback gateway.
 func TestCashfreeBaseURL_FollowsCredentials(t *testing.T) {
-	const testApp, testSecret = "TEST1234567890", "cfsk_ma_test_abc"
-	const liveApp, liveSecret = "1234567890abcd", "cfsk_ma_prod_abc"
+	const testApp, testSecret = "TEST_APP_ID_PLACEHOLDER", "SANDBOX_test_SECRET_PLACEHOLDER"
+	const liveApp, liveSecret = "LIVE_APP_ID_PLACEHOLDER", "LIVE_SECRET_PLACEHOLDER"
 
 	// Live slot + sandbox credentials → sandbox. Harmless, and the normal state
 	// while a merchant account is still in review.

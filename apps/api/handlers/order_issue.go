@@ -159,6 +159,13 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 				log.Printf("order issue photo open failed for order %s: %v", order.ID, oerr)
 				continue
 			}
+			sniffed, serr := sniffContentType(file)
+			if serr != nil || !services.IsImageContentType(sniffed) {
+				file.Close()
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Photo contents don't match an allowed image type."})
+				return
+			}
+			ct = sniffed
 			// Evidence photos can contain sensitive imagery, so store them in the
 			// PRIVATE bucket (unguessable object key) and serve via short-lived
 			// signed URLs at read time (see signIssuePhotoURLs). PhotoURLs holds

@@ -212,6 +212,26 @@ func TestAutoLogin_AdminAllowlistUnset_Denied(t *testing.T) {
 	require.False(t, api.captured, "a denied admin must never be upserted")
 }
 
+func TestAutoLogin_AdminUnverifiedEmail_Denied(t *testing.T) {
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "admin@fe3dr.com")
+	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
+	deps := newDeps(t,
+		&fakeGIP{tok: &gip.VerifiedToken{
+			UID: "g1", Email: "admin@fe3dr.com", TenantID: "HomeChef-Internal-gyofe",
+			Provider: "password", EmailVerified: false, Claims: map[string]any{},
+		}},
+		api,
+		&fakeSessions{encoded: "sess"},
+	)
+
+	_, err := deps.AutoLogin(t.Context(), Request{
+		IDToken: "t", ExpectedTenantID: "HomeChef-Internal-gyofe",
+	})
+
+	require.ErrorIs(t, err, ErrEmailNotAllowed)
+	assert.False(t, api.captured, "an unverified admin identity must never be upserted")
+}
+
 // A non-admin (customer/business/delivery) pool must be unaffected by the admin
 // allowlist — the fail-closed rule applies only to internal/admin logins.
 func TestAutoLogin_NonAdminUnaffectedByAllowlist(t *testing.T) {

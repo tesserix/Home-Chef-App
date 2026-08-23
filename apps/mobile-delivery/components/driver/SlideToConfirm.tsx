@@ -1,10 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
-  useAnimatedGestureHandler,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -20,10 +19,6 @@ interface SlideToConfirmProps {
   color?: string;
 }
 
-type GestureContext = {
-  startX: number;
-};
-
 export function SlideToConfirm({
   label,
   onConfirm,
@@ -31,6 +26,7 @@ export function SlideToConfirm({
   color = '#C2410C',
 }: SlideToConfirmProps) {
   const translateX = useSharedValue(0);
+  const startX = useSharedValue(0);
   const [trackWidth, setTrackWidth] = useState(0);
   const confirmedRef = useRef(false);
 
@@ -41,21 +37,19 @@ export function SlideToConfirm({
     onConfirm();
   }, [onConfirm]);
 
-  const gestureHandler = useAnimatedGestureHandler<
-    PanGestureHandlerGestureEvent,
-    GestureContext
-  >({
-    onStart: (_, ctx) => {
-      ctx.startX = translateX.value;
-    },
-    onActive: (event, ctx) => {
+  const panGesture = Gesture.Pan()
+    .enabled(!disabled && trackWidth > 0)
+    .onStart(() => {
+      startX.value = translateX.value;
+    })
+    .onUpdate((event) => {
       const maxTranslate = trackWidth - THUMB_SIZE;
       translateX.value = Math.max(
         0,
-        Math.min(ctx.startX + event.translationX, maxTranslate),
+        Math.min(startX.value + event.translationX, maxTranslate),
       );
-    },
-    onEnd: () => {
+    })
+    .onEnd(() => {
       const maxTranslate = trackWidth - THUMB_SIZE;
       if (maxTranslate > 0 && translateX.value > maxTranslate * 0.75) {
         translateX.value = withSpring(maxTranslate);
@@ -63,8 +57,7 @@ export function SlideToConfirm({
       } else {
         translateX.value = withSpring(0, { damping: 15 });
       }
-    },
-  });
+    });
 
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -79,10 +72,7 @@ export function SlideToConfirm({
         <Text style={[styles.label, { color }]} numberOfLines={1}>
           Slide to {label}
         </Text>
-        <PanGestureHandler
-          onGestureEvent={gestureHandler}
-          enabled={!disabled && trackWidth > 0}
-        >
+        <GestureDetector gesture={panGesture}>
           <Animated.View
             style={[
               styles.thumb,
@@ -90,7 +80,7 @@ export function SlideToConfirm({
               thumbStyle,
             ]}
           />
-        </PanGestureHandler>
+        </GestureDetector>
       </View>
     </View>
   );

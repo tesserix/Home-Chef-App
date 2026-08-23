@@ -194,8 +194,8 @@ Register a new user account.
       "emailVerified": false,
       "phoneVerified": false
     },
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "refreshToken": "refresh_token_here",
+    "token": "SESSION_TOKEN_PLACEHOLDER",
+    "refreshToken": "REFRESH_TOKEN_PLACEHOLDER",
     "expiresIn": 3600
   }
 }
@@ -227,8 +227,8 @@ Login with email and password.
       "role": "customer",
       "avatar": "https://..."
     },
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "refreshToken": "refresh_token_here",
+    "token": "SESSION_TOKEN_PLACEHOLDER",
+    "refreshToken": "REFRESH_TOKEN_PLACEHOLDER",
     "expiresIn": 3600
   }
 }
@@ -243,7 +243,7 @@ Authenticate via social provider.
 ```json
 {
   "provider": "google",
-  "token": "oauth_token_from_provider",
+  "token": "SESSION_TOKEN_PLACEHOLDER",
   "role": "customer"
 }
 ```
@@ -293,7 +293,7 @@ Verify phone OTP.
   "data": {
     "verified": true,
     "user": { ... },
-    "token": "eyJhbGciOiJIUzI1NiIs..."
+    "token": "SESSION_TOKEN_PLACEHOLDER"
   }
 }
 ```
@@ -306,7 +306,7 @@ Refresh access token.
 **Request:**
 ```json
 {
-  "refreshToken": "refresh_token_here"
+  "refreshToken": "REFRESH_TOKEN_PLACEHOLDER"
 }
 ```
 
@@ -315,8 +315,8 @@ Refresh access token.
 {
   "success": true,
   "data": {
-    "token": "new_access_token",
-    "refreshToken": "new_refresh_token",
+    "token": "SESSION_TOKEN_PLACEHOLDER",
+    "refreshToken": "REFRESH_TOKEN_PLACEHOLDER",
     "expiresIn": 3600
   }
 }

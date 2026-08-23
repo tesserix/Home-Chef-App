@@ -6,8 +6,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "jsEngine": "hermes",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -75,7 +73,8 @@
           "backgroundColor": "#0E0E0C"
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true

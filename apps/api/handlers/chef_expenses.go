@@ -294,6 +294,12 @@ func (h *ChefExpensesHandler) UploadExpenseReceipt(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP."})
 		return
 	}
+	sniffed, err := sniffContentType(file)
+	if err != nil || !services.IsImageContentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
+		return
+	}
+	contentType = sniffed
 
 	folder := fmt.Sprintf("expenses/%s", chef.ID.String())
 	path, err := services.UploadPrivateFile(c.Request.Context(), folder, header.Filename, file, contentType)

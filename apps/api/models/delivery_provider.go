@@ -16,10 +16,10 @@ type DeliveryProvider struct {
 	LogoURL     string    `gorm:"" json:"logoUrl"` // provider logo for admin UI
 
 	// API Configuration
-	APIBaseURL    string `gorm:"" json:"apiBaseUrl"` // e.g. "https://api.dunzo.com/v1"
-	APIKey        string `gorm:"" json:"-"`          // encrypted, never exposed
-	APISecret     string `gorm:"" json:"-"`
-	WebhookSecret string `gorm:"" json:"-"` // for verifying inbound webhooks
+	APIBaseURL    string          `gorm:"" json:"apiBaseUrl"` // e.g. "https://api.dunzo.com/v1"
+	APIKey        EncryptedString `gorm:"" json:"-"`          // encrypted, never exposed
+	APISecret     EncryptedString `gorm:"" json:"-"`
+	WebhookSecret EncryptedString `gorm:"" json:"-"` // for verifying inbound webhooks
 
 	// Status mapping — maps provider statuses to Fe3dr DeliveryStatus
 	// e.g. {"PICKED_UP": "picked_up", "DELIVERED": "delivered", "CANCELLED": "cancelled"}

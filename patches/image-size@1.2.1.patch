@@ -1,0 +1,59 @@
+diff --git a/dist/types/icns.js b/dist/types/icns.js
+index f2bfafef3723cb423b110304815e56e3f97f81e0..873e50d8065615aa18da5d1a0b9a665645cda56a 100644
+--- a/dist/types/icns.js
++++ b/dist/types/icns.js
+@@ -64,12 +64,22 @@ const ICON_TYPE_SIZE = {
+     ic10: 1024,
+ };
+ function readImageHeader(input, imageOffset) {
++    if (input.length - imageOffset < SIZE_HEADER)
++        return;
+     const imageLengthOffset = imageOffset + ENTRY_LENGTH_OFFSET;
+     return [
+         (0, utils_1.toUTF8String)(input, imageOffset, imageLengthOffset),
+         (0, utils_1.readUInt32BE)(input, imageLengthOffset),
+     ];
+ }
++function assertValidImageHeader(imageHeader, imageOffset, fileLength, inputLength) {
++    if (!imageHeader ||
++        imageHeader[1] < SIZE_HEADER ||
++        imageHeader[1] > fileLength - imageOffset ||
++        imageHeader[1] > inputLength - imageOffset) {
++        throw new TypeError('Invalid ICNS image entry length');
++    }
++}
+ function getImageSize(type) {
+     const size = ICON_TYPE_SIZE[type];
+     return { width: size, height: size, type };
+@@ -81,6 +91,7 @@ exports.ICNS = {
+         const fileLength = (0, utils_1.readUInt32BE)(input, FILE_LENGTH_OFFSET);
+         let imageOffset = SIZE_HEADER;
+         let imageHeader = readImageHeader(input, imageOffset);
++        assertValidImageHeader(imageHeader, imageOffset, fileLength, inputLength);
+         let imageSize = getImageSize(imageHeader[0]);
+         imageOffset += imageHeader[1];
+         if (imageOffset === fileLength)
+@@ -92,6 +103,7 @@ exports.ICNS = {
+         };
+         while (imageOffset < fileLength && imageOffset < inputLength) {
+             imageHeader = readImageHeader(input, imageOffset);
++            assertValidImageHeader(imageHeader, imageOffset, fileLength, inputLength);
+             imageSize = getImageSize(imageHeader[0]);
+             imageOffset += imageHeader[1];
+             result.images.push(imageSize);
+diff --git a/dist/types/utils.js b/dist/types/utils.js
+index 5224bbafe87551ac415cb3de234820ccc0ff6e2c..eab91191d826185f5c061fc64b0248bc8a598937 100644
+--- a/dist/types/utils.js
++++ b/dist/types/utils.js
+@@ -52,7 +52,10 @@ function readBox(input, offset) {
+     if (input.length - offset < 4)
+         return;
+     const boxSize = (0, exports.readUInt32BE)(input, offset);
+-    if (input.length - offset < boxSize)
++    // ISO BMFF boxes include an eight-byte size + type header. Treat zero and
++    // undersized boxes as malformed instead of returning a recognized box whose
++    // caller may repeatedly advance by zero bytes (CVE-2025-71329).
++    if (boxSize < 8 || input.length - offset < boxSize)
+         return;
+     return {
+         name: (0, exports.toUTF8String)(input, 4 + offset, 8 + offset),

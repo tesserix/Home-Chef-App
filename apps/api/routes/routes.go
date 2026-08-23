@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -59,7 +60,7 @@ func allowedOrigins() []string {
 		var out []string
 		for o := range strings.SplitSeq(env, ",") {
 			o = strings.TrimSpace(o)
-			if o != "" {
+			if validAllowedOrigin(o) {
 				out = append(out, o)
 			}
 		}
@@ -89,6 +90,35 @@ func allowedOrigins() []string {
 	}
 }
 
+func validAllowedOrigin(origin string) bool {
+	if origin == "" || origin == "*" || strings.Contains(origin, "*") {
+		return false
+	}
+	u, err := url.ParseRequestURI(origin)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" {
+		return false
+	}
+	if config.IsProduction() {
+		return u.Scheme == "https"
+	}
+	if u.Scheme == "https" {
+		return true
+	}
+	host := strings.ToLower(u.Hostname())
+	return u.Scheme == "http" && (host == "localhost" || host == "127.0.0.1" || host == "::1")
+}
+
+func corsConfiguration() cors.Config {
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowOrigins = allowedOrigins()
+	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Auth-Token", "X-Request-ID", "Stripe-Signature", "x-webhook-signature", "x-webhook-timestamp", "x-jwt-claim-sub", "x-jwt-claim-tenant-id", "x-jwt-claim-tenant-slug", "x-jwt-claim-email", "x-jwt-claim-name", "x-jwt-claim-given-name", "x-jwt-claim-family-name"}
+	corsConfig.ExposeHeaders = []string{"X-Request-ID", "Retry-After"}
+	corsConfig.AllowCredentials = true
+	corsConfig.MaxAge = 600
+	return corsConfig
+}
+
 func SetupRouter() *gin.Engine {
 	// Set Gin mode
 	if config.IsProduction() {
@@ -100,6 +130,7 @@ func SetupRouter() *gin.Engine {
 	// gin.Recovery stays as the outermost panic backstop.
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(middleware.BodyLimit(64 << 20))
 
 	// Trust only proxies on the loopback / private mesh addresses so c.ClientIP()
 	// can't be spoofed by an upstream client.
@@ -132,14 +163,7 @@ func SetupRouter() *gin.Engine {
 
 	// CORS configuration — allowlist driven by env in prod; never wildcards
 	// because AllowCredentials=true requires a specific origin.
-	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins = allowedOrigins()
-	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Auth-Token", "X-Request-ID", "Stripe-Signature", "x-webhook-signature", "x-webhook-timestamp", "x-jwt-claim-sub", "x-jwt-claim-tenant-id", "x-jwt-claim-tenant-slug", "x-jwt-claim-email", "x-jwt-claim-name", "x-jwt-claim-given-name", "x-jwt-claim-family-name"}
-	corsConfig.ExposeHeaders = []string{"X-Request-ID", "Retry-After"}
-	corsConfig.AllowCredentials = true
-	corsConfig.MaxAge = 600
-	r.Use(cors.New(corsConfig))
+	r.Use(cors.New(corsConfiguration()))
 
 	// Shared HMAC key for verifying BFF-signed identity headers. Loaded once
 	// at config.Load() so the same []byte is captured by every protected

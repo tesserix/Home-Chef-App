@@ -32,14 +32,19 @@
     "lint:fix": "pnpm -r lint:fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "test": "pnpm -r test",
+    "test:security-dependencies": "node --test tests/security/*.test.mjs",
     "test:coverage": "pnpm -r test:coverage",
     "clean": "pnpm -r clean && rm -rf node_modules",
     "typecheck": "pnpm -r typecheck",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@expo/dom-webview": "57.0.1",
+    "@expo/metro-runtime": "57.0.12",
+    "@react-native/metro-config": "0.86.2",
     "@types/node": "^25.9.3",
     "husky": "^9.1.7",
+    "image-size": "1.2.1",
     "lint-staged": "^17.0.7",
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.8.0",
@@ -61,11 +66,13 @@
   },
   "pnpm": {
     "patchedDependencies": {
-      "@tesserix/native": "patches/@tesserix__native.patch"
+      "@tesserix/native": "patches/@tesserix__native.patch",
+      "image-size@1.2.1": "patches/image-size@1.2.1.patch"
     },
     "overrides": {
-      "@expo/dom-webview": "^56.0.5",
-      "@expo/metro-runtime": "^56.0.15",
+      "@expo/dom-webview": "^57.0.1",
+      "@expo/metro-runtime": "^57.0.12",
+      "@react-native/metro-config": "0.86.2",
       "@tootallnate/once": "^2.0.1",
       "@xmldom/xmldom": "^0.8.13",
       "ajv": "^6.14.0",
@@ -76,8 +83,8 @@
       "esbuild": "^0.25.0",
       "flatted": "^3.4.2",
       "follow-redirects": "^1.16.0",
-      "js-yaml@3": "^3.15.0",
-      "js-yaml@4": "^4.3.0",
+      "js-yaml@3": "^3.15.1",
+      "js-yaml@4": "^4.3.1",
       "minimatch@3": "^3.1.4",
       "minimatch@9": "^9.0.7",
       "nanoid": "^3.3.18",

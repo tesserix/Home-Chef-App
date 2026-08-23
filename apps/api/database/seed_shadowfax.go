@@ -28,8 +28,8 @@ func SeedShadowfaxProvider(db *gorm.DB) {
 			Code:               "shadowfax",
 			Description:        "Shadowfax hyperlocal 3PL (Unified API)",
 			APIBaseURL:         "https://dale.staging.shadowfax.in/api",
-			APIKey:             token,
-			WebhookSecret:      webhookSecret,
+			APIKey:             models.EncryptedString(token),
+			WebhookSecret:      models.EncryptedString(webhookSecret),
 			SupportedCities:    `["Bengaluru"]`, // owner edits via admin API for their test city
 			SupportedCountries: `["IN"]`,
 			MaxDistance:        50,
@@ -52,8 +52,8 @@ func SeedShadowfaxProvider(db *gorm.DB) {
 	// the owner controls IsEnabled. Keeps the token in sync with Secret Manager.
 	if e := db.Model(&existing).Updates(map[string]any{
 		"api_base_url":   "https://dale.staging.shadowfax.in/api",
-		"api_key":        token,
-		"webhook_secret": webhookSecret,
+		"api_key":        models.EncryptedString(token),
+		"webhook_secret": models.EncryptedString(webhookSecret),
 	}).Error; e != nil {
 		log.Printf("refresh shadowfax provider: %v", e)
 	}

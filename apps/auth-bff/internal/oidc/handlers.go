@@ -2,6 +2,8 @@ package oidc
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"log"
 	"net/http"
 	"time"
@@ -40,13 +42,13 @@ type SessionWriter interface {
 // /auth/exchange. The OAuthByApp / OIDCByApp maps are populated by main.go
 // based on homechef-products.yaml.
 type Handlers struct {
-	Registry    *productregistry.Registry
-	OAuthByApp  map[string]*oauth2.Config
-	OIDCByApp   map[string]*oidc.Provider
-	GIPVerifier GIPVerifier
-	API         APIClient
-	Sessions    SessionWriter
-	StateStore  StateStore
+	Registry     *productregistry.Registry
+	OAuthByApp   map[string]*oauth2.Config
+	OIDCByApp    map[string]*oidc.Provider
+	GIPVerifier  GIPVerifier
+	API          APIClient
+	Sessions     SessionWriter
+	StateManager StateManager
 }
 
 // Login starts the OIDC authorization-code flow. It resolves the per-host app
@@ -64,13 +66,20 @@ func (h *Handlers) Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no_oauth_config"})
 		return
 	}
-	state := NewStateID()
-	nonce := NewStateID()
-	h.StateStore.Put(state, StateEntry{
+	nonce, err := NewStateID()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "state_generation_failed"})
+		return
+	}
+	state, err := h.StateManager.Begin(c.Writer, StateEntry{
 		AppName:  app.Name,
 		Nonce:    nonce,
-		ReturnTo: c.Query("return_to"),
+		ReturnTo: safeReturnTo(c.Query("return_to")),
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "state_generation_failed"})
+		return
+	}
 	url := cfg.AuthCodeURL(
 		state,
 		oidc.Nonce(nonce),
@@ -90,8 +99,12 @@ func (h *Handlers) Callback(c *gin.Context) {
 		return
 	}
 	state := c.Query("state")
-	entry, ok := h.StateStore.Take(state)
+	entry, ok := h.StateManager.Take(c.Writer, c.Request, state)
 	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "bad_state"})
+		return
+	}
+	if !stateMatchesApp(entry, app.Name) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "bad_state"})
 		return
 	}
@@ -117,8 +130,19 @@ func (h *Handlers) Callback(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "id_token_invalid"})
 		return
 	}
+	if !nonceMatches(entry, idTok.Nonce) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "id_token_invalid"})
+		return
+	}
 	var claims map[string]any
-	_ = idTok.Claims(&claims)
+	if err := idTok.Claims(&claims); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "id_token_invalid"})
+		return
+	}
+	if !tenantMatchesApp(claims, app.GIPTenantID) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "id_token_invalid"})
+		return
+	}
 	h.issueSession(c, app, claims, entry)
 }
 
@@ -153,7 +177,7 @@ func (h *Handlers) Exchange(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "id_token_invalid"})
 		return
 	}
-	h.issueSession(c, app, map[string]any(vt.Claims), StateEntry{
+	h.issueSession(c, app, claimsFromVerifiedToken(vt), StateEntry{
 		MarketingConsent: req.MarketingConsent,
 	})
 }
@@ -186,8 +210,13 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 			c.JSON(http.StatusForbidden, gin.H{"error": "email_not_allowed"})
 			return
 		}
+		if !getBool(claims, "email_verified") {
+			log.Printf("oidc: rejected admin login for %q — email is not verified", email)
+			c.JSON(http.StatusForbidden, gin.H{"error": "email_not_verified"})
+			return
+		}
 	}
-	provider := ""
+	provider := getStr(claims, "sign_in_provider")
 	if fb, ok := claims["firebase"].(map[string]any); ok {
 		if p, ok := fb["sign_in_provider"].(string); ok {
 			provider = p
@@ -199,6 +228,9 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 		GIPProvider:      provider,
 		AuthPool:         pool,
 		Email:            getStr(claims, "email"),
+		Name:             getStr(claims, "name"),
+		Avatar:           getStr(claims, "picture"),
+		EmailVerified:    getBool(claims, "email_verified"),
 		Role:             role,
 		MarketingConsent: entry.MarketingConsent,
 		DeviceID:         browserDeviceID(c),
@@ -261,4 +293,45 @@ func getStr(m map[string]any, k string) string {
 		return v
 	}
 	return ""
+}
+
+func getBool(m map[string]any, k string) bool {
+	v, _ := m[k].(bool)
+	return v
+}
+
+func claimsFromVerifiedToken(vt *gip.VerifiedToken) map[string]any {
+	claims := make(map[string]any, len(vt.Claims)+7)
+	for key, value := range vt.Claims {
+		claims[key] = value
+	}
+	claims["sub"] = vt.UID
+	claims["email"] = vt.Email
+	claims["name"] = vt.Name
+	claims["picture"] = vt.Picture
+	claims["email_verified"] = vt.EmailVerified
+	claims["sign_in_provider"] = vt.Provider
+	return claims
+}
+
+func stateMatchesApp(entry StateEntry, appName string) bool {
+	return entry.AppName != "" && entry.AppName == appName
+}
+
+func nonceMatches(entry StateEntry, tokenNonce string) bool {
+	if entry.Nonce == "" || tokenNonce == "" {
+		return false
+	}
+	expected := sha256.Sum256([]byte(entry.Nonce))
+	actual := sha256.Sum256([]byte(tokenNonce))
+	return subtle.ConstantTimeCompare(expected[:], actual[:]) == 1
+}
+
+func tenantMatchesApp(claims map[string]any, expectedTenantID string) bool {
+	firebase, ok := claims["firebase"].(map[string]any)
+	if !ok {
+		return false
+	}
+	tenantID, ok := firebase["tenant"].(string)
+	return ok && tenantID != "" && tenantID == expectedTenantID
 }

@@ -71,6 +71,7 @@ func (v *Verifier) Verify(ctx context.Context, raw string, expectedTenantID stri
 		jwt.WithIssuer(v.expIss),
 		jwt.WithAudience(v.cfg.ProjectID),
 		jwt.WithValidMethods([]string{"RS256"}),
+		jwt.WithExpirationRequired(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("parse token: %w", err)

@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/externalize-inline-scripts.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
+    "test": "node --test scripts/*.test.mjs",
     "clean": "rm -rf .next out node_modules .turbo"
   },
   "dependencies": {
