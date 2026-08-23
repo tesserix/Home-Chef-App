@@ -84,3 +84,17 @@ func TestBlindIndexDeterministicAndNormalized(t *testing.T) {
 		t.Error("empty value should give empty index")
 	}
 }
+
+func TestIsCiphertext_DistinguishesMigrationRows(t *testing.T) {
+	activateForTest(t)
+	sealed, err := EncryptPII("provider-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !IsCiphertext(sealed) {
+		t.Fatal("encrypted value must be recognized during backfill")
+	}
+	if IsCiphertext("provider-secret") || IsCiphertext("") {
+		t.Fatal("plaintext and empty values must remain eligible for backfill")
+	}
+}

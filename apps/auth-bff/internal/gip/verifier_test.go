@@ -142,6 +142,22 @@ func TestVerifier_Expired_Rejects(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestVerifier_MissingExpiry_Rejects(t *testing.T) {
+	tj := newJWKServer(t)
+	defer tj.srv.Close()
+	v, err := New(Config{ProjectID: "p", JWKSURL: tj.srv.URL, Leeway: time.Second})
+	require.NoError(t, err)
+
+	tok := tj.signToken(t, jwt.MapClaims{
+		"iss": "https://securetoken.google.com/p", "aud": "p", "sub": "u",
+		"iat":      time.Now().Unix(),
+		"firebase": map[string]any{"tenant": "T"},
+	})
+
+	_, err = v.Verify(t.Context(), tok, "T")
+	require.Error(t, err)
+}
+
 func TestVerifier_TamperedSignature_Rejects(t *testing.T) {
 	tj := newJWKServer(t)
 	defer tj.srv.Close()

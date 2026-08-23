@@ -166,6 +166,14 @@ export default function FleetScreen() {
     );
   }
 
+  if (fleet === undefined) {
+    return (
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
+        <ActivityIndicator size="large" color="#C2410C" />
+      </SafeAreaView>
+    );
+  }
+
   const partnerList = partners ?? [];
 
   return (

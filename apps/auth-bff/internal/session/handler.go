@@ -50,11 +50,17 @@ func (h *Handler) session(c *gin.Context) {
 }
 
 func (h *Handler) logout(c *gin.Context) {
+	if !h.guardCookieMutation(c) {
+		return
+	}
 	h.Mgr.Clear(c.Writer, h.cookieName(c.Request.Host))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func (h *Handler) refresh(c *gin.Context) {
+	if !h.guardCookieMutation(c) {
+		return
+	}
 	p, err := h.read(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthenticated"})
@@ -70,19 +76,37 @@ func (h *Handler) refresh(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"expires_at": p.ExpiresAt})
 }
 
+func (h *Handler) guardCookieMutation(c *gin.Context) bool {
+	if _, err := c.Request.Cookie(h.cookieName(c.Request.Host)); err != nil {
+		return true
+	}
+	if !SameOrigin(c.Request) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "origin_rejected"})
+		return false
+	}
+	if !ValidCSRFToken(c.Request) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "csrf_rejected"})
+		return false
+	}
+	return true
+}
+
 func (h *Handler) csrf(c *gin.Context) {
 	b := make([]byte, 32)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "csrf_generation_failed"})
+		return
+	}
 	tok := hex.EncodeToString(b)
 	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     "hc_csrf",
+		Name:     CSRFCookieName,
 		Value:    tok,
 		Path:     "/",
 		Secure:   h.Mgr.cfg.Secure, // HTTPS-only in prod (env-driven, matches the session cookie); dev stays false
 		SameSite: http.SameSiteStrictMode,
 		// HttpOnly deliberately omitted — this is a double-submit CSRF token the client JS must read.
 	})
-	c.JSON(http.StatusOK, gin.H{"csrf_token": tok})
+	c.JSON(http.StatusOK, gin.H{"csrf_token": tok, "csrfToken": tok})
 }
 
 // read pulls the session payload from either the session cookie or

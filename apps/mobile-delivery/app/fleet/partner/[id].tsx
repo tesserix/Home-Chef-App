@@ -15,7 +15,7 @@ interface Partner {
 }
 
 function usePartnerDetail(id: string) {
-  return useQuery<Partner | null>({
+  return useQuery<Partner[] | null, Error, Partner | null>({
     queryKey: ['driver', 'fleet', 'partners'],
     queryFn: async () => {
       try {

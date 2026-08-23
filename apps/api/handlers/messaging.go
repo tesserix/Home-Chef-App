@@ -7,8 +7,11 @@ package handlers
 
 import (
 	"encoding/csv"
+	"mime"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -447,6 +450,12 @@ func (h *MessagingHandler) uploadAttachment(c *gin.Context, role string) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large (max 10 MB)"})
 		return
 	}
+	sniffed, err := sniffContentType(file)
+	if err != nil || !services.AllowedChatAttachmentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed attachment type"})
+		return
+	}
+	contentType = sniffed
 	attachmentID, err := services.UploadChatAttachment(c.Request.Context(), header.Filename, contentType, file)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload attachment"})
@@ -508,12 +517,26 @@ func (h *MessagingHandler) DownloadAttachment(c *gin.Context) {
 	if services.IsImageContentType(msg.ContentType) {
 		disposition = "inline"
 	}
-	c.Header("Content-Disposition", disposition+"; filename=\""+msg.Filename+"\"")
+	c.Header("Content-Disposition", attachmentDisposition(disposition, msg.Filename))
 	c.Header("Cache-Control", "private, no-store")
 	if err := services.DownloadChatAttachment(c.Request.Context(), attachmentID, c.Writer); err != nil {
 		// Headers may already be flushed; nothing more we can do but log upstream.
 		return
 	}
+}
+
+func attachmentDisposition(disposition, filename string) string {
+	filename = strings.Map(func(r rune) rune {
+		if r == '\r' || r == '\n' || r == 0 {
+			return -1
+		}
+		return r
+	}, filename)
+	filename = path.Base(strings.ReplaceAll(filename, `\`, "/"))
+	if filename == "." || filename == "" {
+		filename = "attachment"
+	}
+	return mime.FormatMediaType(disposition, map[string]string{"filename": filename})
 }
 
 // csvSafe neutralises CSV formula injection: a cell that begins with a formula

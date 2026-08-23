@@ -282,6 +282,12 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 				return
 			}
 			defer file.Close()
+			sniffed, err := sniffContentType(file)
+			if err != nil || !services.IsImageContentType(sniffed) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Image contents don't match an allowed image type."})
+				return
+			}
+			contentType = sniffed
 
 			folder := fmt.Sprintf("reviews/%s", parsedOrderID.String())
 			fileURL, err := services.UploadPublicFile(c.Request.Context(), folder, header.Filename, file, contentType)

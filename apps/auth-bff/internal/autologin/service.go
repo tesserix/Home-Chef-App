@@ -100,6 +100,10 @@ func (d *Deps) AutoLogin(ctx context.Context, req Request) (*Response, error) {
 			}
 			return nil, ErrEmailNotAllowed
 		}
+		if !tok.EmailVerified {
+			log.Printf("autologin: rejected admin login for %q — email is not verified", tok.Email)
+			return nil, ErrEmailNotAllowed
+		}
 	}
 	upsert, err := d.API.UpsertUser(ctx, apiclient.UpsertUserRequest{
 		GIPUid:        tok.UID,

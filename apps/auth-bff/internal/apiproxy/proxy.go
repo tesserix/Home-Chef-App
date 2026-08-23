@@ -36,7 +36,6 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -49,6 +48,9 @@ type Deps struct {
 	APIBaseURL string
 	Sessions   *session.Manager
 	Signer     *headerproxy.Signer
+	// MaxBodyBytes bounds the body buffered for HMAC signing. Zero uses the
+	// production default, which leaves headroom for the 50 MiB video upload.
+	MaxBodyBytes int64
 
 	// CookieForHost resolves the request Host to the app-specific session
 	// cookie name (e.g. productregistry.Registry.SessionCookieForHost). It
@@ -83,18 +85,6 @@ var safeMethods = map[string]struct{}{
 	http.MethodOptions: {},
 }
 
-// originHost pulls the host out of an Origin header value
-// ("https://fe3dr.com" -> "fe3dr.com"), returning "" if it isn't a usable
-// absolute origin. Origin is always scheme://host[:port] or the literal
-// "null"; it never carries a path.
-func originHost(origin string) string {
-	u, err := url.Parse(origin)
-	if err != nil || u.Host == "" {
-		return ""
-	}
-	return u.Host
-}
-
 // checkOrigin enforces that a cookie-authenticated request actually
 // originated from this same BFF's own origin. It must only be called for
 // requests authenticated via the session cookie — Bearer-authenticated
@@ -117,8 +107,8 @@ func originHost(origin string) string {
 // expected host is read from the request itself on every call, never
 // hardcoded, so each domain compares correctly against itself.
 func checkOrigin(c *gin.Context) bool {
-	if origin := c.GetHeader("Origin"); origin != "" {
-		return originHost(origin) == c.Request.Host
+	if c.GetHeader("Origin") != "" {
+		return session.SameOrigin(c.Request)
 	}
 	// No Origin at all. Fine for a safe method (e.g. a top-level GET
 	// navigation, which browsers don't attach Origin to); anything else
@@ -130,6 +120,10 @@ func checkOrigin(c *gin.Context) bool {
 func Handler(d *Deps) gin.HandlerFunc {
 	client := &http.Client{Timeout: 30 * time.Second}
 	base := strings.TrimRight(d.APIBaseURL, "/")
+	maxBodyBytes := d.MaxBodyBytes
+	if maxBodyBytes <= 0 {
+		maxBodyBytes = 64 << 20
+	}
 	return func(c *gin.Context) {
 		// 1. Resolve the session token. Mobile apps send it as a Bearer
 		//    header; browser SPAs can't (their session lives in an HttpOnly
@@ -155,6 +149,10 @@ func Handler(d *Deps) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "origin_rejected"})
 			return
 		}
+		if _, safe := safeMethods[c.Request.Method]; viaCookie && !safe && !session.ValidCSRFToken(c.Request) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "csrf_rejected"})
+			return
+		}
 
 		// 2. Resolve session → identity. Decode also enforces expiry.
 		p, err := d.Sessions.Decode(token)
@@ -166,9 +164,17 @@ func Handler(d *Deps) gin.HandlerFunc {
 		// 3. Buffer body so we can re-hash it for the HMAC signature.
 		var body []byte
 		if c.Request.Body != nil {
-			body, err = io.ReadAll(c.Request.Body)
+			if c.Request.ContentLength > maxBodyBytes {
+				c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{"error": "request_too_large"})
+				return
+			}
+			body, err = io.ReadAll(io.LimitReader(c.Request.Body, maxBodyBytes+1))
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "body_read_failed"})
+				return
+			}
+			if int64(len(body)) > maxBodyBytes {
+				c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{"error": "request_too_large"})
 				return
 			}
 		}
@@ -196,7 +202,7 @@ func Handler(d *Deps) gin.HandlerFunc {
 		//    adds), and hop-by-hop headers (must not be forwarded).
 		for k, vs := range c.Request.Header {
 			lower := strings.ToLower(k)
-			if lower == "authorization" || lower == "cookie" {
+			if lower == "authorization" || lower == "cookie" || lower == strings.ToLower(session.CSRFHeaderName) {
 				continue
 			}
 			if _, hop := hopByHop[lower]; hop {

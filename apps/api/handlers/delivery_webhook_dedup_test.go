@@ -86,6 +86,10 @@ func seedDelivery(t *testing.T, db *gorm.DB, providerID uuid.UUID, externalID st
 }
 
 func postDeliveryWebhook(t *testing.T, providerCode, secret string, body []byte) *httptest.ResponseRecorder {
+	return postDeliveryWebhookWithEventID(t, providerCode, secret, body, "")
+}
+
+func postDeliveryWebhookWithEventID(t *testing.T, providerCode, secret string, body []byte, eventID string) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -94,9 +98,32 @@ func postDeliveryWebhook(t *testing.T, providerCode, secret string, body []byte)
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/delivery/"+providerCode, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Webhook-Signature", signDelivery(body, secret))
+	if eventID != "" {
+		req.Header.Set("X-Webhook-Event-Id", eventID)
+	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w
+}
+
+func TestDeliveryWebhook_ReplayCannotVaryUnsignedEventID(t *testing.T) {
+	db := setupDeliveryWebhookDB(t)
+	secret := "borzo_wh_secret"
+	providerID := seedBorzoProvider(t, db, secret, `{"PICKED_UP":"picked_up"}`)
+	deliveryID := seedDelivery(t, db, providerID, "EXT-HEADER")
+	body := []byte(`{"delivery_id":"EXT-HEADER","status":"PICKED_UP"}`)
+
+	first := postDeliveryWebhookWithEventID(t, "borzo", secret, body, "event-one")
+	require.Equal(t, http.StatusOK, first.Code)
+	require.NoError(t, db.Exec(`UPDATE deliveries SET status = 'in_transit' WHERE id = ?`, deliveryID).Error)
+
+	replay := postDeliveryWebhookWithEventID(t, "borzo", secret, body, "attacker-changed-id")
+	require.Equal(t, http.StatusOK, replay.Code)
+	assert.Equal(t, "duplicate", decodeStatus(t, replay))
+
+	var status string
+	require.NoError(t, db.Raw(`SELECT status FROM deliveries WHERE id = ?`, deliveryID).Scan(&status).Error)
+	assert.Equal(t, "in_transit", status, "changing an unsigned header must not bypass body replay dedup")
 }
 
 func TestDeliveryWebhook_ReplaySkipsReprocess(t *testing.T) {

@@ -213,6 +213,13 @@ func DecryptPII(value string) (string, error) {
 	return string(pt), nil
 }
 
+// IsCiphertext reports whether a stored value carries the encryption envelope
+// prefix. Migration code uses it to distinguish plaintext rows without
+// exposing or logging either form.
+func IsCiphertext(value string) bool {
+	return strings.HasPrefix(value, cipherPrefix)
+}
+
 // BlindIndex returns a deterministic HMAC of a normalized value for equality
 // lookups / uniqueness over encrypted columns. Empty string when disabled or the
 // input is empty (so an absent optional field doesn't collide on "").

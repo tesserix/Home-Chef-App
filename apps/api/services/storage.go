@@ -43,13 +43,17 @@ var ErrStorageUnavailable = errors.New("storage: GCS client not initialised")
 
 // UploadFile uploads a file to the specified bucket and returns the object path
 func UploadFile(ctx context.Context, bucket, objectPath string, reader io.Reader, contentType string) (string, error) {
+	return uploadFile(ctx, bucket, objectPath, reader, contentType, "private, no-store")
+}
+
+func uploadFile(ctx context.Context, bucket, objectPath string, reader io.Reader, contentType, cacheControl string) (string, error) {
 	if storageClient == nil {
 		return "", ErrStorageUnavailable
 	}
 	obj := storageClient.Bucket(bucket).Object(objectPath)
 	writer := obj.NewWriter(ctx)
 	writer.ContentType = contentType
-	writer.CacheControl = "public, max-age=31536000" // 1 year cache for immutable uploads
+	writer.CacheControl = cacheControl
 
 	if _, err := io.Copy(writer, reader); err != nil {
 		return "", fmt.Errorf("failed to write to GCS: %w", err)
@@ -65,10 +69,10 @@ func UploadFile(ctx context.Context, bucket, objectPath string, reader io.Reader
 // Returns the public URL: https://storage.googleapis.com/{bucket}/{path}
 func UploadPublicFile(ctx context.Context, folder string, fileName string, reader io.Reader, contentType string) (string, error) {
 	bucket := config.AppConfig.GCSPublicBucket
-	ext := path.Ext(fileName)
+	ext := uploadExtension(fileName, contentType)
 	objectPath := fmt.Sprintf("%s/%s%s", folder, uuid.New().String(), ext)
 
-	if _, err := UploadFile(ctx, bucket, objectPath, reader, contentType); err != nil {
+	if _, err := uploadFile(ctx, bucket, objectPath, reader, contentType, "public, max-age=31536000, immutable"); err != nil {
 		return "", err
 	}
 
@@ -79,7 +83,7 @@ func UploadPublicFile(ctx context.Context, folder string, fileName string, reade
 // Returns the object path (not a public URL — use signed URLs for access).
 func UploadPrivateFile(ctx context.Context, folder string, fileName string, reader io.Reader, contentType string) (string, error) {
 	bucket := config.AppConfig.GCSPrivateBucket
-	ext := path.Ext(fileName)
+	ext := uploadExtension(fileName, contentType)
 	objectPath := fmt.Sprintf("%s/%s%s", folder, uuid.New().String(), ext)
 
 	if _, err := UploadFile(ctx, bucket, objectPath, reader, contentType); err != nil {
@@ -87,6 +91,35 @@ func UploadPrivateFile(ctx context.Context, folder string, fileName string, read
 	}
 
 	return objectPath, nil
+}
+
+func uploadExtension(fileName, contentType string) string {
+	switch strings.ToLower(contentType) {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	case "application/pdf":
+		return ".pdf"
+	case "video/mp4":
+		return ".mp4"
+	case "video/quicktime":
+		return ".mov"
+	case "video/webm":
+		return ".webm"
+	}
+	ext := strings.ToLower(path.Ext(fileName))
+	if len(ext) < 2 || len(ext) > 10 {
+		return ""
+	}
+	for _, char := range ext[1:] {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') {
+			return ""
+		}
+	}
+	return ext
 }
 
 // GenerateSignedURL generates a temporary signed URL for a private file

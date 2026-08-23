@@ -1633,6 +1633,27 @@ func (h *DeliveryHandler) UploadPartnerDocument(c *gin.Context) {
 			return
 		}
 	}
+	sniffed, err := sniffContentType(file)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not read file"})
+		return
+	}
+	if isPhoto {
+		photoTypes := map[string]bool{"image/jpeg": true, "image/png": true}
+		if !photoTypes[sniffed] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed photo type"})
+			return
+		}
+	} else {
+		docContentTypes := map[string]bool{
+			"image/jpeg": true, "image/png": true, "image/webp": true, "application/pdf": true,
+		}
+		if !docContentTypes[sniffed] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed document type"})
+			return
+		}
+	}
+	contentType = sniffed
 
 	// Upload to storage — photos go to public bucket, verification docs to private
 	folder := fmt.Sprintf("delivery-partners/%s/%s", partner.ID, docType)

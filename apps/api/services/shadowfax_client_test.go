@@ -13,7 +13,10 @@ import (
 )
 
 func newTestShadowfax(srv *httptest.Server) *shadowfaxClient {
-	return newShadowfaxClient(&models.DeliveryProvider{APIBaseURL: srv.URL, APIKey: "tok123"})
+	client := newShadowfaxClient(&models.DeliveryProvider{APIBaseURL: srv.URL, APIKey: models.EncryptedString("tok123")})
+	client.httpClient = srv.Client()
+	client.validateURL = func(context.Context, string) error { return nil }
+	return client
 }
 
 func TestShadowfaxCreateTask(t *testing.T) {

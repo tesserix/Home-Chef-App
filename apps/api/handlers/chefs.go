@@ -1964,6 +1964,12 @@ func (h *ChefHandler) UploadOrderPhoto(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP."})
 		return
 	}
+	sniffed, err := sniffContentType(file)
+	if err != nil || !services.IsImageContentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
+		return
+	}
+	contentType = sniffed
 
 	folder := fmt.Sprintf("orders/%s/%s", order.ID.String(), kind)
 	fileURL, err := services.UploadPublicFile(c.Request.Context(), folder, header.Filename, file, contentType)

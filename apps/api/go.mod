@@ -44,7 +44,7 @@ require (
 	go.temporal.io/api v1.63.5
 	go.temporal.io/sdk v1.47.0
 	go.uber.org/automaxprocs v1.6.0
-	golang.org/x/image v0.44.0
+	golang.org/x/image v0.45.0
 	golang.org/x/oauth2 v0.36.0
 	gorm.io/driver/sqlite v1.6.0
 )
@@ -156,7 +156,7 @@ require (
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/api v0.287.1 // indirect
 	google.golang.org/appengine/v2 v2.0.6 // indirect
 	google.golang.org/genproto v0.0.0-20260519071638-aa98bba5eb94 // indirect

@@ -110,6 +110,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("oauth build: %v", err)
 	}
+	stateManager, err := oidcpkg.NewBrowserStateManager(cfg.SessionEncryptKey, cfg.Env != "dev")
+	if err != nil {
+		log.Fatalf("oauth state manager: %v", err)
+	}
 
 	auditClient := audit.New(cfg.AuditEndpoint) // ok if cfg.AuditEndpoint is ""
 	_ = auditClient                             // currently unused by handlers; placeholder for future emit calls
@@ -123,13 +127,13 @@ func main() {
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 
 	oidcH := &oidcpkg.Handlers{
-		Registry:    reg,
-		OAuthByApp:  oauthByApp,
-		OIDCByApp:   oidcByApp,
-		GIPVerifier: verifier,
-		API:         api,
-		Sessions:    mgr,
-		StateStore:  oidcpkg.NewMemStateStore(),
+		Registry:     reg,
+		OAuthByApp:   oauthByApp,
+		OIDCByApp:    oidcByApp,
+		GIPVerifier:  verifier,
+		API:          api,
+		Sessions:     mgr,
+		StateManager: stateManager,
 	}
 
 	// Rate-limit login-style endpoints: brute-force / resource-exhaustion targets.
@@ -160,7 +164,14 @@ func main() {
 	})
 	r.Any("/api/v1/*proxyPath", apiProxyH)
 
-	srv := &http.Server{Addr: ":" + cfg.HTTPPort, Handler: r, ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{
+		Addr:              ":" + cfg.HTTPPort,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       2 * time.Minute,
+		WriteTimeout:      2 * time.Minute,
+		IdleTimeout:       time.Minute,
+	}
 	go func() {
 		log.Printf("auth-bff listening on :%s (env=%s)", cfg.HTTPPort, cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

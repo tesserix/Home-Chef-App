@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -163,6 +164,14 @@ func (h *DeliveryProviderHandler) CreateProvider(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Code must be lowercase alphanumeric with underscores only"})
 		return
 	}
+	if req.APIBaseURL != "" {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+		if err := services.ValidatePublicHTTPSURL(ctx, req.APIBaseURL); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "apiBaseUrl must be a public HTTPS URL"})
+			return
+		}
+	}
 
 	// Check code uniqueness
 	var existing models.DeliveryProvider
@@ -204,9 +213,9 @@ func (h *DeliveryProviderHandler) CreateProvider(c *gin.Context) {
 		Description:        req.Description,
 		LogoURL:            req.LogoURL,
 		APIBaseURL:         req.APIBaseURL,
-		APIKey:             req.APIKey,
-		APISecret:          req.APISecret,
-		WebhookSecret:      req.WebhookSecret,
+		APIKey:             models.EncryptedString(req.APIKey),
+		APISecret:          models.EncryptedString(req.APISecret),
+		WebhookSecret:      models.EncryptedString(req.WebhookSecret),
 		StatusMapping:      req.StatusMapping,
 		SupportedCities:    req.SupportedCities,
 		SupportedCountries: req.SupportedCountries,
@@ -326,16 +335,24 @@ func (h *DeliveryProviderHandler) UpdateProvider(c *gin.Context) {
 		updates["logo_url"] = *req.LogoURL
 	}
 	if req.APIBaseURL != nil {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+		if *req.APIBaseURL != "" {
+			if err := services.ValidatePublicHTTPSURL(ctx, *req.APIBaseURL); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "apiBaseUrl must be a public HTTPS URL"})
+				return
+			}
+		}
 		updates["api_base_url"] = *req.APIBaseURL
 	}
 	if req.APIKey != nil {
-		updates["api_key"] = *req.APIKey
+		updates["api_key"] = models.EncryptedString(*req.APIKey)
 	}
 	if req.APISecret != nil {
-		updates["api_secret"] = *req.APISecret
+		updates["api_secret"] = models.EncryptedString(*req.APISecret)
 	}
 	if req.WebhookSecret != nil {
-		updates["webhook_secret"] = *req.WebhookSecret
+		updates["webhook_secret"] = models.EncryptedString(*req.WebhookSecret)
 	}
 	if req.StatusMapping != nil {
 		var sm map[string]string
@@ -503,9 +520,15 @@ func (h *DeliveryProviderHandler) TestConnection(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Provider has no API base URL configured"})
 		return
 	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+	if err := services.ValidatePublicHTTPSURL(ctx, provider.APIBaseURL); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Provider API base URL is not a public HTTPS URL"})
+		return
+	}
 
 	// Make a HEAD request to check reachability
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := services.NewPublicHTTPSClient(10 * time.Second)
 	start := time.Now()
 	resp, err := client.Head(provider.APIBaseURL)
 	elapsed := time.Since(start)
@@ -649,7 +672,7 @@ func (h *DeliveryProviderHandler) HandleWebhook(c *gin.Context) {
 		return
 	}
 	signature := c.GetHeader("X-Webhook-Signature")
-	if !verifyHMACSHA256(body, signature, provider.WebhookSecret) {
+	if !verifyHMACSHA256(body, signature, string(provider.WebhookSecret)) {
 		log.Printf("delivery webhook signature mismatch for provider=%s", provider.Code)
 		services.CaptureSentryError(c, fmt.Errorf("delivery webhook bad signature: provider=%s", provider.Code))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
@@ -659,11 +682,12 @@ func (h *DeliveryProviderHandler) HandleWebhook(c *gin.Context) {
 	// Event-level replay dedup (#462). HMAC only proves authenticity, not
 	// freshness — a captured+replayed "delivered" callback would re-stamp
 	// timestamps, re-enqueue outbox events, and re-drive the escrow park. Claim
-	// (provider, event-id) AFTER verifying the signature (never let a forged
-	// request write a ledger row). No id header in practice → body hash, so an
-	// exact replay dedups. Genuine status changes carry a distinct body.
+	// (provider, body hash) AFTER verifying the signature (never let a forged
+	// request write a ledger row). The provider event-id header is not covered by
+	// this HMAC contract, so it must not influence deduplication: otherwise a
+	// replay could vary that header while reusing a captured signed body.
 	consumer := "webhook:delivery:" + provider.Code
-	eventID := services.WebhookEventID(c.GetHeader("X-Webhook-Event-Id"), body)
+	eventID := services.WebhookEventID("", body)
 	firstTime, err := services.ClaimWebhookEvent(database.DB, consumer, eventID, "delivery:"+provider.Code)
 	if err != nil {
 		log.Printf("delivery webhook: claim failed for provider=%s: %v", provider.Code, err)

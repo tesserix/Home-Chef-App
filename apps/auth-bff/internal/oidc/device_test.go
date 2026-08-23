@@ -19,6 +19,7 @@ func exchangeWithDeviceCookie(t *testing.T, cookie string) (*httptest.ResponseRe
 	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "x@y.com")
 	ver := &fakeVerifier{tok: &gip.VerifiedToken{
 		UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password",
+		EmailVerified: true,
 		Claims: map[string]any{
 			"sub": "g1", "email": "x@y.com",
 			"firebase": map[string]any{"sign_in_provider": "password", "tenant": "HomeChef-Internal-gyofe"},
