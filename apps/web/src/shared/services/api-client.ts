@@ -126,7 +126,7 @@ class ApiClient {
     //
     // This used to branch on `accessToken`, sending email/password users
     // straight to /api/v1 with a Bearer token, from an era when the API issued
-    // its own JWTs. It no longer does: auth is GIP -> /bff/auth/exchange -> an
+    // its own JWTs. It no longer does: auth is Zitadel hosted login -> /bff/auth/callback -> an
     // HttpOnly session cookie, `accessToken` is just the Firebase ID token, and
     // the API accepts only HMAC-signed requests from the BFF (see the apiproxy
     // package doc: "there is no Bearer auth path on the API"). So the direct

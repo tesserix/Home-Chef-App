@@ -678,6 +678,7 @@ function RootLayout() {
     <ErrorBoundary>
       <AuthProvider
         bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
+        pool={process.env.EXPO_PUBLIC_AUTH_POOL ?? 'business'}
         tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
       >
         <GestureHandlerRootView style={{ flex: 1 }}>

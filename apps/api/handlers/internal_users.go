@@ -16,61 +16,62 @@ import (
 	"github.com/homechef/api/services"
 )
 
-// InternalUsersHandler owns the BFF-only user upsert path. Called by
-// apps/auth-bff on every successful Google Identity Platform sign-in via the
-// HMAC-signed pathway from Task 1.6 + verified by BFFAuth (Task 2.1). New
-// identities get inserted; returning ones only refresh last_login_at.
-//
-// Cross-pool same-email behavior (one person can exist as both a customer and
-// a vendor under the same email) is enforced by the partial unique index in
-// migration 20260514000002 — at the application layer we dispatch by gip_uid
-// so this handler never has to see the conflict.
+// InternalUsersHandler owns the BFF-only user upsert path, called by
+// apps/auth-bff on every successful sign-in via the HMAC-signed pathway and
+// verified by BFFAuth. Identities are keyed by (provider, subject) in the
+// user_identities table; a verified-email match links a new identity to an
+// existing user, which is what migrates GIP-era accounts to Zitadel seamlessly.
 type InternalUsersHandler struct {
 	DB *gorm.DB
 }
 
 // NewInternalUsersHandler builds a handler bound to the given GORM connection.
-// We pass DB in explicitly (rather than reading the package-level
-// database.DB) so unit tests can swap in an in-memory sqlite instance.
+// DB is passed explicitly so unit tests can swap in an in-memory sqlite instance.
 func NewInternalUsersHandler(db *gorm.DB) *InternalUsersHandler {
 	return &InternalUsersHandler{DB: db}
 }
 
 // UpsertUserRequest mirrors the BFF's apiclient.UpsertUserRequest shape.
-// Every field that maps to a GIP identity column is required so that we
-// fail loudly if the BFF stops sending one.
 type UpsertUserRequest struct {
-	GIPUid      string `json:"gip_uid" binding:"required"`
-	GIPTenantID string `json:"gip_tenant_id" binding:"required"`
-	GIPProvider string `json:"gip_provider" binding:"required"`
+	// Provider + Subject identify the upstream identity ("zitadel" + OIDC sub).
+	Provider string `json:"provider"`
+	Subject  string `json:"subject"`
+	// Legacy GIP shape — accepted during rollout so an older BFF build can
+	// still upsert; normalise() maps it onto Provider="gip", Subject=gip_uid.
+	GIPUid      string `json:"gip_uid"`
+	GIPTenantID string `json:"gip_tenant_id"`
+	GIPProvider string `json:"gip_provider"`
 	AuthPool    string `json:"auth_pool" binding:"required"`
 	Email       string `json:"email" binding:"required,email"`
 	Name        string `json:"name"`
-	// Avatar is the GIP token's "picture" claim URL. Backfilled onto the user
-	// row only when the stored avatar is empty — never overwrites a user's
-	// edited avatar on repeat login.
+	// Avatar is the id_token's "picture" claim URL. Backfilled onto the user
+	// row only when the stored avatar is empty — never overwrites an edit.
 	Avatar string `json:"avatar"`
-	// EmailVerified is the GIP token's email_verified claim. It gates same-email
-	// account re-bind (see Upsert): an unverified password signup must not
-	// hijack a verified social account's row. Not persisted — request-only.
+	// EmailVerified gates same-email account linking (see Upsert): an
+	// unverified signup must not hijack a verified account's row. Request-only.
 	EmailVerified bool   `json:"email_verified"`
 	Role          string `json:"role" binding:"required"`
-	// MarketingConsent is the user's DPDP §6 opt-in for promotional email,
-	// captured at registration. Optional in the request body so legacy
-	// callers (and social sign-in paths that have no checkbox) default to
-	// false. Only honored on NEW user creation — re-login does not flip
-	// the flag in either direction.
-	// TODO(CW-01b): expose a separate /users/:id/preferences endpoint for
-	// updating consent post-registration.
+	// MarketingConsent is the DPDP §6 opt-in captured at registration. Only
+	// honored on NEW user creation — re-login does not flip the flag.
+	// TODO(CW-01b): expose a /users/:id/preferences endpoint for updates.
 	MarketingConsent bool `json:"marketing_consent"`
-	// Device describes the install this sign-in came from (#1164). Optional —
-	// clients older than the multi-device change send none of it, and a
-	// sighting with no DeviceID is simply dropped.
+	// Device describes the install this sign-in came from (#1164). Optional.
 	DeviceID    string `json:"device_id"`
 	Platform    string `json:"platform"`
 	DeviceLabel string `json:"device_label"`
 	AppVersion  string `json:"app_version"`
 	IP          string `json:"ip"`
+}
+
+// normalise folds the legacy GIP shape into provider/subject and validates.
+func (req *UpsertUserRequest) normalise() error {
+	if req.Provider == "" && req.GIPUid != "" {
+		req.Provider, req.Subject = "gip", req.GIPUid
+	}
+	if req.Provider == "" || req.Subject == "" {
+		return errors.New("provider and subject are required")
+	}
+	return nil
 }
 
 // loginDeviceNotifier runs the device sighting off the request path: a sign-in
@@ -98,21 +99,24 @@ type UpsertUserResponse struct {
 	UserID string `json:"user_id"`
 }
 
-// Upsert idempotently materializes a user row for a GIP identity.
+// Upsert idempotently materializes a user row for an upstream identity.
 //
-// Lookup is keyed on gip_uid (the GIP-issued subject claim). On first
-// sign-in we create the row with email lowercased, the Name split into
-// FirstName/LastName, every GIP column populated, LastLoginAt set, and
-// IsActive=true. On subsequent sign-ins we only refresh LastLoginAt (and
-// lazily backfill FirstName/LastName if they were previously blank).
+// Resolution order:
+//  1. user_identities (provider, subject) hit → returning login.
+//  2. legacy gip_uid column hit (provider "gip" only) → GIP-era row that
+//     predates the identities table; link an identity row to it.
+//  3. verified-email + same-pool match → same human on a new identity
+//     (the GIP→Zitadel migration path); link, never duplicate.
+//  4. otherwise → create user + identity.
 //
-// Errors:
-//   - 400 on validation failures (bad email, missing required fields).
-//   - 502 on any DB error — the BFF retries, so surfacing a gateway error
-//     keeps the user-facing flow consistent with other upstream failures.
+// Errors: 400 on validation failures, 502 on any DB error (the BFF retries).
 func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 	var req UpsertUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := req.normalise(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -120,121 +124,140 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 	now := time.Now()
 	email := strings.ToLower(req.Email)
 
-	// Deleted-account handshake, before anything else.
-	//
-	// A soft-deleted row still owns its (lower(email), auth_pool) slot in
-	// idx_users_email_per_pool — the index is not filtered on deleted_at. The
-	// scoped lookups below cannot see that row, so they used to fall through to
-	// INSERT, hit a duplicate key, and return 502: a deleted user could never
-	// sign up again on the same email. Detect the ghost instead and hand back a
-	// restore token so the app can offer "restore" or "start fresh".
+	// Deleted-account handshake, before anything else. A soft-deleted row still
+	// owns its (lower(email), auth_pool) slot, so signup would 502 on the
+	// unique index forever; offer restore instead (see handleDeletedAccount).
 	if h.handleDeletedAccount(c, email, req) {
 		return
 	}
 
 	var u models.User
 	firstLogin := false
-	res := h.DB.Where("gip_uid = ?", req.GIPUid).First(&u)
+	var ident models.UserIdentity
+	identErr := h.DB.Where("provider = ? AND subject = ?", req.Provider, req.Subject).First(&ident).Error
 	switch {
-	case errors.Is(res.Error, gorm.ErrRecordNotFound):
-		// gip_uid miss — before creating a new row, look for an existing
-		// row by email. The unique idx_users_email constraint would
-		// otherwise reject the INSERT and surface a 502 to the BFF,
-		// which is how this manifested for users who re-signed in via
-		// a different identity provider or whose GIP tenant changed.
-		// Scope the email lookup by auth_pool so we don't collapse a
-		// customer-pool row into the chef-pool row when the same human uses
-		// the same email across products. The unique constraint on email
-		// is per-pool, not global — see TestUpsert_SameEmailDifferentPool.
-		// SECURITY (T-due-01): only attempt a same-email re-bind when the
-		// incoming token's email is verified. Otherwise an unverified password
-		// signup using an email already owned by a verified social account
-		// could hijack that existing row. Google/Apple GIP tokens are always
-		// email_verified=true; only unverified password signups are false, so
-		// they fall through to the new-user INSERT path below.
-		if email != "" && req.AuthPool != "" && req.EmailVerified {
-			byEmail := h.DB.Where("email = ? AND auth_pool = ?", email, req.AuthPool).First(&u)
-			if byEmail.Error == nil {
-				// Existing row found by email — re-bind it to the new
-				// GIP identity and stamp last-login. This is the "same
-				// human, new GIP uid" path.
-				u.GIPUid = req.GIPUid
+	case identErr == nil:
+		if err := h.DB.First(&u, "id = ?", ident.UserID).Error; err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		if !h.refreshOnLogin(c, &u, req, now) {
+			return
+		}
+		_ = h.DB.Model(&models.UserIdentity{}).Where("id = ?", ident.ID).
+			UpdateColumn("last_login_at", now).Error
+	case errors.Is(identErr, gorm.ErrRecordNotFound):
+		linked := false
+		// Legacy rows predate user_identities — match GIP logins on the old
+		// gip_uid column so they land on the same row and gain an identity row.
+		if req.Provider == "gip" {
+			err := h.DB.Where("gip_uid = ?", req.Subject).First(&u).Error
+			switch {
+			case err == nil:
+				linked = true
+			case !errors.Is(err, gorm.ErrRecordNotFound):
+				c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		// SECURITY (T-due-01): only link by email when the incoming token's
+		// email is verified — an unverified password signup on an address owned
+		// by a verified account must not hijack that row. Scoped by auth_pool:
+		// the same human may exist separately as customer and chef.
+		if !linked && email != "" && req.AuthPool != "" && req.EmailVerified {
+			err := h.DB.Where("email = ? AND auth_pool = ?", email, req.AuthPool).First(&u).Error
+			switch {
+			case err == nil:
+				linked = true
+			case !errors.Is(err, gorm.ErrRecordNotFound):
+				c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+				return
+			}
+		}
+		if linked {
+			// Same human, new identity — keep the legacy GIP columns current
+			// only for legacy callers; Zitadel identities live in their own row.
+			if req.Provider == "gip" {
+				u.GIPUid = req.Subject
 				u.GIPTenantID = req.GIPTenantID
 				u.GIPProvider = req.GIPProvider
-				if req.AuthPool != "" {
-					u.AuthPool = models.AuthPool(req.AuthPool)
-				}
-				u.LastLoginAt = &now
-				// Backfill-only: never clobber a name/avatar the user may have edited.
-				if req.Name != "" && u.FirstName == "" && u.LastName == "" {
-					u.FirstName, u.LastName = splitName(req.Name)
-				}
-				if req.Avatar != "" && u.Avatar == "" {
-					u.Avatar = req.Avatar
-				}
-				if err := h.DB.Save(&u).Error; err != nil {
-					c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-					return
-				}
-				loginDeviceNotifier(h.DB, u, req.sighting(false))
-				c.JSON(http.StatusOK, UpsertUserResponse{UserID: u.ID.String()})
+			}
+			if req.AuthPool != "" {
+				u.AuthPool = models.AuthPool(req.AuthPool)
+			}
+			if !h.refreshOnLogin(c, &u, req, now) {
 				return
 			}
-			if !errors.Is(byEmail.Error, gorm.ErrRecordNotFound) {
-				c.JSON(http.StatusBadGateway, gin.H{"error": byEmail.Error.Error()})
+		} else {
+			first, last := splitName(req.Name)
+			u = models.User{
+				ID:               uuid.New(),
+				Email:            email,
+				FirstName:        first,
+				LastName:         last,
+				Avatar:           req.Avatar,
+				AuthPool:         models.AuthPool(req.AuthPool),
+				Role:             models.UserRole(req.Role),
+				LastLoginAt:      &now,
+				IsActive:         true,
+				MarketingConsent: req.MarketingConsent,
+			}
+			if req.Provider == "gip" {
+				u.GIPUid = req.Subject
+				u.GIPTenantID = req.GIPTenantID
+				u.GIPProvider = req.GIPProvider
+			}
+			// Only stamp the consent timestamp if the user actually opted in.
+			// Leaving it null preserves the "never granted" signal for DPDP audits.
+			if req.MarketingConsent {
+				u.MarketingConsentAt = &now
+			}
+			if err := h.DB.Create(&u).Error; err != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 				return
 			}
+			firstLogin = true
 		}
-
-		first, last := splitName(req.Name)
-		u = models.User{
-			ID:               uuid.New(),
-			Email:            email,
-			FirstName:        first,
-			LastName:         last,
-			Avatar:           req.Avatar,
-			GIPUid:           req.GIPUid,
-			GIPTenantID:      req.GIPTenantID,
-			GIPProvider:      req.GIPProvider,
-			AuthPool:         models.AuthPool(req.AuthPool),
-			Role:             models.UserRole(req.Role),
-			LastLoginAt:      &now,
-			IsActive:         true,
-			MarketingConsent: req.MarketingConsent,
-		}
-		// Only stamp the consent timestamp if the user actually opted in.
-		// Leaving it null preserves the "never granted" signal for DPDP audits.
-		if req.MarketingConsent {
-			u.MarketingConsentAt = &now
-		}
-		if err := h.DB.Create(&u).Error; err != nil {
+		// Hard-fail: without the identity row the next login would re-run the
+		// email link (fine when verified) or create a duplicate (502 forever).
+		if err := h.linkIdentity(u.ID, req, now); err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
-		firstLogin = true
-	case res.Error != nil:
-		c.JSON(http.StatusBadGateway, gin.H{"error": res.Error.Error()})
-		return
 	default:
-		// Found by gip_uid — bump last_login_at, and lazily backfill the
-		// name if the row was created before we started capturing one. We
-		// never overwrite an existing FirstName/LastName here: the user
-		// may have edited their profile and a re-login shouldn't clobber that.
-		u.LastLoginAt = &now
-		if req.Name != "" && u.FirstName == "" && u.LastName == "" {
-			u.FirstName, u.LastName = splitName(req.Name)
-		}
-		// Backfill-only avatar: fill a blank avatar, never overwrite an edited one.
-		if req.Avatar != "" && u.Avatar == "" {
-			u.Avatar = req.Avatar
-		}
-		if err := h.DB.Save(&u).Error; err != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-			return
-		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": identErr.Error()})
+		return
 	}
 	loginDeviceNotifier(h.DB, u, req.sighting(firstLogin))
 	c.JSON(http.StatusOK, UpsertUserResponse{UserID: u.ID.String()})
+}
+
+// refreshOnLogin bumps last_login_at and lazily backfills name/avatar — never
+// overwriting values the user may have edited. Writes the 502 itself on error.
+func (h *InternalUsersHandler) refreshOnLogin(c *gin.Context, u *models.User, req UpsertUserRequest, now time.Time) bool {
+	u.LastLoginAt = &now
+	if req.Name != "" && u.FirstName == "" && u.LastName == "" {
+		u.FirstName, u.LastName = splitName(req.Name)
+	}
+	if req.Avatar != "" && u.Avatar == "" {
+		u.Avatar = req.Avatar
+	}
+	if err := h.DB.Save(u).Error; err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return false
+	}
+	return true
+}
+
+func (h *InternalUsersHandler) linkIdentity(userID uuid.UUID, req UpsertUserRequest, now time.Time) error {
+	return h.DB.Create(&models.UserIdentity{
+		ID:          uuid.New(),
+		UserID:      userID,
+		Provider:    req.Provider,
+		Subject:     req.Subject,
+		Email:       strings.ToLower(req.Email),
+		LastLoginAt: &now,
+	}).Error
 }
 
 // handleDeletedAccount looks for a soft-deleted account on this email+pool and,
@@ -244,7 +267,7 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 //
 // Requires req.EmailVerified. Without it an unverified password signup on a
 // known address could probe for — or seize — someone's deleted account, the
-// same hijack the live re-bind path below already guards against.
+// same hijack the live linking path above already guards against.
 //
 // A ghost whose window has already elapsed is purged here and now, which frees
 // the unique email slot so the ordinary signup path can proceed.
@@ -287,7 +310,7 @@ func (h *InternalUsersHandler) handleDeletedAccount(c *gin.Context, email string
 		"user_id":      ghost.ID.String(),
 		"deletedAt":    ghost.DeletedAt.Time,
 		"purgeAfter":   ghost.PurgeAfter,
-		"restoreToken": services.MintRestoreToken(ghost.ID, req.GIPUid),
+		"restoreToken": services.MintRestoreToken(ghost.ID, req.Subject),
 	})
 	return true
 }

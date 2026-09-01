@@ -12,11 +12,11 @@ import (
 var ErrUnknownHost = errors.New("unknown host")
 
 type App struct {
-	Name             string   `yaml:"name"`
-	Hosts            []string `yaml:"hosts"`
-	GIPTenantID      string   `yaml:"gipTenantId"`
+	Name  string   `yaml:"name"`
+	Hosts []string `yaml:"hosts"`
+	// OAuthClientID is the Zitadel OIDC client id (public client, PKCE only —
+	// there is no client secret). All web apps currently share one client.
 	OAuthClientID    string   `yaml:"oauthClientId"`
-	ClientSecretEnv  string   `yaml:"clientSecretEnv"`
 	SessionCookie    string   `yaml:"sessionCookie"`
 	CallbackPath     string   `yaml:"callbackPath"`
 	CallbackHost     string   `yaml:"callbackHost"`
@@ -36,9 +36,11 @@ type Product struct {
 }
 
 type Registry struct {
-	PlatformDomain        string    `yaml:"platformDomain"`
-	Products              []Product `yaml:"products"`
-	MobileTenantAllowlist []string  `yaml:"mobileTenantAllowlist"`
+	PlatformDomain string    `yaml:"platformDomain"`
+	Products       []Product `yaml:"products"`
+	// MobilePoolAllowlist names the auth pools mobile auto-login may mint
+	// sessions for (customer/business/internal).
+	MobilePoolAllowlist []string `yaml:"mobilePoolAllowlist"`
 
 	hostIndex map[string]*App
 }
@@ -87,22 +89,23 @@ func (r *Registry) SessionCookieForHost(host string) string {
 	return app.SessionCookie
 }
 
-func (r *Registry) IsMobileTenantAllowed(tenantID string) bool {
-	for _, t := range r.MobileTenantAllowlist {
-		if t == tenantID {
+func (r *Registry) IsMobilePoolAllowed(pool string) bool {
+	for _, p := range r.MobilePoolAllowlist {
+		if p == pool {
 			return true
 		}
 	}
 	return false
 }
 
-// ResolveByTenant returns the first app registered with the given GIP tenant ID,
-// or nil when no app matches. The mobile auto-login path resolves apps by tenant
-// (there is no request host), so it uses this instead of ResolveByHost.
-func (r *Registry) ResolveByTenant(tenantID string) *App {
+// ResolveByPool returns the first app registered with the given auth pool
+// (authContext), or nil when no app matches. The mobile auto-login path
+// resolves apps by pool (there is no request host), so it uses this instead
+// of ResolveByHost.
+func (r *Registry) ResolveByPool(pool string) *App {
 	for i := range r.Products {
 		for j := range r.Products[i].Apps {
-			if r.Products[i].Apps[j].GIPTenantID == tenantID {
+			if r.Products[i].Apps[j].AuthContext == pool {
 				return &r.Products[i].Apps[j]
 			}
 		}

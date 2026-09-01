@@ -13,8 +13,8 @@ type Config struct {
 	Env                 string
 	HTTPPort            string
 	ProductsConfigPath  string
-	GIPProjectID        string
-	GIPProjectNumber    string
+	ZitadelIssuer       string
+	ZitadelProjectID    string
 	SessionEncryptKey   []byte
 	SessionMaxAge       time.Duration
 	SessionCookieDomain string
@@ -25,8 +25,8 @@ type Config struct {
 
 	// Observability. TraceProjectID is the GCP project Cloud Trace spans are
 	// written to — set GCP_PROJECT_ID to the GKE project (e.g. tesseracthub-480811)
-	// so auth-bff spans land in the SAME trace view as homechef-api. Defaults to
-	// the GIP project when unset. Empty disables tracing (local dev).
+	// so auth-bff spans land in the SAME trace view as homechef-api. Empty
+	// disables tracing (local dev).
 	TraceProjectID   string
 	OTelSamplingRate float64
 	AppVersion       string
@@ -37,15 +37,15 @@ func Load() (*Config, error) {
 		Env:                 os.Getenv("ENV"),
 		HTTPPort:            getOrDefault("HTTP_PORT", "8080"),
 		ProductsConfigPath:  os.Getenv("PRODUCTS_CONFIG_PATH"),
-		GIPProjectID:        os.Getenv("GIP_PROJECT_ID"),
-		GIPProjectNumber:    os.Getenv("GIP_PROJECT_NUMBER"),
+		ZitadelIssuer:       getOrDefault("ZITADEL_ISSUER", "https://auth.tesserix.app"),
+		ZitadelProjectID:    os.Getenv("ZITADEL_PROJECT_ID"),
 		SessionCookieDomain: os.Getenv("SESSION_COOKIE_DOMAIN"),
 		APIBaseURL:          os.Getenv("API_BASE_URL"),
 		AuditEndpoint:       os.Getenv("AUDIT_ENDPOINT"),
 		AdminAllowedEmails:  os.Getenv("HOMECHEF_ADMIN_ALLOWED_EMAILS"),
 	}
-	if c.GIPProjectID == "" {
-		return nil, errors.New("GIP_PROJECT_ID required")
+	if c.ZitadelProjectID == "" {
+		return nil, errors.New("ZITADEL_PROJECT_ID required")
 	}
 	if c.ProductsConfigPath == "" {
 		return nil, errors.New("PRODUCTS_CONFIG_PATH required")
@@ -83,8 +83,7 @@ func Load() (*Config, error) {
 	}
 	c.SessionMaxAge = time.Duration(h) * time.Hour
 
-	// Cloud Trace target — GCP_PROJECT_ID wins, else fall back to the GIP project.
-	c.TraceProjectID = getOrDefault("GCP_PROJECT_ID", c.GIPProjectID)
+	c.TraceProjectID = os.Getenv("GCP_PROJECT_ID")
 	c.AppVersion = os.Getenv("APP_VERSION")
 	c.OTelSamplingRate = 0.1
 	if v := os.Getenv("OTEL_SAMPLING_RATE"); v != "" {

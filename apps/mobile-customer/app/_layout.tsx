@@ -377,6 +377,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider
         bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
+        pool={process.env.EXPO_PUBLIC_AUTH_POOL ?? 'customer'}
         tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
       >
         <QueryClientProvider client={queryClient}>

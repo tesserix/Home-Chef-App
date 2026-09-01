@@ -4,18 +4,18 @@ import (
 	"context"
 	"errors"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/homechef/auth-bff/internal/apiclient"
-	"github.com/homechef/auth-bff/internal/gip"
 	"github.com/homechef/auth-bff/internal/productregistry"
 	"github.com/homechef/auth-bff/internal/session"
+	"github.com/homechef/auth-bff/internal/zitadel"
 )
 
-// GIPVerifier is the surface of *gip.Verifier we need. Defined as interface for testability.
-type GIPVerifier interface {
-	Verify(ctx context.Context, raw string, expectedTenantID string) (*gip.VerifiedToken, error)
+// TokenVerifier is the surface of *zitadel.Verifier we need. Defined as an
+// interface for testability.
+type TokenVerifier interface {
+	Verify(ctx context.Context, raw string) (*zitadel.VerifiedToken, error)
 }
 
 // APIClient is the surface of *apiclient.Client we need.
@@ -30,15 +30,18 @@ type SessionManager interface {
 }
 
 type Deps struct {
-	GIP      GIPVerifier
+	Verifier TokenVerifier
 	Sessions SessionManager
 	Registry *productregistry.Registry
 	API      APIClient
 }
 
 type Request struct {
-	IDToken          string `json:"id_token" binding:"required"`
-	ExpectedTenantID string `json:"expected_tenant_id" binding:"required"`
+	IDToken string `json:"id_token" binding:"required"`
+	// Pool is the auth pool the app signs into (customer/business/internal),
+	// validated against the registry's mobilePoolAllowlist. It replaces the
+	// GIP-era expected_tenant_id.
+	Pool string `json:"pool" binding:"required"`
 	// Device metadata forwarded to apps/api's device registry (#1164).
 	DeviceID    string `json:"device_id"`
 	Platform    string `json:"platform"`
@@ -62,20 +65,20 @@ type User struct {
 }
 
 var (
-	ErrTenantNotAllowed = errors.New("tenant not allowed for mobile")
-	ErrTokenInvalid     = errors.New("id_token invalid")
-	ErrEmailNotAllowed  = errors.New("email not allowed for admin")
+	ErrPoolNotAllowed  = errors.New("pool not allowed for mobile")
+	ErrTokenInvalid    = errors.New("id_token invalid")
+	ErrEmailNotAllowed = errors.New("email not allowed for admin")
 )
 
 func (d *Deps) AutoLogin(ctx context.Context, req Request) (*Response, error) {
-	if !d.Registry.IsMobileTenantAllowed(req.ExpectedTenantID) {
-		return nil, ErrTenantNotAllowed
+	if !d.Registry.IsMobilePoolAllowed(req.Pool) {
+		return nil, ErrPoolNotAllowed
 	}
-	tok, err := d.GIP.Verify(ctx, req.IDToken, req.ExpectedTenantID)
+	tok, err := d.Verifier.Verify(ctx, req.IDToken)
 	if err != nil {
 		return nil, ErrTokenInvalid
 	}
-	pool := poolFromTenant(req.ExpectedTenantID)
+	pool := req.Pool
 	role := defaultRoleForPool(pool)
 	if r, ok := tok.Claims["role"].(string); ok && r != "" {
 		role = r
@@ -83,13 +86,13 @@ func (d *Deps) AutoLogin(ctx context.Context, req Request) (*Response, error) {
 	// Admin allowlist enforcement (security). Mirror the OIDC web path: for
 	// internal/admin logins the verified email must be in the app's allowlist.
 	// FAIL-CLOSED: deny when the allowlist is unconfigured, when the email isn't
-	// on it, or when the tenant has no registered app (no allowlist to check).
+	// on it, or when the pool has no registered app (no allowlist to check).
 	// A missing allowlist must never grant admin — the mesh does not strip
 	// X-User-* headers, so this gate is the sole defense.
 	if pool == "internal" || role == "admin" {
-		app := d.Registry.ResolveByTenant(req.ExpectedTenantID)
+		app := d.Registry.ResolveByPool(pool)
 		if app == nil {
-			log.Printf("autologin: no app registered for tenant %q — denying admin login for %q", req.ExpectedTenantID, tok.Email)
+			log.Printf("autologin: no app registered for pool %q — denying admin login for %q", pool, tok.Email)
 			return nil, ErrEmailNotAllowed
 		}
 		if allowed, configured := app.IsEmailAllowed(tok.Email); !configured || !allowed {
@@ -106,9 +109,8 @@ func (d *Deps) AutoLogin(ctx context.Context, req Request) (*Response, error) {
 		}
 	}
 	upsert, err := d.API.UpsertUser(ctx, apiclient.UpsertUserRequest{
-		GIPUid:        tok.UID,
-		GIPTenantID:   tok.TenantID,
-		GIPProvider:   tok.Provider,
+		Provider:      "zitadel",
+		Subject:       tok.Subject,
 		AuthPool:      pool,
 		Email:         tok.Email,
 		Name:          tok.Name,
@@ -148,16 +150,6 @@ func (d *Deps) AutoLogin(ctx context.Context, req Request) (*Response, error) {
 			Pool:  pool,
 		},
 	}, nil
-}
-
-// poolFromTenant extracts the pool name from tenant IDs of the form
-// "HomeChef-{Pool}-{suffix}" and lowercases it.
-func poolFromTenant(tenantID string) string {
-	parts := strings.SplitN(tenantID, "-", 3)
-	if len(parts) < 2 {
-		return ""
-	}
-	return strings.ToLower(parts[1])
 }
 
 func defaultRoleForPool(pool string) string {

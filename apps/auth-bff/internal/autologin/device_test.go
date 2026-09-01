@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/homechef/auth-bff/internal/apiclient"
-	"github.com/homechef/auth-bff/internal/gip"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/homechef/auth-bff/internal/apiclient"
+	"github.com/homechef/auth-bff/internal/zitadel"
 )
 
 func postAutoLogin(t *testing.T, deps *Deps, body, remoteAddr string) *httptest.ResponseRecorder {
@@ -30,12 +31,11 @@ func deviceDeps(t *testing.T) (*Deps, *fakeAPI) {
 	t.Helper()
 	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
 	deps := newDeps(t,
-		&fakeGIP{tok: &gip.VerifiedToken{
-			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Customer-rqg8a",
-			Provider: "google.com", Claims: map[string]any{},
+		&fakeVerifier{tok: &zitadel.VerifiedToken{
+			Subject: "z1", Email: "x@y.com", Claims: map[string]any{},
 		}},
 		api,
-		&fakeSessions{encoded: "sess-abc"},
+		&fakeSessions{encoded: "sess"},
 	)
 	return deps, api
 }
@@ -43,7 +43,7 @@ func deviceDeps(t *testing.T) (*Deps, *fakeAPI) {
 func TestAutoLogin_ForwardsTheDeviceDescription(t *testing.T) {
 	deps, api := deviceDeps(t)
 
-	w := postAutoLogin(t, deps, `{"id_token":"valid.test.token","expected_tenant_id":"HomeChef-Customer-rqg8a",
+	w := postAutoLogin(t, deps, `{"id_token":"valid.test.token","pool":"customer",
 		"device_id":"device-a","platform":"ios","device_label":"iPhone 17","app_version":"1.4.0"}`, "49.207.1.1:5555")
 
 	require.Equal(t, 200, w.Code)
@@ -59,7 +59,7 @@ func TestAutoLogin_ForwardsTheDeviceDescription(t *testing.T) {
 func TestAutoLogin_TakesTheIPFromTheConnectionNotTheBody(t *testing.T) {
 	deps, api := deviceDeps(t)
 
-	w := postAutoLogin(t, deps, `{"id_token":"valid.test.token","expected_tenant_id":"HomeChef-Customer-rqg8a",
+	w := postAutoLogin(t, deps, `{"id_token":"valid.test.token","pool":"customer",
 		"device_id":"device-a","ip":"8.8.8.8"}`, "49.207.1.1:5555")
 
 	require.Equal(t, 200, w.Code)
@@ -72,7 +72,7 @@ func TestAutoLogin_WorksWithoutAnyDeviceFields(t *testing.T) {
 	deps, api := deviceDeps(t)
 
 	w := postAutoLogin(t, deps,
-		`{"id_token":"valid.test.token","expected_tenant_id":"HomeChef-Customer-rqg8a"}`, "49.207.1.1:5555")
+		`{"id_token":"valid.test.token","pool":"customer"}`, "49.207.1.1:5555")
 
 	require.Equal(t, 200, w.Code)
 	assert.Empty(t, api.lastReq.DeviceID)

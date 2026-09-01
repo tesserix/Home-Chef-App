@@ -13,17 +13,18 @@ import (
 )
 
 type UpsertUserRequest struct {
-	GIPUid      string `json:"gip_uid"`
-	GIPTenantID string `json:"gip_tenant_id"`
-	GIPProvider string `json:"gip_provider"`
-	AuthPool    string `json:"auth_pool"`
-	Email       string `json:"email"`
-	Name        string `json:"name"`
-	// Avatar is the profile picture URL derived from the GIP token's "picture"
-	// claim. apps/api backfills it only when the stored avatar is empty.
+	// Provider + Subject identify the upstream identity ("zitadel" + OIDC sub).
+	// apps/api links them to a local user via the user_identities table.
+	Provider string `json:"provider"`
+	Subject  string `json:"subject"`
+	AuthPool string `json:"auth_pool"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	// Avatar is the profile picture URL from the id_token's "picture" claim.
+	// apps/api backfills it only when the stored avatar is empty.
 	Avatar string `json:"avatar"`
-	// EmailVerified forwards the GIP token's email_verified claim so apps/api
-	// can gate same-email account re-bind on a verified identity.
+	// EmailVerified forwards the id_token's email_verified claim so apps/api
+	// can gate same-email account linking on a verified identity.
 	EmailVerified bool   `json:"email_verified"`
 	Role          string `json:"role"`
 	// MarketingConsent forwards the DPDP §6 opt-in collected at registration
@@ -70,7 +71,7 @@ func (c *Client) UpsertUser(ctx context.Context, req UpsertUserRequest) (*Upsert
 	}
 	r.Header.Set("Content-Type", "application/json")
 	if err := c.signer.Sign(r, body, headerproxy.Identity{
-		UserID: req.GIPUid, Email: req.Email, Role: req.Role, Pool: req.AuthPool,
+		UserID: req.Subject, Email: req.Email, Role: req.Role, Pool: req.AuthPool,
 	}); err != nil {
 		return nil, err
 	}

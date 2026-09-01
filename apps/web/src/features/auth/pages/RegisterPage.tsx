@@ -1,23 +1,10 @@
-import { useState, type FormEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChefHat, Check, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useState } from 'react';
+import { Link } from 'react-router';
+import { motion } from 'framer-motion';
+import { ChefHat, Check, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
-import { apiClient } from '@/shared/services/api-client';
 import { Button } from '@/shared/components/ui';
 import { fadeInLeft, fadeInRight } from '@/shared/utils/animations';
-
-// Apply a referral code captured from ?ref=CODE after signup (#38). Best-effort:
-// an invalid/ineligible code must never block account creation.
-async function applyPendingReferral(code: string | null) {
-  const c = code?.trim();
-  if (!c) return;
-  try {
-    await apiClient.post('/customer/referral/accept', { code: c });
-  } catch {
-    /* ignore */
-  }
-}
 
 const BENEFITS = [
   'Access to 500+ home chefs',
@@ -26,39 +13,18 @@ const BENEFITS = [
   'Support local home chefs',
 ];
 
+// Account creation happens on the hosted Zitadel registration page; this page
+// captures the choices that belong to Fe3dr, not to the identity provider —
+// the DPDP §6 marketing opt-in and agreement to our terms — then hands off.
+// A pending ?ref=CODE referral is applied post-signup by the onboarding flow.
 export default function RegisterPage() {
-  const { login, registerWithEmail } = useAuth();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const refCode = searchParams.get('ref');
-
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const { register } = useAuth();
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [confirmAge, setConfirmAge] = useState(false);
   const [optInMarketing, setOptInMarketing] = useState(false);
 
-  const handleRegister = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!firstName || !lastName || !email || !password) {
-      setError('Please fill in all fields');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
+  const handleContinue = async () => {
     if (!agreeTerms) {
       setError('Please agree to the Terms, Privacy Policy, and Refund Policy.');
       return;
@@ -67,37 +33,8 @@ export default function RegisterPage() {
       setError('You must be at least 18 to use Fe3dr.');
       return;
     }
-    setLoading(true);
     setError('');
-    try {
-      await registerWithEmail({
-        email,
-        password,
-        firstName,
-        lastName,
-        marketingConsent: optInMarketing,
-      });
-      await applyPendingReferral(refCode);
-      navigate('/user-info');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSocialSignup = async (provider: 'google') => {
-    setError('');
-    setLoading(true);
-    try {
-      await login(provider);
-      await applyPendingReferral(refCode);
-      navigate('/user-info');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-up failed');
-    } finally {
-      setLoading(false);
-    }
+    await register({ marketingConsent: optInMarketing });
   };
 
   return (
@@ -106,7 +43,7 @@ export default function RegisterPage() {
       <motion.div
         initial="hidden"
         animate="visible"
-        variants={fadeInLeft}
+        variants={fadeInRight}
         transition={{ duration: 0.6 }}
         className="relative hidden w-0 flex-1 lg:block"
       >
@@ -118,47 +55,29 @@ export default function RegisterPage() {
           decoding="async"
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-ink/60 via-ink/20 to-transparent" />
-        <div className="absolute inset-0 flex items-center justify-center p-12">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="max-w-lg text-center text-paper"
-          >
-            <h2 className="font-display text-display-sm font-semibold">Join Fe3dr Today</h2>
-            <p className="mt-4 text-lg text-paper/90">
-              Get access to hundreds of home chefs serving authentic, homemade food in your area.
-            </p>
-            <div className="mt-8 space-y-3">
-              {BENEFITS.map((benefit, index) => (
-                <motion.div
-                  key={benefit}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 + index * 0.1 }}
-                  className="flex items-center gap-3 justify-center"
-                >
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-bone/20">
-                    <Check aria-hidden="true" className="h-4 w-4" />
-                  </div>
-                  <span className="text-paper/95">{benefit}</span>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
+        <div className="absolute bottom-0 left-0 right-0 p-12">
+          <ul className="space-y-3">
+            {BENEFITS.map((benefit) => (
+              <li key={benefit} className="flex items-center gap-3 text-on-photo">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-herb">
+                  <Check aria-hidden="true" className="h-3.5 w-3.5 text-paper" />
+                </span>
+                <span className="font-medium">{benefit}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </motion.div>
 
-      {/* Right side - Sign up options */}
+      {/* Right side - Consent + hand-off */}
       <motion.div
         initial="hidden"
         animate="visible"
-        variants={fadeInRight}
-        transition={{ duration: 0.5, delay: 0.1 }}
+        variants={fadeInLeft}
+        transition={{ duration: 0.5 }}
         className="flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24"
       >
         <div className="mx-auto w-full max-w-sm lg:w-96">
-          {/* Logo */}
           <Link to="/" className="inline-flex items-center gap-2 group">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-herb shadow-1 group-hover:shadow-2 transition-shadow">
               <ChefHat aria-hidden="true" className="h-5 w-5 text-paper" />
@@ -166,12 +85,7 @@ export default function RegisterPage() {
             <span className="font-display text-2xl font-semibold text-ink">Fe3dr</span>
           </Link>
 
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mt-8"
-          >
+          <div className="mt-8">
             <h2 className="font-display text-display-xs text-ink">Create your account</h2>
             <p className="mt-2 text-ink-soft">
               Already have an account?{' '}
@@ -179,247 +93,70 @@ export default function RegisterPage() {
                 Sign in
               </Link>
             </p>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mt-8 space-y-4"
-          >
-            {/* Social signup buttons */}
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => handleSocialSignup('google')}
-              className="w-full justify-center gap-3 py-3"
+          {error && (
+            <div
+              role="alert"
+              className="mt-6 rounded-lg border border-paprika/30 bg-paprika-tint p-3 text-sm text-paprika"
             >
-              <svg className="h-5 w-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-              Sign up with Google
-            </Button>
-
-
-            <div className="relative mt-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-mist" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-bone px-3 text-ink-muted">Or</span>
-              </div>
+              {error}
             </div>
+          )}
 
-            <AnimatePresence mode="wait">
-              {!showEmailForm ? (
-                <motion.div key="reg-btn" exit={{ opacity: 0, height: 0 }}>
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={() => setShowEmailForm(true)}
-                    className="w-full"
-                  >
-                    Sign up with email
-                  </Button>
-                </motion.div>
-              ) : (
-                <motion.form
-                  key="reg-form"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  transition={{ duration: 0.3 }}
-                  onSubmit={handleRegister}
-                  className="space-y-4"
-                >
-                  {error && (
-                    <div className="rounded-lg border border-paprika/30 bg-paprika-tint p-3 text-sm text-paprika">
-                      {error}
-                    </div>
-                  )}
+          <div className="mt-8 space-y-4">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={agreeTerms}
+                onChange={(e) => setAgreeTerms(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-2 focus-visible:ring-herb/30"
+              />
+              <span className="text-sm text-ink-soft">
+                I agree to the{' '}
+                <Link to="/terms" className="text-herb hover:underline">Terms of Service</Link>,{' '}
+                <Link to="/privacy" className="text-herb hover:underline">Privacy Policy</Link> and{' '}
+                <Link to="/refund" className="text-herb hover:underline">Refund Policy</Link>.
+              </span>
+            </label>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label htmlFor="reg-first" className="block text-sm font-medium text-ink-soft">
-                        First name
-                      </label>
-                      <input
-                        id="reg-first"
-                        type="text"
-                        autoComplete="given-name"
-                        required
-                        aria-required="true"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="reg-last" className="block text-sm font-medium text-ink-soft">
-                        Last name
-                      </label>
-                      <input
-                        id="reg-last"
-                        type="text"
-                        autoComplete="family-name"
-                        required
-                        aria-required="true"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
-                      />
-                    </div>
-                  </div>
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={confirmAge}
+                onChange={(e) => setConfirmAge(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-2 focus-visible:ring-herb/30"
+              />
+              <span className="text-sm text-ink-soft">I confirm that I am at least 18 years old.</span>
+            </label>
 
-                  <div>
-                    <label htmlFor="reg-email" className="block text-sm font-medium text-ink-soft">
-                      Email
-                    </label>
-                    <input
-                      id="reg-email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      aria-required="true"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
-                      placeholder="you@example.com"
-                    />
-                  </div>
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={optInMarketing}
+                onChange={(e) => setOptInMarketing(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-2 focus-visible:ring-herb/30"
+              />
+              <span className="text-sm text-ink-soft">
+                Send me offers, new-chef announcements and food inspiration. Optional —
+                you can change this any time.
+              </span>
+            </label>
 
-                  <div>
-                    <label htmlFor="reg-password" className="block text-sm font-medium text-ink-soft">
-                      Password
-                    </label>
-                    <div className="relative mt-1">
-                      <input
-                        id="reg-password"
-                        type={showPassword ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        required
-                        aria-required="true"
-                        minLength={8}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="block w-full rounded-lg border border-mist-strong px-3 py-2.5 pr-10 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
-                        placeholder="Min. 8 characters"
-                      />
-                      <button
-                        type="button"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        aria-pressed={showPassword}
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center rounded pr-3 text-ink-muted transition-colors hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
-                      >
-                        {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label htmlFor="reg-confirm" className="block text-sm font-medium text-ink-soft">
-                      Confirm password
-                    </label>
-                    <input
-                      id="reg-confirm"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      aria-required="true"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
-                      placeholder="Re-enter password"
-                    />
-                  </div>
-
-                  <div className="space-y-3 text-sm">
-                    {/* Required: Terms + Privacy + Refund */}
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={agreeTerms}
-                        onChange={(e) => setAgreeTerms(e.target.checked)}
-                        required
-                        className="mt-0.5 h-4 w-4 rounded border-mist text-herb focus:ring-herb"
-                        aria-describedby="agree-terms-help"
-                      />
-                      <span id="agree-terms-help" className="text-ink-soft">
-                        I have read and agree to the{' '}
-                        <Link to="/terms" className="text-herb hover:underline">Terms of Service</Link>,{' '}
-                        <Link to="/privacy" className="text-herb hover:underline">Privacy Policy</Link>, and{' '}
-                        <Link to="/refund" className="text-herb hover:underline">Refund Policy</Link>.{' '}
-                        <span className="text-signal">(Required)</span>
-                      </span>
-                    </label>
-
-                    {/* Required: 18+ */}
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={confirmAge}
-                        onChange={(e) => setConfirmAge(e.target.checked)}
-                        required
-                        className="mt-0.5 h-4 w-4 rounded border-mist text-herb focus:ring-herb"
-                      />
-                      <span className="text-ink-soft">
-                        I am at least 18 years old. <span className="text-signal">(Required)</span>
-                      </span>
-                    </label>
-
-                    {/* Optional: Marketing */}
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={optInMarketing}
-                        onChange={(e) => setOptInMarketing(e.target.checked)}
-                        className="mt-0.5 h-4 w-4 rounded border-mist text-herb focus:ring-herb"
-                      />
-                      <span className="text-ink-soft">
-                        Send me occasional updates about new chefs and seasonal menus. You can unsubscribe any time.{' '}
-                        <span className="text-ink-muted">(Optional)</span>
-                      </span>
-                    </label>
-
-                    {/* What we'll do with your data — purpose disclosure */}
-                    <details className="mt-2 rounded-md border border-mist bg-bone p-3 text-xs text-ink-muted">
-                      <summary className="cursor-pointer text-ink-soft font-medium">What happens with the information you provide?</summary>
-                      <ul className="mt-2 space-y-1 list-disc pl-5">
-                        <li>Your name and email let us create your account and send order updates.</li>
-                        <li>Your phone number lets your chef and driver reach you about your order.</li>
-                        <li>Your delivery address is shared only with the chef and driver for orders you place.</li>
-                        <li>We don't sell your data. We use Cashfree Payments or Stripe to process payments; they receive only what's needed to process the transaction.</li>
-                        <li>
-                          You can request access, correction, or deletion of your data any time. See our{' '}
-                          <Link to="/privacy" className="text-herb hover:underline">Privacy Policy</Link>.
-                        </li>
-                      </ul>
-                    </details>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="lg"
-                    disabled={loading || !agreeTerms || !confirmAge}
-                    className="w-full"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin"  aria-hidden="true" />
-                        Creating account...
-                      </>
-                    ) : (
-                      'Create account'
-                    )}
-                  </Button>
-                </motion.form>
-              )}
-            </AnimatePresence>
-          </motion.div>
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={handleContinue}
+              className="w-full rounded-full"
+            >
+              Continue to sign up
+              <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+            </Button>
+            <p className="text-center text-sm text-ink-muted">
+              You'll create your account securely on our account page — email,
+              Google and Apple all work there.
+            </p>
+          </div>
         </div>
       </motion.div>
     </div>

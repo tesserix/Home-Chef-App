@@ -41,13 +41,13 @@ func TestClient_UpsertUser_ForwardsIdentityWithHMAC(t *testing.T) {
 
 	c := New(srv.URL, signer)
 	resp, err := c.UpsertUser(context.Background(), UpsertUserRequest{
-		GIPUid: "gip-u", GIPTenantID: "HomeChef-Customer", GIPProvider: "google.com",
+		Provider: "zitadel", Subject: "z-u",
 		AuthPool: "customer", Email: "a@b.com", Name: "A", Role: "customer",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "u1", resp.UserID)
-	assert.Equal(t, "gip-u", received.GIPUid)
-	assert.Equal(t, "HomeChef-Customer", received.GIPTenantID)
+	assert.Equal(t, "zitadel", received.Provider)
+	assert.Equal(t, "z-u", received.Subject)
 	assert.Equal(t, "customer", received.AuthPool)
 }
 
@@ -66,7 +66,7 @@ func TestClient_UpsertUser_MarshalsAvatarAndEmailVerified(t *testing.T) {
 
 	c := New(srv.URL, signer)
 	_, err := c.UpsertUser(context.Background(), UpsertUserRequest{
-		GIPUid: "gip-u", GIPTenantID: "HomeChef-Customer", GIPProvider: "google.com",
+		Provider: "zitadel", Subject: "z-u",
 		AuthPool: "customer", Email: "a@b.com", Name: "A",
 		Avatar: "https://example.com/a.png", EmailVerified: true, Role: "customer",
 	})
@@ -88,7 +88,7 @@ func TestClient_UpsertUser_NonOKResponse_Errors(t *testing.T) {
 	defer srv.Close()
 
 	c := New(srv.URL, signer)
-	_, err := c.UpsertUser(context.Background(), UpsertUserRequest{GIPUid: "x", Email: "x@x.com", Role: "customer", AuthPool: "customer"})
+	_, err := c.UpsertUser(context.Background(), UpsertUserRequest{Provider: "zitadel", Subject: "x", Email: "x@x.com", Role: "customer", AuthPool: "customer"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "502")
 }
@@ -100,6 +100,6 @@ func TestClient_UpsertUser_NetworkError_Errors(t *testing.T) {
 	c := New("http://127.0.0.1:1", signer) // port 1 is unreachable
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	_, err := c.UpsertUser(ctx, UpsertUserRequest{GIPUid: "x", Email: "x@x.com", Role: "customer", AuthPool: "customer"})
+	_, err := c.UpsertUser(ctx, UpsertUserRequest{Provider: "zitadel", Subject: "x", Email: "x@x.com", Role: "customer", AuthPool: "customer"})
 	require.Error(t, err)
 }

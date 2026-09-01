@@ -24,8 +24,8 @@ func (h *Handler) post(c *gin.Context) {
 	req.IP = c.ClientIP()
 	resp, err := h.d.AutoLogin(c.Request.Context(), req)
 	switch {
-	case errors.Is(err, ErrTenantNotAllowed):
-		c.JSON(http.StatusForbidden, gin.H{"error": "tenant_not_allowed"})
+	case errors.Is(err, ErrPoolNotAllowed):
+		c.JSON(http.StatusForbidden, gin.H{"error": "pool_not_allowed"})
 	case errors.Is(err, ErrEmailNotAllowed):
 		c.JSON(http.StatusForbidden, gin.H{"error": "email_not_allowed"})
 	case errors.Is(err, ErrTokenInvalid):

@@ -13,24 +13,20 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/homechef/auth-bff/internal/apiclient"
-	"github.com/homechef/auth-bff/internal/gip"
 	"github.com/homechef/auth-bff/internal/productregistry"
 	"github.com/homechef/auth-bff/internal/session"
 )
 
-// GIPVerifier is the surface of *gip.Verifier needed by the exchange handler.
-// Defined as an interface so the handler can be tested without a live GIP.
-type GIPVerifier interface {
-	Verify(ctx context.Context, raw string, expectedTenantID string) (*gip.VerifiedToken, error)
-}
+// ProviderName is recorded on every identity minted through this BFF.
+const ProviderName = "zitadel"
 
-// APIClient is the surface of *apiclient.Client needed to persist the user
+// APIClient is the surface of *apiclient.Client needed to persist a user
 // after successful authentication.
 type APIClient interface {
 	UpsertUser(ctx context.Context, req apiclient.UpsertUserRequest) (*apiclient.UpsertUserResponse, error)
 }
 
-// SessionWriter is the surface of *session.Manager needed to issue the
+// SessionWriter is the surface of *session.Manager needed to issue a
 // browser session cookie.
 type SessionWriter interface {
 	Encode(*session.Payload) (string, error)
@@ -38,23 +34,22 @@ type SessionWriter interface {
 	MaxAge() time.Duration
 }
 
-// Handlers wires the BFF web auth surface: /auth/login, /auth/callback, and
-// /auth/exchange. The OAuthByApp / OIDCByApp maps are populated by main.go
-// based on homechef-products.yaml.
+// Handlers wires the BFF web auth surface: /auth/login and /auth/callback.
+// All apps share the Zitadel hosted login; per-app oauth2 configs differ only
+// by redirect URL. PKCE (S256) replaces client secrets — the Zitadel apps are
+// public clients (OIDC_AUTH_METHOD_TYPE_NONE).
 type Handlers struct {
 	Registry     *productregistry.Registry
 	OAuthByApp   map[string]*oauth2.Config
-	OIDCByApp    map[string]*oidc.Provider
-	GIPVerifier  GIPVerifier
+	Provider     *oidc.Provider
 	API          APIClient
 	Sessions     SessionWriter
 	StateManager StateManager
 }
 
-// Login starts the OIDC authorization-code flow. It resolves the per-host app
-// from the registry, mints a fresh state + nonce, stores them, and redirects
-// the user agent to GIP's authorize endpoint with the tenant-specific
-// `tenantId` query parameter that GIP uses to scope the sign-in.
+// Login starts the OIDC authorization-code + PKCE flow against Zitadel.
+// ?screen=register forwards prompt=create so Zitadel opens registration;
+// ?marketing_consent=true carries the DPDP §6 opt-in collected pre-redirect.
 func (h *Handlers) Login(c *gin.Context) {
 	app, err := h.Registry.ResolveByHost(c.Request.Host)
 	if err != nil {
@@ -68,30 +63,33 @@ func (h *Handlers) Login(c *gin.Context) {
 	}
 	nonce, err := NewStateID()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "state_generation_failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "state_failed"})
 		return
 	}
+	pkce := oauth2.GenerateVerifier()
 	state, err := h.StateManager.Begin(c.Writer, StateEntry{
-		AppName:  app.Name,
-		Nonce:    nonce,
-		ReturnTo: safeReturnTo(c.Query("return_to")),
+		AppName:          app.Name,
+		Nonce:            nonce,
+		ReturnTo:         safeReturnTo(c.Query("return_to")),
+		MarketingConsent: c.Query("marketing_consent") == "true",
+		CodeVerifier:     pkce,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "state_generation_failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "state_failed"})
 		return
 	}
-	url := cfg.AuthCodeURL(
-		state,
+	opts := []oauth2.AuthCodeOption{
 		oidc.Nonce(nonce),
-		oauth2.SetAuthURLParam("tenantId", app.GIPTenantID),
-	)
-	c.Redirect(http.StatusFound, url)
+		oauth2.S256ChallengeOption(pkce),
+	}
+	if c.Query("screen") == "register" {
+		opts = append(opts, oauth2.SetAuthURLParam("prompt", "create"))
+	}
+	c.Redirect(http.StatusFound, cfg.AuthCodeURL(state, opts...))
 }
 
-// Callback completes the OIDC authorization-code flow. It validates the
-// returned state against the store, exchanges the authorization code for
-// tokens, verifies the id_token via go-oidc, and then issues the browser
-// session cookie via issueSession.
+// Callback completes the code flow: state + PKCE + nonce checks, id_token
+// verification, then session issuance.
 func (h *Handlers) Callback(c *gin.Context) {
 	app, err := h.Registry.ResolveByHost(c.Request.Host)
 	if err != nil {
@@ -109,12 +107,11 @@ func (h *Handlers) Callback(c *gin.Context) {
 		return
 	}
 	cfg := h.OAuthByApp[app.Name]
-	provider := h.OIDCByApp[app.Name]
-	if cfg == nil || provider == nil {
+	if cfg == nil || h.Provider == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no_oauth_config"})
 		return
 	}
-	tok, err := cfg.Exchange(c.Request.Context(), c.Query("code"))
+	tok, err := cfg.Exchange(c.Request.Context(), c.Query("code"), oauth2.VerifierOption(entry.CodeVerifier))
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "exchange_failed"})
 		return
@@ -124,7 +121,7 @@ func (h *Handlers) Callback(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "no_id_token"})
 		return
 	}
-	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
+	verifier := h.Provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
 	idTok, err := verifier.Verify(c.Request.Context(), rawID)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "id_token_invalid"})
@@ -139,66 +136,20 @@ func (h *Handlers) Callback(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "id_token_invalid"})
 		return
 	}
-	if !tenantMatchesApp(claims, app.GIPTenantID) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "id_token_invalid"})
-		return
-	}
 	h.issueSession(c, app, claims, entry)
 }
 
-// ExchangeRequest is the body shape POSTed by the SPA after a successful
-// Firebase email/password sign-in. The browser has already obtained the
-// id_token client-side; the BFF just verifies it and issues a session.
-//
-// MarketingConsent is the DPDP §6 opt-in captured by RegisterPage (CW-01b).
-// It's optional — login flows omit it and it defaults to false, which the API
-// only consumes on first-user creation (re-logins never flip the flag).
-type ExchangeRequest struct {
-	IDToken          string `json:"id_token" binding:"required"`
-	MarketingConsent bool   `json:"marketing_consent"`
-}
-
-// Exchange handles the email/password sign-in path. The SPA signs in to
-// Firebase client-side and POSTs the resulting id_token here; this handler
-// verifies the token against the per-app GIP tenant and issues the session.
-func (h *Handlers) Exchange(c *gin.Context) {
-	app, err := h.Registry.ResolveByHost(c.Request.Host)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unknown_host"})
-		return
-	}
-	var req ExchangeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_body"})
-		return
-	}
-	vt, err := h.GIPVerifier.Verify(c.Request.Context(), req.IDToken, app.GIPTenantID)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "id_token_invalid"})
-		return
-	}
-	h.issueSession(c, app, claimsFromVerifiedToken(vt), StateEntry{
-		MarketingConsent: req.MarketingConsent,
-	})
-}
-
-// issueSession is the shared tail of both the Callback (GET) and Exchange
-// (POST) paths. It upserts the user in apps/api, encodes the session payload
-// into the encrypted cookie, and then either redirects (GET) or returns JSON
-// (POST) depending on the request method.
+// issueSession upserts the user in apps/api, encodes the session payload into
+// the encrypted cookie, then redirects to the app.
 func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims map[string]any, entry StateEntry) {
 	pool := app.AuthContext
 	role := app.DefaultRole
 	if r, ok := claims["role"].(string); ok && r != "" {
 		role = r
 	}
-	// Admin allowlist enforcement (security). For internal/admin logins the
-	// verified email must be in the app's HOMECHEF_ADMIN_ALLOWED_EMAILS
-	// allowlist. FAIL-CLOSED: an unconfigured/empty allowlist DENIES admin login
-	// (the k8s secret is mounted optional and the mesh does not strip X-User-*
-	// headers, so a missing allowlist must never hand admin to any verified
-	// email). Reject BEFORE the user upsert so a blocked email never gets an
-	// admin row/session.
+	// Admin allowlist enforcement. FAIL-CLOSED: an unconfigured/empty allowlist
+	// denies admin login, and the reject happens BEFORE the upsert so a blocked
+	// email never gets an admin row or session.
 	if pool == "internal" || role == "admin" {
 		email := getStr(claims, "email")
 		if allowed, configured := app.IsEmailAllowed(email); !configured || !allowed {
@@ -216,16 +167,9 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 			return
 		}
 	}
-	provider := getStr(claims, "sign_in_provider")
-	if fb, ok := claims["firebase"].(map[string]any); ok {
-		if p, ok := fb["sign_in_provider"].(string); ok {
-			provider = p
-		}
-	}
 	upsert, err := h.API.UpsertUser(c.Request.Context(), apiclient.UpsertUserRequest{
-		GIPUid:           getStr(claims, "sub"),
-		GIPTenantID:      app.GIPTenantID,
-		GIPProvider:      provider,
+		Provider:         ProviderName,
+		Subject:          getStr(claims, "sub"),
 		AuthPool:         pool,
 		Email:            getStr(claims, "email"),
 		Name:             getStr(claims, "name"),
@@ -239,7 +183,7 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 		IP:               c.ClientIP(),
 	})
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "upsert_failed"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "upstream_error"})
 		return
 	}
 	now := time.Now()
@@ -254,38 +198,21 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 	}
 	enc, err := h.Sessions.Encode(payload)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "session_encode_failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "session_failed"})
 		return
 	}
-	// app is already resolved from the request Host (see Callback/Exchange
-	// above), so this writes the cookie under that app's own name directly —
-	// no separate Host→name resolution needed here, unlike session.Handler
-	// and apiproxy, which see the raw request instead of a pre-resolved app.
 	h.Sessions.SetCookie(c.Writer, app.SessionCookie, enc)
-	if c.Request.Method == http.MethodGet {
-		// Callback path → browser-friendly redirect.
-		target := app.PostLoginURL
-		if entry.ReturnTo != "" {
-			target = entry.ReturnTo
-		}
-		c.Redirect(http.StatusFound, target)
-		return
+	target := app.PostLoginURL
+	if entry.ReturnTo != "" {
+		target = entry.ReturnTo
 	}
-	// Exchange path → JSON response for the SPA.
-	c.JSON(http.StatusOK, gin.H{
-		"user_id":    upsert.UserID,
-		"email":      payload.Email,
-		"role":       role,
-		"pool":       pool,
-		"expires_at": exp.Unix(),
-	})
+	c.Redirect(http.StatusFound, target)
 }
 
-// Register binds the three auth endpoints onto the provided router.
+// Register binds the auth endpoints onto the provided router.
 func (h *Handlers) Register(r gin.IRouter) {
 	r.GET("/auth/login", h.Login)
 	r.GET("/auth/callback", h.Callback)
-	r.POST("/auth/exchange", h.Exchange)
 }
 
 func getStr(m map[string]any, k string) string {
@@ -300,20 +227,6 @@ func getBool(m map[string]any, k string) bool {
 	return v
 }
 
-func claimsFromVerifiedToken(vt *gip.VerifiedToken) map[string]any {
-	claims := make(map[string]any, len(vt.Claims)+7)
-	for key, value := range vt.Claims {
-		claims[key] = value
-	}
-	claims["sub"] = vt.UID
-	claims["email"] = vt.Email
-	claims["name"] = vt.Name
-	claims["picture"] = vt.Picture
-	claims["email_verified"] = vt.EmailVerified
-	claims["sign_in_provider"] = vt.Provider
-	return claims
-}
-
 func stateMatchesApp(entry StateEntry, appName string) bool {
 	return entry.AppName != "" && entry.AppName == appName
 }
@@ -325,13 +238,4 @@ func nonceMatches(entry StateEntry, tokenNonce string) bool {
 	expected := sha256.Sum256([]byte(entry.Nonce))
 	actual := sha256.Sum256([]byte(tokenNonce))
 	return subtle.ConstantTimeCompare(expected[:], actual[:]) == 1
-}
-
-func tenantMatchesApp(claims map[string]any, expectedTenantID string) bool {
-	firebase, ok := claims["firebase"].(map[string]any)
-	if !ok {
-		return false
-	}
-	tenantID, ok := firebase["tenant"].(string)
-	return ok && tenantID != "" && tenantID == expectedTenantID
 }

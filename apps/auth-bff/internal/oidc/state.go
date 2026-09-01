@@ -33,7 +33,10 @@ type StateEntry struct {
 	Nonce            string
 	ReturnTo         string
 	MarketingConsent bool
-	Created          time.Time
+	// CodeVerifier is the PKCE verifier generated at /auth/login and replayed
+	// at token exchange — sealed inside the state envelope, never client-visible.
+	CodeVerifier string
+	Created      time.Time
 }
 
 // StateManager creates and consumes browser-bound OAuth state. Implementations

@@ -1,27 +1,24 @@
 platformDomain: fe3dr.com
 
+# Zitadel OIDC (project 388810586143588367, org TESSERIX, https://auth.tesserix.app).
+# All web apps share the homechef-web public client (PKCE, no secret) — the
+# clientId below is a local-dev placeholder; prod values come from the copy in
+# tesserix-k8s/charts/apps/homechef-auth-bff once the ZitadelApplication claim
+# reconciles and reports status.clientId.
+#
+# Mobile auth does NOT use these app entries (it goes through /auth/auto-login
+# gated by mobilePoolAllowlist below); only the OIDC browser handlers resolve
+# apps by host.
+#
+# delivery-portal (delivery.fe3dr.com) is deliberately absent — sunset; restore
+# it alongside if that portal is revived.
 products:
   - name: homechef
     domain: fe3dr.com
     apps:
-      # Restored 2026-07-25: the web surfaces are coming back (owner reversal of
-      # the 2026-06 app-first sunset). These entries were dropped in #22, which
-      # is why vendors.fe3dr.com answered /bff/auth/exchange with
-      # {"error":"unknown_host"} — GIP sign-in succeeded, then the BFF could not
-      # resolve an app for the host, so nobody could log in.
-      #
-      # Mobile auth does NOT use these app entries (it goes through
-      # /auth/auto-login gated by mobileTenantAllowlist below); only the
-      # OIDC browser handlers resolve apps by host.
-      #
-      # delivery-portal (delivery.fe3dr.com) was dropped by the same commit and
-      # is deliberately still absent — restore it alongside if that portal is
-      # revived too.
       - name: web
         hosts: ["fe3dr.com", "www.fe3dr.com", "localhost:5173"]
-        gipTenantId: HomeChef-Customer-rqg8a
-        oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
-        clientSecretEnv: HOMECHEF_CUSTOMER_CLIENT_SECRET
+        oauthClientId: "388815910560858918"
         sessionCookie: hc_session
         callbackPath: /auth/callback
         callbackHost: fe3dr.com
@@ -34,29 +31,21 @@ products:
 
       - name: vendor-portal
         hosts: ["vendors.fe3dr.com", "localhost:5174"]
-        gipTenantId: HomeChef-Business-8s8ql
-        oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
-        clientSecretEnv: HOMECHEF_BUSINESS_CLIENT_SECRET
+        oauthClientId: "388815909336122150"
         sessionCookie: hc_vendor_session
         callbackPath: /auth/callback
         postLoginUrl: /dashboard
         authContext: business
         # "chef", not "vendor": the Go API's UserRole enum has no vendor member
-        # (customer|chef|delivery|admin|fleet_manager), and every /chef/* route
-        # is gated by RequireChef() == RequireRole(RoleChef, RoleAdmin). A
-        # session minted with role=vendor authenticates fine and then 403s
-        # "Insufficient permissions" on the dashboard. The mobile path already
-        # gets this right — autologin's defaultRoleForPool maps the business
-        # pool to "chef" for exactly this reason.
+        # and every /chef/* route is gated by RequireChef() — role=vendor would
+        # authenticate then 403 on the dashboard.
         defaultRole: chef
         signInMethods: [password, google.com, apple.com, phone]
         allowedOrigins: ["https://vendors.fe3dr.com", "http://localhost:5174"]
 
       - name: admin-portal
         hosts: ["admin.fe3dr.com", "localhost:5176"]
-        gipTenantId: HomeChef-Internal-gyofe
-        oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
-        clientSecretEnv: HOMECHEF_INTERNAL_CLIENT_SECRET
+        oauthClientId: "388815911282279206"
         sessionCookie: hc_admin_session
         callbackPath: /auth/callback
         postLoginUrl: /
@@ -66,11 +55,10 @@ products:
         allowedEmailsEnv: HOMECHEF_ADMIN_ALLOWED_EMAILS
         allowedOrigins: ["https://admin.fe3dr.com", "http://localhost:5176"]
 
-mobileTenantAllowlist:
-  - HomeChef-Customer-rqg8a
-  - HomeChef-Business-8s8ql
+mobilePoolAllowlist:
+  - customer
+  - business
   # Internal/admin pool — powers the admin mobile app (apps/mobile-admin).
-  # The "internal" pool resolves to role=admin in autologin (defaultRoleForPool),
-  # so an admin GIP sign-in yields an admin BFF session the API's RequireAdmin
-  # gate accepts. Without this entry /auth/auto-login rejects admin logins.
-  - HomeChef-Internal-gyofe
+  # "internal" resolves to role=admin in autologin (defaultRoleForPool), still
+  # gated by the HOMECHEF_ADMIN_ALLOWED_EMAILS allowlist + verified email.
+  - internal

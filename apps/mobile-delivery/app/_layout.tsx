@@ -250,7 +250,8 @@ export default function RootLayout() {
   return (
     <AuthProvider
       bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
-      tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
+      pool={process.env.EXPO_PUBLIC_AUTH_POOL ?? 'business'}
+        tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <QueryClientProvider client={queryClient}>

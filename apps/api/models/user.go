@@ -55,7 +55,7 @@ type User struct {
 	// GIP identity. Populated when apps/auth-bff upserts a user after a
 	// successful Google Identity Platform sign-in. See migration
 	// 20260514000002_add_gip_identity_to_users.up.sql.
-	GIPUid      string   `gorm:"column:gip_uid;uniqueIndex" json:"gipUid,omitempty"`
+	GIPUid      string   `gorm:"column:gip_uid" json:"gipUid,omitempty"`
 	GIPTenantID string   `gorm:"column:gip_tenant_id" json:"gipTenantId,omitempty"`
 	GIPProvider string   `gorm:"column:gip_provider" json:"gipProvider,omitempty"`
 	AuthPool    AuthPool `gorm:"column:auth_pool;type:varchar(16)" json:"authPool,omitempty"`
