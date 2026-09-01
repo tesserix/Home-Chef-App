@@ -113,11 +113,13 @@ func (h *Handlers) Callback(c *gin.Context) {
 	}
 	tok, err := cfg.Exchange(c.Request.Context(), c.Query("code"), oauth2.VerifierOption(entry.CodeVerifier))
 	if err != nil {
+		log.Printf("oidc: token exchange failed for app %s: %v", app.Name, err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "exchange_failed"})
 		return
 	}
 	rawID, _ := tok.Extra("id_token").(string)
 	if rawID == "" {
+		log.Printf("oidc: token response for app %s has no id_token", app.Name)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "no_id_token"})
 		return
 	}
@@ -183,6 +185,7 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 		IP:               c.ClientIP(),
 	})
 	if err != nil {
+		log.Printf("oidc: user upsert failed for app %s: %v", app.Name, err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "upstream_error"})
 		return
 	}

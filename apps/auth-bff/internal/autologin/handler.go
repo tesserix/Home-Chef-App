@@ -2,6 +2,7 @@ package autologin
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -31,6 +32,7 @@ func (h *Handler) post(c *gin.Context) {
 	case errors.Is(err, ErrTokenInvalid):
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
 	case err != nil:
+		log.Printf("autologin: upstream error: %v", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "upstream_error"})
 	default:
 		c.JSON(http.StatusOK, resp)
