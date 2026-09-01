@@ -20,10 +20,10 @@ export const HERO_IMAGES = {
 
 // Chef profile placeholder images
 export const CHEF_PLACEHOLDERS = [
-  'https://images.unsplash.com/photo-1583394293214-28ez9e5a2b8d?w=400&q=80', // Chef portrait 1
+  'https://images.unsplash.com/photo-1566041510639-8d95a2490bfb?w=400&q=80', // Chef portrait 1
   'https://images.unsplash.com/photo-1581349485608-9469926a8e5e?w=400&q=80', // Chef portrait 2
   'https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?w=400&q=80', // Chef portrait 3
-  'https://images.unsplash.com/photo-1607631568010-a87245c0dbd8?w=400&q=80', // Chef portrait 4
+  'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=400&q=80', // Chef portrait 4
 ];
 
 // Food category images
@@ -48,7 +48,7 @@ export const FOOD_PLACEHOLDERS = [
   'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400&q=80', // Pancakes
   'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&q=80', // Pizza
   'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=400&q=80', // Salad
-  'https://images.unsplash.com/photo-1482049016gy584d96f05?w=400&q=80', // Curry
+  'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&q=80', // Curry
   'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=400&q=80', // BBQ
   'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=400&q=80', // Mixed dishes
   'https://images.unsplash.com/photo-1547592180-85f173990554?w=400&q=80', // Cooking
@@ -57,7 +57,7 @@ export const FOOD_PLACEHOLDERS = [
 // Background patterns and textures
 export const BACKGROUNDS = {
   woodTexture: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80',
-  marbleTexture: 'https://images.unsplash.com/photo-1544966503-7cc5ac882d5a?w=1920&q=80',
+  marbleTexture: 'https://images.unsplash.com/photo-1517971071642-34a2d3ecc9cd?w=1920&q=80',
   kitchenAmbient: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1920&q=80',
   tableSetting: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1920&q=80',
 };

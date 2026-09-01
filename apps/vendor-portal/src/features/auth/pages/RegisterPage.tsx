@@ -23,7 +23,7 @@ export default function RegisterPage() {
       {/* Left side - Image & Benefits */}
       <div className="relative hidden flex-1 lg:block">
         <img
-          src="https://images.unsplash.com/photo-1606491956689-2ea866880049?w=1200&h=900&fit=crop&q=80"
+          src="https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=1200&h=900&fit=crop&q=80"
           alt="Indian woman cooking in home kitchen"
           className="absolute inset-0 h-full w-full object-cover"
           fetchPriority="high"
