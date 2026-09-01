@@ -46,8 +46,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://delivery.fe3dr.com/api/v1",
         "EXPO_PUBLIC_BFF_URL": "https://delivery.fe3dr.com",
-        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Business-8s8ql"
-        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912691565350",
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Business-8s8ql",
+        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912691565350"
       }
     },
     "production": {
@@ -56,8 +56,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://delivery.fe3dr.com/api/v1",
         "EXPO_PUBLIC_BFF_URL": "https://delivery.fe3dr.com",
-        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Business-8s8ql"
-        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912691565350",
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Business-8s8ql",
+        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912691565350"
       }
     }
   },
