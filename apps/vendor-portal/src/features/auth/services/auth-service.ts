@@ -1,17 +1,4 @@
-import {
-  signInWithPopup,
-  OAuthProvider,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  PhoneAuthProvider,
-  RecaptchaVerifier,
-  signInWithCredential,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  type User as FirebaseUser,
-} from 'firebase/auth';
-import { firebaseAuth } from '@/lib/firebase';
-import type { SessionResponse, SessionUser, SocialProvider } from '@/shared/types/auth';
+import type { SessionResponse, SessionUser } from '@/shared/types/auth';
 
 // BFF_URL resolution:
 //   1. VITE_BFF_URL env var (escape hatch)
@@ -27,14 +14,12 @@ const BFF_URL = (() => {
   return '/bff';
 })();
 
-// For fetch calls we always prefer same-origin /bff in non-local environments
-// to avoid CORS preflight; for localhost dev we hit BFF_URL directly.
 const isLocalDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 const BFF_FETCH_BASE = isLocalDev ? BFF_URL : '/bff';
 
 /**
- * Session shape returned by the GIP-backed BFF.
- * `pool` is the GIP tenant ID; `expiresAt` is unix seconds.
+ * Session shape returned by the BFF. `pool` is the auth pool
+ * (customer/business/internal); `expiresAt` is unix seconds.
  */
 export interface AuthSession {
   userId: string;
@@ -44,40 +29,17 @@ export interface AuthSession {
   expiresAt: number;
 }
 
-interface ExchangeResponse {
+interface BffSessionResponse {
   user_id: string;
   email: string;
   role: string;
   pool: string;
   expires_at: number;
   csrf_token?: string;
-}
-
-interface BffSessionResponse extends ExchangeResponse {
   authenticated?: boolean;
 }
 
-/**
- * POST a Firebase ID token to the BFF's /auth/exchange endpoint.
- * The BFF verifies the token with GIP, upserts the user, and sets an
- * encrypted session cookie (HttpOnly, Secure, SameSite=Lax). Returns the
- * normalized session for the local store.
- */
-export async function postExchange(idToken: string): Promise<AuthSession> {
-  const res = await fetch(`${BFF_FETCH_BASE}/auth/exchange`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ id_token: idToken }),
-  });
-  if (!res.ok) {
-    throw new Error(`exchange_failed_${res.status}`);
-  }
-  const body = (await res.json()) as ExchangeResponse;
-  return normalizeSession(body);
-}
-
-function normalizeSession(body: ExchangeResponse): AuthSession {
+function normalizeSession(body: BffSessionResponse): AuthSession {
   return {
     userId: body.user_id,
     email: body.email,
@@ -87,10 +49,7 @@ function normalizeSession(body: ExchangeResponse): AuthSession {
   };
 }
 
-/**
- * Convert an `AuthSession` to the legacy `SessionUser` shape so callers
- * that read `user.firstName` / `user.roles` keep working.
- */
+/** Convert an `AuthSession` to the legacy `SessionUser` shape. */
 export function toSessionUser(session: AuthSession): SessionUser {
   return {
     id: session.userId,
@@ -100,82 +59,32 @@ export function toSessionUser(session: AuthSession): SessionUser {
   };
 }
 
-// =============================================================================
-// Firebase-backed sign-in flows — vendor portal supports Google, Apple, phone.
-// (Facebook is intentionally omitted; vendors sign in via the business pool.)
-// =============================================================================
-
-export async function signInWithGoogle(): Promise<AuthSession> {
-  // Google sign-in runs through GSI (<GoogleSignInButton/>) — avoids
-  // signInWithPopup's COOP failure + hides the firebaseapp.com URL.
-  throw new Error(
-    'signInWithGoogle() is no longer supported — mount <GoogleSignInButton/> directly.',
-  );
-}
-
-export async function signInWithApple(): Promise<AuthSession> {
-  const provider = new OAuthProvider('apple.com');
-  provider.addScope('email');
-  provider.addScope('name');
-  const cred = await signInWithPopup(firebaseAuth, provider);
-  const idToken = await cred.user.getIdToken();
-  return postExchange(idToken);
-}
-
-export async function signInWithEmail(
-  email: string,
-  password: string,
-): Promise<AuthSession> {
-  const cred = await signInWithEmailAndPassword(firebaseAuth, email, password);
-  const idToken = await cred.user.getIdToken();
-  return postExchange(idToken);
-}
-
-export async function registerWithEmail(
-  email: string,
-  password: string,
-): Promise<AuthSession> {
-  const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
-  const idToken = await cred.user.getIdToken();
-  return postExchange(idToken);
-}
-
-export async function startPhoneSignIn(
-  phone: string,
-  recaptchaContainerId: string,
-): Promise<string> {
-  const verifier = new RecaptchaVerifier(firebaseAuth, recaptchaContainerId, {
-    size: 'invisible',
-  });
-  const provider = new PhoneAuthProvider(firebaseAuth);
-  return provider.verifyPhoneNumber(phone, verifier);
-}
-
-export async function completePhoneSignIn(
-  verificationId: string,
-  code: string,
-): Promise<AuthSession> {
-  const phoneCred = PhoneAuthProvider.credential(verificationId, code);
-  const cred = await signInWithCredential(firebaseAuth, phoneCred);
-  const idToken = await cred.user.getIdToken();
-  return postExchange(idToken);
+export interface LoginRedirectOptions {
+  /** Same-origin path to land on after the callback (e.g. "/orders/42"). */
+  returnTo?: string;
+  /** Open the hosted registration screen instead of sign-in. */
+  register?: boolean;
 }
 
 /**
- * Ask the Fe3dr API to email a password-reset link.
- *
- * Deliberately NOT Firebase's sendPasswordResetEmail. Firebase mints a valid
- * token but delivers it from noreply@<project>.firebaseapp.com — an
- * unauthenticated domain Gmail files as spam — branded with the GCP project
- * name and containing a raw firebaseapp.com URL that reads as phishing.
- *
- * Our API mints the same token server-side and sends it through the verified
- * platform sender with the Fe3dr template, wrapped in a single-use link that
- * expires in 15 minutes.
- *
- * app='vendor' selects the Identity Platform tenant. Accounts are tenant-scoped,
- * so a chef's address does not exist in the customer tenant — sending the wrong
- * one is exactly how a reset silently produces no email.
+ * Full-page redirect into the hosted Zitadel login via the BFF's
+ * GET /auth/login. The BFF runs the OIDC code+PKCE flow and returns with an
+ * encrypted session cookie (HttpOnly, Secure, SameSite=Lax); there is no
+ * in-page credential handling any more.
+ */
+export function redirectToLogin(options: LoginRedirectOptions = {}): void {
+  const params = new URLSearchParams();
+  if (options.returnTo) params.set('return_to', options.returnTo);
+  if (options.register) params.set('screen', 'register');
+  const qs = params.toString();
+  window.location.assign(`${BFF_FETCH_BASE}/auth/login${qs ? `?${qs}` : ''}`);
+}
+
+/**
+ * Ask the Fe3dr API to email a password-reset link for legacy email/password
+ * accounts. Zitadel's hosted login has its own reset; this endpoint remains
+ * for accounts created before the migration. app='vendor' selects the
+ * business pool — a chef's address does not exist in the customer pool.
  *
  * Resolves on every outcome the server treats as normal, including "no such
  * account": it answers identically either way (anti-enumeration).
@@ -211,50 +120,6 @@ export async function fetchSession(): Promise<AuthSession | null> {
 }
 
 /**
- * Sign out of Firebase and clear the BFF session cookie. Best-effort: even if
- * Firebase sign-out fails, we still call the BFF logout endpoint.
- */
-export async function logout(): Promise<void> {
-  try {
-    await firebaseSignOut(firebaseAuth);
-  } catch {
-    // best-effort
-  }
-  try {
-    const csrfToken = await fetchCsrfToken();
-    await fetch(`${BFF_FETCH_BASE}/auth/logout`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : undefined,
-    });
-  } catch {
-    // ignore
-  }
-}
-
-/**
- * Subscribe to Firebase auth-state changes. On sign-in, the BFF session is
- * fetched and forwarded to the callback. On sign-out, the callback receives
- * null. Returns the Firebase unsubscribe handle.
- */
-export function subscribeAuth(
-  cb: (session: AuthSession | null) => void,
-): () => void {
-  return onAuthStateChanged(firebaseAuth, async (firebaseUser: FirebaseUser | null) => {
-    if (!firebaseUser) {
-      cb(null);
-      return;
-    }
-    try {
-      const session = await fetchSession();
-      cb(session);
-    } catch {
-      cb(null);
-    }
-  });
-}
-
-/**
  * Best-effort fetch of a CSRF token from the BFF. Returned token is attached
  * to state-changing requests in api-client.
  */
@@ -271,35 +136,23 @@ export async function fetchCsrfToken(): Promise<string | null> {
   }
 }
 
-// =============================================================================
-// Legacy `authService` object — preserves the shape that existing callers
-// import. Firebase handles social sign-in directly on the page, so
-// getLoginUrl/getRegisterUrl return null and callers use the typed helpers
-// above (signInWithGoogle, etc).
-// =============================================================================
+/** Clear the BFF session cookie. Best-effort. */
+export async function logout(): Promise<void> {
+  try {
+    const csrfToken = await fetchCsrfToken();
+    await fetch(`${BFF_FETCH_BASE}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : undefined,
+    });
+  } catch {
+    // ignore
+  }
+}
 
+// Object form kept for callers that import `authService` (auth store).
 export const authService = {
-  /**
-   * Deprecated. Callers should call `signInWithGoogle()` / `signInWithApple()`
-   * directly. Returns null so existing callsites can detect the new auth flow
-   * and adapt.
-   */
-  getLoginUrl(_options?: { provider?: SocialProvider; returnTo?: string }): null {
-    return null;
-  },
-
-  /**
-   * Deprecated. Registration is handled inline via `registerWithEmail()` or
-   * social sign-in helpers.
-   */
-  getRegisterUrl(_returnTo?: string): null {
-    return null;
-  },
-
-  /**
-   * Check current BFF session. Returns the legacy `SessionResponse` shape so
-   * existing callers in the auth store and api-client keep working.
-   */
+  /** Check current BFF session in the legacy `SessionResponse` shape. */
   async getSession(): Promise<SessionResponse | null> {
     try {
       const session = await fetchSession();
@@ -316,11 +169,7 @@ export const authService = {
     }
   },
 
-  /**
-   * Cookie sessions on the BFF are refreshed transparently on each
-   * `/auth/exchange` round-trip; there's no separate refresh endpoint to
-   * call from the client. Kept as a shim for any legacy callers.
-   */
+  /** The BFF refreshes its own cookie; this just re-checks it. */
   async refreshSession(): Promise<boolean> {
     const session = await fetchSession().catch(() => null);
     return session !== null;
@@ -332,67 +181,5 @@ export const authService = {
 
   async getCsrfToken(): Promise<string | null> {
     return fetchCsrfToken();
-  },
-
-  // ---------------------------------------------------------------------------
-  // Email/password — now backed by Firebase instead of the direct API JWT path.
-  // The return shape (`{ user, accessToken, refreshToken }`) is kept for
-  // backward compatibility with callers; accessToken/refreshToken come from
-  // Firebase so the api-client can keep sending them as bearer headers if
-  // needed, but the canonical auth surface is the BFF session cookie.
-  // ---------------------------------------------------------------------------
-
-  async loginWithEmail(email: string, password: string) {
-    const cred = await signInWithEmailAndPassword(firebaseAuth, email, password);
-    const accessToken = await cred.user.getIdToken();
-    const session = await postExchange(accessToken);
-    return {
-      user: toSessionUser(session),
-      accessToken,
-      refreshToken: cred.user.refreshToken,
-    };
-  },
-
-  async registerWithEmail(input: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-  }) {
-    const cred = await createUserWithEmailAndPassword(
-      firebaseAuth,
-      input.email,
-      input.password,
-    );
-    const accessToken = await cred.user.getIdToken();
-    const session = await postExchange(accessToken);
-    return {
-      user: {
-        ...toSessionUser(session),
-        firstName: input.firstName,
-        lastName: input.lastName,
-      },
-      accessToken,
-      refreshToken: cred.user.refreshToken,
-    };
-  },
-
-  /**
-   * Refresh the Firebase ID token. Returns a fresh access token; refresh
-   * token is rotated by Firebase internally.
-   */
-  async refreshApiToken(_refreshToken: string) {
-    if (!firebaseAuth.currentUser) {
-      throw new Error('not_authenticated');
-    }
-    const accessToken = await firebaseAuth.currentUser.getIdToken(true);
-    return {
-      accessToken,
-      refreshToken: firebaseAuth.currentUser.refreshToken,
-    };
-  },
-
-  async logoutApi(_refreshToken: string) {
-    await logout();
   },
 };

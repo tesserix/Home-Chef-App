@@ -10,7 +10,7 @@ import {
 import { useNavigate, useLocation } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/auth-store';
-import type { SessionUser, SocialProvider } from '@/shared/types/auth';
+import type { SessionUser } from '@/shared/types/auth';
 
 const BFF_URL = (() => {
   const env = import.meta.env.VITE_BFF_URL;
@@ -29,10 +29,8 @@ interface AuthContextValue {
   needsOnboarding: boolean;
   onboardingStatus: string;
   adminNotes: string;
-  login: (provider?: SocialProvider) => Promise<void>;
+  login: (options?: { returnTo?: string }) => Promise<void>;
   register: () => Promise<void>;
-  loginWithEmail: (email: string, password: string) => Promise<void>;
-  registerWithEmail: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -94,18 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const checkOnboarding = async () => {
       try {
-        // Attach the Firebase ID token (email/password login) the same way
-        // api-client does. Without this header, the BFF returns 401 for users
-        // who logged in with email/password (no Firebase cookie session),
-        // which used to cascade into AuthProvider routing them back to
-        // /onboarding forever.
-        const { accessToken } = useAuthStore.getState();
-        const headers: Record<string, string> = {};
-        if (accessToken) headers['X-Auth-Token'] = accessToken;
-
         const res = await fetch(`${BFF_URL}/api/v1/chef/onboarding/status`, {
           credentials: 'include',
-          headers,
         });
         if (!res.ok) {
           setNeedsOnboarding(true);
@@ -160,37 +148,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkOnboarding();
   }, [isAuthenticated, isLoading, onboardingChecked, navigate, location.pathname, user?.email]);
 
-  const login = useCallback(async (provider?: SocialProvider) => {
+  // Login and registration are full-page redirects into the hosted Zitadel
+  // pages via the BFF; credentials never touch this app any more.
+  const login = useCallback(async (options?: { returnTo?: string }) => {
     const svc = await import('@/features/auth/services/auth-service');
-    const session =
-      provider === 'apple'
-        ? await svc.signInWithApple()
-        : await svc.signInWithGoogle();
-    const { setApiAuth } = useAuthStore.getState();
-    setApiAuth(svc.toSessionUser(session), '', '');
+    svc.redirectToLogin({ returnTo: options?.returnTo });
   }, []);
 
   const register = useCallback(async () => {
-    // Registration via social provider mirrors login; email/password
-    // registration is handled by RegisterPage via `registerWithEmail`.
     const svc = await import('@/features/auth/services/auth-service');
-    const session = await svc.signInWithGoogle();
-    const { setApiAuth } = useAuthStore.getState();
-    setApiAuth(svc.toSessionUser(session), '', '');
-  }, []);
-
-  const loginWithEmail = useCallback(async (email: string, password: string) => {
-    const { authService } = await import('@/features/auth/services/auth-service');
-    const result = await authService.loginWithEmail(email, password);
-    const { setApiAuth } = useAuthStore.getState();
-    setApiAuth(result.user, result.accessToken, result.refreshToken);
-  }, []);
-
-  const registerWithEmail = useCallback(async (data: { email: string; password: string; firstName: string; lastName: string }) => {
-    const { authService } = await import('@/features/auth/services/auth-service');
-    const result = await authService.registerWithEmail(data);
-    const { setApiAuth } = useAuthStore.getState();
-    setApiAuth(result.user, result.accessToken, result.refreshToken);
+    svc.redirectToLogin({ register: true });
   }, []);
 
   const logout = useCallback(async () => {
@@ -226,8 +193,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     adminNotes,
     login,
     register,
-    loginWithEmail,
-    registerWithEmail,
     logout,
   };
 
