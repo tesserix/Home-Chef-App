@@ -68,8 +68,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://admin.fe3dr.com/api/v1",
         "EXPO_PUBLIC_BFF_URL": "https://admin.fe3dr.com",
-        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe"
-        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912104362790",
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe",
+        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912104362790"
       }
     },
     "production": {
