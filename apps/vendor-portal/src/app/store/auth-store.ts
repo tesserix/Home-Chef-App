@@ -6,12 +6,11 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   csrfToken: string | null;
-  /** Firebase ID token; sent as X-Auth-Token bearer by api-client. */
+  /** Legacy bearer slot, always null now; the BFF cookie is the session. */
   accessToken: string | null;
-  /** Firebase refresh token; rotated internally by Firebase. */
+  /** Legacy refresh slot, always null now. */
   refreshToken: string | null;
   setSession: (user: SessionUser, csrfToken?: string) => void;
-  setApiAuth: (user: SessionUser, accessToken: string, refreshToken: string) => void;
   clearAuth: () => void;
   setLoading: (loading: boolean) => void;
   initialize: () => Promise<void>;
@@ -28,8 +27,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setSession: (user, csrfToken) =>
     set({ user, isAuthenticated: true, csrfToken: csrfToken ?? get().csrfToken }),
 
-  setApiAuth: (user, accessToken, refreshToken) =>
-    set({ user, isAuthenticated: true, accessToken, refreshToken }),
 
   clearAuth: () =>
     set({
@@ -43,9 +40,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setLoading: (isLoading) => set({ isLoading }),
 
   /**
-   * Bootstrap auth state from the BFF session cookie. The cookie is the
-   * single source of truth; Firebase auth-state changes flow in via
-   * `subscribeAuth()` (see initialization below).
+   * Bootstrap auth state from the BFF session cookie — the single source
+   * of truth now that login happens on Zitadel's hosted pages.
    */
   initialize: async () => {
     try {
@@ -68,27 +64,3 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }));
 
-// Subscribe Firebase auth-state to the store so signOut from another tab (or
-// token expiry detected by the SDK) clears local state automatically.
-if (typeof window !== 'undefined') {
-  void import('@/features/auth/services/auth-service').then(({ subscribeAuth, toSessionUser }) => {
-    subscribeAuth((session) => {
-      if (session) {
-        useAuthStore.setState({
-          user: toSessionUser(session),
-          isAuthenticated: true,
-          isLoading: false,
-        });
-      } else {
-        useAuthStore.setState({
-          user: null,
-          isAuthenticated: false,
-          csrfToken: null,
-          accessToken: null,
-          refreshToken: null,
-          isLoading: false,
-        });
-      }
-    });
-  });
-}
