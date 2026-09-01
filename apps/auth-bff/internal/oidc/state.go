@@ -33,7 +33,10 @@ type StateEntry struct {
 	Nonce            string
 	ReturnTo         string
 	MarketingConsent bool
-	Created          time.Time
+	// CodeVerifier is the PKCE verifier generated at /auth/login and replayed
+	// at token exchange — sealed inside the state envelope, never client-visible.
+	CodeVerifier string
+	Created      time.Time
 }
 
 // StateManager creates and consumes browser-bound OAuth state. Implementations
@@ -153,11 +156,13 @@ func (m *BrowserStateManager) Take(w http.ResponseWriter, r *http.Request, raw s
 		return StateEntry{}, false
 	}
 	m.clearCookie(w, cookieName)
-	binding, err := base64.RawURLEncoding.DecodeString(cookie.Value)
+	binding, err := base64.RawURLEncoding.Strict().DecodeString(cookie.Value)
 	if err != nil || len(binding) != stateBindingBytes {
 		return StateEntry{}, false
 	}
-	blob, err := base64.RawURLEncoding.DecodeString(ciphertext)
+	// Strict: a state whose final character differs only in the trailing bits
+	// the default decoder ignores must not alias the canonical encoding.
+	blob, err := base64.RawURLEncoding.Strict().DecodeString(ciphertext)
 	if err != nil || len(blob) < m.gcm.NonceSize()+m.gcm.Overhead() {
 		return StateEntry{}, false
 	}
@@ -206,7 +211,7 @@ func splitState(raw string) (string, string, bool) {
 		return "", "", false
 	}
 	handle, ciphertext, _ := strings.Cut(raw, ".")
-	decoded, err := base64.RawURLEncoding.DecodeString(handle)
+	decoded, err := base64.RawURLEncoding.Strict().DecodeString(handle)
 	if err != nil || len(decoded) != stateHandleBytes || ciphertext == "" {
 		return "", "", false
 	}

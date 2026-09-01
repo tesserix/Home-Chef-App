@@ -3,7 +3,6 @@ package oidc
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,23 +10,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/homechef/auth-bff/internal/apiclient"
-	"github.com/homechef/auth-bff/internal/gip"
-	"github.com/homechef/auth-bff/internal/productregistry"
-	"github.com/homechef/auth-bff/internal/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
+
+	"github.com/homechef/auth-bff/internal/apiclient"
+	"github.com/homechef/auth-bff/internal/productregistry"
+	"github.com/homechef/auth-bff/internal/session"
 )
-
-type fakeVerifier struct {
-	tok *gip.VerifiedToken
-	err error
-}
-
-func (f *fakeVerifier) Verify(ctx context.Context, raw, tenant string) (*gip.VerifiedToken, error) {
-	return f.tok, f.err
-}
 
 type fakeAPI struct {
 	resp     *apiclient.UpsertUserResponse
@@ -81,29 +71,27 @@ func loadReg(t *testing.T) *productregistry.Registry {
 	return r
 }
 
-func newHandlers(t *testing.T, ver *fakeVerifier, api *fakeAPI) *Handlers {
+func newHandlers(t *testing.T, api *fakeAPI) *Handlers {
 	stateManager, err := NewBrowserStateManager(stateTestKey(t), false)
 	require.NoError(t, err)
 	return &Handlers{
 		Registry: loadReg(t),
 		OAuthByApp: map[string]*oauth2.Config{
 			"admin-portal": {
-				ClientID:     "test-client",
-				ClientSecret: "test-secret",
-				Endpoint:     oauth2.Endpoint{AuthURL: "https://example.com/oauth/authorize", TokenURL: "https://example.com/oauth/token"},
-				RedirectURL:  "http://localhost:5173/auth/callback",
-				Scopes:       []string{"openid", "email", "profile"},
+				ClientID:    "test-client",
+				Endpoint:    oauth2.Endpoint{AuthURL: "https://example.com/oauth/v2/authorize", TokenURL: "https://example.com/oauth/v2/token"},
+				RedirectURL: "http://localhost:5176/auth/callback",
+				Scopes:      []string{"openid", "email", "profile"},
 			},
 		},
-		GIPVerifier:  ver,
 		API:          api,
 		Sessions:     &fakeSessions{encoded: "sess-blob"},
 		StateManager: stateManager,
 	}
 }
 
-func TestLogin_Redirects(t *testing.T) {
-	h := newHandlers(t, &fakeVerifier{}, &fakeAPI{})
+func TestLogin_Redirects_WithPKCE(t *testing.T) {
+	h := newHandlers(t, &fakeAPI{})
 	r := gin.New()
 	h.Register(r)
 
@@ -113,16 +101,48 @@ func TestLogin_Redirects(t *testing.T) {
 
 	require.Equal(t, http.StatusFound, w.Code)
 	loc := w.Header().Get("Location")
-	assert.Contains(t, loc, "https://example.com/oauth/authorize")
+	assert.Contains(t, loc, "https://example.com/oauth/v2/authorize")
 	assert.Contains(t, loc, "state=")
-	assert.Contains(t, loc, "tenantId=HomeChef-Internal-gyofe")
 	assert.Contains(t, loc, "nonce=")
+	assert.Contains(t, loc, "code_challenge=")
+	assert.Contains(t, loc, "code_challenge_method=S256")
+	// Zitadel is a single multi-app instance — the GIP-era tenantId must be gone.
+	assert.NotContains(t, loc, "tenantId")
 	assert.Contains(t, w.Header().Get("Set-Cookie"), "hc_oidc_")
 	assert.Contains(t, w.Header().Get("Set-Cookie"), "HttpOnly")
 }
 
+func TestLogin_RegisterScreen_AddsPromptCreate(t *testing.T) {
+	h := newHandlers(t, &fakeAPI{})
+	r := gin.New()
+	h.Register(r)
+
+	req := httptest.NewRequest("GET", "http://admin.fe3dr.com/auth/login?screen=register", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusFound, w.Code)
+	assert.Contains(t, w.Header().Get("Location"), "prompt=create")
+}
+
+func TestLogin_StoresPKCEVerifierAndConsentInState(t *testing.T) {
+	h := newHandlers(t, &fakeAPI{})
+	states := &recordingStateManager{}
+	h.StateManager = states
+	r := gin.New()
+	h.Register(r)
+
+	req := httptest.NewRequest("GET", "http://admin.fe3dr.com/auth/login?marketing_consent=true", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusFound, w.Code)
+	assert.NotEmpty(t, states.entry.CodeVerifier, "PKCE verifier must be sealed into state")
+	assert.True(t, states.entry.MarketingConsent)
+}
+
 func TestLogin_UnknownHost_400(t *testing.T) {
-	h := newHandlers(t, &fakeVerifier{}, &fakeAPI{})
+	h := newHandlers(t, &fakeAPI{})
 	r := gin.New()
 	h.Register(r)
 	req := httptest.NewRequest("GET", "http://attacker.example.com/auth/login", nil)
@@ -132,7 +152,7 @@ func TestLogin_UnknownHost_400(t *testing.T) {
 }
 
 func TestLogin_DoesNotPersistExternalReturnTo(t *testing.T) {
-	h := newHandlers(t, &fakeVerifier{}, &fakeAPI{})
+	h := newHandlers(t, &fakeAPI{})
 	states := &recordingStateManager{}
 	h.StateManager = states
 	r := gin.New()
@@ -148,7 +168,7 @@ func TestLogin_DoesNotPersistExternalReturnTo(t *testing.T) {
 }
 
 func TestLogin_StateManagerFailure_500(t *testing.T) {
-	h := newHandlers(t, &fakeVerifier{}, &fakeAPI{})
+	h := newHandlers(t, &fakeAPI{})
 	h.StateManager = &recordingStateManager{err: errors.New("random source unavailable")}
 	r := gin.New()
 	h.Register(r)
@@ -158,7 +178,7 @@ func TestLogin_StateManagerFailure_500(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Contains(t, w.Body.String(), "state_generation_failed")
+	assert.Contains(t, w.Body.String(), "state_failed")
 }
 
 func TestSafeReturnTo_RejectsRedirectAmbiguities(t *testing.T) {
@@ -174,185 +194,129 @@ func TestSafeReturnTo_RejectsRedirectAmbiguities(t *testing.T) {
 	}
 }
 
-func TestCallbackInvariants_RequireMatchingAppNonceAndTenant(t *testing.T) {
+func TestCallbackInvariants_RequireMatchingAppAndNonce(t *testing.T) {
 	entry := StateEntry{AppName: "admin-portal", Nonce: "expected-nonce"}
 	assert.True(t, stateMatchesApp(entry, "admin-portal"))
 	assert.False(t, stateMatchesApp(entry, "web"))
 	assert.True(t, nonceMatches(entry, "expected-nonce"))
 	assert.False(t, nonceMatches(entry, ""))
 	assert.False(t, nonceMatches(entry, "attacker-nonce"))
-
-	claims := map[string]any{
-		"firebase": map[string]any{"tenant": "HomeChef-Internal-gyofe"},
-	}
-	assert.True(t, tenantMatchesApp(claims, "HomeChef-Internal-gyofe"))
-	assert.False(t, tenantMatchesApp(claims, "HomeChef-Customer-gyofe"))
-	assert.False(t, tenantMatchesApp(map[string]any{}, "HomeChef-Internal-gyofe"))
 }
 
-func TestExchange_Happy(t *testing.T) {
-	// Internal-tenant admin login: the allowlist must include the email now that
-	// the gate fails closed on an unconfigured allowlist.
-	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "x@y.com")
-	ver := &fakeVerifier{
-		tok: &gip.VerifiedToken{
-			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password",
-			Name: "Ada Admin", Picture: "https://example.com/avatar.png", EmailVerified: true,
-			Claims: map[string]any{
-				"sub":      "g1",
-				"email":    "x@y.com",
-				"firebase": map[string]any{"sign_in_provider": "password", "tenant": "HomeChef-Internal-gyofe"},
-			},
-		},
-	}
-	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
-	h := newHandlers(t, ver, api)
-	r := gin.New()
-	h.Register(r)
+// --- issueSession (white-box: the callback path after token verification) ---
 
-	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"valid"}`))
-	req.Header.Set("Content-Type", "application/json")
+func runIssueSession(t *testing.T, h *Handlers, host string, claims map[string]any, entry StateEntry) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "http://"+host+"/auth/callback", nil)
+	app, err := h.Registry.ResolveByHost(host)
+	require.NoError(t, err)
+	h.issueSession(c, app, claims, entry)
+	return w
+}
 
-	require.Equal(t, http.StatusOK, w.Code)
-	body, _ := io.ReadAll(w.Result().Body)
-	assert.Contains(t, string(body), `"user_id":"u1"`)
-	// Session cookie should be set under the admin app's own cookie name
-	// (homechef-products.yaml: admin-portal → hc_admin_session), not the
-	// shared hc_session name — that's exactly the isolation this handler
-	// exists to preserve (see productregistry.App.SessionCookie).
-	// Joined, not Get(): the exchange also sets the browser device cookie, and
-	// Get returns whichever Set-Cookie happens to come first.
-	assert.Contains(t, strings.Join(w.Header().Values("Set-Cookie"), " "), "hc_admin_session=sess-blob")
+// allCookies joins every Set-Cookie header; Get() only returns the first.
+func allCookies(w *httptest.ResponseRecorder) string {
+	return strings.Join(w.Header().Values("Set-Cookie"), "\n")
+}
+
+func adminClaims(verified bool) map[string]any {
+	return map[string]any{
+		"sub": "z1", "email": "x@y.com", "email_verified": verified,
+		"name": "Ada Admin", "picture": "https://example.com/avatar.png",
+	}
+}
+
+func TestIssueSession_Admin_Happy(t *testing.T) {
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "x@y.com")
+	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
+	h := newHandlers(t, api)
+
+	w := runIssueSession(t, h, "admin.fe3dr.com", adminClaims(true), StateEntry{})
+
+	require.Equal(t, http.StatusFound, w.Code, w.Body.String())
+	// Session cookie must be the admin app's own name, not the shared hc_session.
+	assert.Contains(t, allCookies(w), "hc_admin_session=sess-blob")
+	assert.Equal(t, ProviderName, api.lastReq.Provider)
+	assert.Equal(t, "z1", api.lastReq.Subject)
+	assert.Equal(t, "internal", api.lastReq.AuthPool)
 	assert.Equal(t, "Ada Admin", api.lastReq.Name)
 	assert.Equal(t, "https://example.com/avatar.png", api.lastReq.Avatar)
 	assert.True(t, api.lastReq.EmailVerified)
 }
 
-func TestExchange_AdminEmailNotInAllowlist_403(t *testing.T) {
+func TestIssueSession_AdminEmailNotInAllowlist_403(t *testing.T) {
 	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "allowed@fe3dr.com")
-	ver := &fakeVerifier{
-		tok: &gip.VerifiedToken{
-			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password",
-			EmailVerified: true,
-			Claims:        map[string]any{"sub": "g1", "email": "x@y.com"},
-		},
-	}
 	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
-	h := newHandlers(t, ver, api)
-	r := gin.New()
-	h.Register(r)
+	h := newHandlers(t, api)
 
-	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"valid"}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := runIssueSession(t, h, "admin.fe3dr.com", adminClaims(true), StateEntry{})
 
 	require.Equal(t, http.StatusForbidden, w.Code)
 	assert.Contains(t, w.Body.String(), "email_not_allowed")
+	assert.False(t, api.captured, "a denied admin must never be upserted")
 }
 
-func TestExchange_AdminUnverifiedEmail_Denied(t *testing.T) {
-	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "admin@fe3dr.com")
+func TestIssueSession_AdminUnverifiedEmail_Denied(t *testing.T) {
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "x@y.com")
 	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
-	h := newHandlers(t, &fakeVerifier{tok: &gip.VerifiedToken{
-		UID: "g1", Email: "admin@fe3dr.com", TenantID: "HomeChef-Internal-gyofe",
-		Provider: "password", EmailVerified: false,
-		Claims: map[string]any{"sub": "g1", "email": "admin@fe3dr.com", "email_verified": false},
-	}}, api)
-	r := gin.New()
-	h.Register(r)
+	h := newHandlers(t, api)
 
-	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"valid"}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := runIssueSession(t, h, "admin.fe3dr.com", adminClaims(false), StateEntry{})
 
 	require.Equal(t, http.StatusForbidden, w.Code)
 	assert.Contains(t, w.Body.String(), "email_not_verified")
 	assert.False(t, api.captured, "an unverified admin identity must never be upserted")
 }
 
-func TestExchange_AdminAllowlistUnset_Denied(t *testing.T) {
+func TestIssueSession_AdminAllowlistUnset_Denied(t *testing.T) {
 	// Fail-closed: an unconfigured allowlist must DENY admin login. The k8s
-	// secret is mounted optional and the mesh does not strip X-User-* headers, so
-	// a missing allowlist would otherwise hand admin to any verified email.
+	// secret is mounted optional and the mesh does not strip X-User-* headers,
+	// so a missing allowlist would otherwise hand admin to any verified email.
 	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "")
-	ver := &fakeVerifier{
-		tok: &gip.VerifiedToken{
-			UID: "g1", Email: "admin@fe3dr.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password",
-			Claims: map[string]any{"sub": "g1", "email": "admin@fe3dr.com"},
-		},
-	}
 	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
-	h := newHandlers(t, ver, api)
-	r := gin.New()
-	h.Register(r)
+	h := newHandlers(t, api)
 
-	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"valid"}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := runIssueSession(t, h, "admin.fe3dr.com", adminClaims(true), StateEntry{})
 
 	require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "email_not_allowed")
-	assert.False(t, api.captured, "a denied admin must never be upserted")
+	assert.False(t, api.captured)
 }
 
-func TestExchange_AdminEmailInAllowlist_OK(t *testing.T) {
-	// Case-insensitive + space-trimmed match.
+func TestIssueSession_AdminAllowlist_CaseInsensitive(t *testing.T) {
 	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", " X@Y.com , other@fe3dr.com ")
-	ver := &fakeVerifier{
-		tok: &gip.VerifiedToken{
-			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password",
-			EmailVerified: true,
-			Claims:        map[string]any{"sub": "g1", "email": "x@y.com"},
-		},
-	}
 	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
-	h := newHandlers(t, ver, api)
-	r := gin.New()
-	h.Register(r)
+	h := newHandlers(t, api)
 
-	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"valid"}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := runIssueSession(t, h, "admin.fe3dr.com", adminClaims(true), StateEntry{})
 
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), `"user_id":"u1"`)
+	require.Equal(t, http.StatusFound, w.Code, w.Body.String())
 }
 
-func TestExchange_InvalidBody_400(t *testing.T) {
-	h := newHandlers(t, &fakeVerifier{}, &fakeAPI{})
-	r := gin.New()
-	h.Register(r)
-	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusBadRequest, w.Code)
+func TestIssueSession_Customer_NoAllowlistNeeded(t *testing.T) {
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "")
+	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
+	h := newHandlers(t, api)
+
+	claims := map[string]any{"sub": "z2", "email": "cust@example.com", "email_verified": false}
+	w := runIssueSession(t, h, "fe3dr.com", claims, StateEntry{MarketingConsent: true})
+
+	require.Equal(t, http.StatusFound, w.Code, w.Body.String())
+	assert.Contains(t, allCookies(w), "hc_session=sess-blob")
+	assert.Equal(t, "customer", api.lastReq.AuthPool)
+	assert.True(t, api.lastReq.MarketingConsent, "DPDP consent captured at login must reach the API")
 }
 
-func TestExchange_InvalidToken_401(t *testing.T) {
-	h := newHandlers(t, &fakeVerifier{err: errors.New("bad")}, &fakeAPI{})
-	r := gin.New()
-	h.Register(r)
-	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"bad"}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusUnauthorized, w.Code)
-}
+func TestIssueSession_ReturnToOverridesPostLoginURL(t *testing.T) {
+	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
+	h := newHandlers(t, api)
 
-func TestExchange_UnknownHost_400(t *testing.T) {
-	h := newHandlers(t, &fakeVerifier{}, &fakeAPI{})
-	r := gin.New()
-	h.Register(r)
-	req := httptest.NewRequest("POST", "http://attacker.example.com/auth/exchange", strings.NewReader(`{"id_token":"x"}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusBadRequest, w.Code)
+	claims := map[string]any{"sub": "z2", "email": "cust@example.com"}
+	w := runIssueSession(t, h, "fe3dr.com", claims, StateEntry{ReturnTo: "/orders/42"})
+
+	require.Equal(t, http.StatusFound, w.Code)
+	assert.Equal(t, "/orders/42", w.Header().Get("Location"))
 }

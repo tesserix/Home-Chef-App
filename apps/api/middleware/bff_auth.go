@@ -407,7 +407,8 @@ func verifyBearer(r *http.Request, bffSessionURL string, client *http.Client) (*
 // Without this every approval, rejection and document verification recorded
 // uuid.Nil as the actor — 24/24 rows in production carried no reviewer (#968).
 // UUID callers (mobile, the auth BFF) never reach here, so the lookup only
-// costs the low-volume admin path and is served by the gip_uid unique index.
+// costs the low-volume admin path. user_identities is checked first, then the
+// legacy gip_uid column for rows that predate the identities table.
 func resolveLocalUserID(id *BFFIdentity) (uuid.UUID, bool) {
 	if database.DB == nil || id == nil {
 		return uuid.Nil, false
@@ -416,20 +417,29 @@ func resolveLocalUserID(id *BFFIdentity) (uuid.UUID, bool) {
 		return uuid.Nil, false
 	}
 
-	var user models.User
-	q := database.DB.Select("id")
 	if id.UserID != "" {
-		q = q.Where("gip_uid = ?", id.UserID)
+		var ident models.UserIdentity
+		if err := database.DB.Select("user_id").Where("subject = ?", id.UserID).
+			First(&ident).Error; err == nil && ident.UserID != uuid.Nil {
+			return ident.UserID, true
+		}
+		var user models.User
+		if err := database.DB.Select("id").Where("gip_uid = ?", id.UserID).
+			First(&user).Error; err == nil && user.ID != uuid.Nil {
+			return user.ID, true
+		}
 	} else {
-		q = q.Where("lower(email) = lower(?) AND auth_pool = ?", id.Email, models.PoolInternal)
-	}
-	if err := q.First(&user).Error; err == nil && user.ID != uuid.Nil {
-		return user.ID, true
+		var user models.User
+		if err := database.DB.Select("id").
+			Where("lower(email) = lower(?) AND auth_pool = ?", id.Email, models.PoolInternal).
+			First(&user).Error; err == nil && user.ID != uuid.Nil {
+			return user.ID, true
+		}
 	}
 
 	// Platform admins sign in against tesserix-home, so they have never had a
 	// HomeChef row — leaving nothing to attribute an approval to. Materialise
-	// one on first use, the same way the auth BFF does for every other GIP
+	// one on first use, the same way the auth BFF does for every other
 	// identity. Only for an internal-pool admin, and role/pool are inside the
 	// HMAC the gateway signs, so this cannot be driven by a caller.
 	if id.Pool != string(models.PoolInternal) || id.Role != string(models.RoleAdmin) || id.Email == "" {
@@ -438,13 +448,20 @@ func resolveLocalUserID(id *BFFIdentity) (uuid.UUID, bool) {
 	admin := models.User{
 		ID:       uuid.New(), // set here, not via the Postgres-only column default
 		Email:    strings.ToLower(id.Email),
-		GIPUid:   id.UserID,
 		AuthPool: models.PoolInternal,
 		Role:     models.RoleAdmin,
 		IsActive: true,
 	}
 	if err := database.DB.Create(&admin).Error; err != nil || admin.ID == uuid.Nil {
 		return uuid.Nil, false
+	}
+	if id.UserID != "" {
+		// Best-effort identity link so the next call resolves via the index.
+		_ = database.DB.Create(&models.UserIdentity{
+			ID: uuid.New(), UserID: admin.ID,
+			Provider: "external-oidc", Subject: id.UserID,
+			Email: strings.ToLower(id.Email),
+		}).Error
 	}
 	return admin.ID, true
 }

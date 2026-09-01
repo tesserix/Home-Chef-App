@@ -60,7 +60,16 @@ func setupDB(t *testing.T) *gorm.DB {
 			deleted_at            DATETIME
 		)
 	`).Error)
-	require.NoError(t, db.Exec(`CREATE UNIQUE INDEX idx_users_gip_uid ON users(gip_uid)`).Error)
+	require.NoError(t, db.Exec(`
+		CREATE TABLE user_identities (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			provider TEXT NOT NULL,
+			subject TEXT NOT NULL,
+			email TEXT DEFAULT '',
+			created_at DATETIME, last_login_at DATETIME)`).Error)
+	require.NoError(t, db.Exec(`CREATE UNIQUE INDEX idx_user_identities_provider_subject ON user_identities(provider, subject)`).Error)
+	require.NoError(t, db.Exec(`CREATE UNIQUE INDEX idx_users_gip_uid ON users(gip_uid) WHERE gip_uid <> ''`).Error)
 	require.NoError(t, db.Exec(`CREATE INDEX idx_users_deleted_at ON users(deleted_at)`).Error)
 	return db
 }
@@ -306,4 +315,114 @@ func TestUpsert_SameEmailDifferentPool_AllowsTwoRows(t *testing.T) {
 	var count int64
 	require.NoError(t, db.Model(&models.User{}).Where("email = ?", "person@example.com").Count(&count).Error)
 	assert.Equal(t, int64(2), count)
+}
+
+// --- Zitadel-era provider/subject shape ---
+
+func TestUpsert_ZitadelNewUser_CreatesUserAndIdentity(t *testing.T) {
+	db := setupDB(t)
+	h := NewInternalUsersHandler(db)
+
+	w := postUpsert(t, h, UpsertUserRequest{
+		Provider: "zitadel", Subject: "z-1", AuthPool: "customer",
+		Email: "Zed@Example.com", Name: "Zed Zitadel",
+		EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+
+	var ident models.UserIdentity
+	require.NoError(t, db.Where("provider = ? AND subject = ?", "zitadel", "z-1").First(&ident).Error)
+	var got models.User
+	require.NoError(t, db.First(&got, "id = ?", ident.UserID).Error)
+	assert.Equal(t, "zed@example.com", got.Email)
+	assert.Empty(t, got.GIPUid, "a zitadel identity must not populate legacy GIP columns")
+}
+
+func TestUpsert_ZitadelRepeatLogin_ReusesRow(t *testing.T) {
+	db := setupDB(t)
+	h := NewInternalUsersHandler(db)
+
+	w1 := postUpsert(t, h, UpsertUserRequest{
+		Provider: "zitadel", Subject: "z-2", AuthPool: "customer",
+		Email: "r@example.com", EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w1.Code)
+	w2 := postUpsert(t, h, UpsertUserRequest{
+		Provider: "zitadel", Subject: "z-2", AuthPool: "customer",
+		Email: "r@example.com", EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w2.Code, "body: %s", w2.Body.String())
+
+	var users, idents int64
+	require.NoError(t, db.Model(&models.User{}).Where("email = ?", "r@example.com").Count(&users).Error)
+	require.NoError(t, db.Model(&models.UserIdentity{}).Where("subject = ?", "z-2").Count(&idents).Error)
+	assert.EqualValues(t, 1, users)
+	assert.EqualValues(t, 1, idents)
+}
+
+// The GIP→Zitadel migration path: a GIP-era account's first Zitadel login must
+// link a new identity to the existing row, not mint a duplicate account.
+func TestUpsert_ZitadelLogin_LinksExistingGIPUserByVerifiedEmail(t *testing.T) {
+	db := setupDB(t)
+	h := NewInternalUsersHandler(db)
+
+	w1 := postUpsert(t, h, UpsertUserRequest{
+		GIPUid: "gip-mig", GIPTenantID: "T", GIPProvider: "google.com",
+		AuthPool: "customer", Email: "mig@example.com", Name: "Mig Rant",
+		EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w1.Code)
+	var original models.User
+	require.NoError(t, db.Where("gip_uid = ?", "gip-mig").First(&original).Error)
+
+	w2 := postUpsert(t, h, UpsertUserRequest{
+		Provider: "zitadel", Subject: "z-mig", AuthPool: "customer",
+		Email: "mig@example.com", Name: "Mig Rant",
+		EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w2.Code, "body: %s", w2.Body.String())
+
+	var resp UpsertUserResponse
+	require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &resp))
+	assert.Equal(t, original.ID.String(), resp.UserID, "must reuse the GIP-era row")
+
+	var count int64
+	require.NoError(t, db.Model(&models.User{}).Where("email = ?", "mig@example.com").Count(&count).Error)
+	assert.EqualValues(t, 1, count)
+	var ident models.UserIdentity
+	require.NoError(t, db.Where("provider = ? AND subject = ?", "zitadel", "z-mig").First(&ident).Error)
+	assert.Equal(t, original.ID, ident.UserID)
+}
+
+// An unverified Zitadel signup on an occupied email must NOT link — it falls
+// through to the create path (where Postgres's per-pool unique index has the
+// final word; sqlite can't model that, mirroring the legacy unverified test).
+func TestUpsert_ZitadelUnverified_DoesNotLink(t *testing.T) {
+	db := setupDB(t)
+	h := NewInternalUsersHandler(db)
+
+	w1 := postUpsert(t, h, UpsertUserRequest{
+		Provider: "zitadel", Subject: "z-owner", AuthPool: "customer",
+		Email: "owned@example.com", EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w1.Code)
+
+	w2 := postUpsert(t, h, UpsertUserRequest{
+		Provider: "zitadel", Subject: "z-intruder", AuthPool: "customer",
+		Email: "owned@example.com", EmailVerified: false, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w2.Code)
+
+	var owner, intruder models.UserIdentity
+	require.NoError(t, db.Where("subject = ?", "z-owner").First(&owner).Error)
+	require.NoError(t, db.Where("subject = ?", "z-intruder").First(&intruder).Error)
+	assert.NotEqual(t, owner.UserID, intruder.UserID, "unverified email must not attach to the owner's account")
+}
+
+func TestUpsert_MissingProviderAndSubject_400(t *testing.T) {
+	h := NewInternalUsersHandler(setupDB(t))
+	w := postUpsert(t, h, UpsertUserRequest{
+		AuthPool: "customer", Email: "x@y.com", Role: "customer",
+	})
+	require.Equal(t, http.StatusBadRequest, w.Code)
 }

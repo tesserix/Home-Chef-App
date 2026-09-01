@@ -95,15 +95,23 @@ func TestRegistry_SessionCookieForHost_UnknownHost_ReturnsEmpty(t *testing.T) {
 	assert.Equal(t, "", r.SessionCookieForHost("attacker.example.com"))
 }
 
-func TestRegistry_MobileTenantAllowlist(t *testing.T) {
+func TestRegistry_MobilePoolAllowlist(t *testing.T) {
 	r, _ := Load("../../homechef-products.yaml")
-	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Customer-rqg8a"))
-	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Business-8s8ql"))
+	assert.True(t, r.IsMobilePoolAllowed("customer"))
+	assert.True(t, r.IsMobilePoolAllowed("business"))
 	// Internal/admin pool is mobile-allowed too — it powers apps/mobile-admin
-	// (the internal pool resolves to role=admin in autologin).
-	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Internal-gyofe"))
-	// A tenant not in the allowlist is still rejected.
-	assert.False(t, r.IsMobileTenantAllowed("HomeChef-Unknown-zzzzz"))
+	// (still gated by the admin email allowlist + verified email in autologin).
+	assert.True(t, r.IsMobilePoolAllowed("internal"))
+	// A pool not in the allowlist is rejected.
+	assert.False(t, r.IsMobilePoolAllowed("superuser"))
+}
+
+// The mobile auto-login path resolves apps by pool (no request host).
+func TestRegistry_ResolveByPool(t *testing.T) {
+	r, _ := Load("../../homechef-products.yaml")
+	require.NotNil(t, r.ResolveByPool("internal"))
+	assert.Equal(t, "admin-portal", r.ResolveByPool("internal").Name)
+	assert.Nil(t, r.ResolveByPool("superuser"))
 }
 
 // Every app's defaultRole must be a member of the Go API's UserRole enum

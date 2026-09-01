@@ -10,7 +10,7 @@ import { useAuthStore } from '../store/auth-store';
 import { useFavoritesStore } from '../store/favorites-store';
 import { useCurrencyStore } from '../store/currency-store';
 import { apiClient, ACCOUNT_BLOCKED_EVENT, AUTH_EXPIRED_EVENT } from '@/shared/services/api-client';
-import type { SessionUser, SocialProvider } from '@/shared/types/auth';
+import type { SessionUser } from '@/shared/types/auth';
 import type { OnboardingStatus, CustomerProfile } from '@/shared/types';
 
 interface AuthContextValue {
@@ -18,10 +18,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   csrfToken: string | null;
-  login: (provider?: SocialProvider) => Promise<void>;
-  register: () => Promise<void>;
-  loginWithEmail: (email: string, password: string) => Promise<void>;
-  registerWithEmail: (data: { email: string; password: string; firstName: string; lastName: string; marketingConsent?: boolean }) => Promise<void>;
+  login: (options?: { returnTo?: string }) => Promise<void>;
+  register: (options?: { marketingConsent?: boolean }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -132,35 +130,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, [isAuthenticated, isLoading, onboardingCompleted, navigate, location.pathname, setOnboardingCompleted]);
 
-  const login = useCallback(async (provider?: SocialProvider) => {
+  // Login and registration are full-page redirects into the hosted Zitadel
+  // pages via the BFF; credentials never touch this app any more.
+  const login = useCallback(async (options?: { returnTo?: string }) => {
     const svc = await import('@/features/auth/services/auth-service');
-    const session =
-      provider === 'apple' ? await svc.signInWithApple() : await svc.signInWithGoogle();
-    const { setApiAuth } = useAuthStore.getState();
-    setApiAuth(svc.toSessionUser(session), '', '');
+    svc.redirectToLogin({ returnTo: options?.returnTo });
   }, []);
 
-  const register = useCallback(async () => {
-    // Registration via social provider mirrors login; email/password
-    // registration is handled by RegisterPage via `registerWithEmail`.
+  const register = useCallback(async (options?: { marketingConsent?: boolean }) => {
     const svc = await import('@/features/auth/services/auth-service');
-    const session = await svc.signInWithGoogle();
-    const { setApiAuth } = useAuthStore.getState();
-    setApiAuth(svc.toSessionUser(session), '', '');
-  }, []);
-
-  const loginWithEmail = useCallback(async (email: string, password: string) => {
-    const { authService } = await import('@/features/auth/services/auth-service');
-    const result = await authService.loginWithEmail(email, password);
-    const { setApiAuth } = useAuthStore.getState();
-    setApiAuth(result.user, result.accessToken, result.refreshToken);
-  }, []);
-
-  const registerWithEmail = useCallback(async (data: { email: string; password: string; firstName: string; lastName: string; marketingConsent?: boolean }) => {
-    const { authService } = await import('@/features/auth/services/auth-service');
-    const result = await authService.registerWithEmail(data);
-    const { setApiAuth } = useAuthStore.getState();
-    setApiAuth(result.user, result.accessToken, result.refreshToken);
+    svc.redirectToLogin({ register: true, marketingConsent: options?.marketingConsent });
   }, []);
 
   const logout = useCallback(async () => {
@@ -177,8 +156,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     csrfToken,
     login,
     register,
-    loginWithEmail,
-    registerWithEmail,
     logout,
   };
 

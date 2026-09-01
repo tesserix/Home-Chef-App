@@ -20,7 +20,7 @@ import { api } from '../../lib/api';
 import type { AuthResponse } from '@homechef/mobile-shared/types';
 
 const BFF_URL = process.env.EXPO_PUBLIC_BFF_URL ?? '';
-const GIP_TENANT_ID = process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? '';
+const AUTH_POOL = process.env.EXPO_PUBLIC_AUTH_POOL ?? 'business';
 
 function bffToAuthResponse(
   body: { session_token: string; user: { id: string; email: string; role: string } },
@@ -75,7 +75,7 @@ export default function RegisterPage() {
   async function completeOAuthFlow(): Promise<void> {
     const idToken = await getIdToken();
     if (!idToken) throw new Error('no_id_token_after_oauth');
-    const body = await autoLogin(BFF_URL, idToken, GIP_TENANT_ID);
+    const body = await autoLogin(BFF_URL, idToken, AUTH_POOL);
     // OAuth flows don't capture first/last name in the form — use empty
     // strings; the user can fill them in from the profile screen later.
     await setAuthResponse(bffToAuthResponse(body, '', '', ''));
@@ -131,7 +131,7 @@ export default function RegisterPage() {
         await registerWithEmail(data.email, data.password);
         const idToken = await getIdToken();
         if (!idToken) throw new Error('no_id_token_after_register');
-        const body = await autoLogin(BFF_URL, idToken, GIP_TENANT_ID);
+        const body = await autoLogin(BFF_URL, idToken, AUTH_POOL);
         await setAuthResponse(
           bffToAuthResponse(body, data.firstName, data.lastName, data.phone ?? ''),
         );

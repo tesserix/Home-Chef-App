@@ -72,20 +72,20 @@ export interface BFFSessionUser {
 export async function autoLogin(
   bffUrl: string,
   idToken: string,
-  expectedTenantId: string
+  pool: string
 ): Promise<BFFAutoLoginResponse> {
   // Catch missing-env-var silent failures before they become a mysterious
   // network error against `//auth/auto-login`. The most common cause is a
-  // forgotten EXPO_PUBLIC_BFF_URL / EXPO_PUBLIC_GIP_TENANT_ID in the EAS
+  // forgotten EXPO_PUBLIC_BFF_URL / EXPO_PUBLIC_AUTH_POOL in the EAS
   // build profile.
   if (!bffUrl) {
     throw new Error(
       "autoLogin: bffUrl is empty. Set EXPO_PUBLIC_BFF_URL in your .env.local or EAS build profile."
     );
   }
-  if (!expectedTenantId) {
+  if (!pool) {
     throw new Error(
-      "autoLogin: expectedTenantId is empty. Set EXPO_PUBLIC_GIP_TENANT_ID in your .env.local or EAS build profile."
+      "autoLogin: pool is empty. Set EXPO_PUBLIC_AUTH_POOL in your .env.local or EAS build profile."
     );
   }
   if (!idToken) {
@@ -99,7 +99,7 @@ export async function autoLogin(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       id_token: idToken,
-      expected_tenant_id: expectedTenantId,
+      pool,
       device_id: await getDeviceId(),
       platform: device.platform,
       device_label: device.label,
@@ -108,7 +108,7 @@ export async function autoLogin(
   });
   if (!r.ok) {
     // Try to extract the BFF's structured error body (e.g.
-    // {"error":"tenant_not_allowed"}); fall back to a status-coded throw.
+    // {"error":"pool_not_allowed"}); fall back to a status-coded throw.
     // The caller is expected to map these to user-facing messages —
     // see resolveAuthErrorMessage() in this file.
     let bffError = '';
@@ -145,8 +145,8 @@ export function resolveAuthErrorMessage(err: unknown): string {
   const raw = `${code} ${message}`.trim();
   const codeMap: Record<string, string> = {
     auto_login_invalid_token: "We couldn't verify your sign-in. Please try again.",
-    auto_login_tenant_not_allowed:
-      "This account isn't allowed for the vendor app. Use a customer or driver app instead.",
+    auto_login_pool_not_allowed:
+      "This account isn't allowed in this app. Use the app that matches your account.",
     auto_login_upstream_error:
       "We couldn't reach the kitchen service. Check your connection and try again.",
     auto_login_400: 'Something was off with the sign-in details. Please try again.',

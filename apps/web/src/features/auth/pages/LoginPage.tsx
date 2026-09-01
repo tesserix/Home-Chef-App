@@ -1,70 +1,46 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChefHat, Loader2, Eye, EyeOff } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ChefHat, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { Button } from '@/shared/components/ui';
 import { fadeInLeft, fadeInRight } from '@/shared/utils/animations';
-import { GoogleSignInButton } from '@/features/auth/components/GoogleSignInButton';
+import { redirectToLogin } from '@/features/auth/services/auth-service';
 
+// Sign-in now lives on the hosted Zitadel pages (email/password, Google,
+// Apple all in one place); this page is just the branded doorway. Keeping a
+// deliberate click here — rather than auto-redirecting — avoids a loop when
+// the callback bounces back with ?error=….
 export default function LoginPage() {
-  const { loginWithEmail, isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const authError = searchParams.get('error');
   const sessionExpired = authError === 'session_expired' || authError === 'invalid_state';
   const returnTo = searchParams.get('returnTo');
 
-  // Already signed in? Don't show the form.
-  //
-  // The BFF session lives in an HttpOnly cookie with a 7-day Max-Age, so it
-  // survives new tabs, reloads and typing /login by hand. Without this the
-  // route rendered the form anyway and it looked like the session had been
-  // lost — the user is asked to sign in again while a perfectly good session
-  // is sitting in the jar.
-  //
-  // Waits for isLoading: AuthProvider bootstraps from /bff/auth/session, and
-  // acting before that resolves would flash the form on every visit. Uses
-  // replace so Back doesn't bounce the user straight back here.
+  // Already signed in? The BFF cookie survives new tabs and reloads; don't
+  // show a sign-in door to someone who is already inside.
   useEffect(() => {
     if (isLoading || !isAuthenticated) return;
-    // Only honour a same-origin relative path; an absolute returnTo would be
-    // an open redirect.
     const target = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
       ? returnTo
       : '/';
     navigate(target === '/login' ? '/' : target, { replace: true });
   }, [isAuthenticated, isLoading, returnTo, navigate]);
 
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleEmailLogin = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) {
-      setError('Please enter your email and password');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      await loginWithEmail(email, password);
-      navigate('/');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid email or password');
-    } finally {
-      setLoading(false);
-    }
+  const startLogin = () => {
+    redirectToLogin({
+      returnTo:
+        returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+          ? returnTo
+          : undefined,
+    });
   };
-
 
   return (
     <div className="flex min-h-screen">
-      {/* Left side - Form */}
+      {/* Left side - Sign-in door */}
       <motion.div
         initial="hidden"
         animate="visible"
@@ -73,7 +49,6 @@ export default function LoginPage() {
         className="flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24"
       >
         <div className="mx-auto w-full max-w-sm lg:w-96">
-          {/* Logo */}
           <Link to="/" className="inline-flex items-center gap-2 group">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-herb shadow-1 group-hover:shadow-2 transition-shadow">
               <ChefHat aria-hidden="true" className="h-5 w-5 text-paper" />
@@ -99,7 +74,6 @@ export default function LoginPage() {
             </p>
           </motion.div>
 
-          {/* Error messages */}
           {sessionExpired && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -127,130 +101,24 @@ export default function LoginPage() {
             transition={{ delay: 0.2 }}
             className="mt-8 space-y-4"
           >
-            {/* Social login buttons — Google is rendered by GSI (inline FedCM modal, no popup) */}
-            <GoogleSignInButton
-              onSuccess={() => navigate('/')}
-              onError={(msg) => setError(msg)}
-              width={360}
-            />
-
-
-            <div className="relative mt-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-mist" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-bone px-3 text-ink-muted">Or</span>
-              </div>
-            </div>
-
-            <AnimatePresence mode="wait">
-              {!showEmailForm ? (
-                <motion.div key="email-btn" exit={{ opacity: 0, height: 0 }}>
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={() => setShowEmailForm(true)}
-                    className="mx-auto block w-full max-w-[360px] rounded-full"
-                  >
-                    Sign in with email
-                  </Button>
-                </motion.div>
-              ) : (
-                <motion.form
-                  key="email-form"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  transition={{ duration: 0.3 }}
-                  onSubmit={handleEmailLogin}
-                  className="space-y-4"
-                >
-                  {error && (
-                    <div
-                      id="login-form-error"
-                      role="alert"
-                      className="rounded-lg border border-paprika/30 bg-paprika-tint p-3 text-sm text-paprika"
-                    >
-                      {error}
-                    </div>
-                  )}
-
-                  <div>
-                    <label htmlFor="login-email" className="block text-sm font-medium text-ink-soft">
-                      Email
-                    </label>
-                    <input
-                      id="login-email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      aria-required="true"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      aria-invalid={!!error || undefined}
-                      aria-describedby={error ? 'login-form-error' : undefined}
-                      className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
-                      placeholder="you@example.com"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="login-password" className="block text-sm font-medium text-ink-soft">
-                        Password
-                      </label>
-                      <Link
-                        to="/forgot-password"
-                        className="text-sm text-herb hover:text-herb"
-                      >
-                        Forgot password?
-                      </Link>
-                    </div>
-                    <div className="relative mt-1">
-                      <input
-                        id="login-password"
-                        type={showPassword ? 'text' : 'password'}
-                        autoComplete="current-password"
-                        required
-                        aria-required="true"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        aria-invalid={!!error || undefined}
-                        aria-describedby={error ? 'login-form-error' : undefined}
-                        className="block w-full rounded-lg border border-mist-strong px-3 py-2.5 pr-10 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
-                        placeholder="Enter your password"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        aria-pressed={showPassword}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-ink-muted hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30 rounded-r-lg"
-                      >
-                        {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="lg"
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin"  aria-hidden="true" />
-                        Signing in...
-                      </>
-                    ) : (
-                      'Sign in'
-                    )}
-                  </Button>
-                </motion.form>
-              )}
-            </AnimatePresence>
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={startLogin}
+              className="w-full rounded-full"
+            >
+              Sign in
+              <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+            </Button>
+            <p className="text-center text-sm text-ink-muted">
+              You'll sign in securely on our account page — email, Google and
+              Apple all work there.
+            </p>
+            <p className="text-center text-sm">
+              <Link to="/forgot-password" className="font-medium text-herb hover:text-herb">
+                Forgot password?
+              </Link>
+            </p>
           </motion.div>
         </div>
       </motion.div>

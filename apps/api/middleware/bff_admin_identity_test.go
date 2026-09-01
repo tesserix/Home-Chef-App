@@ -49,6 +49,15 @@ func setupAdminIdentityDB(t *testing.T) *gorm.DB {
 			deletion_reason TEXT NOT NULL DEFAULT '',
 			restored_at DATETIME, last_login_at DATETIME,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`).Error)
+	require.NoError(t, db.Exec(`
+		CREATE TABLE user_identities (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			provider TEXT NOT NULL,
+			subject TEXT NOT NULL,
+			email TEXT DEFAULT '',
+			created_at DATETIME, last_login_at DATETIME)`).Error)
+	require.NoError(t, db.Exec(`CREATE UNIQUE INDEX idx_user_identities_provider_subject ON user_identities(provider, subject)`).Error)
 	prev := database.DB
 	database.DB = db
 	t.Cleanup(func() { database.DB = prev })

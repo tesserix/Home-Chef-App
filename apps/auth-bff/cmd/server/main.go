@@ -22,7 +22,6 @@ import (
 	"github.com/homechef/auth-bff/internal/audit"
 	"github.com/homechef/auth-bff/internal/autologin"
 	"github.com/homechef/auth-bff/internal/config"
-	gippkg "github.com/homechef/auth-bff/internal/gip"
 	"github.com/homechef/auth-bff/internal/headerproxy"
 	"github.com/homechef/auth-bff/internal/observability"
 	"github.com/homechef/auth-bff/internal/obsmw"
@@ -31,6 +30,7 @@ import (
 	"github.com/homechef/auth-bff/internal/ratelimit"
 	"github.com/homechef/auth-bff/internal/session"
 	"github.com/homechef/auth-bff/internal/tracing"
+	"github.com/homechef/auth-bff/internal/zitadel"
 )
 
 // serviceName identifies this service in OpenTelemetry resources, the gin OTel
@@ -76,12 +76,12 @@ func main() {
 		log.Fatalf("registry: %v", err)
 	}
 
-	verifier, err := gippkg.New(gippkg.Config{
-		ProjectID: cfg.GIPProjectID,
-		Leeway:    10 * time.Second,
+	verifier, err := zitadel.New(context.Background(), zitadel.Config{
+		Issuer:    cfg.ZitadelIssuer,
+		ProjectID: cfg.ZitadelProjectID,
 	})
 	if err != nil {
-		log.Fatalf("gip verifier: %v", err)
+		log.Fatalf("zitadel verifier: %v", err)
 	}
 
 	mgr, err := session.NewManager(session.Config{
@@ -106,7 +106,7 @@ func main() {
 	})
 	api := apiclient.New(cfg.APIBaseURL, signer)
 
-	oauthByApp, oidcByApp, err := buildOAuthMaps(reg, cfg.GIPProjectID)
+	provider, oauthByApp, err := buildOAuthMaps(reg, cfg.ZitadelIssuer, cfg.ZitadelProjectID)
 	if err != nil {
 		log.Fatalf("oauth build: %v", err)
 	}
@@ -129,8 +129,7 @@ func main() {
 	oidcH := &oidcpkg.Handlers{
 		Registry:     reg,
 		OAuthByApp:   oauthByApp,
-		OIDCByApp:    oidcByApp,
-		GIPVerifier:  verifier,
+		Provider:     provider,
 		API:          api,
 		Sessions:     mgr,
 		StateManager: stateManager,
@@ -143,10 +142,9 @@ func main() {
 	rateLimited := r.Group("/auth", rl.Middleware())
 	rateLimited.GET("/login", oidcH.Login)
 	rateLimited.GET("/callback", oidcH.Callback)
-	rateLimited.POST("/exchange", oidcH.Exchange)
 
 	autoH := autologin.NewHandler(&autologin.Deps{
-		GIP: verifier, Sessions: mgr, Registry: reg, API: api,
+		Verifier: verifier, Sessions: mgr, Registry: reg, API: api,
 	})
 	rateLimited.POST("/auto-login", autoH.PostHandler())
 
@@ -188,36 +186,30 @@ func main() {
 	_ = srv.Shutdown(ctx)
 }
 
-// buildOAuthMaps walks the product registry and constructs an *oauth2.Config
-// and a discovered *oidc.Provider per app, keyed by app name.
-//
-// For each tenant, the OIDC issuer is "https://securetoken.google.com/{project_id}".
-// The OAuth2 client secret is read from the env var named in app.ClientSecretEnv.
-// The redirect URL is canonical: https://<callbackHost or first https host>/<callbackPath>.
-// In dev (no https hosts), use http://<first localhost host>/<callbackPath>.
-func buildOAuthMaps(reg *productregistry.Registry, projectID string) (map[string]*oauth2.Config, map[string]*oidc.Provider, error) {
-	oauthByApp := make(map[string]*oauth2.Config)
-	oidcByApp := make(map[string]*oidc.Provider)
-	issuer := "https://securetoken.google.com/" + projectID
+// buildOAuthMaps discovers the Zitadel issuer once and constructs an
+// *oauth2.Config per app, keyed by app name. All apps share the public PKCE
+// client; only the redirect URL differs. The project-aud scope puts the
+// Zitadel project id in the token audience so apps/api-facing verifiers accept it.
+func buildOAuthMaps(reg *productregistry.Registry, issuer, projectID string) (*oidc.Provider, map[string]*oauth2.Config, error) {
 	provider, err := oidc.NewProvider(context.Background(), issuer)
 	if err != nil {
 		return nil, nil, fmt.Errorf("oidc discovery for %s: %w", issuer, err)
 	}
+	oauthByApp := make(map[string]*oauth2.Config)
 	for _, p := range reg.Products {
 		for _, a := range p.Apps {
-			clientSecret := os.Getenv(a.ClientSecretEnv)
-			redirectURL := pickRedirectURL(a)
 			oauthByApp[a.Name] = &oauth2.Config{
-				ClientID:     a.OAuthClientID,
-				ClientSecret: clientSecret,
-				Endpoint:     provider.Endpoint(),
-				RedirectURL:  redirectURL,
-				Scopes:       []string{oidc.ScopeOpenID, "email", "profile"},
+				ClientID:    a.OAuthClientID,
+				Endpoint:    provider.Endpoint(),
+				RedirectURL: pickRedirectURL(a),
+				Scopes: []string{
+					oidc.ScopeOpenID, "profile", "email",
+					zitadel.ProjectAudScope(projectID),
+				},
 			}
-			oidcByApp[a.Name] = provider
 		}
 	}
-	return oauthByApp, oidcByApp, nil
+	return provider, oauthByApp, nil
 }
 
 func pickRedirectURL(a productregistry.App) string {

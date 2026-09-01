@@ -164,6 +164,7 @@ func Migrate() error {
 		// no longer owned by this service — apps/auth-bff handles all session
 		// + verification flows via Google Identity Platform.
 		&models.User{},
+		&models.UserIdentity{},
 		&models.CustomerProfile{},
 		&models.PreferenceOption{},
 		// One row per app install, so push reaches every signed-in device (#1164).
@@ -416,9 +417,13 @@ func Migrate() error {
 		// One registration per payee per rail — what makes EnsurePayoutMethod's
 		// upsert safe under concurrency.
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payout_method_payee_rail ON payout_methods (tenant_id, payee_type, payee_id, rail)`,
-		// New schema. gip_uid is already covered by the model's uniqueIndex tag
-		// but stating it here keeps this block self-documenting.
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_gip_uid ON users (gip_uid) WHERE gip_uid IS NOT NULL`,
+		// Zitadel-created users carry gip_uid = '' (Go zero value), so gip_uid
+		// uniqueness must exclude empty strings or the second such user fails
+		// to insert. Replaces the legacy full unique (idx_users_g_ip_uid) and
+		// the IS NOT NULL partial, both of which collide on ''.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_gip_uid_nonempty ON users (gip_uid) WHERE gip_uid <> ''`,
+		`DROP INDEX IF EXISTS idx_users_g_ip_uid`,
+		`DROP INDEX IF EXISTS idx_users_gip_uid`,
 		`CREATE INDEX IF NOT EXISTS idx_users_email_pool ON users (email, auth_pool)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_per_pool ON users (lower(email), auth_pool) WHERE email IS NOT NULL AND auth_pool IS NOT NULL`,
 		// Drop the legacy global email uniqueness. Postgres unique constraints

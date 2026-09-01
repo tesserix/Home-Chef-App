@@ -19,7 +19,7 @@ import { api } from '../../lib/api';
 import type { AuthResponse } from '@homechef/mobile-shared/types';
 
 const BFF_URL = process.env.EXPO_PUBLIC_BFF_URL ?? '';
-const GIP_TENANT_ID = process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? '';
+const AUTH_POOL = process.env.EXPO_PUBLIC_AUTH_POOL ?? 'customer';
 
 /**
  * Convert a BFF auto-login response into the legacy AuthResponse shape so the
@@ -52,7 +52,7 @@ function bffToAuthResponse(body: {
 async function completeBFFLogin(): Promise<AuthResponse> {
   const idToken = await getIdToken();
   if (!idToken) throw new Error('no_id_token_after_sign_in');
-  const body = await autoLogin(BFF_URL, idToken, GIP_TENANT_ID);
+  const body = await autoLogin(BFF_URL, idToken, AUTH_POOL);
   return bffToAuthResponse(body);
 }
 

@@ -36,18 +36,21 @@ const Ctx = createContext<AuthContextValue | undefined>(undefined);
 export interface AuthProviderProps {
   children: ReactNode;
   bffUrl: string;
-  tenantId: string;
+  /** Auth pool this app signs into: customer | business | internal. */
+  pool: string;
+  /** Legacy GIP tenant pin; optional during the Zitadel migration. */
+  tenantId?: string;
 }
 
-export function AuthProvider({ children, bffUrl, tenantId }: AuthProviderProps) {
+export function AuthProvider({ children, bffUrl, pool, tenantId }: AuthProviderProps) {
   if (!bffUrl) {
     throw new Error(
       "AuthProvider: bffUrl prop is empty. Set EXPO_PUBLIC_BFF_URL in your .env.local or EAS build profile."
     );
   }
-  if (!tenantId) {
+  if (!pool) {
     throw new Error(
-      "AuthProvider: tenantId prop is empty. Set EXPO_PUBLIC_GIP_TENANT_ID in your .env.local or EAS build profile."
+      "AuthProvider: pool prop is empty. Set EXPO_PUBLIC_AUTH_POOL in your .env.local or EAS build profile."
     );
   }
 
@@ -64,7 +67,7 @@ export function AuthProvider({ children, bffUrl, tenantId }: AuthProviderProps) 
 
     (async () => {
       try {
-        await configureFirebaseAuth(tenantId);
+        if (tenantId) await configureFirebaseAuth(tenantId);
       } catch (err) {
         // Don't let a tenant-set failure crash the app; surface in the
         // loading state instead. The user can still retry sign-in.
@@ -95,7 +98,7 @@ export function AuthProvider({ children, bffUrl, tenantId }: AuthProviderProps) 
       cancelled = true;
       unsub?.();
     };
-  }, [bffUrl, tenantId]);
+  }, [bffUrl, pool, tenantId]);
 
   // Register the silent-refresh strategy the api client uses on a 401 (#428):
   // re-mint a BFF session from the still-valid Firebase identity, then persist
@@ -108,7 +111,7 @@ export function AuthProvider({ children, bffUrl, tenantId }: AuthProviderProps) 
     setSessionRefresher(async () => {
       const idToken = await getIdToken();
       if (!idToken) return null;
-      const body = await autoLogin(bffUrl, idToken, tenantId);
+      const body = await autoLogin(bffUrl, idToken, pool);
       const token = body.session_token;
       await setTokens({ accessToken: token });
       useAuthStore.setState({ accessToken: token, isAuthenticated: true });
@@ -121,12 +124,12 @@ export function AuthProvider({ children, bffUrl, tenantId }: AuthProviderProps) 
       return token;
     });
     return () => setSessionRefresher(null);
-  }, [bffUrl, tenantId]);
+  }, [bffUrl, pool, tenantId]);
 
   const completeSignIn = async () => {
     const idToken = await getIdToken();
     if (!idToken) throw new Error("no_id_token_after_sign_in");
-    const body = await autoLogin(bffUrl, idToken, tenantId);
+    const body = await autoLogin(bffUrl, idToken, pool);
     setUser({
       id: body.user.id,
       email: body.user.email,
