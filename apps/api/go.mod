@@ -13,7 +13,7 @@ require (
 	github.com/nats-io/nats.go v1.53.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/redis/go-redis/v9 v9.22.0
-	golang.org/x/crypto v0.54.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/time v0.15.0
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
