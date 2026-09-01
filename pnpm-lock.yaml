@@ -1130,9 +1130,6 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.4.0
-      firebase:
-        specifier: ^12.15.0
-        version: 12.15.0(@react-native-async-storage/async-storage@3.1.1(react-native@0.86.2(@babel/core@8.0.1)(@react-native/jest-preset@0.86.2(@babel/core@8.0.1)(react@19.2.7))(@react-native/metro-config@0.86.2(@babel/core@8.0.1))(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))
       framer-motion:
         specifier: ^12.40.0
         version: 12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
