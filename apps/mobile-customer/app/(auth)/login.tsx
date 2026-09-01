@@ -1,18 +1,7 @@
-import { useEffect } from 'react';
-import { Platform } from 'react-native';
 import { router } from 'expo-router';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { LoginScreen } from '@homechef/mobile-shared/screens';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import {
-  signInWithGoogleCredential,
-  signInWithApple,
-  linkPendingAppleGrant,
-  signInWithEmail,
-  useAuth,
-  autoLogin,
-  getIdToken,
-} from '@homechef/mobile-shared/auth';
+import { useAuth, autoLogin, signInWithZitadel } from '@homechef/mobile-shared/auth';
 import { getRawFCMToken, registerDeviceToken, authenticateWithBiometrics } from '@homechef/mobile-shared/hooks';
 import { useAuthStore } from '../../store/auth-store';
 import { api } from '../../lib/api';
@@ -20,13 +9,15 @@ import type { AuthResponse } from '@homechef/mobile-shared/types';
 
 const BFF_URL = process.env.EXPO_PUBLIC_BFF_URL ?? '';
 const AUTH_POOL = process.env.EXPO_PUBLIC_AUTH_POOL ?? 'customer';
+// Zitadel native client (claim homechef-customer-mobile). Not a secret.
+const ZITADEL_CLIENT_ID = process.env.EXPO_PUBLIC_ZITADEL_CLIENT_ID ?? '388815907910058790';
 
 /**
  * Convert a BFF auto-login response into the legacy AuthResponse shape so the
  * existing Zustand auth-store + axios api client keep working unchanged.
  * The session_token from the BFF replaces the previous JWT access token.
- * No refresh token: the BFF owns refresh; the client re-auto-logins via
- * AuthProvider.completeSignIn() when the Firebase user is still valid.
+ * No refresh token: the BFF owns refresh; the client re-auto-logins via the
+ * stored Zitadel refresh token (see provider's session refresher).
  */
 function bffToAuthResponse(body: {
   session_token: string;
@@ -49,55 +40,22 @@ function bffToAuthResponse(body: {
   };
 }
 
-async function completeBFFLogin(): Promise<AuthResponse> {
-  const idToken = await getIdToken();
-  if (!idToken) throw new Error('no_id_token_after_sign_in');
-  const body = await autoLogin(BFF_URL, idToken, AUTH_POOL);
-  return bffToAuthResponse(body);
-}
-
 export default function LoginPage() {
   const { setAuthResponse, biometricsEnabled } = useAuthStore();
   // useAuth is wired via <AuthProvider> in _layout.tsx; ensures BFF session
   // is mirrored into AuthContext state.
   const { completeSignIn } = useAuth();
 
-  useEffect(() => {
-    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-    if (!webClientId) {
-      throw new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not configured');
-    }
-    GoogleSignin.configure({
-      webClientId,
-      // iosClientId is required for native sign-in on iOS. Missing on Android.
-      iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+  // Hosted Zitadel login: credentials + social providers live on the hosted
+  // page, so this screen only opens the browser and finishes the exchange.
+  const handleHostedSignIn = async () => {
+    const { idToken } = await signInWithZitadel({
+      clientId: ZITADEL_CLIENT_ID,
+      scheme: 'homechef-customer',
     });
-  }, []);
-
-  const handleGoogleSignIn = async () => {
-    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-    const result = (await GoogleSignin.signIn()) as { data?: { idToken?: string | null }; idToken?: string | null };
-    const googleIdToken = result?.data?.idToken ?? result?.idToken;
-    if (!googleIdToken) throw new Error('Google sign-in failed: no ID token');
-    await signInWithGoogleCredential(googleIdToken);
-    const response = await completeBFFLogin();
-    await setAuthResponse(response);
+    const body = await autoLogin(BFF_URL, idToken, AUTH_POOL);
+    await setAuthResponse(bffToAuthResponse(body));
     await completeSignIn();
-    try {
-      const fcmToken = await getRawFCMToken();
-      if (fcmToken) await registerDeviceToken(api, fcmToken);
-    } catch { /* non-fatal */ }
-    router.replace('/(tabs)');
-  };
-
-  const handleAppleSignIn = async () => {
-    await signInWithApple();
-    const response = await completeBFFLogin();
-    await setAuthResponse(response);
-    await completeSignIn();
-    // Hand Apple's one-shot authorization code to the API now that a session
-    // exists, so account deletion can revoke the grant (App Review 5.1.1(v)).
-    await linkPendingAppleGrant(api);
     try {
       const fcmToken = await getRawFCMToken();
       if (fcmToken) await registerDeviceToken(api, fcmToken);
@@ -110,7 +68,7 @@ export default function LoginPage() {
     if (!success) throw new Error('Biometric authentication failed');
     // Token is already in secure store from previous login — just confirm it's still valid
     const { accessToken: token } = useAuthStore.getState();
-    if (!token) throw new Error('No saved session found. Please log in with email.');
+    if (!token) throw new Error('No saved session found. Please sign in again.');
     // Auth guard in _layout.tsx will detect isAuthenticated=true and redirect
     router.replace('/(tabs)');
   };
@@ -124,24 +82,8 @@ export default function LoginPage() {
       // (#E00B41), not the coral fill (#FF385C), which fails AA at link/body
       // text size. Fills (CTA, focus rings) stay coral via `accent` above.
       linkColor={customerColors.coral.pressed}
-      onLogin={async ({ email, password }) => {
-        await signInWithEmail(email, password);
-        const response = await completeBFFLogin();
-        await setAuthResponse(response);
-        await completeSignIn();
-        // Register FCM token after auth (D-09: raw FCM token)
-        try {
-          const fcmToken = await getRawFCMToken();
-          if (fcmToken) await registerDeviceToken(api, fcmToken);
-        } catch {
-          // Non-fatal: push registration failure should not block login
-        }
-        router.replace('/(tabs)');
-      }}
+      onHostedSignIn={handleHostedSignIn}
       onNavigateToRegister={() => router.push('/(auth)/register')}
-      onNavigateToForgotPassword={() => router.push('/(auth)/forgot-password' as never)}
-      onGoogleSignIn={handleGoogleSignIn}
-      onAppleSignIn={Platform.OS === 'ios' ? handleAppleSignIn : undefined}
       onBiometricLogin={biometricsEnabled ? handleBiometricLogin : undefined}
       // App Review 5.1.1(iv): browsing chefs and menus needs no account, so the
       // wall moves to the point of ordering (hooks/useRequireAccount.ts).

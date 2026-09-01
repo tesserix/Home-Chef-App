@@ -25,6 +25,8 @@ export default defineConfig({
       'react-native-svg': new URL('./src/__mocks__/react-native-svg.ts', import.meta.url).pathname,
       'expo-constants': new URL('./src/__mocks__/expo-constants.ts', import.meta.url).pathname,
       'expo-device': new URL('./src/__mocks__/expo-device.ts', import.meta.url).pathname,
+      'expo-crypto': new URL('./src/__mocks__/expo-crypto.ts', import.meta.url).pathname,
+      'expo-web-browser': new URL('./src/__mocks__/expo-web-browser.ts', import.meta.url).pathname,
     },
   },
 });

@@ -1,67 +1,59 @@
 import { router } from 'expo-router';
-import { RegisterScreen } from '@homechef/mobile-shared/screens';
-import {
-  registerWithEmail,
-  useAuth,
-  autoLogin,
-  getIdToken,
-} from '@homechef/mobile-shared/auth';
+import { LoginScreen } from '@homechef/mobile-shared/screens';
+import { useAuth, autoLogin, signInWithZitadel } from '@homechef/mobile-shared/auth';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
 import { useAuthStore } from '../../store/auth-store';
 import { api } from '../../lib/api';
-import type { AuthResponse } from '@homechef/mobile-shared/types';
 
 const BFF_URL = process.env.EXPO_PUBLIC_BFF_URL ?? '';
 const AUTH_POOL = process.env.EXPO_PUBLIC_AUTH_POOL ?? 'business';
+const ZITADEL_CLIENT_ID = process.env.EXPO_PUBLIC_ZITADEL_CLIENT_ID ?? '388815912691565350';
 
-function bffToAuthResponse(
-  body: { session_token: string; user: { id: string; email: string; role: string } },
-  firstName: string,
-  lastName: string,
-  phone: string,
-): AuthResponse {
-  return {
-    user: {
-      id: body.user.id,
-      email: body.user.email,
-      firstName,
-      lastName,
-      phone,
-      role: body.user.role as AuthResponse['user']['role'],
-      avatar: null,
-      fcmToken: null,
-      createdAt: '',
-      updatedAt: '',
-    },
-    accessToken: body.session_token,
-  };
-}
-
+/** Hosted sign-up: Zitadel's registration screen owns names and credentials. */
 export default function RegisterPage() {
   const { setAuthResponse } = useAuthStore();
   const { completeSignIn } = useAuth();
 
+  const handleHostedSignUp = async () => {
+    const { idToken } = await signInWithZitadel({
+      clientId: ZITADEL_CLIENT_ID,
+      scheme: 'homechef-delivery',
+      register: true,
+    });
+    const body = await autoLogin(BFF_URL, idToken, AUTH_POOL);
+    await setAuthResponse({
+      user: {
+        id: body.user.id,
+        email: body.user.email,
+        firstName: '',
+        lastName: '',
+        phone: '',
+        role: body.user.role as never,
+        avatar: null,
+        fcmToken: null,
+        createdAt: '',
+        updatedAt: '',
+      },
+      accessToken: body.session_token,
+    });
+    await completeSignIn();
+    try {
+      const fcmToken = await getRawFCMToken();
+      if (fcmToken) await registerDeviceToken(api, fcmToken);
+    } catch { /* non-fatal */ }
+    router.replace('/(tabs)');
+  };
+
   return (
-    <RegisterScreen
-      onRegister={async (data) => {
-        await registerWithEmail(data.email, data.password);
-        const idToken = await getIdToken();
-        if (!idToken) throw new Error('no_id_token_after_register');
-        const body = await autoLogin(BFF_URL, idToken, AUTH_POOL);
-        await setAuthResponse(
-          bffToAuthResponse(body, data.firstName, data.lastName, data.phone ?? ''),
-        );
-        await completeSignIn();
-        // Register FCM token after auth (D-09: raw FCM token)
-        try {
-          const fcmToken = await getRawFCMToken();
-          if (fcmToken) await registerDeviceToken(api, fcmToken);
-        } catch {
-          // Non-fatal: push registration failure should not block registration
-        }
-        router.replace('/(tabs)');
-      }}
-      onNavigateToLogin={() => router.back()}
+    <LoginScreen
+      brand="Fe3dr · Delivery"
+      title="Start delivering"
+      subtitle="A quick sign-up and you're on the road"
+      onHostedSignIn={handleHostedSignUp}
+      hostedCtaLabel="Continue to sign up"
+      registerPrompt="Already have an account?"
+      registerCta="Sign in"
+      onNavigateToRegister={() => router.replace('/(auth)/login')}
     />
   );
 }

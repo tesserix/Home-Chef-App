@@ -169,6 +169,9 @@ export function resolveAuthErrorMessage(err: unknown): string {
   if (raw.includes('auth/too-many-requests'))
     return 'Too many attempts. Wait a minute and try again.';
   if (raw.includes('cancel')) return 'Sign-in was cancelled.';
+  // Hosted-login (Zitadel) failures that aren't a plain cancel.
+  if (raw.startsWith('zitadel_'))
+    return "We couldn't complete the secure sign-in. Please try again.";
   // Anything else: best-effort plain-English fallback. We strip technical
   // prefixes so the user doesn't see `auto_login_502` literally.
   return "We couldn't sign you in. Please try again.";
