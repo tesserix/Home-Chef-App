@@ -15,6 +15,7 @@
         "EXPO_PUBLIC_API_URL": "http://localhost:8090/api/v1",
         "EXPO_PUBLIC_BFF_URL": "http://localhost:8090",
         "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe",
+        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912104362790",
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-cnurh8dj06m19stidfir381fsgoug9im.apps.googleusercontent.com",
@@ -32,6 +33,7 @@
         "EXPO_PUBLIC_API_URL": "https://admin.fe3dr.com/api/v1",
         "EXPO_PUBLIC_BFF_URL": "https://admin.fe3dr.com",
         "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe",
+        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912104362790",
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-cnurh8dj06m19stidfir381fsgoug9im.apps.googleusercontent.com",
@@ -51,6 +53,7 @@
         "EXPO_PUBLIC_API_URL": "http://localhost:8090/api/v1",
         "EXPO_PUBLIC_BFF_URL": "http://localhost:8090",
         "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe",
+        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912104362790",
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-cnurh8dj06m19stidfir381fsgoug9im.apps.googleusercontent.com"
@@ -66,6 +69,7 @@
         "EXPO_PUBLIC_API_URL": "https://admin.fe3dr.com/api/v1",
         "EXPO_PUBLIC_BFF_URL": "https://admin.fe3dr.com",
         "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe"
+        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912104362790",
       }
     },
     "production": {
@@ -78,6 +82,7 @@
         "EXPO_PUBLIC_API_URL": "https://admin.fe3dr.com/api/v1",
         "EXPO_PUBLIC_BFF_URL": "https://admin.fe3dr.com",
         "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe",
+        "EXPO_PUBLIC_ZITADEL_CLIENT_ID": "388815912104362790",
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-cnurh8dj06m19stidfir381fsgoug9im.apps.googleusercontent.com"

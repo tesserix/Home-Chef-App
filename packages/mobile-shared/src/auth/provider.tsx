@@ -10,6 +10,7 @@ import {
 } from "./bff-session";
 import { getIdToken, signOut as fbSignOut } from "./sign-in";
 import { isDevSimSessionActive } from "./dev-sim-auth";
+import { clearZitadelSession, getZitadelIdToken, hasZitadelSession } from "./zitadel";
 import { setTokens } from "../utils/storage";
 import { useAuthStore } from "../hooks/useAuth";
 
@@ -24,8 +25,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   /**
-   * Call after a Firebase signInWith* succeeds to exchange the id_token
-   * for a BFF session. Updates the context user.
+   * Call after a sign-in (Zitadel hosted login or a legacy Firebase
+   * signInWith*) has minted a BFF session. Mirrors it into context state.
    */
   completeSignIn: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -61,7 +62,7 @@ export function AuthProvider({ children, bffUrl, pool, tenantId }: AuthProviderP
     // configureFirebaseAuth is async in @react-native-firebase/auth v22+
     // (uses setTenantId() instead of the old read-only tenantId setter).
     // We chain onAuthStateChanged after the tenant is pinned so the listener
-    // never observes a stale tenant.
+    // never observes a stale tenant. Kept for legacy-GIP sessions only.
     let cancelled = false;
     let unsub: (() => void) | null = null;
 
@@ -76,9 +77,15 @@ export function AuthProvider({ children, bffUrl, pool, tenantId }: AuthProviderP
       if (cancelled) return;
 
       unsub = onAuthStateChanged(getAuth(), async (fb) => {
-        // A dev-only REST sign-in (iOS Simulator) has no Firebase user; don't
-        // let the null notification tear down its session.
-        if (!fb && !(__DEV__ && isDevSimSessionActive())) {
+        // Zitadel hosted sign-ins have no Firebase user, and neither does a
+        // dev-only REST sign-in (iOS Simulator). Don't let the null
+        // notification tear their sessions down — only a truly signed-out
+        // install (no identity of any kind) gets cleared here.
+        if (
+          !fb &&
+          !(__DEV__ && isDevSimSessionActive()) &&
+          !(await hasZitadelSession())
+        ) {
           await clearStoredSession();
           setUser(null);
           setLoading(false);
@@ -101,15 +108,15 @@ export function AuthProvider({ children, bffUrl, pool, tenantId }: AuthProviderP
   }, [bffUrl, pool, tenantId]);
 
   // Register the silent-refresh strategy the api client uses on a 401 (#428):
-  // re-mint a BFF session from the still-valid Firebase identity, then persist
-  // the fresh token everywhere the client reads it (the Zustand store that feeds
+  // re-mint a BFF session from the durable identity — the Zitadel refresh
+  // token when present, else the legacy Firebase user — then persist the fresh
+  // token everywhere the client reads it (the Zustand store that feeds
   // getToken, the mirrored SecureStore access_token, and — via autoLogin — the
-  // BFF SESSION_KEY). Returning a token lets the client retry instead of logging
-  // the user out; returning null (no Firebase user) lets it fall through to
-  // clearing the session.
+  // BFF SESSION_KEY). Returning a token lets the client retry instead of
+  // logging the user out; returning null lets it fall through to clearing.
   useEffect(() => {
     setSessionRefresher(async () => {
-      const idToken = await getIdToken();
+      const idToken = (await getZitadelIdToken()) ?? (await getIdToken());
       if (!idToken) return null;
       const body = await autoLogin(bffUrl, idToken, pool);
       const token = body.session_token;
@@ -127,6 +134,14 @@ export function AuthProvider({ children, bffUrl, pool, tenantId }: AuthProviderP
   }, [bffUrl, pool, tenantId]);
 
   const completeSignIn = async () => {
+    // The hosted-login screens call autoLogin() themselves, so a BFF session
+    // usually already exists — mirror it rather than minting a second one.
+    const s = await fetchSessionUser(bffUrl);
+    if (s) {
+      setUser({ id: s.user_id, email: s.email, role: s.role, pool: s.pool });
+      return;
+    }
+    // Legacy path: mint from the still-signed-in Firebase identity.
     const idToken = await getIdToken();
     if (!idToken) throw new Error("no_id_token_after_sign_in");
     const body = await autoLogin(bffUrl, idToken, pool);
@@ -144,6 +159,7 @@ export function AuthProvider({ children, bffUrl, pool, tenantId }: AuthProviderP
     } catch {
       // best-effort
     }
+    await clearZitadelSession();
     try {
       await fbSignOut();
     } catch {

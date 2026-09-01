@@ -26,7 +26,19 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 interface LoginScreenProps {
-  onLogin: (data: LoginFormData) => Promise<void>;
+  /** Email/password submit — legacy path; omit when using hosted sign-in. */
+  onLogin?: (data: LoginFormData) => Promise<void>;
+  /**
+   * Hosted (Zitadel) sign-in: opens the system browser and resolves once
+   * the session exists. When provided, the in-app credential form and
+   * social buttons are hidden — the hosted page owns all of that.
+   */
+  onHostedSignIn?: () => Promise<void>;
+  /** CTA label for the hosted button. Defaults to "Sign in". */
+  hostedCtaLabel?: string;
+  /** Copy for the bottom account-switch row (defaults to sign-up copy). */
+  registerPrompt?: string;
+  registerCta?: string;
   onNavigateToRegister?: () => void;
   onNavigateToForgotPassword?: () => void;
   onGoogleSignIn?: () => Promise<void>;
@@ -84,6 +96,10 @@ interface LoginScreenProps {
  */
 export function LoginScreen({
   onLogin,
+  onHostedSignIn,
+  hostedCtaLabel = 'Sign in',
+  registerPrompt = "Don't have an account?",
+  registerCta = 'Sign up',
   onNavigateToRegister,
   onNavigateToForgotPassword,
   onGoogleSignIn,
@@ -98,6 +114,7 @@ export function LoginScreen({
 }: LoginScreenProps) {
   const resolvedLinkColor = linkColor ?? accent;
   const [error, setError] = useState<string | null>(null);
+  const [hostedSubmitting, setHostedSubmitting] = useState(false);
   const errorOpacity = useRef(new Animated.Value(0)).current;
   const errorTranslate = useRef(new Animated.Value(-8)).current;
 
@@ -153,6 +170,7 @@ export function LoginScreen({
   }, [error, errorOpacity, errorTranslate, reduceMotion]);
 
   const onSubmit = async (data: LoginFormData) => {
+    if (!onLogin) return;
     setError(null);
     try {
       await onLogin(data);
@@ -167,6 +185,19 @@ export function LoginScreen({
       await handler();
     } catch (e: unknown) {
       setError(resolveAuthErrorMessage(e));
+    }
+  };
+
+  const hostedPress = async () => {
+    if (!onHostedSignIn || hostedSubmitting) return;
+    setError(null);
+    setHostedSubmitting(true);
+    try {
+      await onHostedSignIn();
+    } catch (e: unknown) {
+      setError(resolveAuthErrorMessage(e));
+    } finally {
+      setHostedSubmitting(false);
     }
   };
 
@@ -198,6 +229,30 @@ export function LoginScreen({
         ) : null}
       </Animated.View>
 
+      {onHostedSignIn ? (
+        <View style={styles.primaryActions}>
+          <Button
+            label={hostedSubmitting ? 'Opening…' : hostedCtaLabel}
+            onPress={hostedPress}
+            loading={hostedSubmitting}
+            disabled={hostedSubmitting}
+            accentColor={accent}
+          />
+          {onBiometricLogin ? (
+            <Button
+              label="Use Face ID / Touch ID"
+              variant="ghost"
+              onPress={wrap(onBiometricLogin)}
+            />
+          ) : null}
+          <Text style={styles.hostedHint}>
+            You'll sign in securely in your browser and come right back.
+          </Text>
+        </View>
+      ) : null}
+
+      {!onHostedSignIn ? (
+        <>
       <Controller
         control={control}
         name="email"
@@ -302,6 +357,9 @@ export function LoginScreen({
         </>
       ) : null}
 
+        </>
+      ) : null}
+
       {onContinueAsGuest ? (
         <View style={styles.guestRow}>
           <Pressable
@@ -329,10 +387,10 @@ export function LoginScreen({
             onPress={onNavigateToRegister}
             hitSlop={8}
             accessibilityRole="link"
-            accessibilityLabel="Don't have an account? Sign up"
+            accessibilityLabel={`${registerPrompt} ${registerCta}`}
           >
             <Text style={styles.signupPrompt}>
-              Don't have an account?{' '}
+              {registerPrompt}{' '}
               <Text
                 style={[
                   styles.signupCTA,
@@ -341,7 +399,7 @@ export function LoginScreen({
                     : null,
                 ]}
               >
-                Sign up
+                {registerCta}
               </Text>
             </Text>
           </Pressable>
@@ -430,6 +488,13 @@ const styles = StyleSheet.create({
   primaryActions: {
     gap: theme.spacing[2],
     marginBottom: theme.spacing[6],
+  },
+  hostedHint: {
+    marginTop: theme.spacing[2],
+    textAlign: 'center',
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
   },
 
   divider: {

@@ -5,3 +5,4 @@ export * from "./bff-session";
 export * from "./device-identity";
 export * from "./install-guard";
 export * from "./provider";
+export * from "./zitadel";
