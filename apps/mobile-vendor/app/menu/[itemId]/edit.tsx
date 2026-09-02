@@ -22,10 +22,10 @@ import {
   useCreateCategory,
   extraDietTags,
 } from '../../../hooks/useVendorMenu';
-import { MenuItemForm } from '../MenuItemForm';
+import { MenuItemForm } from '../../../components/vendor/MenuItemForm';
 import { useOffersBakery } from '../../../hooks/useChefVertical';
 import { leaveTo } from '../../../lib/navigation';
-import type { MenuItemFormValues } from '../MenuItemForm';
+import type { MenuItemFormValues } from '../../../components/vendor/MenuItemForm';
 
 export default function EditMenuItemScreen() {
   const { showAlert } = useAlert();
