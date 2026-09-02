@@ -31,16 +31,16 @@ import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { validationSummary } from '../../lib/menu-validation';
 import { pricingHint } from '../../lib/pricing-guidance';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
-import { SelectField } from '../../components/SelectField';
+import { SelectField } from '../SelectField';
 import {
   categoryIdForName,
   categoryNameForId,
   prepTimeForLabel,
   prepTimeLabel,
 } from '../../lib/menuSelectOptions';
-import { DietIcon } from '../../components/vendor/DietIcon';
-import { ModifierComboEditor } from '../../components/vendor/ModifierComboEditor';
-import { BakerySpecEditor } from '../../components/vendor/BakerySpecEditor';
+import { DietIcon } from './DietIcon';
+import { ModifierComboEditor } from './ModifierComboEditor';
+import { BakerySpecEditor } from './BakerySpecEditor';
 import type {
   MenuItemImage,
   Category,
