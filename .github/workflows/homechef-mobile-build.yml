@@ -37,7 +37,7 @@ jobs:
       fail-fast: false
       matrix:
         app: ${{ inputs.app == 'all' && fromJSON('["customer","vendor","delivery","admin"]') || fromJSON(format('["{0}"]', inputs.app)) }}
-    uses: tesserix/tesserix-workflows/.github/workflows/expo-eas-build.yml@v2.1.0
+    uses: tesserix/tesserix-workflows/.github/workflows/expo-eas-build.yml@v2.2.1
     with:
       working_directory: apps/mobile-${{ matrix.app }}
       install_directory: .
