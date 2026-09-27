@@ -395,6 +395,9 @@ var chefPurgeTables = []string{
 }
 
 func (chefCascade) Purge(tx *gorm.DB, userID uuid.UUID) error {
+	if SecretWritesPaused() {
+		return ErrSecretWritesPaused
+	}
 	chefID, ok := chefProfileID(tx, userID)
 	if !ok {
 		// No profile — still erase the customer-side footprint this user owns.

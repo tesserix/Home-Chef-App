@@ -1230,6 +1230,9 @@ func cashfreeSlotWarning(slot, environment, appID string) string {
 //
 // PUT /admin/payment-gateway/cashfree/keys
 func (h *AdminHandler) UpdateCashfreeGatewayKeys(c *gin.Context) {
+	if secretMutationPaused(c) {
+		return
+	}
 	var req struct {
 		AppID         string `json:"appId"`
 		SecretKey     string `json:"secretKey"`
@@ -1373,6 +1376,9 @@ func (h *AdminHandler) GetStripeGatewayStatus(c *gin.Context) {
 // Manager, invalidates the cached client, and runs an immediate health
 // check so the admin sees pass/fail in one response.
 func (h *AdminHandler) UpdateStripeGatewayKeys(c *gin.Context) {
+	if secretMutationPaused(c) {
+		return
+	}
 	var req struct {
 		SecretKey      string `json:"secretKey"`
 		PublishableKey string `json:"publishableKey"`

@@ -9,21 +9,34 @@ import (
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/homechef/api/config"
+	"github.com/homechef/api/internal/appsecrets"
+	"google.golang.org/api/option"
 )
 
 var secretClient *secretmanager.Client
+var baoClient *appsecrets.Client
 
 // InitSecretManager initializes the GCP Secret Manager client.
 // Uses default credentials (Workload Identity on GKE, ADC locally).
-func InitSecretManager() error {
+func InitSecretManager(options ...option.ClientOption) error {
+	client, err := appsecrets.FromEnvironment()
+	if err != nil {
+		return err
+	}
+	if client != nil {
+		baoClient = client
+		log.Println("OpenBao application secret client initialized")
+		return nil
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := secretmanager.NewClient(ctx)
+	gcpClient, err := secretmanager.NewClient(ctx, options...)
 	if err != nil {
 		return fmt.Errorf("failed to create secret manager client: %w", err)
 	}
-	secretClient = client
+	secretClient = gcpClient
 	log.Println("GCP Secret Manager client initialized")
 	return nil
 }
@@ -32,6 +45,7 @@ func InitSecretManager() error {
 func CloseSecretManager() {
 	if secretClient != nil {
 		secretClient.Close()
+		secretClient = nil
 	}
 }
 
@@ -64,6 +78,9 @@ func paymentSecretID(role, entityID, field string) string {
 
 // StoreVendorSecret creates or updates a secret for a vendor's payment field.
 func StoreVendorSecret(ctx context.Context, vendorID, field, value string) error {
+	if SecretWritesPaused() {
+		return ErrSecretWritesPaused
+	}
 	return storeSecret(ctx, vendorSecretID(vendorID, field), vendorID, field, value)
 }
 
@@ -74,6 +91,9 @@ func GetVendorSecret(ctx context.Context, vendorID, field string) (string, error
 
 // storeSecret creates or updates a secret in GCP Secret Manager.
 func storeSecret(ctx context.Context, secretID, entityID, field, value string) error {
+	if baoClient != nil {
+		return baoClient.Write(ctx, secretID, value)
+	}
 	if secretClient == nil {
 		return fmt.Errorf("secret manager not initialized")
 	}
@@ -123,6 +143,9 @@ func storeSecret(ctx context.Context, secretID, entityID, field, value string) e
 
 // getSecret retrieves the latest version of a secret.
 func getSecret(ctx context.Context, secretID string) (string, error) {
+	if baoClient != nil {
+		return baoClient.Read(ctx, secretID)
+	}
 	if secretClient == nil {
 		return "", fmt.Errorf("secret manager not initialized")
 	}
@@ -142,6 +165,9 @@ func getSecret(ctx context.Context, secretID string) (string, error) {
 
 // StoreDriverSecret creates or updates a secret for a driver's payment field.
 func StoreDriverSecret(ctx context.Context, driverID, field, value string) error {
+	if SecretWritesPaused() {
+		return ErrSecretWritesPaused
+	}
 	return storeSecret(ctx, driverSecretID(driverID, field), driverID, field, value)
 }
 
@@ -153,6 +179,12 @@ func GetDriverSecret(ctx context.Context, driverID, field string) (string, error
 // StorePlatformSecret stores a platform-level secret (e.g. gateway API keys).
 // The secretName is the full GCP Secret Manager secret ID (e.g. "prod-homechef-cashfree-app-id").
 func StorePlatformSecret(ctx context.Context, secretName, value string) error {
+	if SecretWritesPaused() {
+		return ErrSecretWritesPaused
+	}
+	if baoClient != nil {
+		return baoClient.Write(ctx, secretName, value)
+	}
 	if secretClient == nil {
 		return fmt.Errorf("secret manager not initialized")
 	}
@@ -206,6 +238,12 @@ func GetPlatformSecret(ctx context.Context, secretName string) (string, error) {
 
 // DeleteVendorSecret destroys all versions of a vendor payment secret.
 func DeleteVendorSecret(ctx context.Context, vendorID, field string) error {
+	if SecretWritesPaused() {
+		return ErrSecretWritesPaused
+	}
+	if baoClient != nil {
+		return baoClient.Delete(ctx, vendorSecretID(vendorID, field))
+	}
 	if secretClient == nil {
 		return fmt.Errorf("secret manager not initialized")
 	}

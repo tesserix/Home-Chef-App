@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -308,6 +307,9 @@ func (h *DriverOnboardingHandler) DriverOnboardingVehicle(c *gin.Context) {
 // Step 3 is documents which uses existing upload endpoints
 // POST /driver/onboarding/payout
 func (h *DriverOnboardingHandler) DriverOnboardingPayout(c *gin.Context) {
+	if secretMutationPaused(c) {
+		return
+	}
 	userID, _ := middleware.GetUserID(c)
 
 	var req struct {
@@ -344,6 +346,15 @@ func (h *DriverOnboardingHandler) DriverOnboardingPayout(c *gin.Context) {
 
 	driverID := partner.ID.String()
 
+	if !storePayoutSecrets(c, driverID, services.StoreDriverSecret, map[string]string{
+		"bank-account-number": req.BankAccountNumber,
+		"bank-account-name":   req.BankAccountName,
+		"bank-ifsc":           req.BankIFSC,
+		"upi-id":              req.UpiID,
+	}) {
+		return
+	}
+
 	// DB stores ONLY payout method (non-sensitive). All sensitive data in Secret Manager.
 	partner.PayoutMethod = req.PayoutMethod
 	partner.BankAccountNumber = ""
@@ -361,25 +372,6 @@ func (h *DriverOnboardingHandler) DriverOnboardingPayout(c *gin.Context) {
 	}
 
 	log.Printf("Payout details saved for driver %s (method: %s)", driverID, req.PayoutMethod)
-
-	// Store sensitive fields in GCP Secret Manager asynchronously
-	go func() {
-		ctx := context.Background()
-		secretFields := map[string]string{
-			"bank-account-number": req.BankAccountNumber,
-			"bank-account-name":   req.BankAccountName,
-			"bank-ifsc":           req.BankIFSC,
-			"upi-id":              req.UpiID,
-		}
-		for field, value := range secretFields {
-			if value != "" {
-				if err := services.StoreDriverSecret(ctx, driverID, field, value); err != nil {
-					log.Printf("Warning: failed to store secret %s for driver %s: %v", field, driverID, err)
-				}
-			}
-		}
-		log.Printf("Secrets stored in Secret Manager for driver %s", driverID)
-	}()
 
 	database.DB.Preload("User").Preload("Documents").First(&partner, "id = ?", partner.ID)
 	c.JSON(http.StatusOK, partner.ToDetailResponse())

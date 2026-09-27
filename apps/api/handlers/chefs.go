@@ -2592,6 +2592,9 @@ var panPattern = regexp.MustCompile(`^[A-Z]{5}[0-9]{4}[A-Z]$`)
 // Only masked values are stored in the database for display purposes.
 // Also registers the bank account with Cashfree so order money can reach it.
 func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
+	if secretMutationPaused(c) {
+		return
+	}
 	userID, _ := middleware.GetUserID(c)
 
 	var req struct {
@@ -2681,28 +2684,6 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 
 		log.Printf("Payout details saved for vendor %s (method: %s)", vendorID, req.PayoutMethod)
 
-		// Store sensitive fields in GCP Secret Manager asynchronously
-		// (Secret Manager creation can take several seconds on first call).
-		// Fire-and-forget and independent of tx, so it runs concurrently with
-		// the synchronous vendor registrations below rather than after them.
-		go func() {
-			ctx := context.Background()
-			secretFields := map[string]string{
-				"bank-account-number": req.BankAccountNumber,
-				"bank-account-name":   req.BankAccountName,
-				"bank-ifsc":           req.BankIFSC,
-				"upi-id":              req.UpiID,
-			}
-			for field, value := range secretFields {
-				if value != "" {
-					if err := services.StoreVendorSecret(ctx, vendorID, field, value); err != nil {
-						log.Printf("Warning: failed to store secret %s for vendor %s: %v", field, vendorID, err)
-					}
-				}
-			}
-			log.Printf("Secrets stored in Secret Manager for vendor %s", vendorID)
-		}()
-
 		return nil
 	})
 
@@ -2712,6 +2693,15 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save payout details"})
+		return
+	}
+
+	if !storePayoutSecrets(c, vendorID, services.StoreVendorSecret, map[string]string{
+		"bank-account-number": req.BankAccountNumber,
+		"bank-account-name":   req.BankAccountName,
+		"bank-ifsc":           req.BankIFSC,
+		"upi-id":              req.UpiID,
+	}) {
 		return
 	}
 
@@ -2725,8 +2715,7 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 	// later.
 	//
 	// The instrument is passed from the request rather than read back from
-	// Secret Manager, because the secrets above are stored in a fire-and-forget
-	// goroutine and a read-back would race it.
+	// Secret Manager, to avoid another remote read of the values just persisted.
 	payoutMethodErrorCode := ""
 	if services.GetCashfreePayoutFor(chef.Mode) != nil {
 		instrument := payouts.Instrument{Kind: payouts.MethodBankAccount,

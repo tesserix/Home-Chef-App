@@ -20,6 +20,7 @@ import (
 	"gorm.io/gorm"
 	glogger "gorm.io/gorm/logger"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 )
 
@@ -73,4 +74,17 @@ func TestDriverOnboardingPayout_UpiRejected(t *testing.T) {
 	require.NoError(t, database.DB.Raw(
 		`SELECT payout_method FROM delivery_partners WHERE id = ?`, driverID.String()).Row().Scan(&method))
 	require.NotEqual(t, "upi", method, "the rejected UPI method must never be persisted")
+}
+
+func TestDriverOnboardingPayout_SecretFailureDoesNotAdvanceOnboarding(t *testing.T) {
+	old := config.AppConfig
+	config.AppConfig = &config.Config{Environment: "test"}
+	t.Cleanup(func() { config.AppConfig = old })
+	userID, driverID := setupDriverPayoutDB(t)
+	w := postDriverPayout(t, userID, bankTransferPayload())
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+	require.Contains(t, w.Body.String(), "SECRET_WRITE_FAILED")
+	var step int
+	require.NoError(t, database.DB.Raw("SELECT onboarding_step FROM delivery_partners WHERE id = ?", driverID.String()).Scan(&step).Error)
+	require.Equal(t, 3, step)
 }
