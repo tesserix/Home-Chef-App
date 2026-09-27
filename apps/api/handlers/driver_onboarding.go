@@ -308,6 +308,9 @@ func (h *DriverOnboardingHandler) DriverOnboardingVehicle(c *gin.Context) {
 // Step 3 is documents which uses existing upload endpoints
 // POST /driver/onboarding/payout
 func (h *DriverOnboardingHandler) DriverOnboardingPayout(c *gin.Context) {
+	if secretMutationPaused(c) {
+		return
+	}
 	userID, _ := middleware.GetUserID(c)
 
 	var req struct {

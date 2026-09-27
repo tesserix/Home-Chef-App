@@ -2592,6 +2592,9 @@ var panPattern = regexp.MustCompile(`^[A-Z]{5}[0-9]{4}[A-Z]$`)
 // Only masked values are stored in the database for display purposes.
 // Also registers the bank account with Cashfree so order money can reach it.
 func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
+	if secretMutationPaused(c) {
+		return
+	}
 	userID, _ := middleware.GetUserID(c)
 
 	var req struct {

@@ -50,6 +50,7 @@ func TestPlatformSecretOperationsUseConfiguredOpenBaoBackend(t *testing.T) {
 	if err := StorePlatformSecret(context.Background(), "prod-homechef-cashfree-app-id", "updated"); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("APP_SECRET_WRITES_PAUSED", "true")
 	got, err := GetPlatformSecret(context.Background(), "prod-homechef-cashfree-app-id")
 	if err != nil || got != "updated" {
 		t.Fatalf("backend roundtrip failed: %v", err)

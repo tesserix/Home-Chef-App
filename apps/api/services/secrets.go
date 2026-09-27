@@ -76,6 +76,9 @@ func paymentSecretID(role, entityID, field string) string {
 
 // StoreVendorSecret creates or updates a secret for a vendor's payment field.
 func StoreVendorSecret(ctx context.Context, vendorID, field, value string) error {
+	if SecretWritesPaused() {
+		return ErrSecretWritesPaused
+	}
 	return storeSecret(ctx, vendorSecretID(vendorID, field), vendorID, field, value)
 }
 
@@ -160,6 +163,9 @@ func getSecret(ctx context.Context, secretID string) (string, error) {
 
 // StoreDriverSecret creates or updates a secret for a driver's payment field.
 func StoreDriverSecret(ctx context.Context, driverID, field, value string) error {
+	if SecretWritesPaused() {
+		return ErrSecretWritesPaused
+	}
 	return storeSecret(ctx, driverSecretID(driverID, field), driverID, field, value)
 }
 
@@ -171,6 +177,9 @@ func GetDriverSecret(ctx context.Context, driverID, field string) (string, error
 // StorePlatformSecret stores a platform-level secret (e.g. gateway API keys).
 // The secretName is the full GCP Secret Manager secret ID (e.g. "prod-homechef-cashfree-app-id").
 func StorePlatformSecret(ctx context.Context, secretName, value string) error {
+	if SecretWritesPaused() {
+		return ErrSecretWritesPaused
+	}
 	if baoClient != nil {
 		return baoClient.Write(ctx, secretName, value)
 	}
@@ -227,6 +236,9 @@ func GetPlatformSecret(ctx context.Context, secretName string) (string, error) {
 
 // DeleteVendorSecret destroys all versions of a vendor payment secret.
 func DeleteVendorSecret(ctx context.Context, vendorID, field string) error {
+	if SecretWritesPaused() {
+		return ErrSecretWritesPaused
+	}
 	if baoClient != nil {
 		return baoClient.Delete(ctx, vendorSecretID(vendorID, field))
 	}

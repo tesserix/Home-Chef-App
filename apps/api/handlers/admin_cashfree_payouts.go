@@ -111,6 +111,9 @@ func cashfreePayoutSlotWarning(slot, environment, clientID string, signing bool)
 //
 // PUT /admin/payouts/cashfree/keys
 func (h *AdminPayoutRailHandler) UpdateCashfreePayoutKeys(c *gin.Context) {
+	if secretMutationPaused(c) {
+		return
+	}
 	var req struct {
 		ClientID     string `json:"clientId"`
 		ClientSecret string `json:"clientSecret"`
@@ -629,6 +632,9 @@ func (h *AdminPayoutRailHandler) GetPlatformSettlementAccount(c *gin.Context) {
 //
 // PUT /admin/platform/settlement-account
 func (h *AdminPayoutRailHandler) SetPlatformSettlementAccount(c *gin.Context) {
+	if secretMutationPaused(c) {
+		return
+	}
 	var req struct {
 		BankAccountName   string `json:"bankAccountName" binding:"required"`
 		BankAccountNumber string `json:"bankAccountNumber" binding:"required"`
@@ -841,6 +847,9 @@ func (h *AdminPayoutRailHandler) RefreshChefPayoutMethod(c *gin.Context) {
 //
 // POST /admin/chefs/:id/payout-methods/test-bank
 func (h *AdminPayoutRailHandler) SeedChefTestBankAccount(c *gin.Context) {
+	if secretMutationPaused(c) {
+		return
+	}
 	chefID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
