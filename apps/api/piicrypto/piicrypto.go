@@ -36,6 +36,7 @@ import (
 	"cloud.google.com/go/kms/apiv1/kmspb"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"github.com/homechef/api/internal/appsecrets"
 )
 
 // cipherPrefix tags an encrypted value so DecryptPII can tell ciphertext from a
@@ -97,21 +98,34 @@ func Init(ctx context.Context, projectID string) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	sm, err := secretmanager.NewClient(ctx)
+	bao, err := appsecrets.PIIFromEnvironment()
 	if err != nil {
-		return fmt.Errorf("piicrypto: secret manager: %w", err)
+		return fmt.Errorf("piicrypto: secret store: %w", err)
 	}
-	defer sm.Close()
-
-	// Both secrets are stored base64-encoded (binary payloads round-trip through
-	// Secret Manager cleanly as text), so decode after fetching.
-	wrapped, err := accessSecretB64(ctx, sm, projectID, wrappedDEKSecret)
-	if err != nil {
-		return err
+	var load func(string) ([]byte, error)
+	if bao != nil {
+		load = func(id string) ([]byte, error) {
+			value, err := bao.Read(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			return base64.StdEncoding.DecodeString(strings.TrimSpace(value))
+		}
+	} else {
+		sm, err := secretmanager.NewClient(ctx)
+		if err != nil {
+			return fmt.Errorf("piicrypto: secret manager: %w", err)
+		}
+		defer sm.Close()
+		load = func(id string) ([]byte, error) { return accessSecretB64(ctx, sm, projectID, id) }
 	}
-	bidx, err := accessSecretB64(ctx, sm, projectID, blindIndexSecret)
+	wrapped, err := load(wrappedDEKSecret)
 	if err != nil {
-		return err
+		return fmt.Errorf("piicrypto: wrapped key: %w", err)
+	}
+	bidx, err := load(blindIndexSecret)
+	if err != nil {
+		return fmt.Errorf("piicrypto: blind index key: %w", err)
 	}
 
 	kc, err := kms.NewKeyManagementClient(ctx)
