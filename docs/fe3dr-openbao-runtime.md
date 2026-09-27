@@ -30,17 +30,23 @@ PII base64 decoding and KMS unwrap are unchanged. The existing wrapped DEK and
 blind-index key must be copied exactly; no re-keying or new encryption scheme is
 part of this migration. KMS, storage and recovery identities remain in GCP.
 
-## Gates before enabling either switch
+## Cutover gates
 
 1. The tested `APP_SECRET_WRITES_PAUSED=true` guard rejects all seven
    payment-detail/gateway mutation endpoints with HTTP 503 and Retry-After,
    blocks secret-service writes/deletes, and defers background vendor-account
    erasure before its side effects. Empty/`false` leaves writes enabled; unknown
-   settings fail closed. Reads are unaffected. Obtain scoped production pause
-   approval before enabling it; it has not been deployed or enabled.
-2. Fix onboarding's fire-and-forget secret-write success reporting. It currently
-   logs failures after committing other state. A new backend must not introduce
-   silent missing or partial payment details. Define retry/idempotency handling.
+   settings fail closed. Reads are unaffected. Scoped production pause approval was given on 2026-09-27. It has not yet
+   been deployed or enabled.
+2. Onboarding now waits for bounded secret writes before reporting success or
+   contacting payment providers. Failures return HTTP 503/SECRET_WRITE_FAILED
+   and Retry-After; retry the complete request to finish any partial field set.
+   Driver onboarding does not advance on failure. Vendor non-sensitive DB
+   updates can already be committed, but provider registration is not attempted
+   on secret-write failure. Repeated identical writes preserve the same value.
+   No request spawns a detached secret writer or holds a DB transaction across
+   the secret-service calls. Gateway mutations retain their synchronous error
+   handling. This does not claim cross-system transaction atomicity.
 3. Deploy pause-capable code while still on GCP. Wait until all old pods and
    outstanding writers are drained; then reconcile source changes since staging.
 4. Verify exact runtime capabilities and test sandbox read/write/delete, failure,
