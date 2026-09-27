@@ -29,6 +29,7 @@ import (
 
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/services"
 )
 
 // setupChefPayoutSettlementDB wires users + chef_profiles + audit_logs and
@@ -51,17 +52,10 @@ func setupChefPayoutSettlementDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) 
 	database.DB = db
 	t.Cleanup(func() { database.DB = orig })
 
-	// SavePayoutDetails' secret-storage goroutine calls config.IsDevelopment(),
-	// which nil-derefs unless AppConfig is set. Set it once and never restore to
-	// nil: that goroutine is fire-and-forget and can still be running after this
-	// test function returns, so a save/restore-to-nil in t.Cleanup would race the
-	// goroutine's read against the next test's restore. A permanent non-nil
-	// zero-value Config is behaviourally identical to nil for every other
-	// handler's `config.AppConfig == nil || !config.AppConfig.XEnabled`
-	// feature-flag checks, so this can't affect unrelated tests in this package.
-	if config.AppConfig == nil {
-		config.AppConfig = &config.Config{Environment: "test"}
-	}
+	oldConfig := config.AppConfig
+	config.AppConfig = &config.Config{Environment: "test", GCSProjectID: "test-project"}
+	t.Cleanup(func() { config.AppConfig = oldConfig })
+	setupPayoutSecretStore(t)
 
 	return db, userID, chefID
 }
@@ -156,6 +150,7 @@ func TestSavePayoutDetails_CannotSwitchToUpi(t *testing.T) {
 // itself must not depend on a gateway being reachable.
 func TestSavePayoutDetails_PersistsMethodWithoutAGateway(t *testing.T) {
 	db, userID, chefID := setupChefPayoutSettlementDB(t)
+	backend := setupPayoutSecretStore(t)
 
 	w := postPayout(t, userID, bankTransferPayload())
 	require.Equal(t, http.StatusOK, w.Code)
@@ -163,4 +158,19 @@ func TestSavePayoutDetails_PersistsMethodWithoutAGateway(t *testing.T) {
 	var method string
 	require.NoError(t, db.Raw(`SELECT payout_method FROM chef_profiles WHERE id = ?`, chefID.String()).Row().Scan(&method))
 	require.Equal(t, "bank_transfer", method)
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	require.Len(t, backend.values, 3)
+	prefix := "projects/test-project/secrets/prod-homechef-vendor-payment-" + chefID.String() + "-"
+	require.Equal(t, "1234567890", backend.values[prefix+"bank-account-number"])
+	require.Equal(t, "Anita Rao", backend.values[prefix+"bank-account-name"])
+	require.Equal(t, "HDFC0000123", backend.values[prefix+"bank-ifsc"])
+}
+
+func TestSavePayoutDetails_SecretFailureIsNotReportedAsSuccess(t *testing.T) {
+	_, userID, _ := setupChefPayoutSettlementDB(t)
+	services.CloseSecretManager()
+	w := postPayout(t, userID, bankTransferPayload())
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+	require.Contains(t, w.Body.String(), "SECRET_WRITE_FAILED")
 }

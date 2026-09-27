@@ -10,6 +10,7 @@ import (
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/internal/appsecrets"
+	"google.golang.org/api/option"
 )
 
 var secretClient *secretmanager.Client
@@ -17,7 +18,7 @@ var baoClient *appsecrets.Client
 
 // InitSecretManager initializes the GCP Secret Manager client.
 // Uses default credentials (Workload Identity on GKE, ADC locally).
-func InitSecretManager() error {
+func InitSecretManager(options ...option.ClientOption) error {
 	client, err := appsecrets.FromEnvironment()
 	if err != nil {
 		return err
@@ -31,7 +32,7 @@ func InitSecretManager() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	gcpClient, err := secretmanager.NewClient(ctx)
+	gcpClient, err := secretmanager.NewClient(ctx, options...)
 	if err != nil {
 		return fmt.Errorf("failed to create secret manager client: %w", err)
 	}
@@ -44,6 +45,7 @@ func InitSecretManager() error {
 func CloseSecretManager() {
 	if secretClient != nil {
 		secretClient.Close()
+		secretClient = nil
 	}
 }
 
