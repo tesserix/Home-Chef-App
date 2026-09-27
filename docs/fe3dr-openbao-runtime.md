@@ -32,9 +32,12 @@ part of this migration. KMS, storage and recovery identities remain in GCP.
 
 ## Gates before enabling either switch
 
-1. Implement and test an early, explicit pause guard for payment-detail and
-   gateway-credential mutations; obtain the scoped production pause approval.
-   Reads and checkout should continue. Inventory background deletion/writers too.
+1. The tested `APP_SECRET_WRITES_PAUSED=true` guard rejects all seven
+   payment-detail/gateway mutation endpoints with HTTP 503 and Retry-After,
+   blocks secret-service writes/deletes, and defers background vendor-account
+   erasure before its side effects. Empty/`false` leaves writes enabled; unknown
+   settings fail closed. Reads are unaffected. Obtain scoped production pause
+   approval before enabling it; it has not been deployed or enabled.
 2. Fix onboarding's fire-and-forget secret-write success reporting. It currently
    logs failures after committing other state. A new backend must not introduce
    silent missing or partial payment details. Define retry/idempotency handling.
