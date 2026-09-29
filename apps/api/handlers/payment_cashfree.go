@@ -266,11 +266,11 @@ func (h *PaymentHandler) finishCashfreeFromGateway(c *gin.Context, order *models
 // status: ErrPaymentGatewayUnavailable (gateway not configured — a
 // misconfiguration, not a payment outcome) is 503, ErrPaymentGatewayFetchFailed
 // (the mandatory gateway fetch itself failed — retryable) is 502, and anything
-// else (nil, or a terminal ValidateCapturedPayment rejection) is 400,
+// a pending local settlement is 503; nil or a terminal capture rejection is 400,
 // unchanged. Shared by both HTTP callers of SettleCashfreeOrder below.
 func cashfreeSettleStatus(err error) int {
 	switch {
-	case errors.Is(err, services.ErrPaymentGatewayUnavailable):
+	case errors.Is(err, services.ErrPaymentGatewayUnavailable), errors.Is(err, services.ErrPaymentSettlementPending):
 		return http.StatusServiceUnavailable
 	case errors.Is(err, services.ErrPaymentGatewayFetchFailed):
 		return http.StatusBadGateway
