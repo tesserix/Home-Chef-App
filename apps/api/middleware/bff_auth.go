@@ -265,11 +265,15 @@ func BFFAuth(cfg BFFAuthConfig) gin.HandlerFunc {
 				// and 401 is what the mobile clients' interceptor turns into
 				// clear-tokens → refresh-attempt (fails; the GIP credential was
 				// deleted with the account) → logout → guest landing.
-				// Only ErrRecordNotFound: a transient DB error must keep failing
-				// open here rather than signing out every live user.
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 						"error": "This session belongs to an account that no longer exists.",
+					})
+					return
+				}
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+						"error": "account_verification_unavailable",
 					})
 					return
 				}
@@ -308,6 +312,9 @@ func isReactivationPath(path string) bool {
 }
 
 func verify(r *http.Request, body []byte, key []byte, window time.Duration) (*BFFIdentity, error) {
+	if len(key) == 0 {
+		return nil, ErrBFFSignatureMismatch
+	}
 	sig := r.Header.Get(HdrSignature)
 	if sig == "" {
 		return nil, ErrBFFMissingSignature

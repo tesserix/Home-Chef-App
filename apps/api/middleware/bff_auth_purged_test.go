@@ -86,3 +86,25 @@ func TestBFFAuth_LiveSubject_StillPasses(t *testing.T) {
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code, "a live account must keep working: %s", w.Body.String())
 }
+
+func TestBFFAuth_AccountLookupUnavailable_Returns503(t *testing.T) {
+	db := setupBFFUserDB(t)
+	uid := uuid.NewString()
+	require.NoError(t, db.Exec(`INSERT INTO users (id, email, is_active) VALUES (?,?,0)`,
+		uid, "suspended@example.com").Error)
+	raw, err := db.DB()
+	require.NoError(t, err)
+	require.NoError(t, raw.Close())
+
+	key := []byte("test-key-32-bytes-padding-padding!")
+	body := []byte(`{}`)
+	req := httptest.NewRequest(http.MethodPost, "/x", bytes.NewReader(body))
+	attachSigned(req, body, key, BFFIdentity{
+		UserID: uid, Email: "suspended@example.com", Role: "customer", Pool: "customer",
+	}, time.Now().Unix())
+	w := httptest.NewRecorder()
+	bffEngine(key).ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusServiceUnavailable, w.Code, "account checks must fail closed: %s", w.Body.String())
+	require.JSONEq(t, `{"error":"account_verification_unavailable"}`, w.Body.String())
+}

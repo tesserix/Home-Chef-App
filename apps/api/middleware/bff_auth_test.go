@@ -86,6 +86,19 @@ func TestBFFAuth_MissingHeader_401(t *testing.T) {
 	require.Equal(t, 401, w.Code)
 }
 
+func TestBFFAuth_EmptyHMACKey_RejectsForgedIdentity(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/x", BFFAuth(BFFAuthConfig{}), func(c *gin.Context) { c.Status(http.StatusOK) })
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	attachSigned(req, nil, nil, BFFIdentity{
+		UserID: "attacker", Role: "admin", Pool: "admin",
+	}, time.Now().Unix())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
 func TestBFFAuth_StaleTs_401(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	key := []byte("test-key-32-bytes-padding-padding!")
