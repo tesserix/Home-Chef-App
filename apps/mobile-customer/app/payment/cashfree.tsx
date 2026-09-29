@@ -17,7 +17,7 @@
 //     screen, which polls the server's real paymentStatus. The client's own view
 //     of "paid" is never trusted.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -28,7 +28,6 @@ import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { chargeRefreshKeys } from '../../lib/payment';
-import { useCartStore } from '../../store/cart-store';
 
 const BACK_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
@@ -59,7 +58,11 @@ export default function CashfreeCheckoutScreen() {
   // constrained to a route path string, not a params record.
   const params = useLocalSearchParams() as unknown as CashfreeCheckoutParams;
   const [loading, setLoading] = useState(true);
-  const clearCart = useCartStore((s) => s.clearCart);
+  const [needsRecovery, setNeedsRecovery] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const finished = useRef(false);
+  const verifying = useRef<Promise<{ data: { status?: string } }> | null>(null);
+  const leaving = useRef(false);
   const qc = useQueryClient();
 
   const orderId = String(params.orderId ?? '');
@@ -75,9 +78,10 @@ export default function CashfreeCheckoutScreen() {
   // — Cashfree gives the client no payment id or signature, so the server reads the
   // capture from the gateway and binds it by the order id, which is the row's uuid.
   const kind = String(params.kind ?? '');
-  const chargeId = String(params.mealPlanId ?? params.groupId ?? params.cateringId ?? params.tipId ?? '');
-  const isCharge =
-    kind === 'mealplan' || kind === 'group' || kind === 'catering' || kind === 'tip';
+  const chargeId = String(
+    params.mealPlanId ?? params.groupId ?? params.cateringId ?? params.tipId ?? '',
+  );
+  const isCharge = kind === 'mealplan' || kind === 'group' || kind === 'catering' || kind === 'tip';
   const { verifyPath, doneRoute } =
     kind === 'mealplan'
       ? {
@@ -99,33 +103,64 @@ export default function CashfreeCheckoutScreen() {
                 verifyPath: `/v1/payments/tip/${chargeId}/verify`,
                 doneRoute: `/order/${orderId}`,
               }
-          : {
-              verifyPath: `/v1/payments/order/${orderId}/verify`,
-              doneRoute: `/payment/result?order_id=${orderId}`,
-            };
+            : {
+                verifyPath: `/v1/payments/order/${orderId}/verify`,
+                doneRoute: `/payment/result?order_id=${orderId}`,
+              };
 
   // The row we land back on is already mounted (we pushed from it), so replace()
   // reuses that screen and it keeps rendering its pre-payment snapshot unless the
   // cache is invalidated. The order result screen polls, so it needs nothing.
   const settle = useCallback(() => {
+    if (finished.current) return;
+    finished.current = true;
     for (const key of chargeRefreshKeys(kind, chargeId)) {
       void qc.invalidateQueries({ queryKey: key });
     }
-    clearCart();
     router.replace(doneRoute as never);
-  }, [qc, kind, chargeId, clearCart, doneRoute]);
+  }, [qc, kind, chargeId, doneRoute]);
+
+  const verify = useCallback(() => {
+    if (!verifying.current) {
+      verifying.current = api
+        .post<{
+          status?: string;
+        }>(verifyPath, isCharge ? {} : { cashfreeOrderId })
+        .finally(() => {
+          verifying.current = null;
+        });
+    }
+    return verifying.current;
+  }, [verifyPath, isCharge, cashfreeOrderId]);
 
   const finish = useCallback(async () => {
-    // Fast-path verify. The result screen polls server status as the backstop
-    // (the webhook completes it regardless), so a failure here is swallowed
-    // rather than shown as a payment failure.
+    if (leaving.current || finished.current) return;
+    leaving.current = true;
+    setChecking(true);
     try {
-      await api.post(verifyPath, isCharge ? {} : { cashfreeOrderId });
+      await verify();
     } catch {
-      // ignore — the result screen confirms via polling
+      // A timeout is an unknown outcome; the destination reads server status.
     }
     settle();
-  }, [verifyPath, isCharge, cashfreeOrderId, settle]);
+  }, [verify, settle]);
+
+  useEffect(() => {
+    finished.current = false;
+    const timer = setTimeout(() => {
+      setLoading(false);
+      setNeedsRecovery(true);
+    }, 60000);
+    return () => {
+      clearTimeout(timer);
+      finished.current = true;
+    };
+  }, []);
+
+  const recover = useCallback(() => {
+    setLoading(false);
+    setNeedsRecovery(true);
+  }, []);
 
   // The bridge is not a reliable completion signal: the 3DS step navigates this
   // document away (popup fallback, bank redirect) and kills the script before it
@@ -138,11 +173,9 @@ export default function CashfreeCheckoutScreen() {
   useEffect(() => {
     if (!orderId && !chargeId) return;
     const timer = setInterval(async () => {
+      if (verifying.current || finished.current || leaving.current) return;
       try {
-        const r = await api.post<{ status?: string }>(
-          verifyPath,
-          isCharge ? {} : { cashfreeOrderId },
-        );
+        const r = await verify();
         // The plan endpoint answers 200 only once the advance is confirmed, so
         // reaching here at all is the signal; the order endpoint reports a status.
         if (isCharge || (r.data?.status && r.data.status !== 'pending')) {
@@ -154,7 +187,7 @@ export default function CashfreeCheckoutScreen() {
       }
     }, 4000);
     return () => clearInterval(timer);
-  }, [orderId, chargeId, verifyPath, isCharge, cashfreeOrderId, settle]);
+  }, [orderId, chargeId, isCharge, verify, settle]);
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -164,10 +197,7 @@ export default function CashfreeCheckoutScreen() {
       } catch {
         return;
       }
-      if (msg.type === 'dismiss') {
-        router.back();
-        return;
-      }
+      if (!['dismiss', 'settled', 'error'].includes(msg.type)) return;
       // 'settled' and 'error' both land on the result screen: even an error may
       // have followed a real capture, and only the server knows.
       void finish();
@@ -187,9 +217,18 @@ export default function CashfreeCheckoutScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top']}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, height: 48 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 8,
+          height: 48,
+        }}
+      >
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => {
+            void finish();
+          }}
           android_ripple={{ color: BACK_RIPPLE, borderless: true }}
           hitSlop={12}
           accessibilityRole="button"
@@ -198,10 +237,40 @@ export default function CashfreeCheckoutScreen() {
         >
           <ChevronLeft size={24} color={customerColors.charcoal.DEFAULT} />
         </Pressable>
-        <Text style={{ fontSize: 16, fontWeight: '600', color: customerColors.charcoal.DEFAULT }}>
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: '600',
+            color: customerColors.charcoal.DEFAULT,
+          }}
+        >
           Secure checkout
         </Text>
       </View>
+
+      {needsRecovery ? (
+        <View style={{ padding: 16, backgroundColor: '#fff7ed' }}>
+          <Text style={{ color: customerColors.charcoal.DEFAULT }}>
+            Checkout taking too long? Check your payment status before trying again.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Check payment status"
+            disabled={checking}
+            onPress={finish}
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text
+              style={{
+                color: customerColors.charcoal.DEFAULT,
+                fontWeight: '600',
+              }}
+            >
+              {checking ? 'Checking payment…' : 'Check payment status'}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <WebView
         source={{
@@ -215,6 +284,8 @@ export default function CashfreeCheckoutScreen() {
         }}
         onMessage={onMessage}
         onLoadEnd={() => setLoading(false)}
+        onError={recover}
+        onHttpError={recover}
         javaScriptEnabled
         domStorageEnabled
         // UPI intent hands off to GPay/PhonePe via a custom scheme; without this
