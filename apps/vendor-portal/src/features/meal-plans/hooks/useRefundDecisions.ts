@@ -71,5 +71,5 @@ export function useSubmitRefundDecision() {
 /** The refund at `percent`, interpolated from the server's 100% figure so the preview
  *  tracks the slider without a round-trip. The server recomputes it authoritatively. */
 export function refundAtPercent(day: RefundDecisionDay, percent: number): number {
-  return Math.round(day.fullRefund * percent) / 100;
+  return Math.floor(day.fullRefund * Math.min(100, Math.max(0, percent)) + 1e-9) / 100;
 }

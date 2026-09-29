@@ -24,7 +24,7 @@ export function refundDestinationLine(
   // Never claim more reached the gateway than the refund itself, and never a
   // negative slice, however the two sources disagree.
   const toCard = Math.min(total, Math.max(0, total - toWallet));
-  const gateway = destination === 'wallet' ? 'wallet' : 'card';
+  const gateway = destination === 'wallet' ? 'wallet' : 'original payment method';
 
   if (toWallet <= 0) return `${formatMoney(total)} refunded to your ${gateway}.`;
   if (toCard <= 0) return `${formatMoney(total)} refunded to your wallet.`;

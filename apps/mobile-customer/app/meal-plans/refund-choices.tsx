@@ -69,8 +69,8 @@ export default function RefundChoicesScreen() {
               <Text style={styles.intro}>
                 Your chef agreed a refund. Pick where it goes — your Fe3dr wallet is instant, or
                 we can reverse it to your original payment method (per RBI, that takes 5–7 business
-                days). It covers the food and that day’s delivery fee; the GST and platform fee aren’t
-                refundable.
+                days). The eligible amount includes food after commission, food GST, and delivery.
+                The platform fee and other taxes are excluded.
               </Text>
             ) : null
           }

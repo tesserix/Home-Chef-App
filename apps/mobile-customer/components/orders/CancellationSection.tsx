@@ -89,6 +89,7 @@ const money = (paise: number) => formatMoney(paise / 100);
 export function CancellationSection({
   orderId,
   status,
+  paymentStatus,
   source,
   walletRefunded,
   loyaltyRefunded,
@@ -96,6 +97,7 @@ export function CancellationSection({
 }: {
   orderId: string;
   status: string;
+  paymentStatus?: string;
   source?: Order['source'];
   walletRefunded?: number;
   loyaltyRefunded?: number;
@@ -157,7 +159,7 @@ export function CancellationSection({
     );
   }
 
-  if (!orderCancellable(status)) return null;
+  if (!orderCancellable(status, paymentStatus)) return null;
 
   // A meal-plan day / group order is refund-managed by THAT flow on a separate
   // idempotency keyspace, so handlers/cancellation.go refuses a generic request

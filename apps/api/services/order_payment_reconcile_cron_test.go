@@ -57,7 +57,7 @@ func setupReconcileDB(t *testing.T) *gorm.DB {
 func reconcilePaymentRow(t *testing.T, db *gorm.DB, id interface{ String() string }) (paymentStatus, gatewayPaymentID string) {
 	t.Helper()
 	row := struct {
-		PaymentStatus     string
+		PaymentStatus    string
 		GatewayPaymentID string
 	}{}
 	require.NoError(t, db.Raw(
@@ -240,4 +240,26 @@ func TestOrderPaymentReconcile_RetiredGatewayOrder_LeftAloneWithZeroGatewayHits(
 	paymentStatus, gatewayPaymentID := reconcilePaymentRow(t, db, o.ID)
 	require.Equal(t, string(models.PaymentPending), paymentStatus, "a legacy order is left exactly as it was")
 	require.Empty(t, gatewayPaymentID)
+}
+
+func TestCashfreeSettlement_PersistenceFailureDoesNotReportSuccess(t *testing.T) {
+	db := setupReconcileDB(t)
+	order := seedStaleOrder(t, db, "cashfree", "cf_persist_retry", models.ChefModeLive, time.Now())
+	withCashfreeServer(t, models.ChefModeLive, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"cf_payment_id":779,"order_id":"cf_persist_retry","payment_status":"SUCCESS","payment_amount":300.00,"payment_group":"upi"}]`))
+	})
+	require.NoError(t, db.Exec(`CREATE TRIGGER reject_completion BEFORE UPDATE OF payment_status ON orders BEGIN SELECT RAISE(ABORT, 'temporary write failure'); END`).Error)
+	settled, message, err := SettleCashfreeOrder(order)
+	require.False(t, settled, "a captured payment is not a persisted settlement")
+	require.Error(t, err)
+	require.NotEmpty(t, message)
+	status, _ := reconcilePaymentRow(t, db, order.ID)
+	require.Equal(t, string(models.PaymentPending), status)
+	require.NoError(t, db.Exec(`DROP TRIGGER reject_completion`).Error)
+	settled, _, err = SettleCashfreeOrder(order)
+	require.NoError(t, err)
+	require.True(t, settled)
+	status, paymentID := reconcilePaymentRow(t, db, order.ID)
+	require.Equal(t, string(models.PaymentCompleted), status)
+	require.Equal(t, "779", paymentID)
 }

@@ -613,7 +613,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 			database.DB.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
 				Updates(map[string]any{
 					"gateway_order_id": orderID,
-					"payment_provider":  plan.PaymentProvider,
+					"payment_provider": plan.PaymentProvider,
 				})
 			plan.GatewayOrderID = orderID
 			mealPlanGatewayHandshake(resp, &plan, sessionID)
@@ -1262,9 +1262,12 @@ func (h *MealPlanHandler) RespondMealPlan(c *gin.Context) {
 	approveBy := now.Add(custApproveWindow)
 	plan.CustomerApproveBy = &approveBy
 
-	// Estimate basis = the accepted days only (declined days are excluded). The
-	// final charge is recomputed with GST + delivery at approval.
-	acceptedTotal := plan.AcceptedTotal()
+	// Keep the priced booking snapshot for the accepted-subset estimate.
+	// Approval computes the final charge; the unpaid flow carries food only.
+	if !services.MealPlanEscrowActive() {
+		plan.Subtotal = plan.AcceptedTotal()
+		plan.Total = plan.Subtotal
+	}
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		// Status-guarded transition from pending_chef — a concurrent expiry sweep
 		// (or double-submit) that already moved the row loses here.
@@ -1285,7 +1288,7 @@ func (h *MealPlanHandler) RespondMealPlan(c *gin.Context) {
 			}
 		}
 		if err := tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).Updates(map[string]any{
-			"subtotal": acceptedTotal, "total": acceptedTotal, "customer_approve_by": plan.CustomerApproveBy,
+			"subtotal": plan.Subtotal, "total": plan.Total, "customer_approve_by": plan.CustomerApproveBy,
 		}).Error; err != nil {
 			return err
 		}
@@ -1300,7 +1303,6 @@ func (h *MealPlanHandler) RespondMealPlan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record response"})
 		return
 	}
-	plan.Subtotal, plan.Total = acceptedTotal, acceptedTotal
 	plan.ProjectForChef()
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan, "allAccepted": allAccepted})
 }

@@ -64,7 +64,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '6. Cancellations and refunds',
     paragraphs: [
-      'You can cancel an order any time before the chef starts cooking and get a full refund. Once the chef has begun preparing the food, the chef chooses whether to cancel and how much to refund, because the ingredients have already been used. Each chef sets a clear cancellation policy that you see at checkout.',
+      'Cancellation eligibility and the food refund depend on the order stage and preparation progress under the platform cancellation policy. Eligible delivery charges and associated tax are refunded; the platform fee and its tax are retained on customer cancellations. The cancellation screen shows an estimate and the confirmed breakdown shows the refund and retained amounts.',
       'If the chef cancels after accepting, or the food is not delivered, you get a full refund. If the food arrives in poor condition, contact us within four hours of delivery with a photo and a short description, and we will work with the chef to put it right. For full detail, see our Refund & Cancellation Policy at fe3dr.com/refund.',
     ],
   },

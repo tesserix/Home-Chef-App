@@ -41,6 +41,9 @@ var ErrPaymentGatewayUnavailable = errors.New("payment gateway not configured")
 // outcome, this is a retryable upstream failure (#872 final item).
 var ErrPaymentGatewayFetchFailed = errors.New("failed to fetch payment from gateway")
 
+// ErrPaymentSettlementPending means capture was verified but its local transaction must be retried.
+var ErrPaymentSettlementPending = errors.New("payment settlement pending")
+
 // NotifyChefNewOrderTx stages the actionable "new order" push to the chef
 // within a payment-completion transaction. Orders are created pre-payment, so
 // the chef is only notified once money is captured (previously this fired in
@@ -244,7 +247,7 @@ func SettleOrderWallet(order *models.Order) {
 // final item): nil on every terminal branch (payment==nil, a
 // ValidateCapturedPayment rejection, and the success path), and one of
 // ErrPaymentGatewayUnavailable / ErrPaymentGatewayFetchFailed (wrapped) on the
-// two branches a caller should treat as retryable rather than "not paid".
+// gateway branches or a local settlement failure; all are retryable rather than "not paid".
 func SettleCashfreeOrder(order *models.Order) (bool, string, error) {
 	cf := GetCashfreeFor(order.Mode)
 	if cf == nil {
@@ -289,15 +292,17 @@ func SettleCashfreeOrder(order *models.Order) (bool, string, error) {
 
 	cfPaymentID := payment.CFPaymentID.String()
 
-	// Mark paid + stage the chef push and order.paid event atomically. The payment
-	// is already captured at the gateway, so a DB hiccup must not fail the caller —
-	// it is logged, sent to Sentry, and the reconcile cron catches the drift.
+	// A captured payment is not settled until the local transaction commits.
+	previousStatus := order.PaymentStatus
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		_, err := CompleteCashfreeOrderTx(tx, order, payment.MethodLabel(), cfPaymentID, payment.AmountPaise.Paise())
 		return err
 	}); err != nil {
 		log.Printf("Failed to persist cashfree payment completion for order %s: %v", order.ID, err)
 		CaptureBackgroundError(err)
+		order.PaymentStatus = previousStatus
+		return false, "Payment received; confirmation is pending. Please check the order status shortly",
+			fmt.Errorf("%w: %v", ErrPaymentSettlementPending, err)
 	} else {
 		MaybeGrantReward(database.DB, order.ID)
 		StartOrderSaga(order.ID)

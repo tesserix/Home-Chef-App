@@ -87,7 +87,7 @@ func approveSkip(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, re
 	if err := tx.Select("id", "user_id").First(&chef, "id = ?", plan.ChefID).Error; err == nil && chef.UserID != uuid.Nil {
 		if err := EnqueueEvent(tx, SubjectMealPlanDaySkippedChef, "meal_plan.day_skipped_chef", chef.UserID, map[string]any{
 			"meal_plan_id": plan.ID.String(), "day_id": day.ID.String(),
-			"date": day.Date.Format("2006-01-02"),
+			"date": day.Date.In(scheduleIST).Format("2006-01-02"),
 		}); err != nil {
 			return err
 		}

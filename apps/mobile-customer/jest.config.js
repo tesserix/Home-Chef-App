@@ -15,6 +15,7 @@
 
 module.exports = {
   testEnvironment: 'node',
+  moduleNameMapper: { '^react$': require.resolve('react') },
   // babel-preset-expo (via the app's babel.config.js) handles TS, JSX and the
   // Flow syntax react-native ships. The metro caller is what tells the preset it
   // is compiling for a native target rather than web.

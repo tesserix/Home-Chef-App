@@ -298,6 +298,12 @@ export default function MealPlanDetailScreen() {
             <Text style={styles.moneyLabel}>Food subtotal</Text>
             <Text style={styles.moneyValue}>{formatMoney(charge.food)}</Text>
           </View>
+          {charge.platformFee > 0.005 ? (
+            <View style={styles.moneyRow}>
+              <Text style={styles.moneyLabel}>Platform fee</Text>
+              <Text style={styles.moneyValue}>{formatMoney(charge.platformFee)}</Text>
+            </View>
+          ) : null}
           {charge.delivery > 0.005 ? (
             <View style={styles.moneyRow}>
               <Text style={styles.moneyLabel}>Delivery</Text>

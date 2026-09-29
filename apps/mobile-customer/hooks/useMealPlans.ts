@@ -105,8 +105,12 @@ export interface MealPlan {
   startDate: string;
   endDate: string;
   subtotal: number; // food only
-  tax?: number; // GST on the food (escrow-on advance)
-  total: number; // what the customer is actually charged (food + GST + delivery)
+  platformFee?: number;
+  taxFood?: number;
+  taxService?: number;
+  taxDelivery?: number;
+  tax?: number; // total GST across food, platform fee, and delivery
+  total: number; // full server charge including fees and GST
   currency?: string;
   days: MealPlanDay[];
   chef?: { businessName?: string; profileImage?: string } | null;
@@ -217,9 +221,10 @@ export interface CreateMealPlanResponse {
 
 export interface MealPlanAdvanceBreakdown {
   food: number; // food subtotal
-  gst: number; // GST on the food
+  platformFee: number;
+  gst: number; // total GST
   delivery: number; // per-day delivery total
-  total: number; // the charge = food + gst + delivery
+  total: number; // food + platform fee + GST + delivery
   amountPaise: number; // total in paise, for the checkout amount param
 }
 
@@ -227,10 +232,11 @@ export interface MealPlanAdvanceBreakdown {
  *  Uses the SERVER `plan.total` (food + GST + per-day delivery) — never the food-only
  *  selection sum — so the amount shown before checkout equals the gateway charge to
  *  the paise (#402: the booking footer shows food only; the server adds GST + delivery).
- *  Delivery is derived (total − food − GST) since the server folds it into total.
+ *  Delivery is derived (total − food − platform fee − GST) since the server folds it into total.
  *  When escrow is off the server returns total == subtotal, so gst/delivery are 0. */
 export function mealPlanAdvanceBreakdown(plan: {
   subtotal: number;
+  platformFee?: number;
   tax?: number;
   total: number;
 }): MealPlanAdvanceBreakdown {
@@ -238,8 +244,9 @@ export function mealPlanAdvanceBreakdown(plan: {
   const food = plan.subtotal ?? 0;
   const gst = plan.tax ?? 0;
   const total = plan.total ?? food;
-  const delivery = Math.max(0, round2(total - food - gst));
-  return { food, gst, delivery, total, amountPaise: Math.round(total * 100) };
+  const platformFee = plan.platformFee ?? 0;
+  const delivery = Math.max(0, round2(total - food - platformFee - gst));
+  return { food, platformFee, gst, delivery, total, amountPaise: Math.round(total * 100) };
 }
 
 /** The advance for a SUBSET of a plan's days — what a customer is agreeing to
@@ -253,7 +260,7 @@ export function mealPlanAdvanceBreakdown(plan: {
  *  plan's per-day rate for the accepted days. With every day accepted it returns
  *  the plan's own figures exactly. Pure. */
 export function mealPlanSubsetBreakdown(
-  plan: { subtotal: number; tax?: number; total: number; days?: unknown[] },
+  plan: Pick<MealPlan, 'subtotal' | 'platformFee' | 'tax' | 'taxFood' | 'taxService' | 'taxDelivery' | 'total'> & { days?: unknown[] },
   acceptedFood: number,
   acceptedDayCount: number,
 ): MealPlanAdvanceBreakdown {
@@ -265,10 +272,20 @@ export function mealPlanSubsetBreakdown(
   // the plan's own breakdown rather than inventing a rate from a zero base.
   if (full.food <= 0 || dayCount <= 0) return full;
 
-  const gst = round2(acceptedFood * (full.gst / full.food));
+  const foodShare = acceptedFood / full.food;
+  const dayShare = acceptedDayCount / dayCount;
+  const hasTaxSplit = (plan.taxFood ?? 0) + (plan.taxService ?? 0) + (plan.taxDelivery ?? 0) > 0;
+  const gst = hasTaxSplit
+    ? round2(
+        round2((plan.taxFood ?? 0) * foodShare) +
+          round2((plan.taxService ?? 0) * foodShare) +
+          round2((plan.taxDelivery ?? 0) * dayShare),
+      )
+    : round2(full.gst * foodShare);
   const delivery = round2((full.delivery / dayCount) * acceptedDayCount);
-  const total = round2(acceptedFood + gst + delivery);
-  return { food: acceptedFood, gst, delivery, total, amountPaise: Math.round(total * 100) };
+  const platformFee = round2(acceptedFood * (full.platformFee / full.food));
+  const total = round2(acceptedFood + platformFee + gst + delivery);
+  return { food: acceptedFood, platformFee, gst, delivery, total, amountPaise: Math.round(total * 100) };
 }
 
 /** Book a calendar of days from one chef. */

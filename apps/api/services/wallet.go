@@ -101,15 +101,18 @@ func applyWalletTxn(db *gorm.DB, userID uuid.UUID, amount float64, txnType model
 			return err
 		}
 
-		newBalance := w.Balance
+		balancePaise := ToPaise(w.Balance)
+		amountPaise := ToPaise(amount)
+		newBalancePaise := balancePaise
 		if txnType == models.WalletCredit {
-			newBalance += amount
+			newBalancePaise += amountPaise
 		} else {
-			if w.Balance < amount {
+			if balancePaise < amountPaise {
 				return ErrInsufficientWalletBalance
 			}
-			newBalance -= amount
+			newBalancePaise -= amountPaise
 		}
+		newBalance := FromPaise(newBalancePaise)
 
 		entry := &models.WalletTxn{
 			ID:             uuid.New(),
@@ -117,7 +120,7 @@ func applyWalletTxn(db *gorm.DB, userID uuid.UUID, amount float64, txnType model
 			UserID:         userID,
 			Type:           txnType,
 			Source:         source,
-			Amount:         amount,
+			Amount:         FromPaise(amountPaise),
 			BalanceAfter:   newBalance,
 			Currency:       w.Currency,
 			OrderID:        orderID,
