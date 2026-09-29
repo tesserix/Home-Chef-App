@@ -166,6 +166,11 @@ func estimateFrom(order *models.Order, penalty float64) *models.ChefPayoutRespon
 	if currency == "" {
 		currency = "INR"
 	}
+	if order.Status == models.OrderStatusRejected {
+		return &models.ChefPayoutResponse{
+			Currency: currency, Status: models.ChefPayoutReversed, ComputedAt: time.Now().UTC(),
+		}
+	}
 	return &models.ChefPayoutResponse{
 		FoodAmount: b.FoodAmount, DeliveryFee: b.DeliveryFee, ChefTip: b.ChefTip,
 		Penalty: b.Penalty, NetPayout: b.NetPayout,
