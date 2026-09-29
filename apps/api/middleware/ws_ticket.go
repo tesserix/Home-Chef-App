@@ -143,7 +143,7 @@ func BFFAuthOrTicket(cfg BFFAuthConfig) gin.HandlerFunc {
 		}
 		applyBFFIdentity(c, id)
 		c.Set(ctxBFFResolved, true)
-		c.Next()
+		hmacAuth(c)
 	}
 }
 

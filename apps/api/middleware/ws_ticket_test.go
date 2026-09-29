@@ -10,9 +10,51 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 )
 
 var wsTestKey = []byte("a-test-hmac-key-that-is-long-enough")
+
+func TestBFFAuthOrTicket_EnforcesAccountStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		active      bool
+		deleted     bool
+		missing     bool
+		unavailable bool
+		want        int
+	}{
+		{name: "active", active: true, want: http.StatusOK},
+		{name: "suspended", want: http.StatusForbidden},
+		{name: "deleted", active: true, deleted: true, want: http.StatusForbidden},
+		{name: "purged", missing: true, want: http.StatusUnauthorized},
+		{name: "database unavailable", unavailable: true, want: http.StatusServiceUnavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupBFFUserDB(t)
+			id := wsTestIdentity()
+			if !tc.missing {
+				require.NoError(t, db.Exec(`INSERT INTO users (id, email, is_active) VALUES (?,?,?)`, id.UserID, id.Email, tc.active).Error)
+			}
+			if tc.deleted {
+				require.NoError(t, db.Exec(`UPDATE users SET deleted_at = ? WHERE id = ?`, time.Now(), id.UserID).Error)
+			}
+			if tc.unavailable {
+				raw, err := db.DB()
+				require.NoError(t, err)
+				require.NoError(t, raw.Close())
+			}
+			ticket, err := MintWSTicket(wsTestKey, id, time.Now())
+			require.NoError(t, err)
+			gin.SetMode(gin.TestMode)
+			r := gin.New()
+			r.GET("/ws/notifications", BFFAuthOrTicket(BFFAuthConfig{HMACKey: wsTestKey}), func(c *gin.Context) { c.Status(http.StatusOK) })
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ws/notifications?ticket="+ticket, nil))
+			require.Equal(t, tc.want, w.Code, w.Body.String())
+		})
+	}
+}
 
 func wsTestIdentity() BFFIdentity {
 	return BFFIdentity{
