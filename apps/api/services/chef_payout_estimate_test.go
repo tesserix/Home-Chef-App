@@ -159,3 +159,24 @@ func TestChefPayoutsFor_IgnoresWaivedPenalties(t *testing.T) {
 func TestChefPayoutsFor_EmptyPage(t *testing.T) {
 	require.Empty(t, ChefPayoutsFor(setupPayoutReadDB(t), nil))
 }
+
+func TestChefPayoutFor_RejectedOrderHasNoFutureEarnings(t *testing.T) {
+	db := setupPayoutReadDB(t)
+	order := pendingOrder(240, 0, models.FulfillmentPickup)
+	order.Status = models.OrderStatusRejected
+	order.PaymentStatus = models.PaymentRefunded
+	for name, payout := range map[string]*models.ChefPayoutResponse{
+		"detail": ChefPayoutFor(db, order),
+		"list":   ChefPayoutsFor(db, []models.Order{*order})[order.ID],
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.Zero(t, payout.NetPayout)
+			require.Zero(t, payout.FoodAmount)
+			require.Equal(t, models.ChefPayoutReversed, payout.Status)
+			require.Equal(t, "INR", payout.Currency)
+		})
+	}
+	var count int64
+	require.NoError(t, db.Model(&models.OrderChefPayout{}).Count(&count).Error)
+	require.Zero(t, count, "rendering must not create a payout")
+}
