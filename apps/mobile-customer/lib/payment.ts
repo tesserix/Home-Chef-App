@@ -125,7 +125,13 @@ export async function startOrderPayment(
   const resp = await api.post<{ data: GatewayPaymentData }>(
     `/v1/payments/order/${orderId}/create`,
     credit,
-  );
+  ).catch((error: unknown) => {
+    if ((opts.holdSeconds ?? 0) <= 0) throw error;
+    // The order already exists. Recover it instead of offering another placement.
+    router.replace(`/payment/result?order_id=${encodeURIComponent(orderId)}`);
+    return null;
+  });
+  if (!resp) return;
   const data = resp.data.data ?? (resp.data as unknown as GatewayPaymentData);
 
   // Full-wallet order: store credit covered the total, so the server already

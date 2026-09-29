@@ -3,7 +3,7 @@
 
 import { LegalScreen, type LegalSection } from '../components/legal/LegalScreen';
 
-const LAST_UPDATED = '11 June 2026';
+const LAST_UPDATED = '29 September 2026';
 
 const INTRO =
   'Fe3dr is a marketplace that connects you with independent home chefs and delivery partners. Fe3dr is a product of Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia. This policy explains when you can cancel an order and how refunds are handled. It applies to all orders placed through the Fe3dr customer app.';
@@ -13,8 +13,8 @@ const SECTIONS: LegalSection[] = [
     heading: '1. Cancelling an order',
     paragraphs: [
       'You can cancel an order from the order screen. Whether a refund applies depends on the stage your order has reached when you cancel:',
-      '• Before the chef accepts — free cancellation, full refund.',
-      '• After the chef accepts but before they begin cooking — full refund, less any payment-gateway charges that are non-refundable.',
+      '• Before the chef accepts — the food amount is refunded in full, with eligible delivery charges and associated tax. The platform fee and its tax are retained.',
+      '• After the chef accepts — the food refund depends on preparation progress under the platform cancellation policy. The cancellation screen shows an estimate; the confirmed breakdown shows the refund and retained amounts.',
       '• After the chef has begun preparing your food — a partial refund may apply, since ingredients and effort have already been committed. The exact amount depends on how far preparation has progressed.',
       '• After the order is handed to a delivery partner — the order generally cannot be cancelled and is non-refundable, except where the food is not delivered or arrives in an unacceptable condition.',
     ],
@@ -29,7 +29,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '3. How and when refunds are paid',
     paragraphs: [
-      'Payments are processed by Cashfree Payments, an RBI-licensed payment aggregator. Approved refunds are returned to your original payment method.',
+      'Payments are processed by Cashfree Payments, an RBI-licensed payment aggregator. Approved refunds follow the original funding: gateway payments return to the original payment method, wallet credit returns to the wallet, and redeemed loyalty credit is refunded as wallet rupees.',
       'Refunds are completed within 7 working days of approval, in line with the Reserve Bank of India Payment Aggregator Master Direction. The time it takes for the amount to appear in your account afterward depends on your bank or card issuer.',
     ],
   },

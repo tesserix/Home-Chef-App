@@ -85,6 +85,6 @@ export function useDisputeCancellation() {
 }
 
 /** Whether an order is at a stage the customer can still ask to cancel. */
-export function orderCancellable(status: string): boolean {
-  return ['pending', 'accepted', 'preparing'].includes(status);
+export function orderCancellable(status: string, paymentStatus?: string): boolean {
+  return paymentStatus === 'completed' && ['pending', 'accepted', 'preparing'].includes(status);
 }

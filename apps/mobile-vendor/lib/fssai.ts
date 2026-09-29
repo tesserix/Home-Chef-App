@@ -181,7 +181,7 @@ export function buildCashfreeCheckoutUrl(opts: {
  *
  *  `urgent` means the chef has to do something; `calm` is progress they should
  *  see but need not act on. null when there is nothing worth a banner — no
- *  request, or one that finished long enough ago to stop being news.
+ *  request, or a completed registration.
  *
  *  Separate from the tracker's own copy because a banner has one line to land
  *  in: it says where the request is and what, if anything, is owed.
@@ -230,13 +230,7 @@ export function fssaiDashboardNotice(
           : 'Lodged with FSSAI.',
       };
     case 'issued':
-      return {
-        tone: 'calm',
-        title: 'Your FSSAI registration is ready',
-        body: r.registrationNo
-          ? `Registration ${r.registrationNo}. Tap to download your certificate.`
-          : 'Tap to download your certificate.',
-      };
+      return null;
     case 'rejected':
       return {
         tone: 'urgent',

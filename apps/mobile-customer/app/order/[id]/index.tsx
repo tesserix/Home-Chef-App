@@ -624,6 +624,7 @@ export default function OrderDetailScreen() {
         <CancellationSection
           orderId={order.id}
           status={order.status}
+          paymentStatus={order.paymentStatus}
           source={order.source}
           walletRefunded={order.walletRefunded}
           loyaltyRefunded={order.loyaltyRefunded}

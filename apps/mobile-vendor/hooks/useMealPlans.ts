@@ -361,7 +361,7 @@ export interface RefundDecisionDay {
 /** The refund at `percent`, interpolated from the server's 100% figure so the picker
  *  updates without a round-trip. The server recomputes it authoritatively on submit. */
 export function refundAtPercent(day: RefundDecisionDay, percent: number): number {
-  return Math.round(day.fullRefund * percent) / 100;
+  return Math.floor(day.fullRefund * Math.min(100, Math.max(0, percent)) + 1e-9) / 100;
 }
 
 // Days awaiting THIS chef's decision.

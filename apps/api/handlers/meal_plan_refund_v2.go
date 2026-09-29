@@ -66,14 +66,14 @@ func (h *MealPlanHandler) GetChefPendingRefundDecisions(c *gin.Context) {
 		d := &days[i]
 		var plan models.MealPlan
 		// subtotal/tax/total are needed so MealPlanRefundAmount can add the day's delivery fee.
-		if err := database.DB.Select("id", "meal_plan_number", "customer_id", "subtotal", "tax", "total").First(&plan, "id = ?", d.MealPlanID).Error; err != nil {
+		if err := database.DB.Select("id", "meal_plan_number", "customer_id", "subtotal", "platform_fee", "tax", "tax_food", "tax_service", "tax_delivery", "total").First(&plan, "id = ?", d.MealPlanID).Error; err != nil {
 			continue
 		}
 		var cust models.User
 		database.DB.Select("first_name", "last_name").First(&cust, "id = ?", plan.CustomerID)
 		floor := services.MealPlanDayRefundFloor(d)
 		out = append(out, chefRefundDecisionDay{
-			DayID: d.ID.String(), Date: d.Date.Format("2006-01-02"), Slot: string(d.Slot),
+			DayID: d.ID.String(), Date: d.Date.In(istLoc).Format("2006-01-02"), Slot: string(d.Slot),
 			DishName: d.DishName, CustomerName: strings.TrimSpace(cust.FirstName + " " + cust.LastName),
 			MealPlanNumber: plan.MealPlanNumber, FoodPrice: d.Price,
 			MinPercent: floor,
@@ -192,7 +192,7 @@ func (h *MealPlanHandler) GetAdminPendingRefunds(c *gin.Context) {
 	for i := range days {
 		d := &days[i]
 		var plan models.MealPlan
-		if err := database.DB.Select("id", "meal_plan_number", "customer_id", "chef_id", "subtotal", "tax", "total").First(&plan, "id = ?", d.MealPlanID).Error; err != nil {
+		if err := database.DB.Select("id", "meal_plan_number", "customer_id", "chef_id", "subtotal", "platform_fee", "tax", "tax_food", "tax_service", "tax_delivery", "total").First(&plan, "id = ?", d.MealPlanID).Error; err != nil {
 			continue
 		}
 		var cust models.User
@@ -200,7 +200,7 @@ func (h *MealPlanHandler) GetAdminPendingRefunds(c *gin.Context) {
 		var chef models.ChefProfile
 		database.DB.Select("business_name").First(&chef, "id = ?", plan.ChefID)
 		out = append(out, adminPendingRefundDay{
-			DayID: d.ID.String(), Date: d.Date.Format("2006-01-02"), Slot: string(d.Slot),
+			DayID: d.ID.String(), Date: d.Date.In(istLoc).Format("2006-01-02"), Slot: string(d.Slot),
 			DishName: d.DishName, CustomerName: strings.TrimSpace(cust.FirstName + " " + cust.LastName),
 			ChefName: chef.BusinessName, MealPlanNumber: plan.MealPlanNumber,
 			ChefChoice:   string(d.ChefRefundChoice),
@@ -279,12 +279,12 @@ func (h *MealPlanHandler) GetCustomerPendingRefundChoices(c *gin.Context) {
 	for i := range days {
 		d := &days[i]
 		var plan models.MealPlan
-		if err := database.DB.Select("id", "meal_plan_number", "subtotal", "tax", "total").First(&plan, "id = ?", d.MealPlanID).Error; err != nil {
+		if err := database.DB.Select("id", "meal_plan_number", "subtotal", "platform_fee", "tax", "tax_food", "tax_service", "tax_delivery", "total").First(&plan, "id = ?", d.MealPlanID).Error; err != nil {
 			continue
 		}
 		out = append(out, customerRefundChoiceDay{
 			DayID: d.ID.String(), MealPlanID: d.MealPlanID.String(), MealPlanNumber: plan.MealPlanNumber,
-			Date: d.Date.Format("2006-01-02"), Slot: string(d.Slot), DishName: d.DishName,
+			Date: d.Date.In(istLoc).Format("2006-01-02"), Slot: string(d.Slot), DishName: d.DishName,
 			Amount: services.MealPlanRefundAmountForDay(&plan, d),
 		})
 	}

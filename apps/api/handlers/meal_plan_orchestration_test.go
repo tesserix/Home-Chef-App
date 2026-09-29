@@ -281,3 +281,16 @@ func TestApproveMealPlan_WrongCustomer_NotFound(t *testing.T) {
 	w := finalizeReq(t, uuid.New(), planID, "approve") // a different customer
 	require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 }
+
+func TestRespondMealPlan_PreservesPricedSnapshotForCustomerApproval(t *testing.T) {
+	escrowOff(t)
+	config.AppConfig.MealPlanEscrowEnabled = true
+	db := setupOrchestrationDB(t)
+	chefID, chefUserID := seedOrchChef(t, db)
+	planID := seedOrchPlan(t, db, models.MealPlanPendingChef, uuid.New(), chefID)
+	seedOrchDay(t, db, planID, models.MealPlanDayRequested, 175)
+	require.NoError(t, db.Exec(`UPDATE meal_plans SET subtotal=175, platform_fee=7.4, tax=12.03, total=233.43 WHERE id=?`, planID.String()).Error)
+	w := respondReq(t, chefUserID, planID, map[string]any{"acceptAll": true})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, 233.43, planTotalOf(t, db, planID), "approval must retain fees and delivery")
+}

@@ -15,15 +15,15 @@ export const metadata: Metadata = {
 };
 
 const SUMMARY =
-  'Here is how refunds work. You can cancel for free before the chef starts cooking. After that, refund eligibility depends on the order stage. All refunds go back to your original payment method within 7 working days of approval, in line with the Reserve Bank of India Payment Aggregator Master Direction.';
+  'Here is how refunds work. Refund eligibility and retained fees depend on the order stage and preparation progress. The cancellation screen shows the applicable breakdown. All refunds go back to your original payment method within 7 working days of approval, in line with the Reserve Bank of India Payment Aggregator Master Direction.';
 
 const SECTIONS: LegalSection[] = [
   {
     heading: '1. Cancellation eligibility by order stage',
     paragraphs: [
       `Fe3dr is a product of ${LEGAL_OPERATOR_FULL}, and ties refunds to the order stage because home chefs cook to order. Every order moves through fixed stages — Placed, Accepted, Preparing, Ready, Out for delivery, Delivered — and you can see the current stage on the order detail screen.`,
-      '• Placed (chef has not accepted yet): cancel instantly, 100% refund within 7 working days.',
-      '• Accepted (chef has not started cooking): full refund. In rare cases — a custom or pre-shopped catering dish — the chef may have already bought ingredients; if so, we show you the ingredient cost before you confirm and refund the rest.',
+      '• Placed (chef has not accepted yet): the food amount is refunded in full, with eligible delivery charges and associated tax. The platform fee and its tax are retained.',
+      '• Accepted: the food refund depends on preparation progress under the platform cancellation policy. The cancellation screen shows an estimate; the confirmed breakdown shows the refund and retained amounts.',
       '• Preparing (chef is cooking): we cannot refund the food cost, because the chef cannot sell the food to someone else. If the order is not delivered, we still refund the delivery fee.',
       '• Out for delivery: you cannot cancel from the app, but contact support if something is wrong — refunds are case-by-case.',
       '• Delivered but unsatisfactory: raise a complaint within 24 hours; refunds are case-by-case, partial or full.',

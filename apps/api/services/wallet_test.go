@@ -6,6 +6,7 @@ package services
 // snapshot, and a retried operation (same idempotency key) never double-applies.
 
 import (
+	"math"
 	"testing"
 
 	"github.com/google/uuid"
@@ -15,6 +16,26 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
+
+func TestDebit_EntireBalanceUsesCurrencyPrecision(t *testing.T) {
+	db := setupWalletDB(t)
+	uid := uuid.New()
+	w, err := GetOrCreateWallet(db, uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Legacy floating-point accumulation can leave a sub-paise residue.
+	if err := db.Model(w).Update("balance", math.Nextafter(163.53, 0)).Error; err != nil {
+		t.Fatal(err)
+	}
+	entry, err := DebitWallet(db, uid, 163.53, models.WalletSourceOrderPayment, nil, "checkout", "precision-debit", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.BalanceAfter != 0 {
+		t.Fatalf("balance = %.18f, want zero", entry.BalanceAfter)
+	}
+}
 
 func setupWalletDB(t *testing.T) *gorm.DB {
 	t.Helper()
