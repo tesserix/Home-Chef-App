@@ -230,3 +230,47 @@ func TestQuoteEndpointUsesSameMarketGatewayAsPayment(t *testing.T) {
 		})
 	}
 }
+
+func TestQuoteEndpoint_KitchenTaxCountry(t *testing.T) {
+	for _, country := range []string{"AU", "NZ"} {
+		t.Run(country, func(t *testing.T) {
+			db := setupQuoteDB(t)
+			services.InvalidateTaxCache()
+			t.Cleanup(services.InvalidateTaxCache)
+			rate := 10.0
+			if country == "NZ" {
+				rate = 15
+			}
+			require.NoError(t, db.Exec(`CREATE TABLE tax_rates (country_code text, region text, tax_name text, rate real, is_active boolean)`).Error)
+			require.NoError(t, db.Exec(`INSERT INTO tax_rates VALUES (?, '', 'GST', ?, true)`, country, rate).Error)
+			chefID := uuid.New()
+			require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, payout_country) VALUES (?,?,?)`, chefID.String(), uuid.NewString(), country).Error)
+			for _, body := range []string{`{"subtotal":100}`, `{"subtotal":100,"fulfillment":"pickup","country":"IN"}`} {
+				out := quote(t, chefID, body)
+				require.Equal(t, country, out["taxCountry"])
+				require.Equal(t, rate, out["taxRatePercent"])
+				require.Equal(t, "GST", out["taxName"])
+				lines, err := json.Marshal(out["taxLines"])
+				require.NoError(t, err)
+				require.NotContains(t, string(lines), "CGST")
+				require.NotContains(t, string(lines), "SGST")
+				require.Greater(t, out["tax"].(float64), 0.0)
+			}
+		})
+	}
+}
+
+func TestQuoteEndpoint_RejectsCrossMarketDelivery(t *testing.T) {
+	db := setupQuoteDB(t)
+	chefID := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, payout_country) VALUES (?,?,?)`, chefID.String(), uuid.NewString(), "NZ").Error)
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.POST("/chefs/:id/delivery-quote", (&OrderHandler{}).QuoteDeliveryFee)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/chefs/"+chefID.String()+"/delivery-quote", strings.NewReader(`{"country":"AU"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	require.Contains(t, w.Body.String(), "address_market_mismatch")
+}

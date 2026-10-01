@@ -86,7 +86,13 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 
 	country := req.Country
 	if country == "" {
-		country = "IN"
+		country = chef.PayoutCountry
+	}
+
+	country, err = services.OrderSupplyCountry(chef.PayoutCountry, country, fulfillmentForTax(req.Fulfillment))
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error(), "code": "address_market_mismatch"})
+		return
 	}
 
 	// Live conditions, resolved ONCE per quote: the headline fee, the itemised
