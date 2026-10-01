@@ -14,11 +14,7 @@ export interface ChefFilters {
   maxPrice?: number;
   lat?: number;
   lng?: number;
-  // radius (km) around the customer for the near-me bounding box. Home kitchens
-  // are hyperlocal — a customer can only realistically get food from nearby ones,
-  // so the feed passes a real radius (the API also caps it). A customer with no
-  // kitchen in range sees an empty feed by design, which is correct: better than
-  // surfacing kitchens in another city/state they can't order from.
+  // Optional tighter radius (km); the API defaults to and caps at 20 km.
   radius?: number;
   // Region gate: the customer's selected-address state. The API hides kitchens in
   // other states outright, so results stay local to the delivery region.

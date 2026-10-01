@@ -29,10 +29,67 @@ func NewChefHandler() *ChefHandler {
 	return &ChefHandler{}
 }
 
-// maxDiscoveryRadiusKm caps the customer "near me" radius so a home kitchen is
-// only discoverable to nearby customers — a home cook can't serve another city,
-// let alone another state. Also a backstop against a bad/huge radius value.
-const maxDiscoveryRadiusKm = 30.0
+// discoveryRadiusKm is both the default and the ceiling of the customer
+// "near me" radius: a home cook can't serve another city, let alone another state.
+const discoveryRadiusKm = 20.0
+
+// requestedDiscoveryRadius parses the client's radius, defaulting and capping it
+// at discoveryRadiusKm. Clients historically sent metres (20000 = 20 km), so an
+// implausibly large value is read as metres rather than disabling the filter.
+func requestedDiscoveryRadius(raw string) float64 {
+	r, err := strconv.ParseFloat(raw, 64)
+	if err != nil || r <= 0 {
+		return discoveryRadiusKm
+	}
+	if r > 500 {
+		r /= 1000
+	}
+	return math.Min(r, discoveryRadiusKm)
+}
+
+// geoDistanceSQL is the squared distance in degrees of latitude from (lat,lng),
+// with longitude scaled by cos(lat) — an equirectangular projection, accurate to
+// well under 1% at city scale and needing no trig in SQL.
+func geoDistanceSQL(lat, lng float64) (string, []interface{}) {
+	k := math.Cos(lat * math.Pi / 180.0)
+	return "((latitude - ?) * (latitude - ?) + ((longitude - ?) * ?) * ((longitude - ?) * ?))",
+		[]interface{}{lat, lat, lng, k, lng, k}
+}
+
+// withinRadius keeps kitchens inside a true circle around the customer; the
+// bounding box in front of it lets the planner use the lat/lng index.
+func withinRadius(lat, lng, radiusKm float64) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		minLat, maxLat, minLng, maxLng := chefBoundingBox(lat, lng, radiusKm)
+		dist, vars := geoDistanceSQL(lat, lng)
+		r := radiusKm / 111.0
+		return db.Where("latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?", minLat, maxLat, minLng, maxLng).
+			Where(dist+" <= ?", append(vars, r*r)...)
+	}
+}
+
+// queryCoords reads the customer's lat/lng, rejecting anything not on the globe.
+func queryCoords(c *gin.Context) (lat, lng float64, ok bool) {
+	lat, e1 := strconv.ParseFloat(c.Query("lat"), 64)
+	lng, e2 := strconv.ParseFloat(c.Query("lng"), 64)
+	ok = e1 == nil && e2 == nil && math.Abs(lat) <= 90 && math.Abs(lng) <= 180
+	return lat, lng, ok
+}
+
+// nearestFirst orders by distance between any rankFirst bands and thenBy ties.
+// It must be the only ORDER BY: gorm drops a bare clause.Expr, and an expression
+// order replaces every column ordered before it.
+func nearestFirst(lat, lng float64, rankFirst, thenBy string) clause.OrderBy {
+	dist, vars := geoDistanceSQL(lat, lng)
+	sql := dist + " ASC"
+	if rankFirst != "" {
+		sql = rankFirst + ", " + sql
+	}
+	if thenBy != "" {
+		sql += ", " + thenBy
+	}
+	return clause.OrderBy{Expression: clause.Expr{SQL: sql, Vars: vars}}
+}
 
 // chefBoundingBox returns the lat/lng rectangle around (lat,lng) covering
 // radiusKm, used as a cheap SQL-side "near me" prefilter (#36). ~1° latitude ≈
@@ -63,19 +120,19 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	// Accept both "sortBy" and "sort" (frontend sends "sort")
 	sortBy := c.Query("sortBy")
 	if sortBy == "" {
-		sortBy = c.DefaultQuery("sort", "rating")
+		sortBy = c.Query("sort")
 	}
 
 	// Price range + near-me geo (#36).
 	minPriceStr := c.Query("minPrice")
 	maxPriceStr := c.Query("maxPrice")
-	var geoLat, geoLng float64
-	hasGeo := false
-	if latS, lngS := c.Query("lat"), c.Query("lng"); latS != "" && lngS != "" {
-		la, e1 := strconv.ParseFloat(latS, 64)
-		lo, e2 := strconv.ParseFloat(lngS, 64)
-		if e1 == nil && e2 == nil {
-			geoLat, geoLng, hasGeo = la, lo, true
+	geoLat, geoLng, hasGeo := queryCoords(c)
+
+	// Recommended, located: the kitchens nearest the customer come first.
+	if sortBy == "" {
+		sortBy = "rating"
+		if hasGeo {
+			sortBy = "distance"
 		}
 	}
 
@@ -176,29 +233,9 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	// disables the delivery-area gate below and feeds each chef's delivery flags.
 	tplEnabled := services.ThirdPartyDeliveryEnabled()
 
-	// Near-me: bounding-box prefilter around the customer's coords (#36). radius
-	// defaults to 15km. Cheap, SQL-side, paginates correctly.
+	// Near-me (#36): only kitchens within the discovery radius of the customer.
 	if hasGeo {
-		radiusKm := 15.0
-		if rS := c.Query("radius"); rS != "" {
-			if r, err := strconv.ParseFloat(rS, 64); err == nil && r > 0 {
-				radiusKm = r
-			}
-		}
-		// The client has historically sent metres (e.g. 20000 = 20 km) while the
-		// box math is in km — read as-is that put the radius at 20,000 km, i.e. the
-		// whole planet, so the near-me filter did nothing and kitchens from other
-		// states surfaced. Treat an implausibly large value as metres, then cap it
-		// so no value can disable local filtering.
-		if radiusKm > 500 {
-			radiusKm /= 1000
-		}
-		if radiusKm > maxDiscoveryRadiusKm {
-			radiusKm = maxDiscoveryRadiusKm
-		}
-		minLat, maxLat, minLng, maxLng := chefBoundingBox(geoLat, geoLng, radiusKm)
-		query = query.Where("latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?",
-			minLat, maxLat, minLng, maxLng)
+		query = query.Scopes(withinRadius(geoLat, geoLng, requestedDiscoveryRadius(c.Query("radius"))))
 
 		// Chef delivery-area gate (hybrid): a chef that only offers delivery must
 		// actually reach the customer to appear, so a self-delivering chef the
@@ -247,13 +284,7 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		query = query.Order(rankOrder + ", minimum_order " + dir + ", " + socialOrder)
 	case "distance":
 		if hasGeo {
-			// Squared distance on lat/lng — a monotonic proxy for true distance
-			// at city scale; cheap (no trig) and orders nearby chefs correctly.
-			// Closest first.
-			query = query.Order(clause.Expr{
-				SQL:  rankOrder + ", ((latitude - ?) * (latitude - ?) + (longitude - ?) * (longitude - ?)) ASC, " + socialOrder,
-				Vars: []interface{}{geoLat, geoLat, geoLng, geoLng},
-			})
+			query = query.Order(nearestFirst(geoLat, geoLng, rankOrder, socialOrder))
 		} else {
 			query = query.Order(rankOrder + ", rating " + dir + ", " + socialOrder)
 		}
@@ -361,6 +392,14 @@ func (h *ChefHandler) SearchDishes(c *gin.Context) {
 		Where("is_verified = ?", true). // admin-approved only — mirrors ListChefs
 		Scopes(services.ExcludeFSSAILocked, services.TestChefVisibility(viewerEmail(c))).
 		Select("id")
+	// Located search only reaches the same kitchens the located feed lists.
+	if lat, lng, ok := queryCoords(c); ok {
+		visibleChefs = visibleChefs.Scopes(withinRadius(lat, lng, requestedDiscoveryRadius(c.Query("radius"))))
+		if !services.ThirdPartyDeliveryEnabled() {
+			keepSQL, keepVars := services.DeliveryAreaKeepSQL(lat, lng)
+			visibleChefs = visibleChefs.Where(keepSQL, keepVars...)
+		}
+	}
 
 	// Admin moderation is now enforced (product decision): a dish is visible only when
 	// it is both available AND admin-approved (is_approved), consistent with the
@@ -460,13 +499,9 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 	// Per-customer reach: if the request carried the customer's coordinates,
 	// tell the app whether this chef can deliver to them. A deep link opened by
 	// an out-of-range customer then shows delivery as read-only (pickup only).
-	if latS, lngS := c.Query("lat"), c.Query("lng"); latS != "" && lngS != "" {
-		if la, e1 := strconv.ParseFloat(latS, 64); e1 == nil {
-			if lo, e2 := strconv.ParseFloat(lngS, 64); e2 == nil {
-				d := services.DeliverableToYou(chef, la, lo, tplEnabled)
-				resp.DeliverableToYou = &d
-			}
-		}
+	if la, lo, ok := queryCoords(c); ok {
+		d := services.DeliverableToYou(chef, la, lo, tplEnabled)
+		resp.DeliverableToYou = &d
 	}
 	// Customer-facing: approximate the kitchen location (deterministic per-chef
 	// offset) so the exact address is never exposed to customers.

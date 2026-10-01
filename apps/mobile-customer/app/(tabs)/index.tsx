@@ -90,10 +90,6 @@ import { HAIRLINE } from '../../lib/hairline';
 // Entrance easing — ease-out-quart, matches the app-wide motion spec.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
-// Discovery reach (km) from the customer's location. Home kitchens are
-// hyperlocal — a kitchen further out can't cook for you, so it isn't shown.
-const NEARBY_RADIUS_KM = 30;
-
 // Android ripple tint for pills/rows on white or light surfaces — translucent
 // ink derived from the charcoal token (never a new literal colour), matching
 // the primitive Button's `withAlpha` convention.
@@ -136,7 +132,7 @@ function countActiveFilters(params: {
   let n = 0;
   if (params.selectedDiet !== '') n += 1;
   if (params.maxPrice !== undefined) n += 1;
-  if (params.sort !== 'rating') n += 1;
+  if (params.sort !== undefined) n += 1;
   // isOpenOnly is surfaced separately in the quick bar; don't double-count.
   return n;
 }
@@ -164,7 +160,7 @@ export default function HomeScreen() {
   const [selectedCuisine, setSelectedCuisine] = useState<string>('All');
   const [selectedDiet, setSelectedDiet] = useState<string>('');
   const [isOpenOnly, setIsOpenOnly] = useState(false);
-  const [sort, setSort] = useState<ChefFilters['sort']>('rating');
+  const [sort, setSort] = useState<ChefFilters['sort']>(undefined);
   const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
 
   const { orders: activeOrders } = useActiveOrder();
@@ -212,13 +208,9 @@ export default function HomeScreen() {
   const addressSheetRef = useRef<SheetHandle>(null);
 
   // ── Data fetching ────────────────────────────────────────────────────────
-  // Customer location drives the chef delivery-area gate: a chef who only
-  // delivers (no pickup) and can't reach the customer is hidden, and chefs shown
-  // for pickup-only carry deliverableToYou=false. Omitted when unknown, so
-  // discovery falls back to un-located. We pass a very large radius so the legacy
-  // 15km near-me box doesn't ALSO hard-cap the feed — reach is decided per-chef
-  // by the delivery-area gate, not a fixed circle around the customer (otherwise
-  // a customer with no chef within 15km sees an empty feed).
+  // Customer location scopes the feed to kitchens within the API's discovery
+  // radius, nearest first under "Recommended". Omitted when unknown, so
+  // discovery falls back to un-located.
   const coords = useCustomerCoords();
   const { address: activeAddress } = useActiveAddress();
   const filters: ChefFilters = {
@@ -229,9 +221,6 @@ export default function HomeScreen() {
     sort,
     lat: coords?.lat,
     lng: coords?.lng,
-    // Real near-me radius (km) — the API caps it. Nobody, guest or signed in,
-    // sees a kitchen further than this from where they are.
-    radius: coords ? NEARBY_RADIUS_KM : undefined,
     // Hard region gate: only kitchens in the delivery address's state.
     state: activeAddress?.state || undefined,
     limit: 20,
@@ -708,7 +697,7 @@ export default function HomeScreen() {
                     setIsOpenOnly(false);
                     setSelectedDiet('');
                     setMaxPrice(undefined);
-                    setSort('rating');
+                    setSort(undefined);
                   }}
                   accessibilityRole="button"
                   accessibilityLabel="Clear all filters"

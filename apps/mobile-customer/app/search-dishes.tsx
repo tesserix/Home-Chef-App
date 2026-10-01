@@ -8,6 +8,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useSearchDishes, type DishResult } from '../hooks/useSearchDishes';
 import { useChefs } from '../hooks/useChefs';
+import { useCustomerCoords } from '../hooks/useCustomerCoords';
 import type { Chef } from '../types/customer';
 import { formatMoney } from '../lib/format';
 
@@ -195,11 +196,15 @@ export default function SearchDishesScreen() {
 
   // Unified search (home's single search entry): chefs by name alongside
   // dishes. Chef matches render as a compact section above the dish list.
+  // Scoped to the customer's area, like the home feed.
+  const coords = useCustomerCoords();
   const chefQueryActive = query.trim().length >= 2;
   const chefsQuery = useChefs(
-    chefQueryActive ? { search: query.trim(), limit: 5 } : { limit: 0 },
+    chefQueryActive
+      ? { search: query.trim(), limit: 5, lat: coords?.lat, lng: coords?.lng }
+      : { limit: 0 },
   );
-  const dishesQuery = useSearchDishes(query);
+  const dishesQuery = useSearchDishes(query, coords);
 
   // ── R13 zero-flicker: keep the previous results rendered while a new
   // debounced query is in flight, instead of blanking to empty while

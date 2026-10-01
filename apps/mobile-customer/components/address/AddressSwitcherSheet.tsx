@@ -23,13 +23,8 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { useAddresses, useSetDefaultAddress } from '../../hooks/useAddresses';
 import { hasUsableCoords, pickActiveAddress } from '../../hooks/useCustomerCoords';
 import { friendlyErrorMessage } from '../../lib/errors';
+import { fullAddress } from '../../lib/address-label';
 import type { Address } from '../../types/customer';
-
-function formatShortLine(addr: Address): string {
-  const parts = [addr.city];
-  if (addr.pincode) parts.push(addr.pincode);
-  return parts.filter(Boolean).join(' ');
-}
 
 export const AddressSwitcherSheet = forwardRef<SheetHandle>((_props, ref) => {
   const { data, isLoading } = useAddresses();
@@ -102,7 +97,7 @@ export const AddressSwitcherSheet = forwardRef<SheetHandle>((_props, ref) => {
                   disabled={setDefault.isPending}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: isActive, disabled: setDefault.isPending }}
-                  accessibilityLabel={`${addr.label || 'Address'}, ${formatShortLine(addr)}${
+                  accessibilityLabel={`${addr.label || 'Address'}, ${fullAddress(addr)}${
                     isActive ? ', currently active' : ''
                   }`}
                 >
@@ -119,8 +114,8 @@ export const AddressSwitcherSheet = forwardRef<SheetHandle>((_props, ref) => {
                           <Text style={styles.defaultTag}>Default</Text>
                         ) : null}
                       </View>
-                      <Text style={styles.rowLine} numberOfLines={1}>
-                        {addr.addressLine1}, {formatShortLine(addr)}
+                      <Text style={styles.rowLine} numberOfLines={2}>
+                        {fullAddress(addr)}
                       </Text>
                       {isMissingCoords ? (
                         <Text style={styles.rowWarning}>

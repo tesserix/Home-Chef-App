@@ -1,4 +1,4 @@
-// AddressSwitcher — compact "Delivering to <label> · <city>" pill for the
+// AddressSwitcher — header pill: the address's name ("Office"), else its full address for the
 // Home screen header. Shows whichever address useCustomerCoords would pick
 // (see hooks/useCustomerCoords.ts's pickActiveAddress) and opens
 // AddressSwitcherSheet to view/change it.
@@ -13,6 +13,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { useActiveAddress } from '../../hooks/useCustomerCoords';
 import { useIsGuest } from '../../hooks/useRequireAccount';
 import { useDeviceLocation } from '../../hooks/useDeviceLocation';
+import { savedAddressLabel } from '../../lib/address-label';
 
 interface AddressSwitcherProps {
   /** Opens the address sheet. The sheet is mounted at the screen root (a
@@ -53,7 +54,7 @@ export function AddressSwitcher({ onOpen }: AddressSwitcherProps) {
     : isLoading
       ? 'Loading address…'
       : address
-        ? `${address.label || 'Address'} · ${address.city}`
+        ? savedAddressLabel(address)
         : hasAnyAddress
           ? 'Select delivery address'
           : 'Add delivery address';
@@ -63,7 +64,7 @@ export function AddressSwitcher({ onOpen }: AddressSwitcherProps) {
       ? `Showing kitchens near ${deviceLocation.label}. Tap to change your area.`
       : 'No location set. Tap to choose your area.'
     : address
-      ? `Delivering to ${address.label || 'address'}, ${address.city}. Tap to change address.`
+      ? `Delivering to ${savedAddressLabel(address)}. Tap to change address.`
       : hasAnyAddress
         ? 'No address selected for delivery. Tap to choose one.'
         : 'No delivery address saved. Tap to add one.';
@@ -80,7 +81,7 @@ export function AddressSwitcher({ onOpen }: AddressSwitcherProps) {
           color={customerColors.coral.DEFAULT}
           accessibilityElementsHidden
         />
-        <Text style={styles.triggerText} numberOfLines={1}>
+        <Text style={styles.triggerText} numberOfLines={2}>
           {triggerLabel}
         </Text>
         <ChevronDown

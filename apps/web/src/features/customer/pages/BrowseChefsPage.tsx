@@ -89,6 +89,8 @@ export default function BrowseChefsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
 
+  // Located browsing defaults to nearest first, like the API and mobile feed.
+  const defaultSort: ChefFilters['sort'] = searchParams.get('lat') ? 'distance' : 'rating';
   const filters: ChefFilters = {
     search: searchParams.get('search') || undefined,
     cuisine: searchParams.get('cuisine') || undefined,
@@ -99,7 +101,7 @@ export default function BrowseChefsPage() {
     lat: searchParams.get('lat') ? Number(searchParams.get('lat')) : undefined,
     lng: searchParams.get('lng') ? Number(searchParams.get('lng')) : undefined,
     isOpen: searchParams.get('isOpen') === 'true' ? true : undefined,
-    sort: (searchParams.get('sort') as ChefFilters['sort']) || 'rating',
+    sort: (searchParams.get('sort') as ChefFilters['sort']) || defaultSort,
     page: Number(searchParams.get('page')) || 1,
     limit: 12,
   };
@@ -180,7 +182,7 @@ export default function BrowseChefsPage() {
           <div className="flex items-center gap-3">
             <SimpleSelect
               options={SORT_OPTIONS}
-              value={filters.sort || 'rating'}
+              value={filters.sort || defaultSort}
               onValueChange={(value) => updateFilters({ sort: value as ChefFilters['sort'] })}
             />
 
