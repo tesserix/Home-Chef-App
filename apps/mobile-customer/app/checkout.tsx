@@ -68,6 +68,7 @@ import {
 } from "../hooks/useLocations";
 import { startOrderPayment } from "../lib/payment";
 import { friendlyErrorMessage } from "../lib/errors";
+import { fullAddress } from "../lib/address-label";
 import { paymentSecuredByLine } from "../lib/payment-provider";
 import { getEtaLine } from "../lib/orderSteps";
 import { useFormDraft } from "@homechef/mobile-shared/hooks";
@@ -632,13 +633,6 @@ export default function CheckoutScreen() {
     !bakeryTimeTooSoon &&
     acceptedTerms;
 
-  function formatAddress(addr: Address): string {
-    const parts = [addr.addressLine1];
-    if (addr.addressLine2) parts.push(addr.addressLine2);
-    parts.push(`${addr.city}, ${addr.state} ${addr.pincode}`);
-    return parts.join(", ");
-  }
-
   const subtotal = cartStore.total();
 
   // The delivery fee the SERVER will charge, previewed so checkout shows the real
@@ -1022,7 +1016,7 @@ export default function CheckoutScreen() {
                     accessibilityState={{
                       checked: selectedAddressId === addr.id,
                     }}
-                    accessibilityLabel={formatAddress(addr)}
+                    accessibilityLabel={fullAddress(addr)}
                     android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
                   >
                     {({ pressed }) => (
@@ -1059,7 +1053,7 @@ export default function CheckoutScreen() {
                               </View>
                             )}
                             <Text className="text-sm text-charcoal">
-                              {formatAddress(addr)}
+                              {fullAddress(addr)}
                             </Text>
                           </View>
                         </View>

@@ -41,7 +41,8 @@ export const PRICE_FILTER_OPTIONS: { label: string; value: number | undefined }[
 ];
 
 export const SORT_OPTIONS: { label: string; value: ChefFilters['sort']; key: string }[] = [
-  { label: 'Recommended', value: 'rating', key: 'recommended' },
+  // No sort: the API ranks nearest first when it knows the customer's location.
+  { label: 'Recommended', value: undefined, key: 'recommended' },
   { label: 'Top Rated', value: 'rating', key: 'top-rated' },
   { label: 'Newest', value: 'newest', key: 'newest' },
   { label: 'Price', value: 'price', key: 'price' },

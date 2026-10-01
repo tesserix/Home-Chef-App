@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { placeLabel } from '../lib/address-label';
 
 // useDeviceLocation — where the phone actually is.
 //
 // A guest has no saved address, so before this the home screen had no point to
 // measure from: the header sat on a placeholder and the chef list was ranked
 // un-located. This asks the OS once, keeps the answer, and hands back both the
-// coordinates and a human label ("Bhubaneswar, Odisha").
+// coordinates and a human label ("12 Queen St, Auckland").
 //
 // SHARED state, not per-component. An earlier cut used useState inside the hook,
 // so every caller got its own private copy: the header requested a fix while
@@ -34,7 +35,7 @@ const LAST_KNOWN_MAX_AGE_MS = 2 * 60 * 1000;
 export interface DeviceLocation {
   lat: number;
   lng: number;
-  /** "Bhubaneswar, Odisha" — for the header pill. Empty when reverse geocoding
+  /** "12 Queen St, Auckland" — for the header pill. Empty when reverse geocoding
    *  found nothing, which is not a failure: the coordinates still work. */
   label: string;
   city: string;
@@ -92,7 +93,7 @@ async function describe(
       city,
       region,
       postalCode: place.postalCode || '',
-      label: [city, region].filter(Boolean).join(', '),
+      label: placeLabel({ ...place, city }),
     };
   } catch {
     return empty;
