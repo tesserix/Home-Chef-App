@@ -25,7 +25,8 @@ type OrderChefPayout struct {
 	ChefID   uuid.UUID `gorm:"type:uuid;not null;index" json:"chefId"`
 	Currency string    `gorm:"type:varchar(3);not null;default:INR" json:"currency"`
 
-	// FoodAmount is the order's food subtotal — the chef's own price.
+	// FoodAmount is food proceeds: the INR subtotal, or AU/NZ food GST credited
+	// and commission deducted using the payment allocation.
 	FoodAmount float64 `gorm:"type:numeric(12,2);not null;default:0" json:"foodAmount"`
 	// DeliveryFee is the chef's ONLY when they carried the leg and it was
 	// charged; 0 otherwise, and the UI then omits the line rather than showing ₹0.

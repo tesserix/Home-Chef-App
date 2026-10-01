@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/internal/markets"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
@@ -42,16 +45,13 @@ func vendorPortalBaseURL() string {
 func (h *StripeConnectHandler) CreateStripeConnectAccount(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
-	st := services.GetStripe()
-	if st == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured by platform admin"})
-		return
-	}
-
 	var req struct {
 		Country string `json:"country"`
 	}
-	_ = c.ShouldBindJSON(&req) // body is optional
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
 
 	var chef models.ChefProfile
 	if err := database.DB.Preload("User").Where("user_id = ?", userID).First(&chef).Error; err != nil {
@@ -59,12 +59,18 @@ func (h *StripeConnectHandler) CreateStripeConnectAccount(c *gin.Context) {
 		return
 	}
 
-	country := strings.ToUpper(req.Country)
-	if country == "" {
-		country = strings.ToUpper(chef.PayoutCountry)
+	country := strings.ToUpper(strings.TrimSpace(chef.PayoutCountry))
+	market, supported := markets.Lookup(country)
+	requested := strings.ToUpper(strings.TrimSpace(req.Country))
+	if !supported || market.PaymentProvider != models.PaymentProviderStripe || (requested != "" && requested != country) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Stripe onboarding must match your registered AU or NZ country", "code": "market_provider_mismatch"})
+		return
 	}
-	if country == "" {
-		country = "US"
+
+	st := services.GetStripeFor(chef.Mode)
+	if st == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured by platform admin"})
+		return
 	}
 
 	// Reuse an existing Connect account if the chef has already started
@@ -84,11 +90,13 @@ func (h *StripeConnectHandler) CreateStripeConnectAccount(c *gin.Context) {
 		}
 		accountID = acct.ID
 
-		database.DB.Model(&chef).Updates(map[string]interface{}{
+		if err := database.DB.WithContext(c.Request.Context()).Model(&models.ChefProfile{}).Where("id = ?", chef.ID).Updates(map[string]interface{}{
 			"stripe_account_id": accountID,
-			"payout_country":    country,
-			"payment_provider":  "stripe",
-		})
+			"payment_provider":  models.PaymentProviderStripe,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to save Stripe account"})
+			return
+		}
 	}
 
 	link, err := st.CreateAccountLink(
@@ -139,7 +147,7 @@ func (h *StripeConnectHandler) GetStripeConnectStatus(c *gin.Context) {
 		return
 	}
 
-	st := services.GetStripe()
+	st := services.GetStripeFor(chef.Mode)
 	if st == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
 		return
@@ -198,7 +206,7 @@ func (h *StripeConnectHandler) RefreshStripeOnboardingLink(c *gin.Context) {
 		return
 	}
 
-	st := services.GetStripe()
+	st := services.GetStripeFor(chef.Mode)
 	if st == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
 		return
@@ -238,16 +246,13 @@ func deliveryPortalBaseURL() string {
 func (h *StripeConnectHandler) CreateDriverStripeAccount(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
-	st := services.GetStripe()
-	if st == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured by platform admin"})
-		return
-	}
-
 	var req struct {
 		Country string `json:"country"`
 	}
-	_ = c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
 
 	var driver models.DeliveryPartner
 	if err := database.DB.Preload("User").Where("user_id = ?", userID).First(&driver).Error; err != nil {
@@ -255,12 +260,18 @@ func (h *StripeConnectHandler) CreateDriverStripeAccount(c *gin.Context) {
 		return
 	}
 
-	country := strings.ToUpper(req.Country)
-	if country == "" {
-		country = strings.ToUpper(driver.PayoutCountry)
+	country := strings.ToUpper(strings.TrimSpace(driver.PayoutCountry))
+	market, supported := markets.Lookup(country)
+	requested := strings.ToUpper(strings.TrimSpace(req.Country))
+	if !supported || market.PaymentProvider != models.PaymentProviderStripe || (requested != "" && requested != country) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Stripe onboarding must match your registered AU or NZ country", "code": "market_provider_mismatch"})
+		return
 	}
-	if country == "" {
-		country = "US"
+
+	st := services.GetStripe()
+	if st == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured by platform admin"})
+		return
 	}
 
 	accountID := driver.StripeAccountID
@@ -277,11 +288,13 @@ func (h *StripeConnectHandler) CreateDriverStripeAccount(c *gin.Context) {
 		}
 		accountID = acct.ID
 
-		database.DB.Model(&driver).Updates(map[string]interface{}{
+		if err := database.DB.WithContext(c.Request.Context()).Model(&models.DeliveryPartner{}).Where("id = ?", driver.ID).Updates(map[string]interface{}{
 			"stripe_account_id": accountID,
-			"payout_country":    country,
-			"payment_provider":  "stripe",
-		})
+			"payment_provider":  models.PaymentProviderStripe,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to save Stripe account"})
+			return
+		}
 	}
 
 	link, err := st.CreateAccountLink(
@@ -402,12 +415,7 @@ func (h *StripeConnectHandler) RefreshDriverOnboardingLink(c *gin.Context) {
 	})
 }
 
-// SetPaymentProvider lets a chef toggle which gateway their orders settle
-// through. Used when a chef switches regions or when the platform wants to
-// migrate a chef between providers. The chef must have completed onboarding
-// with the target provider (the gateway's linked account ID or Stripe account ID
-// non-empty) before switching to it.
-//
+// SetPaymentProvider retains the compatibility endpoint while enforcing country policy.
 // PUT /chef/payment-provider
 // Body: { "provider": "stripe" | "cashfree" }
 func (h *StripeConnectHandler) SetPaymentProvider(c *gin.Context) {
@@ -436,6 +444,15 @@ func (h *StripeConnectHandler) SetPaymentProvider(c *gin.Context) {
 		return
 	}
 
+	country := strings.ToUpper(strings.TrimSpace(chef.PayoutCountry))
+	if country == "" {
+		country = "IN"
+	}
+	market, supported := markets.Lookup(country)
+	if !supported || req.Provider != market.PaymentProvider {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Payment provider is determined by your registered country", "code": "market_provider_mismatch"})
+		return
+	}
 	if req.Provider == models.PaymentProviderStripe && chef.StripeAccountID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Complete Stripe onboarding before switching to Stripe"})
 		return
@@ -455,7 +472,10 @@ func (h *StripeConnectHandler) SetPaymentProvider(c *gin.Context) {
 		}
 	}
 
-	database.DB.Model(&chef).Update("payment_provider", req.Provider)
+	if err := database.DB.Model(&chef).Update("payment_provider", req.Provider).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to save payment provider"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"paymentProvider": req.Provider,

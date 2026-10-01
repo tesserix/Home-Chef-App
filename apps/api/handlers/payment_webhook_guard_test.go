@@ -25,7 +25,7 @@ func setStripeIntent(t *testing.T, db *gorm.DB, orderID uuid.UUID, piID string) 
 
 func stripeIntentPayload(t *testing.T, piID string) json.RawMessage {
 	t.Helper()
-	b, err := json.Marshal(services.StripePaymentIntent{ID: piID, Amount: 50000, Currency: "inr", Status: "succeeded"})
+	b, err := json.Marshal(services.StripePaymentIntent{ID: piID, Amount: 50000, AmountReceived: 50000, Livemode: true, Currency: "inr", Status: "succeeded"})
 	require.NoError(t, err)
 	return b
 }
@@ -38,7 +38,7 @@ func TestHandleStripePaymentSucceeded_DoesNotReStampRefunded(t *testing.T) {
 	orderID := payOrder(t, db, cust, chef, "refunded", 500, "", "")
 	setStripeIntent(t, db, orderID, "pi_ref")
 
-	(&PaymentHandler{}).handleStripePaymentSucceeded(stripeIntentPayload(t, "pi_ref"))
+	(&PaymentHandler{}).handleStripePaymentSucceeded(t.Context(), stripeIntentPayload(t, "pi_ref"))
 
 	require.Equal(t, string(models.PaymentRefunded), paymentStatusOf(t, db, orderID),
 		"a refunded order survives a duplicate payment_intent.succeeded")
@@ -53,7 +53,7 @@ func TestHandleStripePaymentSucceeded_CompletesPending(t *testing.T) {
 	orderID := payOrder(t, db, cust, chef, "pending", 500, "", "")
 	setStripeIntent(t, db, orderID, "pi_ok")
 
-	(&PaymentHandler{}).handleStripePaymentSucceeded(stripeIntentPayload(t, "pi_ok"))
+	(&PaymentHandler{}).handleStripePaymentSucceeded(t.Context(), stripeIntentPayload(t, "pi_ok"))
 
 	require.Equal(t, string(models.PaymentCompleted), paymentStatusOf(t, db, orderID))
 	require.Equal(t, int64(1), countOutbox(t, db, services.SubjectChefNewOrder), "chef notified once on the transition")
@@ -68,7 +68,7 @@ func TestHandleStripePaymentSucceeded_CompletesFailedOnRetry(t *testing.T) {
 	orderID := payOrder(t, db, cust, chef, "failed", 500, "", "")
 	setStripeIntent(t, db, orderID, "pi_retry")
 
-	(&PaymentHandler{}).handleStripePaymentSucceeded(stripeIntentPayload(t, "pi_retry"))
+	(&PaymentHandler{}).handleStripePaymentSucceeded(t.Context(), stripeIntentPayload(t, "pi_retry"))
 
 	require.Equal(t, string(models.PaymentCompleted), paymentStatusOf(t, db, orderID),
 		"a retry after a decline completes the order")

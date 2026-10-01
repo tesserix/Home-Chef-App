@@ -18,6 +18,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,6 +39,8 @@ func NewChefEarningsHandler() *ChefEarningsHandler {
 
 // earningsOrderRow is an intermediate scan target used by the DB query.
 type earningsOrderRow struct {
+	Currency           string    `gorm:"column:currency"`
+	TaxInclusive       bool      `gorm:"column:tax_inclusive"`
 	OrderID            uuid.UUID `gorm:"column:id"`
 	OrderNumber        string    `gorm:"column:order_number"`
 	CompletedAt        time.Time `gorm:"column:delivered_at"`
@@ -146,7 +149,7 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"cycleStart": cycleStart,
 		"cycleEnd":   cycleEnd,
-		"currency":   services.EarningsCurrency,
+		"currency":   strings.ToUpper(services.CurrencyForCountry(chef.PayoutCountry)),
 		"rates": breakdownRates{
 			PlatformCommission: effectiveCommission,
 			GST:                services.RateGST,
@@ -180,7 +183,7 @@ func chefSettledEarnings(
 	// platform's own GST on the fee and delivery as if it were theirs.
 	err := database.DB.Raw(`
 		SELECT id, order_number, delivered_at, subtotal, tax,
-		       tax_food, tax_service, chef_funded_discount,
+		       currency, tax_inclusive, tax_food, tax_service, chef_funded_discount,
 		       delivery_fee, delivery_fee_final, fulfillment_type,
 		       chef_tip, delivery_address_state, commission_rate,
 		       payout_hold_status, COALESCE(gateway_split_paise, 0) AS gateway_split_paise
@@ -295,6 +298,8 @@ func computeOrderBreakdown(row earningsOrderRow, chefState string, commissionRat
 		fee = *row.DeliveryFeeFinal
 	}
 	e := services.ComputeOrderEarnings(services.EarningsInput{
+		Currency:             row.Currency,
+		TaxInclusive:         row.TaxInclusive,
 		OrderID:              row.OrderID,
 		OrderNumber:          row.OrderNumber,
 		CompletedAt:          row.CompletedAt,

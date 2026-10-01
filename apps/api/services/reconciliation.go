@@ -203,11 +203,11 @@ func reconcileCashfree(o *models.Order) []Drift {
 }
 
 func reconcileStripe(o *models.Order) []Drift {
-	client := GetStripe()
+	client := GetStripeFor(o.Mode)
 	if client == nil {
 		return nil
 	}
-	pi, err := client.FetchPaymentIntent(o.StripePaymentIntentID)
+	pi, err := client.FetchPaymentIntent(context.Background(), o.StripePaymentIntentID)
 	if err != nil {
 		return []Drift{driftFor(o, "stripe", DriftGatewayUnreachable,
 			fmt.Sprintf("fetch intent %s: %v", o.StripePaymentIntentID, err), 0, 0)}

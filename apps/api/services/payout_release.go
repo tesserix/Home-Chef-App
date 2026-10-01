@@ -141,6 +141,8 @@ func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	// NetPayout ignores the CGST/SGST vs IGST split, so chefState is irrelevant here
 	// (passed ""); the extra money columns feed the pure computation.
 	type orderNetRow struct {
+		Currency            string
+		TaxInclusive        bool
 		ID                  string
 		ChefID              string
 		Amount              float64
@@ -162,7 +164,7 @@ func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	}
 	q := db.Table("orders").
 		Select("id, chef_id, total AS amount, payout_hold_status, delivered_at, customer_confirmed_at, "+
-			"order_number AS context, subtotal, tax, tax_food, tax_service, chef_tip, chef_funded_discount, commission_rate, "+
+			"order_number AS context, currency, tax_inclusive, subtotal, tax, tax_food, tax_service, chef_tip, chef_funded_discount, commission_rate, "+
 			"fulfillment_type, delivery_fee, delivery_fee_final, "+
 			"EXISTS(SELECT 1 FROM order_issues oi WHERE oi.order_id = orders.id AND oi.status = 'pending') AS has_open_issue").
 		Where("payout_hold_status IN ?", f.pendingStatuses()).
@@ -188,6 +190,8 @@ func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 			fee = *r.DeliveryFeeFinal
 		}
 		net := ComputeOrderEarnings(EarningsInput{
+			Currency:             r.Currency,
+			TaxInclusive:         r.TaxInclusive,
 			ItemRevenue:          r.Subtotal,
 			Tax:                  ChefTaxOf(r.Tax, r.TaxFood, r.TaxService),
 			ChefTip:              r.ChefTip,

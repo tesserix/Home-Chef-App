@@ -9,6 +9,10 @@ package handlers
 // admits and that its totals are the sum of the per-order rows it hands back.
 
 import (
+	"encoding/json"
+	"github.com/gin-gonic/gin"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -27,7 +31,7 @@ func setupSettledEarningsDB(t *testing.T) (*gorm.DB, models.ChefProfile) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT,
+	require.NoError(t, db.Exec(`CREATE TABLE orders (currency TEXT DEFAULT 'INR', tax_inclusive BOOLEAN DEFAULT false, id TEXT PRIMARY KEY, order_number TEXT,
 		chef_id TEXT, status TEXT, mode TEXT DEFAULT 'live',
 		subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, tax_food REAL DEFAULT 0,
 		tax_service REAL DEFAULT 0, chef_funded_discount REAL DEFAULT 0,
@@ -325,4 +329,26 @@ func TestChefSettledEarnings_PenaltyNeverDrivesAnOrderNegative(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, orders[0].NetPayout)
 	require.Zero(t, totals.NetPayout)
+}
+
+func TestEarningsBreakdownUsesKitchenCurrency(t *testing.T) {
+	for _, tc := range []struct{ country, currency string }{{"IN", "INR"}, {"AU", "AUD"}, {"NZ", "NZD"}} {
+		t.Run(tc.country, func(t *testing.T) {
+			db, chef := setupSettledEarningsDB(t)
+			require.NoError(t, db.Exec("ALTER TABLE chef_profiles ADD COLUMN user_id TEXT").Error)
+			require.NoError(t, db.Exec("ALTER TABLE chef_profiles ADD COLUMN payout_country TEXT").Error)
+			userID := uuid.New()
+			require.NoError(t, db.Exec("UPDATE chef_profiles SET user_id=?, payout_country=? WHERE id=?", userID, tc.country, chef.ID).Error)
+			gin.SetMode(gin.TestMode)
+			r := gin.New()
+			r.Use(func(c *gin.Context) { c.Set("userID", userID); c.Next() })
+			r.GET("/earnings", (&ChefEarningsHandler{}).GetEarningsBreakdown)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/earnings", nil))
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			var body map[string]any
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+			require.Equal(t, tc.currency, body["currency"])
+		})
+	}
 }

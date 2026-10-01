@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 	"time"
@@ -74,7 +75,7 @@ func TestInvoiceDocumentRendersARefundedReceipt(t *testing.T) {
 		Items:        []models.OrderItem{{MenuItemID: uuid.New(), Name: "Curd rice", Quantity: 1, Price: 200, Subtotal: 200}},
 	}
 
-	m := maroto.New(config.NewBuilder().Build())
+	m := maroto.New(config.NewBuilder().WithCompression(false).Build())
 	addInvoiceHeader(m, &order)
 	addInvoiceParties(m, &order)
 	addInvoiceItems(m, &order, map[uuid.UUID]string{})
@@ -83,5 +84,21 @@ func TestInvoiceDocumentRendersARefundedReceipt(t *testing.T) {
 
 	if _, err := m.Generate(); err != nil {
 		t.Fatalf("generate: %v", err)
+	}
+}
+
+func TestInternationalInvoiceOmitsIndianClassification(t *testing.T) {
+	for _, currency := range []string{"AUD", "NZD"} {
+		t.Run(currency, func(t *testing.T) {
+			order := models.Order{Currency: currency, Items: []models.OrderItem{{Name: "Test Bowl", Price: 15, Quantity: 1, Subtotal: 15}}}
+			m := maroto.New(config.NewBuilder().WithCompression(false).Build())
+			addInvoiceItems(m, &order, nil)
+			doc, err := m.Generate()
+			require.NoError(t, err)
+			structure := doc.GetBytes()
+			require.Contains(t, string(structure), "Test Bowl")
+			require.NotContains(t, string(structure), "HSN/SAC")
+			require.NotContains(t, string(structure), "996331")
+		})
 	}
 }

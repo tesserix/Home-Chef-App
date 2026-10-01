@@ -244,10 +244,15 @@ func addInvoiceParties(m core.Maroto, order *models.Order) {
 }
 
 func addInvoiceItems(m core.Maroto, order *models.Order, hsnMeta map[uuid.UUID]string) {
+	showHSN := order.Currency == "" || strings.EqualFold(order.Currency, "INR")
+	hsnTitle := "HSN/SAC"
+	if !showHSN {
+		hsnTitle = ""
+	}
 	m.AddRows(
 		row.New(8).Add(
 			col.New(5).Add(text.New("ITEM", props.Text{Top: 2.4, Left: 1.5, Size: 7, Style: fontstyle.Bold, Color: docMutedColor()})),
-			col.New(2).Add(text.New("HSN/SAC", props.Text{Top: 2.4, Size: 7, Style: fontstyle.Bold, Align: align.Center, Color: docMutedColor()})),
+			col.New(2).Add(text.New(hsnTitle, props.Text{Top: 2.4, Size: 7, Style: fontstyle.Bold, Align: align.Center, Color: docMutedColor()})),
 			col.New(1).Add(text.New("QTY", props.Text{Top: 2.4, Size: 7, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()})),
 			col.New(2).Add(text.New("UNIT", props.Text{Top: 2.4, Size: 7, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()})),
 			col.New(2).Add(text.New("AMOUNT", props.Text{Top: 2.4, Right: 1.5, Size: 7, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()})),
@@ -261,6 +266,9 @@ func addInvoiceItems(m core.Maroto, order *models.Order, hsnMeta map[uuid.UUID]s
 		hsn := hsnMeta[it.MenuItemID]
 		if hsn == "" {
 			hsn = "996331"
+		}
+		if !showHSN {
+			hsn = ""
 		}
 		rows = append(rows, row.New(7).Add(
 			col.New(5).Add(text.New(InvoiceLineName(it), props.Text{Top: 1.8, Left: 1.5, Size: 9})),

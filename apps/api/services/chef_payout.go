@@ -1,24 +1,11 @@
 package services
 
-// chef_payout.go — THE one writer of order_chef_payouts (D-21).
-//
-//	net = food + delivery + tip − penalty
-//
-// No commission, no GST, no TDS. The platform's revenue is the customer-paid
-// platform fee, and the platform accounts for all GST under CGST s.9(5) — the
-// e-commerce operator is liable for the tax on restaurant service supplied
-// through it, not the kitchen, whether or not the kitchen is registered.
-//
-// Deliberately NOT built on ComputeOrderEarnings: that computes the settlement
-// view (commission, commission GST, TDS, and food GST credited to the chef) and
-// still feeds the weekly statement, the FY statement and the TDS certificate.
-// Changing it would restate figures chefs have already been reconciled against —
-// the hazard ChefTaxOf was written to avoid. This is a separate, forward-only
-// view; the statement path is untouched.
-//
-// See .planning/CHEF-PAYOUT-VIEW-DESIGN.md.
+// INR keeps the existing food + delivery + tip - penalty display policy.
+// AU/NZ food proceeds match the Stripe allocation, including food GST and
+// commission. Persisted rows remain immutable once released or reversed.
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,6 +46,13 @@ func ComputeChefPayout(order *models.Order, penalty float64) ChefPayoutBreakdown
 		if fee := order.EffectiveDeliveryFee(); fee > 0 {
 			b.DeliveryFee = Round2(fee)
 		}
+	}
+	if currency := strings.ToUpper(strings.TrimSpace(order.Currency)); currency == "AUD" || currency == "NZD" {
+		if order.ChefEarnsDeliveryFee() {
+			b.DeliveryFee = Round2(b.DeliveryFee + order.DriverTip)
+		}
+		// International food proceeds use the same tax/commission split as Stripe.
+		b.FoodAmount = Round2(ChefNetPayoutFor(order) - b.DeliveryFee - b.ChefTip)
 	}
 	if b.Penalty < 0 {
 		b.Penalty = 0
@@ -166,7 +160,7 @@ func estimateFrom(order *models.Order, penalty float64) *models.ChefPayoutRespon
 	if currency == "" {
 		currency = "INR"
 	}
-	if order.Status == models.OrderStatusRejected {
+	if order.Status == models.OrderStatusRejected || order.Status == models.OrderStatusRefunded {
 		return &models.ChefPayoutResponse{
 			Currency: currency, Status: models.ChefPayoutReversed, ComputedAt: time.Now().UTC(),
 		}
@@ -190,6 +184,9 @@ func estimateFrom(order *models.Order, penalty float64) *models.ChefPayoutRespon
 //
 // Never nil, so a surface always has a figure to render.
 func ChefPayoutFor(db *gorm.DB, order *models.Order) *models.ChefPayoutResponse {
+	if order.Status == models.OrderStatusRefunded {
+		return estimateFrom(order, 0)
+	}
 	if row, err := GetChefPayout(db, order.ID); err == nil && row != nil {
 		return row.ToResponse()
 	}
@@ -219,6 +216,10 @@ func ChefPayoutsFor(db *gorm.DB, orders []models.Order) map[uuid.UUID]*models.Ch
 	penalties := ChefOrderPenalties(db, ids)
 	for i := range orders {
 		id := orders[i].ID
+		if orders[i].Status == models.OrderStatusRefunded {
+			out[id] = estimateFrom(&orders[i], 0)
+			continue
+		}
 		if row, ok := settled[id]; ok {
 			out[id] = row.ToResponse()
 			continue

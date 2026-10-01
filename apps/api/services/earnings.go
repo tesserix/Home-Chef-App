@@ -20,6 +20,7 @@ package services
 //   - netPayout = gross − platformCommission − tds.
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,11 +55,13 @@ const (
 
 // EarningsInput is the per-order data the math operates on.
 type EarningsInput struct {
-	OrderID     uuid.UUID
-	OrderNumber string
-	CompletedAt time.Time
-	ItemRevenue float64
-	DeliveryFee float64
+	Currency     string
+	TaxInclusive bool
+	OrderID      uuid.UUID
+	OrderNumber  string
+	CompletedAt  time.Time
+	ItemRevenue  float64
+	DeliveryFee  float64
 	// ChefEarnsDeliveryFee makes DeliveryFee the chef's income rather than the
 	// driver's. True for a leg the chef carried themselves, where the fee was
 	// priced from the chef's OWN published rates (models.Order.ChefEarnsDeliveryFee).
@@ -166,6 +169,7 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 	if in.ChefEarnsDeliveryFee {
 		chefDelivery = in.DeliveryFee + in.DriverTip
 	}
+	// Checkout stores net supply amounts even when menu prices include GST.
 	gross := Round2(itemRevenue + in.Tax + in.ChefTip + chefDelivery)
 
 	// GST on the platform's commission. Split so CGST+SGST reconciles EXACTLY to the
@@ -183,6 +187,9 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 	}
 
 	tds := Round2(RateTDS * gross)
+	if currency := strings.ToUpper(strings.TrimSpace(in.Currency)); currency == "AUD" || currency == "NZD" {
+		cgst, sgst, igst, tds = 0, 0, 0, 0
+	}
 	netPayout := Round2(gross - commission - tds)
 
 	return OrderEarnings{
@@ -284,6 +291,8 @@ func SettledChefEarnsDeliveryFee(fulfillmentType string) bool {
 
 func ChefNetPayoutFor(order *models.Order) float64 {
 	return ComputeOrderEarnings(EarningsInput{
+		Currency:             order.Currency,
+		TaxInclusive:         order.TaxInclusive,
 		ItemRevenue:          order.Subtotal,
 		Tax:                  ChefAttributableTax(order),
 		ChefTip:              order.ChefTip,

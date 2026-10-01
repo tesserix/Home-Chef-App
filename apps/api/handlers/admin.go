@@ -1321,55 +1321,49 @@ func (h *AdminHandler) UpdateCashfreeGatewayKeys(c *gin.Context) {
 	})
 }
 
-// GetStripeGatewayStatus reports whether Stripe is configured and reachable.
-// Mirrors GetCashfreeGatewayStatus so the admin UI renders a parallel card.
-func (h *AdminHandler) GetStripeGatewayStatus(c *gin.Context) {
-	client := services.GetStripe()
+func stripeCredentialSlot(value string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "live", "prod", "production":
+		return models.ChefModeLive, true
+	case "test", "sandbox":
+		return models.ChefModeTest, true
+	default:
+		return "", false
+	}
+}
 
-	webhookURL := "https://api.fe3dr.com/webhooks/stripe"
-
+func stripeSlotStatus(slot string, client *services.StripeClient) gin.H {
+	result := gin.H{"slot": slot, "mode": slot, "environment": "unknown", "configured": false, "checkoutReady": false, "keyId": "", "keyPrefix": "", "publishableKeySet": false, "webhookSecretSet": false, "webhookUrl": "https://api.fe3dr.com/api/webhooks/stripe?mode=" + slot, "slotWarning": ""}
 	if client == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"configured":        false,
-			"mode":              "unknown",
-			"webhookUrl":        webhookURL,
-			"webhookSecretSet":  false,
-			"keyPrefix":         "",
-			"publishableKeySet": false,
-			"error":             "Stripe is not configured. Enter your keys to enable international payouts.",
-		})
+		result["error"] = "Stripe credential slot is not configured"
+		return result
+	}
+	result["keyId"] = client.GetSecretKeyID()
+	result["publishableKeySet"] = client.GetPublishableKey() != ""
+	result["webhookSecretSet"] = client.HasWebhookSecret()
+	result["environment"] = "production"
+	if client.IsTestMode() {
+		result["environment"] = "sandbox"
+		if slot == models.ChefModeLive {
+			result["slotWarning"] = "The Live slot contains sandbox credentials. No real money can be collected; real-order checkout remains disabled until live credentials are configured."
+		}
+	}
+	if err := client.HealthCheck(); err != nil {
+		result["error"] = "Stripe credential validation failed"
+		return result
+	}
+	result["configured"] = true
+	result["checkoutReady"] = client.GetPublishableKey() != "" && client.HasWebhookSecret() && (client.IsTestMode() == models.IsTestMode(slot))
+	return result
+}
+
+func (h *AdminHandler) GetStripeGatewayStatus(c *gin.Context) {
+	slot, ok := stripeCredentialSlot(c.Query("mode"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Stripe credential slot"})
 		return
 	}
-
-	secretKey := client.GetSecretKeyID()
-	mode := "unknown"
-	if strings.HasPrefix(secretKey, "sk_test_") {
-		mode = "test"
-	} else if strings.HasPrefix(secretKey, "sk_live_") {
-		mode = "live"
-	}
-
-	keyPrefix := secretKey
-	if len(secretKey) > 12 {
-		keyPrefix = secretKey[:12] + "..."
-	}
-
-	healthErr := ""
-	configured := true
-	if err := client.HealthCheck(); err != nil {
-		healthErr = err.Error()
-		configured = false
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"configured":        configured,
-		"mode":              mode,
-		"webhookUrl":        webhookURL,
-		"webhookSecretSet":  client.HasWebhookSecret(),
-		"keyPrefix":         keyPrefix,
-		"publishableKeySet": client.GetPublishableKey() != "",
-		"error":             healthErr,
-	})
+	c.JSON(http.StatusOK, stripeSlotStatus(slot, services.GetStripeFor(slot)))
 }
 
 // UpdateStripeGatewayKeys persists the Stripe credentials to GCP Secret
@@ -1383,64 +1377,56 @@ func (h *AdminHandler) UpdateStripeGatewayKeys(c *gin.Context) {
 		SecretKey      string `json:"secretKey"`
 		PublishableKey string `json:"publishableKey"`
 		WebhookSecret  string `json:"webhookSecret"`
+		KeyID          string `json:"keyId"`
+		Mode           string `json:"mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
-
-	if req.SecretKey == "" && req.PublishableKey == "" && req.WebhookSecret == "" {
+	slot, ok := stripeCredentialSlot(req.Mode)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Stripe credential slot"})
+		return
+	}
+	if req.SecretKey == "" && req.PublishableKey == "" && req.WebhookSecret == "" && req.KeyID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "At least one field is required"})
 		return
 	}
-
-	ctx := c.Request.Context()
-
-	// The secret key alone is enough to authenticate API calls, but the
-	// publishable key is what the frontend loads Elements with — callers
-	// that set one usually set the other, but we don't enforce it here.
-	secretMap := map[string]string{
-		"prod-homechef-stripe-secret-key":      req.SecretKey,
-		"prod-homechef-stripe-publishable-key": req.PublishableKey,
-		"prod-homechef-stripe-webhook-secret":  req.WebhookSecret,
+	testKey := strings.HasPrefix(req.SecretKey, "sk_test_") || strings.HasPrefix(req.SecretKey, "rk_test_")
+	if req.SecretKey != "" && ((!testKey && !strings.HasPrefix(req.SecretKey, "sk_live_") && !strings.HasPrefix(req.SecretKey, "rk_live_")) || (models.IsTestMode(slot) && !testKey)) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid secret key for Stripe slot"})
+		return
 	}
-	for secretName, value := range secretMap {
-		if value == "" {
+	if req.PublishableKey != "" && ((!strings.HasPrefix(req.PublishableKey, "pk_test_") && !strings.HasPrefix(req.PublishableKey, "pk_live_")) || (models.IsTestMode(slot) && !strings.HasPrefix(req.PublishableKey, "pk_test_")) || (req.SecretKey != "" && testKey != strings.HasPrefix(req.PublishableKey, "pk_test_"))) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid publishable key for Stripe slot"})
+		return
+	}
+	if req.KeyID != "" && !strings.HasPrefix(req.KeyID, "mk_") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Expected Stripe management key ID"})
+		return
+	}
+	if req.WebhookSecret != "" && !strings.HasPrefix(req.WebhookSecret, "whsec_") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid webhook signing secret"})
+		return
+	}
+	sk, pk, wh, id := services.StripeSecretNames(slot)
+	for _, entry := range []struct{ name, value string }{{sk, req.SecretKey}, {pk, req.PublishableKey}, {wh, req.WebhookSecret}, {id, req.KeyID}} {
+		if entry.value == "" {
 			continue
 		}
-		if err := services.StorePlatformSecret(ctx, secretName, value); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to store %s: %v", secretName, err)})
+		if err := services.StorePlatformSecret(c.Request.Context(), entry.name, entry.value); err != nil {
+			services.InvalidateStripeFor(slot)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to store Stripe credentials"})
 			return
 		}
 	}
-
-	services.InvalidateStripe()
-	services.LogAudit(c, "payment.keys.update", "payment_gateway", "stripe", nil, map[string]any{
-		"updatedFields": []string{
-			boolField("secretKey", req.SecretKey != ""),
-			boolField("publishableKey", req.PublishableKey != ""),
-			boolField("webhookSecret", req.WebhookSecret != ""),
-		},
-	})
-
-	client := services.GetStripe()
-	if client == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Saved to Secret Manager, but client failed to initialize"})
-		return
-	}
-	if err := client.HealthCheck(); err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"message":   "Keys saved, but validation failed",
-			"testError": err.Error(),
-			"verified":  false,
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":  "Stripe gateway keys saved and verified",
-		"verified": true,
-	})
+	services.InvalidateStripeFor(slot)
+	services.LogAudit(c, "payment.keys.update", "payment_gateway", "stripe", nil, map[string]any{"slot": slot, "updatedFields": []string{boolField("secretKey", req.SecretKey != ""), boolField("publishableKey", req.PublishableKey != ""), boolField("webhookSecret", req.WebhookSecret != ""), boolField("keyId", req.KeyID != "")}})
+	result := stripeSlotStatus(slot, services.GetStripeFor(slot))
+	result["verified"] = result["configured"]
+	result["message"] = "Stripe credential slot saved"
+	c.JSON(http.StatusOK, result)
 }
 
 // UpdateSettings updates platform settings
