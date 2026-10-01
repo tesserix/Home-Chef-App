@@ -62,7 +62,7 @@ func (h *ChefHandler) GetChefProfitLoss(c *gin.Context) {
 	var rows []earningsOrderRow
 	if err := database.DB.Raw(`
 		SELECT id, order_number, delivered_at, subtotal, tax,
-		       tax_food, tax_service, chef_funded_discount,
+		       currency, tax_inclusive, tax_food, tax_service, chef_funded_discount,
 		       delivery_fee, chef_tip, delivery_address_state, commission_rate,
 		       payout_hold_status
 		FROM   orders

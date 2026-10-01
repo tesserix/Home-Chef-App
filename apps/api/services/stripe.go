@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/homechef/api/config"
+	"github.com/homechef/api/models"
 )
 
 const stripeBaseURL = "https://api.stripe.com/v1"
@@ -26,102 +27,101 @@ const stripeBaseURL = "https://api.stripe.com/v1"
 // InvalidateStripe() so the next read picks up new keys immediately.
 const stripeCacheTTL = 5 * time.Minute
 
-// Stripe credentials live in GCP Secret Manager alongside the Cashfree ones.
-// Product-scoped ("homechef-") keeps them separate from other tenants sharing
-// project tesseracthub-480811.
-const (
-	secretStripeSecretKey      = "prod-homechef-stripe-secret-key"
-	secretStripePublishableKey = "prod-homechef-stripe-publishable-key"
-	secretStripeWebhookSecret  = "prod-homechef-stripe-webhook-secret"
-)
+// StripeSecretNames is shared by runtime readers and admin writers.
+func StripeSecretNames(mode string) (secretKey, publishableKey, webhookSecret, keyID string) {
+	prefix := "prod-homechef-stripe-"
+	if models.IsTestMode(mode) {
+		prefix += "test-"
+	}
+	return prefix + "secret-key", prefix + "publishable-key", prefix + "webhook-secret", prefix + "key-id"
+}
 
 // StripeClient handles all Stripe REST API interactions. Same shape as the
 // Cashfree client so the admin UI and payment handlers can treat them
 // symmetrically.
 type StripeClient struct {
 	secretKey      string
+	keyID          string
 	publishableKey string
 	webhookSecret  string
 	fetchedAt      time.Time
+	httpClient     *http.Client
 }
 
 var (
-	stripeClient *StripeClient
-	stripeMu     sync.Mutex
+	stripeClients = map[string]*StripeClient{}
+	stripeMu      sync.Mutex
 )
 
-func fetchStripeFromSM(ctx context.Context) (*StripeClient, error) {
-	secretKey, skErr := GetPlatformSecret(ctx, secretStripeSecretKey)
-	publishableKey, _ := GetPlatformSecret(ctx, secretStripePublishableKey)
-	webhookSecret, _ := GetPlatformSecret(ctx, secretStripeWebhookSecret)
-
-	if skErr != nil || isPlaceholderValue(secretKey) {
+func fetchStripeFor(ctx context.Context, mode string) (*StripeClient, error) {
+	skName, pkName, whName, idName := StripeSecretNames(mode)
+	sk, skErr := GetPlatformSecret(ctx, skName)
+	pk, _ := GetPlatformSecret(ctx, pkName)
+	wh, _ := GetPlatformSecret(ctx, whName)
+	id, _ := GetPlatformSecret(ctx, idName)
+	if skErr != nil || isPlaceholderValue(sk) {
 		cfg := config.AppConfig
-		if cfg != nil && !isPlaceholderValue(cfg.StripeSecretKey) {
-			return &StripeClient{
-				secretKey:      cfg.StripeSecretKey,
-				publishableKey: cfg.StripePublishableKey,
-				webhookSecret:  cfg.StripeWebhookSecret,
-				fetchedAt:      time.Now(),
-			}, nil
+		if cfg == nil {
+			return nil, fmt.Errorf("Stripe slot is not configured")
 		}
-		if skErr != nil {
-			return nil, fmt.Errorf("stripe credentials not configured: %w", skErr)
+		if models.IsTestMode(mode) {
+			sk, pk, wh, id = cfg.StripeTestSecretKey, cfg.StripeTestPublishableKey, cfg.StripeTestWebhookSecret, cfg.StripeTestKeyID
+		} else {
+			sk, pk, wh, id = cfg.StripeSecretKey, cfg.StripePublishableKey, cfg.StripeWebhookSecret, cfg.StripeKeyID
 		}
-		return nil, fmt.Errorf("stripe credentials missing or still set to placeholder — configure them in Admin → Settings → Payment Gateway")
 	}
-
-	return &StripeClient{
-		secretKey:      secretKey,
-		publishableKey: publishableKey,
-		webhookSecret:  webhookSecret,
-		fetchedAt:      time.Now(),
-	}, nil
+	client := &StripeClient{secretKey: sk, publishableKey: pk, webhookSecret: wh, keyID: id, fetchedAt: time.Now()}
+	if !client.IsTestMode() && !strings.HasPrefix(sk, "sk_live_") && !strings.HasPrefix(sk, "rk_live_") {
+		return nil, fmt.Errorf("Stripe slot has no valid API credential")
+	}
+	if models.IsTestMode(mode) && !client.IsTestMode() {
+		return nil, fmt.Errorf("Stripe test slot cannot use live credentials")
+	}
+	if pk != "" && ((client.IsTestMode() && !strings.HasPrefix(pk, "pk_test_")) || (!client.IsTestMode() && !strings.HasPrefix(pk, "pk_live_"))) {
+		return nil, fmt.Errorf("Stripe publishable key environment mismatch")
+	}
+	return client, nil
 }
 
-// GetStripe returns a Stripe client sourced from GCP Secret Manager. nil
-// when no credentials are configured — callers must handle that. Mirrors
-// GetCashfree semantics, including cached-client fallback on SM outage.
-func GetStripe() *StripeClient {
+func GetStripe() *StripeClient { return GetStripeFor(models.ChefModeLive) }
+
+func GetStripeFor(mode string) *StripeClient {
+	mode = models.NormalizeMode(mode)
 	stripeMu.Lock()
 	defer stripeMu.Unlock()
-
-	if stripeClient != nil && time.Since(stripeClient.fetchedAt) < stripeCacheTTL {
-		return stripeClient
+	cached := stripeClients[mode]
+	if cached != nil && time.Since(cached.fetchedAt) < stripeCacheTTL {
+		return cached
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	fresh, err := fetchStripeFromSM(ctx)
+	fresh, err := fetchStripeFor(ctx, mode)
 	if err != nil {
-		if stripeClient != nil {
-			log.Printf("stripe: SM fetch failed, using cached credentials: %v", err)
-			return stripeClient
-		}
-		log.Printf("stripe: not configured (%v)", err)
+		log.Printf("Stripe %s credential refresh unavailable", mode)
 		return nil
 	}
-
-	stripeClient = fresh
-	return stripeClient
+	stripeClients[mode] = fresh
+	return fresh
 }
 
-// InvalidateStripe clears the cached client. Call after admin key rotation.
+func InvalidateStripeFor(mode string) {
+	stripeMu.Lock()
+	defer stripeMu.Unlock()
+	delete(stripeClients, models.NormalizeMode(mode))
+}
+
 func InvalidateStripe() {
 	stripeMu.Lock()
 	defer stripeMu.Unlock()
-	stripeClient = nil
-	log.Println("stripe: credential cache invalidated")
+	stripeClients = map[string]*StripeClient{}
 }
 
-// InitStripe triggers an initial fetch so config gaps surface at startup.
 func InitStripe() {
-	if GetStripe() != nil {
-		log.Println("stripe: client initialized from Secret Manager")
-		return
+	for _, mode := range []string{models.ChefModeLive, models.ChefModeTest} {
+		if GetStripeFor(mode) != nil {
+			log.Printf("Stripe %s slot initialized", mode)
+		}
 	}
-	log.Println("stripe: no credentials yet — configure via Admin → Settings → Payment Gateway")
 }
 
 // --- Connect Accounts (Stripe Connect) ---
@@ -233,6 +233,7 @@ func (c *StripeClient) FetchConnectAccount(accountID string) (*StripeConnectAcco
 // connected account ID (so funds settle directly), and an application fee
 // for the platform cut.
 type StripePaymentIntentRequest struct {
+	IdempotencyKey      string
 	Amount              int
 	Currency            string
 	ReceiptEmail        string
@@ -244,17 +245,19 @@ type StripePaymentIntentRequest struct {
 }
 
 type StripePaymentIntent struct {
-	ID           string `json:"id"`
-	Object       string `json:"object"`
-	Amount       int    `json:"amount"`
-	Currency     string `json:"currency"`
-	Status       string `json:"status"`
-	ClientSecret string `json:"client_secret"`
-	Customer     string `json:"customer"`
-	Description  string `json:"description"`
+	Livemode       bool   `json:"livemode"`
+	ID             string `json:"id"`
+	Object         string `json:"object"`
+	Amount         int    `json:"amount"`
+	AmountReceived int    `json:"amount_received"`
+	Currency       string `json:"currency"`
+	Status         string `json:"status"`
+	ClientSecret   string `json:"client_secret"`
+	Customer       string `json:"customer"`
+	Description    string `json:"description"`
 }
 
-func (c *StripeClient) CreatePaymentIntent(req *StripePaymentIntentRequest) (*StripePaymentIntent, error) {
+func (c *StripeClient) CreatePaymentIntent(ctx context.Context, req *StripePaymentIntentRequest) (*StripePaymentIntent, error) {
 	form := url.Values{}
 	form.Set("amount", strconv.Itoa(req.Amount))
 	form.Set("currency", strings.ToLower(req.Currency))
@@ -278,7 +281,7 @@ func (c *StripeClient) CreatePaymentIntent(req *StripePaymentIntentRequest) (*St
 		form.Set("metadata["+k+"]", v)
 	}
 
-	resp, err := c.doFormRequest("POST", "/payment_intents", form)
+	resp, err := c.doFormRequestContext(ctx, "POST", "/payment_intents", form, req.IdempotencyKey)
 	if err != nil {
 		return nil, err
 	}
@@ -289,8 +292,8 @@ func (c *StripeClient) CreatePaymentIntent(req *StripePaymentIntentRequest) (*St
 	return &result, nil
 }
 
-func (c *StripeClient) FetchPaymentIntent(id string) (*StripePaymentIntent, error) {
-	resp, err := c.doFormRequest("GET", "/payment_intents/"+id, nil)
+func (c *StripeClient) FetchPaymentIntent(ctx context.Context, id string) (*StripePaymentIntent, error) {
+	resp, err := c.doFormRequestContext(ctx, "GET", "/payment_intents/"+url.PathEscape(id), nil, "")
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +418,19 @@ const stripeWebhookTolerance = 5 * time.Minute
 // the secret and compare in constant time. Also rejects events older than
 // stripeWebhookTolerance to prevent replay.
 func VerifyStripeWebhookSignature(payload []byte, sigHeader string) bool {
-	if stripeClient == nil || stripeClient.webhookSecret == "" {
+	return VerifyStripeWebhookSignatureFor(models.ChefModeLive, payload, sigHeader)
+}
+
+func VerifyStripeWebhookSignatureFor(mode string, payload []byte, sigHeader string) bool {
+	client := GetStripeFor(mode)
+	if client == nil {
+		return false
+	}
+	return client.verifyWebhookSignature(payload, sigHeader)
+}
+
+func (c *StripeClient) verifyWebhookSignature(payload []byte, sigHeader string) bool {
+	if c.webhookSecret == "" {
 		log.Println("Warning: Stripe webhook secret not configured")
 		return false
 	}
@@ -450,7 +465,7 @@ func VerifyStripeWebhookSignature(payload []byte, sigHeader string) bool {
 	}
 
 	signedPayload := ts + "." + string(payload)
-	mac := hmac.New(sha256.New, []byte(stripeClient.webhookSecret))
+	mac := hmac.New(sha256.New, []byte(c.webhookSecret))
 	mac.Write([]byte(signedPayload))
 	expected := hex.EncodeToString(mac.Sum(nil))
 
@@ -469,11 +484,13 @@ func (c *StripeClient) GetPublishableKey() string {
 	return c.publishableKey
 }
 
-// GetSecretKeyID returns the sk_* prefix (safe — full secret is hashed-like
-// from the caller's perspective, we only surface the first ~12 chars for UI).
-func (c *StripeClient) GetSecretKeyID() string {
-	return c.secretKey
+// IsTestMode identifies sandbox credentials without exposing key material.
+func (c *StripeClient) IsTestMode() bool {
+	return strings.HasPrefix(c.secretKey, "sk_test_") || strings.HasPrefix(c.secretKey, "rk_test_")
 }
+
+// GetSecretKeyID returns Stripe's non-secret management identifier.
+func (c *StripeClient) GetSecretKeyID() string { return c.keyID }
 
 func (c *StripeClient) HasWebhookSecret() bool {
 	return c.webhookSecret != ""
@@ -501,17 +518,21 @@ func FromCents(cents int) float64 {
 // doFormRequest executes an authenticated HTTP request to the Stripe API
 // using form-encoded bodies (Stripe's standard). GET requests pass nil.
 func (c *StripeClient) doFormRequest(method, path string, form url.Values) ([]byte, error) {
+	return c.doFormRequestContext(context.Background(), method, path, form, "")
+}
+
+func (c *StripeClient) doFormRequestContext(ctx context.Context, method, path string, form url.Values, idempotencyKey string) ([]byte, error) {
 	fullURL := stripeBaseURL + path
 
 	var req *http.Request
 	var err error
 	if form != nil && method != "GET" {
-		req, err = http.NewRequest(method, fullURL, bytes.NewBufferString(form.Encode()))
+		req, err = http.NewRequestWithContext(ctx, method, fullURL, bytes.NewBufferString(form.Encode()))
 		if err == nil {
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		}
 	} else {
-		req, err = http.NewRequest(method, fullURL, nil)
+		req, err = http.NewRequestWithContext(ctx, method, fullURL, nil)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -520,7 +541,13 @@ func (c *StripeClient) doFormRequest(method, path string, form url.Values) ([]by
 	req.Header.Set("Authorization", "Bearer "+c.secretKey)
 	req.Header.Set("Stripe-Version", "2024-06-20")
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	if idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
+	client := c.httpClient
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("stripe request failed: %w", err)
@@ -533,7 +560,7 @@ func (c *StripeClient) doFormRequest(method, path string, form url.Values) ([]by
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("stripe API error (HTTP %d): %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("stripe API error (HTTP %d)", resp.StatusCode)
 	}
 	return respBody, nil
 }

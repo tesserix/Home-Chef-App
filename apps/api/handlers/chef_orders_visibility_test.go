@@ -52,7 +52,7 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 		status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'pending',
 		payment_method TEXT DEFAULT '', fulfillment_type TEXT DEFAULT '',
 		subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, total REAL DEFAULT 0,
-		currency TEXT DEFAULT 'INR',
+		currency TEXT DEFAULT 'INR', tax_inclusive BOOLEAN DEFAULT false,
 		-- The dashboard's money now comes from the settlement query (#1030), which
 		-- reads these; without them it errors and the hero silently reads zero.
 		tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0,

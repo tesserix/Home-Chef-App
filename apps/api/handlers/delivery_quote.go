@@ -191,30 +191,35 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		"surgePin": services.SignSurgePin(chef.ID, req.Latitude, req.Longitude, chargeSurge),
 	}
 
+	preview := &models.Order{Chef: chef, Currency: services.CurrencyForCountry(chef.PayoutCountry)}
+	resolvedProvider, err := services.OrderCheckoutProvider(preview)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Unsupported payment market", "code": "unsupported_market"})
+		return
+	}
+	resp["paymentProvider"] = resolvedProvider
+
 	// Credit preview. The checkout screen renders the wallet/loyalty card BEFORE an
 	// order exists, so it cannot use the order-scoped quote endpoint. Running the
 	// SAME allocator here on the same fee/tax figures this endpoint already computes
 	// keeps the preview and the eventual charge in agreement; payment creation still
 	// recomputes from the real order and remains authoritative.
-	if userID, ok := middleware.GetUserID(c); ok {
+	if userID, ok := middleware.GetUserID(c); ok && resolvedProvider == models.PaymentProviderCashfree {
 		// The RESOLVED gateway, not the chef's stored column. Two things read it:
 		// the credit quote below, and — via the response — the RBI Payment
 		// Aggregator disclosure the checkout screen must render. That disclosure
 		// has to name the aggregator that will actually process the payment, so it
 		// must come from the same resolution the charge itself uses rather than
 		// from a column the selection may override.
-		resolvedProvider := services.SelectCheckoutGateway(chef.PaymentProvider, chef.Mode)
-		resp["paymentProvider"] = resolvedProvider
-
 		preview := &models.Order{
 			CustomerID: userID, Currency: services.CurrencyForCountry(chef.PayoutCountry),
 			PaymentProvider: resolvedProvider,
-			Subtotal:    pricing.Subtotal,
-			Discount:    pricing.Discount,
-			DeliveryFee: pricing.DeliveryFee,
-			PlatformFee: pricing.PlatformFee,
-			Tax:         pricing.Tax,
-			Total:       pricing.Total,
+			Subtotal:        pricing.Subtotal,
+			Discount:        pricing.Discount,
+			DeliveryFee:     pricing.DeliveryFee,
+			PlatformFee:     pricing.PlatformFee,
+			Tax:             pricing.Tax,
+			Total:           pricing.Total,
 		}
 		if q, err := services.BuildCreditQuote(database.DB, preview, userID, req.CreditRequest, creditFlags()); err == nil {
 			resp["credit"] = creditQuoteResponse(q)

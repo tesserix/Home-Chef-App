@@ -77,6 +77,10 @@ func recordCancellationRefundLedger(tx *gorm.DB, in cancellationRefundLedgerInpu
 		refundID = in.WalletRef
 	}
 	now := time.Now()
+	currency := in.Order.Currency
+	if currency == "" {
+		currency = "INR"
+	}
 	row := models.RefundTransaction{
 		ID:                uuid.New(),
 		OrderID:           in.Order.ID,
@@ -84,7 +88,7 @@ func recordCancellationRefundLedger(tx *gorm.DB, in cancellationRefundLedgerInpu
 		ProviderPaymentID: in.Order.GatewayPaymentID,
 		ProviderRefundID:  refundID,
 		Amount:            Round2(in.Amount),
-		CurrencyCode:      "INR",
+		CurrencyCode:      currency,
 		Status:            models.RefundTxnSucceeded,
 		Reason:            in.Reason,
 		IdempotencyKey:    orderrefund.IdempotencyKeyFor(in.Order.ID, orderrefund.ScopeFull),

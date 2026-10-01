@@ -45,10 +45,15 @@ type Config struct {
 	GCSPublicBucket  string
 	GCSPrivateBucket string
 
-	// Stripe (legacy)
-	StripeSecretKey      string
-	StripeWebhookSecret  string
-	StripePublishableKey string
+	// Stripe credential slots
+	StripeSecretKey          string
+	StripeWebhookSecret      string
+	StripePublishableKey     string
+	StripeKeyID              string
+	StripeTestSecretKey      string
+	StripeTestPublishableKey string
+	StripeTestWebhookSecret  string
+	StripeTestKeyID          string
 
 	// Google Identity Platform tenants. GIP accounts are tenant-scoped, so any
 	// admin-side identity operation (password reset, account deletion) has to
@@ -497,10 +502,15 @@ func Load() {
 		GCSPublicBucket:  getEnv("GCS_PUBLIC_BUCKET", "homechef-prod-assets-in"),
 		GCSPrivateBucket: getEnv("GCS_PRIVATE_BUCKET", "homechef-prod-docs-in"),
 
-		// Stripe (legacy)
-		StripeSecretKey:      getEnv("STRIPE_SECRET_KEY", ""),
-		StripeWebhookSecret:  getEnv("STRIPE_WEBHOOK_SECRET", ""),
-		StripePublishableKey: getEnv("STRIPE_PUBLISHABLE_KEY", ""),
+		// Stripe credential slots
+		StripeSecretKey:          getEnv("STRIPE_SECRET_KEY", ""),
+		StripeWebhookSecret:      getEnv("STRIPE_WEBHOOK_SECRET", ""),
+		StripePublishableKey:     getEnv("STRIPE_PUBLISHABLE_KEY", ""),
+		StripeKeyID:              getEnv("STRIPE_KEY_ID", ""),
+		StripeTestSecretKey:      getEnv("STRIPE_TEST_SECRET_KEY", ""),
+		StripeTestPublishableKey: getEnv("STRIPE_TEST_PUBLISHABLE_KEY", ""),
+		StripeTestWebhookSecret:  getEnv("STRIPE_TEST_WEBHOOK_SECRET", ""),
+		StripeTestKeyID:          getEnv("STRIPE_TEST_KEY_ID", ""),
 
 		GIPCustomerTenantID: getEnv("GIP_CUSTOMER_TENANT_ID", "HomeChef-Customer-rqg8a"),
 		GIPBusinessTenantID: getEnv("GIP_BUSINESS_TENANT_ID", "HomeChef-Business-8s8ql"),

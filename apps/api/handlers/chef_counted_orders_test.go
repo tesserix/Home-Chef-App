@@ -32,7 +32,8 @@ func setupCountedOrdersDB(t *testing.T) (*gorm.DB, uuid.UUID) {
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, chef_id TEXT, customer_id TEXT,
 			payment_status TEXT, status TEXT, mode TEXT DEFAULT 'live', total REAL,
 			subtotal REAL DEFAULT 0, delivery_fee REAL DEFAULT 0, tax REAL DEFAULT 0,
-			tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0,
+			tax_food REAL DEFAULT 0, tax_service REAL DEFAULT 0, tax_inclusive BOOLEAN DEFAULT FALSE,
+			currency TEXT DEFAULT 'INR',
 			chef_funded_discount REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 			refund_amount REAL DEFAULT 0, created_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, mode TEXT)`,
@@ -202,6 +203,19 @@ func TestCountedRevenue_IncludesTipExcludesDelivery(t *testing.T) {
 
 	_, revenue := countedRevenue(t, db, chefID)
 	require.InDelta(t, 366.00, revenue, 0.005, "320 + 16 + tip 30")
+}
+
+func TestCountedRevenue_InclusiveMenuPriceUsesSavedNetSubtotal(t *testing.T) {
+	for _, currency := range []string{"AUD", "NZD"} {
+		t.Run(currency, func(t *testing.T) {
+			db, chefID := setupCountedOrdersDB(t)
+			id := seedPricedOrder(t, db, chefID, 100, 10, 10, 1, 1, 5, 5, 0)
+			require.NoError(t, db.Exec(`UPDATE orders SET tax_inclusive = TRUE, currency = ?, total = 120 WHERE id = ?`, currency, id).Error)
+			orders, revenue := countedRevenue(t, db, chefID)
+			require.EqualValues(t, 1, orders)
+			require.InDelta(t, 115, revenue, 0.005)
+		})
+	}
 }
 
 // Rows placed before tax was split per supply have no snapshot, so they keep the whole

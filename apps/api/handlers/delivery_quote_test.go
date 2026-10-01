@@ -208,3 +208,25 @@ func TestQuoteEndpoint_BadChefID_Is400(t *testing.T) {
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/chefs/not-a-uuid/delivery-quote", strings.NewReader(`{}`)))
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+func TestQuoteEndpointUsesSameMarketGatewayAsPayment(t *testing.T) {
+	for _, tc := range []struct{ country, currency, configured, provider string }{
+		{"IN", "inr", "stripe", "cashfree"},
+		{"AU", "aud", "cashfree", "stripe"},
+		{"NZ", "nzd", "cashfree", "stripe"},
+	} {
+		t.Run(tc.country, func(t *testing.T) {
+			db := setupQuoteDB(t)
+			creditRailsOff(t)
+			require.NoError(t, db.Exec("ALTER TABLE chef_profiles ADD COLUMN payment_provider text").Error)
+			chefID := uuid.New()
+			require.NoError(t, db.Exec("INSERT INTO chef_profiles (id, user_id, payout_country, payment_provider) VALUES (?,?,?,?)", chefID, uuid.New(), tc.country, tc.configured).Error)
+			out := quoteAs(t, chefID, uuid.New(), `{"subtotal":50,"fulfillmentType":"pickup"}`)
+			require.Equal(t, tc.provider, out["paymentProvider"])
+			require.Equal(t, tc.currency, out["currency"])
+			if tc.provider == "stripe" {
+				require.NotContains(t, out, "credit", "Stripe must not preview unsupported wallet/loyalty discounts")
+			}
+		})
+	}
+}

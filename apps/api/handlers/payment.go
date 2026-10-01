@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/internal/markets"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
@@ -25,17 +27,32 @@ import (
 // most, 0 for JPY/KRW/VND, 3 for KWD/BHD/OMR). Keeping those in one place
 // prevents the "÷100 vs ÷1000 vs ÷1" bug from drifting across handlers.
 
-type PaymentHandler struct{}
+type stripePayments interface {
+	CreatePaymentIntent(context.Context, *services.StripePaymentIntentRequest) (*services.StripePaymentIntent, error)
+	FetchPaymentIntent(context.Context, string) (*services.StripePaymentIntent, error)
+	GetPublishableKey() string
+	IsTestMode() bool
+}
+
+type PaymentHandler struct {
+	stripe stripePayments
+}
+
+func (h *PaymentHandler) stripePayments(mode string) stripePayments {
+	if h.stripe != nil {
+		return h.stripe
+	}
+	if client := services.GetStripeFor(mode); client != nil {
+		return client
+	}
+	return nil
+}
 
 func NewPaymentHandler() *PaymentHandler {
 	return &PaymentHandler{}
 }
 
-// CreateOrderPayment mints the gateway charge for an order.
-//
-// The customer pays one total to the platform merchant account; the chef's and
-// rider's shares are allocated later, when the payout governor releases the
-// order (services/easy_split_release.go), not at capture.
+// CreateOrderPayment prepares a payment through the order market's gateway.
 //
 // POST /payments/order/:orderId/create
 func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
@@ -103,14 +120,21 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 		order.CommissionRate = rate // same request uses the frozen rate
 	}
 
-	// Resolve the gateway from the chef's configured provider. The branch taken is
-	// also what stamps order.payment_provider, so the gateway that takes the money
-	// and the gateway a later refund goes to cannot disagree. Anything selection
-	// cannot charge is refused rather than sent down a gateway's branch by
-	// default — that fallthrough is how a Cashfree order used to reach the
-	// wrong gateway's code and fail on an empty payment id.
-	switch provider := services.SelectCheckoutGateway(order.Chef.PaymentProvider, order.Mode); provider {
+	provider, err := services.OrderCheckoutProvider(&order)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "payment_market_mismatch"})
+		return
+	}
+	switch provider {
 	case models.PaymentProviderStripe:
+		if market, ok := markets.Lookup(order.Chef.PayoutCountry); ok && market.Status != "active" && order.Mode != models.ChefModeTest && order.StripePaymentIntentID == "" {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Live payments are not enabled for this market", "code": "market_not_enabled"})
+			return
+		}
+		if creditReq.UseWallet || creditReq.UseLoyalty || order.WalletApplied > 0 || order.LoyaltyApplied > 0 {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Wallet and loyalty funding are not yet supported for Stripe payments", "code": "stripe_credit_unsupported"})
+			return
+		}
 		h.createStripePayment(c, &order, userID)
 	case models.PaymentProviderCashfree:
 		h.createCashfreePayment(c, &order, userID, creditReq)
@@ -178,17 +202,20 @@ func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Ord
 	})
 }
 
-// createStripePayment creates a PaymentIntent against the chef's Connect
-// account. Chef receives their NET payout (gross − commission − TDS, where gross
-// is subtotal + tax + chefTip) via `transfer_data[destination]`; the platform
-// retains the rest (commission + TDS + deliveryFee + driverTip) as
-// `application_fee_amount` and settles the driver separately. Stripe rejects
-// charges whose currency doesn't match the chef's Connect country, so we derive
-// currency from PayoutCountry rather than hardcoding.
+// createStripePayment prepares or reuses a destination charge in the order's frozen currency.
 func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order, userID uuid.UUID) {
-	st := services.GetStripe()
+	st := h.stripePayments(order.Mode)
 	if st == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
+		return
+	}
+	if (order.Mode == models.ChefModeTest) != st.IsTestMode() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe credentials do not match the order environment", "code": "stripe_mode_mismatch"})
+		return
+	}
+	if (st.IsTestMode() && !strings.HasPrefix(st.GetPublishableKey(), "pk_test_")) ||
+		(!st.IsTestMode() && !strings.HasPrefix(st.GetPublishableKey(), "pk_live_")) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe publishable key is not configured for this environment"})
 		return
 	}
 
@@ -222,30 +249,51 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 		applicationFee = 0
 	}
 
-	pi, err := st.CreatePaymentIntent(&services.StripePaymentIntentRequest{
-		Amount:              totalMinor,
-		Currency:            currency,
-		ReceiptEmail:        order.Customer.Email,
-		DestinationAccount:  order.Chef.StripeAccountID,
-		ApplicationFeeCents: applicationFee,
-		Description:         fmt.Sprintf("Fe3dr order %s", order.OrderNumber),
-		Metadata: map[string]string{
-			"order_id":     order.ID.String(),
-			"order_number": order.OrderNumber,
-			"customer_id":  userID.String(),
-			"chef_id":      order.ChefID.String(),
-		},
-	})
+	var pi *services.StripePaymentIntent
+	var err error
+	if order.StripePaymentIntentID != "" {
+		pi, err = st.FetchPaymentIntent(c.Request.Context(), order.StripePaymentIntentID)
+	} else {
+		pi, err = st.CreatePaymentIntent(c.Request.Context(), &services.StripePaymentIntentRequest{
+			IdempotencyKey:      "fe3dr-order-" + order.ID.String(),
+			Amount:              totalMinor,
+			Currency:            currency,
+			ReceiptEmail:        order.Customer.Email,
+			DestinationAccount:  order.Chef.StripeAccountID,
+			ApplicationFeeCents: applicationFee,
+			Description:         fmt.Sprintf("Fe3dr order %s", order.OrderNumber),
+			Metadata: map[string]string{
+				"order_id":     order.ID.String(),
+				"order_number": order.OrderNumber,
+				"customer_id":  userID.String(),
+				"chef_id":      order.ChefID.String(),
+			},
+		})
+	}
 	if err != nil {
 		log.Printf("Failed to create Stripe PaymentIntent: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
 		return
 	}
 
-	database.DB.Model(order).Updates(map[string]interface{}{
+	if pi == nil || pi.ID == "" || pi.Amount != totalMinor || !strings.EqualFold(pi.Currency, currency) || pi.Livemode == st.IsTestMode() ||
+		(order.StripePaymentIntentID != "" && pi.ID != order.StripePaymentIntentID) {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Stripe payment does not match the order"})
+		return
+	}
+	if pi.Status == "canceled" {
+		c.JSON(http.StatusConflict, gin.H{"error": "This payment was canceled; create a new order"})
+		return
+	}
+
+	if err := database.DB.WithContext(c.Request.Context()).Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
 		"stripe_payment_intent_id": pi.ID,
 		"payment_provider":         "stripe",
-	})
+	}).Error; err != nil {
+		log.Printf("Stripe intent persistence failed for order %s: %v", order.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Payment could not be saved; retry payment creation"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"provider":              "stripe",
@@ -330,51 +378,37 @@ func (h *PaymentHandler) verifyStripePayment(c *gin.Context, order *models.Order
 		return
 	}
 
-	st := services.GetStripe()
+	st := h.stripePayments(order.Mode)
 	if st == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
 		return
 	}
 
-	pi, err := st.FetchPaymentIntent(piID)
+	pi, err := st.FetchPaymentIntent(c.Request.Context(), piID)
 	if err != nil {
 		log.Printf("Failed to fetch Stripe PaymentIntent %s: %v", piID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
 		return
 	}
 
-	if pi.Status != "succeeded" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Payment not succeeded, status: %s", pi.Status)})
+	if err := services.ValidateStripeOrderPayment(order, pi); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if order.PaymentStatus == models.PaymentRefunded {
+		c.JSON(http.StatusConflict, gin.H{"error": "Order has been refunded"})
+		return
+	}
+	completed, err := completeStripeOrder(c.Request.Context(), order, pi)
+	if err != nil {
+		log.Printf("Stripe payment completion failed for order %s: %v", order.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Payment verification could not be saved; retry verification"})
 		return
 	}
 
-	eventCurrency := strings.ToLower(order.Currency)
-	if eventCurrency == "" {
-		eventCurrency = "inr"
-	}
-
-	// Mark paid + stage the chef push + order.paid event atomically (transactional
-	// outbox). #555: the guarded services.CompleteOrderPaymentTx emits order.paid ONLY on the
-	// single pending→completed transition — a re-verify or a verify/webhook race no
-	// longer double-emits (the old path here updated + emitted unconditionally).
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		_, err := services.CompleteOrderPaymentTx(tx, order,
-			map[string]interface{}{"payment_method": "card"},
-			map[string]interface{}{
-				"order_id":     order.ID.String(),
-				"order_number": order.OrderNumber,
-				"amount":       services.FromMinor(pi.Amount, eventCurrency),
-				"method":       "card",
-				"provider":     "stripe",
-				"currency":     order.Currency,
-			})
-		return err
-	}); err != nil {
-		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
-		services.CaptureBackgroundError(err)
-	} else {
-		// Start the durable order saga (#122) — gated, idempotent, no-op when off.
-		services.StartOrderSaga(order.ID)
+	if !completed {
+		c.JSON(http.StatusConflict, gin.H{"error": "Order is no longer payable"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
@@ -799,7 +833,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No Stripe payment found for this order"})
 			return
 		}
-		st := services.GetStripe()
+		st := services.GetStripeFor(order.Mode)
 		if st == nil {
 			releaseReservation()
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
@@ -995,6 +1029,11 @@ func (h *PaymentHandler) confirmFssaiRequestFromWebhook(orderID, paymentID, mode
 // Only the event types relevant to our order lifecycle are handled;
 // everything else is acknowledged with 200 so Stripe stops retrying.
 func (h *PaymentHandler) StripeWebhook(c *gin.Context) {
+	slot, valid := stripeCredentialSlot(c.Query("mode"))
+	if !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Stripe credential slot"})
+		return
+	}
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read body"})
@@ -1002,7 +1041,7 @@ func (h *PaymentHandler) StripeWebhook(c *gin.Context) {
 	}
 
 	signature := c.GetHeader("Stripe-Signature")
-	if !services.VerifyStripeWebhookSignature(body, signature) {
+	if !services.VerifyStripeWebhookSignatureFor(slot, body, signature) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
 		return
 	}
@@ -1023,7 +1062,11 @@ func (h *PaymentHandler) StripeWebhook(c *gin.Context) {
 
 	switch event.Type {
 	case "payment_intent.succeeded":
-		h.handleStripePaymentSucceeded(event.Data.Object)
+		if err := h.handleStripePaymentSucceeded(c.Request.Context(), event.Data.Object); err != nil {
+			log.Printf("Stripe webhook %s failed: %v", event.ID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Payment event could not be processed"})
+			return
+		}
 	case "payment_intent.payment_failed":
 		h.handleStripePaymentFailed(event.Data.Object)
 	case "charge.refunded":
@@ -1041,47 +1084,62 @@ func (h *PaymentHandler) StripeWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-func (h *PaymentHandler) handleStripePaymentSucceeded(obj json.RawMessage) {
+func (h *PaymentHandler) handleStripePaymentSucceeded(ctx context.Context, obj json.RawMessage) error {
 	var pi services.StripePaymentIntent
 	if err := json.Unmarshal(obj, &pi); err != nil {
-		log.Printf("Failed to parse stripe payment_intent: %v", err)
-		return
+		return fmt.Errorf("parse stripe payment intent: %w", err)
 	}
-	log.Printf("Stripe payment succeeded: %s (amount: %d %s)", pi.ID, pi.Amount, pi.Currency)
+	if pi.ID == "" {
+		return fmt.Errorf("missing stripe payment intent id")
+	}
+	var order models.Order
+	if err := database.DB.WithContext(ctx).Where("stripe_payment_intent_id = ? AND payment_provider = ?", pi.ID, models.PaymentProviderStripe).First(&order).Error; err != nil {
+		return fmt.Errorf("load stripe order: %w", err)
+	}
+	if err := services.ValidateStripeOrderPayment(&order, &pi); err != nil {
+		return err
+	}
+	_, err := completeStripeOrder(ctx, &order, &pi)
+	return err
+}
 
-	// Guarded completion mirroring handlePaymentCaptured (#563 — this was an
-	// UNCONDITIONAL update that would re-stamp a refunded/failed order back to completed
-	// on a webhook replay). Only flip an order that isn't already completed/refunded; the
-	// chef notify + reward + saga fire on the single transition (RowsAffected > 0), so the
-	// client verify path (verifyStripePayment) and this webhook can't both re-fire them.
-	res := database.DB.Model(&models.Order{}).
-		Where("stripe_payment_intent_id = ? AND payment_status NOT IN ?", pi.ID, services.CompletionBlockedStatuses).
-		Updates(map[string]interface{}{
-			"payment_status": models.PaymentCompleted,
-			"payment_method": "card",
-		})
-	if res.Error != nil {
-		log.Printf("Failed to apply stripe payment_intent.succeeded for %s: %v", pi.ID, res.Error)
-		return
+func completeStripeOrder(ctx context.Context, order *models.Order, pi *services.StripePaymentIntent) (bool, error) {
+	completed := false
+	if err := database.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		changed, err := services.CompleteOrderPaymentTx(tx, order,
+			map[string]interface{}{"payment_method": "card"},
+			map[string]interface{}{
+				"order_id": order.ID.String(), "order_number": order.OrderNumber,
+				"amount": services.FromMinor(pi.Amount, order.Currency),
+				"method": "card", "provider": "stripe", "currency": order.Currency,
+			})
+		if err != nil {
+			return err
+		}
+		if changed {
+			completed = true
+			return services.EnqueueEvent(tx, services.SubjectPaymentSuccess, "payment_success", order.CustomerID, map[string]interface{}{
+				"type": "payment_success", "orderId": order.ID.String(), "orderNumber": order.OrderNumber,
+				"amount": services.FromMinor(pi.AmountReceived, order.Currency), "orderTotal": order.Total,
+				"method": "card", "currency": order.Currency,
+			})
+		}
+		var current models.Order
+		if err := tx.Select("payment_status").Where("id = ?", order.ID).First(&current).Error; err != nil {
+			return err
+		}
+		completed = current.PaymentStatus == models.PaymentCompleted
+		return nil
+	}); err != nil {
+		return false, fmt.Errorf("complete stripe order: %w", err)
 	}
-	if res.RowsAffected == 0 {
-		return // already completed/refunded — dup delivery or raced with verify
+	if completed {
+		if strings.EqualFold(order.Currency, "INR") {
+			services.MaybeGrantReward(database.DB.WithContext(ctx), order.ID)
+		}
+		services.StartOrderSaga(order.ID)
 	}
-	var ord models.Order
-	if err := database.DB.Where("stripe_payment_intent_id = ?", pi.ID).First(&ord).Error; err != nil {
-		// Order was just marked completed but we can't re-read it — the chef notify +
-		// saga won't fire. Surface it (reconciliation is the backstop) rather than drop silently.
-		log.Printf("stripe succeeded: completed order for intent %s but re-read failed: %v", pi.ID, err)
-		services.CaptureBackgroundError(err)
-		return
-	}
-	services.MaybeGrantReward(database.DB, ord.ID)
-	services.StartOrderSaga(ord.ID)
-	services.NotifyPaymentSucceeded(database.DB, ord.ID)
-	if err := services.NotifyChefNewOrderTx(database.DB, &ord); err != nil {
-		log.Printf("Failed to enqueue chef new-order push for order %s: %v", ord.ID, err)
-		services.CaptureBackgroundError(err)
-	}
+	return completed, nil
 }
 
 func (h *PaymentHandler) handleStripePaymentFailed(obj json.RawMessage) {

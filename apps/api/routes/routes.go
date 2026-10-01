@@ -11,6 +11,7 @@ import (
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/handlers"
+	"github.com/homechef/api/internal/markets"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
@@ -399,6 +400,7 @@ func SetupRouter() *gin.Engine {
 		v1.GET("/invoice/:token", orderHandler.DownloadInvoiceByToken)
 
 		// Location reference routes (public)
+		markets.RegisterRoutes(v1)
 		locations := v1.Group("/locations")
 		{
 			locations.GET("/countries", locationHandler.GetCountries)

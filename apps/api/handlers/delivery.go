@@ -726,7 +726,7 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 			if driverAmount <= 0 {
 				return
 			}
-			st := services.GetStripe()
+			st := services.GetStripeFor(order.Mode)
 			if st == nil {
 				log.Printf("driver payout skipped for order %s: stripe client unavailable", order.OrderNumber)
 				return

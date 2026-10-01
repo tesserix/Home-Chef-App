@@ -96,3 +96,23 @@ func TestRecordCancellationRefundLedger_SkipsZero(t *testing.T) {
 	db.Model(&models.RefundTransaction{}).Count(&count)
 	assert.EqualValues(t, 0, count)
 }
+
+func TestRecordCancellationRefundLedger_PreservesOrderCurrency(t *testing.T) {
+	for _, currency := range []string{"AUD", "NZD", "INR", ""} {
+		t.Run(currency, func(t *testing.T) {
+			db := setupSweepDB(t)
+			order := &models.Order{ID: uuid.New(), Currency: currency, PaymentProvider: "stripe"}
+			require.NoError(t, recordCancellationRefundLedger(db, cancellationRefundLedgerInput{
+				Order: order, Amount: 10, GatewayRefundID: "re_test",
+			}))
+			var row models.RefundTransaction
+			require.NoError(t, db.First(&row, "order_id = ?", order.ID).Error)
+			want := currency
+			if want == "" {
+				want = "INR"
+			}
+			require.Equal(t, want, row.CurrencyCode)
+			require.Equal(t, 10.0, row.Amount)
+		})
+	}
+}

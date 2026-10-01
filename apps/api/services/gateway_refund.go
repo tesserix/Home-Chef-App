@@ -54,7 +54,7 @@ func GatewayRefundAvailable(order *models.Order) bool {
 	case models.PaymentProviderCashfree:
 		return GetCashfreeFor(order.Mode) != nil
 	case models.PaymentProviderStripe:
-		return GetStripe() != nil
+		return GetStripeFor(order.Mode) != nil
 	default:
 		// Wallet is a ledger credit, not a gateway call; anything else (a legacy
 		// retired-gateway row) has no client left to refund on since #1086.
@@ -122,7 +122,7 @@ func IssueOrderGatewayRefund(order *models.Order, amountPaise int, notes map[str
 		}, nil
 
 	case models.PaymentProviderStripe:
-		st := GetStripe()
+		st := GetStripeFor(order.Mode)
 		if st == nil {
 			return nil, fmt.Errorf("stripe gateway not configured")
 		}

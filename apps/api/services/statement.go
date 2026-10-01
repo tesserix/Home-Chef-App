@@ -25,6 +25,8 @@ import (
 // order financials plus the owning chef's identity + home state (for the
 // intra/inter-state GST split).
 type statementOrderRow struct {
+	Currency           string    `gorm:"column:currency"`
+	TaxInclusive       bool      `gorm:"column:tax_inclusive"`
 	OrderID            uuid.UUID `gorm:"column:id"`
 	OrderNumber        string    `gorm:"column:order_number"`
 	CompletedAt        time.Time `gorm:"column:delivered_at"`
@@ -58,6 +60,8 @@ func (r statementOrderRow) earningsInput(flatRate float64) EarningsInput {
 		fee = *r.DeliveryFeeFinal
 	}
 	return EarningsInput{
+		Currency:             r.Currency,
+		TaxInclusive:         r.TaxInclusive,
 		OrderID:              r.OrderID,
 		OrderNumber:          r.OrderNumber,
 		CompletedAt:          r.CompletedAt,
@@ -177,7 +181,7 @@ func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, 
 		-- platform's own GST on the fee and delivery. Omitting them from this
 		-- list is invisible to a test that exercises the helper directly.
 		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax,
-		       o.tax_food, o.tax_service, o.chef_funded_discount,
+		       o.currency, o.tax_inclusive, o.tax_food, o.tax_service, o.chef_funded_discount,
 		       o.delivery_fee, o.chef_tip, o.driver_tip, o.delivery_address_state, o.commission_rate,
 		       o.fulfillment_type, o.delivery_fee_final,
 		       o.chef_id, c.user_id, c.state AS chef_state

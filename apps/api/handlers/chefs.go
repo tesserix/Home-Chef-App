@@ -1046,6 +1046,7 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	activeOrdersResp := chefDashboardOrderRows(database.DB, active)
 
 	c.JSON(http.StatusOK, gin.H{
+		"currency":     strings.ToUpper(services.CurrencyForCountry(chef.PayoutCountry)),
 		"todayOrders":  todayOrders,
 		"todayRevenue": todayRevenue,
 		// Mobile reads `todayEarnings`; keep `todayRevenue` for any other

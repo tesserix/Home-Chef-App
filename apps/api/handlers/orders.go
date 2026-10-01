@@ -536,20 +536,16 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	} else if req.DeliveryAddress != nil {
 		deliveryAddr = *req.DeliveryAddress
 	} else if fulfillment == models.FulfillmentPickup {
-		// Pickup: no delivery address — the customer collects from the chef.
-		// Leave the address empty; country defaults to IN for tax resolution.
-		deliveryAddr = CreateAddressRequest{Country: "IN"}
+		deliveryAddr = CreateAddressRequest{Country: chef.PayoutCountry, State: chef.State}
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery address required"})
 		return
 	}
 
-	// Country defaults to India if the address was created before the
-	// column was populated; tax resolver falls back to a zero-rate rule
-	// so the order still goes through.
-	deliveryCountry := deliveryAddr.Country
-	if deliveryCountry == "" {
-		deliveryCountry = "IN"
+	deliveryCountry, countryErr := services.OrderSupplyCountry(chef.PayoutCountry, deliveryAddr.Country, fulfillment)
+	if countryErr != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": countryErr.Error(), "code": "address_market_mismatch"})
+		return
 	}
 
 	// The delivery fee is computed by the ONE shared function the checkout quote

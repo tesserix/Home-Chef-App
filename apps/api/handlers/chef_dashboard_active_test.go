@@ -181,3 +181,16 @@ func TestDashboard_TerminalOrders_AreNotQueued(t *testing.T) {
 	require.Equal(t, []string{live.String()}, activeIDs(t, getDashboard(t, userID)),
 		"only live kitchen work belongs in the queue")
 }
+
+func TestDashboardUsesKitchenCurrency(t *testing.T) {
+	for _, tc := range []struct{ country, currency string }{{"IN", "INR"}, {"AU", "AUD"}, {"NZ", "NZD"}} {
+		t.Run(tc.country, func(t *testing.T) {
+			db, userID, chefID := setupDashboardDB(t)
+			if !db.Migrator().HasColumn("chef_profiles", "payout_country") {
+				require.NoError(t, db.Exec("ALTER TABLE chef_profiles ADD COLUMN payout_country TEXT").Error)
+			}
+			require.NoError(t, db.Exec("UPDATE chef_profiles SET payout_country=? WHERE id=?", tc.country, chefID).Error)
+			require.Equal(t, tc.currency, getDashboard(t, userID)["currency"])
+		})
+	}
+}
