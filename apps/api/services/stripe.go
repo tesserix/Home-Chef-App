@@ -358,6 +358,7 @@ func (c *StripeClient) CreateTransfer(req *StripeTransferRequest) (*StripeTransf
 // --- Refunds ---
 
 type StripeRefundRequest struct {
+	IdempotencyKey       string
 	PaymentIntent        string
 	Amount               int // In cents; 0 = full refund
 	Reason               string
@@ -377,6 +378,9 @@ type StripeRefund struct {
 }
 
 func (c *StripeClient) CreateRefund(req *StripeRefundRequest) (*StripeRefund, error) {
+	if strings.TrimSpace(req.IdempotencyKey) == "" {
+		return nil, fmt.Errorf("stripe refund idempotency key is required")
+	}
 	form := url.Values{}
 	form.Set("payment_intent", req.PaymentIntent)
 	if req.Amount > 0 {
@@ -395,7 +399,7 @@ func (c *StripeClient) CreateRefund(req *StripeRefundRequest) (*StripeRefund, er
 		form.Set("metadata["+k+"]", v)
 	}
 
-	resp, err := c.doFormRequest("POST", "/refunds", form)
+	resp, err := c.doFormRequestContext(context.Background(), "POST", "/refunds", form, req.IdempotencyKey)
 	if err != nil {
 		return nil, err
 	}

@@ -136,6 +136,7 @@ func IssueOrderGatewayRefund(order *models.Order, amountPaise int, notes map[str
 		// currency governs, and its minor unit may not be 1/100 — so convert back
 		// through rupees and re-scale rather than passing paise straight through.
 		r, err := st.CreateRefund(&StripeRefundRequest{
+			IdempotencyKey:       idempotencyKey,
 			PaymentIntent:        reference,
 			Amount:               ToMinor(FromPaise(amountPaise), currency),
 			Reason:               "requested_by_customer",

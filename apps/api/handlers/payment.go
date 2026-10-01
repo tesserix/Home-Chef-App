@@ -844,6 +844,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			refundCurrency = services.CurrencyForCountry(order.Chef.PayoutCountry)
 		}
 		r, err := st.CreateRefund(&services.StripeRefundRequest{
+			IdempotencyKey:       services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(priorRefunded)),
 			PaymentIntent:        order.StripePaymentIntentID,
 			Amount:               services.ToMinor(refundAmount, refundCurrency),
 			Reason:               "requested_by_customer",

@@ -150,6 +150,7 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 	})
 
 	resp := gin.H{
+		"subtotal":    pricing.Subtotal,
 		"deliveryFee": models.RoundAmount(deliveryFee),
 		"pickupFee":   pickupFee,
 		"platformFee": pricing.PlatformFee,

@@ -241,8 +241,8 @@ func TestQuoteEndpoint_KitchenTaxCountry(t *testing.T) {
 			if country == "NZ" {
 				rate = 15
 			}
-			require.NoError(t, db.Exec(`CREATE TABLE tax_rates (country_code text, region text, tax_name text, rate real, is_active boolean)`).Error)
-			require.NoError(t, db.Exec(`INSERT INTO tax_rates VALUES (?, '', 'GST', ?, true)`, country, rate).Error)
+			require.NoError(t, db.Exec(`CREATE TABLE tax_rates (country_code text, region text, tax_name text, rate real, is_active boolean, inclusive boolean)`).Error)
+			require.NoError(t, db.Exec(`INSERT INTO tax_rates VALUES (?, '', 'GST', ?, true, true)`, country, rate).Error)
 			chefID := uuid.New()
 			require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, payout_country) VALUES (?,?,?)`, chefID.String(), uuid.NewString(), country).Error)
 			for _, body := range []string{`{"subtotal":100}`, `{"subtotal":100,"fulfillment":"pickup","country":"IN"}`} {
@@ -250,6 +250,9 @@ func TestQuoteEndpoint_KitchenTaxCountry(t *testing.T) {
 				require.Equal(t, country, out["taxCountry"])
 				require.Equal(t, rate, out["taxRatePercent"])
 				require.Equal(t, "GST", out["taxName"])
+				require.Contains(t, out, "subtotal")
+				require.Less(t, out["subtotal"].(float64), 100.0)
+				require.InDelta(t, out["total"], out["subtotal"].(float64)+out["effectiveDeliveryFee"].(float64)+out["platformFee"].(float64)+out["tax"].(float64), 0.001)
 				lines, err := json.Marshal(out["taxLines"])
 				require.NoError(t, err)
 				require.NotContains(t, string(lines), "CGST")

@@ -47,3 +47,41 @@ func TestStripeKeyIDNeverReturnsSecretMaterial(t *testing.T) {
 	client := &StripeClient{secretKey: "sk_test_do_not_expose"}
 	require.Empty(t, client.GetSecretKeyID())
 }
+
+func TestStripeRefundRejectsMissingIdempotencyBeforeSending(t *testing.T) {
+	calls := 0
+	client := &StripeClient{httpClient: &http.Client{Transport: stripeTransport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"re_test","status":"succeeded"}`)), Header: http.Header{}}, nil
+	})}}
+	_, err := client.CreateRefund(&StripeRefundRequest{PaymentIntent: "pi_test", Amount: 500})
+	require.Error(t, err)
+	require.Zero(t, calls)
+}
+
+func TestStripeRefundSendsStableKeyAndReversesBothShares(t *testing.T) {
+	for _, currency := range []string{"aud", "nzd"} {
+		t.Run(currency, func(t *testing.T) {
+			calls := 0
+			client := &StripeClient{httpClient: &http.Client{Transport: stripeTransport(func(r *http.Request) (*http.Response, error) {
+				calls++
+				require.Equal(t, "test-refund", r.Header.Get("Idempotency-Key"))
+				require.Equal(t, "/v1/refunds", r.URL.Path)
+				require.NoError(t, r.ParseForm())
+				require.Equal(t, "500", r.Form.Get("amount"))
+				require.Equal(t, "pi_test", r.Form.Get("payment_intent"))
+				require.Equal(t, "true", r.Form.Get("reverse_transfer"))
+				require.Equal(t, "true", r.Form.Get("refund_application_fee"))
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"re_test","status":"succeeded","amount":500,"currency":"` + currency + `"}`)), Header: http.Header{}}, nil
+			})}}
+			req := &StripeRefundRequest{PaymentIntent: "pi_test", Amount: 500, IdempotencyKey: "test-refund", ReverseTransfer: true, RefundApplicationFee: true}
+			for i := 0; i < 2; i++ {
+				result, err := client.CreateRefund(req)
+				require.NoError(t, err)
+				require.Equal(t, 500, result.Amount)
+				require.Equal(t, currency, result.Currency)
+			}
+			require.Equal(t, 2, calls)
+		})
+	}
+}
