@@ -28,11 +28,12 @@ RUN --mount=type=secret,id=npm_token \
     sed -i '/_authToken/d' .npmrc
 
 COPY apps/web ./apps/web
-# The bakery and dietary rules are dependency-free TS the web app aliases
+# The bakery, dietary and payment rules are dependency-free TS the web app aliases
 # straight from source, so the browser runs the rules the server enforces.
 # Source only — the rest of mobile-shared pulls in React Native.
 COPY packages/mobile-shared/src/bakery ./packages/mobile-shared/src/bakery
 COPY packages/mobile-shared/src/dietary ./packages/mobile-shared/src/dietary
+COPY packages/mobile-shared/src/payments ./packages/mobile-shared/src/payments
 WORKDIR /app/apps/web
 
 ARG VITE_API_URL
