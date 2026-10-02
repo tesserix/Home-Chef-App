@@ -364,7 +364,9 @@ export default function KitchenDetailsScreen() {
                   <Text style={[styles.verticalTitle, selected && styles.verticalTitleActive]}>
                     {t(v.title)}
                   </Text>
-                  <Text style={styles.verticalHint}>{t(v.hint)}</Text>
+                  <Text style={styles.verticalHint}>
+                    {t(v.value === 'kitchen' && !isIndia ? 'onboarding.verticalKitchenHintIntl' : v.hint)}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -399,7 +401,7 @@ export default function KitchenDetailsScreen() {
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
               label={t('onboarding.businessName')}
-              placeholder={t('onboarding.businessNamePlaceholder')}
+              placeholder={t(isIndia ? 'onboarding.businessNamePlaceholder' : 'onboarding.businessNamePlaceholderIntl')}
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
