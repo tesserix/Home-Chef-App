@@ -14,6 +14,7 @@ import { theme } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
+import { getMarket } from '../../lib/market';
 
 interface CachedOnboardingStatus {
   data: {
@@ -114,12 +115,16 @@ export default function ReviewScreen() {
     .map(([day]) => DAY_LABELS[day] ?? day)
     .join(', ');
 
+  const market = getMarket(kitchenDetails.country);
+  const isIndia = market.code === 'IN';
+
   const fullAddress = [
     kitchenDetails.addressLine1,
     kitchenDetails.addressLine2,
     kitchenDetails.city,
     kitchenDetails.state,
     kitchenDetails.postalCode,
+    market.name,
   ]
     .filter(Boolean)
     .join(', ');
@@ -142,6 +147,7 @@ export default function ReviewScreen() {
           city: kitchenDetails.city,
           state: kitchenDetails.state,
           postalCode: kitchenDetails.postalCode,
+          country: market.code,
         },
         prepTime: operations.prepTime,
         serviceRadius: operations.serviceRadius,
@@ -155,8 +161,14 @@ export default function ReviewScreen() {
         // chef_profiles so Wave 3 invoicing can print it and FoSCoS
         // validation can query against it. GSTIN is optional; backend
         // only validates length when provided.
-        fssaiLicenseNumber: documents.fssaiLicenseNumber,
-        gstin: documents.gstin || undefined,
+        // Only the kitchen country's own IDs: a draft switched from India keeps
+        // stale FSSAI/GSTIN values the API rejects for AU/NZ.
+        ...(isIndia
+          ? { fssaiLicenseNumber: documents.fssaiLicenseNumber, gstin: documents.gstin || undefined }
+          : {
+              foodRegistrationNumber: documents.foodRegistrationNumber.trim() || undefined,
+              businessNumber: documents.businessNumber.replace(/\s/g, '') || undefined,
+            }),
         // Kitchen compliance media — both photo and video URLs go in this one
         // array (the video is just another URL); backend persists them to
         // chef_profiles.kitchen_photos for admin review.
@@ -298,7 +310,10 @@ export default function ReviewScreen() {
       <Section title={t('onboarding.documents')} editRoute="/(onboarding)/documents">
         <RowItem label={t('onboarding.idProof')} value={idStatus} />
         <RowItem label={t('onboarding.addressProof')} value={addressStatus} />
-        <RowItem label={t('onboarding.fssaiLicense')} value={fssaiStatus} />
+        <RowItem
+          label={t(isIndia ? 'onboarding.fssaiLicense' : 'onboarding.foodRegCert')}
+          value={fssaiStatus}
+        />
         <RowItem label={t('onboarding.kitchenMediaLabel')} value={kitchenStatus} isLast />
       </Section>
 
@@ -325,7 +340,9 @@ export default function ReviewScreen() {
           value={
             payout.configured
               ? payout.summary
-              : 'Skipped — payouts stay on hold until bank details are added'
+              : market.payoutRail === 'stripe'
+                ? `Stripe (${market.currency}) — connect from More → Payout after submitting`
+                : 'Skipped — payouts stay on hold until bank details are added'
           }
           isLast
         />

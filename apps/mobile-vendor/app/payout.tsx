@@ -30,6 +30,8 @@ import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast, useAlert } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
+import { getMarket } from '../lib/market';
+import { StripeConnectCard } from '../components/vendor/StripeConnectCard';
 import {
   payoutBannerKind,
   payoutStatusChip,
@@ -270,6 +272,18 @@ export default function PayoutScreen() {
             )}
           </Pressable>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  const market = getMarket(data?.payoutCountry);
+  if (market.payoutRail === 'stripe') {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <CommandBar onBack={handleBack} />
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+          <StripeConnectCard country={market.code} currency={market.currency} />
+        </ScrollView>
       </SafeAreaView>
     );
   }

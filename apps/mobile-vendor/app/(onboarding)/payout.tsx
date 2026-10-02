@@ -24,6 +24,7 @@ import { getServerErrorMessage, multipartConfig } from '@homechef/mobile-shared/
 import { api } from '../../lib/api';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
+import { getMarket } from '../../lib/market';
 import {
   buildPayoutPayload,
   emptyPayoutForm,
@@ -38,7 +39,8 @@ import {
 export default function PayoutStep() {
   const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
-  const { updatePayout, setStep } = useVendorOnboardingStore();
+  const { updatePayout, setStep, kitchenDetails } = useVendorOnboardingStore();
+  const market = getMarket(kitchenDetails.country);
 
   const [values, setValues] = useState<PayoutFormValues>(emptyPayoutForm);
   const [errors, setErrors] = useState<PayoutValidationError[]>([]);
@@ -150,6 +152,36 @@ export default function PayoutStep() {
           getServerErrorMessage(err, 'Please check your details and try again.'),
         ),
     });
+  }
+
+  // Stripe needs the submitted kitchen's country, so AU/NZ connect from More → Payout.
+  if (market.payoutRail === 'stripe') {
+    return (
+      <OnboardingScaffold
+        onCancel={cancelOnboarding}
+        step={6}
+        total={7}
+        stepName="Payouts"
+        title="Where should we send your earnings?"
+        subtitle={`${market.name} kitchens are paid in ${market.currency} through Stripe.`}
+        primaryLabel="Continue"
+        onPrimary={() => {
+          setStep(7);
+          router.push('/(onboarding)/review');
+        }}
+        onBack={() => router.back()}
+        scrollRef={scrollRef}
+      >
+        <View style={styles.deferCard}>
+          <Text style={styles.deferTitle}>Connect Stripe after you submit</Text>
+          <Text style={styles.deferBody}>
+            Once your application is in, open More → Payout and connect your Stripe account.
+            Stripe verifies your ID and bank account. Until then, earnings from delivered orders
+            are held and payouts are paused.
+          </Text>
+        </View>
+      </OnboardingScaffold>
+    );
   }
 
   return (

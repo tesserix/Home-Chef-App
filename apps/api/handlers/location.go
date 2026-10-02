@@ -17,6 +17,7 @@ import (
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 // LocationHandler exposes the public, India-only reference-data API:
@@ -208,10 +209,10 @@ func (h *LocationHandler) SearchPostcodes(c *gin.Context) {
 // photonClient is reused across requests so connection pooling kicks in.
 var photonClient = &http.Client{Timeout: 4 * time.Second}
 
-const (
-	photonAPI       = "https://photon.komoot.io/api/"
-	photonUserAgent = "homechef-api (+https://fe3dr.com)"
-)
+// photonAPI is a var so tests can point it at a stub.
+var photonAPI = "https://photon.komoot.io/api/"
+
+const photonUserAgent = "homechef-api (+https://fe3dr.com)"
 
 // photonProperties is the subset of Photon's per-feature properties we
 // consume. Photon's response shape: see https://photon.komoot.io/
@@ -259,9 +260,9 @@ type AddressSuggestion struct {
 // AutocompleteAddresses powers the mobile address picker's autocomplete on top
 // of our seeded PIN registry.
 //
-// Provider order (India-only — HomeChef serves only India today, so surfacing
-// foreign matches would let a customer pick an unusable drop point):
-//  1. Mappls (MapmyIndia) when credentials are set — India-native, flat/house-
+// Suggestions are scoped to ?country= (a served market, default India) so a
+// foreign match can never become an unusable drop point. Provider order:
+//  1. Mappls (India only) (MapmyIndia) when credentials are set — India-native, flat/house-
 //     level accuracy + precise coordinates, so a real drop resolves to the RIGHT
 //     delivery distance/fee. This is why an accurate geocoder matters: the
 //     coordinates it returns are what the delivery-fee quote is priced on.
@@ -284,9 +285,14 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 	// was indistinguishable from a bad search term and left nothing in the
 	// logs to diagnose. attempted/failed is what separates the two below.
 	attempted, failed := 0, 0
+	country, ok := services.NormalizeKitchenCountry(c.Query("country"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported country", "code": "unsupported_market"})
+		return
+	}
 
 	// Primary: Mappls. One call returns flat-level matches with coordinates.
-	if mapplsConfigured() {
+	if country == "IN" && mapplsConfigured() {
 		attempted++
 		out, err := fetchMapplsSuggestions(c.Request.Context(), q)
 		switch {
@@ -308,7 +314,7 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 	photonErrors := 0
 	for _, variant := range variants {
 		attempted++
-		out, err := fetchPhotonSuggestions(c.Request.Context(), variant)
+		out, err := fetchPhotonSuggestions(c.Request.Context(), variant, country)
 		if err != nil {
 			failed++
 			photonErrors++
@@ -391,10 +397,10 @@ func photonQueryVariants(q string) []string {
 	return out
 }
 
-// fetchPhotonSuggestions queries Photon for one term and returns India-only,
+// fetchPhotonSuggestions queries Photon for one term and returns the country's
 // coordinate-bearing suggestions. Any transport/parse error is returned so the
 // caller can try the next variant.
-func fetchPhotonSuggestions(reqCtx context.Context, q string) ([]AddressSuggestion, error) {
+func fetchPhotonSuggestions(reqCtx context.Context, q, country string) ([]AddressSuggestion, error) {
 	pu, err := url.Parse(photonAPI)
 	if err != nil {
 		return nil, err
@@ -429,7 +435,7 @@ func fetchPhotonSuggestions(reqCtx context.Context, q string) ([]AddressSuggesti
 	out := make([]AddressSuggestion, 0, len(body.Features))
 	for _, f := range body.Features {
 		p := f.Properties
-		if !strings.EqualFold(p.CountryCode, "IN") { // India-only guard.
+		if !strings.EqualFold(p.CountryCode, country) {
 			continue
 		}
 		s := AddressSuggestion{

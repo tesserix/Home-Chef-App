@@ -665,6 +665,11 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			models.WalletSourceRefund, &order.ID,
 			fmt.Sprintf("Refund for order %s: %s", order.OrderNumber, req.Reason),
 			refundWalletIdempotencyKey("refund", order.ID, priorRefunded), nil)
+		if errors.Is(werr, services.ErrWalletCurrencyMismatch) {
+			releaseReservation()
+			c.JSON(http.StatusBadRequest, gin.H{"error": "This order can only be refunded to the original payment method, not the wallet"})
+			return
+		}
 		if werr != nil {
 			log.Printf("refund-to-wallet failed for order %s: %v", order.OrderNumber, werr)
 			releaseReservation()

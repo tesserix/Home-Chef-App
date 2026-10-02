@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -33,6 +34,10 @@ func GetOrCreateWallet(db *gorm.DB, userID uuid.UUID) (*models.Wallet, error) {
 // ErrTestOrderNoWallet is returned when a test-partition order tries to use the
 // wallet as a payment source or a refund destination.
 var ErrTestOrderNoWallet = errors.New("wallet is not available for test-mode orders")
+
+// ErrWalletCurrencyMismatch is returned when an order's money would land in a
+// wallet held in another currency; those refunds go back to the source instead.
+var ErrWalletCurrencyMismatch = errors.New("wallet currency does not match the order currency")
 
 // CreditWallet adds store credit (refund-to-wallet, referral, promo, cashback,
 // admin top-up). Amount must be positive. Idempotent on idempotencyKey: a repeat
@@ -65,6 +70,10 @@ func applyWalletTxn(db *gorm.DB, userID uuid.UUID, amount float64, txnType model
 	// each of the many callers.
 	if orderID != nil && OrderIsTestMode(db, *orderID) {
 		return nil, ErrTestOrderNoWallet
+	}
+	orderCurrency := ""
+	if orderID != nil {
+		db.Model(&models.Order{}).Where("id = ?", *orderID).Select("currency").Scan(&orderCurrency)
 	}
 	// Every entry carries a non-empty unique key. Callers pass a semantic key
 	// (e.g. "refund:<orderID>") for dedup; absent one we mint a UUID so the
@@ -99,6 +108,9 @@ func applyWalletTxn(db *gorm.DB, userID uuid.UUID, amount float64, txnType model
 		}
 		if err := reread.First(w, "id = ?", w.ID).Error; err != nil {
 			return err
+		}
+		if orderCurrency != "" && !strings.EqualFold(orderCurrency, w.Currency) {
+			return ErrWalletCurrencyMismatch
 		}
 
 		balancePaise := ToPaise(w.Balance)

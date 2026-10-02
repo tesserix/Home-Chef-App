@@ -5,3 +5,4 @@ export * from './subscription-meal-day';
 export * from './subscription-summary-line';
 export * from './order-datetime';
 export * from './meal-plan-refund-summary';
+export * from '../validation/phone';

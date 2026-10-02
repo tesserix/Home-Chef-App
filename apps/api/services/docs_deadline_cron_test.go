@@ -17,6 +17,8 @@ import (
 	"github.com/homechef/api/models"
 )
 
+var indiaDocs = []string{string(models.DocIDProof), string(models.DocAddressProof), string(models.DocFSSAILicense)}
+
 func setupDocsDeadlineDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
@@ -24,7 +26,7 @@ func setupDocsDeadlineDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (
 		id text PRIMARY KEY, user_id text, business_name text DEFAULT '',
 		is_verified integer DEFAULT 0, is_active integer DEFAULT 1,
-		accepting_orders integer DEFAULT 0, payout_method text DEFAULT '',
+		accepting_orders integer DEFAULT 0, payout_method text DEFAULT '', payout_country text DEFAULT 'IN',
 		onboarded_at datetime, docs_warning_sent_at datetime, payout_reminder_sent_at datetime,
 		created_at datetime, updated_at datetime
 	)`).Error)
@@ -118,7 +120,7 @@ func TestDocsDeadline_WithdrawsAfterThirtyDays(t *testing.T) {
 
 func TestPayoutReminder_NudgesOnceAfterDay25(t *testing.T) {
 	db := setupDocsDeadlineDB(t)
-	seedDeadlineChef(t, db, 26*24*time.Hour, requiredDocTypes) // docs done, payout not
+	seedDeadlineChef(t, db, 26*24*time.Hour, indiaDocs) // docs done, payout not
 
 	nudged := sweepPayoutReminders(db, time.Now())
 	require.Equal(t, 1, nudged)
@@ -132,7 +134,7 @@ func TestPayoutReminder_NudgesOnceAfterDay25(t *testing.T) {
 
 func TestPayoutReminder_SkipsChefsWithPayoutMethod(t *testing.T) {
 	db := setupDocsDeadlineDB(t)
-	chefID := seedDeadlineChef(t, db, 26*24*time.Hour, requiredDocTypes)
+	chefID := seedDeadlineChef(t, db, 26*24*time.Hour, indiaDocs)
 	require.NoError(t, db.Exec(`UPDATE chef_profiles SET payout_method = 'bank_transfer' WHERE id = ?`, chefID.String()).Error)
 
 	require.Zero(t, sweepPayoutReminders(db, time.Now()))
@@ -140,7 +142,7 @@ func TestPayoutReminder_SkipsChefsWithPayoutMethod(t *testing.T) {
 
 func TestDocsDeadline_CompleteDocsAreLeftAlone(t *testing.T) {
 	db := setupDocsDeadlineDB(t)
-	chefID := seedDeadlineChef(t, db, 31*24*time.Hour, requiredDocTypes) // docs in, even past day 30
+	chefID := seedDeadlineChef(t, db, 31*24*time.Hour, indiaDocs) // docs in, even past day 30
 
 	warned, withdrawn := sweepDocsDeadlines(db, time.Now())
 	require.Zero(t, warned)
@@ -149,4 +151,21 @@ func TestDocsDeadline_CompleteDocsAreLeftAlone(t *testing.T) {
 	var status string
 	db.Raw(`SELECT status FROM approval_requests WHERE chef_id = ?`, chefID.String()).Scan(&status)
 	require.Equal(t, string(models.ApprovalPending), status, "docs-complete application stays in the admin queue")
+}
+
+func TestChefDocsComplete_FollowsKitchenCountry(t *testing.T) {
+	db := setupDocsDeadlineDB(t)
+	au := seedDeadlineChef(t, db, time.Hour, []string{
+		string(models.DocIDProof), string(models.DocAddressProof), string(models.DocFoodSafetyCert)})
+	require.NoError(t, db.Exec(`UPDATE chef_profiles SET payout_country = 'AU' WHERE id = ?`, au.String()).Error)
+	require.True(t, ChefDocsComplete(db, au), "council certificate stands in for FSSAI in AU")
+
+	auWithFSSAI := seedDeadlineChef(t, db, time.Hour, []string{
+		string(models.DocIDProof), string(models.DocAddressProof), string(models.DocFSSAILicense)})
+	require.NoError(t, db.Exec(`UPDATE chef_profiles SET payout_country = 'AU' WHERE id = ?`, auWithFSSAI.String()).Error)
+	require.False(t, ChefDocsComplete(db, auWithFSSAI), "an FSSAI licence is not an Australian registration")
+
+	in := seedDeadlineChef(t, db, time.Hour, []string{
+		string(models.DocIDProof), string(models.DocAddressProof), string(models.DocFoodSafetyCert)})
+	require.False(t, ChefDocsComplete(db, in), "Indian kitchens still need FSSAI")
 }

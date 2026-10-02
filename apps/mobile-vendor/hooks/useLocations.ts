@@ -115,7 +115,11 @@ export function useCities(stateCode: string | null): UseQueryResult<City[]> {
 //
 // The debounce keeps us from firing a request on every keystroke; 250ms
 // is a comfortable typing pause without feeling laggy on a fast network.
-export function usePostcodeSearch(query: string): UseQueryResult<PostcodeSearchResult[]> {
+// The PIN registry is seeded for India only, so other countries pass enabled=false.
+export function usePostcodeSearch(
+  query: string,
+  enabled = true,
+): UseQueryResult<PostcodeSearchResult[]> {
   const trimmed = query.trim();
   const [debounced, setDebounced] = useState(trimmed);
 
@@ -133,7 +137,7 @@ export function usePostcodeSearch(query: string): UseQueryResult<PostcodeSearchR
       );
       return r.data.data;
     },
-    enabled: debounced.length >= 2,
+    enabled: enabled && debounced.length >= 2,
     staleTime: 60_000, // PIN data is stable; brief cache is fine
   });
 }
@@ -146,7 +150,10 @@ export function usePostcodeSearch(query: string): UseQueryResult<PostcodeSearchR
 // Used in tandem with usePostcodeSearch — the seeded PIN registry
 // covers the high-traffic common case (chef types a known area name),
 // while Photon handles every other Indian street address.
-export function useAddressAutocomplete(query: string): UseQueryResult<AddressSuggestion[]> {
+export function useAddressAutocomplete(
+  query: string,
+  country: string = COUNTRY_CODE,
+): UseQueryResult<AddressSuggestion[]> {
   const trimmed = query.trim();
   const [debounced, setDebounced] = useState(trimmed);
 
@@ -156,11 +163,11 @@ export function useAddressAutocomplete(query: string): UseQueryResult<AddressSug
   }, [trimmed]);
 
   return useQuery<AddressSuggestion[]>({
-    queryKey: ['locations', 'autocomplete', debounced],
+    queryKey: ['locations', 'autocomplete', country, debounced],
     queryFn: async () => {
       if (debounced.length < 3) return [];
       const r = await api.get<Envelope<AddressSuggestion[]>>(
-        `/locations/autocomplete?q=${encodeURIComponent(debounced)}`,
+        `/locations/autocomplete?q=${encodeURIComponent(debounced)}&country=${country}`,
       );
       return r.data.data;
     },

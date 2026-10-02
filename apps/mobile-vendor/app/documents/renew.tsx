@@ -22,6 +22,8 @@ import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { describeDocumentType } from '../../hooks/useExpiringDocuments';
 import { ocrDocument } from '../../lib/ocr';
+import { useKitchenMarket } from '../../hooks/useKitchenMarket';
+import type { Market } from '../../lib/market';
 import { FssaiOfferCard } from '../../components/vendor/FssaiOfferCard';
 
 // Mirrors apps/api/models/document.go ChefDocumentResponse — the
@@ -85,11 +87,24 @@ function useChefDocuments() {
 // What onboarding asks every chef for. A chef who skipped the step lands here
 // with nothing on file, so the screen has to show what is still owed — not an
 // empty list, which reads as "nothing to do".
-const EXPECTED_DOCS: { type: string; why: string }[] = [
-  { type: 'id_proof', why: 'Aadhaar, PAN or passport — proves who you are.' },
-  { type: 'address_proof', why: 'Shows where your kitchen operates from.' },
-  { type: 'fssai_license', why: 'Required by law before your menu can go live.' },
-];
+function expectedDocs(market: Market): { type: string; why: string }[] {
+  const isIndia = market.code === 'IN';
+  return [
+    {
+      type: 'id_proof',
+      why: isIndia
+        ? 'Aadhaar, PAN or passport — proves who you are.'
+        : "Passport or driver's licence — proves who you are.",
+    },
+    { type: 'address_proof', why: 'Shows where your kitchen operates from.' },
+    {
+      type: market.licenceDocType,
+      why: isIndia
+        ? 'Required by law before your menu can go live.'
+        : 'Your council food business registration — required before your menu can go live.',
+    },
+  ];
+}
 
 /** An upload either replaces a document on file or adds one that is missing.
  *  Same picker, same expiry prompt — only the endpoint differs. */
@@ -171,6 +186,7 @@ function expiryHint(doc: ChefDocument): { text: string; isUrgent: boolean } | nu
 export default function DocumentsRenewScreen() {
   const { showAlert } = useAlert();
   const { data: docs, isLoading, isError, refetch } = useChefDocuments();
+  const market = useKitchenMarket();
   const upload = useUploadDocument();
   const { show: showToast } = useToast();
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -187,7 +203,7 @@ export default function DocumentsRenewScreen() {
 
   const onFile = docs ?? [];
   // What onboarding wanted but never got. Drives the "still needed" section.
-  const missing = EXPECTED_DOCS.filter((e) => !onFile.some((d) => d.type === e.type));
+  const missing = (market ? expectedDocs(market) : []).filter((e) => !onFile.some((d) => d.type === e.type));
 
   // Submit an upload (optionally with an expiry date) + surface the result.
   async function submitUpload(
@@ -288,6 +304,7 @@ export default function DocumentsRenewScreen() {
       // stale date. Everything else submits immediately.
       const carriesExpiry =
         target.type === 'fssai_license' ||
+        target.type === 'food_safety_cert' ||
         (target.mode === 'replace' && target.expiryDate != null);
       if (carriesExpiry) {
         // Try OCR on image uploads to pre-fill the expiry — best-effort, the

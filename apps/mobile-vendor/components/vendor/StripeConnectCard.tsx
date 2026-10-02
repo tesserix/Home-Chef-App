@@ -1,41 +1,35 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { CheckCircle2, ChevronDown, ChevronUp, Globe, TriangleAlert } from 'lucide-react-native';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useAlert } from '@homechef/mobile-shared/ui';
 import {
-  STRIPE_COUNTRIES,
   useCreateStripeAccount,
   useRefreshStripeOnboardingLink,
-  useSetPaymentProvider,
   useStripeConnectStatus,
 } from '../../hooks/useStripeConnect';
 
-// International payouts via Stripe Connect — the mobile counterpart of the
-// vendor portal's StripeConnectCard. Collapsed by default: most chefs are paid
-// into an Indian bank account through Cashfree and never need this, so it sits
-// under a disclosure row rather than competing with the bank-details form.
+// Stripe Connect payouts for AU/NZ kitchens. Stripe must hold an account in the
+// kitchen's registered country, so there is no country picker and no switch back
+// to Cashfree (which only pays Indian bank accounts).
 //
 // KYC happens on Stripe's hosted pages. We open them in the system browser
 // (not a WebView) because Stripe blocks embedded webviews for identity
 // verification, and poll the status afterwards since the redirect lands on the
 // web portal, never back in the app.
 
-export function StripeConnectCard() {
+export function StripeConnectCard({ country, currency }: { country: string; currency: string }) {
   const { showAlert } = useAlert();
-  const [open, setOpen] = useState(false);
-  const [country, setCountry] = useState('US');
+  const [open, setOpen] = useState(true);
 
   const { data, isLoading, refetch } = useStripeConnectStatus(open);
   const createAccount = useCreateStripeAccount();
   const refreshLink = useRefreshStripeOnboardingLink();
-  const setProvider = useSetPaymentProvider();
 
   const connected = data?.connected ?? false;
   const ready = Boolean(data?.connected && data.chargesEnabled && data.payoutsEnabled);
-  const activeProvider = data?.paymentProvider ?? 'cashfree';
   const busy = createAccount.isPending || refreshLink.isPending;
 
   async function openOnboarding(url: string): Promise<void> {
@@ -67,26 +61,6 @@ export function StripeConnectCard() {
     });
   }
 
-  function onSwitchProvider(): void {
-    const next = activeProvider === 'stripe' ? 'cashfree' : 'stripe';
-    showAlert(
-      next === 'stripe' ? 'Get paid through Stripe?' : 'Get paid through Cashfree?',
-      next === 'stripe'
-        ? 'Future payouts will settle to your Stripe account instead of your Indian bank account.'
-        : 'Future payouts will settle to your Indian bank account instead of Stripe.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Switch',
-          onPress: () =>
-            setProvider.mutate(next, {
-              onError: (err) =>
-                showAlert('Could not switch', getServerErrorMessage(err, 'Please try again.')),
-            }),
-        },
-      ],
-    );
-  }
 
   return (
     <View style={styles.card}>
@@ -94,16 +68,16 @@ export function StripeConnectCard() {
         onPress={() => setOpen((v) => !v)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        accessibilityLabel={open ? 'Hide international payouts' : 'Show international payouts'}
+        accessibilityLabel={open ? 'Hide Stripe payouts' : 'Show Stripe payouts'}
       >
         {({ pressed }) => (
           <View style={[styles.headerRow, pressed && { opacity: 0.7 }]}>
             <View style={styles.headerLeft}>
               <Globe size={18} color={theme.colors.ink.soft} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.title}>International payouts</Text>
+                <Text style={styles.title}>Stripe payouts</Text>
                 <Text style={styles.caption}>
-                  Paid outside India? Get settled in your local currency via Stripe.
+                  Earnings settle to your bank in {currency} through Stripe.
                 </Text>
               </View>
             </View>
@@ -133,44 +107,9 @@ export function StripeConnectCard() {
             {!connected ? (
               <>
                 <Text style={styles.para}>
-                  Stripe handles identity and bank verification on their own pages. Pick the country
-                  your bank account is in, then follow the steps.
+                  Stripe verifies your identity and bank account on their own pages. Have your
+                  photo ID and bank details ready.
                 </Text>
-                <Text style={styles.fieldLabel}>Country</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.countryRow}
-                >
-                  {STRIPE_COUNTRIES.map((c) => (
-                    <Pressable
-                      key={c.code}
-                      onPress={() => setCountry(c.code)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: country === c.code }}
-                      accessibilityLabel={c.name}
-                    >
-                      {({ pressed }) => (
-                        <View
-                          style={[
-                            styles.chip,
-                            country === c.code && styles.chipSelected,
-                            pressed && { opacity: 0.8 },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.chipText,
-                              country === c.code && styles.chipTextSelected,
-                            ]}
-                          >
-                            {c.name}
-                          </Text>
-                        </View>
-                      )}
-                    </Pressable>
-                  ))}
-                </ScrollView>
                 <PrimaryButton
                   label={busy ? 'Opening Stripe…' : 'Set up Stripe payouts'}
                   disabled={busy}
@@ -206,29 +145,6 @@ export function StripeConnectCard() {
                   />
                 ) : null}
 
-                {/* Provider switch — only offered once Stripe can actually pay
-                    out, so a chef can't strand their earnings on an account
-                    Stripe has not cleared. */}
-                {ready ? (
-                  <>
-                    <View style={styles.providerRow}>
-                      <Text style={styles.fieldLabel}>Payouts settle via</Text>
-                      <Text style={styles.providerValue}>
-                        {activeProvider === 'stripe' ? 'Stripe' : 'Cashfree'}
-                      </Text>
-                    </View>
-                    <SecondaryButton
-                      label={
-                        activeProvider === 'stripe'
-                          ? 'Switch back to Cashfree'
-                          : 'Use Stripe for payouts'
-                      }
-                      disabled={setProvider.isPending}
-                      loading={setProvider.isPending}
-                      onPress={onSwitchProvider}
-                    />
-                  </>
-                ) : null}
               </>
             )}
           </View>
@@ -261,28 +177,6 @@ function PrimaryButton({
   );
 }
 
-function SecondaryButton({
-  label,
-  onPress,
-  disabled,
-  loading,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-}) {
-  return (
-    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label}>
-      {({ pressed }) => (
-        <View style={[styles.secondaryBtn, pressed && { opacity: 0.85 }]}>
-          {loading ? <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} /> : null}
-          <Text style={styles.secondaryBtnText}>{label}</Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}
 
 const styles = StyleSheet.create({
   card: {
@@ -299,19 +193,6 @@ const styles = StyleSheet.create({
   loading: { paddingVertical: theme.spacing[4], alignItems: 'center' },
   body: { gap: theme.spacing[3], paddingTop: theme.spacing[2] },
   para: { fontFamily: 'Inter', fontSize: 13, lineHeight: 19, color: theme.colors.ink.soft },
-  fieldLabel: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.ink.DEFAULT },
-  countryRow: { flexDirection: 'row', gap: theme.spacing[2], paddingVertical: 2 },
-  chip: {
-    minHeight: 36,
-    justifyContent: 'center',
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.mist.strong,
-    paddingHorizontal: theme.spacing[3],
-  },
-  chipSelected: { backgroundColor: theme.colors.ink.DEFAULT, borderColor: theme.colors.ink.DEFAULT },
-  chipText: { fontFamily: 'Inter-Medium', fontSize: 13, color: theme.colors.ink.DEFAULT },
-  chipTextSelected: { color: theme.colors.paper },
   warning: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -343,17 +224,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   statusPendingText: { fontFamily: 'Inter-SemiBold', fontSize: 12, color: theme.colors.ink.DEFAULT },
-  providerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 32,
-  },
-  providerValue: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 14,
-    color: theme.colors.ink.DEFAULT,
-  },
   primaryBtn: {
     minHeight: 48,
     flexDirection: 'row',
@@ -366,16 +236,4 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.paper },
   btnDisabled: { backgroundColor: theme.colors.mist.strong },
-  secondaryBtn: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.mist.strong,
-    paddingHorizontal: theme.spacing[5],
-  },
-  secondaryBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.ink.DEFAULT },
 });

@@ -1,8 +1,7 @@
 // packages/mobile-shared/src/validation/phone.ts
 //
-// Country-aware phone rules. HomeChef is India-only today, but the platform is
-// built to go multi-country — and every country has its own national-number
-// length (India 10, US 10, UK 10–11, …). Centralise the rule so the input can
+// Country-aware phone rules. Every country has its own national-number length
+// (India 10, Australia 9, New Zealand 8–10). Centralise the rule so the input can
 // HARD-CAP typing at the country's length (you physically can't enter an 11th
 // digit for India) and validation stays in one place instead of a regex copied
 // across screens.
@@ -23,6 +22,9 @@ export interface PhoneRule {
 // Add a country here to support it — nothing else needs to change.
 const PHONE_RULES: Record<string, PhoneRule> = {
   IN: { country: 'IN', dialCode: '+91', length: 10, pattern: /^[6-9]\d{9}$/, example: '9876543210' },
+  AU: { country: 'AU', dialCode: '+61', length: 9, pattern: /^4\d{8}$/, example: '412345678' },
+  // NZ mobiles vary in length; `length` is the cap, the pattern the real rule.
+  NZ: { country: 'NZ', dialCode: '+64', length: 10, pattern: /^2\d{7,9}$/, example: '211234567' },
 };
 
 export const DEFAULT_PHONE_COUNTRY = 'IN';
