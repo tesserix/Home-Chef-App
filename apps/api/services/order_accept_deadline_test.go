@@ -236,3 +236,29 @@ func TestAcceptRemindersOwed_AdvanceOrder_NoneUntilTheDayOf(t *testing.T) {
 	require.Equal(t, 1, AcceptRemindersOwed(deadline, created, ist(2026, 7, 21, 20, 5), 0),
 		"the first nudge lands at 20:00 tomorrow — 2h before close")
 }
+
+func TestDeadlineUsesKitchenCountryCalendar(t *testing.T) {
+	for _, tc := range []struct{ name, country, zone, created string }{
+		{"NZ early morning", "NZ", "Pacific/Auckland", "2026-10-02T16:08:15Z"},
+		{"NZ summer", "NZ", "Pacific/Auckland", "2026-01-10T22:00:00Z"},
+		{"NZ winter", "NZ", "Pacific/Auckland", "2026-07-10T22:00:00Z"},
+		{"Australia", "AU", "Australia/Sydney", "2026-10-02T23:00:00Z"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, chefID := setupDeadlineDB(t)
+			require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (id text PRIMARY KEY,payout_country text)`).Error)
+			require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id,payout_country) VALUES (?,?)`, chefID, tc.country).Error)
+			loc, err := time.LoadLocation(tc.zone)
+			require.NoError(t, err)
+			created, err := time.Parse(time.RFC3339, tc.created)
+			require.NoError(t, err)
+			local := created.In(loc)
+			seedSchedule(t, db, chefID, int(local.Weekday()), "21:00")
+			d := ResolveAcceptDeadline(db, &models.Order{ChefID: chefID, CreatedAt: created})
+			require.Equal(t, "kitchen_close", d.Source)
+			require.Equal(t, "lunch", d.Slot)
+			require.True(t, d.At.Equal(time.Date(local.Year(), local.Month(), local.Day(), 21, 0, 0, 0, loc)))
+			require.True(t, d.At.After(created), "an open local day must not be treated as already closed")
+		})
+	}
+}

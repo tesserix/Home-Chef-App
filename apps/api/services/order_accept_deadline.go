@@ -69,10 +69,10 @@ type AcceptDeadline struct {
 //
 // DeliverySlot is authoritative when the customer picked a scheduled window. An
 // ASAP order has none, so it is inferred from the hour it is FOR: anything at or
-// before 16:00 IST is lunch, later is dinner. The boundary is late on purpose —
+// before 16:00 kitchen-local time is lunch, later is dinner. The boundary is late on purpose —
 // misfiling a 15:00 order as dinner gives the chef longer, which is the harmless
 // direction.
-func inferSlot(order *models.Order) string {
+func inferSlot(order *models.Order, loc *time.Location) string {
 	if s := strings.ToLower(strings.TrimSpace(order.DeliverySlot)); s == "lunch" || s == "dinner" {
 		return s
 	}
@@ -80,24 +80,30 @@ func inferSlot(order *models.Order) string {
 	if order.ScheduledFor != nil {
 		at = *order.ScheduledFor
 	}
-	if at.In(istLoc).Hour() <= 16 {
+	if at.In(loc).Hour() <= 16 {
 		return string(models.MealSlotLunch)
 	}
 	return string(models.MealSlotDinner)
 }
 
-// serviceDay is the IST calendar day the order is FOR — the scheduled day when
+// serviceDay is the kitchen-local calendar day the order is FOR — the scheduled day when
 // there is one, else the day it was placed. Using the placed day for an advance
 // order is exactly the bug this file exists to prevent.
-func serviceDay(order *models.Order) time.Time {
+func serviceDay(order *models.Order, loc *time.Location) time.Time {
+	at := order.CreatedAt
 	if order.ScheduledFor != nil {
-		return CapacityDay(*order.ScheduledFor)
+		at = *order.ScheduledFor
 	}
-	return CapacityDay(order.CreatedAt)
+	local := at.In(loc)
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
 }
 
 // atIST puts an "HH:MM" IST wall-clock time onto a calendar day.
 func atIST(day time.Time, hhmm string) (time.Time, bool) {
+	return atLocalTime(day, hhmm, istLoc)
+}
+
+func atLocalTime(day time.Time, hhmm string, loc *time.Location) (time.Time, bool) {
 	hhmm = strings.TrimSpace(hhmm)
 	if hhmm == "" {
 		return time.Time{}, false
@@ -109,8 +115,8 @@ func atIST(day time.Time, hhmm string) (time.Time, bool) {
 	if h < 0 || h > 23 || m < 0 || m > 59 {
 		return time.Time{}, false
 	}
-	d := day.In(istLoc)
-	return time.Date(d.Year(), d.Month(), d.Day(), h, m, 0, 0, istLoc), true
+	d := day.In(loc)
+	return time.Date(d.Year(), d.Month(), d.Day(), h, m, 0, 0, loc), true
 }
 
 // ResolveAcceptDeadline works out when `order` stops being acceptable, reading
@@ -118,8 +124,11 @@ func atIST(day time.Time, hhmm string) (time.Time, bool) {
 // to the platform default, because "no deadline" means the customer's money sits
 // captured forever, which is the hole this closes.
 func ResolveAcceptDeadline(db *gorm.DB, order *models.Order) AcceptDeadline {
-	slot := inferSlot(order)
-	day := serviceDay(order)
+	var chef struct{ PayoutCountry string }
+	db.Table("chef_profiles").Select("payout_country").Where("id = ?", order.ChefID).Take(&chef)
+	loc := FiscalCalendarFor(chef.PayoutCountry).Loc
+	slot := inferSlot(order, loc)
+	day := serviceDay(order, loc)
 
 	// 1. The chef's stated end of THIS meal's service.
 	var cap models.ChefCapacitySettings
@@ -128,16 +137,16 @@ func ResolveAcceptDeadline(db *gorm.DB, order *models.Order) AcceptDeadline {
 		if slot == string(models.MealSlotDinner) {
 			end = cap.DinnerSlotEnd
 		}
-		if at, ok := atIST(day, end); ok {
+		if at, ok := atLocalTime(day, end, loc); ok {
 			return AcceptDeadline{At: at, Slot: slot, Source: "slot_end"}
 		}
 	}
 
 	// 2. When the kitchen closes on that weekday.
 	var sched models.ChefSchedule
-	if err := db.Where("chef_id = ? AND day_of_week = ?", order.ChefID, int(day.In(istLoc).Weekday())).
+	if err := db.Where("chef_id = ? AND day_of_week = ?", order.ChefID, int(day.In(loc).Weekday())).
 		First(&sched).Error; err == nil && !sched.IsClosed {
-		if at, ok := atIST(day, sched.CloseTime); ok {
+		if at, ok := atLocalTime(day, sched.CloseTime, loc); ok {
 			return AcceptDeadline{At: at, Slot: slot, Source: "kitchen_close"}
 		}
 	}
@@ -147,7 +156,7 @@ func ResolveAcceptDeadline(db *gorm.DB, order *models.Order) AcceptDeadline {
 	if slot == string(models.MealSlotDinner) {
 		def = defaultDinnerCloseIST
 	}
-	at, _ := atIST(day, def)
+	at, _ := atLocalTime(day, def, loc)
 	return AcceptDeadline{At: at, Slot: slot, Source: "platform_default"}
 }
 
