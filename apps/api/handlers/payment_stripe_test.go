@@ -12,9 +12,10 @@ import (
 )
 
 type stripeGatewayStub struct {
-	intent  *services.StripePaymentIntent
-	created []*services.StripePaymentIntentRequest
-	onFetch func()
+	intent      *services.StripePaymentIntent
+	created     []*services.StripePaymentIntentRequest
+	onFetch     func()
+	settlements []string
 }
 
 func (s *stripeGatewayStub) CreatePaymentIntent(_ context.Context, req *services.StripePaymentIntentRequest) (*services.StripePaymentIntent, error) {
@@ -25,6 +26,11 @@ func (s *stripeGatewayStub) FetchPaymentIntent(context.Context, string) (*servic
 	if s.onFetch != nil {
 		s.onFetch()
 	}
+	return s.intent, nil
+}
+func (s *stripeGatewayStub) SetPaymentIntentSettlement(_ context.Context, id, account string) (*services.StripePaymentIntent, error) {
+	s.settlements = append(s.settlements, id+":"+account)
+	s.intent.OnBehalfOf = account
 	return s.intent, nil
 }
 func (s *stripeGatewayStub) GetPublishableKey() string { return "pk_test_fixture" }
@@ -207,6 +213,39 @@ func TestStripeApplicationFeePreservesSharedCommissionBasis(t *testing.T) {
 			require.Equal(t, 12000, stub.created[0].Amount)
 			require.Equal(t, 1100, stub.created[0].ApplicationFeeCents, "vendor gets 100 + 10 food GST + 5 tip - 6 commission = 109; platform holds remainder")
 			require.Equal(t, "acct_vendor", stub.created[0].DestinationAccount)
+		})
+	}
+}
+
+func TestStripeRetryRepairsUnconfirmedDestinationSettlement(t *testing.T) {
+	for _, tc := range []struct {
+		name, status, settlement string
+		wantCode, updates        int
+	}{
+		{"unconfirmed", "requires_payment_method", "", 200, 1},
+		{"awaiting confirmation", "requires_confirmation", "", 200, 1},
+		{"already correct", "requires_payment_method", "acct_nz_vendor", 200, 0},
+		{"wrong merchant", "requires_payment_method", "acct_other", 502, 0},
+		{"processing", "processing", "", 200, 0},
+		{"requires action", "requires_action", "", 200, 0},
+		{"succeeded", "succeeded", "", 200, 0},
+		{"canceled", "canceled", "", 409, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupPayDB(t)
+			customer := payUser(t, db, "customer")
+			chef := payChef(t, db, payUser(t, db, "chef"))
+			orderID := payOrder(t, db, customer, chef, "pending", 50, "", "")
+			require.NoError(t, db.Exec("UPDATE chef_profiles SET payout_country='NZ', stripe_account_id='acct_nz_vendor', stripe_charges_enabled=1 WHERE id=?", chef).Error)
+			require.NoError(t, db.Exec("UPDATE orders SET currency='NZD', mode='test', stripe_payment_intent_id='pi_saved', payment_provider='stripe' WHERE id=?", orderID).Error)
+			stub := &stripeGatewayStub{intent: &services.StripePaymentIntent{ID: "pi_saved", Amount: 5000, Currency: "nzd", Status: tc.status, OnBehalfOf: tc.settlement, ClientSecret: "fixture"}}
+			response := callPay(customer, http.MethodPost, "/payments/order/"+orderID.String()+"/create", func(r *gin.Engine, h *PaymentHandler) { h.stripe = stub; regCreate(r, h) }, nil)
+			require.Equal(t, tc.wantCode, response.Code, response.Body.String())
+			require.Len(t, stub.settlements, tc.updates)
+			if tc.updates > 0 {
+				require.Equal(t, "pi_saved:acct_nz_vendor", stub.settlements[0])
+			}
+			require.Empty(t, stub.created)
 		})
 	}
 }

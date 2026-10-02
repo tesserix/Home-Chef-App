@@ -245,6 +245,7 @@ type StripePaymentIntentRequest struct {
 }
 
 type StripePaymentIntent struct {
+	OnBehalfOf     string `json:"on_behalf_of"`
 	Livemode       bool   `json:"livemode"`
 	ID             string `json:"id"`
 	Object         string `json:"object"`
@@ -273,6 +274,7 @@ func (c *StripeClient) CreatePaymentIntent(ctx context.Context, req *StripePayme
 	}
 	if req.DestinationAccount != "" {
 		form.Set("transfer_data[destination]", req.DestinationAccount)
+		form.Set("on_behalf_of", req.DestinationAccount)
 	}
 	if req.ApplicationFeeCents > 0 {
 		form.Set("application_fee_amount", strconv.Itoa(req.ApplicationFeeCents))
@@ -300,6 +302,23 @@ func (c *StripeClient) FetchPaymentIntent(ctx context.Context, id string) (*Stri
 	var result StripePaymentIntent
 	if err := json.Unmarshal(resp, &result); err != nil {
 		return nil, fmt.Errorf("failed to parse payment intent: %w", err)
+	}
+	return &result, nil
+}
+
+// SetPaymentIntentSettlement repairs an unconfirmed destination charge in place.
+func (c *StripeClient) SetPaymentIntentSettlement(ctx context.Context, id, account string) (*StripePaymentIntent, error) {
+	if id == "" || account == "" {
+		return nil, fmt.Errorf("payment intent and settlement account are required")
+	}
+	form := url.Values{"on_behalf_of": {account}}
+	resp, err := c.doFormRequestContext(ctx, "POST", "/payment_intents/"+url.PathEscape(id), form, "fe3dr-settlement-"+id+"-"+account)
+	if err != nil {
+		return nil, err
+	}
+	var result StripePaymentIntent
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("parse payment intent: %w", err)
 	}
 	return &result, nil
 }

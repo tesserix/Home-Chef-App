@@ -30,6 +30,7 @@ import (
 type stripePayments interface {
 	CreatePaymentIntent(context.Context, *services.StripePaymentIntentRequest) (*services.StripePaymentIntent, error)
 	FetchPaymentIntent(context.Context, string) (*services.StripePaymentIntent, error)
+	SetPaymentIntentSettlement(context.Context, string, string) (*services.StripePaymentIntent, error)
 	GetPublishableKey() string
 	IsTestMode() bool
 }
@@ -284,6 +285,23 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 	if pi.Status == "canceled" {
 		c.JSON(http.StatusConflict, gin.H{"error": "This payment was canceled; create a new order"})
 		return
+	}
+	if order.StripePaymentIntentID != "" && (pi.Status == "requires_payment_method" || pi.Status == "requires_confirmation") {
+		if pi.OnBehalfOf != "" && pi.OnBehalfOf != order.Chef.StripeAccountID {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Stripe settlement account does not match the order"})
+			return
+		}
+		if pi.OnBehalfOf == "" {
+			pi, err = st.SetPaymentIntentSettlement(c.Request.Context(), pi.ID, order.Chef.StripeAccountID)
+			if err != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"error": "Payment setup could not be refreshed; retry payment"})
+				return
+			}
+			if pi == nil || pi.ID != order.StripePaymentIntentID || pi.OnBehalfOf != order.Chef.StripeAccountID || pi.Amount != totalMinor || !strings.EqualFold(pi.Currency, currency) || pi.Livemode == st.IsTestMode() {
+				c.JSON(http.StatusBadGateway, gin.H{"error": "Stripe payment does not match the order"})
+				return
+			}
+		}
 	}
 
 	if err := database.DB.WithContext(c.Request.Context()).Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{

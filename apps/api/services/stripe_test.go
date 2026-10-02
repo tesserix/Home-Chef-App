@@ -85,3 +85,36 @@ func TestStripeRefundSendsStableKeyAndReversesBothShares(t *testing.T) {
 		})
 	}
 }
+
+func TestStripeDestinationChargeUsesVendorAsSettlementMerchant(t *testing.T) {
+	for _, destination := range []string{"acct_nz_vendor", "acct_au_vendor", ""} {
+		t.Run(destination, func(t *testing.T) {
+			client := &StripeClient{secretKey: "sk_test_fixture", httpClient: &http.Client{Transport: stripeTransport(func(r *http.Request) (*http.Response, error) {
+				require.NoError(t, r.ParseForm())
+				require.Equal(t, destination, r.Form.Get("transfer_data[destination]"))
+				require.Equal(t, destination, r.Form.Get("on_behalf_of"))
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"pi_test","status":"requires_payment_method"}`)), Header: http.Header{}}, nil
+			})}}
+			_, err := client.CreatePaymentIntent(t.Context(), &StripePaymentIntentRequest{Amount: 2062, Currency: "NZD", DestinationAccount: destination, IdempotencyKey: "order-test"})
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestStripeSettlementRepairUsesSameIntentAndStableIdempotency(t *testing.T) {
+	client := &StripeClient{secretKey: "sk_test_fixture", httpClient: &http.Client{Transport: stripeTransport(func(r *http.Request) (*http.Response, error) {
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t, "/v1/payment_intents/pi_saved", r.URL.Path)
+		require.Equal(t, "fe3dr-settlement-pi_saved-acct_nz_vendor", r.Header.Get("Idempotency-Key"))
+		require.NoError(t, r.ParseForm())
+		require.Equal(t, "acct_nz_vendor", r.Form.Get("on_behalf_of"))
+		require.Len(t, r.Form, 1)
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"pi_saved","on_behalf_of":"acct_nz_vendor","status":"requires_payment_method"}`)), Header: http.Header{}}, nil
+	})}}
+	for i := 0; i < 2; i++ {
+		pi, err := client.SetPaymentIntentSettlement(t.Context(), "pi_saved", "acct_nz_vendor")
+		require.NoError(t, err)
+		require.Equal(t, "pi_saved", pi.ID)
+		require.Equal(t, "acct_nz_vendor", pi.OnBehalfOf)
+	}
+}
