@@ -13,6 +13,7 @@ func fyStatementFixture() *FYStatement {
 	return &FYStatement{
 		FYStartYear:        2026,
 		FYLabel:            "FY 2026-27",
+		Period:             "1 Apr 2026 – 31 Mar 2027",
 		Currency:           "INR",
 		OrdersCount:        20,
 		FoodRevenue:        7780,

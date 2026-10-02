@@ -26,13 +26,13 @@ import { Skeleton } from '@homechef/mobile-shared/ui';
 import { downloadAndSharePdf } from '../lib/download-pdf';
 import { ExpenseQuickAdd } from '../components/ExpenseQuickAdd';
 import {
-  currentFyStartYear,
   expenseCategoryLabel,
   useChefExpenses,
   useExpenseMutations,
   useFYStatement,
 } from '../hooks/useChefExpenses';
-import { useKitchenMoney } from '../hooks/useKitchenMarket';
+import { useKitchenMarket, useKitchenMoney } from '../hooks/useKitchenMarket';
+import { taxYearStart } from '../lib/market';
 
 const INK_RIPPLE = `${theme.colors.ink.DEFAULT}14`;
 
@@ -46,7 +46,9 @@ function fmtShortDate(iso: string): string {
 
 export default function ExpensesScreen() {
   const money = useKitchenMoney();
-  const fy = currentFyStartYear();
+  const market = useKitchenMarket();
+  const isIndia = market?.code === 'IN';
+  const fy = market ? taxYearStart(market) : undefined;
   const { data, isLoading, refetch, isRefetching } = useChefExpenses();
   const { data: stmt } = useFYStatement(fy);
   const { remove } = useExpenseMutations();
@@ -54,7 +56,7 @@ export default function ExpensesScreen() {
   const [showBreakdown, setShowBreakdown] = useState(false);
 
   const expenses = data?.expenses ?? [];
-  const fyEndShort = String((fy + 1) % 100).padStart(2, '0');
+  const fyName = fy === undefined ? 'FY' : `FY ${fy}-${String((fy + 1) % 100).padStart(2, '0')}`;
 
   function onDelete(id: string, label: string): void {
     Alert.alert('Delete expense?', `${label} will be removed from your books.`, [
@@ -71,11 +73,12 @@ export default function ExpensesScreen() {
   }
 
   async function onDownloadStatement(): Promise<void> {
+    if (fy === undefined) return;
     setDownloading(true);
     try {
       await downloadAndSharePdf(
         `/chef/tax/fy-statement.pdf?year=${fy}`,
-        `fy-statement-FY${fy}-${fyEndShort}.pdf`,
+        `fy-statement-${fyName.replace(' ', '')}.pdf`,
       );
     } finally {
       setDownloading(false);
@@ -111,7 +114,7 @@ export default function ExpensesScreen() {
           <View style={styles.cardHeader}>
             <FileDown size={18} color={theme.colors.ink.DEFAULT} />
             <Text style={styles.cardTitle}>
-              Annual statement · FY {fy}-{fyEndShort}
+              Annual statement · {fyName}
             </Text>
           </View>
           {stmt ? (
@@ -134,7 +137,9 @@ export default function ExpensesScreen() {
               </View>
               <Text style={styles.hint}>
                 Income from {stmt.ordersCount} delivered orders minus your recorded expenses.
-                Download the PDF for GST / income-tax filing.
+                {isIndia
+                  ? 'Download the PDF for GST / income-tax filing.'
+                  : 'Download the PDF for your tax return.'}
               </Text>
 
               {/* Itemised breakdown, matching the vendor portal's annual
@@ -170,17 +175,23 @@ export default function ExpensesScreen() {
                     INCOME · {stmt.ordersCount} DELIVERED ORDERS
                   </Text>
                   <Line label="Food revenue" amount={stmt.foodRevenue} />
-                  <Line label="GST collected from customers" amount={stmt.gstCollected} />
+                  {isIndia ? (
+                    <Line label="GST collected from customers" amount={stmt.gstCollected} />
+                  ) : null}
                   <Line label="Customer tips" amount={stmt.tips} />
                   <Line label="Gross receipts" amount={stmt.grossReceipts} strong />
                   <Line label="Platform commission" amount={stmt.platformCommission} negative />
-                  <Line
-                    label="GST on commission (ITC eligible)"
-                    amount={
-                      stmt.commissionCgst + stmt.commissionSgst + stmt.commissionIgst
-                    }
-                  />
-                  <Line label="TDS withheld (194-O)" amount={stmt.tdsWithheld} negative />
+                  {isIndia ? (
+                    <>
+                      <Line
+                        label="GST on commission (ITC eligible)"
+                        amount={
+                          stmt.commissionCgst + stmt.commissionSgst + stmt.commissionIgst
+                        }
+                      />
+                      <Line label="TDS withheld (194-O)" amount={stmt.tdsWithheld} negative />
+                    </>
+                  ) : null}
                   <Line label="Net earnings from platform" amount={stmt.netEarnings} strong />
 
                   <Text style={[styles.breakdownLabel, { marginTop: theme.spacing[3] }]}>
@@ -210,9 +221,9 @@ export default function ExpensesScreen() {
           )}
           <Pressable
             onPress={() => void onDownloadStatement()}
-            disabled={downloading}
+            disabled={downloading || fy === undefined}
             accessibilityRole="button"
-            accessibilityLabel={`Download FY ${fy}-${fyEndShort} statement PDF`}
+            accessibilityLabel={`Download ${fyName} statement PDF`}
           >
             {({ pressed }) => (
               <View

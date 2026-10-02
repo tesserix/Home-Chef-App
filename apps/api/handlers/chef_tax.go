@@ -78,7 +78,7 @@ func (h *ChefTaxHandler) GetFYStatement(c *gin.Context) {
 		return
 	}
 
-	fyStartYear, msg := parseFYStartYear(c.Query("year"))
+	fyStartYear, msg := parseFYStartYear(c.Query("year"), services.FiscalCalendarFor(chef.PayoutCountry))
 	if msg != "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
@@ -102,7 +102,7 @@ func (h *ChefTaxHandler) GetFYStatementPDF(c *gin.Context) {
 		return
 	}
 
-	fyStartYear, msg := parseFYStartYear(c.Query("year"))
+	fyStartYear, msg := parseFYStartYear(c.Query("year"), services.FiscalCalendarFor(chef.PayoutCountry))
 	if msg != "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
