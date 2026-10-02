@@ -41,7 +41,8 @@ func setupExpenseDB(t *testing.T) *gorm.DB {
 			city          TEXT,
 			postal_code   TEXT,
 			pan_number    TEXT,
-			gstin         TEXT
+			gstin         TEXT,
+			payout_country TEXT DEFAULT 'IN'
 		)
 	`).Error)
 	require.NoError(t, db.Exec(`
@@ -370,4 +371,37 @@ func TestFYStatementMath(t *testing.T) {
 	assert.Equal(t, 1, stmt.Quarters[3].OrdersCount)
 	assert.Equal(t, 525.0, stmt.Quarters[3].Gross)
 	assert.Equal(t, 0, stmt.Quarters[1].OrdersCount)
+}
+
+func TestExpenseSummaryFollowsAUTaxYear(t *testing.T) {
+	db := setupExpenseDB(t)
+	userID := uuid.New()
+	chefID := seedExpenseChef(t, db, userID)
+	require.NoError(t, db.Exec(`UPDATE chef_profiles SET payout_country = 'AU' WHERE id = ?`, chefID.String()).Error)
+
+	for _, e := range []struct {
+		amt  float64
+		date string
+	}{{40, "2025-06-30"}, {25, "2025-07-01"}, {60, "2026-06-30"}} {
+		w := expenseReq(t, userID, http.MethodPost, "/chef/expenses", gin.H{
+			"category": "gas", "amount": e.amt, "expenseDate": e.date,
+		})
+		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+		var created struct {
+			Expense models.ChefExpense `json:"expense"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
+		assert.Equal(t, "AUD", created.Expense.Currency)
+	}
+
+	w := expenseReq(t, userID, http.MethodGet, "/chef/expenses/summary?year=2025", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var summary services.ExpenseSummary
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &summary))
+
+	assert.Equal(t, 85.0, summary.Total, "1 Jul 2025 – 30 Jun 2026 only")
+	assert.Equal(t, "AUD", summary.Currency)
+	require.Len(t, summary.ByMonth, 2)
+	assert.Equal(t, "2025-07", summary.ByMonth[0].Month)
+	assert.Equal(t, "2026-06", summary.ByMonth[1].Month)
 }

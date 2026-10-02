@@ -1,7 +1,7 @@
 package services
 
-// fy_statement.go — annual (Indian FY, 1 Apr – 31 Mar) income & expense
-// statement for a chef.
+// fy_statement.go — annual income & expense statement for a chef, in their
+// market's tax year (India/NZ Apr–Mar, Australia Jul–Jun).
 //
 // Earnings side re-derives from delivered orders exactly like the TDS
 // certificate — including gateway-split (Easy Split) orders, because the FY
@@ -57,8 +57,9 @@ type ExpenseSummary struct {
 }
 
 // ComputeExpenseSummary aggregates one chef's expenses across a financial year.
-func ComputeExpenseSummary(chefID uuid.UUID, fyStartYear int) (*ExpenseSummary, error) {
-	start, end := FinancialYearWindow(fyStartYear)
+func ComputeExpenseSummary(chefID uuid.UUID, country string, fyStartYear int) (*ExpenseSummary, error) {
+	cal := FiscalCalendarFor(country)
+	start, end := cal.Window(fyStartYear)
 
 	var expenses []models.ChefExpense
 	if err := database.DB.
@@ -71,7 +72,7 @@ func ComputeExpenseSummary(chefID uuid.UUID, fyStartYear int) (*ExpenseSummary, 
 	summary := &ExpenseSummary{
 		FYStartYear: fyStartYear,
 		FYLabel:     FYLabel(fyStartYear),
-		Currency:    EarningsCurrency,
+		Currency:    ReportingCurrency(country),
 		ByCategory:  []ExpenseCategoryTotal{},
 		ByMonth:     []ExpenseMonthTotal{},
 	}
@@ -89,7 +90,7 @@ func ComputeExpenseSummary(chefID uuid.UUID, fyStartYear int) (*ExpenseSummary, 
 		}
 		ct.Amount += e.Amount
 		ct.Count++
-		month := e.ExpenseDate.In(istLoc).Format("2006-01")
+		month := cal.Month(e.ExpenseDate)
 		if _, seen := byMonth[month]; !seen {
 			monthOrder = append(monthOrder, month)
 		}
@@ -129,6 +130,7 @@ type FYQuarter struct {
 type FYStatement struct {
 	FYStartYear int    `json:"fyStartYear"`
 	FYLabel     string `json:"fyLabel"`
+	Period      string `json:"period"`
 	Currency    string `json:"currency"`
 
 	// Income side — derived from delivered orders (Easy Split included).
@@ -162,7 +164,8 @@ func ComputeFYStatement(chefID uuid.UUID, fyStartYear int) (*FYStatement, error)
 		return nil, fmt.Errorf("chef not found: %w", err)
 	}
 
-	start, end := FinancialYearWindow(fyStartYear)
+	cal := FiscalCalendarFor(chef.PayoutCountry)
+	start, end := cal.Window(fyStartYear)
 
 	// Same income basis as the TDS certificate: every delivered order in the
 	// FY, split-settled or not, with the per-order frozen commission rate.
@@ -189,13 +192,11 @@ func ComputeFYStatement(chefID uuid.UUID, fyStartYear int) (*FYStatement, error)
 	stmt := &FYStatement{
 		FYStartYear: fyStartYear,
 		FYLabel:     FYLabel(fyStartYear),
-		Currency:    EarningsCurrency,
-		Quarters: []FYQuarter{
-			{Label: "Q1 (Apr–Jun)"},
-			{Label: "Q2 (Jul–Sep)"},
-			{Label: "Q3 (Oct–Dec)"},
-			{Label: "Q4 (Jan–Mar)"},
-		},
+		Period:      cal.PeriodLabel(fyStartYear),
+		Currency:    ReportingCurrency(chef.PayoutCountry),
+	}
+	for _, label := range cal.QuarterLabels() {
+		stmt.Quarters = append(stmt.Quarters, FYQuarter{Label: label})
 	}
 
 	for _, r := range rows {
@@ -215,14 +216,14 @@ func ComputeFYStatement(chefID uuid.UUID, fyStartYear int) (*FYStatement, error)
 		stmt.TDSWithheld += e.TDS
 		stmt.NetEarnings += e.NetPayout
 
-		q := &stmt.Quarters[financialQuarterIndex(r.CompletedAt)]
+		q := &stmt.Quarters[cal.Quarter(r.CompletedAt)]
 		q.OrdersCount++
 		q.Gross += e.Gross
 		q.TDS += e.TDS
 		q.NetPayout += e.NetPayout
 	}
 
-	expenses, err := ComputeExpenseSummary(chefID, fyStartYear)
+	expenses, err := ComputeExpenseSummary(chefID, chef.PayoutCountry, fyStartYear)
 	if err != nil {
 		return nil, err
 	}

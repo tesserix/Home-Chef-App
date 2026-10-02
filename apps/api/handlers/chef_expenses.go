@@ -86,7 +86,7 @@ func resolveOrderID(raw string, chefID uuid.UUID) (*uuid.UUID, string) {
 }
 
 // parseAndValidate normalises the request; returns the parsed date or an error string.
-func (r *expenseRequest) parseAndValidate() (time.Time, string) {
+func (r *expenseRequest) parseAndValidate(cal services.FiscalCalendar) (time.Time, string) {
 	if !models.ValidExpenseCategory(r.Category) {
 		return time.Time{}, "Invalid category"
 	}
@@ -96,7 +96,7 @@ func (r *expenseRequest) parseAndValidate() (time.Time, string) {
 	if len(r.Note) > 500 {
 		return time.Time{}, "Note too long (max 500 characters)"
 	}
-	day, err := services.ParseISTDate(r.ExpenseDate)
+	day, err := cal.ParseDate(r.ExpenseDate)
 	if err != nil {
 		return time.Time{}, "expenseDate must be YYYY-MM-DD"
 	}
@@ -120,7 +120,7 @@ func (h *ChefExpensesHandler) CreateExpense(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
-	day, msg := req.parseAndValidate()
+	day, msg := req.parseAndValidate(services.FiscalCalendarFor(chef.PayoutCountry))
 	if msg != "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
@@ -140,7 +140,7 @@ func (h *ChefExpensesHandler) CreateExpense(c *gin.Context) {
 		UserID:      userID,
 		Category:    req.Category,
 		Amount:      services.Round2(req.Amount),
-		Currency:    "INR",
+		Currency:    services.ReportingCurrency(chef.PayoutCountry),
 		Note:        req.Note,
 		ExpenseDate: day,
 		ReceiptPath: req.ReceiptPath,
@@ -165,12 +165,12 @@ func (h *ChefExpensesHandler) ListExpenses(c *gin.Context) {
 
 	q := database.DB.Model(&models.ChefExpense{}).Where("chef_id = ?", chef.ID)
 	if raw := c.Query("from"); raw != "" {
-		if day, perr := services.ParseISTDate(raw); perr == nil {
+		if day, perr := services.FiscalCalendarFor(chef.PayoutCountry).ParseDate(raw); perr == nil {
 			q = q.Where("expense_date >= ?", day)
 		}
 	}
 	if raw := c.Query("to"); raw != "" {
-		if day, perr := services.ParseISTDate(raw); perr == nil {
+		if day, perr := services.FiscalCalendarFor(chef.PayoutCountry).ParseDate(raw); perr == nil {
 			// Inclusive end-of-day: strictly before the next IST midnight.
 			q = q.Where("expense_date < ?", day.AddDate(0, 0, 1))
 		}
@@ -331,7 +331,7 @@ func (h *ChefExpensesHandler) UpdateExpense(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
-	day, msg := req.parseAndValidate()
+	day, msg := req.parseAndValidate(services.FiscalCalendarFor(chef.PayoutCountry))
 	if msg != "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
@@ -408,13 +408,13 @@ func (h *ChefExpensesHandler) GetExpenseSummary(c *gin.Context) {
 		return
 	}
 
-	fyStartYear, msg := parseFYStartYear(c.Query("year"))
+	fyStartYear, msg := parseFYStartYear(c.Query("year"), services.FiscalCalendarFor(chef.PayoutCountry))
 	if msg != "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
 
-	summary, err := services.ComputeExpenseSummary(chef.ID, fyStartYear)
+	summary, err := services.ComputeExpenseSummary(chef.ID, chef.PayoutCountry, fyStartYear)
 	if err != nil {
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compute summary"})
@@ -425,8 +425,8 @@ func (h *ChefExpensesHandler) GetExpenseSummary(c *gin.Context) {
 
 // parseFYStartYear resolves the ?year= FY-start-year param, defaulting to the
 // current Indian financial year. Bounds match the TDS certificate.
-func parseFYStartYear(raw string) (int, string) {
-	currentFY := services.CurrentFinancialYearStart(time.Now())
+func parseFYStartYear(raw string, cal services.FiscalCalendar) (int, string) {
+	currentFY := cal.CurrentStart(time.Now())
 	if raw == "" {
 		return currentFY, ""
 	}

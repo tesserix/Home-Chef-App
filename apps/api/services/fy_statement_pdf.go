@@ -158,7 +158,7 @@ func addFYSummaryBand(m core.Maroto, stmt *FYStatement) {
 			),
 			col.New(6).Add(
 				text.New("PERIOD", props.Text{Top: 4, Size: 7, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()}),
-				text.New(fmt.Sprintf("1 Apr %d – 31 Mar %d", stmt.FYStartYear, stmt.FYStartYear+1),
+				text.New(stmt.Period,
 					props.Text{Right: 3, Top: 8, Size: 9, Align: align.Right}),
 				text.New(fmt.Sprintf("%d delivered orders", stmt.OrdersCount),
 					props.Text{Right: 3, Top: 12.5, Size: 8, Align: align.Right, Color: docMutedColor()}),

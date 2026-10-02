@@ -13,6 +13,8 @@ export interface Market {
   /** 'bank' collects IFSC details in-app; 'stripe' hands off to Stripe Connect. */
   payoutRail: 'bank' | 'stripe';
   businessNumberLabel: string | null;
+  /** 0-based month the tax year starts: April (3) or July (6). */
+  taxYearStartMonth: number;
 }
 
 const MARKETS: Record<MarketCode, Market> = {
@@ -27,6 +29,7 @@ const MARKETS: Record<MarketCode, Market> = {
     licenceDocType: 'fssai_license',
     payoutRail: 'bank',
     businessNumberLabel: null,
+    taxYearStartMonth: 3,
   },
   AU: {
     code: 'AU',
@@ -48,6 +51,7 @@ const MARKETS: Record<MarketCode, Market> = {
     licenceDocType: 'food_safety_cert',
     payoutRail: 'stripe',
     businessNumberLabel: 'ABN',
+    taxYearStartMonth: 6,
   },
   NZ: {
     code: 'NZ',
@@ -77,6 +81,7 @@ const MARKETS: Record<MarketCode, Market> = {
     licenceDocType: 'food_safety_cert',
     payoutRail: 'stripe',
     businessNumberLabel: 'NZBN',
+    taxYearStartMonth: 3,
   },
 };
 
@@ -90,4 +95,8 @@ export function getMarket(code: string | undefined): Market {
 export function isValidPostcode(value: string, code: string | undefined): boolean {
   const { postcodeLength } = getMarket(code);
   return new RegExp(`^\\d{${postcodeLength}}$`).test(value.trim());
+}
+
+export function taxYearStart(market: Market, d: Date = new Date()): number {
+  return d.getMonth() >= market.taxYearStartMonth ? d.getFullYear() : d.getFullYear() - 1;
 }

@@ -81,10 +81,6 @@ export interface FYStatement {
   netIncome: number;
 }
 
-export function currentFyStartYear(d: Date = new Date()): number {
-  return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
-}
-
 export function useChefExpenses(options?: { orderId?: string; limit?: number }) {
   const limit = options?.limit ?? 100;
   const orderId = options?.orderId;
@@ -100,11 +96,12 @@ export function useChefExpenses(options?: { orderId?: string; limit?: number }) 
   });
 }
 
-export function useFYStatement(fyStartYear: number) {
+export function useFYStatement(fyStartYear: number | undefined) {
   return useQuery<FYStatement>({
     queryKey: ['chef', 'fy-statement', fyStartYear],
     queryFn: () =>
       api.get<FYStatement>(`/chef/tax/fy-statement?year=${fyStartYear}`).then((r) => r.data),
+    enabled: fyStartYear !== undefined,
   });
 }
 

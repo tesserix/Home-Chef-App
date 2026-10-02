@@ -1,6 +1,6 @@
 import { describe, it, expect } from "@jest/globals";
 
-import { getMarket, isValidPostcode, MARKET_CODES } from "./market";
+import { getMarket, isValidPostcode, MARKET_CODES, taxYearStart } from "./market";
 
 describe("kitchen markets", () => {
   it("serves India, Australia and New Zealand", () => {
@@ -37,5 +37,14 @@ describe("kitchen markets", () => {
     expect(getMarket("AU").regions).toHaveLength(8);
     expect(getMarket("NZ").regions).toHaveLength(16);
     expect(getMarket("IN").regions).toBeNull();
+  });
+
+  it("starts the tax year in July for Australia and April elsewhere", () => {
+    const may = new Date(2026, 4, 15);
+    const july = new Date(2026, 6, 1);
+    expect(taxYearStart(getMarket("AU"), may)).toBe(2025);
+    expect(taxYearStart(getMarket("AU"), july)).toBe(2026);
+    expect(taxYearStart(getMarket("NZ"), may)).toBe(2026);
+    expect(taxYearStart(getMarket("IN"), new Date(2026, 2, 31))).toBe(2025);
   });
 });

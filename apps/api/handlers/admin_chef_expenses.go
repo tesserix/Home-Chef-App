@@ -31,7 +31,7 @@ func (h *AdminChefExpensesHandler) GetChefExpenses(c *gin.Context) {
 		return
 	}
 
-	fyStartYear, msg := parseFYStartYear(c.Query("year"))
+	fyStartYear, msg := parseFYStartYear(c.Query("year"), services.FiscalCalendarFor(chef.PayoutCountry))
 	if msg != "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
@@ -44,7 +44,7 @@ func (h *AdminChefExpensesHandler) GetChefExpenses(c *gin.Context) {
 		}
 	}
 
-	start, end := services.FinancialYearWindow(fyStartYear)
+	start, end := services.FiscalCalendarFor(chef.PayoutCountry).Window(fyStartYear)
 	var expenses []models.ChefExpense
 	if err := database.DB.
 		Where("chef_id = ? AND expense_date >= ? AND expense_date < ?", chefID, start, end).
@@ -55,7 +55,7 @@ func (h *AdminChefExpensesHandler) GetChefExpenses(c *gin.Context) {
 		return
 	}
 
-	summary, err := services.ComputeExpenseSummary(chefID, fyStartYear)
+	summary, err := services.ComputeExpenseSummary(chefID, chef.PayoutCountry, fyStartYear)
 	if err != nil {
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compute summary"})
