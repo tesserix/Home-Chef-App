@@ -170,7 +170,7 @@ export function ActiveOrderCard({ order, onPress }: ActiveOrderCardProps) {
                 <View style={styles.metaBadge}>
                   <Text style={styles.metaBadgeText}>
                     {itemCount} {itemCount === 1 ? 'item' : 'items'}{' '}
-                    · {formatMoney(order.totalAmount)}
+                    · {formatMoney(order.totalAmount, order.currency)}
                   </Text>
                 </View>
                 <ChevronRight

@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api';
-import type { ChefPayout } from '../lib/chefPayout';
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../lib/api";
+import type { ChefPayout } from "../lib/chefPayout";
 
 // ---- API contract types -------------------------------------------------------
 // Shape returned by GET /chef/orders/:orderId.
@@ -44,13 +44,18 @@ export interface OrderDetailTiming {
   // confirmed/proposed time + status, shown to the chef at accept + in detail.
   requestedFulfillmentAt?: string | null;
   confirmedFulfillmentAt?: string | null;
-  fulfillmentTimeStatus?: 'requested' | 'confirmed' | 'proposed' | 'declined' | null;
+  fulfillmentTimeStatus?:
+    | "requested"
+    | "confirmed"
+    | "proposed"
+    | "declined"
+    | null;
 }
 
 /** One statutory tax row, split and labelled by the API (models/pricing.go). The
  *  chef sees the same rows the customer's receipt carries. */
 export interface OrderDetailTaxLine {
-  code: 'cgst' | 'sgst' | 'igst' | 'tax';
+  code: "cgst" | "sgst" | "igst" | "tax";
   label: string;
   rate: number;
   amount: number;
@@ -58,7 +63,7 @@ export interface OrderDetailTaxLine {
 
 // ChefPayout lives in lib/ — the list cards and the dashboard queue render it
 // too, so it can't belong to the detail hook. Re-exported for existing callers.
-export type { ChefPayout } from '../lib/chefPayout';
+export type { ChefPayout } from "../lib/chefPayout";
 
 export interface OrderDetailPricing {
   subtotal: number;
@@ -75,20 +80,21 @@ export interface OrderDetailPricing {
 }
 
 export type OrderDetailStatus =
-  | 'pending'
-  | 'accepted'
-  | 'preparing'
-  | 'ready'
-  | 'picked_up'
-  | 'delivered'
-  | 'cancelled'
-  | 'rejected';
+  | "pending"
+  | "accepted"
+  | "preparing"
+  | "ready"
+  | "picked_up"
+  | "delivered"
+  | "cancelled"
+  | "rejected";
 
 // How the order reaches the customer (backend OrderResponse.fulfillmentType).
 // 'pickup' → customer collects from the chef; the chef confirms handover.
-export type FulfillmentType = 'delivery' | 'chef_delivery' | 'pickup';
+export type FulfillmentType = "delivery" | "chef_delivery" | "pickup";
 
 export interface OrderDetail {
+  currency: string;
   id: string;
   orderNumber: string;
   status: OrderDetailStatus;
@@ -161,6 +167,7 @@ interface RawOrderItemResponse {
 }
 
 interface RawChefOrderDetailResponse {
+  currency?: string;
   chefPayout?: ChefPayout;
   id: string;
   orderNumber: string;
@@ -180,7 +187,7 @@ interface RawChefOrderDetailResponse {
   deliveredAt?: string | null;
   requestedFulfillmentAt?: string | null;
   confirmedFulfillmentAt?: string | null;
-  fulfillmentTimeStatus?: OrderDetailTiming['fulfillmentTimeStatus'];
+  fulfillmentTimeStatus?: OrderDetailTiming["fulfillmentTimeStatus"];
   // Flat pricing
   subtotal?: number;
   deliveryFee?: number;
@@ -203,11 +210,12 @@ interface RawChefOrderDetailResponse {
 function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
   return {
     id: raw.id,
+    currency: raw.currency ?? raw.chefPayout?.currency ?? "INR",
     orderNumber: raw.orderNumber,
     status: raw.status,
     // Legacy orders predate the field — default to delivery (3PL).
-    fulfillmentType: raw.fulfillmentType ?? 'delivery',
-    customerName: raw.customerName ?? '',
+    fulfillmentType: raw.fulfillmentType ?? "delivery",
+    customerName: raw.customerName ?? "",
     customerPhone: raw.customerPhone,
     items: (raw.items ?? []).map((i) => ({
       id: i.id,
@@ -222,7 +230,7 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
       cancelledAt: i.cancelledAt,
       refundAmount: i.refundAmount,
     })),
-    deliveryAddress: raw.deliveryAddress ?? '',
+    deliveryAddress: raw.deliveryAddress ?? "",
     specialInstructions: raw.specialInstructions,
     deliveryInstructions: raw.deliveryInstructions,
     timing: {
@@ -262,10 +270,10 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
  */
 export function useOrderDetail(orderId: string | null | undefined) {
   return useQuery<OrderDetail>({
-    queryKey: ['chef', 'orders', 'detail-v2', orderId],
+    queryKey: ["chef", "orders", "detail-v2", orderId],
     enabled: !!orderId,
     queryFn: () => {
-      if (!orderId) throw new Error('orderId required');
+      if (!orderId) throw new Error("orderId required");
       return api
         .get<RawChefOrderDetailResponse>(`/chef/orders/${orderId}`)
         .then((r) => adaptOrderDetail(r.data));

@@ -16,19 +16,27 @@
 //
 // Presentational: category state and the startGroupOrder flow stay in the screen.
 
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Users } from 'lucide-react-native';
-import { customerColors } from '@homechef/mobile-shared/theme';
-import type { MenuItem } from '../../types/customer';
-import { GROUP_ORDERS_ENABLED } from '../../lib/features';
-import { MenuItemCard } from './MenuItemCard';
-import { ChefActionRow } from './ChefActionRow';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Users } from "lucide-react-native";
+import { customerColors } from "@homechef/mobile-shared/theme";
+import type { MenuItem } from "../../types/customer";
+import { GROUP_ORDERS_ENABLED } from "../../lib/features";
+import { MenuItemCard } from "./MenuItemCard";
+import { ChefActionRow } from "./ChefActionRow";
 
 // Android ripple tint — translucent charcoal derived from the token (never a
 // new literal colour), matching the ChefCard `withAlpha` convention.
 const CHIP_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 
 export interface ChefMenuTabProps {
+  currency?: string;
   chefId: string;
   chefName: string;
   categories: string[];
@@ -46,6 +54,7 @@ export interface ChefMenuTabProps {
 }
 
 export function ChefMenuTab({
+  currency,
   chefId,
   chefName,
   categories,
@@ -58,7 +67,10 @@ export function ChefMenuTab({
 }: ChefMenuTabProps) {
   // Group once per render, preserving the category order the screen derived.
   const sections = categories
-    .map((name) => ({ name, items: items.filter((i) => (i.category ?? 'Other') === name) }))
+    .map((name) => ({
+      name,
+      items: items.filter((i) => (i.category ?? "Other") === name),
+    }))
     .filter((sec) => sec.items.length > 0);
 
   return (
@@ -87,13 +99,16 @@ export function ChefMenuTab({
                     style={[
                       styles.categoryChip,
                       activeCategory === cat && styles.categoryChipActive,
-                      pressed && Platform.OS === 'ios' && styles.categoryChipPressed,
+                      pressed &&
+                        Platform.OS === "ios" &&
+                        styles.categoryChipPressed,
                     ]}
                   >
                     <Text
                       style={[
                         styles.categoryChipLabel,
-                        activeCategory === cat && styles.categoryChipLabelActive,
+                        activeCategory === cat &&
+                          styles.categoryChipLabelActive,
                       ]}
                     >
                       {cat}
@@ -115,12 +130,16 @@ export function ChefMenuTab({
       {menuIsEmpty ? (
         <View style={styles.emptyMenu}>
           <Text style={styles.emptyMenuText}>
-            This kitchen hasn&apos;t published a menu right now — check back soon.
+            This kitchen hasn&apos;t published a menu right now — check back
+            soon.
           </Text>
         </View>
       ) : (
         sections.map((section) => (
-          <View key={section.name} ref={(node) => registerSection(section.name, node)}>
+          <View
+            key={section.name}
+            ref={(node) => registerSection(section.name, node)}
+          >
             {/* The heading is omitted for a single-category menu, where it would
                 only repeat what the screen already says. */}
             {sections.length > 1 ? (
@@ -128,7 +147,13 @@ export function ChefMenuTab({
             ) : null}
             <View style={styles.menuList}>
               {section.items.map((item) => (
-                <MenuItemCard key={item.id} item={item} chefId={chefId} chefName={chefName} />
+                <MenuItemCard
+                  currency={currency}
+                  key={item.id}
+                  item={item}
+                  chefId={chefId}
+                  chefName={chefName}
+                />
               ))}
             </View>
           </View>
@@ -162,7 +187,7 @@ export function ChefMenuTab({
 const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
     color: customerColors.charcoal.DEFAULT,
     paddingHorizontal: 20,
     paddingTop: 24,
@@ -191,8 +216,8 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 10,
     marginRight: 20,
-    alignItems: 'center',
-    position: 'relative',
+    alignItems: "center",
+    position: "relative",
   },
   categoryChipActive: {
     // Underline drawn as a child View (see below)
@@ -202,7 +227,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   categoryChipLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 14,
     color: customerColors.charcoal.soft,
     letterSpacing: 0.1,
@@ -213,7 +238,7 @@ const styles = StyleSheet.create({
   },
   // 2px charcoal underline for selected chip (Airbnb category-bar style).
   categoryChipUnderline: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
@@ -229,10 +254,10 @@ const styles = StyleSheet.create({
   },
   emptyMenu: {
     paddingVertical: 40,
-    alignItems: 'center',
+    alignItems: "center",
   },
   emptyMenuText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 14,
     color: customerColors.charcoal.soft,
   },

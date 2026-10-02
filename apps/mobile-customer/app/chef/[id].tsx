@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { formatMoney } from '../../lib/format';
-import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { formatMoney } from "../../lib/format";
+import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import {
   ActivityIndicator,
   Dimensions,
@@ -11,7 +11,7 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
+} from "react-native";
 import Animated, {
   Easing,
   FadeInDown,
@@ -20,37 +20,46 @@ import Animated, {
   useSharedValue,
   withSequence,
   withTiming,
-} from 'react-native-reanimated';
-import { Image } from 'expo-image';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Bookmark, ChevronLeft, Share2, UtensilsCrossed, ShoppingCart } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
-import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
-import { ChefAudienceBar } from '../../components/chef/ChefAudienceBar';
-import { useChefAudience } from '../../hooks/useChefAudience';
-import { useChefGuestActions } from '../../hooks/useChefGuestActions';
-import { useChef, useChefMenu } from '../../hooks/useChefs';
-import { useCustomerCoords } from '../../hooks/useCustomerCoords';
-import { useChefAvailabilityWS } from '../../hooks/useChefAvailabilityWS';
-import { useChefWeeklyMenu } from '../../hooks/useMealPlans';
-import { useCreateGroupOrder, type GroupType } from '../../hooks/useGroupOrder';
-import { useFavorites } from '../../hooks/useFavorites';
-import { useRequireAccount } from '../../hooks/useRequireAccount';
-import { useCartStore } from '../../store/cart-store';
+} from "react-native-reanimated";
+import { Image } from "expo-image";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { router, useLocalSearchParams } from "expo-router";
+import {
+  Bookmark,
+  ChevronLeft,
+  Share2,
+  UtensilsCrossed,
+  ShoppingCart,
+} from "lucide-react-native";
+import * as Haptics from "expo-haptics";
+import { customerColors, customerTheme } from "@homechef/mobile-shared/theme";
+import { ChefAudienceBar } from "../../components/chef/ChefAudienceBar";
+import { useChefAudience } from "../../hooks/useChefAudience";
+import { useChefGuestActions } from "../../hooks/useChefGuestActions";
+import { useChef, useChefMenu } from "../../hooks/useChefs";
+import { useCustomerCoords } from "../../hooks/useCustomerCoords";
+import { useChefAvailabilityWS } from "../../hooks/useChefAvailabilityWS";
+import { useChefWeeklyMenu } from "../../hooks/useMealPlans";
+import { useCreateGroupOrder, type GroupType } from "../../hooks/useGroupOrder";
+import { useFavorites } from "../../hooks/useFavorites";
+import { useRequireAccount } from "../../hooks/useRequireAccount";
+import { useCartStore } from "../../store/cart-store";
 import {
   ChefDetailTabs,
   type ChefDetailTab,
   type ChefDetailTabKey,
-} from '../../components/chef/ChefDetailTabs';
-import { ChefMenuTab } from '../../components/chef/ChefMenuTab';
-import { MenuPill } from '../../components/chef/MenuPill';
-import { MenuCategorySheet } from '../../components/chef/MenuCategorySheet';
-import { ChefWeeklyPlanTab } from '../../components/chef/ChefWeeklyPlanTab';
-import { ChefReviewList } from '../../components/chef/ChefReviewList';
-import { TIFFIN_ENABLED } from '../../lib/features';
-import { deliveryFeeLabel } from '../../lib/delivery-fee-label';
-import { useAlert } from '@homechef/mobile-shared/ui';
+} from "../../components/chef/ChefDetailTabs";
+import { ChefMenuTab } from "../../components/chef/ChefMenuTab";
+import { MenuPill } from "../../components/chef/MenuPill";
+import { MenuCategorySheet } from "../../components/chef/MenuCategorySheet";
+import { ChefWeeklyPlanTab } from "../../components/chef/ChefWeeklyPlanTab";
+import { ChefReviewList } from "../../components/chef/ChefReviewList";
+import { TIFFIN_ENABLED } from "../../lib/features";
+import { deliveryFeeLabel } from "../../lib/delivery-fee-label";
+import { useAlert } from "@homechef/mobile-shared/ui";
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec (§3.5).
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -63,7 +72,7 @@ const RATING_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 // Full-bleed photo header — ~40% of viewport per canonical spec §2.4, capped
 // so it stays sane on very tall devices/phablets.
 const HEADER_HEIGHT = Math.min(
-  Math.round(Dimensions.get('window').height * 0.4),
+  Math.round(Dimensions.get("window").height * 0.4),
   400,
 );
 
@@ -72,25 +81,25 @@ const HEADER_HEIGHT = Math.min(
 // content just lives in a tab now.
 const DETAIL_TABS: ChefDetailTab[] = TIFFIN_ENABLED
   ? [
-      { key: 'menu', label: 'Menu' },
-      { key: 'weekly', label: 'Weekly plan' },
-      { key: 'reviews', label: 'Reviews' },
+      { key: "menu", label: "Menu" },
+      { key: "weekly", label: "Weekly plan" },
+      { key: "reviews", label: "Reviews" },
     ]
   : [
-      { key: 'menu', label: 'Menu' },
-      { key: 'reviews', label: 'Reviews' },
+      { key: "menu", label: "Menu" },
+      { key: "reviews", label: "Reviews" },
     ];
 
 // Truncate the cuisine list to one line: first couple of cuisines + "+N"
 // (e.g. "North Indian, South Indian +6"). The full list added 2-3 wrapped
 // lines of noise to the header.
 function formatCuisines(cuisine?: string): string {
-  const parts = (cuisine ?? '')
-    .split('·')
+  const parts = (cuisine ?? "")
+    .split("·")
     .map((p) => p.trim())
     .filter(Boolean);
-  if (parts.length <= 3) return parts.join(', ');
-  return `${parts.slice(0, 2).join(', ')} +${parts.length - 2}`;
+  if (parts.length <= 3) return parts.join(", ");
+  return `${parts.slice(0, 2).join(", ")} +${parts.length - 2}`;
 }
 
 export default function ChefDetailScreen() {
@@ -109,16 +118,19 @@ export default function ChefDetailScreen() {
   // Customer coords let the server compute deliverableToYou (can this chef reach
   // you) so the detail screen can show delivery as pickup-only when out of range.
   const coords = useCustomerCoords();
-  const { data: chefData, isLoading: chefLoading, isError: chefError } = useChef(
-    id ?? '',
-    coords ?? undefined,
-  );
+  const {
+    data: chefData,
+    isLoading: chefLoading,
+    isError: chefError,
+  } = useChef(id ?? "", coords ?? undefined);
   // The route param may be a slug (SEO/universal links, #58) or a UUID. GetChef
   // resolves both; the menu endpoint takes a UUID, so use the resolved chef.id
   // once it loads (falls back to the raw param for the initial render).
-  const { data: menuData, isLoading: menuLoading, isError: menuError } = useChefMenu(
-    chefData?.data?.id ?? id ?? ''
-  );
+  const {
+    data: menuData,
+    isLoading: menuLoading,
+    isError: menuError,
+  } = useChefMenu(chefData?.data?.id ?? id ?? "");
   // Live open/close, so the badge and the reserve note never go stale under the
   // customer while they read the menu (#970). Keyed on the resolved UUID.
   useChefAvailabilityWS(chefData?.data?.id);
@@ -128,43 +140,54 @@ export default function ChefDetailScreen() {
   const requireAccount = useRequireAccount();
   const createGroup = useCreateGroupOrder();
   // Chef's published fixed weekly menu (#1) — read-only preview below the CTAs.
-  const { data: weeklyMenu } = useChefWeeklyMenu(chefData?.data?.id ?? id ?? '');
+  const { data: weeklyMenu } = useChefWeeklyMenu(
+    chefData?.data?.id ?? id ?? "",
+  );
 
   // Start a group / office order (#46): pick the context, then open the hub.
   function startGroupOrder(chefId: string) {
-    if (!requireAccount('start a group order')) return;
+    if (!requireAccount("start a group order")) return;
     const start = (type: GroupType) =>
       createGroup.mutate(
-        { chefId, type, splitMode: 'split' },
+        { chefId, type, splitMode: "split" },
         {
-          onSuccess: (d) => router.push(`/group-order/${d.groupOrder.id}` as never),
+          onSuccess: (d) =>
+            router.push(`/group-order/${d.groupOrder.id}` as never),
           onError: (err: unknown) => {
-            const e = err as { response?: { status?: number; data?: { error?: string } } };
+            const e = err as {
+              response?: { status?: number; data?: { error?: string } };
+            };
             const status = e?.response?.status;
             const serverMsg = e?.response?.data?.error;
             const msg =
               status === 503
                 ? "Group orders aren't available right now. Please try again later."
-                : serverMsg || "We couldn't start the group order. Please try again.";
-            showAlert('Could not start', msg);
+                : serverMsg ||
+                  "We couldn't start the group order. Please try again.";
+            showAlert("Could not start", msg);
           },
         },
       );
-    showAlert('Start a group order', 'Who is this for?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Office / corporate', onPress: () => start('office') },
-      { text: 'Personal group', onPress: () => start('personal') },
+    showAlert("Start a group order", "Who is this for?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Office / corporate", onPress: () => start("office") },
+      { text: "Personal group", onPress: () => start("personal") },
     ]);
   }
 
   const chef = chefData?.data;
   // A floor, not a quote — see lib/delivery-fee-label (D-01).
-  const deliveryLabel = deliveryFeeLabel(chef?.deliveryFee, chef?.deliveryFeeFlat, chef?.offersDelivery);
+  const deliveryLabel = deliveryFeeLabel(
+    chef?.deliveryFee,
+    chef?.deliveryFeeFlat,
+    chef?.offersDelivery,
+    chef?.currency,
+  );
   const menuItems = menuData?.data ?? [];
 
   // Derive unique categories preserving order of first appearance.
   const categories = Array.from(
-    new Set(menuItems.map((item) => item.category ?? 'Other'))
+    new Set(menuItems.map((item) => item.category ?? "Other")),
   );
 
   // Category state drives a JUMP, not a filter: every category is rendered, and
@@ -206,7 +229,10 @@ export default function ChefDetailScreen() {
       const target = scrollY.current + pageY;
       sectionOffsets.current[category] = target;
       // Leave a little clear so the heading isn't flush against the chip bar.
-      scrollRef.current?.scrollTo({ y: Math.max(0, target - 12), animated: true });
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, target - 12),
+        animated: true,
+      });
       setActiveCategory(category);
     });
   }, []);
@@ -222,25 +248,29 @@ export default function ChefDetailScreen() {
   // Track which section is in view so the chip underline follows the scroll.
   // The section whose top has most recently passed the fold is the one being
   // read, so take the LAST offset at or above the current position.
-  const onMenuScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    scrollY.current = e.nativeEvent.contentOffset.y;
-    const y = e.nativeEvent.contentOffset.y + 24;
-    let current: string | null = null;
-    // Iterate the CATEGORY order, not the offsets object: its key order is
-    // whatever order layout happened to report, which is not guaranteed to be
-    // top-to-bottom.
-    for (const name of categoriesRef.current) {
-      const top = sectionOffsets.current[name];
-      if (top !== undefined && top <= y) current = name;
-    }
-    if (current) setActiveCategory((prev) => (prev === current ? prev : current));
-  }, []);
+  const onMenuScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      scrollY.current = e.nativeEvent.contentOffset.y;
+      const y = e.nativeEvent.contentOffset.y + 24;
+      let current: string | null = null;
+      // Iterate the CATEGORY order, not the offsets object: its key order is
+      // whatever order layout happened to report, which is not guaranteed to be
+      // top-to-bottom.
+      for (const name of categoriesRef.current) {
+        const top = sectionOffsets.current[name];
+        if (top !== undefined && top <= y) current = name;
+      }
+      if (current)
+        setActiveCategory((prev) => (prev === current ? prev : current));
+    },
+    [],
+  );
 
   // Which in-page tab is showing — Menu is the landing view.
   // Initial tab is deep-linkable via ?tab= (e.g. a "see reviews" link); defaults
   // to the à-la-carte menu. Only honour tabs that exist for this chef.
   const initialTab: ChefDetailTabKey =
-    (tab === 'weekly' && TIFFIN_ENABLED) || tab === 'reviews' ? tab : 'menu';
+    (tab === "weekly" && TIFFIN_ENABLED) || tab === "reviews" ? tab : "menu";
   const [activeTab, setActiveTab] = useState<ChefDetailTabKey>(initialTab);
 
   // The Reviews tab's content is conditionally rendered (unmounts when the
@@ -249,7 +279,7 @@ export default function ChefDetailScreen() {
   // it's already been revealed once so only the FIRST reveal animates.
   const reviewsRevealedRef = useRef(false);
   useEffect(() => {
-    if (activeTab === 'reviews') {
+    if (activeTab === "reviews") {
       reviewsRevealedRef.current = true;
     }
   }, [activeTab]);
@@ -264,13 +294,13 @@ export default function ChefDetailScreen() {
   const isSaved = favData?.data.some((f) => f.chefId === chef?.id) ?? false;
 
   const openCart = () => {
-    router.push('/cart');
+    router.push("/cart");
   };
 
   const handleToggleSave = () => {
     if (!chef) return;
     // Ahead of the animation, so a guest's heart never fills for a save that can't happen.
-    if (!requireAccount('save a chef')) return;
+    if (!requireAccount("save a chef")) return;
     if (!reduceMotion) {
       heartScale.value = withSequence(
         withTiming(1.25, { duration: 75 }),
@@ -294,10 +324,7 @@ export default function ChefDetailScreen() {
   if (chefLoading || menuLoading) {
     return (
       <View style={styles.centerFill}>
-        <ActivityIndicator
-          size="large"
-          color={customerColors.coral.DEFAULT}
-        />
+        <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
       </View>
     );
   }
@@ -305,20 +332,24 @@ export default function ChefDetailScreen() {
   // ── Error / not-found state ──────────────────────────────────────────────
   if (chefError || menuError || !chef) {
     return (
-      <SafeAreaView style={styles.centerFill} edges={['top']}>
+      <SafeAreaView style={styles.centerFill} edges={["top"]}>
         {/* Floating back button even on error screen */}
         <View style={[styles.overlayBtnRow, { top: insets.top + 12 }]}>
           <Pressable
             onPress={() => router.back()}
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            android_ripple={{ color: OVERLAY_BTN_RIPPLE, borderless: true, radius: 22 }}
+            android_ripple={{
+              color: OVERLAY_BTN_RIPPLE,
+              borderless: true,
+              radius: 22,
+            }}
           >
             {({ pressed }) => (
               <View
                 style={[
                   styles.overlayBtn,
-                  pressed && Platform.OS === 'ios' && styles.overlayBtnPressed,
+                  pressed && Platform.OS === "ios" && styles.overlayBtnPressed,
                 ]}
               >
                 <ChevronLeft
@@ -356,7 +387,7 @@ export default function ChefDetailScreen() {
             source={{ uri: chef.imageUrl }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+            placeholder={{ blurhash: "L6PZfSi_.AyE_3t7t7R**0o#DgR4" }}
             transition={300}
             accessibilityLabel={`Photo of ${chef.name}`}
           />
@@ -378,10 +409,7 @@ export default function ChefDetailScreen() {
       {/* ── CIRCULAR OVERLAY BUTTONS (float over photo) ── */}
       {/* Shadow on the outer View; no overflow:hidden here (spec §6). */}
       <View
-        style={[
-          styles.overlayBtnRow,
-          { top: insets.top + 12 },
-        ]}
+        style={[styles.overlayBtnRow, { top: insets.top + 12 }]}
         pointerEvents="box-none"
       >
         {/* Back */}
@@ -389,13 +417,17 @@ export default function ChefDetailScreen() {
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          android_ripple={{ color: OVERLAY_BTN_RIPPLE, borderless: true, radius: 22 }}
+          android_ripple={{
+            color: OVERLAY_BTN_RIPPLE,
+            borderless: true,
+            radius: 22,
+          }}
         >
           {({ pressed }) => (
             <View
               style={[
                 styles.overlayBtn,
-                pressed && Platform.OS === 'ios' && styles.overlayBtnPressed,
+                pressed && Platform.OS === "ios" && styles.overlayBtnPressed,
               ]}
             >
               <ChevronLeft
@@ -410,16 +442,22 @@ export default function ChefDetailScreen() {
         {/* Share + Save — grouped on the right */}
         <View style={styles.overlayBtnRightGroup}>
           <Pressable
-            onPress={() => { void handleShare(); }}
+            onPress={() => {
+              void handleShare();
+            }}
             accessibilityRole="button"
             accessibilityLabel="Share chef"
-            android_ripple={{ color: OVERLAY_BTN_RIPPLE, borderless: true, radius: 22 }}
+            android_ripple={{
+              color: OVERLAY_BTN_RIPPLE,
+              borderless: true,
+              radius: 22,
+            }}
           >
             {({ pressed }) => (
               <View
                 style={[
                   styles.overlayBtn,
-                  pressed && Platform.OS === 'ios' && styles.overlayBtnPressed,
+                  pressed && Platform.OS === "ios" && styles.overlayBtnPressed,
                 ]}
               >
                 <Share2
@@ -434,9 +472,13 @@ export default function ChefDetailScreen() {
           <Pressable
             onPress={handleToggleSave}
             accessibilityRole="button"
-            accessibilityLabel={isSaved ? 'Remove from saved' : 'Save chef'}
+            accessibilityLabel={isSaved ? "Remove from saved" : "Save chef"}
             accessibilityState={{ checked: isSaved }}
-            android_ripple={{ color: OVERLAY_BTN_RIPPLE, borderless: true, radius: 22 }}
+            android_ripple={{
+              color: OVERLAY_BTN_RIPPLE,
+              borderless: true,
+              radius: 22,
+            }}
           >
             {({ pressed }) => (
               <View
@@ -444,7 +486,7 @@ export default function ChefDetailScreen() {
                   styles.overlayBtn,
                   // Saved heart = coral fill bg (spec §2.4).
                   isSaved && styles.overlayBtnSaved,
-                  pressed && Platform.OS === 'ios' && styles.overlayBtnPressed,
+                  pressed && Platform.OS === "ios" && styles.overlayBtnPressed,
                 ]}
               >
                 <Animated.View style={heartAnimStyle}>
@@ -455,7 +497,7 @@ export default function ChefDetailScreen() {
                         ? customerColors.canvas
                         : customerColors.charcoal.DEFAULT
                     }
-                    fill={isSaved ? customerColors.canvas : 'transparent'}
+                    fill={isSaved ? customerColors.canvas : "transparent"}
                     strokeWidth={2}
                   />
                 </Animated.View>
@@ -508,7 +550,7 @@ export default function ChefDetailScreen() {
                   chef.isOpen ? styles.openStatusOpen : styles.openStatusClosed,
                 ]}
               >
-                {chef.availability?.label ?? (chef.isOpen ? 'Open' : 'Closed')}
+                {chef.availability?.label ?? (chef.isOpen ? "Open" : "Closed")}
               </Text>
             </View>
 
@@ -517,12 +559,12 @@ export default function ChefDetailScreen() {
               {/* Tap the rating to jump to the in-page Reviews tab (the
                   /chef/reviews/[id] route still exists for deep links). */}
               <Pressable
-                onPress={() => setActiveTab('reviews')}
+                onPress={() => setActiveTab("reviews")}
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel={
                   chef.reviewCount === 0
-                    ? 'New chef — no reviews yet, see reviews'
+                    ? "New chef — no reviews yet, see reviews"
                     : `See ${chef.reviewCount} reviews, rated ${chef.rating.toFixed(1)} out of 5`
                 }
                 style={styles.ratingTap}
@@ -557,7 +599,7 @@ export default function ChefDetailScreen() {
                 <>
                   <View style={styles.metaDot} />
                   <Text style={styles.metaText}>
-                    Min ₹{chef.minimumOrder}
+                    Min {formatMoney(chef.minimumOrder, chef.currency)}
                   </Text>
                 </>
               ) : null}
@@ -583,9 +625,13 @@ export default function ChefDetailScreen() {
               liked={audience?.liked ?? false}
               subscribed={audience?.subscribed ?? false}
               likeCount={audience?.likeCount ?? chef.likeCount ?? 0}
-              subscriberCount={audience?.subscriberCount ?? chef.subscriberCount ?? 0}
+              subscriberCount={
+                audience?.subscriberCount ?? chef.subscriberCount ?? 0
+              }
               busy={guestActions.busy}
-              onToggleLike={() => guestActions.toggleLike(audience?.liked ?? false)}
+              onToggleLike={() =>
+                guestActions.toggleLike(audience?.liked ?? false)
+              }
               onToggleSubscribe={() =>
                 guestActions.toggleSubscribe(audience?.subscribed ?? false)
               }
@@ -615,9 +661,10 @@ export default function ChefDetailScreen() {
             {/* Sandbox kitchen. Reaching this screen at all means the viewer
                 is on the test-mode allowlist, so this is a reminder rather than
                 a warning: nothing bought here costs real money. */}
-            {chef.mode === 'test' ? (
+            {chef.mode === "test" ? (
               <Text style={styles.testModeNote}>
-                TEST kitchen — payments use the gateway's test mode, no real money is charged.
+                TEST kitchen — payments use the gateway's test mode, no real
+                money is charged.
               </Text>
             ) : null}
 
@@ -665,8 +712,9 @@ export default function ChefDetailScreen() {
             {/* ── MENU TAB (default) ── */}
             {/* Category chips + à-la-carte items + the small group-order row
                 (GROUP_ORDERS_ENABLED gating lives inside ChefMenuTab). */}
-            {activeTab === 'menu' ? (
+            {activeTab === "menu" ? (
               <ChefMenuTab
+                currency={chef.currency}
                 chefId={chef.id}
                 chefName={chef.name}
                 categories={categories}
@@ -686,7 +734,7 @@ export default function ChefDetailScreen() {
                 gated: the tab itself only exists while TIFFIN_ENABLED (see
                 DETAIL_TABS). Recurring-subscription signup was removed from
                 this pane in #1035. */}
-            {activeTab === 'weekly' && TIFFIN_ENABLED ? (
+            {activeTab === "weekly" && TIFFIN_ENABLED ? (
               <ChefWeeklyPlanTab
                 chefId={chef.id}
                 weeklyMenuItems={weeklyMenu?.items ?? []}
@@ -695,7 +743,7 @@ export default function ChefDetailScreen() {
             ) : null}
 
             {/* ── REVIEWS TAB ── */}
-            {activeTab === 'reviews' ? (
+            {activeTab === "reviews" ? (
               <View style={styles.reviewsPane}>
                 {/* Only animate the very first reveal — see reviewsRevealedRef. */}
                 <ChefReviewList
@@ -714,7 +762,7 @@ export default function ChefDetailScreen() {
           the need it serves — "I'm deep in a long menu and want to be elsewhere"
           — arises precisely when an in-flow control would be off screen. Sits
           above the cart bar when one is showing. */}
-      {activeTab === 'menu' && categories.length > 1 ? (
+      {activeTab === "menu" && categories.length > 1 ? (
         <>
           <MenuPill
             onPress={() => setMenuSheetOpen(true)}
@@ -724,7 +772,8 @@ export default function ChefDetailScreen() {
             visible={menuSheetOpen}
             categories={categories.map((name) => ({
               name,
-              count: menuItems.filter((i) => (i.category ?? 'Other') === name).length,
+              count: menuItems.filter((i) => (i.category ?? "Other") === name)
+                .length,
             }))}
             activeCategory={activeCategory ?? categories[0] ?? null}
             onSelect={(cat) => {
@@ -754,14 +803,11 @@ export default function ChefDetailScreen() {
             <Pressable
               onPress={openCart}
               accessibilityRole="button"
-              accessibilityLabel={`View cart — ${cartCount} items, ${formatMoney(cartTotal)}`}
+              accessibilityLabel={`View cart — ${cartCount} items, ${formatMoney(cartTotal, chef.currency)}`}
             >
               {({ pressed }) => (
                 <View
-                  style={[
-                    styles.ctaButton,
-                    pressed && styles.ctaButtonPressed,
-                  ]}
+                  style={[styles.ctaButton, pressed && styles.ctaButtonPressed]}
                 >
                   <View style={styles.ctaLeft}>
                     <ShoppingCart size={18} color={customerColors.canvas} />
@@ -769,12 +815,10 @@ export default function ChefDetailScreen() {
                     <View style={styles.ctaCountBadge}>
                       <Text style={styles.ctaCountText}>{cartCount}</Text>
                     </View>
-                    <Text style={styles.ctaLabel}>
-                      View cart
-                    </Text>
+                    <Text style={styles.ctaLabel}>View cart</Text>
                   </View>
                   <Text style={styles.ctaTotal}>
-                    {formatMoney(cartTotal)}
+                    {formatMoney(cartTotal, chef.currency)}
                   </Text>
                 </View>
               )}
@@ -782,7 +826,6 @@ export default function ChefDetailScreen() {
           </View>
         </View>
       ) : null}
-
     </View>
   );
 }
@@ -795,22 +838,22 @@ const styles = StyleSheet.create({
   },
   centerFill: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: customerColors.canvas,
     paddingHorizontal: 24,
   },
   errorText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 15,
     color: customerColors.charcoal.soft,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 22,
   },
 
   // ── Hero photo ────────────────────────────────────────────────────────────
   heroContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -818,36 +861,36 @@ const styles = StyleSheet.create({
   },
   heroPlaceholder: {
     ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: customerColors.surface.soft,
   },
   // Subtle gradient-like scrim at the top so overlay buttons stay readable.
   heroScrim: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     height: 100,
     // RN doesn't support CSS gradient inline; use a semi-transparent overlay.
     // Spec intent: keep buttons legible on bright sky/food photos.
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: "rgba(0,0,0,0.08)",
   },
 
   // ── Overlay buttons ───────────────────────────────────────────────────────
   // Floating circular white buttons over the hero photo (spec §2.4).
   // shadow[2] on this outer row View — no overflow:hidden so shadow is visible.
   overlayBtnRow: {
-    position: 'absolute',
+    position: "absolute",
     left: 16,
     right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     zIndex: 10,
   },
   overlayBtnRightGroup: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   // Each button: white bg, radius-full, shadow[2] (spec §1 floating).
@@ -856,8 +899,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 9999,
     backgroundColor: customerColors.canvas,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     // shadow[2] from customerTheme — split to avoid TS spread type issue.
     shadowColor: customerTheme.shadow[2].shadowColor,
     shadowOffset: customerTheme.shadow[2].shadowOffset,
@@ -897,23 +940,23 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   identityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 8,
     marginBottom: 6,
   },
   // Chef name: Geist-Bold charcoal, ~26pt (spec §4 + §2.4).
   chefName: {
     flex: 1,
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: 26,
     lineHeight: 30,
     letterSpacing: -0.3,
     color: customerColors.charcoal.DEFAULT,
   },
   openStatus: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 12,
     letterSpacing: 0.1,
   },
@@ -926,15 +969,15 @@ const styles = StyleSheet.create({
 
   // Rating row: charcoal star (NOT gold), tabular figures.
   ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
     gap: 4,
     marginBottom: 4,
   },
   ratingTap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   star: {
@@ -944,16 +987,16 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   ratingValue: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 14,
     color: customerColors.charcoal.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   ratingCount: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 13,
     color: customerColors.charcoal.soft,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   // R1 zero-review state — surface-soft bg + charcoal-soft text (never a
   // gold/coral badge; that budget stays with the accent). Matches ChefCard.
@@ -964,7 +1007,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   newChipText: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 12,
     color: customerColors.charcoal.soft,
   },
@@ -974,49 +1017,49 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: customerColors.charcoal.soft,
     marginHorizontal: 2,
-    alignSelf: 'center',
+    alignSelf: "center",
   },
   metaText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 13,
     color: customerColors.charcoal.soft,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   cuisine: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 14,
     color: customerColors.charcoal.soft,
   },
   // Food-safety badge (#35) — calm trust-green, matches the ChefCard badge.
   foodSafe: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: customerColors.success.DEFAULT,
     marginTop: 6,
   },
   testModeNote: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 12,
-    color: '#78350F',
-    backgroundColor: '#FDE68A',
+    color: "#78350F",
+    backgroundColor: "#FDE68A",
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
     marginTop: 6,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   pickupOnlyNote: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: customerColors.charcoal.soft,
     marginTop: 6,
   },
   // A full sentence, not a chip: soft surface block so it reads as an
   // explanation rather than a status pill, and wraps without cramping.
   unavailableNote: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 13,
     lineHeight: 19,
     color: customerColors.charcoal.DEFAULT,
@@ -1039,7 +1082,7 @@ const styles = StyleSheet.create({
   // CRITICAL: shadow lives on the outer View; overflow:hidden on the inner
   // View so the radius works without killing the outer shadow (spec §6 gotcha).
   ctaBarOuter: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
@@ -1058,9 +1101,9 @@ const styles = StyleSheet.create({
     // No overflow:hidden needed here since the button itself has radius 8.
   },
   ctaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: customerColors.coral.DEFAULT,
     borderRadius: 8,
     paddingHorizontal: 20,
@@ -1070,8 +1113,8 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.coral.pressed,
   },
   ctaLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   ctaCountBadge: {
@@ -1080,25 +1123,25 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     paddingHorizontal: 6,
     backgroundColor: customerColors.canvas,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   ctaCountText: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 13,
     color: customerColors.coral.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   ctaLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 16,
     color: customerColors.canvas,
     letterSpacing: 0,
   },
   ctaTotal: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 16,
     color: customerColors.canvas,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
 });

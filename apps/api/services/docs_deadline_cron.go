@@ -76,15 +76,23 @@ func runDocsDeadlineScan(ctx context.Context) {
 // document type. Shared with the onboarding-status endpoint so the app and
 // the sweep agree on what "complete" means.
 func ChefDocsComplete(db *gorm.DB, chefID uuid.UUID) bool {
-	var country string
-	db.Model(&models.ChefProfile{}).Where("id = ?", chefID).Pluck("payout_country", &country)
+	var chef models.ChefProfile
+	if err := db.Select("payout_country").Take(&chef, "id = ?", chefID).Error; err != nil {
+		return false
+	}
+	country, ok := NormalizeKitchenCountry(chef.PayoutCountry)
+	if !ok {
+		return false
+	}
 	required := RequiredChefDocTypes(country)
 	var n int64
-	db.Model(&models.ChefDocument{}).
+	err := db.Model(&models.ChefDocument{}).
 		Where("chef_id = ? AND type IN ?", chefID, required).
+		Where("status <> ?", models.DocStatusRejected).
+		Where("expiry_date IS NULL OR expiry_date >= ?", time.Now().UTC().Truncate(24*time.Hour)).
 		Distinct("type").
-		Count(&n)
-	return n >= int64(len(required))
+		Count(&n).Error
+	return err == nil && n >= int64(len(required))
 }
 
 func sweepDocsDeadlines(db *gorm.DB, now time.Time) (warned, withdrawn int) {

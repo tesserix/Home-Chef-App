@@ -19,10 +19,11 @@ import { toast } from "sonner";
 import { useCartStore } from "@/app/store/cart-store";
 import { apiClient } from "@/shared/services/api-client";
 import { useFormatPrice } from "@/shared/utils/format-price";
-import { loadStripeJs } from "@/shared/utils/load-stripe";
+import { StripeCheckout, type StripeCheckoutPayment } from "../components/StripeCheckout";
 import { openCashfreeCheckout } from "@/shared/utils/cashfree";
 import { Button } from "@/shared/components/ui";
 import { earliestBakeryFulfillment } from "@homechef/mobile-shared/bakery";
+import { checkoutCreditIntent } from "@homechef/mobile-shared/payments";
 import type { Order, Address } from "@/shared/types";
 import { useDeliveryQuote, type CreditIntent } from "../hooks/useDeliveryQuote";
 import { surgeReasonText } from "../lib/surge";
@@ -124,6 +125,7 @@ function slotDayLabel(dateStr: string): string {
 // UUID that the API can actually look up.
 
 export default function CheckoutPage() {
+  const [stripeCheckout, setStripeCheckout] = useState<{ orderId: string; payment: StripeCheckoutPayment } | null>(null);
   const navigate = useNavigate();
   const cart = useCartStore();
   const fp = useFormatPrice();
@@ -470,8 +472,8 @@ export default function CheckoutPage() {
     setIsProcessing(true);
 
     try {
-      // Step 1: Create order. The backend decides which gateway to use
-      // based on the chef's PaymentProvider setting.
+      const paymentCredit = checkoutCreditIntent(quote?.paymentProvider, credit);
+      // The backend derives the payment gateway from the kitchen market.
       const order = await apiClient.post<Order>("/orders", {
         // Map cart lines to the API item shape, including selected add-ons (#232).
         items: cart.items.map((i) => ({
@@ -537,7 +539,7 @@ export default function CheckoutPage() {
       // one figure while the gateway took another.
       const paymentData = await apiClient.post<
         CashfreePayment | StripePayment | WalletPayment
-      >(`/payments/order/${order.id}/create`, credit);
+      >(`/payments/order/${order.id}/create`, paymentCredit);
 
       if (paymentData.provider === "wallet" || paymentData.paid) {
         cart.clearCart();
@@ -547,7 +549,7 @@ export default function CheckoutPage() {
       }
 
       if (paymentData.provider === "stripe") {
-        await confirmStripePayment(order.id, paymentData);
+        setStripeCheckout({ orderId: order.id, payment: paymentData });
       } else if (paymentData.provider === "cashfree") {
         await confirmCashfreePayment(order, paymentData);
       } else {
@@ -631,49 +633,24 @@ export default function CheckoutPage() {
     });
   };
 
-  // Launch the Stripe hosted-redirect flow. We use the Checkout redirect
-  // (simpler + no extra React integration needed) by loading Stripe.js on
-  // demand and calling stripe.confirmPayment with the client secret.
-  const confirmStripePayment = async (
-    orderId: string,
-    paymentData: {
-      stripePaymentIntentId: string;
-      clientSecret: string;
-      publishableKey: string;
-      amount: number;
-      currency: string;
-    },
-  ) => {
-    const stripe = await loadStripeJs(paymentData.publishableKey);
-    if (!stripe) {
-      toast.error("Stripe failed to load");
-      return;
-    }
-    // Customer confirms via Stripe-hosted form. `return_url` is where
-    // Stripe sends them after 3DS / wallet confirmation — we land back
-    // on the order page and VerifyPayment is triggered there too.
-    const returnUrl = `${window.location.origin}/orders/${orderId}?stripe_pi=${paymentData.stripePaymentIntentId}`;
-    const { error } = await stripe.confirmPayment({
-      clientSecret: paymentData.clientSecret,
-      confirmParams: { return_url: returnUrl },
-    });
-    if (error) {
-      toast.error(error.message || "Payment failed");
-      return;
-    }
-    // If confirmPayment doesn't redirect (rare — happens for sync
-    // confirmations like some non-3DS card paths), verify inline.
+  async function verifyStripeCheckout() {
+    if (!stripeCheckout) return;
+    const { orderId, payment } = stripeCheckout;
     try {
-      await apiClient.post(`/payments/order/${orderId}/verify`, {
-        stripePaymentIntentId: paymentData.stripePaymentIntentId,
+      const result = await apiClient.post<{ status: string }>(`/payments/order/${orderId}/verify`, {
+        stripePaymentIntentId: payment.stripePaymentIntentId,
       });
-      cart.clearCart();
-      toast.success("Payment successful!");
-      navigate(`/orders/${orderId}`);
+      if (result.status === "completed") {
+        cart.clearCart();
+        toast.success("Payment successful!");
+      } else {
+        toast.message("Confirming your payment…");
+      }
     } catch {
-      toast.error("Payment verification failed. Please contact support.");
+      toast.message("Confirming your payment… Check your order before retrying.");
     }
-  };
+    navigate(`/orders/${orderId}`);
+  }
 
   const onAddressSubmit = async (data: AddressFormData) => {
     try {
@@ -697,6 +674,10 @@ export default function CheckoutPage() {
       toast.error("Failed to save address");
     }
   };
+
+  if (stripeCheckout) {
+    return <StripeCheckout key={stripeCheckout.orderId} orderId={stripeCheckout.orderId} payment={stripeCheckout.payment} onConfirmed={verifyStripeCheckout} onCancel={() => navigate(`/orders/${stripeCheckout.orderId}`)} />;
+  }
 
   if (cart.items.length === 0) {
     navigate("/cart");

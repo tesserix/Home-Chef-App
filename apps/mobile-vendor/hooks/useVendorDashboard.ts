@@ -1,8 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
-import type { ChefPayout } from '../lib/chefPayout';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api";
+import type { ChefPayout } from "../lib/chefPayout";
 
 export interface DashboardData {
+  currency?: string;
   todayOrders: number;
   todayEarnings: number;
   /** Orders PLACED in the settlement week — the population the orders tab shows.
@@ -36,7 +37,7 @@ export interface DashboardData {
    * real earnings, which is what the TEST MODE banner exists to prevent.
    * Optional: a client can outrun the API deploy that added it.
    */
-  mode?: 'live' | 'test';
+  mode?: "live" | "test";
   /** Human-facing number of the open sandbox session (0 when live). */
   testSessionNo?: number;
   recentOrders: RecentOrder[];
@@ -66,13 +67,14 @@ export interface RecentOrder {
   createdAt: string;
   // 'pickup' orders show a pickup stepper + chef handover action on the
   // dashboard in-flight card. Legacy orders default to delivery.
-  fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
+  fulfillmentType?: "delivery" | "chef_delivery" | "pickup";
 }
 
 export function useVendorDashboard() {
   return useQuery<DashboardData>({
-    queryKey: ['chef', 'dashboard'],
-    queryFn: () => api.get<DashboardData>('/chef/dashboard').then((r) => r.data),
+    queryKey: ["chef", "dashboard"],
+    queryFn: () =>
+      api.get<DashboardData>("/chef/dashboard").then((r) => r.data),
     staleTime: 30_000,
     // This query owns EVERY in-flight card, and nothing else refreshes them:
     // pending orders poll (useVendorOrders) but the kitchen queue did not, so a
@@ -88,8 +90,9 @@ export function useToggleAcceptingOrders() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (acceptingOrders: boolean) =>
-      api.put('/chef/settings', { acceptingOrders }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] }),
+      api.put("/chef/settings", { acceptingOrders }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["chef", "dashboard"] }),
   });
 }
 
@@ -98,9 +101,9 @@ export function usePauseReceiving() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (minutes: PauseMinutes) =>
-      api.post('/chef/availability/pause', { minutes }),
+      api.post("/chef/availability/pause", { minutes }),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] }),
+      queryClient.invalidateQueries({ queryKey: ["chef", "dashboard"] }),
   });
 }
 
@@ -108,8 +111,8 @@ export function usePauseReceiving() {
 export function useResumeReceiving() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post('/chef/availability/resume', {}),
+    mutationFn: () => api.post("/chef/availability/resume", {}),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] }),
+      queryClient.invalidateQueries({ queryKey: ["chef", "dashboard"] }),
   });
 }

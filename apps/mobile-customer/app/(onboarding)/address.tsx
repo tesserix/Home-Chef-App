@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { addressSchema as schema } from '../../lib/address';
+import { AddressCountrySelect } from '../../components/address/AddressCountrySelect';
 import { router } from 'expo-router';
 import { Search, MapPin } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -27,14 +29,6 @@ import { AddressLabelSelect } from '../../components/address/AddressLabelSelect'
 import { useCustomerOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 
-const schema = z.object({
-  label: z.string().min(1),
-  addressLine2: z.string().optional(), // flat / house / floor — user-typed
-  addressLine1: z.string().min(5, 'Address must be at least 5 characters'),
-  city: z.string().min(1, 'City is required'),
-  state: z.string().min(1, 'State is required'),
-  pincode: z.string().regex(/^\d{6}$/, 'Enter a valid 6-digit pincode'),
-});
 
 type AddressForm = z.infer<typeof schema>;
 
@@ -92,6 +86,7 @@ export default function AddressScreen() {
     control,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<AddressForm>({
     resolver: zodResolver(schema),
@@ -104,6 +99,7 @@ export default function AddressScreen() {
       city: draft.city,
       state: draft.state,
       pincode: draft.pincode,
+      country: draft.country,
     },
   });
 
@@ -125,6 +121,7 @@ export default function AddressScreen() {
   );
 
   function pickSuggestion(s: AddressSuggestion): void {
+    setValue('country', (s.country ?? '').toUpperCase() as AddressForm['country'], { shouldValidate: true });
     setValue('addressLine1', s.line1 || s.description, { shouldValidate: true });
     if (s.city) setValue('city', s.city, { shouldValidate: true });
     if (s.region) setValue('state', s.region, { shouldValidate: true });
@@ -147,6 +144,7 @@ export default function AddressScreen() {
       city: data.city,
       state: data.state,
       pincode: data.pincode,
+      country: data.country,
       latitude: coords ? coords.lat : null,
       longitude: coords ? coords.lon : null,
     });
@@ -189,6 +187,14 @@ export default function AddressScreen() {
             Where should we deliver your orders?
           </Text>
 
+          <Controller control={control} name="country" render={({ field: { value, onChange } }) => (
+            <AddressCountrySelect value={value} onChange={(country) => {
+              onChange(country);
+              setValue('pincode', '', { shouldValidate: false });
+              setCoords(null);
+            }} />
+          )} />
+          {errors.country && <Text className="text-xs text-destructive mb-3">Choose India, Australia or New Zealand.</Text>}
           {/* ── Label selector — Home / Work / Other ── */}
           <View className="mb-5">
             <Controller
@@ -404,7 +410,7 @@ export default function AddressScreen() {
           {/* ── Pincode ── */}
           <View onLayout={(e) => { pincodeY.current = e.nativeEvent.layout.y; }}>
             <Text className="text-sm font-medium text-charcoal mb-1">
-              Pincode
+              {watch('country') === 'IN' ? 'Pincode' : 'Postcode'}
             </Text>
             <Controller
               control={control}
@@ -414,7 +420,7 @@ export default function AddressScreen() {
                   ref={pincodeRef}
                   className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
                   style={fieldBorderStyle(Boolean(errors.pincode), focusedField === 'pincode')}
-                  placeholder="6-digit pincode"
+                  placeholder={watch('country') === 'IN' ? '6-digit pincode' : '4-digit postcode'}
                   placeholderTextColor={customerColors.charcoal.soft}
                   onFocus={() => setFocusedField('pincode')}
                   onBlur={() => {
@@ -424,9 +430,9 @@ export default function AddressScreen() {
                   onChangeText={onChange}
                   value={value}
                   keyboardType="numeric"
-                  maxLength={6}
+                  maxLength={watch('country') === 'IN' ? 6 : 4}
                   returnKeyType="done"
-                  accessibilityLabel="Pincode"
+                  accessibilityLabel={watch('country') === 'IN' ? 'Pincode' : 'Postcode'}
                 />
               )}
             />

@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import Animated, { Easing, FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { ShoppingBag } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { useChef } from '../../hooks/useChefs';
 import { useCartStore } from '../../store/cart-store';
 import { DOCK_HEIGHT } from './dock-metrics';
 import { useRequireAccount } from '../../hooks/useRequireAccount';
@@ -34,6 +35,9 @@ export function CartFab() {
   const requireAccount = useRequireAccount();
   const items = useCartStore((s) => s.items);
   const total = useCartStore((s) => s.total());
+  const chefId = useCartStore((s) => s.chefId);
+  const { data: chef } = useChef(chefId ?? '');
+  const totalLabel = chef?.data.currency ? formatMoney(total, chef.data.currency) : null;
   const hasHydrated = useCartStore((s) => s.hasHydrated);
   const reduceMotion = useReducedMotion();
 
@@ -77,7 +81,7 @@ export function CartFab() {
           accessibilityRole="button"
           accessibilityLabel={`View cart — ${itemCount} ${
             itemCount === 1 ? 'item' : 'items'
-          }, ${formatMoney(total)}`}
+          }${totalLabel ? `, ${totalLabel}` : ''}`}
           style={styles.pillClip}
           android_ripple={{ color: PILL_RIPPLE, borderless: false }}
         >
@@ -94,7 +98,7 @@ export function CartFab() {
                   <Text style={styles.badgeText}>{itemCount}</Text>
                 </View>
               </View>
-              <Text style={styles.totalText}>{formatMoney(total)}</Text>
+              {totalLabel ? <Text style={styles.totalText}>{totalLabel}</Text> : null}
             </View>
           )}
         </Pressable>

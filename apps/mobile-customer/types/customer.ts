@@ -25,6 +25,7 @@ export interface ChefAvailability {
 }
 
 export interface Chef {
+  currency?: string;
   id: string;
   name: string;
   /** Official receipt fields (#receipt): the kitchen's registered business name,
@@ -199,6 +200,7 @@ export interface Address {
   city: string;
   state: string;
   pincode: string;
+  country?: string;
   /** Geocoded coords (from address autocomplete). 0/absent → server uses a flat delivery fee + skips zone checks. */
   latitude?: number;
   longitude?: number;
@@ -229,6 +231,7 @@ export interface TaxLine {
 }
 
 export interface Order {
+  currency?: string;
   id: string;
   orderNumber: string;
   // Matches the backend OrderStatus enum exactly (models/order.go). The chef

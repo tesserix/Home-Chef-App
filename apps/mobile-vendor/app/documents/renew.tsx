@@ -22,7 +22,7 @@ import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { describeDocumentType } from '../../hooks/useExpiringDocuments';
 import { ocrDocument } from '../../lib/ocr';
-import { useKitchenMarket } from '../../hooks/useKitchenMarket';
+import { useKitchenMarketState } from '../../hooks/useKitchenMarket';
 import type { Market } from '../../lib/market';
 import { FssaiOfferCard } from '../../components/vendor/FssaiOfferCard';
 
@@ -185,8 +185,15 @@ function expiryHint(doc: ChefDocument): { text: string; isUrgent: boolean } | nu
 
 export default function DocumentsRenewScreen() {
   const { showAlert } = useAlert();
-  const { data: docs, isLoading, isError, refetch } = useChefDocuments();
-  const market = useKitchenMarket();
+  const docsQuery = useChefDocuments();
+  const marketState = useKitchenMarketState();
+  const { data: docs, isLoading } = docsQuery;
+  const market = marketState.market;
+  const isError = docsQuery.isError || marketState.isError;
+  const refetch = () => {
+    void docsQuery.refetch();
+    marketState.refetch();
+  };
   const upload = useUploadDocument();
   const { show: showToast } = useToast();
   const [busyKey, setBusyKey] = useState<string | null>(null);

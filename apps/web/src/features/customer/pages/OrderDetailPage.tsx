@@ -120,16 +120,20 @@ export default function OrderDetailPage() {
     let cancelled = false;
     (async () => {
       try {
-        await apiClient.post(`/payments/order/${id}/verify`, { stripePaymentIntentId: pi });
+        const result = await apiClient.post<{ status: string }>(`/payments/order/${id}/verify`, { stripePaymentIntentId: pi });
         if (cancelled) return;
-        toast.success('Payment confirmed');
+        if (result.status === 'completed') toast.success('Payment confirmed');
+        else toast.message('Confirming your payment…');
         queryClient.invalidateQueries({ queryKey: ['order', id] });
       } catch {
-        if (!cancelled) toast.error('Payment verification failed — please contact support');
+        if (!cancelled) toast.message('Confirming your payment… Check your order before retrying.');
       } finally {
         if (!cancelled) {
           const next = new URLSearchParams(searchParams);
           next.delete('stripe_pi');
+          next.delete('payment_intent');
+          next.delete('payment_intent_client_secret');
+          next.delete('redirect_status');
           setSearchParams(next, { replace: true });
         }
       }

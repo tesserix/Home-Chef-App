@@ -259,7 +259,7 @@ export default function HomeScreen() {
         <View style={styles.addressRowPill}>
           <AddressSwitcher onOpen={() => addressSheetRef.current?.present()} />
         </View>
-        {WALLET_ENABLED && !isGuest ? (
+        {WALLET_ENABLED && !isGuest && activeAddress?.country === 'IN' ? (
           <Pressable
             onPress={() => router.push('/wallet')}
             accessibilityRole="button"

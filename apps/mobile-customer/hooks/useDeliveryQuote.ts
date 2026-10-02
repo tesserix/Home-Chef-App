@@ -1,3 +1,4 @@
+import type { CheckoutCreditIntent } from '@homechef/mobile-shared/payments';
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { TaxLine } from "../types/customer";
@@ -56,6 +57,7 @@ export interface SurgeFactors {
 }
 
 export interface DeliveryQuote {
+  subtotal?: number;
   deliveryFee: number;
   pickupFee: number;
   /** What the customer keeps by collecting. 0 when delivery is itself free. */
@@ -146,12 +148,7 @@ export interface CreditQuote {
 
 /** The customer's credit intent. Amounts are omitted while a rail is on "auto",
  *  which asks the server to apply as much as its ceilings allow. */
-export interface CreditIntent {
-  useWallet: boolean;
-  walletAmount?: number;
-  useLoyalty: boolean;
-  loyaltyPoints?: number;
-}
+export type CreditIntent = CheckoutCreditIntent;
 
 /**
  * Quote the per-mode delivery fee for a chef + drop coordinates.
@@ -201,6 +198,7 @@ export function useDeliveryQuote(
       latitude,
       longitude,
       city,
+      country,
       state,
       subtotal,
       discount,

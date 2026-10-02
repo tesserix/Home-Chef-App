@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { formatMoney } from "../lib/format";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   FlatList,
   Platform,
@@ -7,27 +8,27 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
-import { ChevronLeft } from 'lucide-react-native';
-import { theme } from '@homechef/mobile-shared/theme';
-import { Skeleton } from '@homechef/mobile-shared/ui';
-import { api } from '../lib/api';
-import { downloadAndSharePdf } from '../lib/download-pdf';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { ChevronLeft } from "lucide-react-native";
+import { theme } from "@homechef/mobile-shared/theme";
+import { Skeleton } from "@homechef/mobile-shared/ui";
+import { api } from "../lib/api";
+import { downloadAndSharePdf } from "../lib/download-pdf";
 import {
   useEarningsBreakdown,
   type BreakdownPeriod,
   type EarningsBreakdownOrder,
-} from '../hooks/useEarningsBreakdown';
+} from "../hooks/useEarningsBreakdown";
 import {
   useWeeklyStatements,
   type WeeklyStatement,
-} from '../hooks/useWeeklyStatements';
-import { useRefunds, type RefundEntry } from '../hooks/useRefunds';
-import { payoutHoldMeta, statementStatusMeta } from '../lib/payout-hold';
+} from "../hooks/useWeeklyStatements";
+import { useRefunds, type RefundEntry } from "../hooks/useRefunds";
+import { payoutHoldMeta, statementStatusMeta } from "../lib/payout-hold";
 
 // ----- Types (payout account) -------------------------------------------------
 
@@ -37,7 +38,7 @@ interface LastPayout {
 }
 
 interface PayoutResponse {
-  payoutMethod: 'bank_transfer' | 'upi' | '';
+  payoutMethod: "bank_transfer" | "upi" | "";
   bankAccountName: string;
   bankAccountNumber: string;
   bankIFSC: string;
@@ -47,11 +48,11 @@ interface PayoutResponse {
   lastPayout?: LastPayout | null;
 }
 
-type Period = 'week' | 'month' | 'all';
+type Period = "week" | "month" | "all";
 
 /** Map the UI period tab to the API's `period` query param. */
 function toApiPeriod(p: Period): BreakdownPeriod {
-  if (p === 'all') return 'cycle';
+  if (p === "all") return "cycle";
   return p;
 }
 
@@ -59,17 +60,13 @@ function toApiPeriod(p: Period): BreakdownPeriod {
 
 function usePayoutDetails() {
   return useQuery<PayoutResponse>({
-    queryKey: ['chef', 'payout'],
-    queryFn: () => api.get<PayoutResponse>('/chef/payout').then((r) => r.data),
+    queryKey: ["chef", "payout"],
+    queryFn: () => api.get<PayoutResponse>("/chef/payout").then((r) => r.data),
     staleTime: 60_000,
   });
 }
 
 // ----- Formatting helpers -----------------------------------------------------
-
-function fmtInr(value: number): string {
-  return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
-}
 
 function fmtPct(rate: number): string {
   return `${(rate * 100).toFixed(1)}%`;
@@ -78,7 +75,7 @@ function fmtPct(rate: number): string {
 function fmtShortDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
 // ----- Sub-components ---------------------------------------------------------
@@ -98,7 +95,10 @@ function TabLabel({ label, active, onPress }: TabLabelProps) {
       accessibilityState={{ selected: active }}
       accessibilityLabel={label}
       hitSlop={7}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         // Inner-View pattern — visual styles live on the View, not the
@@ -107,7 +107,7 @@ function TabLabel({ label, active, onPress }: TabLabelProps) {
           style={[
             tabStyles.segment,
             active && tabStyles.segmentActive,
-            pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+            pressed && Platform.OS === "ios" && { opacity: 0.7 },
           ]}
         >
           <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
@@ -168,7 +168,7 @@ const segmentStyles = StyleSheet.create({
     borderBottomRightRadius: theme.radius.lg,
   },
   clip: {
-    overflow: 'hidden',
+    overflow: "hidden",
     backgroundColor: theme.colors.paper,
   },
   separator: {
@@ -179,7 +179,7 @@ const segmentStyles = StyleSheet.create({
 });
 
 interface PayoutAccountRowProps {
-  payoutMethod: PayoutResponse['payoutMethod'];
+  payoutMethod: PayoutResponse["payoutMethod"];
   bankAccountName: string;
   bankAccountNumber: string;
   bankIFSC: string;
@@ -195,8 +195,8 @@ function PayoutAccountRow({
 }: PayoutAccountRowProps) {
   const { t } = useTranslation();
   const hasBank =
-    payoutMethod === 'bank_transfer' && bankAccountNumber.trim() !== '';
-  const hasUpi = payoutMethod === 'upi' && upiId.trim() !== '';
+    payoutMethod === "bank_transfer" && bankAccountNumber.trim() !== "";
+  const hasUpi = payoutMethod === "upi" && upiId.trim() !== "";
 
   let label: string;
   let sublabel: string;
@@ -204,31 +204,39 @@ function PayoutAccountRow({
     label = bankAccountName
       ? `${bankAccountName} · ${bankAccountNumber}`
       : bankAccountNumber;
-    sublabel = bankIFSC ? t('earnings.ifsc', { ifsc: bankIFSC }) : t('earnings.bankAccount');
+    sublabel = bankIFSC
+      ? t("earnings.ifsc", { ifsc: bankIFSC })
+      : t("earnings.bankAccount");
   } else if (hasUpi) {
     label = upiId;
-    sublabel = t('earnings.upi');
+    sublabel = t("earnings.upi");
   } else {
-    label = t('earnings.noPayoutAccount');
-    sublabel = t('earnings.addPayoutHint');
+    label = t("earnings.noPayoutAccount");
+    sublabel = t("earnings.addPayoutHint");
   }
 
   return (
     <Pressable
-      onPress={() => router.push('/payout')}
+      onPress={() => router.push("/payout")}
       accessibilityRole="button"
       accessibilityLabel={`Payout account: ${label}`}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         <View
           style={[
             accountRowStyles.root,
-            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
+            pressed &&
+              Platform.OS === "ios" && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={accountRowStyles.textBlock}>
-            <Text style={accountRowStyles.sectionLabel}>{t('earnings.payoutAccountLabel')}</Text>
+            <Text style={accountRowStyles.sectionLabel}>
+              {t("earnings.payoutAccountLabel")}
+            </Text>
             <Text style={accountRowStyles.value} numberOfLines={1}>
               {label}
             </Text>
@@ -239,7 +247,7 @@ function PayoutAccountRow({
           <ChevronLeft
             size={16}
             color={theme.colors.ink.muted}
-            style={{ transform: [{ rotate: '180deg' }] }}
+            style={{ transform: [{ rotate: "180deg" }] }}
           />
         </View>
       )}
@@ -300,9 +308,9 @@ function BreakdownRow({
 
 const bkStyles = StyleSheet.create({
   row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: theme.spacing[3],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.mist.DEFAULT,
@@ -312,38 +320,38 @@ const bkStyles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   rowLabel: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     flex: 1,
   },
   rowLabelEmphasized: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     color: theme.colors.ink.DEFAULT,
   },
   rowAnnotation: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
   },
   rowValue: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'right',
+    fontVariant: ["tabular-nums"],
+    textAlign: "right",
   },
   rowValueSecondary: {
     color: theme.colors.ink.muted,
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
   },
   rowValueEmphasized: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.body.size,
   },
   rowValueAccent: {
     color: theme.colors.ink.DEFAULT,
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.body.size,
   },
 });
@@ -351,11 +359,13 @@ const bkStyles = StyleSheet.create({
 // ---- Order history row (tappable) -------------------------------------------
 
 interface OrderHistoryRowProps {
+  currency: string;
   order: EarningsBreakdownOrder;
   onPress: () => void;
 }
 
-function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
+function OrderHistoryRow({ order, onPress, currency }: OrderHistoryRowProps) {
+  const formatAmount = (value: number) => formatMoney(value, currency);
   const { t } = useTranslation();
   // #617 — escrow hold pill; empty labelKey (no hold / flags off) renders nothing.
   const hold = payoutHoldMeta(order.payoutHoldStatus);
@@ -364,13 +374,17 @@ function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Open order ${order.orderNumber}`}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         <View
           style={[
             orderRowStyles.root,
-            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
+            pressed &&
+              Platform.OS === "ios" && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={orderRowStyles.leftBlock}>
@@ -381,7 +395,9 @@ function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
               {fmtShortDate(order.completedAt)}
             </Text>
             {hold.labelKey ? (
-              <View style={[orderRowStyles.holdPill, { backgroundColor: hold.bg }]}>
+              <View
+                style={[orderRowStyles.holdPill, { backgroundColor: hold.bg }]}
+              >
                 <Text style={[orderRowStyles.holdPillText, { color: hold.fg }]}>
                   {t(hold.labelKey)}
                 </Text>
@@ -389,15 +405,17 @@ function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
             ) : null}
           </View>
           <View style={orderRowStyles.rightBlock}>
-            <Text style={orderRowStyles.netPayout}>{fmtInr(order.netPayout)}</Text>
+            <Text style={orderRowStyles.netPayout}>
+              {formatAmount(order.netPayout)}
+            </Text>
             <Text style={orderRowStyles.gross}>
-              {t('earnings.gross', { amount: fmtInr(order.gross) })}
+              {t("earnings.gross", { amount: formatAmount(order.gross) })}
             </Text>
           </View>
           <ChevronLeft
             size={14}
             color={theme.colors.ink.muted}
-            style={{ transform: [{ rotate: '180deg' }] }}
+            style={{ transform: [{ rotate: "180deg" }] }}
           />
         </View>
       )}
@@ -409,8 +427,8 @@ const orderRowStyles = StyleSheet.create({
   // Rows live inside white group cards (CardSegment) — separators are
   // rendered by the segment shell, not the row itself.
   root: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: theme.spacing[3],
     minHeight: 56,
     paddingVertical: theme.spacing[2],
@@ -418,43 +436,43 @@ const orderRowStyles = StyleSheet.create({
   },
   leftBlock: { flex: 1 },
   orderNumber: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   // #617 — escrow hold / statement-status pill (tint bg + colored text, radius.full).
   holdPill: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     marginTop: 4,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: 2,
     borderRadius: theme.radius.full,
   },
   holdPillText: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 0.2,
   },
   date: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: 2,
   },
-  rightBlock: { alignItems: 'flex-end' },
+  rightBlock: { alignItems: "flex-end" },
   netPayout: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   gross: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: 1,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
 });
 
@@ -465,11 +483,11 @@ function fmtWeekRange(weekStart: string, weekEnd: string): string {
   const start = new Date(`${weekStart}T00:00:00`);
   const end = new Date(`${weekEnd}T00:00:00`);
   end.setDate(end.getDate() - 1); // weekEnd is the exclusive next Monday
-  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return weekStart;
   }
-  return `${start.toLocaleDateString('en-IN', opts)} – ${end.toLocaleDateString('en-IN', opts)}`;
+  return `${start.toLocaleDateString("en-IN", opts)} – ${end.toLocaleDateString("en-IN", opts)}`;
 }
 
 interface StatementRowProps {
@@ -478,6 +496,8 @@ interface StatementRowProps {
 }
 
 function StatementRow({ statement, onPress }: StatementRowProps) {
+  const formatAmount = (value: number) =>
+    formatMoney(value, statement.currency);
   const { t } = useTranslation();
   // #617 — disbursement pill: paid (green) vs pending (amber).
   const status = statementStatusMeta(statement.status);
@@ -486,13 +506,17 @@ function StatementRow({ statement, onPress }: StatementRowProps) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Download settlement statement for ${fmtWeekRange(statement.weekStart, statement.weekEnd)}`}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         <View
           style={[
             orderRowStyles.root,
-            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
+            pressed &&
+              Platform.OS === "ios" && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={orderRowStyles.leftBlock}>
@@ -501,10 +525,16 @@ function StatementRow({ statement, onPress }: StatementRowProps) {
             </Text>
             <Text style={orderRowStyles.date}>
               {statement.ordersCount === 1
-                ? t('earnings.ordersInPeriodOne', { count: statement.ordersCount })
-                : t('earnings.ordersInPeriod', { count: statement.ordersCount })}
+                ? t("earnings.ordersInPeriodOne", {
+                    count: statement.ordersCount,
+                  })
+                : t("earnings.ordersInPeriod", {
+                    count: statement.ordersCount,
+                  })}
             </Text>
-            <View style={[orderRowStyles.holdPill, { backgroundColor: status.bg }]}>
+            <View
+              style={[orderRowStyles.holdPill, { backgroundColor: status.bg }]}
+            >
               <Text style={[orderRowStyles.holdPillText, { color: status.fg }]}>
                 {t(status.labelKey)}
               </Text>
@@ -512,14 +542,16 @@ function StatementRow({ statement, onPress }: StatementRowProps) {
           </View>
           <View style={orderRowStyles.rightBlock}>
             <Text style={orderRowStyles.netPayout}>
-              {fmtInr(statement.netPayout)}
+              {formatAmount(statement.netPayout)}
             </Text>
-            <Text style={statementRowStyles.download}>{t('earnings.downloadPdfShort')}</Text>
+            <Text style={statementRowStyles.download}>
+              {t("earnings.downloadPdfShort")}
+            </Text>
           </View>
           <ChevronLeft
             size={14}
             color={theme.colors.ink.muted}
-            style={{ transform: [{ rotate: '180deg' }] }}
+            style={{ transform: [{ rotate: "180deg" }] }}
           />
         </View>
       )}
@@ -529,7 +561,7 @@ function StatementRow({ statement, onPress }: StatementRowProps) {
 
 const statementRowStyles = StyleSheet.create({
   download: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.DEFAULT, // persimmon accent
     marginTop: 1,
@@ -541,8 +573,9 @@ const statementRowStyles = StyleSheet.create({
 /** Current Indian financial year label, e.g. "FY 2026-27" (FY starts 1 Apr). */
 function currentFyLabel(): string {
   const now = new Date();
-  const fyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-  const endShort = String((fyStart + 1) % 100).padStart(2, '0');
+  const fyStart =
+    now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const endShort = String((fyStart + 1) % 100).padStart(2, "0");
   return `FY ${fyStart}-${endShort}`;
 }
 
@@ -558,25 +591,33 @@ function TaxDocumentRow({ fyLabel, onPress }: TaxDocumentRowProps) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Download TDS certificate for ${fyLabel}`}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         <View
           style={[
             accountRowStyles.root,
-            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
+            pressed &&
+              Platform.OS === "ios" && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={accountRowStyles.textBlock}>
-            <Text style={accountRowStyles.sectionLabel}>{t('earnings.taxDocumentsLabel')}</Text>
+            <Text style={accountRowStyles.sectionLabel}>
+              {t("earnings.taxDocumentsLabel")}
+            </Text>
             <Text style={accountRowStyles.value} numberOfLines={1}>
-              {t('earnings.tdsCertificateFy', { fy: fyLabel })}
+              {t("earnings.tdsCertificateFy", { fy: fyLabel })}
             </Text>
             <Text style={accountRowStyles.sub} numberOfLines={1}>
-              {t('earnings.annualSummary')}
+              {t("earnings.annualSummary")}
             </Text>
           </View>
-          <Text style={statementRowStyles.download}>{t('earnings.downloadShort')}</Text>
+          <Text style={statementRowStyles.download}>
+            {t("earnings.downloadShort")}
+          </Text>
         </View>
       )}
     </Pressable>
@@ -593,24 +634,30 @@ function FYStatementRow({ fyLabel, onPress }: TaxDocumentRowProps) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Download FY statement for ${fyLabel}`}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         <View
           style={[
             accountRowStyles.root,
-            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
+            pressed &&
+              Platform.OS === "ios" && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={accountRowStyles.textBlock}>
             <Text style={accountRowStyles.value} numberOfLines={1}>
-              {t('earnings.fyStatementFy', { fy: fyLabel })}
+              {t("earnings.fyStatementFy", { fy: fyLabel })}
             </Text>
             <Text style={accountRowStyles.sub} numberOfLines={1}>
-              {t('earnings.fyStatementSub')}
+              {t("earnings.fyStatementSub")}
             </Text>
           </View>
-          <Text style={statementRowStyles.download}>{t('earnings.downloadShort')}</Text>
+          <Text style={statementRowStyles.download}>
+            {t("earnings.downloadShort")}
+          </Text>
         </View>
       )}
     </Pressable>
@@ -623,28 +670,32 @@ function ExpensesLinkRow({ onPress }: { onPress: () => void }) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={t('earnings.expensesRowLabel')}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      accessibilityLabel={t("earnings.expensesRowLabel")}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         <View
           style={[
             accountRowStyles.root,
-            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
+            pressed &&
+              Platform.OS === "ios" && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={accountRowStyles.textBlock}>
             <Text style={accountRowStyles.value} numberOfLines={1}>
-              {t('earnings.expensesRowLabel')}
+              {t("earnings.expensesRowLabel")}
             </Text>
             <Text style={accountRowStyles.sub} numberOfLines={1}>
-              {t('earnings.expensesRowSub')}
+              {t("earnings.expensesRowSub")}
             </Text>
           </View>
           <ChevronLeft
             size={14}
             color={theme.colors.ink.muted}
-            style={{ transform: [{ rotate: '180deg' }] }}
+            style={{ transform: [{ rotate: "180deg" }] }}
           />
         </View>
       )}
@@ -655,29 +706,35 @@ function ExpensesLinkRow({ onPress }: { onPress: () => void }) {
 // ---- Refund row (tappable → opens the order) ---------------------------------
 
 interface RefundRowProps {
+  currency: string;
   refund: RefundEntry;
   onPress: () => void;
 }
 
-function RefundRow({ refund, onPress }: RefundRowProps) {
+function RefundRow({ refund, onPress, currency }: RefundRowProps) {
+  const formatAmount = (value: number) => formatMoney(value, currency);
   const { t } = useTranslation();
   const detail =
     refund.reason ||
     (refund.items && refund.items.length > 0
-      ? refund.items.map((i) => i.name).join(', ')
-      : t('earnings.refund'));
+      ? refund.items.map((i) => i.name).join(", ")
+      : t("earnings.refund"));
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Refund on order ${refund.orderNumber}, ${fmtInr(refund.amount)}`}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      accessibilityLabel={`Refund on order ${refund.orderNumber}, ${formatAmount(refund.amount)}`}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {({ pressed }) => (
         <View
           style={[
             orderRowStyles.root,
-            pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
+            pressed &&
+              Platform.OS === "ios" && { backgroundColor: theme.colors.bone },
           ]}
         >
           <View style={orderRowStyles.leftBlock}>
@@ -690,13 +747,13 @@ function RefundRow({ refund, onPress }: RefundRowProps) {
           </View>
           <View style={orderRowStyles.rightBlock}>
             <Text style={refundRowStyles.amount}>
-              − {fmtInr(refund.amount)}
+              − {formatAmount(refund.amount)}
             </Text>
           </View>
           <ChevronLeft
             size={14}
             color={theme.colors.ink.muted}
-            style={{ transform: [{ rotate: '180deg' }] }}
+            style={{ transform: [{ rotate: "180deg" }] }}
           />
         </View>
       )}
@@ -706,45 +763,45 @@ function RefundRow({ refund, onPress }: RefundRowProps) {
 
 const refundRowStyles = StyleSheet.create({
   amount: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.destructive.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
 });
 
 // ----- List item type ---------------------------------------------------------
 
 type ListItem =
-  | { type: 'hero' }
-  | { type: 'figures' }
-  | { type: 'tabBar' }
-  | { type: 'breakdown' }
-  | { type: 'orderListHeader' }
+  | { type: "hero" }
+  | { type: "figures" }
+  | { type: "tabBar" }
+  | { type: "breakdown" }
+  | { type: "orderListHeader" }
   | {
-      type: 'orderEntry';
+      type: "orderEntry";
       order: EarningsBreakdownOrder;
       first: boolean;
       last: boolean;
     }
-  | { type: 'refundsHeader' }
-  | { type: 'refundEntry'; refund: RefundEntry; first: boolean; last: boolean }
-  | { type: 'statementsHeader' }
+  | { type: "refundsHeader" }
+  | { type: "refundEntry"; refund: RefundEntry; first: boolean; last: boolean }
+  | { type: "statementsHeader" }
   | {
-      type: 'statementEntry';
+      type: "statementEntry";
       statement: WeeklyStatement;
       first: boolean;
       last: boolean;
     }
-  | { type: 'taxRow' }
-  | { type: 'payoutRow' }
-  | { type: 'empty' };
+  | { type: "taxRow" }
+  | { type: "payoutRow" }
+  | { type: "empty" };
 
 // ----- Screen -----------------------------------------------------------------
 
 export default function EarningsScreen() {
   const { t } = useTranslation();
-  const [period, setPeriod] = useState<Period>('week');
+  const [period, setPeriod] = useState<Period>("week");
   const apiPeriod = toApiPeriod(period);
 
   // Payout account details (bank/UPI + pending/last payout)
@@ -789,6 +846,8 @@ export default function EarningsScreen() {
     }
   }
 
+  const currency = breakdown?.currency ?? "INR";
+  const formatAmount = (value: number) => formatMoney(value, currency);
   const totals = breakdown?.totals;
   const orders = breakdown?.orders ?? [];
   const rates = breakdown?.rates;
@@ -803,22 +862,22 @@ export default function EarningsScreen() {
 
   const listItems = useMemo<ListItem[]>(() => {
     const items: ListItem[] = [
-      { type: 'hero' },
-      { type: 'figures' },
-      { type: 'tabBar' },
+      { type: "hero" },
+      { type: "figures" },
+      { type: "tabBar" },
     ];
 
     if (totals) {
-      items.push({ type: 'breakdown' });
+      items.push({ type: "breakdown" });
     }
 
     if (orders.length === 0) {
-      items.push({ type: 'empty' });
+      items.push({ type: "empty" });
     } else {
-      items.push({ type: 'orderListHeader' });
+      items.push({ type: "orderListHeader" });
       orders.forEach((order, idx) => {
         items.push({
-          type: 'orderEntry',
+          type: "orderEntry",
           order,
           first: idx === 0,
           last: idx === orders.length - 1,
@@ -828,10 +887,10 @@ export default function EarningsScreen() {
 
     const refundList = refunds ?? [];
     if (refundList.length > 0) {
-      items.push({ type: 'refundsHeader' });
+      items.push({ type: "refundsHeader" });
       refundList.forEach((refund, idx) => {
         items.push({
-          type: 'refundEntry',
+          type: "refundEntry",
           refund,
           first: idx === 0,
           last: idx === refundList.length - 1,
@@ -841,10 +900,10 @@ export default function EarningsScreen() {
 
     const stmts = statements ?? [];
     if (stmts.length > 0) {
-      items.push({ type: 'statementsHeader' });
+      items.push({ type: "statementsHeader" });
       stmts.forEach((statement, idx) => {
         items.push({
-          type: 'statementEntry',
+          type: "statementEntry",
           statement,
           first: idx === 0,
           last: idx === stmts.length - 1,
@@ -852,34 +911,37 @@ export default function EarningsScreen() {
       });
     }
 
-    items.push({ type: 'taxRow' });
-    items.push({ type: 'payoutRow' });
+    items.push({ type: "taxRow" });
+    items.push({ type: "payoutRow" });
     return items;
   }, [totals, orders, refunds, statements]);
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
         <View style={styles.commandBar}>
           <Pressable
             onPress={() => router.back()}
             hitSlop={8}
-            accessibilityLabel={t('earnings.goBack')}
+            accessibilityLabel={t("earnings.goBack")}
             accessibilityRole="button"
-            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+            android_ripple={{
+              color: `${theme.colors.ink.DEFAULT}14`,
+              borderless: true,
+            }}
           >
             {({ pressed }) => (
               <View
                 style={[
                   styles.backButton,
-                  pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                  pressed && Platform.OS === "ios" && { opacity: 0.6 },
                 ]}
               >
                 <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} />
               </View>
             )}
           </Pressable>
-          <Text style={styles.commandTitle}>{t('earnings.title')}</Text>
+          <Text style={styles.commandTitle}>{t("earnings.title")}</Text>
         </View>
         <View style={styles.skeletonPad}>
           <Skeleton height={48} style={{ width: 180, marginBottom: 16 }} />
@@ -894,25 +956,26 @@ export default function EarningsScreen() {
 
   if (isError) {
     return (
-      <SafeAreaView style={styles.errorRoot} edges={['top', 'left', 'right']}>
-        <Text style={styles.errorTitle}>{t('earnings.errorTitle')}</Text>
-        <Text style={styles.errorBody}>
-          {t('earnings.errorBody')}
-        </Text>
+      <SafeAreaView style={styles.errorRoot} edges={["top", "left", "right"]}>
+        <Text style={styles.errorTitle}>{t("earnings.errorTitle")}</Text>
+        <Text style={styles.errorBody}>{t("earnings.errorBody")}</Text>
         <Pressable
           onPress={() => refetchPayout()}
           accessibilityRole="button"
-          accessibilityLabel={t('common.retry')}
-          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+          accessibilityLabel={t("common.retry")}
+          android_ripple={{
+            color: `${theme.colors.paper}33`,
+            borderless: false,
+          }}
         >
           {({ pressed }) => (
             <View
               style={[
                 styles.errorPrimary,
-                pressed && Platform.OS === 'ios' && { opacity: 0.85 },
+                pressed && Platform.OS === "ios" && { opacity: 0.85 },
               ]}
             >
-              <Text style={styles.errorPrimaryText}>{t('common.retry')}</Text>
+              <Text style={styles.errorPrimaryText}>{t("common.retry")}</Text>
             </View>
           )}
         </Pressable>
@@ -922,142 +985,155 @@ export default function EarningsScreen() {
 
   function renderItem({ item }: { item: ListItem }) {
     switch (item.type) {
-      case 'hero':
+      case "hero":
         return (
           <View style={styles.heroBlock}>
             <Text style={styles.heroLabel}>
-              {period === 'week'
-                ? t('earnings.heroThisWeek')
-                : period === 'month'
-                  ? t('earnings.heroThisMonth')
-                  : t('earnings.heroAllTime')}
+              {period === "week"
+                ? t("earnings.heroThisWeek")
+                : period === "month"
+                  ? t("earnings.heroThisMonth")
+                  : t("earnings.heroAllTime")}
             </Text>
-            <Text style={styles.heroAmount}>{fmtInr(periodTotal)}</Text>
+            <Text style={styles.heroAmount}>{formatAmount(periodTotal)}</Text>
             {breakdown && (
               <Text style={styles.heroCycleDates}>
-                {fmtShortDate(breakdown.cycleStart)} –{' '}
+                {fmtShortDate(breakdown.cycleStart)} –{" "}
                 {fmtShortDate(breakdown.cycleEnd)}
               </Text>
             )}
           </View>
         );
 
-      case 'figures': {
+      case "figures": {
         // #617 — real escrow figures. "Held" = net payout still in escrow for the
         // period (₹0 while the flags are off, so this reads as "nothing held" pre-
         // launch); "Last payout" = the most recent PAID weekly statement (the old
         // fields the backend never sent, so they always showed ₹0 / "None yet").
         const held = breakdown?.totals.held ?? 0;
-        const lastPaid = (statements ?? []).find((s) => s.status === 'paid');
+        const lastPaid = (statements ?? []).find((s) => s.status === "paid");
         return (
           <View style={styles.figuresStrip}>
             <View style={styles.figureItem}>
-              <Text style={styles.figureLabel}>{t('earnings.figureHeld')}</Text>
-              <Text style={styles.figureValue}>{fmtInr(held)}</Text>
+              <Text style={styles.figureLabel}>{t("earnings.figureHeld")}</Text>
+              <Text style={styles.figureValue}>{formatAmount(held)}</Text>
             </View>
             <View style={styles.figureDivider} />
             {lastPaid ? (
               <View style={styles.figureItem}>
-                <Text style={styles.figureLabel}>{t('earnings.figureLastPayout')}</Text>
-                <Text style={styles.figureValue}>{fmtInr(lastPaid.netPayout)}</Text>
+                <Text style={styles.figureLabel}>
+                  {t("earnings.figureLastPayout")}
+                </Text>
+                <Text style={styles.figureValue}>
+                  {formatAmount(lastPaid.netPayout)}
+                </Text>
                 <Text style={styles.figureSub}>
                   {lastPaid.paidAt
-                    ? new Date(lastPaid.paidAt).toLocaleDateString('en-IN', {
-                        day: 'numeric',
-                        month: 'short',
+                    ? new Date(lastPaid.paidAt).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
                       })
                     : fmtWeekRange(lastPaid.weekStart, lastPaid.weekEnd)}
                 </Text>
               </View>
             ) : (
               <View style={styles.figureItem}>
-                <Text style={styles.figureLabel}>{t('earnings.figureLastPayout')}</Text>
-                <Text style={styles.figureSub}>{t('earnings.noneYet')}</Text>
+                <Text style={styles.figureLabel}>
+                  {t("earnings.figureLastPayout")}
+                </Text>
+                <Text style={styles.figureSub}>{t("earnings.noneYet")}</Text>
               </View>
             )}
           </View>
         );
       }
 
-      case 'tabBar':
+      case "tabBar":
         return (
           <View style={styles.tabBar}>
             <TabLabel
-              label={t('earnings.week')}
-              active={period === 'week'}
-              onPress={() => setPeriod('week')}
+              label={t("earnings.week")}
+              active={period === "week"}
+              onPress={() => setPeriod("week")}
             />
             <TabLabel
-              label={t('earnings.month')}
-              active={period === 'month'}
-              onPress={() => setPeriod('month')}
+              label={t("earnings.month")}
+              active={period === "month"}
+              onPress={() => setPeriod("month")}
             />
             <TabLabel
-              label={t('earnings.all')}
-              active={period === 'all'}
-              onPress={() => setPeriod('all')}
+              label={t("earnings.all")}
+              active={period === "all"}
+              onPress={() => setPeriod("all")}
             />
           </View>
         );
 
-      case 'breakdown':
+      case "breakdown":
         if (!totals || !rates) return null;
         return (
           <View style={styles.breakdownSection}>
-            <Text style={styles.breakdownSectionLabel}>{t('earnings.breakdownLabel')}</Text>
+            <Text style={styles.breakdownSectionLabel}>
+              {t("earnings.breakdownLabel")}
+            </Text>
             <View style={styles.breakdownGroup}>
               <BreakdownRow
-                label={t('earnings.grossRevenue')}
-                value={fmtInr(totals.grossRevenue)}
+                label={t("earnings.grossRevenue")}
+                value={formatAmount(totals.grossRevenue)}
               />
               <BreakdownRow
-                label={t('earnings.platformCommission')}
+                label={t("earnings.platformCommission")}
                 annotation={`(${fmtPct(rates.platformCommission)})`}
-                value={`− ${fmtInr(totals.platformCommission)}`}
+                value={`− ${formatAmount(totals.platformCommission)}`}
                 secondary
               />
-              {gstInterState ? (
+              {currency === "INR" && (
                 <>
-                  <BreakdownRow
-                    label={t('earnings.gstIgst')}
-                    annotation={`(${fmtPct(rates.gst)})`}
-                    value={`− ${fmtInr(totals.igst)}`}
-                    secondary
-                  />
-                </>
-              ) : (
-                <>
-                  <BreakdownRow
-                    label={t('earnings.gst')}
-                    annotation={`(${fmtPct(rates.gst)})`}
-                    value={`− ${fmtInr(gstCombined)}`}
-                    secondary
-                  />
-                  {gstCombined > 0 && (
-                    <View style={bkStyles.row}>
-                      <Text style={styles.gstSubRow}>
-                        CGST {fmtInr(totals.cgst)} + SGST {fmtInr(totals.sgst)}
-                      </Text>
-                    </View>
+                  {gstInterState ? (
+                    <>
+                      <BreakdownRow
+                        label={t("earnings.gstIgst")}
+                        annotation={`(${fmtPct(rates.gst)})`}
+                        value={`− ${formatAmount(totals.igst)}`}
+                        secondary
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <BreakdownRow
+                        label={t("earnings.gst")}
+                        annotation={`(${fmtPct(rates.gst)})`}
+                        value={`− ${formatAmount(gstCombined)}`}
+                        secondary
+                      />
+                      {gstCombined > 0 && (
+                        <View style={bkStyles.row}>
+                          <Text style={styles.gstSubRow}>
+                            CGST {formatAmount(totals.cgst)} + SGST{" "}
+                            {formatAmount(totals.sgst)}
+                          </Text>
+                        </View>
+                      )}
+                    </>
                   )}
+                  <BreakdownRow
+                    label={t("earnings.tds")}
+                    annotation={`(${fmtPct(rates.tds)})`}
+                    value={`− ${formatAmount(totals.tds)}`}
+                    secondary
+                  />
                 </>
               )}
-              <BreakdownRow
-                label={t('earnings.tds')}
-                annotation={`(${fmtPct(rates.tds)})`}
-                value={`− ${fmtInr(totals.tds)}`}
-                secondary
-              />
               {(totals.penalties ?? 0) > 0 && (
                 <BreakdownRow
-                  label={t('earnings.penalties')}
-                  value={`− ${fmtInr(totals.penalties ?? 0)}`}
+                  label={t("earnings.penalties")}
+                  value={`− ${formatAmount(totals.penalties ?? 0)}`}
                   secondary
                 />
               )}
               <BreakdownRow
-                label={t('earnings.netPayout')}
-                value={fmtInr(totals.netPayout)}
+                label={t("earnings.netPayout")}
+                value={formatAmount(totals.netPayout)}
                 accent={totals.netPayout > 0}
                 emphasized
                 last
@@ -1065,44 +1141,54 @@ export default function EarningsScreen() {
             </View>
             <Text style={styles.ordersCount}>
               {totals.ordersCount === 1
-                ? t('earnings.ordersInPeriodOne', { count: totals.ordersCount })
-                : t('earnings.ordersInPeriod', { count: totals.ordersCount })}
+                ? t("earnings.ordersInPeriodOne", { count: totals.ordersCount })
+                : t("earnings.ordersInPeriod", { count: totals.ordersCount })}
             </Text>
           </View>
         );
 
-      case 'orderListHeader':
+      case "orderListHeader":
         return (
-          <Text style={styles.dateHeader}>{t('earnings.orderHistoryHeader')}</Text>
+          <Text style={styles.dateHeader}>
+            {t("earnings.orderHistoryHeader")}
+          </Text>
         );
 
-      case 'orderEntry':
+      case "orderEntry":
         return (
           <CardSegment first={item.first} last={item.last}>
             <OrderHistoryRow
+              currency={currency}
               order={item.order}
               onPress={() => router.push(`/orders/${item.order.orderId}`)}
             />
           </CardSegment>
         );
 
-      case 'refundsHeader':
-        return <Text style={styles.dateHeader}>{t('earnings.refundsHeader')}</Text>;
+      case "refundsHeader":
+        return (
+          <Text style={styles.dateHeader}>{t("earnings.refundsHeader")}</Text>
+        );
 
-      case 'refundEntry':
+      case "refundEntry":
         return (
           <CardSegment first={item.first} last={item.last}>
             <RefundRow
+              currency={currency}
               refund={item.refund}
               onPress={() => router.push(`/orders/${item.refund.orderId}`)}
             />
           </CardSegment>
         );
 
-      case 'statementsHeader':
-        return <Text style={styles.dateHeader}>{t('earnings.weeklyStatementsHeader')}</Text>;
+      case "statementsHeader":
+        return (
+          <Text style={styles.dateHeader}>
+            {t("earnings.weeklyStatementsHeader")}
+          </Text>
+        );
 
-      case 'statementEntry':
+      case "statementEntry":
         return (
           <CardSegment first={item.first} last={item.last}>
             <StatementRow
@@ -1117,58 +1203,64 @@ export default function EarningsScreen() {
           </CardSegment>
         );
 
-      case 'taxRow':
+      case "taxRow":
         return (
           <View style={styles.payoutSection}>
             <View style={styles.singleCard}>
               <View style={styles.singleCardClip}>
-                <TaxDocumentRow
-                  fyLabel={currentFyLabel()}
-                  onPress={() =>
-                    downloadAndSharePdf(
-                      '/chef/tax/certificate',
-                      `tds-certificate-${currentFyLabel().replace(/\s/g, '')}.pdf`,
-                    )
-                  }
-                />
-                <FYStatementRow
-                  fyLabel={currentFyLabel()}
-                  onPress={() =>
-                    downloadAndSharePdf(
-                      '/chef/tax/fy-statement.pdf',
-                      `fy-statement-${currentFyLabel().replace(/\s/g, '')}.pdf`,
-                    )
-                  }
-                />
-                <ExpensesLinkRow onPress={() => router.push('/expenses')} />
+                {currency === "INR" && (
+                  <>
+                    <TaxDocumentRow
+                      fyLabel={currentFyLabel()}
+                      onPress={() =>
+                        downloadAndSharePdf(
+                          "/chef/tax/certificate",
+                          `tds-certificate-${currentFyLabel().replace(/\s/g, "")}.pdf`,
+                        )
+                      }
+                    />
+                    <FYStatementRow
+                      fyLabel={currentFyLabel()}
+                      onPress={() =>
+                        downloadAndSharePdf(
+                          "/chef/tax/fy-statement.pdf",
+                          `fy-statement-${currentFyLabel().replace(/\s/g, "")}.pdf`,
+                        )
+                      }
+                    />
+                  </>
+                )}
+                <ExpensesLinkRow onPress={() => router.push("/expenses")} />
               </View>
             </View>
           </View>
         );
 
-      case 'payoutRow':
+      case "payoutRow":
         return (
           <View style={styles.payoutSection}>
             <View style={styles.singleCard}>
               <View style={styles.singleCardClip}>
                 <PayoutAccountRow
-                  payoutMethod={payoutData?.payoutMethod ?? ''}
-                  bankAccountName={payoutData?.bankAccountName ?? ''}
-                  bankAccountNumber={payoutData?.bankAccountNumber ?? ''}
-                  bankIFSC={payoutData?.bankIFSC ?? ''}
-                  upiId={payoutData?.upiId ?? ''}
+                  payoutMethod={payoutData?.payoutMethod ?? ""}
+                  bankAccountName={payoutData?.bankAccountName ?? ""}
+                  bankAccountNumber={payoutData?.bankAccountNumber ?? ""}
+                  bankIFSC={payoutData?.bankIFSC ?? ""}
+                  upiId={payoutData?.upiId ?? ""}
                 />
               </View>
             </View>
           </View>
         );
 
-      case 'empty':
+      case "empty":
         return (
           <View style={styles.emptyBlock}>
-            <Text style={styles.emptyHeadline}>{t('earnings.noOrdersInPeriod')}</Text>
+            <Text style={styles.emptyHeadline}>
+              {t("earnings.noOrdersInPeriod")}
+            </Text>
             <Text style={styles.emptyBody}>
-              {t('earnings.noOrdersInPeriodBody')}
+              {t("earnings.noOrdersInPeriodBody")}
             </Text>
           </View>
         );
@@ -1179,35 +1271,40 @@ export default function EarningsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
       <View style={styles.commandBar}>
         <Pressable
           onPress={() => router.back()}
           hitSlop={8}
-          accessibilityLabel={t('earnings.goBack')}
+          accessibilityLabel={t("earnings.goBack")}
           accessibilityRole="button"
-          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+          android_ripple={{
+            color: `${theme.colors.ink.DEFAULT}14`,
+            borderless: true,
+          }}
         >
           {({ pressed }) => (
             <View
               style={[
                 styles.backButton,
-                pressed && Platform.OS === 'ios' && { opacity: 0.6 },
+                pressed && Platform.OS === "ios" && { opacity: 0.6 },
               ]}
             >
               <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} />
             </View>
           )}
         </Pressable>
-        <Text style={styles.commandTitle}>{t('earnings.title')}</Text>
+        <Text style={styles.commandTitle}>{t("earnings.title")}</Text>
       </View>
 
       <FlatList
         data={listItems}
         keyExtractor={(item, idx) => {
-          if (item.type === 'orderEntry') return item.order.orderId;
-          if (item.type === 'statementEntry') return `stmt-${item.statement.id}`;
-          if (item.type === 'refundEntry') return `refund-${item.refund.orderId}`;
+          if (item.type === "orderEntry") return item.order.orderId;
+          if (item.type === "statementEntry")
+            return `stmt-${item.statement.id}`;
+          if (item.type === "refundEntry")
+            return `refund-${item.refund.orderId}`;
           return `${item.type}-${idx}`;
         }}
         contentContainerStyle={styles.listContent}
@@ -1232,14 +1329,14 @@ const styles = StyleSheet.create({
   errorRoot: {
     flex: 1,
     backgroundColor: theme.colors.bone,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: theme.spacing[6],
   },
 
   commandBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[3],
     paddingBottom: theme.spacing[3],
@@ -1248,11 +1345,11 @@ const styles = StyleSheet.create({
   backButton: {
     minWidth: 44,
     minHeight: 44,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
+    alignItems: "flex-start",
+    justifyContent: "center",
   },
   commandTitle: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: 28,
     lineHeight: 32,
     letterSpacing: -0.3,
@@ -1274,32 +1371,32 @@ const styles = StyleSheet.create({
     ...theme.shadow[1],
   },
   heroLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 1.4,
     color: theme.colors.ink.muted,
     marginBottom: theme.spacing[2],
   },
   heroAmount: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: 44,
     lineHeight: 48,
     letterSpacing: -1,
     color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   heroCycleDates: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: 4,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
 
   // Figures strip — white stat card (pending / last payout)
   figuresStrip: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     backgroundColor: theme.colors.paper,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[4],
@@ -1309,35 +1406,35 @@ const styles = StyleSheet.create({
   },
   figureItem: { flex: 1 },
   figureLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 1.2,
     color: theme.colors.ink.muted,
     marginBottom: 4,
   },
   figureValue: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: 20,
     lineHeight: 24,
     letterSpacing: -0.3,
     color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   figureSub: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: 2,
   },
   figureDivider: {
     width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
+    alignSelf: "stretch",
     backgroundColor: theme.colors.mist.DEFAULT,
   },
 
   // Period tabs — iOS-style segmented control track (UI-V2-SPEC §5)
   tabBar: {
-    flexDirection: 'row',
+    flexDirection: "row",
     backgroundColor: theme.colors.mist.DEFAULT,
     borderRadius: theme.radius.md,
     padding: 3,
@@ -1349,7 +1446,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[5],
   },
   breakdownSectionLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 1.4,
     color: theme.colors.ink.muted,
@@ -1364,14 +1461,14 @@ const styles = StyleSheet.create({
     ...theme.shadow[1],
   },
   gstSubRow: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     paddingBottom: theme.spacing[2],
     flex: 1,
   },
   ordersCount: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: theme.spacing[2],
@@ -1379,7 +1476,7 @@ const styles = StyleSheet.create({
 
   // Date header for order list
   dateHeader: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 1.4,
     color: theme.colors.ink.muted,
@@ -1400,7 +1497,7 @@ const styles = StyleSheet.create({
   },
   singleCardClip: {
     borderRadius: theme.radius.lg,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 
   // Empty state
@@ -1409,14 +1506,14 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing[4],
   },
   emptyHeadline: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.h2.size,
     color: theme.colors.ink.DEFAULT,
     letterSpacing: -0.2,
     marginBottom: theme.spacing[2],
   },
   emptyBody: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     lineHeight: 20,
@@ -1430,18 +1527,18 @@ const styles = StyleSheet.create({
 
   // Error state
   errorTitle: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.h2.size,
     color: theme.colors.ink.DEFAULT,
-    textAlign: 'center',
+    textAlign: "center",
     letterSpacing: -0.2,
     marginBottom: theme.spacing[2],
   },
   errorBody: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.muted,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: theme.spacing[6],
   },
   errorPrimary: {
@@ -1450,12 +1547,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[6],
     paddingVertical: theme.spacing[3],
     minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   errorPrimaryText: {
     color: theme.colors.paper,
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
   },
 });
@@ -1467,8 +1564,8 @@ const tabStyles = StyleSheet.create({
   segment: {
     flex: 1,
     minHeight: 34, // 40 track minus 3pt padding top/bottom
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 9,
   },
   segmentActive: {
@@ -1476,7 +1573,7 @@ const tabStyles = StyleSheet.create({
     ...theme.shadow[1],
   },
   label: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
     letterSpacing: 0.1,
@@ -1489,27 +1586,27 @@ const tabStyles = StyleSheet.create({
 const accountRowStyles = StyleSheet.create({
   // Row inside a standalone white card — card shell carries radius/shadow.
   root: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: theme.spacing[4],
     paddingHorizontal: theme.spacing[4],
     minHeight: 56,
   },
   textBlock: { flex: 1 },
   sectionLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 1.2,
     color: theme.colors.ink.muted,
     marginBottom: 4,
   },
   value: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
   },
   sub: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: 2,

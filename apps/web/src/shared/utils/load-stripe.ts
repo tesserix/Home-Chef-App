@@ -9,9 +9,20 @@
 
 type StripeError = { message?: string };
 
+export type StripePaymentElement = {
+  mount: (target: HTMLElement) => void;
+  destroy: () => void;
+  on: (event: 'ready', listener: () => void) => void;
+};
+
+export type StripeElements = {
+  create: (type: 'payment') => StripePaymentElement;
+};
+
 export type StripeInstance = {
+  elements: (options: { clientSecret: string }) => StripeElements;
   confirmPayment: (args: {
-    clientSecret: string;
+    elements: StripeElements;
     confirmParams: { return_url: string };
     redirect?: 'always' | 'if_required';
   }) => Promise<{ error?: StripeError }>;
@@ -30,37 +41,41 @@ declare global {
 }
 
 const SCRIPT_SRC = 'https://js.stripe.com/v3/';
-let loadPromise: Promise<StripeInstance | null> | null = null;
+let loadPromise: Promise<boolean> | null = null;
 
-export function loadStripeJs(publishableKey: string): Promise<StripeInstance | null> {
-  if (!publishableKey) return Promise.resolve(null);
+export async function loadStripeJs(publishableKey: string): Promise<StripeInstance | null> {
+  if (!publishableKey) return null;
+  if (typeof window.Stripe === 'function') return window.Stripe(publishableKey);
 
-  if (typeof window.Stripe === 'function') {
-    return Promise.resolve(window.Stripe(publishableKey));
-  }
-
-  if (loadPromise) return loadPromise;
-
-  loadPromise = new Promise((resolve) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${SCRIPT_SRC}"]`);
-    const onReady = () => {
-      if (typeof window.Stripe === 'function') {
-        resolve(window.Stripe(publishableKey));
-      } else {
-        resolve(null);
+  if (!loadPromise) {
+    loadPromise = new Promise<boolean>((resolve) => {
+      const existing = document.querySelector<HTMLScriptElement>(`script[src="${SCRIPT_SRC}"]`);
+      const script = existing ?? document.createElement('script');
+      const finish = (loaded: boolean) => {
+        clearTimeout(timeout);
+        script.removeEventListener('load', onLoad);
+        script.removeEventListener('error', onError);
+        if (!loaded) script.remove();
+        resolve(loaded);
+      };
+      const onLoad = () => finish(typeof window.Stripe === 'function');
+      const onError = () => finish(false);
+      const timeout = setTimeout(onError, 15_000);
+      script.addEventListener('load', onLoad, { once: true });
+      script.addEventListener('error', onError, { once: true });
+      if (!existing) {
+        script.src = SCRIPT_SRC;
+        script.async = true;
+        document.head.appendChild(script);
       }
-    };
-    if (existing) {
-      existing.addEventListener('load', onReady, { once: true });
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = SCRIPT_SRC;
-    script.async = true;
-    script.onload = onReady;
-    script.onerror = () => resolve(null);
-    document.head.appendChild(script);
-  });
-
-  return loadPromise;
+    });
+  }
+  const pending = loadPromise;
+  const loaded = await pending;
+  if (!loaded) {
+    if (loadPromise === pending) loadPromise = null;
+    return null;
+  }
+  const constructor = window.Stripe as StripeConstructor | undefined;
+  return constructor?.(publishableKey) ?? null;
 }

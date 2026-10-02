@@ -21,20 +21,13 @@
 // Visual: white canvas, centered layout, safe-area aware. Coral CTAs.
 
 import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CheckCircle2, XCircle } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../hooks/useOrderHistory';
-import { startOrderPayment } from '../../lib/payment';
+import { isPaymentSetupRejection, startOrderPayment } from '../../lib/payment';
 import { useCartStore } from '../../store/cart-store';
 
 // Android ripple tints — translucent tokens, never a new literal colour.
@@ -44,6 +37,7 @@ const GHOST_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 interface PaymentParams {
   order_id?: string; // the internal order id passed when launching checkout
   error?: string;
+  not_started?: string;
   tip?: string; // '1' when this is a post-delivery tip charge (#45)
 }
 
@@ -66,6 +60,10 @@ export default function PaymentResult() {
 
   const [pastGrace, setPastGrace] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [notStarted, setNotStarted] = useState(params.not_started === '1');
+  useEffect(() => {
+    setNotStarted(params.not_started === '1');
+  }, [params.not_started, orderId]);
 
   // Authoritative: poll the server's payment status until terminal. Back off
   // to the slow cadence once past grace (see SLOW_POLL_MS above) — undefined
@@ -120,6 +118,7 @@ export default function PaymentResult() {
       ? 'success'
       : paymentStatus === 'failed' ||
           paymentStatus === 'refunded' ||
+          notStarted ||
           (!orderId && Boolean(params.error))
         ? 'failure'
         : !orderId && pastGrace
@@ -139,10 +138,13 @@ export default function PaymentResult() {
       return;
     }
     setRetrying(true);
+    setNotStarted(false);
+    router.setParams({ not_started: undefined });
     try {
       await startOrderPayment(orderId);
-    } catch {
-      // Stay on the failure screen; the order is unpaid and can be retried.
+    } catch (error) {
+      setNotStarted(isPaymentSetupRejection(error));
+    } finally {
       setRetrying(false);
     }
   }
@@ -179,8 +181,7 @@ export default function PaymentResult() {
           </View>
           <Text style={styles.successTitle}>Tip sent! 🎉</Text>
           <Text style={styles.successBody}>
-            Thank you for supporting your chef and rider — 100% of your tip goes
-            straight to them.
+            Thank you for supporting your chef and rider — 100% of your tip goes straight to them.
           </Text>
           <Pressable
             onPress={handleViewOrder}
@@ -260,7 +261,10 @@ export default function PaymentResult() {
           >
             {({ pressed }) => (
               <View
-                style={[styles.ctaGhost, pressed && Platform.OS === 'ios' && styles.ctaGhostPressed]}
+                style={[
+                  styles.ctaGhost,
+                  pressed && Platform.OS === 'ios' && styles.ctaGhostPressed,
+                ]}
               >
                 <Text style={styles.ctaGhostLabel}>My orders</Text>
               </View>
@@ -281,7 +285,8 @@ export default function PaymentResult() {
           </View>
           <Text style={styles.successTitle}>Payment confirmed</Text>
           <Text style={styles.successBody}>
-            Your order has been placed successfully. We'll notify you when the chef starts preparing.
+            Your order has been placed successfully. We'll notify you when the chef starts
+            preparing.
           </Text>
           {/* Primary CTA — coral, radius 8, 52pt (R14: post-payment success always
               routes forward via "View order", never a dead end). */}
@@ -308,7 +313,10 @@ export default function PaymentResult() {
           >
             {({ pressed }) => (
               <View
-                style={[styles.ctaGhost, pressed && Platform.OS === 'ios' && styles.ctaGhostPressed]}
+                style={[
+                  styles.ctaGhost,
+                  pressed && Platform.OS === 'ios' && styles.ctaGhostPressed,
+                ]}
               >
                 <Text style={styles.ctaGhostLabel}>My orders</Text>
               </View>
@@ -329,11 +337,15 @@ export default function PaymentResult() {
         <View style={styles.failureCircle}>
           <XCircle size={48} color={customerColors.destructive.DEFAULT} strokeWidth={1.5} />
         </View>
-        <Text style={styles.failureTitle}>Payment not completed</Text>
+        <Text style={styles.failureTitle}>
+          {notStarted ? 'Payment not started' : 'Payment not completed'}
+        </Text>
         <Text style={styles.failureBody}>
-          {canRetry
-            ? "We couldn't confirm your payment. If money was deducted it will be refunded automatically. You can retry the payment for this order."
-            : "We couldn't confirm your payment, so this order was cancelled. Anything that was deducted is refunded automatically — place a new order whenever you're ready."}
+          {notStarted
+            ? 'Payment setup is temporarily unavailable. Your order is saved. You can retry payment for this same order once setup is available.'
+            : canRetry
+              ? "We couldn't confirm your payment. If money was deducted it will be refunded automatically. You can retry the payment for this order."
+              : "We couldn't confirm your payment, so this order was cancelled. Anything that was deducted is refunded automatically — place a new order whenever you're ready."}
         </Text>
         {canRetry ? (
           <Pressable
@@ -367,12 +379,18 @@ export default function PaymentResult() {
           accessibilityRole="button"
           accessibilityLabel="Go to the order"
           style={canRetry ? undefined : styles.ctaWrapper}
-          android_ripple={{ color: canRetry ? GHOST_RIPPLE : PRIMARY_RIPPLE, borderless: false }}
+          android_ripple={{
+            color: canRetry ? GHOST_RIPPLE : PRIMARY_RIPPLE,
+            borderless: false,
+          }}
         >
           {({ pressed }) =>
             canRetry ? (
               <View
-                style={[styles.ctaGhost, pressed && Platform.OS === 'ios' && styles.ctaGhostPressed]}
+                style={[
+                  styles.ctaGhost,
+                  pressed && Platform.OS === 'ios' && styles.ctaGhostPressed,
+                ]}
               >
                 <Text style={styles.ctaGhostLabel}>{orderId ? 'View order' : 'My orders'}</Text>
               </View>

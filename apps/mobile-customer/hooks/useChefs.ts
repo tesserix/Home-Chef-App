@@ -31,6 +31,7 @@ export interface ChefFilters {
 // shape reach a screen, or names go blank and open-status reads wrong.
 
 interface ApiChefProfile {
+  currency?: string;
   id: string;
   businessName?: string;
   description?: string;
@@ -101,6 +102,7 @@ function firstNonEmpty(...vals: (string | undefined)[]): string | undefined {
 export function mapChef(c: ApiChefProfile): Chef {
   return {
     id: c.id,
+    currency: c.currency,
     name: c.businessName ?? '',
     cuisine: (c.cuisines ?? []).filter(Boolean).join(' · '),
     rating: c.rating ?? 0,

@@ -1,0 +1,25 @@
+import { jest, it, expect, afterEach } from '@jest/globals';
+import React from 'react';
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
+import { act, create } from 'react-test-renderer';
+jest.mock('react-native-css-interop/jsx-runtime', () => require('react/jsx-runtime'));
+jest.mock('react-native-css-interop/jsx-dev-runtime', () => require('react/jsx-dev-runtime'));
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' }, Pressable: 'Pressable', Text: 'Text', View: 'View', StyleSheet: { create: (x: unknown) => x } }));
+jest.mock('react-native-reanimated', () => ({ __esModule: true, default: { View: 'AnimatedView' }, Easing: { bezier: jest.fn() }, FadeIn: {}, useReducedMotion: () => true }));
+jest.mock('lucide-react-native', () => ({ ShoppingBag: 'ShoppingBag' }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('../../hooks/useRequireAccount', () => ({ useRequireAccount: () => () => true }));
+jest.mock('../../hooks/useChefs', () => ({ useChef: jest.fn() }));
+import { useChef } from '../../hooks/useChefs';
+import { useCartStore } from '../../store/cart-store';
+import { CartFab } from './DockCartPill';
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+let screen: ReturnType<typeof create>;
+afterEach(async () => { if (screen) await act(async () => screen.unmount()); useCartStore.getState().clearCart(); });
+it.each([['NZD', 'NZD 15'], ['AUD', 'AUD 15'], ['INR', '₹15'], [undefined, undefined]])('labels the persisted basket using the kitchen currency %s', async (currency, expected) => {
+  useCartStore.setState({ chefId: 'kitchen', hasHydrated: true, items: [{ menuItemId: 'bowl', lineId: 'bowl', name: 'Bowl', price: 15, quantity: 1 }] });
+  jest.mocked(useChef).mockReturnValue({ data: currency ? { data: { currency } } : undefined } as never);
+  await act(async () => { screen = create(<CartFab />); });
+  const button = screen.root.findByProps({ accessibilityRole: 'button' });
+  expect(button.props.accessibilityLabel).toBe(`View cart — 1 item${expected ? `, ${expected}` : ''}`);
+});

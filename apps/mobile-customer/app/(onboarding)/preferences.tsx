@@ -136,7 +136,7 @@ export default function PreferencesScreen() {
         addressCity: draft.city,
         addressState: draft.state,
         addressPostalCode: draft.pincode,
-        addressCountry: 'IN',
+        addressCountry: draft.country,
         // Geocoded from the address autocomplete pick; 0 when the user typed
         // the address manually (server then uses a flat fee + skips zones).
         addressLatitude: draft.latitude ?? 0,

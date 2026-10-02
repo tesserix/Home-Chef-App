@@ -21,6 +21,7 @@ interface OnboardingDraft {
   city: string;
   state: string;
   pincode: string;
+  country: 'IN' | 'AU' | 'NZ';
   // Geocoded from the address autocomplete pick; null when typed manually
   // (server then uses a flat fee + skips delivery-zone checks).
   latitude: number | null;
@@ -49,6 +50,7 @@ const initialDraft: OnboardingDraft = {
   city: '',
   state: '',
   pincode: '',
+  country: 'IN',
   latitude: null,
   longitude: null,
   cuisinePreferences: [],
@@ -78,6 +80,7 @@ export const useCustomerOnboardingStore = create<CustomerOnboardingState>()(
         city: state.city,
         state: state.state,
         pincode: state.pincode,
+        country: state.country,
         latitude: state.latitude,
         longitude: state.longitude,
         cuisinePreferences: state.cuisinePreferences,

@@ -51,6 +51,7 @@ interface ApiOrderChef {
 }
 
 interface ApiOrder {
+  currency?: string;
   id: string;
   orderNumber: string;
   status: Order['status'];
@@ -128,6 +129,7 @@ function mapOrder(raw: ApiOrder): Order {
   return {
     id: raw.id,
     orderNumber: raw.orderNumber,
+    currency: raw.currency,
     status: raw.status,
     paymentStatus: raw.paymentStatus,
     cancelReason: raw.cancelReason,

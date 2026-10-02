@@ -24,6 +24,7 @@ module.exports = {
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   moduleNameMapper: {
+    '^react$': require.resolve('react'),
     // `nativewind/babel` sets jsxImportSource, so every .tsx pulls the interop
     // runtime, which resolves its web build under node and dies reaching
     // StyleSheet. These suites test logic, not rendering, so the plain React

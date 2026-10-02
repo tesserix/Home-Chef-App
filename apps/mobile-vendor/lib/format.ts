@@ -15,14 +15,20 @@ function parts(amount: number | null | undefined): {
   n: number;
   hasPaise: boolean;
 } {
-  const n = typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
+  const n = typeof amount === "number" && Number.isFinite(amount) ? amount : 0;
   return { n, hasPaise: Math.round(n) !== n };
 }
 
 /** "₹351.97" / "₹352" — for display next to a label. */
-export function formatMoney(amount: number | null | undefined): string {
+export function formatMoney(
+  amount: number | null | undefined,
+  currency = "INR",
+): string {
   const { n, hasPaise } = parts(amount);
-  return `₹${n.toLocaleString('en-IN', {
+  const code = currency.trim().toUpperCase() || "INR";
+  const locale = code === "INR" ? "en-IN" : code === "NZD" ? "en-NZ" : "en-AU";
+  const prefix = code === "INR" ? "₹" : `${code} `;
+  return `${prefix}${n.toLocaleString(locale, {
     minimumFractionDigits: hasPaise ? 2 : 0,
     maximumFractionDigits: 2,
   })}`;

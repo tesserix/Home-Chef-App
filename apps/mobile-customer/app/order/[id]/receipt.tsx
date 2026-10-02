@@ -1,3 +1,4 @@
+import { formatMoney } from '../../../lib/format';
 // Order receipt / tax invoice (#receipt). Customers asked to view the receipt
 // for an order they placed and paid for — including a cancelled+refunded one,
 // which the order detail shows the money for but offered no document.
@@ -26,10 +27,6 @@ import { HAIRLINE } from '../../../lib/hairline';
 const ICON_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
 const PDF_RIPPLE = `${customerColors.canvas}33`;
 
-function money(n: number): string {
-  return `₹${n.toFixed(2)}`;
-}
-
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', {
     day: 'numeric',
@@ -46,6 +43,7 @@ export default function OrderReceiptScreen() {
   const router = useRouter();
   const { data, isLoading, isError } = useOrder(id ?? '');
   const order = data?.data;
+  const money = (amount: number) => formatMoney(amount, order?.currency);
   const [openingPdf, setOpeningPdf] = useState(false);
   const [sharing, setSharing] = useState(false);
 

@@ -190,6 +190,7 @@ export default function OrderDetailScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { data, isLoading, isError } = useOrder(id ?? '');
+  const money = (amount: number) => formatMoney(amount, data?.data?.currency);
   // Shares the ['order', id, 'cancel-request'] cache with CancellationSection
   // below, so this is the same fetch rather than a second one. Needed here for
   // the price breakdown: only the cancellation snapshot knows how the retained
@@ -609,7 +610,7 @@ export default function OrderDetailScreen() {
             <Text style={styles.voidBody}>{order.cancelReason}</Text>
             {order.refundAmount && order.refundAmount > 0 ? (
               <Text style={styles.voidRefund}>
-                {formatMoney(order.refundAmount)} has been refunded to your original
+                {money(order.refundAmount)} has been refunded to your original
                 payment method.
               </Text>
             ) : (
@@ -983,7 +984,7 @@ export default function OrderDetailScreen() {
                 <Text style={styles.itemQty}>×{item.quantity}</Text>
               </View>
               <Text style={styles.itemSubtotal}>
-                ₹{(item.price * item.quantity).toFixed(2)}
+                {money(item.price * item.quantity)}
               </Text>
             </View>
           ))}
@@ -1054,7 +1055,7 @@ export default function OrderDetailScreen() {
           <Text style={styles.sectionTitle}>Price Breakdown</Text>
           <View style={styles.priceRow}>
             <Text style={styles.priceLabel}>Subtotal</Text>
-            <Text style={styles.priceValue}>₹{subtotal.toFixed(2)}</Text>
+            <Text style={styles.priceValue}>{money(subtotal)}</Text>
           </View>
           {/* Pickup → free, shown explicitly so it never reads as a charge. */}
           <View style={styles.priceRow}>
@@ -1062,43 +1063,42 @@ export default function OrderDetailScreen() {
               {isPickup ? 'Pickup' : 'Delivery Fee'}
             </Text>
             <Text style={styles.priceValue}>
-              {isPickup ? 'Free' : `₹${deliveryFee.toFixed(2)}`}
+              {isPickup ? 'Free' : money(deliveryFee)}
             </Text>
           </View>
           {deliveryFeeReduction > 0.005 ? (
             <Text style={styles.priceNote}>
-              Your chef set delivery to ₹{(order.deliveryFeeFinal ?? 0).toFixed(2)} — ₹
-              {deliveryFeeReduction.toFixed(2)} refunded to your original payment method.
+              Your chef set delivery to {money(order.deliveryFeeFinal ?? 0)} — {money(deliveryFeeReduction)} refunded to your original payment method.
             </Text>
           ) : null}
           {platformFee > 0 ? (
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Platform fee</Text>
-              <Text style={styles.priceValue}>₹{platformFee.toFixed(2)}</Text>
+              <Text style={styles.priceValue}>{money(platformFee)}</Text>
             </View>
           ) : null}
           {taxLines.map((t) => (
             <View key={t.code} style={styles.priceRow}>
               <Text style={styles.priceLabel}>{t.label}</Text>
-              <Text style={styles.priceValue}>₹{t.amount.toFixed(2)}</Text>
+              <Text style={styles.priceValue}>{money(t.amount)}</Text>
             </View>
           ))}
           {discount > 0 ? (
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Discount</Text>
-              <Text style={styles.priceValue}>−₹{discount.toFixed(2)}</Text>
+              <Text style={styles.priceValue}>−{money(discount)}</Text>
             </View>
           ) : null}
           {tip > 0 ? (
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Tip</Text>
-              <Text style={styles.priceValue}>₹{tip.toFixed(2)}</Text>
+              <Text style={styles.priceValue}>{money(tip)}</Text>
             </View>
           ) : null}
           {rounding !== 0 ? (
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Rounding</Text>
-              <Text style={styles.priceValue}>₹{rounding.toFixed(2)}</Text>
+              <Text style={styles.priceValue}>{money(rounding)}</Text>
             </View>
           ) : null}
           {/* Total row — hairline rule above, heavier weight. Total stays the
@@ -1106,7 +1106,7 @@ export default function OrderDetailScreen() {
           <View style={[styles.priceRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>
-              ₹{order.totalAmount.toFixed(2)}
+              {money(order.totalAmount)}
             </Text>
           </View>
 
@@ -1120,7 +1120,7 @@ export default function OrderDetailScreen() {
                 <View style={styles.priceRow}>
                   <Text style={styles.priceLabel}>Wallet credit</Text>
                   <Text style={[styles.priceValue, styles.refundValue]}>
-                    −₹{walletApplied.toFixed(2)}
+                    −{money(walletApplied)}
                   </Text>
                 </View>
               ) : null}
@@ -1128,14 +1128,14 @@ export default function OrderDetailScreen() {
                 <View style={styles.priceRow}>
                   <Text style={styles.priceLabel}>Loyalty points</Text>
                   <Text style={[styles.priceValue, styles.refundValue]}>
-                    −₹{loyaltyApplied.toFixed(2)}
+                    −{money(loyaltyApplied)}
                   </Text>
                 </View>
               ) : null}
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>Charged to your payment method</Text>
                 <Text style={styles.priceValue}>
-                  ₹{Math.max(order.totalAmount - creditApplied, 0).toFixed(2)}
+                  {money(Math.max(order.totalAmount - creditApplied, 0))}
                 </Text>
               </View>
             </>
@@ -1149,7 +1149,7 @@ export default function OrderDetailScreen() {
               <View style={[styles.priceRow, { marginTop: 8 }]}>
                 <Text style={styles.priceLabel}>Refunded</Text>
                 <Text style={[styles.priceValue, styles.refundValue]}>
-                  −₹{order.refundAmount.toFixed(2)}
+                  −{money(order.refundAmount)}
                 </Text>
               </View>
               {order.totalAmount - order.refundAmount > 0.5 ? (
@@ -1164,25 +1164,25 @@ export default function OrderDetailScreen() {
                     <View style={styles.priceRow}>
                       <Text style={styles.priceLabel}>Paid to the chef (food already prepared)</Text>
                       <Text style={styles.priceValue}>
-                        {formatMoney((cancelRequest?.vendorKeptPaise ?? 0) / 100)}
+                        {money((cancelRequest?.vendorKeptPaise ?? 0) / 100)}
                       </Text>
                     </View>
                     {platformFeeKept > 0.005 ? (
                       <View style={styles.priceRow}>
                         <Text style={styles.priceLabel}>Platform fee (non-refundable)</Text>
-                        <Text style={styles.priceValue}>{formatMoney(platformFeeKept)}</Text>
+                        <Text style={styles.priceValue}>{money(platformFeeKept)}</Text>
                       </View>
                     ) : null}
                     {deliveryKept > 0.005 ? (
                       <View style={styles.priceRow}>
                         <Text style={styles.priceLabel}>Delivery (driver dispatched)</Text>
-                        <Text style={styles.priceValue}>{formatMoney(deliveryKept)}</Text>
+                        <Text style={styles.priceValue}>{money(deliveryKept)}</Text>
                       </View>
                     ) : null}
                     {taxKept > 0.005 ? (
                       <View style={styles.priceRow}>
                         <Text style={styles.priceLabel}>GST on the amount retained</Text>
-                        <Text style={styles.priceValue}>{formatMoney(taxKept)}</Text>
+                        <Text style={styles.priceValue}>{money(taxKept)}</Text>
                       </View>
                     ) : null}
                   </>
@@ -1195,7 +1195,7 @@ export default function OrderDetailScreen() {
                       {cancelledOrder ? 'Retained (non-refundable fees)' : 'You paid'}
                     </Text>
                     <Text style={styles.priceValue}>
-                      {formatMoney(order.totalAmount - order.refundAmount)}
+                      {money(order.totalAmount - order.refundAmount)}
                     </Text>
                   </View>
                 )
