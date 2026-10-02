@@ -41,7 +41,7 @@ func TestEmailOTP_RequestVerifyFlow(t *testing.T) {
 	if err := RequestEmailOTP(ctx, uid, email, "Chef"); err != nil {
 		t.Fatalf("request: %v", err)
 	}
-	code, err := mr.Get(otpCodeKey(uid, norm))
+	code, err := mr.Get(RedisKey(otpCodeKey(uid, norm)))
 	if err != nil || len(code) != 6 {
 		t.Fatalf("stored code missing: %q %v", code, err)
 	}
@@ -56,7 +56,7 @@ func TestEmailOTP_RequestVerifyFlow(t *testing.T) {
 		t.Fatal("must be verified after correct code")
 	}
 	// Code is consumed on success.
-	if _, err := mr.Get(otpCodeKey(uid, norm)); err == nil {
+	if _, err := mr.Get(RedisKey(otpCodeKey(uid, norm))); err == nil {
 		t.Error("code key should be deleted after successful verify")
 	}
 }
@@ -69,7 +69,7 @@ func TestEmailOTP_AttemptLockout(t *testing.T) {
 	if err := RequestEmailOTP(ctx, uid, email, ""); err != nil {
 		t.Fatalf("request: %v", err)
 	}
-	code, _ := mr.Get(otpCodeKey(uid, email))
+	code, _ := mr.Get(RedisKey(otpCodeKey(uid, email)))
 	bad := wrongCode(code)
 
 	for i := 0; i < emailOTPMaxAttempts; i++ {
@@ -107,7 +107,7 @@ func TestEmailOTP_Expiry(t *testing.T) {
 	if err := RequestEmailOTP(ctx, uid, email, ""); err != nil {
 		t.Fatalf("request: %v", err)
 	}
-	code, _ := mr.Get(otpCodeKey(uid, email))
+	code, _ := mr.Get(RedisKey(otpCodeKey(uid, email)))
 	mr.FastForward(emailOTPTTL + time.Minute)
 	if err := VerifyEmailOTP(ctx, uid, email, code); !errors.Is(err, ErrOTPExpired) {
 		t.Fatalf("want ErrOTPExpired, got %v", err)

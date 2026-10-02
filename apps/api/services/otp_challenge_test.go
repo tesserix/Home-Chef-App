@@ -21,7 +21,7 @@ func TestOTPPurposeIsolation_OnboardingCannotSatisfyLogin(t *testing.T) {
 	if err := RequestEmailOTP(ctx, uid, email, "Chef"); err != nil {
 		t.Fatalf("onboarding request: %v", err)
 	}
-	code, err := mr.Get(otpCodeKey(uid, email))
+	code, err := mr.Get(RedisKey(otpCodeKey(uid, email)))
 	if err != nil {
 		t.Fatalf("onboarding code missing: %v", err)
 	}

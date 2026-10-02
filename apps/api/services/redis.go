@@ -11,6 +11,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// keyPrefix matches the global Valkey ACL (~homechef:*); keys outside it are rejected with NOPERM.
+const keyPrefix = "homechef:"
+
+// RedisKey returns the namespaced key the wrapper stores under.
+func RedisKey(key string) string { return keyPrefix + key }
+
 type RedisClient struct {
 	client *redis.Client
 }
@@ -62,15 +68,15 @@ func (r *RedisClient) IsConnected() bool {
 }
 
 func (r *RedisClient) Get(ctx context.Context, key string) (string, error) {
-	return r.client.Get(ctx, key).Result()
+	return r.client.Get(ctx, RedisKey(key)).Result()
 }
 
 func (r *RedisClient) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
-	return r.client.Set(ctx, key, value, ttl).Err()
+	return r.client.Set(ctx, RedisKey(key), value, ttl).Err()
 }
 
 func (r *RedisClient) GetJSON(ctx context.Context, key string, dest interface{}) error {
-	val, err := r.client.Get(ctx, key).Result()
+	val, err := r.client.Get(ctx, RedisKey(key)).Result()
 	if err != nil {
 		return err
 	}
@@ -82,7 +88,7 @@ func (r *RedisClient) SetJSON(ctx context.Context, key string, value interface{}
 	if err != nil {
 		return err
 	}
-	return r.client.Set(ctx, key, string(data), ttl).Err()
+	return r.client.Set(ctx, RedisKey(key), string(data), ttl).Err()
 }
 
 // IncrAndExpire bumps a counter and sets its TTL on first hit. Used by
@@ -94,7 +100,7 @@ func (r *RedisClient) IncrAndExpire(ctx context.Context, key string, ttl time.Du
 	if r.client == nil {
 		return 0, redis.ErrClosed
 	}
-	count, err := r.client.Incr(ctx, key).Result()
+	count, err := r.client.Incr(ctx, RedisKey(key)).Result()
 	if err != nil {
 		return 0, err
 	}
@@ -102,7 +108,7 @@ func (r *RedisClient) IncrAndExpire(ctx context.Context, key string, ttl time.Du
 		// Best-effort — if EXPIRE fails the key will simply persist
 		// forever, capped by Redis maxmemory eviction. We accept the
 		// risk rather than punish the request on a partial failure.
-		_ = r.client.Expire(ctx, key, ttl).Err()
+		_ = r.client.Expire(ctx, RedisKey(key), ttl).Err()
 	}
 	return count, nil
 }
@@ -115,7 +121,7 @@ func (r *RedisClient) SetNX(ctx context.Context, key string, value string, ttl t
 	if r.client == nil {
 		return false, redis.ErrClosed
 	}
-	return r.client.SetNX(ctx, key, value, ttl).Result()
+	return r.client.SetNX(ctx, RedisKey(key), value, ttl).Result()
 }
 
 // Del deletes a single key. Used by the idempotency middleware to
@@ -124,5 +130,5 @@ func (r *RedisClient) Del(ctx context.Context, key string) error {
 	if r.client == nil {
 		return redis.ErrClosed
 	}
-	return r.client.Del(ctx, key).Err()
+	return r.client.Del(ctx, RedisKey(key)).Err()
 }

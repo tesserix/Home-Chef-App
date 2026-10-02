@@ -58,7 +58,7 @@ func TestEnsureLoginEmailVerified(t *testing.T) {
 	require.Equal(t, http.StatusPreconditionRequired, w.Code)
 
 	// Flag on, verified marker present → pass. Key mirrors services.otpVerifiedKey.
-	mr.Set(fmt.Sprintf("email_otp:ok:%s:%s", userID.String(), services.NormalizeEmail(email)), "1")
+	mr.Set(services.RedisKey(fmt.Sprintf("email_otp:ok:%s:%s", userID.String(), services.NormalizeEmail(email))), "1")
 	c, w = otpGateCtx(userID)
 	require.True(t, EnsureLoginEmailVerified(c, userID))
 	require.Equal(t, http.StatusOK, w.Code)

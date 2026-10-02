@@ -72,6 +72,7 @@ func RequestEmailOTP(ctx context.Context, userID, email, firstName string) error
 
 	ok, err := r.SetNX(ctx, otpCooldownKey(userID, email), "1", emailOTPResendCooldown)
 	if err != nil {
+		log.Printf("email-otp: redis cooldown write failed: %v", err)
 		return ErrOTPUnavailable
 	}
 	if !ok {
