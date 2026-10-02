@@ -622,7 +622,7 @@ export default function DocumentsScreen() {
 
       {renderUploadTile(
         t('onboarding.idProof'),
-        t('onboarding.idProofSubtitle'),
+        t(isIndia ? 'onboarding.idProofSubtitle' : 'onboarding.idProofSubtitleIntl'),
         <CreditCard size={18} color={theme.colors.ink.soft} strokeWidth={1.5} />,
         'id_proof',
         documents.idProofUri,

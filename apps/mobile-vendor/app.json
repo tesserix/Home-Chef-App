@@ -27,8 +27,8 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Fe3dr Vendor uses Face ID so you can sign back into your kitchen without re-entering your password.",
-        "NSCameraUsageDescription": "Fe3dr Vendor uses your camera so you can photograph your dishes and your FSSAI licence.",
-        "NSPhotoLibraryUsageDescription": "Fe3dr Vendor uses your photo library so you can attach dish photos and your FSSAI and identity documents.",
+        "NSCameraUsageDescription": "Fe3dr Vendor uses your camera so you can photograph your dishes and your food licence.",
+        "NSPhotoLibraryUsageDescription": "Fe3dr Vendor uses your photo library so you can attach dish photos and your food licence and identity documents.",
         "NSLocationWhenInUseUsageDescription": "Fe3dr Vendor uses your location once, during onboarding, to fill in your kitchen address so customers see the right delivery area.",
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -208,8 +208,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Fe3dr Vendor uses your photo library so you can attach dish photos and your FSSAI and identity documents.",
-          "cameraPermission": "Fe3dr Vendor uses your camera so you can photograph your dishes and your FSSAI licence."
+          "photosPermission": "Fe3dr Vendor uses your photo library so you can attach dish photos and your food licence and identity documents.",
+          "cameraPermission": "Fe3dr Vendor uses your camera so you can photograph your dishes and your food licence."
         }
       ],
       [

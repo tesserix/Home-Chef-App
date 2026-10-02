@@ -35,6 +35,7 @@ import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../../store/auth-store';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { CATERING_ENABLED } from '../../constants/features';
+import { useKitchenMarket } from '../../hooks/useKitchenMarket';
 
 interface NavRow {
   /** i18n key under the "more" namespace for the row label. */
@@ -118,12 +119,17 @@ const ALL_SECTIONS: NavSection[] = [
 // constants/features.ts. Filtering here (rather than deleting the row) keeps it
 // type-checked; empty sections after filtering are dropped so no header floats
 // over a blank card.
-const NAV_SECTIONS: NavSection[] = ALL_SECTIONS.map((section) => ({
-  ...section,
-  rows: section.rows.filter(
-    (row) => row.route !== '/catering' || CATERING_ENABLED,
-  ),
-})).filter((section) => section.rows.length > 0);
+// FSSAI filing is an Indian service, so the row waits for the kitchen's market.
+function navSections(isIndia: boolean): NavSection[] {
+  return ALL_SECTIONS.map((section) => ({
+    ...section,
+    rows: section.rows.filter(
+      (row) =>
+        (row.route !== '/catering' || CATERING_ENABLED) &&
+        (row.route !== '/fssai' || isIndia),
+    ),
+  })).filter((section) => section.rows.length > 0);
+}
 
 function deriveDisplayName(
   user: { name?: string; email?: string } | null | undefined,
@@ -160,6 +166,7 @@ export default function MoreScreen() {
   const initials = deriveInitials(displayName);
   const email = user?.email ?? '';
   const dockClearance = useDockClearance();
+  const sections = navSections(useKitchenMarket()?.code === 'IN');
 
   function handleLogout() {
     showAlert('Log out?', 'You can sign back in any time.', [
@@ -210,7 +217,7 @@ export default function MoreScreen() {
 
         {/* Grouped nav — one ALL-CAPS header + white group card per section,
             with inset hairline separators between rows (spec §1 / §9). */}
-        {NAV_SECTIONS.map((section) => (
+        {sections.map((section) => (
           <View key={section.titleKey}>
             <Text style={styles.sectionLabel}>
               {t(`more.sections.${section.titleKey}`).toUpperCase()}

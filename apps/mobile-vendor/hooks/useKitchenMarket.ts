@@ -8,8 +8,8 @@ export function useKitchenMarket(): Market | undefined {
   const { data } = useQuery({
     queryKey: ['chef', 'market'],
     queryFn: () =>
-      api.get<{ payoutCountry?: string }>('/chef/profile').then((r) => r.data),
+      api.get<{ country?: string }>('/chef/profile').then((r) => r.data),
     staleTime: 5 * 60_000,
   });
-  return data ? getMarket(data.payoutCountry) : undefined;
+  return data ? getMarket(data.country) : undefined;
 }

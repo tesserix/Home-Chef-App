@@ -49,6 +49,7 @@ import {
   describeDocumentType,
 } from '../../hooks/useExpiringDocuments';
 import { useFssaiRequest } from '../../hooks/useFssai';
+import { useKitchenMarket } from '../../hooks/useKitchenMarket';
 import { fssaiDashboardNotice } from '../../lib/fssai';
 import { useDismissedNotice } from '../../hooks/useDismissedNotice';
 import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
@@ -154,6 +155,9 @@ export default function DashboardScreen() {
     onboardingInfo?.status === 'pending_review' ||
     onboardingInfo?.status === 'submitted';
   const docsMissing = underReview && onboardingInfo?.docsComplete === false;
+  const market = useKitchenMarket();
+  const docsBannerBodyKey =
+    market && market.code !== 'IN' ? 'onboarding.docsBannerBodyFoodReg' : 'onboarding.docsBannerBody';
 
   // Payout standing: a verified chef with no bank account accrues earnings
   // that cannot be paid out — surface it until the details are in.
@@ -476,7 +480,7 @@ export default function DashboardScreen() {
                 days: onboardingInfo?.docsDaysLeft ?? 30,
               })}
             </Text>
-            <Text style={styles.reviewBannerBody}>{t('onboarding.docsBannerBody')}</Text>
+            <Text style={styles.reviewBannerBody}>{t(docsBannerBodyKey)}</Text>
             <Text style={styles.reviewBannerCta}>{t('onboarding.docsBannerCta')} →</Text>
           </Pressable>
         ) : underReview ? (
