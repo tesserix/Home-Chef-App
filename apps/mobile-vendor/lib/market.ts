@@ -15,11 +15,13 @@ export interface Market {
   businessNumberLabel: string | null;
   /** 0-based month the tax year starts: April (3) or July (6). */
   taxYearStartMonth: number;
+  timeZone: string;
 }
 
 const MARKETS: Record<MarketCode, Market> = {
   IN: {
     code: 'IN',
+    timeZone: 'Asia/Kolkata',
     name: 'India',
     currency: 'INR',
     postcodeLabel: 'PIN code',
@@ -33,6 +35,7 @@ const MARKETS: Record<MarketCode, Market> = {
   },
   AU: {
     code: 'AU',
+    timeZone: 'Australia/Sydney',
     name: 'Australia',
     currency: 'AUD',
     postcodeLabel: 'Postcode',
@@ -55,6 +58,7 @@ const MARKETS: Record<MarketCode, Market> = {
   },
   NZ: {
     code: 'NZ',
+    timeZone: 'Pacific/Auckland',
     name: 'New Zealand',
     currency: 'NZD',
     postcodeLabel: 'Postcode',
@@ -98,5 +102,18 @@ export function isValidPostcode(value: string, code: string | undefined): boolea
 }
 
 export function taxYearStart(market: Market, d: Date = new Date()): number {
-  return d.getMonth() >= market.taxYearStartMonth ? d.getFullYear() : d.getFullYear() - 1;
+  const [year, month] = marketDateISO(market, d).split('-').map(Number);
+  return month! > market.taxYearStartMonth ? year! : year! - 1;
+}
+
+export function marketDateISO(market: Market, d: Date = new Date(), daysAgo = 0): string {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: market.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
+  const value = (type: string) => Number(parts.find((p) => p.type === type)!.value);
+  return new Date(Date.UTC(value('year'), value('month') - 1, value('day') - daysAgo)).toISOString().slice(0, 10);
+}
+
+export function formatExpenseDate(iso: string, market: Market): string {
+  return new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString(`en-${market.code}`, {
+    timeZone: iso.length === 10 ? 'UTC' : market.timeZone, day: '2-digit', month: 'short', year: 'numeric',
+  });
 }

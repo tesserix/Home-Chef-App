@@ -23,18 +23,11 @@ import {
 } from '../hooks/useChefExpenses';
 import { useKitchenMarket } from '../hooks/useKitchenMarket';
 import { currencySymbol } from '../lib/format';
+import { getMarket, marketDateISO } from '../lib/market';
 
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 
 type DateChoice = 'today' | 'yesterday' | 'custom';
-
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-}
 
 function fmtChipDate(iso: string): string {
   return new Date(`${iso}T12:00:00`).toLocaleDateString('en-IN', {
@@ -51,7 +44,9 @@ interface ExpenseQuickAddProps {
 }
 
 export function ExpenseQuickAdd({ orderId, showDatePicker = true, onSaved }: ExpenseQuickAddProps) {
-  const currency = useKitchenMarket()?.currency;
+  const market = useKitchenMarket();
+  const currency = market?.currency;
+  const isoDaysAgo = (days: number) => marketDateISO(market ?? getMarket(undefined), new Date(), days);
   const symbol = currencySymbol(currency);
   const { create } = useExpenseMutations();
   const uploadReceipt = useUploadExpenseReceipt();
