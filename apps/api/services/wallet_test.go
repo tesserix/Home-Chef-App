@@ -6,6 +6,7 @@ package services
 // snapshot, and a retried operation (same idempotency key) never double-applies.
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -165,5 +166,28 @@ func TestListWalletTxns_NewestFirst(t *testing.T) {
 	}
 	if total != 2 || len(txns) != 2 {
 		t.Fatalf("expected 2 txns, got total=%d len=%d", total, len(txns))
+	}
+}
+
+func TestWallet_RefusesOrdersInAnotherCurrency(t *testing.T) {
+	db := setupWalletDB(t)
+	if err := db.Exec(`CREATE TABLE orders (id text PRIMARY KEY, mode text DEFAULT 'live', currency text DEFAULT 'INR', deleted_at datetime)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	uid, audOrder, inrOrder := uuid.New(), uuid.New(), uuid.New()
+	db.Exec(`INSERT INTO orders (id, currency) VALUES (?, 'AUD'), (?, 'INR')`, audOrder.String(), inrOrder.String())
+
+	if _, err := CreditWallet(db, uid, 25, models.WalletSourceRefund, &audOrder, "refund", "refund:aud", nil); !errors.Is(err, ErrWalletCurrencyMismatch) {
+		t.Fatalf("AUD refund into an INR wallet: err = %v, want ErrWalletCurrencyMismatch", err)
+	}
+	if _, err := DebitWallet(db, uid, 1, models.WalletSourceOrderPayment, &audOrder, "pay", "pay:aud", nil); !errors.Is(err, ErrWalletCurrencyMismatch) {
+		t.Fatalf("INR wallet paying an AUD order: err = %v, want ErrWalletCurrencyMismatch", err)
+	}
+	if _, err := CreditWallet(db, uid, 25, models.WalletSourceRefund, &inrOrder, "refund", "refund:inr", nil); err != nil {
+		t.Fatalf("INR refund: %v", err)
+	}
+	w, _ := GetOrCreateWallet(db, uid)
+	if w.Balance != 25 {
+		t.Fatalf("balance = %v, want only the INR refund", w.Balance)
 	}
 }

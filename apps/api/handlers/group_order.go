@@ -152,6 +152,10 @@ func (h *GroupOrderHandler) CreateGroupOrder(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
+	if !services.IsRupeeMarket(chef.PayoutCountry) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Group orders aren't available in this country yet", "code": "market_not_supported"})
+		return
+	}
 
 	now := time.Now()
 	g := models.GroupOrder{

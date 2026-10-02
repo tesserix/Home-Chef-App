@@ -116,9 +116,9 @@ func (h *UploadHandler) UploadDocument(c *gin.Context) {
 		}
 		// An already-lapsed licence can't be the basis for verification — the
 		// client checks this too, but only the server check is exploit-proof.
-		if docType == models.DocFSSAILicense && parsed.Before(time.Now().Truncate(24*time.Hour)) {
+		if services.IsFoodRegistrationDoc(docType) && parsed.Before(time.Now().Truncate(24*time.Hour)) {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{
-				"error": "This FSSAI licence has already expired. Please renew it and upload the current licence.",
+				"error": "This food licence has already expired. Please renew it and upload the current one.",
 				"field": "expiryDate",
 			})
 			return
@@ -704,11 +704,11 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 			return
 		}
 	}
+	country, ok := validateOnboardingLocale(c, &req)
+	if !ok {
+		return
+	}
 	if req.Phone != "" {
-		if !services.IsValidPhone("IN", req.Phone) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid 10-digit mobile number", "field": "phone"})
-			return
-		}
 		self, err := loadUser(userID)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
@@ -741,7 +741,8 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 
 	chef := models.ChefProfile{
 		UserID:             userID,
-		PaymentProvider:    services.DefaultChefPaymentProvider(models.ChefModeLive),
+		PaymentProvider:    services.ChefPaymentProviderForCountry(country),
+		PayoutCountry:      country,
 		BusinessName:       req.BusinessName,
 		Description:        req.Description,
 		Cuisines:           pq.StringArray(req.Cuisines),
@@ -833,14 +834,17 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		}
 
 		submittedData, _ := json.Marshal(map[string]interface{}{
-			"businessName": req.BusinessName,
-			"fullName":     req.FullName,
-			"phone":        maskPhone(req.Phone),
-			"city":         req.KitchenAddress.City,
-			"cuisines":     req.Cuisines,
-			"kitchenType":  kitchenType,
-			"panNumber":    maskPAN(req.PanNumber),
-			"fssaiNumber":  maskID(req.FSSAINumber),
+			"businessName":           req.BusinessName,
+			"fullName":               req.FullName,
+			"phone":                  maskPhone(req.Phone),
+			"city":                   req.KitchenAddress.City,
+			"cuisines":               req.Cuisines,
+			"kitchenType":            kitchenType,
+			"panNumber":              maskPAN(req.PanNumber),
+			"fssaiNumber":            maskID(req.FSSAINumber),
+			"country":                country,
+			"businessNumber":         req.BusinessNumber,
+			"foodRegistrationNumber": req.FoodRegistrationNumber,
 		})
 		approvalReq.ChefID = &chef.ID
 		approvalReq.EntityID = chef.ID
@@ -905,11 +909,14 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 			return
 		}
 	}
+	if req.KitchenAddress.Country == "" {
+		req.KitchenAddress.Country = chef.PayoutCountry
+	}
+	country, ok := validateOnboardingLocale(c, &req)
+	if !ok {
+		return
+	}
 	if req.Phone != "" {
-		if !services.IsValidPhone("IN", req.Phone) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid 10-digit mobile number", "field": "phone"})
-			return
-		}
 		self, err := loadUser(chef.UserID)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
@@ -949,6 +956,10 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 	chef.City = req.KitchenAddress.City
 	chef.State = req.KitchenAddress.State
 	chef.PostalCode = req.KitchenAddress.PostalCode
+	if chef.PayoutCountry != country {
+		chef.PayoutCountry = country
+		chef.PaymentProvider = services.ChefPaymentProviderForCountry(country)
+	}
 	// Only overwrite kitchen media when this partial update actually carries
 	// some, so a later step that re-submits without the media (e.g. an
 	// address-only edit) doesn't wipe the compliance photos/video.
@@ -1004,14 +1015,17 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 		}
 
 		submittedData, _ := json.Marshal(map[string]interface{}{
-			"businessName": req.BusinessName,
-			"fullName":     req.FullName,
-			"phone":        maskPhone(req.Phone),
-			"city":         req.KitchenAddress.City,
-			"cuisines":     req.Cuisines,
-			"kitchenType":  kitchenType,
-			"panNumber":    maskPAN(req.PanNumber),
-			"fssaiNumber":  maskID(req.FSSAINumber),
+			"businessName":           req.BusinessName,
+			"fullName":               req.FullName,
+			"phone":                  maskPhone(req.Phone),
+			"city":                   req.KitchenAddress.City,
+			"cuisines":               req.Cuisines,
+			"kitchenType":            kitchenType,
+			"panNumber":              maskPAN(req.PanNumber),
+			"fssaiNumber":            maskID(req.FSSAINumber),
+			"country":                country,
+			"businessNumber":         req.BusinessNumber,
+			"foodRegistrationNumber": req.FoodRegistrationNumber,
 		})
 		approvalReq.Title = fmt.Sprintf("Kitchen Onboarding: %s", req.BusinessName)
 		approvalReq.Description = fmt.Sprintf("%s submitted kitchen onboarding for review", req.FullName)
@@ -1271,6 +1285,10 @@ type OnboardingRequest struct {
 	// When provided, persisted to chef_profiles.gstin and printed on
 	// customer invoices alongside the FSSAI number.
 	GSTIN string `json:"gstin"`
+	// BusinessNumber is the optional AU ABN / NZ NZBN, and FoodRegistrationNumber
+	// the council food business registration that stands in for FSSAI there.
+	BusinessNumber         string `json:"businessNumber"`
+	FoodRegistrationNumber string `json:"foodRegistrationNumber"`
 	// KitchenPhotos are the uploaded GCS URLs for the mandatory kitchen
 	// compliance media (photos + a walkthrough video). The video is just
 	// another URL in this same array — there is no separate video column.
@@ -1291,6 +1309,8 @@ type KitchenAddressReq struct {
 	State      string `json:"state" binding:"required"`
 	PostalCode string `json:"postalCode" binding:"required"`
 	Landmark   string `json:"landmark"`
+	// Country is the ISO alpha-2 market; blank is India for older clients.
+	Country string `json:"country"`
 }
 
 type DayHoursReq struct {
@@ -1617,4 +1637,23 @@ func (h *UploadHandler) OCRDocument(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, res)
+}
+
+// validateOnboardingLocale checks country, phone, postcode and the market's
+// business number, and drops India-only tax IDs for other markets.
+func validateOnboardingLocale(c *gin.Context, req *OnboardingRequest) (string, bool) {
+	country, field, msg := services.ValidateKitchenLocale(req.KitchenAddress.Country, req.Phone, req.KitchenAddress.PostalCode)
+	if field != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg, "field": field})
+		return "", false
+	}
+	if country == "IN" {
+		return country, true
+	}
+	if !services.IsValidBusinessNumber(country, req.BusinessNumber) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid business number (ABN in Australia, NZBN in New Zealand)", "field": "businessNumber"})
+		return "", false
+	}
+	req.PanNumber, req.FSSAINumber, req.GSTIN = "", "", ""
+	return country, true
 }

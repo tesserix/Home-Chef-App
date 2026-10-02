@@ -36,14 +36,6 @@ const (
 	docsWarningLead = 5 * 24 * time.Hour
 )
 
-// requiredDocTypes — the vendor app uploads exactly these type values.
-// Address proof (gas/electricity bill) confirms a genuine home kitchen.
-var requiredDocTypes = []string{
-	string(models.DocIDProof),
-	string(models.DocAddressProof),
-	string(models.DocFSSAILicense),
-}
-
 // StartDocsDeadlineCron launches the document-deadline sweep.
 func StartDocsDeadlineCron(ctx context.Context) {
 	go func() {
@@ -84,12 +76,15 @@ func runDocsDeadlineScan(ctx context.Context) {
 // document type. Shared with the onboarding-status endpoint so the app and
 // the sweep agree on what "complete" means.
 func ChefDocsComplete(db *gorm.DB, chefID uuid.UUID) bool {
+	var country string
+	db.Model(&models.ChefProfile{}).Where("id = ?", chefID).Pluck("payout_country", &country)
+	required := RequiredChefDocTypes(country)
 	var n int64
 	db.Model(&models.ChefDocument{}).
-		Where("chef_id = ? AND type IN ?", chefID, requiredDocTypes).
+		Where("chef_id = ? AND type IN ?", chefID, required).
 		Distinct("type").
 		Count(&n)
-	return n >= int64(len(requiredDocTypes))
+	return n >= int64(len(required))
 }
 
 func sweepDocsDeadlines(db *gorm.DB, now time.Time) (warned, withdrawn int) {

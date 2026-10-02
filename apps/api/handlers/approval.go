@@ -290,21 +290,11 @@ func (h *ApprovalHandler) GetApprovalRequest(c *gin.Context) {
 		database.DB.Where("chef_id = ?", approval.ChefID).Order("created_at DESC").Find(&docs)
 		response["documents"] = docs
 
-		// Docs-deadline guardrail: which of the three required documents are
+		// Docs-deadline guardrail: which of the country's required documents are
 		// still missing, so the admin UI can show the checklist and explain why
 		// Approve is refused (approveOneRequest hard-blocks on the same set).
 		if approval.Type == models.ApprovalKitchenOnboarding {
-			present := map[string]bool{}
-			for _, d := range docs {
-				present[string(d.Type)] = true
-			}
-			missing := []string{}
-			for _, req := range []models.DocumentType{models.DocIDProof, models.DocAddressProof, models.DocFSSAILicense} {
-				if !present[string(req)] {
-					missing = append(missing, string(req))
-				}
-			}
-			response["requiredDocsMissing"] = missing
+			response["requiredDocsMissing"] = services.MissingChefDocs(approval.Chef.PayoutCountry, docs)
 		}
 
 		// Home-chefs-only review aids. Surface (1) whether the FSSAI number looks

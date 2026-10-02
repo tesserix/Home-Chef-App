@@ -187,6 +187,10 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
+	if !services.IsRupeeMarket(chef.PayoutCountry) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Meal plans aren't available in this country yet", "code": "market_not_supported"})
+		return
+	}
 	if services.IsChefFSSAIExpired(&chef) {
 		c.JSON(http.StatusConflict, gin.H{"error": "This chef isn't accepting orders right now"})
 		return

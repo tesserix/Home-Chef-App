@@ -336,7 +336,7 @@ func enrichCoordsFromPhoton(reqCtx context.Context, rows []mapplsRow) {
 			// rather than leaving the row without a point.
 			var lat, lon float64
 			for _, variant := range photonQueryVariants(rows[idxs[0]].geo) {
-				out, err := fetchPhotonSuggestions(ctx, variant)
+				out, err := fetchPhotonSuggestions(ctx, variant, "IN")
 				if err != nil || len(out) == 0 {
 					continue
 				}

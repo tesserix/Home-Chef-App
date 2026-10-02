@@ -5,8 +5,8 @@ package services
 // The mobile client already hard-caps and validates phone input, but the API
 // must never trust the client: a direct/replayed request could still carry a
 // malformed number. This mirrors the client's country-aware rule
-// (packages/mobile-shared/src/validation/phone.ts). India-only today; add a
-// country here as the platform expands.
+// (packages/mobile-shared/src/validation/phone.ts). Add a country here as the
+// platform expands.
 
 import (
 	"regexp"
@@ -21,6 +21,8 @@ type phoneRule struct {
 
 var phoneRules = map[string]phoneRule{
 	"IN": {pattern: regexp.MustCompile(`^[6-9]\d{9}$`), length: 10},
+	"AU": {pattern: regexp.MustCompile(`^4\d{8}$`), length: 9},
+	"NZ": {pattern: regexp.MustCompile(`^2\d{7,9}$`), length: 10},
 }
 
 const defaultPhoneCountry = "IN"
