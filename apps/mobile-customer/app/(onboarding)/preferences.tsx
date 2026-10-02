@@ -130,6 +130,7 @@ export default function PreferencesScreen() {
         firstName: draft.firstName,
         lastName: draft.lastName,
         phone: draft.phone,
+        phoneCountry: draft.phoneCountry,
         addressLabel: draft.label || 'Home',
         addressLine1: draft.addressLine1,
         addressLine2: draft.addressLine2 ?? '',

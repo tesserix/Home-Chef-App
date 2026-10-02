@@ -80,6 +80,7 @@ func (h *CustomerHandler) UpdateCustomerProfile(c *gin.Context) {
 		FirstName          *string  `json:"firstName"`
 		LastName           *string  `json:"lastName"`
 		Phone              *string  `json:"phone"`
+		PhoneCountry       string   `json:"phoneCountry"`
 		DateOfBirth        *string  `json:"dateOfBirth"`
 		DietaryPreferences []string `json:"dietaryPreferences"`
 		FoodAllergies      []string `json:"foodAllergies"`
@@ -109,9 +110,17 @@ func (h *CustomerHandler) UpdateCustomerProfile(c *gin.Context) {
 		user.LastName = *req.LastName
 	}
 	if req.Phone != nil {
-		if *req.Phone != "" && !services.IsValidPhone("IN", *req.Phone) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid 10-digit mobile number", "field": "phone"})
-			return
+		if *req.Phone != "" {
+			country, ok := req.PhoneCountry, true
+			if country == "" {
+				country = services.DefaultAddressPhoneCountry(database.DB, userID)
+			} else {
+				country, ok = services.NormalizeKitchenCountry(country)
+			}
+			if !ok || !services.IsValidPhone(country, *req.Phone) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": services.InvalidPhoneMessage(country), "field": "phone"})
+				return
+			}
 		}
 		userUpdates["phone"] = *req.Phone
 		user.Phone = *req.Phone
@@ -213,6 +222,7 @@ func (h *CustomerHandler) CompleteOnboarding(c *gin.Context) {
 		FirstName          string   `json:"firstName"`
 		LastName           string   `json:"lastName"`
 		Phone              string   `json:"phone"`
+		PhoneCountry       string   `json:"phoneCountry"`
 		DateOfBirth        string   `json:"dateOfBirth"`
 		DietaryPreferences []string `json:"dietaryPreferences"`
 		FoodAllergies      []string `json:"foodAllergies"`
@@ -250,8 +260,9 @@ func (h *CustomerHandler) CompleteOnboarding(c *gin.Context) {
 		userUpdates["last_name"] = req.LastName
 	}
 	if req.Phone != "" {
-		if !services.IsValidPhone("IN", req.Phone) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid 10-digit mobile number", "field": "phone"})
+		country, ok := services.CustomerPhoneCountry(req.PhoneCountry, req.AddressCountry)
+		if !ok || !services.IsValidPhone(country, req.Phone) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": services.InvalidPhoneMessage(country), "field": "phone"})
 			return
 		}
 		userUpdates["phone"] = req.Phone

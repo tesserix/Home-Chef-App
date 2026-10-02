@@ -34,3 +34,33 @@ func TestIsValidPhoneAUNZ(t *testing.T) {
 		}
 	}
 }
+
+func TestCustomerPhoneCountry(t *testing.T) {
+	for _, tc := range []struct {
+		phoneCountry, addressCountry, want string
+		ok                                 bool
+	}{
+		{"", "", "IN", true},
+		{"au", "", "AU", true},
+		{"", "NZ", "NZ", true},
+		{"NZ", "AU", "NZ", true},
+		{"US", "", "", false},
+	} {
+		got, ok := CustomerPhoneCountry(tc.phoneCountry, tc.addressCountry)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("CustomerPhoneCountry(%q,%q) = %q,%v want %q,%v", tc.phoneCountry, tc.addressCountry, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+func TestInvalidPhoneMessage(t *testing.T) {
+	for country, want := range map[string]string{
+		"IN": "Enter a valid 10-digit mobile number",
+		"AU": "Enter a valid 9-digit mobile number, without the leading 0",
+		"NZ": "Enter a valid NZ mobile number, without the leading 0",
+	} {
+		if got := InvalidPhoneMessage(country); got != want {
+			t.Errorf("InvalidPhoneMessage(%s) = %q want %q", country, got, want)
+		}
+	}
+}
