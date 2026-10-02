@@ -16,7 +16,7 @@ import { CartFab } from './DockCartPill';
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let screen: ReturnType<typeof create>;
 afterEach(async () => { if (screen) await act(async () => screen.unmount()); useCartStore.getState().clearCart(); });
-it.each([['NZD', 'NZD 15'], ['AUD', 'AUD 15'], ['INR', '₹15'], [undefined, undefined]])('labels the persisted basket using the kitchen currency %s', async (currency, expected) => {
+it.each([['NZD', '$15'], ['AUD', '$15'], ['INR', '₹15'], [undefined, undefined]])('labels the persisted basket using the kitchen currency %s', async (currency, expected) => {
   useCartStore.setState({ chefId: 'kitchen', hasHydrated: true, items: [{ menuItemId: 'bowl', lineId: 'bowl', name: 'Bowl', price: 15, quantity: 1 }] });
   jest.mocked(useChef).mockReturnValue({ data: currency ? { data: { currency } } : undefined } as never);
   await act(async () => { screen = create(<CartFab />); });

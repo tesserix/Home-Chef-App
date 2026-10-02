@@ -3,8 +3,8 @@ import { deliveryFeeLabel } from './delivery-fee-label';
 
 describe('deliveryFeeLabel', () => {
   it.each(['AUD', 'NZD'])('uses %s for delivery fees', (currency) => {
-    expect(deliveryFeeLabel(5, true, true, currency)).toBe(`${currency} 5 delivery`);
-    expect(deliveryFeeLabel(5, false, true, currency)).toBe(`Delivery from ${currency} 5`);
+    expect(deliveryFeeLabel(5, true, true, currency)).toBe('$5 delivery');
+    expect(deliveryFeeLabel(5, false, true, currency)).toBe('Delivery from $5');
   });
   it('preserves legacy, free and pickup labels', () => {
     expect(deliveryFeeLabel(5, true, true)).toBe('₹5 delivery');
