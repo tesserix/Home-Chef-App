@@ -101,18 +101,18 @@ func TestStripeDestinationChargeUsesVendorAsSettlementMerchant(t *testing.T) {
 	}
 }
 
-func TestStripeSettlementRepairUsesSameIntentAndStableIdempotency(t *testing.T) {
+func TestStripeCancellationUsesSameIntentAndStableIdempotency(t *testing.T) {
 	client := &StripeClient{secretKey: "sk_test_fixture", httpClient: &http.Client{Transport: stripeTransport(func(r *http.Request) (*http.Response, error) {
 		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, "/v1/payment_intents/pi_saved", r.URL.Path)
-		require.Equal(t, "fe3dr-settlement-pi_saved-acct_nz_vendor", r.Header.Get("Idempotency-Key"))
+		require.Equal(t, "/v1/payment_intents/pi_saved/cancel", r.URL.Path)
+		require.Equal(t, "fe3dr-settlement-cancel-pi_saved", r.Header.Get("Idempotency-Key"))
 		require.NoError(t, r.ParseForm())
-		require.Equal(t, "acct_nz_vendor", r.Form.Get("on_behalf_of"))
+		require.Equal(t, "abandoned", r.Form.Get("cancellation_reason"))
 		require.Len(t, r.Form, 1)
-		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"pi_saved","on_behalf_of":"acct_nz_vendor","status":"requires_payment_method"}`)), Header: http.Header{}}, nil
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"pi_saved","on_behalf_of":"acct_nz_vendor","status":"canceled"}`)), Header: http.Header{}}, nil
 	})}}
 	for i := 0; i < 2; i++ {
-		pi, err := client.SetPaymentIntentSettlement(t.Context(), "pi_saved", "acct_nz_vendor")
+		pi, err := client.CancelPaymentIntent(t.Context(), "pi_saved")
 		require.NoError(t, err)
 		require.Equal(t, "pi_saved", pi.ID)
 		require.Equal(t, "acct_nz_vendor", pi.OnBehalfOf)

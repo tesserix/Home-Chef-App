@@ -30,7 +30,7 @@ import (
 type stripePayments interface {
 	CreatePaymentIntent(context.Context, *services.StripePaymentIntentRequest) (*services.StripePaymentIntent, error)
 	FetchPaymentIntent(context.Context, string) (*services.StripePaymentIntent, error)
-	SetPaymentIntentSettlement(context.Context, string, string) (*services.StripePaymentIntent, error)
+	CancelPaymentIntent(context.Context, string) (*services.StripePaymentIntent, error)
 	GetPublishableKey() string
 	IsTestMode() bool
 }
@@ -250,13 +250,9 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 		applicationFee = 0
 	}
 
-	var pi *services.StripePaymentIntent
-	var err error
-	if order.StripePaymentIntentID != "" {
-		pi, err = st.FetchPaymentIntent(c.Request.Context(), order.StripePaymentIntentID)
-	} else {
-		pi, err = st.CreatePaymentIntent(c.Request.Context(), &services.StripePaymentIntentRequest{
-			IdempotencyKey:      "fe3dr-order-" + order.ID.String(),
+	createIntent := func(key string) (*services.StripePaymentIntent, error) {
+		return st.CreatePaymentIntent(c.Request.Context(), &services.StripePaymentIntentRequest{
+			IdempotencyKey:      key,
 			Amount:              totalMinor,
 			Currency:            currency,
 			ReceiptEmail:        order.Customer.Email,
@@ -271,6 +267,14 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 			},
 		})
 	}
+	var pi *services.StripePaymentIntent
+	var err error
+	if order.StripePaymentIntentID != "" {
+		pi, err = st.FetchPaymentIntent(c.Request.Context(), order.StripePaymentIntentID)
+	} else {
+		pi, err = createIntent("fe3dr-order-" + order.ID.String())
+	}
+
 	if err != nil {
 		log.Printf("Failed to create Stripe PaymentIntent: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
@@ -282,34 +286,45 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Stripe payment does not match the order"})
 		return
 	}
-	if pi.Status == "canceled" {
-		c.JSON(http.StatusConflict, gin.H{"error": "This payment was canceled; create a new order"})
-		return
-	}
-	if order.StripePaymentIntentID != "" && (pi.Status == "requires_payment_method" || pi.Status == "requires_confirmation") {
+	// Settlement merchant is immutable: retire an unpaid legacy intent before replacement.
+	if order.StripePaymentIntentID != "" && (pi.Status == "requires_payment_method" || pi.Status == "requires_confirmation" || pi.Status == "canceled") {
 		if pi.OnBehalfOf != "" && pi.OnBehalfOf != order.Chef.StripeAccountID {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "Stripe settlement account does not match the order"})
 			return
 		}
 		if pi.OnBehalfOf == "" {
-			pi, err = st.SetPaymentIntentSettlement(c.Request.Context(), pi.ID, order.Chef.StripeAccountID)
-			if err != nil {
-				c.JSON(http.StatusBadGateway, gin.H{"error": "Payment setup could not be refreshed; retry payment"})
-				return
+			oldID := pi.ID
+			if pi.Status != "canceled" {
+				pi, err = st.CancelPaymentIntent(c.Request.Context(), oldID)
+				if err != nil || pi == nil || pi.ID != oldID || pi.Status != "canceled" || pi.Amount != totalMinor || !strings.EqualFold(pi.Currency, currency) || pi.Livemode == st.IsTestMode() {
+					c.JSON(http.StatusBadGateway, gin.H{"error": "Payment setup could not be refreshed; retry payment"})
+					return
+				}
 			}
-			if pi == nil || pi.ID != order.StripePaymentIntentID || pi.OnBehalfOf != order.Chef.StripeAccountID || pi.Amount != totalMinor || !strings.EqualFold(pi.Currency, currency) || pi.Livemode == st.IsTestMode() {
-				c.JSON(http.StatusBadGateway, gin.H{"error": "Stripe payment does not match the order"})
+			pi, err = createIntent("fe3dr-order-" + order.ID.String() + "-settlement-" + oldID)
+			if err != nil || pi == nil || pi.ID == "" || pi.ID == oldID || pi.OnBehalfOf != order.Chef.StripeAccountID || pi.Amount != totalMinor || !strings.EqualFold(pi.Currency, currency) || pi.Livemode == st.IsTestMode() {
+				c.JSON(http.StatusBadGateway, gin.H{"error": "Payment setup could not be refreshed; retry payment"})
 				return
 			}
 		}
 	}
+	if pi.Status == "canceled" {
+		c.JSON(http.StatusConflict, gin.H{"error": "This payment was canceled; create a new order"})
+		return
+	}
 
-	if err := database.DB.WithContext(c.Request.Context()).Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]interface{}{
+	result := database.DB.WithContext(c.Request.Context()).Model(&models.Order{}).Where("id = ? AND (COALESCE(stripe_payment_intent_id, '') = ? OR stripe_payment_intent_id = ?)", order.ID, order.StripePaymentIntentID, pi.ID).Updates(map[string]interface{}{
 		"stripe_payment_intent_id": pi.ID,
 		"payment_provider":         "stripe",
-	}).Error; err != nil {
-		log.Printf("Stripe intent persistence failed for order %s: %v", order.ID, err)
+	})
+	if result.Error != nil {
+		log.Printf("Stripe intent persistence failed for order %s: %v", order.ID, result.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Payment could not be saved; retry payment creation"})
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "Payment changed; retry payment"})
 		return
 	}
 

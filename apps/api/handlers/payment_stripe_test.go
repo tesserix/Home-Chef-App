@@ -3,10 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 	"github.com/stretchr/testify/require"
 )
@@ -16,10 +18,15 @@ type stripeGatewayStub struct {
 	created     []*services.StripePaymentIntentRequest
 	onFetch     func()
 	settlements []string
+	replacement *services.StripePaymentIntent
+	cancelErr   error
 }
 
 func (s *stripeGatewayStub) CreatePaymentIntent(_ context.Context, req *services.StripePaymentIntentRequest) (*services.StripePaymentIntent, error) {
 	s.created = append(s.created, req)
+	if s.replacement != nil {
+		return s.replacement, nil
+	}
 	return s.intent, nil
 }
 func (s *stripeGatewayStub) FetchPaymentIntent(context.Context, string) (*services.StripePaymentIntent, error) {
@@ -28,10 +35,14 @@ func (s *stripeGatewayStub) FetchPaymentIntent(context.Context, string) (*servic
 	}
 	return s.intent, nil
 }
-func (s *stripeGatewayStub) SetPaymentIntentSettlement(_ context.Context, id, account string) (*services.StripePaymentIntent, error) {
-	s.settlements = append(s.settlements, id+":"+account)
-	s.intent.OnBehalfOf = account
-	return s.intent, nil
+func (s *stripeGatewayStub) CancelPaymentIntent(_ context.Context, id string) (*services.StripePaymentIntent, error) {
+	s.settlements = append(s.settlements, id)
+	if s.cancelErr != nil {
+		return nil, s.cancelErr
+	}
+	result := *s.intent
+	result.Status = "canceled"
+	return &result, nil
 }
 func (s *stripeGatewayStub) GetPublishableKey() string { return "pk_test_fixture" }
 func (s *stripeGatewayStub) IsTestMode() bool          { return true }
@@ -113,7 +124,7 @@ func TestStripeCreateDoesNotExposeIntentWhenPersistenceFails(t *testing.T) {
 	require.NoError(t, db.Exec("UPDATE chef_profiles SET payment_provider = 'stripe', payout_country = 'AU', stripe_account_id = 'acct_vendor', stripe_charges_enabled = 1 WHERE id = ?", chef).Error)
 	require.NoError(t, db.Exec("UPDATE orders SET currency = 'AUD', mode = 'test', commission_rate = 10 WHERE id = ?", orderID).Error)
 	require.NoError(t, db.Exec(`CREATE TRIGGER reject_intent BEFORE UPDATE OF stripe_payment_intent_id ON orders BEGIN SELECT RAISE(FAIL, 'write unavailable'); END`).Error)
-	stub := &stripeGatewayStub{intent: &services.StripePaymentIntent{ID: "pi_created", Amount: 5000, Currency: "aud", Status: "requires_payment_method", ClientSecret: "fixture_secret"}}
+	stub := &stripeGatewayStub{intent: &services.StripePaymentIntent{ID: "pi_created", OnBehalfOf: "acct_vendor", Amount: 5000, Currency: "aud", Status: "requires_payment_method", ClientSecret: "fixture_secret"}}
 	response := callPay(customer, http.MethodPost, "/payments/order/"+orderID.String()+"/create", func(r *gin.Engine, h *PaymentHandler) {
 		h.stripe = stub
 		regCreate(r, h)
@@ -130,7 +141,7 @@ func TestStripeCreateReusesStoredIntent(t *testing.T) {
 	orderID := payOrder(t, db, customer, chef, "pending", 50, "", "")
 	require.NoError(t, db.Exec("UPDATE chef_profiles SET payout_country = 'AU', stripe_account_id = 'acct_vendor', stripe_charges_enabled = 1 WHERE id = ?", chef).Error)
 	require.NoError(t, db.Exec("UPDATE orders SET currency = 'AUD', mode = 'test', commission_rate = 10 WHERE id = ?", orderID).Error)
-	stub := &stripeGatewayStub{intent: &services.StripePaymentIntent{ID: "pi_created", Amount: 5000, Currency: "aud", Status: "requires_payment_method", ClientSecret: "fixture_secret"}}
+	stub := &stripeGatewayStub{intent: &services.StripePaymentIntent{ID: "pi_created", OnBehalfOf: "acct_vendor", Amount: 5000, Currency: "aud", Status: "requires_payment_method", ClientSecret: "fixture_secret"}}
 	register := func(r *gin.Engine, h *PaymentHandler) { h.stripe = stub; regCreate(r, h) }
 	for i := 0; i < 2; i++ {
 		response := callPay(customer, http.MethodPost, "/payments/order/"+orderID.String()+"/create", register, nil)
@@ -229,7 +240,9 @@ func TestStripeRetryRepairsUnconfirmedDestinationSettlement(t *testing.T) {
 		{"processing", "processing", "", 200, 0},
 		{"requires action", "requires_action", "", 200, 0},
 		{"succeeded", "succeeded", "", 200, 0},
-		{"canceled", "canceled", "", 409, 0},
+		{"canceled legacy", "canceled", "", 200, 0},
+		{"canceled current", "canceled", "acct_nz_vendor", 409, 0},
+		{"cancel failure", "requires_payment_method", "", 502, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupPayDB(t)
@@ -238,14 +251,25 @@ func TestStripeRetryRepairsUnconfirmedDestinationSettlement(t *testing.T) {
 			orderID := payOrder(t, db, customer, chef, "pending", 50, "", "")
 			require.NoError(t, db.Exec("UPDATE chef_profiles SET payout_country='NZ', stripe_account_id='acct_nz_vendor', stripe_charges_enabled=1 WHERE id=?", chef).Error)
 			require.NoError(t, db.Exec("UPDATE orders SET currency='NZD', mode='test', stripe_payment_intent_id='pi_saved', payment_provider='stripe' WHERE id=?", orderID).Error)
-			stub := &stripeGatewayStub{intent: &services.StripePaymentIntent{ID: "pi_saved", Amount: 5000, Currency: "nzd", Status: tc.status, OnBehalfOf: tc.settlement, ClientSecret: "fixture"}}
+			stub := &stripeGatewayStub{replacement: &services.StripePaymentIntent{ID: "pi_replacement", Amount: 5000, Currency: "nzd", Status: "requires_payment_method", OnBehalfOf: "acct_nz_vendor", ClientSecret: "replacement"}, intent: &services.StripePaymentIntent{ID: "pi_saved", Amount: 5000, Currency: "nzd", Status: tc.status, OnBehalfOf: tc.settlement, ClientSecret: "fixture"}}
+			if tc.name == "cancel failure" {
+				stub.cancelErr = errors.New("stripe unavailable")
+			}
 			response := callPay(customer, http.MethodPost, "/payments/order/"+orderID.String()+"/create", func(r *gin.Engine, h *PaymentHandler) { h.stripe = stub; regCreate(r, h) }, nil)
 			require.Equal(t, tc.wantCode, response.Code, response.Body.String())
 			require.Len(t, stub.settlements, tc.updates)
 			if tc.updates > 0 {
-				require.Equal(t, "pi_saved:acct_nz_vendor", stub.settlements[0])
+				require.Equal(t, "pi_saved", stub.settlements[0])
 			}
-			require.Empty(t, stub.created)
+			if tc.wantCode == 200 && (tc.updates > 0 || tc.name == "canceled legacy") {
+				require.Len(t, stub.created, 1)
+				require.Equal(t, "fe3dr-order-"+orderID.String()+"-settlement-pi_saved", stub.created[0].IdempotencyKey)
+				var updated models.Order
+				require.NoError(t, db.First(&updated, "id = ?", orderID).Error)
+				require.Equal(t, "pi_replacement", updated.StripePaymentIntentID)
+			} else {
+				require.Empty(t, stub.created)
+			}
 		})
 	}
 }

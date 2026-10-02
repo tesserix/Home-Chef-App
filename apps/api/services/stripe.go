@@ -306,13 +306,13 @@ func (c *StripeClient) FetchPaymentIntent(ctx context.Context, id string) (*Stri
 	return &result, nil
 }
 
-// SetPaymentIntentSettlement repairs an unconfirmed destination charge in place.
-func (c *StripeClient) SetPaymentIntentSettlement(ctx context.Context, id, account string) (*StripePaymentIntent, error) {
-	if id == "" || account == "" {
-		return nil, fmt.Errorf("payment intent and settlement account are required")
+// CancelPaymentIntent retires an unpaid intent before a settlement replacement.
+func (c *StripeClient) CancelPaymentIntent(ctx context.Context, id string) (*StripePaymentIntent, error) {
+	if id == "" {
+		return nil, fmt.Errorf("payment intent is required")
 	}
-	form := url.Values{"on_behalf_of": {account}}
-	resp, err := c.doFormRequestContext(ctx, "POST", "/payment_intents/"+url.PathEscape(id), form, "fe3dr-settlement-"+id+"-"+account)
+	form := url.Values{"cancellation_reason": {"abandoned"}}
+	resp, err := c.doFormRequestContext(ctx, "POST", "/payment_intents/"+url.PathEscape(id)+"/cancel", form, "fe3dr-settlement-cancel-"+id)
 	if err != nil {
 		return nil, err
 	}
