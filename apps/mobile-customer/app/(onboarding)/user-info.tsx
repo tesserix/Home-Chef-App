@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject, RefObject } from 'react';
 import {
   View,
@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { router } from 'expo-router';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useAuth } from '@homechef/mobile-shared/auth';
@@ -21,16 +20,9 @@ import { useAuthStore } from '../../store/auth-store';
 import { useCustomerOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import { useAlert } from '@homechef/mobile-shared/ui';
-
-const schema = z.object({
-  firstName: z.string().min(2, 'First name must be at least 2 characters'),
-  lastName: z.string().min(2, 'Last name must be at least 2 characters'),
-  phone: z
-    .string()
-    .regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
-});
-
-type UserInfoForm = z.infer<typeof schema>;
+import { getPhoneRule, sanitizePhoneInput } from '@homechef/mobile-shared/validation/phone';
+import { AddressCountrySelect } from '../../components/address/AddressCountrySelect';
+import { buildUserInfoSchema, type PhoneCountry, type UserInfoForm } from '../../lib/user-info-schema';
 
 // Android ripple tints — translucent tokens derived from existing colours,
 // never a new literal colour (matches the ChefCard `withAlpha` convention).
@@ -64,9 +56,13 @@ export default function UserInfoScreen() {
   // blank). Saves re-typing details we already have.
   const user = useAuthStore((s) => s.user);
   const draft = useCustomerOnboardingStore();
+  const [phoneCountry, setPhoneCountry] = useState<PhoneCountry>(draft.phoneCountry ?? 'IN');
+  const phoneRule = getPhoneRule(phoneCountry);
+  const schema = useMemo(() => buildUserInfoSchema(phoneCountry), [phoneCountry]);
   const {
     control,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<UserInfoForm>({
     resolver: zodResolver(schema),
@@ -176,6 +172,9 @@ export default function UserInfoScreen() {
       firstName: data.firstName,
       lastName: data.lastName,
       phone: data.phone,
+      phoneCountry,
+      // Start the address step in the same country unless one was already entered.
+      ...(draft.addressLine1 ? {} : { country: phoneCountry }),
       emailVerified: true,
     });
     router.push('/(onboarding)/address');
@@ -293,8 +292,15 @@ export default function UserInfoScreen() {
 
           {/* ── Phone ── */}
           <View onLayout={(e) => { phoneY.current = e.nativeEvent.layout.y; }}>
+            <AddressCountrySelect
+              value={phoneCountry}
+              onChange={(code) => {
+                setPhoneCountry(code);
+                setValue('phone', '');
+              }}
+            />
             <Text className="text-sm font-medium text-charcoal mb-1">
-              Phone Number
+              Phone Number ({phoneRule.dialCode})
             </Text>
             <Controller
               control={control}
@@ -304,17 +310,17 @@ export default function UserInfoScreen() {
                   ref={phoneRef}
                   className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
                   style={fieldBorderStyle(Boolean(errors.phone), focusedField === 'phone')}
-                  placeholder="10-digit mobile number"
+                  placeholder={phoneRule.example}
                   placeholderTextColor={customerColors.charcoal.soft}
                   onFocus={() => setFocusedField('phone')}
                   onBlur={() => {
                     setFocusedField(null);
                     onBlur();
                   }}
-                  onChangeText={onChange}
+                  onChangeText={(v) => onChange(sanitizePhoneInput(v, phoneCountry))}
                   value={value}
                   keyboardType="phone-pad"
-                  maxLength={10}
+                  maxLength={phoneRule.length}
                   returnKeyType="done"
                   accessibilityLabel="Phone number"
                 />

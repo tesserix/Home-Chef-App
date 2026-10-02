@@ -13,6 +13,7 @@ interface OnboardingDraft {
   firstName: string;
   lastName: string;
   phone: string;
+  phoneCountry: 'IN' | 'AU' | 'NZ';
   emailVerified: boolean;
   // Step 2 — delivery address
   label: string;
@@ -43,6 +44,7 @@ const initialDraft: OnboardingDraft = {
   firstName: '',
   lastName: '',
   phone: '',
+  phoneCountry: 'IN',
   emailVerified: false,
   label: 'Home',
   addressLine1: '',
@@ -73,6 +75,7 @@ export const useCustomerOnboardingStore = create<CustomerOnboardingState>()(
         firstName: state.firstName,
         lastName: state.lastName,
         phone: state.phone,
+        phoneCountry: state.phoneCountry,
         emailVerified: state.emailVerified,
         label: state.label,
         addressLine1: state.addressLine1,
