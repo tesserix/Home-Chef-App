@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { DeliveryTier } from '../lib/deliveryTiers';
+import type { MarketCode } from '../lib/market';
 
 type DayHours = { open: string; close: string; closed: boolean };
 
@@ -14,6 +15,7 @@ interface PersonalInfo {
 }
 
 interface KitchenDetails {
+  country: MarketCode;
   businessName: string;
   // What this kitchen sells (#1065). A bakery gets the cake configurator on its
   // menu and its own customer-facing section; everything else is a kitchen.
@@ -63,6 +65,10 @@ interface Documents {
   // (currently ₹20L turnover) don't need one. When set, printed on
   // customer invoices and used by the chef to claim input tax credit.
   gstin: string;
+  // AU ABN / NZ NZBN — optional, only asked outside India.
+  businessNumber: string;
+  // Council food business registration number (AU/NZ counterpart of FSSAI).
+  foodRegistrationNumber: string;
   // Kitchen compliance media — uploaded GCS URLs (not local uris) for the
   // kitchen photos + walkthrough video the admin reviews. At least one
   // photo AND one video are mandatory to finish the documents step. Both
@@ -122,6 +128,7 @@ const initialState = {
   currentStep: 1,
   personalInfo: { fullName: '', phone: '', email: '' },
   kitchenDetails: {
+    country: 'IN' as MarketCode,
     businessName: '',
     vertical: 'kitchen' as const,
     sellsBakery: false,
@@ -151,6 +158,8 @@ const initialState = {
     fssaiLicenseNumber: '',
     fssaiExpiryDate: '',
     gstin: '',
+    businessNumber: '',
+    foodRegistrationNumber: '',
     kitchenMedia: [],
   },
   policies: { acceptedTerms: false, cancellationPolicy: '' },

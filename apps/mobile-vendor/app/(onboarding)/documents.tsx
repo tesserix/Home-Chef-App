@@ -37,8 +37,9 @@ import { api } from '../../lib/api';
 import { ocrDocument, billDateTooOld } from '../../lib/ocr';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
+import { getMarket } from '../../lib/market';
 
-type DocumentType = 'id_proof' | 'fssai_license' | 'address_proof';
+type DocumentType = 'id_proof' | 'fssai_license' | 'food_safety_cert' | 'address_proof';
 
 interface UploadState {
   uploading: boolean;
@@ -57,7 +58,9 @@ export default function DocumentsScreen() {
   const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
-  const { documents, updateDocuments, setStep } = useVendorOnboardingStore();
+  const { documents, updateDocuments, setStep, kitchenDetails } = useVendorOnboardingStore();
+  const market = getMarket(kitchenDetails.country);
+  const isIndia = market.code === 'IN';
   const { show: showToast } = useToast();
 
   const [idUpload, setIdUpload] = useState<UploadState>({ uploading: false, error: null });
@@ -139,7 +142,7 @@ export default function DocumentsScreen() {
       // the expiry-reminder cron (services/fssai_reminder.go) can fire at
       // 30/15/7 days. Only sent if it's a parseable YYYY-MM-DD; the backend
       // handler treats missing as no-expiry.
-      if (docType === 'fssai_license' && /^\d{4}-\d{2}-\d{2}$/.test(expiryToSend)) {
+      if (docType === market.licenceDocType && /^\d{4}-\d{2}-\d{2}$/.test(expiryToSend)) {
         formData.append('expiryDate', expiryToSend);
       }
 
@@ -356,16 +359,23 @@ export default function DocumentsScreen() {
       // hint is suppressed while the field is empty. OCR pre-fills both when it
       // can; this guarantees they accompany an uploaded licence so admins have
       // something to verify and the expiry-reminder cron has a date to fire on.
-      if (documents.fssaiLicenseNumber.length !== 14) {
+      if (isIndia && documents.fssaiLicenseNumber.length !== 14) {
         showAlert(
           t('onboarding.fssaiNumberRequired'),
           t('onboarding.fssaiNumberRequiredBody'),
         );
         return;
       }
+      if (!isIndia && documents.foodRegistrationNumber.trim().length < 3) {
+        showAlert(
+          t('onboarding.foodRegNumberRequired'),
+          t('onboarding.foodRegNumberRequiredBody'),
+        );
+        return;
+      }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(documents.fssaiExpiryDate)) {
         showAlert(
-          t('onboarding.fssaiExpiryRequired'),
+          t(isIndia ? 'onboarding.fssaiExpiryRequired' : 'onboarding.foodRegExpiryRequired'),
           t('onboarding.fssaiExpiryRequiredBody'),
         );
         return;
@@ -377,7 +387,7 @@ export default function DocumentsScreen() {
       if (!Number.isNaN(expiry.getTime()) && expiry < today) {
         showAlert(
           t('onboarding.fssaiExpiredTitle'),
-          t('onboarding.fssaiExpiredBody'),
+          t(isIndia ? 'onboarding.fssaiExpiredBody' : 'onboarding.foodRegExpiredBody'),
         );
         return;
       }
@@ -591,7 +601,9 @@ export default function DocumentsScreen() {
       {!documents.idProofUri || !documents.fssaiUri || !documents.addressProofUri ? (
         <View style={styles.deadlineCard}>
           <Text style={styles.deadlineTitle}>{t('onboarding.docsSkipTitle')}</Text>
-          <Text style={styles.deadlineBody}>{t('onboarding.docsSkipBody')}</Text>
+          <Text style={styles.deadlineBody}>
+            {t(isIndia ? 'onboarding.docsSkipBody' : 'onboarding.docsSkipBodyFoodReg')}
+          </Text>
         </View>
       ) : null}
 
@@ -633,10 +645,10 @@ export default function DocumentsScreen() {
       <View style={styles.tileSpacer} />
 
       {renderUploadTile(
-        t('onboarding.fssaiLicense'),
-        t('onboarding.fssaiLicenseSubtitle'),
+        t(isIndia ? 'onboarding.fssaiLicense' : 'onboarding.foodRegCert'),
+        t(isIndia ? 'onboarding.fssaiLicenseSubtitle' : 'onboarding.foodRegCertSubtitle'),
         <ShieldCheck size={18} color={theme.colors.ink.soft} strokeWidth={1.5} />,
-        'fssai_license',
+        market.licenceDocType,
         documents.fssaiUri,
         documents.fssaiType,
         fssaiUpload,
@@ -644,7 +656,9 @@ export default function DocumentsScreen() {
 
       {/* Deliberately text, not a link: the FSSAI request needs a chef profile,
           which does not exist until this application is submitted. */}
-      <Text style={styles.fssaiHelpHint}>{t('onboarding.fssaiWeCanObtainIt')}</Text>
+      <Text style={styles.fssaiHelpHint}>
+        {t(isIndia ? 'onboarding.fssaiWeCanObtainIt' : `onboarding.foodRegHow${market.code}`)}
+      </Text>
 
       {/* FSSAI license number + expiry — collected as structured fields
           alongside the photo so admin tooling can validate, FoSCoS API
@@ -652,6 +666,7 @@ export default function DocumentsScreen() {
           visible (not gated on photo upload) so the chef can type the
           number while their hands are on the keyboard. */}
       <View style={styles.fssaiFields}>
+        {isIndia ? (
         <View style={styles.fssaiFieldGroup}>
           <Text style={styles.fssaiFieldLabel}>{t('onboarding.licenseNumber')}</Text>
           <TextInput
@@ -671,6 +686,21 @@ export default function DocumentsScreen() {
               <Text style={styles.fssaiHelpError}>{t('onboarding.fssaiNumberError')}</Text>
             )}
         </View>
+        ) : (
+          <View style={styles.fssaiFieldGroup}>
+            <Text style={styles.fssaiFieldLabel}>{t('onboarding.foodRegNumber')}</Text>
+            <TextInput
+              value={documents.foodRegistrationNumber}
+              onChangeText={(v) => updateDocuments({ foodRegistrationNumber: v.slice(0, 40) })}
+              placeholder={t('onboarding.foodRegNumberPlaceholder')}
+              placeholderTextColor={theme.colors.ink.muted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={40}
+              style={styles.fssaiInput}
+            />
+          </View>
+        )}
         <View style={styles.fssaiFieldGroup}>
           <Text style={styles.fssaiFieldLabel}>{t('onboarding.expiryDate')}</Text>
           <TextInput
@@ -696,6 +726,7 @@ export default function DocumentsScreen() {
             threshold (₹20L turnover) skip this; everyone else uses
             it to claim input tax credit and to print on the customer
             invoice per Wave 3. */}
+        {isIndia ? (
         <View style={styles.fssaiFieldGroup}>
           <Text style={styles.fssaiFieldLabel}>{t('onboarding.gstinOptional')}</Text>
           <TextInput
@@ -717,6 +748,26 @@ export default function DocumentsScreen() {
             {t('onboarding.gstinHint')}
           </Text>
         </View>
+        ) : (
+          <View style={styles.fssaiFieldGroup}>
+            <Text style={styles.fssaiFieldLabel}>
+              {t('onboarding.businessNumberOptional', { label: market.businessNumberLabel })}
+            </Text>
+            <TextInput
+              value={documents.businessNumber}
+              onChangeText={(v) =>
+                updateDocuments({ businessNumber: v.replace(/[^\d ]/g, '').slice(0, 17) })
+              }
+              placeholder={market.code === 'AU' ? '51 824 753 556' : '9429041533864'}
+              placeholderTextColor={theme.colors.ink.muted}
+              keyboardType="number-pad"
+              autoCorrect={false}
+              maxLength={17}
+              style={styles.fssaiInput}
+            />
+            <Text style={styles.fssaiHelpHint}>{t(`onboarding.businessNumberHint${market.code}`)}</Text>
+          </View>
+        )}
       </View>
 
       {/* ── KITCHEN PHOTOS & VIDEO (mandatory) ──────────────────── */}

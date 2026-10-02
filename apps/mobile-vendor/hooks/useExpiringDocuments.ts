@@ -21,6 +21,7 @@ export interface ExpiringDocumentsResponse {
 export function describeDocumentType(type: string): string {
   const map: Record<string, string> = {
     fssai_license: 'FSSAI license',
+    food_safety_cert: 'Food business registration',
     id_proof: 'ID proof',
     address_proof: 'Address proof',
     pan_card: 'PAN card',

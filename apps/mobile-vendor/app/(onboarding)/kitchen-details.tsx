@@ -1,12 +1,12 @@
 // apps/mobile-vendor/app/(onboarding)/kitchen-details.tsx
 // Step 2/6 — Kitchen name, cuisine multi-select, description, address.
 //
-// Address is India-only (the only country we serve today). State and city
-// come from the backend reference data via useStates() / useCities(); the
+// Indian addresses take state and city from the backend reference data via
+// useStates() / useCities(); AU/NZ use a fixed region list and free-text city. The
 // PIN field carries an autocomplete that resolves to a full (state, city,
 // PIN) triple in one tap.
 
-import { useRef, useState as useReactState } from 'react';
+import { useMemo, useRef, useState as useReactState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -30,6 +30,7 @@ import { SelectField } from '../../components/SelectField';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import { api } from '../../lib/api';
+import { getMarket, isValidPostcode, type MarketCode } from '../../lib/market';
 import {
   useStates,
   useCities,
@@ -41,16 +42,11 @@ import {
   type AddressSuggestion,
 } from '../../hooks/useLocations';
 
-const CUISINE_OPTIONS = [
-  'North Indian',
-  'South Indian',
-  'Chinese',
-  'Continental',
-  'Bakery',
-  'Snacks',
-  'Beverages',
-  'Other',
-] as const;
+const CUISINE_OPTIONS: Record<MarketCode, string[]> = {
+  IN: ['North Indian', 'South Indian', 'Chinese', 'Continental', 'Bakery', 'Snacks', 'Beverages', 'Other'],
+  AU: ['Indian', 'Chinese', 'Thai', 'Italian', 'Middle Eastern', 'Bakery', 'Snacks', 'Beverages', 'Other'],
+  NZ: ['Indian', 'Chinese', 'Thai', 'Italian', 'Pacific', 'Bakery', 'Snacks', 'Beverages', 'Other'],
+};
 
 // A bakery sells configured products (weight, shape, flavour) and gets its own
 // customer-facing section; everything else is a kitchen (#1065).
@@ -59,7 +55,8 @@ const VERTICALS = [
   { value: 'bakery', icon: CakeSlice, title: 'onboarding.verticalBakery', hint: 'onboarding.verticalBakeryHint' },
 ] as const;
 
-const schema = z.object({
+function buildSchema(country: MarketCode) {
+  return z.object({
   vertical: z.enum(['kitchen', 'bakery']),
   sellsBakery: z.boolean(),
   businessName: z.string().min(3, 'onboarding.errBusinessNameMin'),
@@ -72,20 +69,22 @@ const schema = z.object({
   addressLine2: z.string(),
   city: z.string().min(2, 'onboarding.errCity'),
   state: z.string().min(2, 'onboarding.errState'),
-  // India PIN codes are exactly 6 digits. Tightened from the legacy >=4
-  // check now that we enforce India-only.
   postalCode: z
     .string()
-    .regex(/^\d{6}$/, 'onboarding.errPin'),
-});
+    .refine((v) => isValidPostcode(v, country), country === 'IN' ? 'onboarding.errPin' : 'onboarding.errPostcode4'),
+  });
+}
 
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<ReturnType<typeof buildSchema>>;
 
 export default function KitchenDetailsScreen() {
   const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { kitchenDetails, updateKitchenDetails, setStep } = useVendorOnboardingStore();
+  const market = getMarket(kitchenDetails.country);
+  const isIndia = market.code === 'IN';
+  const schema = useMemo(() => buildSchema(market.code), [market.code]);
 
   const {
     control,
@@ -130,11 +129,11 @@ export default function KitchenDetailsScreen() {
   // the suggestions panel can stay open while the form's postalCode value
   // is empty (until the user picks a result).
   const [postcodeQuery, setPostcodeQuery] = useReactState('');
-  const postcodeSearch = usePostcodeSearch(postcodeQuery);
+  const postcodeSearch = usePostcodeSearch(postcodeQuery, isIndia);
   // Photon-backed worldwide autocomplete — runs in parallel with the
   // seeded /postcodes/search so the panel surfaces both kinds of hits
   // simultaneously.
-  const addressAutocomplete = useAddressAutocomplete(postcodeQuery);
+  const addressAutocomplete = useAddressAutocomplete(postcodeQuery, market.code);
   const [showPostcodeSuggestions, setShowPostcodeSuggestions] = useReactState(false);
 
   // Geolocation auto-fill state — drives the spinner on the CTA.
@@ -187,7 +186,7 @@ export default function KitchenDetailsScreen() {
   async function pickAddressSuggestion(item: AddressSuggestion): Promise<void> {
     if (item.line1) setValue('addressLine1', item.line1, { shouldValidate: true });
     let canonicalized = false;
-    if (item.postal) {
+    if (item.postal && isIndia) {
       try {
         const r = await api.get<{ data: PostcodeSearchResult[] }>(
           `/locations/postcodes/search?q=${encodeURIComponent(item.postal)}`,
@@ -246,12 +245,12 @@ export default function KitchenDetailsScreen() {
         });
         return;
       }
-      // Block non-India locations: the address form, state list, and PIN
-      // validation are all India-only.
-      if (top.isoCountryCode && top.isoCountryCode !== 'IN') {
+      // The device must be in the country the chef registered the kitchen in.
+      if (top.isoCountryCode && top.isoCountryCode !== market.code) {
         showToast({
-          message: t('onboarding.indiaOnly', {
+          message: t('onboarding.outsideKitchenCountry', {
             country: top.country ?? top.isoCountryCode,
+            kitchenCountry: market.name,
           }),
           tone: 'error',
         });
@@ -262,7 +261,7 @@ export default function KitchenDetailsScreen() {
       if (line1) setValue('addressLine1', line1, { shouldValidate: true });
 
       let canonicalized = false;
-      if (top.postalCode) {
+      if (top.postalCode && isIndia) {
         try {
           const r = await api.get<{ data: PostcodeSearchResult[] }>(
             `/locations/postcodes/search?q=${encodeURIComponent(top.postalCode)}`,
@@ -416,7 +415,7 @@ export default function KitchenDetailsScreen() {
         <View>
           <Text style={styles.fieldLabel}>{t('onboarding.cuisineTypes')}</Text>
           <View style={styles.chipRow}>
-            {CUISINE_OPTIONS.map((cuisine) => {
+            {CUISINE_OPTIONS[market.code].map((cuisine) => {
               const selected = selectedCuisines?.includes(cuisine) ?? false;
               return (
                 <Pressable
@@ -523,7 +522,7 @@ export default function KitchenDetailsScreen() {
       <View style={styles.searchWrap}>
         <Input
           label=""
-          placeholder={t('onboarding.searchAddressPlaceholder')}
+          placeholder={t(isIndia ? 'onboarding.searchAddressPlaceholder' : 'onboarding.searchAddressPlaceholderIntl')}
           value={postcodeQuery}
           onChangeText={(text) => {
             setPostcodeQuery(text);
@@ -651,21 +650,26 @@ export default function KitchenDetailsScreen() {
         {/* State and city are dropdowns, not chip strips: 36 states never fit a
             strip, and the one already picked was rarely among the two shown. */}
         <SelectField
-          label={t('onboarding.state')}
+          label={isIndia ? t('onboarding.state') : t(`onboarding.region${market.code}`)}
           value={selectedStateName}
-          options={(states.data ?? []).map((s) => s.name)}
+          options={market.regions ?? (states.data ?? []).map((s) => s.name)}
           onChange={(name) => {
+            if (!isIndia) {
+              setValue('state', name, { shouldValidate: true });
+              return;
+            }
             const picked = states.data?.find((s) => s.name === name);
             if (picked) pickState(picked);
           }}
           placeholder={t('onboarding.statePlaceholder')}
-          loading={states.isLoading}
+          loading={isIndia && states.isLoading}
           error={errors.state?.message ? t(errors.state.message) : undefined}
           hasBorderBottom={false}
         />
 
         <View style={styles.innerHairline} />
 
+        {isIndia ? (
         <SelectField
           label={t('onboarding.city')}
           value={selectedCityName}
@@ -683,6 +687,22 @@ export default function KitchenDetailsScreen() {
           error={errors.city?.message ? t(errors.city.message) : undefined}
           hasBorderBottom={false}
         />
+        ) : (
+          <Controller
+            control={control}
+            name="city"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label={t('onboarding.cityOrSuburb')}
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                autoCapitalize="words"
+                error={errors.city?.message ? t(errors.city.message) : undefined}
+              />
+            )}
+          />
+        )}
 
         <View style={styles.innerHairline} />
 
@@ -692,13 +712,13 @@ export default function KitchenDetailsScreen() {
           name="postalCode"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label={t('onboarding.pinCode')}
-              placeholder={t('onboarding.pinPlaceholder')}
+              label={isIndia ? t('onboarding.pinCode') : t('onboarding.postcode')}
+              placeholder={isIndia ? t('onboarding.pinPlaceholder') : t('onboarding.postcodePlaceholder')}
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
               keyboardType="number-pad"
-              maxLength={6}
+              maxLength={market.postcodeLength}
               error={errors.postalCode?.message ? t(errors.postalCode.message) : undefined}
             />
           )}

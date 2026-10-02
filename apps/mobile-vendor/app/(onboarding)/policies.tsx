@@ -10,6 +10,7 @@ import { Check, RotateCcw } from 'lucide-react-native';
 import { OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
+import { getMarket } from '../../lib/market';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import {
   CANCELLATION_POLICY_OPTIONS,
@@ -32,7 +33,9 @@ export default function PoliciesScreen() {
   const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
-  const { policies, updatePolicies, setStep } = useVendorOnboardingStore();
+  const { policies, updatePolicies, setStep, kitchenDetails } = useVendorOnboardingStore();
+  const hygieneKey =
+    getMarket(kitchenDetails.country).code === 'IN' ? 'onboarding.termsBullet1' : 'onboarding.termsBullet1Local';
 
   const [acceptedTerms, setAcceptedTerms] = useState<boolean>(policies.acceptedTerms);
   const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicy | ''>(
@@ -83,7 +86,7 @@ export default function PoliciesScreen() {
 
       {/* Scannable bullets instead of a dense text block */}
       <View style={styles.termsBulletCard}>
-        {TERMS_BULLET_KEYS.map((bulletKey, idx) => (
+        {TERMS_BULLET_KEYS.map((key) => (key === 'onboarding.termsBullet1' ? hygieneKey : key)).map((bulletKey, idx) => (
           <View
             key={idx}
             style={[styles.bulletRow, idx < TERMS_BULLET_KEYS.length - 1 && styles.bulletRowBorder]}

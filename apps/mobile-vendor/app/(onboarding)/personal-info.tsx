@@ -1,34 +1,40 @@
-import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { User, Phone, Mail, Check } from 'lucide-react-native';
+import { User, Phone, Mail, Check, Globe } from 'lucide-react-native';
 import { Input, Button, OnboardingScaffold, useAlert } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
+import { getPhoneRule, isValidPhone, sanitizePhoneInput } from '@homechef/mobile-shared/utils';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
+import { MARKET_CODES, getMarket, type MarketCode } from '../../lib/market';
 
-const schema = z.object({
-  fullName: z.string().min(2, 'onboarding.errFullNameMin'),
-  phone: z
-    .string()
-    .regex(/^[6-9]\d{9}$/, 'onboarding.errPhone'),
-  email: z.string().email('onboarding.errEmail'),
-});
+function buildSchema(country: MarketCode) {
+  return z.object({
+    fullName: z.string().min(2, 'onboarding.errFullNameMin'),
+    phone: z.string().refine((v) => isValidPhone(v, country), `onboarding.errPhone${country}`),
+    email: z.string().email('onboarding.errEmail'),
+  });
+}
 
-type FormValues = z.infer<typeof schema>;
+type FormValues = z.infer<ReturnType<typeof buildSchema>>;
 
 export default function PersonalInfoScreen() {
   const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
   const { user } = useAuthStore();
-  const { personalInfo, updatePersonalInfo, setStep } = useVendorOnboardingStore();
+  const { personalInfo, updatePersonalInfo, kitchenDetails, updateKitchenDetails, setStep } =
+    useVendorOnboardingStore();
+  const country = kitchenDetails.country ?? 'IN';
+  const phoneRule = getPhoneRule(country);
+  const schema = useMemo(() => buildSchema(country), [country]);
 
   const {
     control,
@@ -135,6 +141,36 @@ export default function PersonalInfoScreen() {
       onPrimary={handleSubmit(onSubmit, onInvalid)}
       scrollRef={scrollRef}
     >
+      <View style={styles.sectionLabel}>
+        <Globe size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+        <Text style={styles.sectionLabelText}>{t('onboarding.kitchenCountry')}</Text>
+      </View>
+      <View style={styles.countryRow} accessibilityRole="radiogroup">
+        {MARKET_CODES.map((code) => {
+          const selected = code === country;
+          return (
+            <Pressable
+              key={code}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              style={[styles.countryPill, selected && styles.countryPillSelected]}
+              onPress={() => {
+                if (selected) return;
+                // State, city and postcode belong to the old country.
+                updateKitchenDetails({ country: code, state: '', city: '', postalCode: '' });
+              }}
+            >
+              <Text style={[styles.countryPillText, selected && styles.countryPillTextSelected]}>
+                {getMarket(code).name}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={styles.lockedHint}>{t('onboarding.kitchenCountryHint')}</Text>
+
+      <View style={styles.hairline} />
+
       {/* ── WHO YOU ARE ─────────────────────────────────────── */}
       <View style={styles.sectionLabel}>
         <User size={12} color={theme.colors.ink.muted} strokeWidth={2} />
@@ -183,13 +219,13 @@ export default function PersonalInfoScreen() {
           name="phone"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label={t('onboarding.phoneNumber')}
-              placeholder={t('onboarding.phonePlaceholder')}
+              label={`${t('onboarding.phoneNumber')} (${phoneRule.dialCode})`}
+              placeholder={phoneRule.example}
               onBlur={onBlur}
-              onChangeText={onChange}
+              onChangeText={(v) => onChange(sanitizePhoneInput(v, country))}
               value={value}
               keyboardType="phone-pad"
-              maxLength={10}
+              maxLength={phoneRule.length}
               helper={t('onboarding.phoneHelper')}
               error={errors.phone?.message ? t(errors.phone.message) : undefined}
             />
@@ -289,6 +325,35 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1.2,
     color: theme.colors.ink.muted,
+  },
+
+  countryRow: {
+    flexDirection: 'row',
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[2],
+  },
+  countryPill: {
+    flex: 1,
+    minHeight: theme.touchTarget.vendor,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: theme.radius.DEFAULT,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.paper,
+  },
+  countryPillSelected: {
+    borderColor: theme.colors.herb.DEFAULT,
+    borderWidth: 1.5,
+  },
+  countryPillText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+  },
+  countryPillTextSelected: {
+    color: theme.colors.ink.DEFAULT,
+    fontFamily: 'Inter-SemiBold',
   },
 
   // Hairline separator between sections
