@@ -1,14 +1,14 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRef, useEffect, useState } from 'react';
-import * as Haptics from 'expo-haptics';
-import { multipartConfig } from '@homechef/mobile-shared/api';
-import { api } from '../lib/api';
-import type { ChefPayout } from '../lib/chefPayout';
-import type { DashboardData, RecentOrder } from './useVendorDashboard';
-import type { OrderDetail } from './useOrderDetail';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRef, useEffect, useState } from "react";
+import * as Haptics from "expo-haptics";
+import { multipartConfig } from "@homechef/mobile-shared/api";
+import { api } from "../lib/api";
+import type { ChefPayout } from "../lib/chefPayout";
+import type { DashboardData, RecentOrder } from "./useVendorDashboard";
+import type { OrderDetail } from "./useOrderDetail";
 
 /** Lifecycle photo kinds the chef attaches to an order. */
-export type OrderPhotoKind = 'ready' | 'handover';
+export type OrderPhotoKind = "ready" | "handover";
 
 // Uploads a required lifecycle photo (food-ready or proof-of-handover) for an
 // order. Returns the public URL. The order-detail screen calls this BEFORE the
@@ -22,24 +22,24 @@ export function useUploadOrderPhoto() {
       uri: string;
     }) => {
       const formData = new FormData();
-      const filename = vars.uri.split('/').pop() ?? `${vars.kind}.jpg`;
+      const filename = vars.uri.split("/").pop() ?? `${vars.kind}.jpg`;
       // Label by the real extension. Defaulting everything non-PNG to JPEG sent
       // HEIC bytes as image/jpeg, which the API rejects outright (#photo-upload).
-      const ext = filename.toLowerCase().split('.').pop() ?? '';
+      const ext = filename.toLowerCase().split(".").pop() ?? "";
       const type =
-        ext === 'png'
-          ? 'image/png'
-          : ext === 'webp'
-            ? 'image/webp'
-            : ext === 'heic' || ext === 'heif'
+        ext === "png"
+          ? "image/png"
+          : ext === "webp"
+            ? "image/webp"
+            : ext === "heic" || ext === "heif"
               ? `image/${ext}`
-              : 'image/jpeg';
-      formData.append('file', {
+              : "image/jpeg";
+      formData.append("file", {
         uri: vars.uri,
         name: filename,
         type,
       } as unknown as Blob);
-      formData.append('kind', vars.kind);
+      formData.append("kind", vars.kind);
       const res = await api.post<{ kind: OrderPhotoKind; url: string }>(
         `/chef/orders/${vars.orderId}/photos`,
         formData,
@@ -61,9 +61,10 @@ export interface OrderItem {
 /** Where an order originated, tagged by the API (#435) so the vendor feed can
  *  group à-la-carte, weekly meal-plan days, subscription days, and group orders.
  *  Absent on legacy payloads → treated as à-la-carte. */
-export type OrderSource = 'alacarte' | 'meal_plan' | 'subscription' | 'group';
+export type OrderSource = "alacarte" | "meal_plan" | "subscription" | "group";
 
 export interface Order {
+  currency?: string;
   id: string;
   customerName: string;
   items: OrderItem[];
@@ -74,12 +75,20 @@ export interface Order {
    *  carried it) + tip − penalty. Served on every chef-facing row, `estimated`
    *  until the order is delivered and the row is frozen. */
   chefPayout?: ChefPayout;
-  status: 'pending' | 'accepted' | 'rejected' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
+  status:
+    | "pending"
+    | "accepted"
+    | "rejected"
+    | "preparing"
+    | "ready"
+    | "picked_up"
+    | "delivered"
+    | "cancelled";
   /** Order origin for the unified feed badge (#435). */
   source?: OrderSource;
   // How the order reaches the customer. 'pickup' → customer collects; the chef
   // confirms handover (ready → delivered). Legacy orders default to delivery.
-  fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
+  fulfillmentType?: "delivery" | "chef_delivery" | "pickup";
   // True while an OPEN delivery-failure review is in flight (#393): the chef
   // reported "couldn't deliver" and an admin hasn't ruled on the money yet. The
   // status stays picked_up, so the app treats the order as History (out of the
@@ -120,8 +129,11 @@ export function useVendorPendingOrders() {
   const previousCountRef = useRef(0);
 
   const query = useQuery<OrdersResponse>({
-    queryKey: ['chef', 'orders', 'pending'],
-    queryFn: () => api.get<OrdersResponse>('/chef/orders?status=pending&page=1').then((r) => r.data),
+    queryKey: ["chef", "orders", "pending"],
+    queryFn: () =>
+      api
+        .get<OrdersResponse>("/chef/orders?status=pending&page=1")
+        .then((r) => r.data),
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
     // Hide orders that are mid-action so a background refetch can't re-add them.
@@ -145,15 +157,16 @@ export function useVendorPendingOrders() {
 // Order history (paginated)
 export function useVendorOrderHistory(page = 1) {
   return useQuery<OrdersResponse>({
-    queryKey: ['chef', 'orders', 'history', page],
-    queryFn: () => api.get<OrdersResponse>(`/chef/orders?page=${page}`).then((r) => r.data),
+    queryKey: ["chef", "orders", "history", page],
+    queryFn: () =>
+      api.get<OrdersResponse>(`/chef/orders?page=${page}`).then((r) => r.data),
     staleTime: 30_000,
   });
 }
 
 export interface PendingUndo {
   orderId: string;
-  action: 'accepted' | 'rejected';
+  action: "accepted" | "rejected";
 }
 
 // Accept/Reject with optimistic update + undo timer
@@ -170,7 +183,9 @@ export function useOrderAction() {
   // filtering it out for the rest of the session. The chef saw it "In Progress"
   // and cooked it; the server still had it `pending` and the customer saw an
   // unaccepted order.
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
   // Which orders the chef has already actioned and not undone. REACTIVE, unlike
   // the module-level `actionedOrderIds` set the pending-list filter uses — the
   // order-detail footer has to re-render the instant Accept is tapped.
@@ -180,7 +195,9 @@ export function useOrderAction() {
   // `pending` on the server), which reads as a dead button. Tapping again then
   // re-entered triggerAction and RESET the timer — so an impatient double-tap
   // pushed the accept further away, the opposite of what the chef intended.
-  const [actioningIds, setActioningIds] = useState<ReadonlySet<string>>(new Set());
+  const [actioningIds, setActioningIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const releaseActioning = (orderId: string) =>
     setActioningIds((cur) => {
       if (!cur.has(orderId)) return cur;
@@ -197,7 +214,7 @@ export function useOrderAction() {
       confirmedFulfillmentAt,
     }: {
       orderId: string;
-      action: 'accepted' | 'rejected';
+      action: "accepted" | "rejected";
       reason?: string;
       // Home-tiffin scheduling (#709): at accept, the chef confirms the customer's
       // requested time or proposes a different one (ISO). Absent = confirm as-is.
@@ -209,15 +226,24 @@ export function useOrderAction() {
         confirmedFulfillmentAt,
       }),
     onMutate: async ({ orderId }) => {
-      await queryClient.cancelQueries({ queryKey: ['chef', 'orders', 'pending'] });
-      const previous = queryClient.getQueryData<OrdersResponse>(['chef', 'orders', 'pending']);
-      queryClient.setQueryData<OrdersResponse>(['chef', 'orders', 'pending'], (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          orders: old.orders.filter((o) => o.id !== orderId),
-        };
+      await queryClient.cancelQueries({
+        queryKey: ["chef", "orders", "pending"],
       });
+      const previous = queryClient.getQueryData<OrdersResponse>([
+        "chef",
+        "orders",
+        "pending",
+      ]);
+      queryClient.setQueryData<OrdersResponse>(
+        ["chef", "orders", "pending"],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            orders: old.orders.filter((o) => o.id !== orderId),
+          };
+        },
+      );
       return { previous };
     },
     onError: (_err, vars, context) => {
@@ -226,14 +252,21 @@ export function useOrderAction() {
       actionedOrderIds.delete(vars.orderId);
       releaseActioning(vars.orderId);
       if (context?.previous) {
-        queryClient.setQueryData(['chef', 'orders', 'pending'], context.previous);
+        queryClient.setQueryData(
+          ["chef", "orders", "pending"],
+          context.previous,
+        );
       }
-      queryClient.setQueryData<DashboardData>(['chef', 'dashboard'], (old) =>
+      queryClient.setQueryData<DashboardData>(["chef", "dashboard"], (old) =>
         old
           ? {
               ...old,
-              recentOrders: old.recentOrders.filter((o) => o.id !== vars.orderId),
-              activeOrders: old.activeOrders?.filter((o) => o.id !== vars.orderId),
+              recentOrders: old.recentOrders.filter(
+                (o) => o.id !== vars.orderId,
+              ),
+              activeOrders: old.activeOrders?.filter(
+                (o) => o.id !== vars.orderId,
+              ),
             }
           : old,
       );
@@ -246,14 +279,14 @@ export function useOrderAction() {
       releaseActioning(vars.orderId);
       // Refresh the order lists AND the dashboard stats (pending count, today's
       // totals) — the dashboard was previously left stale after accept/reject.
-      queryClient.invalidateQueries({ queryKey: ['chef', 'orders'] });
-      queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ["chef", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["chef", "dashboard"] });
     },
   });
 
   function triggerAction(
     orderId: string,
-    action: 'accepted' | 'rejected',
+    action: "accepted" | "rejected",
     reason?: string,
     // Home-tiffin scheduling (#709): a proposed/confirmed fulfilment time (ISO)
     // the chef sets when accepting. Absent = confirm the customer's request as-is.
@@ -276,17 +309,24 @@ export function useOrderAction() {
     // Grab the order before removing it — for an accept we move it straight
     // into the dashboard "In Progress" list so it doesn't vanish during the
     // undo window and then pop back a few seconds later (the flicker).
-    const pending = queryClient.getQueryData<OrdersResponse>(['chef', 'orders', 'pending']);
+    const pending = queryClient.getQueryData<OrdersResponse>([
+      "chef",
+      "orders",
+      "pending",
+    ]);
     const accepted = pending?.orders.find((o) => o.id === orderId);
-    queryClient.setQueryData<OrdersResponse>(['chef', 'orders', 'pending'], (old) => {
-      if (!old) return old;
-      return {
-        ...old,
-        orders: old.orders.filter((o) => o.id !== orderId),
-      };
-    });
-    if (action === 'accepted' && accepted) {
-      queryClient.setQueryData<DashboardData>(['chef', 'dashboard'], (old) => {
+    queryClient.setQueryData<OrdersResponse>(
+      ["chef", "orders", "pending"],
+      (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          orders: old.orders.filter((o) => o.id !== orderId),
+        };
+      },
+    );
+    if (action === "accepted" && accepted) {
+      queryClient.setQueryData<DashboardData>(["chef", "dashboard"], (old) => {
         if (!old) return old;
         const optimistic: RecentOrder = {
           id: accepted.id,
@@ -295,7 +335,7 @@ export function useOrderAction() {
           // Carry the payout across the optimistic hand-off or the card would
           // fall back to the customer total for the whole undo window.
           chefPayout: accepted.chefPayout,
-          status: 'accepted',
+          status: "accepted",
           createdAt: accepted.createdAt,
           fulfillmentType: accepted.fulfillmentType,
         };
@@ -344,7 +384,7 @@ export function useOrderAction() {
       actionedOrderIds.delete(undoId);
       releaseActioning(undoId);
       // Pull the order back out of "In Progress" — the accept was undone.
-      queryClient.setQueryData<DashboardData>(['chef', 'dashboard'], (old) =>
+      queryClient.setQueryData<DashboardData>(["chef", "dashboard"], (old) =>
         old
           ? {
               ...old,
@@ -354,8 +394,8 @@ export function useOrderAction() {
           : old,
       );
     }
-    queryClient.invalidateQueries({ queryKey: ['chef', 'orders', 'pending'] });
-    queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ["chef", "orders", "pending"] });
+    queryClient.invalidateQueries({ queryKey: ["chef", "dashboard"] });
     setPendingUndo(null);
   }
 
@@ -386,21 +426,24 @@ export function useUpdateOrderStatus() {
       carrier,
     }: {
       orderId: string;
-      status: Order['status'];
+      status: Order["status"];
       // Optional carrier choice the chef makes at Mark Ready (self-delivery
       // chefs only): 'chef_delivery' = I'll deliver, 'delivery' = hand to a rider.
-      carrier?: 'chef_delivery' | 'delivery';
+      carrier?: "chef_delivery" | "delivery";
     }) => api.put(`/chef/orders/${orderId}/status`, { status, carrier }),
     onMutate: async ({ orderId, status }) => {
       // The screen that shows this footer reads ['chef','orders','detail-v2',id]
       // (useOrderDetail). This optimistic write addressed the older 'detail' key,
       // so it updated a cache nobody rendered and the footer sat on the old stage
       // until the refetch landed — the transition felt seconds slow for no reason.
-      const detailKey = ['chef', 'orders', 'detail-v2', orderId];
+      const detailKey = ["chef", "orders", "detail-v2", orderId];
       await queryClient.cancelQueries({ queryKey: detailKey });
       const previous = queryClient.getQueryData<OrderDetail>(detailKey);
       if (previous) {
-        queryClient.setQueryData<OrderDetail>(detailKey, { ...previous, status });
+        queryClient.setQueryData<OrderDetail>(detailKey, {
+          ...previous,
+          status,
+        });
       }
       return { previous, detailKey };
     },
@@ -411,8 +454,8 @@ export function useUpdateOrderStatus() {
     },
     onSettled: () => {
       // Refresh dashboard + queue + history so card moves between tabs
-      queryClient.invalidateQueries({ queryKey: ['chef', 'orders'] });
-      queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ["chef", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["chef", "dashboard"] });
     },
   });
 }
@@ -430,19 +473,23 @@ export function useVendorOrderDetail(orderId: string | null | undefined) {
   const queryClient = useQueryClient();
 
   return useQuery<Order>({
-    queryKey: ['chef', 'orders', 'detail', orderId],
+    queryKey: ["chef", "orders", "detail", orderId],
     enabled: !!orderId,
     queryFn: async () => {
-      if (!orderId) throw new Error('orderId required');
+      if (!orderId) throw new Error("orderId required");
 
       // 1. Peek pending cache.
-      const pending = queryClient.getQueryData<OrdersResponse>(['chef', 'orders', 'pending']);
+      const pending = queryClient.getQueryData<OrdersResponse>([
+        "chef",
+        "orders",
+        "pending",
+      ]);
       const hitPending = pending?.orders.find((o) => o.id === orderId);
       if (hitPending) return hitPending;
 
       // 2. Peek any history page cache.
       const historyEntries = queryClient.getQueriesData<OrdersResponse>({
-        queryKey: ['chef', 'orders', 'history'],
+        queryKey: ["chef", "orders", "history"],
       });
       for (const [, data] of historyEntries) {
         const hit = data?.orders.find((o) => o.id === orderId);
@@ -452,21 +499,21 @@ export function useVendorOrderDetail(orderId: string | null | undefined) {
       // 3. Refetch pending. Covers the push-notification deep-link case
       // where the cache was cold (app launched from a kill state).
       const freshPending = await api
-        .get<OrdersResponse>('/chef/orders?status=pending&page=1')
+        .get<OrdersResponse>("/chef/orders?status=pending&page=1")
         .then((r) => r.data);
       const hitFreshPending = freshPending.orders.find((o) => o.id === orderId);
-      queryClient.setQueryData(['chef', 'orders', 'pending'], freshPending);
+      queryClient.setQueryData(["chef", "orders", "pending"], freshPending);
       if (hitFreshPending) return hitFreshPending;
 
       // 4. Refetch the first page of history. Covers a chef opening their
       // most recent completed order from history.
       const freshHistory = await api
-        .get<OrdersResponse>('/chef/orders?page=1')
+        .get<OrdersResponse>("/chef/orders?page=1")
         .then((r) => r.data);
       const hitFreshHistory = freshHistory.orders.find((o) => o.id === orderId);
       if (hitFreshHistory) return hitFreshHistory;
 
-      throw new Error('Order not found in cache or recent history');
+      throw new Error("Order not found in cache or recent history");
     },
     staleTime: 5_000,
   });

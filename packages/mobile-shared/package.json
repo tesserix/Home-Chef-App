@@ -14,6 +14,7 @@
     "./hooks": "./src/hooks/index.ts",
     "./types": "./src/types/index.ts",
     "./utils": "./src/utils/index.ts",
+    "./validation/phone": "./src/validation/phone.ts",
     "./theme": "./src/theme/index.ts",
     "./screens": "./src/screens/index.ts",
     "./support": "./src/support/index.ts",

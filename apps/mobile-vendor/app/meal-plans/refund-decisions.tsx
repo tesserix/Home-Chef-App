@@ -27,17 +27,15 @@ import {
   type RefundDecisionDay,
 } from '../../hooks/useMealPlans';
 import { useAlert } from '@homechef/mobile-shared/ui';
+import { useKitchenMoney } from '../../hooks/useKitchenMarket';
 
 function dayLabel(iso: string): string {
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-function money(n: number): string {
-  return `₹${Math.round(n) === n ? n : n.toFixed(2)}`;
-}
-
 export default function RefundDecisionsScreen() {
+  const money = useKitchenMoney();
   const { showAlert } = useAlert();
   const { data, isLoading, isError, refetch, isRefetching } = useChefPendingRefundDecisions();
   const decide = useChefRefundDecision();
@@ -131,6 +129,7 @@ function DecisionCard({
   busy: boolean;
   onAct: (d: RefundDecisionDay, percent: number, decline?: boolean) => void;
 }) {
+  const money = useKitchenMoney();
   const [percent, setPercent] = useState(day.minPercent);
   // Presets inside the permitted range, deduplicated — the common answers stay one tap away.
   const presets = [day.minPercent, 75, 100].filter(

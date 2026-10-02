@@ -15,7 +15,7 @@ describe('paymentSecuredByLine', () => {
   // above, exactly.
   it('does not name the retired gateway, which takes no payment', () => {
     expect(paymentSecuredByLine('razorpay')).toBe(
-      'Payments are processed by an RBI-licensed payment aggregator.',
+      'Payments are processed securely by our payment provider.',
     );
   });
 
@@ -28,7 +28,7 @@ describe('paymentSecuredByLine', () => {
   });
 
   it('never guesses a brand when the provider is missing', () => {
-    const generic = 'Payments are processed by an RBI-licensed payment aggregator.';
+    const generic = 'Payments are processed securely by our payment provider.';
     expect(paymentSecuredByLine(undefined)).toBe(generic);
     expect(paymentSecuredByLine(null)).toBe(generic);
     expect(paymentSecuredByLine('')).toBe(generic);

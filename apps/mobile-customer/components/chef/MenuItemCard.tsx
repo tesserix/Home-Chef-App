@@ -1,18 +1,31 @@
-import { useState } from 'react';
-import { useAlert } from '@homechef/mobile-shared/ui';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
-import * as Haptics from 'expo-haptics';
-import { AlertTriangle, Minus, Plus, UtensilsCrossed } from 'lucide-react-native';
-import { useCartStore, makeLineId } from '../../store/cart-store';
-import { useDietaryConflicts } from '../../hooks/useDietaryConflicts';
-import { useFavoriteDishIds, useToggleFavoriteDish } from '../../hooks/useFavorites';
-import { ModifierSheet } from '../cart/ModifierSheet';
-import { BakerySheet } from '../cart/BakerySheet';
-import { FavoriteHeart } from '../shared/FavoriteHeart';
-import { customerColors } from '@homechef/mobile-shared/theme';
-import type { CartBakeryConfig, CartItem, MenuItem, SelectedModifier } from '../../types/customer';
-import { formatMoney } from '../../lib/format';
+import { useState } from "react";
+import { useAlert } from "@homechef/mobile-shared/ui";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
+import {
+  AlertTriangle,
+  Minus,
+  Plus,
+  UtensilsCrossed,
+} from "lucide-react-native";
+import { useCartStore, makeLineId } from "../../store/cart-store";
+import { useDietaryConflicts } from "../../hooks/useDietaryConflicts";
+import {
+  useFavoriteDishIds,
+  useToggleFavoriteDish,
+} from "../../hooks/useFavorites";
+import { ModifierSheet } from "../cart/ModifierSheet";
+import { BakerySheet } from "../cart/BakerySheet";
+import { FavoriteHeart } from "../shared/FavoriteHeart";
+import { customerColors } from "@homechef/mobile-shared/theme";
+import type {
+  CartBakeryConfig,
+  CartItem,
+  MenuItem,
+  SelectedModifier,
+} from "../../types/customer";
+import { formatMoney } from "../../lib/format";
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the ChefCard `withAlpha` convention.
@@ -20,12 +33,18 @@ const ADD_BTN_RIPPLE = `${customerColors.canvas}40`;
 const STEPPER_RIPPLE = `${customerColors.coral.DEFAULT}22`;
 
 interface MenuItemCardProps {
+  currency?: string;
   item: MenuItem;
   chefId: string;
   chefName: string;
 }
 
-export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
+export function MenuItemCard({
+  item,
+  chefId,
+  chefName,
+  currency = "INR",
+}: MenuItemCardProps) {
   const { showAlert } = useAlert();
   // Read cart state for this item so the quantity control is reactive.
   const cartItems = useCartStore((s) => s.items);
@@ -52,20 +71,28 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
   const toggleFavoriteDish = useToggleFavoriteDish();
 
   const addToCart = (cartItem: CartItem) => {
-    const result = useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
-    if (result === 'cross_chef_conflict') {
-      showAlert('Replace Cart?', 'You have items from another chef. Replace cart?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Replace',
-          style: 'destructive',
-          onPress: () => {
-            useCartStore.getState().clearCart();
-            useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const result = useCartStore
+      .getState()
+      .addItem(cartItem, { id: chefId, name: chefName });
+    if (result === "cross_chef_conflict") {
+      showAlert(
+        "Replace Cart?",
+        "You have items from another chef. Replace cart?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Replace",
+            style: "destructive",
+            onPress: () => {
+              useCartStore.getState().clearCart();
+              useCartStore
+                .getState()
+                .addItem(cartItem, { id: chefId, name: chefName });
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            },
           },
-        },
-      ]);
+        ],
+      );
     } else {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -180,9 +207,13 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
         {/* Conflict warning (#41) — dish clashes with the customer's profile */}
         {conflicts.length > 0 ? (
           <View style={styles.warnRow}>
-            <AlertTriangle size={13} color={customerColors.destructive.DEFAULT} strokeWidth={2} />
+            <AlertTriangle
+              size={13}
+              color={customerColors.destructive.DEFAULT}
+              strokeWidth={2}
+            />
             <Text style={styles.warnText} numberOfLines={2}>
-              {conflicts.map((cf) => cf.detail).join(' · ')}
+              {conflicts.map((cf) => cf.detail).join(" · ")}
             </Text>
           </View>
         ) : null}
@@ -196,7 +227,12 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
         {/* Combo includes (#233) */}
         {item.isCombo && item.comboItems && item.comboItems.length > 0 ? (
           <Text style={styles.comboIncludes} numberOfLines={2}>
-            Includes: {item.comboItems.map((c) => (c.quantity > 1 ? `${c.quantity}× ${c.name}` : c.name)).join(', ')}
+            Includes:{" "}
+            {item.comboItems
+              .map((c) =>
+                c.quantity > 1 ? `${c.quantity}× ${c.name}` : c.name,
+              )
+              .join(", ")}
           </Text>
         ) : null}
 
@@ -206,17 +242,21 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
             <Text style={styles.ratingStar}>★</Text>
             <Text style={styles.ratingText}>
               {item.rating.toFixed(1)}
-              {item.reviewCount ? ` (${item.reviewCount})` : ''}
+              {item.reviewCount ? ` (${item.reviewCount})` : ""}
             </Text>
           </View>
         ) : null}
 
         {/* Price — tabular figures per spec */}
-        <Text style={styles.price}>{formatMoney(item.price)}</Text>
+        <Text style={styles.price}>{formatMoney(item.price, currency)}</Text>
 
         {/* Capacity (#48): low-stock hint for a capped dish that isn't sold out. */}
-        {item.remainingToday != null && item.remainingToday > 0 && !item.soldOut ? (
-          <Text style={styles.remainingCaption}>{item.remainingToday} left today</Text>
+        {item.remainingToday != null &&
+        item.remainingToday > 0 &&
+        !item.soldOut ? (
+          <Text style={styles.remainingCaption}>
+            {item.remainingToday} left today
+          </Text>
         ) : null}
 
         {/* Add / quantity control — coral, sits at bottom of text column */}
@@ -239,7 +279,9 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
                   <View
                     style={[
                       styles.addButton,
-                      pressed && Platform.OS === 'ios' && styles.addButtonPressed,
+                      pressed &&
+                        Platform.OS === "ios" &&
+                        styles.addButtonPressed,
                     ]}
                   >
                     <Plus
@@ -268,7 +310,9 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
                     <View
                       style={[
                         styles.stepperBtn,
-                        pressed && Platform.OS === 'ios' && styles.stepperBtnPressed,
+                        pressed &&
+                          Platform.OS === "ios" &&
+                          styles.stepperBtnPressed,
                       ]}
                     >
                       <Minus
@@ -294,7 +338,9 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
                     <View
                       style={[
                         styles.stepperBtn,
-                        pressed && Platform.OS === 'ios' && styles.stepperBtnPressed,
+                        pressed &&
+                          Platform.OS === "ios" &&
+                          styles.stepperBtnPressed,
                       ]}
                     >
                       <Plus
@@ -320,7 +366,7 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
             source={{ uri: item.imageUrl }}
             style={styles.photo}
             contentFit="cover"
-            placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+            placeholder={{ blurhash: "L6PZfSi_.AyE_3t7t7R**0o#DgR4" }}
             transition={200}
             accessibilityLabel={`Photo of ${item.name}`}
           />
@@ -372,8 +418,8 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
 const styles = StyleSheet.create({
   // Row: text left, photo right, full-width on white canvas.
   root: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     backgroundColor: customerColors.canvas,
     paddingVertical: 16,
     // Hairline below each row — applied via borderBottomWidth to avoid
@@ -391,8 +437,8 @@ const styles = StyleSheet.create({
 
   // Diet tag row.
   tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 4,
     marginBottom: 2,
   },
@@ -403,7 +449,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   tagLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 11,
     letterSpacing: 0.2,
     color: customerColors.charcoal.soft,
@@ -416,28 +462,28 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   allergenLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 11,
     letterSpacing: 0.2,
     color: customerColors.destructive.DEFAULT,
   },
   // Profile-conflict warning line.
   warnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     marginTop: 2,
   },
   warnText: {
     flex: 1,
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 12,
     color: customerColors.destructive.DEFAULT,
   },
 
   // Item name — Inter-SemiBold charcoal (spec §2.4).
   name: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 15,
     lineHeight: 20,
     letterSpacing: 0,
@@ -446,14 +492,14 @@ const styles = StyleSheet.create({
 
   // Description — charcoal-soft, 2-line clamp.
   description: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 13,
     lineHeight: 18,
     color: customerColors.charcoal.soft,
   },
   // Combo "includes" line (#233).
   comboIncludes: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 12,
     lineHeight: 16,
     color: customerColors.charcoal.DEFAULT,
@@ -462,8 +508,8 @@ const styles = StyleSheet.create({
 
   // Per-dish rating — charcoal star + value (spec: charcoal star, NOT gold).
   ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 3,
     marginTop: 4,
   },
@@ -472,30 +518,30 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.DEFAULT,
   },
   ratingText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 12,
     color: customerColors.charcoal.soft,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
 
   // Price — tabular figures, charcoal (spec: tabular for every price).
   price: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 14,
     lineHeight: 20,
     color: customerColors.charcoal.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
     marginTop: 2,
   },
 
   // ---- Add button ----
   addWrapper: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     marginTop: 8,
   },
   addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     backgroundColor: customerColors.coral.DEFAULT,
     borderRadius: 8,
@@ -507,19 +553,19 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.coral.pressed,
   },
   addLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 14,
     color: customerColors.canvas,
   },
 
   // ---- Quantity stepper ----
   stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: customerColors.coral.DEFAULT,
     borderRadius: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
     minHeight: 44,
   },
   stepperBtnWrap: {
@@ -528,40 +574,40 @@ const styles = StyleSheet.create({
   stepperBtn: {
     width: 44, // R5: ≥44pt touch target
     height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   stepperBtnPressed: {
     backgroundColor: customerColors.coral.tint,
   },
   stepperQty: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 14,
     color: customerColors.coral.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
     minWidth: 24,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   unavailable: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 12,
     color: customerColors.charcoal.soft,
     marginTop: 6,
   },
   // Capacity (#48): sold-out label + low-stock caption.
   soldOut: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 12,
     color: customerColors.destructive.DEFAULT,
     marginTop: 6,
   },
   remainingCaption: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: 12,
     color: customerColors.charcoal.soft,
     marginTop: 2,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
 
   // ---- Photo ----
@@ -577,7 +623,7 @@ const styles = StyleSheet.create({
   // Missing image — surface-soft bg + utensil glyph centred.
   photoPlaceholder: {
     backgroundColor: customerColors.surface.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

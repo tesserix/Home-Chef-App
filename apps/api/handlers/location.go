@@ -409,6 +409,7 @@ func fetchPhotonSuggestions(reqCtx context.Context, q, country string) ([]Addres
 	qs.Set("q", q)
 	qs.Set("limit", "8")
 	qs.Set("lang", "en")
+	qs.Set("countrycode", strings.ToLower(country))
 	pu.RawQuery = qs.Encode()
 
 	ctx, cancel := context.WithTimeout(reqCtx, 4*time.Second)

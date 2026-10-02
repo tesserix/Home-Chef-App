@@ -1,3 +1,4 @@
+import { formatMoney } from '../../lib/format';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useReducedMotion,
@@ -217,7 +218,7 @@ export function ChefCard({ chef }: ChefCardProps) {
                   {[
                     chef.cuisine,
                     chef.deliveryTime,
-                    deliveryFeeLabel(chef.deliveryFee, chef.deliveryFeeFlat, chef.offersDelivery),
+                    deliveryFeeLabel(chef.deliveryFee, chef.deliveryFeeFlat, chef.offersDelivery, chef.currency),
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -279,7 +280,7 @@ export function ChefCard({ chef }: ChefCardProps) {
                     {[
                       statusWord,
                       chef.minimumOrder != null
-                        ? `Min ₹${chef.minimumOrder}`
+                        ? `Min ${formatMoney(chef.minimumOrder, chef.currency)}`
                         : undefined,
                     ]
                       .filter(Boolean)

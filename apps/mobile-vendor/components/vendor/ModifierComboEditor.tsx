@@ -8,6 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Trash2, X } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import type { ModifierGroupInput, ComboItemInput } from '../../hooks/useVendorMenu';
+import { useKitchenMarket } from '../../hooks/useKitchenMarket';
+import { currencySymbol } from '../../lib/format';
 
 interface Props {
   groups: ModifierGroupInput[];
@@ -24,6 +26,7 @@ const num = (s: string) => parseFloat(s.replace(/[^0-9.-]/g, '')) || 0;
 
 export function ModifierComboEditor({ groups, setGroups, isCombo, setIsCombo, comboItems, setComboItems, menuItems }: Props) {
   const [picker, setPicker] = useState(false);
+  const symbol = currencySymbol(useKitchenMarket()?.currency);
   const nameById = (id: string) => menuItems.find((m) => m.id === id)?.name ?? 'Item';
 
   // ── Group helpers ──
@@ -105,7 +108,7 @@ export function ModifierComboEditor({ groups, setGroups, isCombo, setIsCombo, co
                     onChangeText={(t) => patchOption(gi, oi, { name: t })}
                   />
                   <View style={styles.priceWrap}>
-                    <Text style={styles.pricePrefix}>₹</Text>
+                    <Text style={styles.pricePrefix}>{symbol}</Text>
                     <TextInput
                       style={styles.priceInput}
                       placeholder="0"

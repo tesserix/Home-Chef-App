@@ -59,7 +59,7 @@ function baseOrder(): Order {
   };
 }
 
-function renderOrderDetail() {
+function renderOrderDetail(query = '') {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -69,7 +69,7 @@ function renderOrderDetail() {
 
   const utils = render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/orders/${ORDER_ID}`]}>
+      <MemoryRouter initialEntries={[`/orders/${ORDER_ID}${query}`]}>
         <Routes>
           <Route path="/orders/:id" element={<OrderDetailPage />} />
         </Routes>
@@ -121,5 +121,20 @@ describe('OrderDetailPage — cancellation 502 (cancelled, refund follow-up need
     // The order query was invalidated — with an active observer mounted,
     // that triggers a refetch so the page re-reads as cancelled.
     await waitFor(() => expect(get.mock.calls.length).toBeGreaterThan(getCallsBeforeSubmit));
+  });
+});
+
+
+describe('Stripe return verification', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('does not announce a pending payment as confirmed', async () => {
+    vi.spyOn(apiClient, 'get').mockResolvedValue(baseOrder());
+    vi.spyOn(apiClient, 'post').mockResolvedValue({ status: 'pending' });
+    const success = vi.spyOn(toast, 'success');
+    const message = vi.spyOn(toast, 'message');
+    renderOrderDetail('?stripe_pi=pi_fixture');
+    await waitFor(() => expect(message).toHaveBeenCalledWith('Confirming your payment…'));
+    expect(success).not.toHaveBeenCalled();
   });
 });

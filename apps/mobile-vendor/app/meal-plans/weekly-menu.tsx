@@ -28,6 +28,8 @@ import {
   type MealVariant,
   type WeeklyMenuItem,
 } from '../../hooks/useMealPlans';
+import { useKitchenMarket } from '../../hooks/useKitchenMarket';
+import { currencySymbol } from '../../lib/format';
 
 // Day-of-week display order (Mon-first), mapped to the API's 0=Sun..6=Sat.
 const DAYS: { dow: number; short: string; long: string }[] = [
@@ -84,6 +86,7 @@ function componentList(cell: Cell | undefined): string[] {
 // day × slot × veg/nonveg. Customers pre-book against these cells (#196).
 // Replace-all save mirrors PutWeeklyMenu.
 export default function WeeklyMenuEditorScreen() {
+  const symbol = currencySymbol(useKitchenMarket()?.currency);
   const { showAlert } = useAlert();
   const { data, isLoading, isError, refetch } = useWeeklyMenu();
   const save = useSaveWeeklyMenu();
@@ -449,7 +452,7 @@ export default function WeeklyMenuEditorScreen() {
                         typed, leaving a bare "140" that could be rupees, a
                         portion size or a quantity. */}
                     <View style={styles.priceWrap}>
-                      <Text style={styles.priceSymbol}>₹</Text>
+                      <Text style={styles.priceSymbol}>{symbol}</Text>
                       <TextInput
                         style={styles.priceInput}
                         placeholder="0"

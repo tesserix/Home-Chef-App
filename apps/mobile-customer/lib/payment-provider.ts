@@ -17,15 +17,9 @@ const DISPLAY_NAMES: Record<string, string> = {
   stripe: 'Stripe',
 };
 
-/**
- * The sentence fragment naming who secures the payment.
- * Returns e.g. "Payments secured by Cashfree (RBI-licensed)." — or, when the
- * provider is unknown, "Payments are processed by an RBI-licensed payment
- * aggregator." which is accurate for every gateway we use.
- */
 export function paymentSecuredByLine(provider?: string | null): string {
   const name = DISPLAY_NAMES[(provider ?? '').trim().toLowerCase()];
-  if (!name) return 'Payments are processed by an RBI-licensed payment aggregator.';
+  if (!name) return 'Payments are processed securely by our payment provider.';
   // Stripe is not RBI-licensed — it serves non-INR Connect chefs, where the
   // Indian aggregator framing does not apply.
   if (name === 'Stripe') return 'Payments secured by Stripe.';

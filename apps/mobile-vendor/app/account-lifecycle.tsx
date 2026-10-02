@@ -32,8 +32,10 @@ import {
   useExportMyData,
 } from '../hooks/useAccountLifecycle';
 import { useAuthStore } from '../store/auth-store';
+import { useKitchenMoney } from '../hooks/useKitchenMarket';
 
 export default function AccountLifecycleScreen() {
+  const money = useKitchenMoney();
   const { showAlert } = useAlert();
   const profile = useAuthStore((s) => s.user);
   const eligibility = useDeletionEligibility();
@@ -208,7 +210,7 @@ export default function AccountLifecycleScreen() {
                 <Text key={b.code} style={styles.blockerItem}>
                   {'•'} {b.label}
                   {b.amount
-                    ? ` (₹${b.amount.toFixed(2)})`
+                    ? ` (${money(b.amount)})`
                     : b.count
                       ? ` (${b.count})`
                       : ''}

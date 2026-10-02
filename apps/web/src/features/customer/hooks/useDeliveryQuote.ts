@@ -1,3 +1,4 @@
+import type { CheckoutCreditIntent } from '@homechef/mobile-shared/payments';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
 import type { TaxLine } from '@/shared/types';
@@ -153,12 +154,7 @@ export interface DeliveryQuote {
 
 /** The customer's credit intent. Amounts are omitted while a rail is on "auto",
  *  which asks the server to apply as much as its ceilings allow. */
-export interface CreditIntent {
-  useWallet: boolean;
-  walletAmount?: number;
-  useLoyalty: boolean;
-  loyaltyPoints?: number;
-}
+export type CreditIntent = CheckoutCreditIntent;
 
 export interface DeliveryQuoteInput {
   latitude?: number;
@@ -201,6 +197,7 @@ export function useDeliveryQuote(chefId: string | undefined, input: DeliveryQuot
       latitude,
       longitude,
       city,
+      country,
       state,
       subtotal,
       discount,

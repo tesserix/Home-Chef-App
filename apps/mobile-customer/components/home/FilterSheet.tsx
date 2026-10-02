@@ -18,6 +18,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SheetBase, type SheetHandle } from '@homechef/mobile-shared/ui';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { ChefFilters } from '../../hooks/useChefs';
+import { priceFilterOptions } from '../../lib/price-filter';
 
 // ---- Constant option sets ---------------------------------------------------
 // Mirrored from index.tsx — the source of truth remains the screen; the
@@ -31,13 +32,6 @@ export const DIET_FILTER_OPTIONS: { label: string; value: string }[] = [
   { label: 'Jain', value: 'jain' },
   { label: 'Eggetarian', value: 'eggetarian' },
   { label: 'Halal', value: 'halal' },
-];
-
-export const PRICE_FILTER_OPTIONS: { label: string; value: number | undefined }[] = [
-  { label: 'Any price', value: undefined },
-  { label: '< ₹100', value: 100 },
-  { label: '< ₹250', value: 250 },
-  { label: '< ₹500', value: 500 },
 ];
 
 export const SORT_OPTIONS: { label: string; value: ChefFilters['sort']; key: string }[] = [
@@ -58,6 +52,8 @@ export interface FilterSheetProps {
   // Price
   maxPrice: number | undefined;
   onMaxPriceChange: (value: number | undefined) => void;
+  /** Currency of the delivery address's market; sets the price buckets. */
+  currency: string;
   // Sort
   sort: ChefFilters['sort'];
   onSortChange: (value: ChefFilters['sort']) => void;
@@ -118,6 +114,7 @@ export const FilterSheet = forwardRef<SheetHandle, FilterSheetProps>(
       onSortChange,
       isOpenOnly,
       onIsOpenOnlyChange,
+      currency,
     } = props;
 
     const handleClose = useCallback(() => {
@@ -207,7 +204,7 @@ export const FilterSheet = forwardRef<SheetHandle, FilterSheetProps>(
               style={styles.chipScroll}
               contentContainerStyle={styles.chipRow}
             >
-              {PRICE_FILTER_OPTIONS.map((opt) => (
+              {priceFilterOptions(currency).map((opt) => (
                 <FilterChip
                   key={opt.label}
                   label={opt.label}

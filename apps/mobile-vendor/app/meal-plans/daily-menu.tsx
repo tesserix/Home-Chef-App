@@ -26,6 +26,8 @@ import {
   type MealSlot,
   type MealVariant,
 } from '../../hooks/useMealPlans';
+import { useKitchenMarket } from '../../hooks/useKitchenMarket';
+import { currencySymbol } from '../../lib/format';
 
 // #405/#406 — per-DATE menu builder. Unlike the fixed weekly grid, each calendar
 // date can hold MULTIPLE dishes per slot, and any dish can be a combo/thali
@@ -65,6 +67,7 @@ function blankRow(sortOrder: number): DailyMenuItemInput {
 }
 
 export default function DailyMenuScreen() {
+  const symbol = currencySymbol(useKitchenMarket()?.currency);
   const { showAlert } = useAlert();
   // Next 14 bookable days (tomorrow onward, matching the customer horizon).
   const dates = useMemo(() => {
@@ -341,7 +344,7 @@ export default function DailyMenuScreen() {
               </View>
 
               <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>₹</Text>
+                <Text style={styles.priceLabel}>{symbol}</Text>
                 <TextInput
                   value={row.price ? String(row.price) : ''}
                   onChangeText={(t) => patchRow(i, { price: Number(t.replace(/[^0-9.]/g, '')) || 0 })}

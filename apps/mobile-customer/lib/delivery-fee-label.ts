@@ -1,3 +1,5 @@
+import { formatMoney } from './format';
+
 // The delivery claim on a chef card and a chef header, in one place so the two
 // can never say different things about the same kitchen.
 //
@@ -20,6 +22,7 @@ export function deliveryFeeLabel(
   fee: number | undefined,
   flat: boolean | undefined,
   offersDelivery: boolean | undefined,
+  currency = 'INR',
 ): string | undefined {
   // Only `false` suppresses. Older API responses omit the field, and a missing
   // answer must not turn every kitchen into a pickup-only one.
@@ -27,7 +30,7 @@ export function deliveryFeeLabel(
   if (fee == null) return undefined;
   const free = fee < 0.005;
   // A flat fee holds however far away the customer is, so it can be stated plainly.
-  if (flat) return free ? 'Free delivery' : `₹${fee} delivery`;
+  if (flat) return free ? 'Free delivery' : `${formatMoney(fee, currency)} delivery`;
   // Otherwise distance can lift it, and the claim has to say so.
-  return free ? 'Free delivery nearby' : `Delivery from ₹${fee}`;
+  return free ? 'Free delivery nearby' : `Delivery from ${formatMoney(fee, currency)}`;
 }

@@ -71,3 +71,17 @@ describe('pricingHint for a bakery item', () => {
     expect(pricingHint('1450', { isBakery: false })?.tone).toBe('warn');
   });
 });
+
+// The parity lines are rupee figures; applying them to dollars would flag
+// every ordinary AU/NZ dish, so other currencies get no hint until they have
+// their own.
+describe('pricingHint outside India', () => {
+  it('stays silent for AUD and NZD', () => {
+    expect(pricingHint('600', { currency: 'AUD' })).toBeNull();
+    expect(pricingHint('3000', { currency: 'NZD', isBakery: true })).toBeNull();
+  });
+
+  it('still warns for an explicit INR kitchen', () => {
+    expect(pricingHint('600', { currency: 'INR' })?.message).toMatch(/₹600/);
+  });
+});

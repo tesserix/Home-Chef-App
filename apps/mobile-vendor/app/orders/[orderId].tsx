@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { formatMoney } from "../../lib/format";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActionSheetIOS,
   Platform,
@@ -6,80 +7,80 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
-import * as SecureStore from 'expo-secure-store';
-import * as ImagePicker from 'expo-image-picker';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import * as Device from 'expo-device';
-import * as Haptics from 'expo-haptics';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Check, ChevronLeft } from 'lucide-react-native';
-import { formatOrderDateTime } from '@homechef/mobile-shared/utils';
-import { theme } from '@homechef/mobile-shared/theme';
+} from "react-native";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import * as SecureStore from "expo-secure-store";
+import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import * as Device from "expo-device";
+import * as Haptics from "expo-haptics";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router, useLocalSearchParams } from "expo-router";
+import { Check, ChevronLeft } from "lucide-react-native";
+import { formatOrderDateTime } from "@homechef/mobile-shared/utils";
+import { theme } from "@homechef/mobile-shared/theme";
 import {
   KeyboardAwareScrollView,
   Skeleton,
   useToast,
   useAlert,
   showAlertOutsideReact,
-} from '@homechef/mobile-shared/ui';
-import { DietIcon } from '../../components/vendor/DietIcon';
-import { OrderMessageThread } from '../../components/vendor/OrderMessageThread';
-import { OrderExpensesCard } from '../../components/OrderExpensesCard';
+} from "@homechef/mobile-shared/ui";
+import { DietIcon } from "../../components/vendor/DietIcon";
+import { OrderMessageThread } from "../../components/vendor/OrderMessageThread";
+import { OrderExpensesCard } from "../../components/OrderExpensesCard";
 import {
   useOrderDetail,
   type OrderDetail,
   type OrderDetailStatus,
   type FulfillmentType,
-} from '../../hooks/useOrderDetail';
-import { isPayoutEstimated, payoutHeadlineLabel } from '../../lib/chefPayout';
+} from "../../hooks/useOrderDetail";
+import { isPayoutEstimated, payoutHeadlineLabel } from "../../lib/chefPayout";
 import {
   useOrderAction,
   useUpdateOrderStatus,
   useUploadOrderPhoto,
   type OrderPhotoKind,
-} from '../../hooks/useVendorOrders';
+} from "../../hooks/useVendorOrders";
 import {
   useCancelOrder,
   useCancelOrderItem,
   CANCEL_REASON_LABEL,
   type CancelReason,
-} from '../../hooks/useCancelOrder';
+} from "../../hooks/useCancelOrder";
 import {
   useReportDeliveryFailure,
   DELIVERY_FAILURE_REASONS,
   DELIVERY_FAILURE_REASON_LABEL,
   type DeliveryFailureReason,
-} from '../../hooks/useReportDeliveryFailure';
+} from "../../hooks/useReportDeliveryFailure";
 
 // Statuses where the chef can still cancel + refund. picked_up onward
 // is out of the chef's hands — cancellation becomes a customer-support
 // concern. Matches the backend's `cancellableStatuses` allowlist in
 // apps/api/handlers/chef_order_cancel.go.
 const CANCELLABLE_STATUSES: ReadonlySet<OrderDetailStatus> = new Set([
-  'accepted',
-  'preparing',
-  'ready',
+  "accepted",
+  "preparing",
+  "ready",
 ]);
 
 const ACTIVE_EXPENSE_STATUSES: ReadonlySet<OrderDetailStatus> = new Set([
-  'accepted',
-  'preparing',
-  'ready',
-  'picked_up',
-  'delivered',
+  "accepted",
+  "preparing",
+  "ready",
+  "picked_up",
+  "delivered",
 ]);
 
 // CANCEL_REASONS preserves a stable display order across iOS/Android
 // action sheets and the destructive Android Alert dialog.
 const CANCEL_REASONS: CancelReason[] = [
-  'out_of_ingredient',
-  'equipment_failure',
-  'customer_request',
-  'other',
+  "out_of_ingredient",
+  "equipment_failure",
+  "customer_request",
+  "other",
 ];
 
 // Pull the API's specific error out of an axios failure so a failed cancel can
@@ -93,14 +94,14 @@ function cancelErrorMessage(err: unknown, fallback: string): string {
 // ---- Status display maps -------------------------------------------------------
 
 const STATUS_LABEL: Record<OrderDetailStatus, string> = {
-  pending: 'New order',
-  accepted: 'Accepted',
-  preparing: 'Preparing',
-  ready: 'Ready for pickup',
-  picked_up: 'Out for delivery',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
-  rejected: 'Rejected',
+  pending: "New order",
+  accepted: "Accepted",
+  preparing: "Preparing",
+  ready: "Ready for pickup",
+  picked_up: "Out for delivery",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  rejected: "Rejected",
 };
 
 // Carrier-aware status wording. The generic STATUS_LABEL only fits pickup
@@ -114,17 +115,17 @@ function statusLabelFor(
   status: OrderDetailStatus,
   fulfillment: FulfillmentType,
 ): string {
-  if (fulfillment === 'pickup') {
-    if (status === 'delivered' || status === 'picked_up') return 'Collected';
-    if (status === 'ready') return 'Ready for pickup';
+  if (fulfillment === "pickup") {
+    if (status === "delivered" || status === "picked_up") return "Collected";
+    if (status === "ready") return "Ready for pickup";
   }
-  if (status === 'ready') {
-    if (fulfillment === 'chef_delivery') return 'Ready';
-    if (fulfillment === 'delivery') return 'Ready · awaiting rider';
+  if (status === "ready") {
+    if (fulfillment === "chef_delivery") return "Ready";
+    if (fulfillment === "delivery") return "Ready · awaiting rider";
   }
-  if (status === 'picked_up') {
-    if (fulfillment === 'chef_delivery') return 'Out for delivery';
-    if (fulfillment === 'delivery') return 'Picked up by rider';
+  if (status === "picked_up") {
+    if (fulfillment === "chef_delivery") return "Out for delivery";
+    if (fulfillment === "delivery") return "Picked up by rider";
   }
   return STATUS_LABEL[status] ?? status;
 }
@@ -170,23 +171,23 @@ function fireHaptic(): void {
 }
 
 function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return '';
+  if (!iso) return "";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
     hour12: true,
   });
 }
 
-function formatAddressLines(addr: OrderDetail['deliveryAddress']): string[] {
-  if (typeof addr === 'string') {
+function formatAddressLines(addr: OrderDetail["deliveryAddress"]): string[] {
+  if (typeof addr === "string") {
     return addr.split(/,\s*/).filter(Boolean);
   }
-  if (addr && typeof addr === 'object') {
+  if (addr && typeof addr === "object") {
     const a = addr as {
       line1?: string;
       line2?: string;
@@ -197,7 +198,7 @@ function formatAddressLines(addr: OrderDetail['deliveryAddress']): string[] {
     return [
       a.line1,
       a.line2,
-      [a.city, a.state, a.postalCode].filter(Boolean).join(', '),
+      [a.city, a.state, a.postalCode].filter(Boolean).join(", "),
     ].filter((l): l is string => !!l && l.trim().length > 0);
   }
   return [];
@@ -218,7 +219,7 @@ function CommandBar({
   orderNumber,
   createdAt,
   status,
-  fulfillmentType = 'delivery',
+  fulfillmentType = "delivery",
   onBack,
 }: CommandBarProps) {
   const chip = status ? (STATUS_CHIP[status] ?? STATUS_CHIP_FALLBACK) : null;
@@ -229,17 +230,24 @@ function CommandBar({
         hitSlop={8}
         accessibilityLabel="Go back"
         accessibilityRole="button"
-        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: true }}
+        android_ripple={{
+          color: `${theme.colors.ink.DEFAULT}14`,
+          borderless: true,
+        }}
       >
         {({ pressed }) => (
           <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
-            <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
+            <ChevronLeft
+              size={22}
+              color={theme.colors.ink.DEFAULT}
+              strokeWidth={2}
+            />
           </View>
         )}
       </Pressable>
       <View style={styles.commandTitleBlock}>
         <Text style={styles.commandTitle} numberOfLines={1}>
-          {orderNumber ? `#${orderNumber}` : 'Order'}
+          {orderNumber ? `#${orderNumber}` : "Order"}
         </Text>
         {createdAt ? (
           <Text style={styles.commandPlacedAt} numberOfLines={1}>
@@ -289,10 +297,19 @@ function Chip({ label, selected, onPress, grow }: ChipProps) {
       accessibilityRole="radio"
       accessibilityState={{ selected }}
       accessibilityLabel={label}
-      style={[styles.chip, grow && styles.chipGrow, selected && styles.chipSelected]}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      style={[
+        styles.chip,
+        grow && styles.chipGrow,
+        selected && styles.chipSelected,
+      ]}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -302,6 +319,7 @@ function round2(n: number): number {
 }
 
 interface TotalRowProps {
+  currency: string;
   label: string;
   value: number;
   emphasis?: boolean;
@@ -309,6 +327,7 @@ interface TotalRowProps {
 }
 
 function TotalRow({
+  currency,
   label,
   value,
   emphasis = false,
@@ -320,7 +339,7 @@ function TotalRow({
         {label}
       </Text>
       <Text style={[styles.totalValue, emphasis && styles.totalValueStrong]}>
-        ₹{value.toLocaleString('en-IN', { minimumFractionDigits: 0 })}
+        {formatMoney(value, currency)}
       </Text>
     </View>
   );
@@ -348,7 +367,9 @@ interface OrderStatusTimelineProps {
  * today, so "Preparing" never renders, and that is correct, not a bug).
  */
 function OrderStatusTimeline({ steps }: OrderStatusTimelineProps) {
-  const known = steps.filter((s): s is TimelineStep & { timestamp: string } => !!s.timestamp);
+  const known = steps.filter(
+    (s): s is TimelineStep & { timestamp: string } => !!s.timestamp,
+  );
   if (known.length === 0) {
     return <Text style={styles.bodyMuted}>No timeline yet</Text>;
   }
@@ -356,8 +377,10 @@ function OrderStatusTimeline({ steps }: OrderStatusTimelineProps) {
     <View accessibilityRole="none">
       {known.map((step, idx) => {
         const isLast = idx === known.length - 1;
-        const isReady = step.label === 'Ready';
-        const dotColor = isReady ? theme.colors.success.DEFAULT : theme.colors.ink.DEFAULT;
+        const isReady = step.label === "Ready";
+        const dotColor = isReady
+          ? theme.colors.success.DEFAULT
+          : theme.colors.ink.DEFAULT;
         return (
           <View key={step.label} style={styles.timelineRow}>
             <View style={styles.timelineRail}>
@@ -366,7 +389,12 @@ function OrderStatusTimeline({ steps }: OrderStatusTimelineProps) {
               </View>
               {!isLast && <View style={styles.timelineConnector} />}
             </View>
-            <View style={[styles.timelineContent, !isLast && styles.rowBorderBottom]}>
+            <View
+              style={[
+                styles.timelineContent,
+                !isLast && styles.rowBorderBottom,
+              ]}
+            >
               <Text style={styles.timelineLabel}>{step.label}</Text>
               <Text style={styles.timelineTimestamp}>
                 {formatDateTime(step.timestamp)}
@@ -380,6 +408,7 @@ function OrderStatusTimeline({ steps }: OrderStatusTimelineProps) {
 }
 
 interface FooterActionsProps {
+  currency: string;
   status: OrderDetailStatus;
   fulfillmentType: FulfillmentType;
   orderId: string;
@@ -415,9 +444,9 @@ interface FooterActionsProps {
   onMarkPreparing: () => void;
   onMarkReady: () => void;
   /** Mark Ready carrying the chef's carrier choice (self-delivery chefs). */
-  onReadyCarrier: (carrier: 'chef_delivery' | 'delivery') => void;
+  onReadyCarrier: (carrier: "chef_delivery" | "delivery") => void;
   /** Flip deliver↔rider while the order is still `ready` (no new photo). */
-  onSwitchCarrier: (carrier: 'chef_delivery' | 'delivery') => void;
+  onSwitchCarrier: (carrier: "chef_delivery" | "delivery") => void;
   onMarkHandedOver: () => void;
   onMarkOutForDelivery: () => void;
   onMarkDelivered: () => void;
@@ -427,6 +456,7 @@ interface FooterActionsProps {
 }
 
 function FooterActions({
+  currency,
   status,
   fulfillmentType,
   orderId,
@@ -460,23 +490,26 @@ function FooterActions({
   // mutation) stays separate so the destructive links, which are the way OUT of
   // a pending request, are not frozen by it (#475).
   const disabled = busy || cancellationPending;
-  const isPickup = fulfillmentType === 'pickup';
-  const isChefDelivery = fulfillmentType === 'chef_delivery';
+  const isPickup = fulfillmentType === "pickup";
+  const isChefDelivery = fulfillmentType === "chef_delivery";
   // Ticks every 45 s so the "ready" caption's elapsed counter updates.
   // Only runs when status === 'ready'; clears on status change or unmount.
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
-    if (status !== 'ready') return;
+    if (status !== "ready") return;
     const id = setInterval(() => setNow(Date.now()), 45_000);
     return () => clearInterval(id);
   }, [status]);
 
   const readyElapsed = (() => {
-    if (status !== 'ready') return '';
+    if (status !== "ready") return "";
     const ts = updatedAt;
-    if (!ts) return '';
-    const mins = Math.max(0, Math.floor((now - new Date(ts).getTime()) / 60_000));
-    return mins < 1 ? '' : ` · ${mins}m`;
+    if (!ts) return "";
+    const mins = Math.max(
+      0,
+      Math.floor((now - new Date(ts).getTime()) / 60_000),
+    );
+    return mins < 1 ? "" : ` · ${mins}m`;
   })();
   // Renders the destructive secondary action below the primary
   // status-transition button when the order is cancellable. Kept as
@@ -490,7 +523,10 @@ function FooterActions({
       accessibilityRole="button"
       accessibilityLabel="Cancel this order"
       style={styles.cancelLinkWrap}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       <Text style={styles.cancelLinkLabel}>Cancel order</Text>
     </Pressable>
@@ -501,7 +537,7 @@ function FooterActions({
   // delivery you haven't started. Quiet destructive link so the primary
   // "Mark delivered" action stays the hero.
   const deliveryFailLink =
-    isChefDelivery && status === 'picked_up' ? (
+    isChefDelivery && status === "picked_up" ? (
       <Pressable
         onPress={onReportDeliveryFailure}
         disabled={busy}
@@ -509,9 +545,14 @@ function FooterActions({
         accessibilityRole="button"
         accessibilityLabel="Report that you couldn't deliver this order"
         style={styles.cancelLinkWrap}
-        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+        android_ripple={{
+          color: `${theme.colors.ink.DEFAULT}14`,
+          borderless: false,
+        }}
       >
-        <Text style={styles.cancelLinkLabel}>Couldn&apos;t deliver this order</Text>
+        <Text style={styles.cancelLinkLabel}>
+          Couldn&apos;t deliver this order
+        </Text>
       </Pressable>
     ) : null;
 
@@ -541,7 +582,7 @@ function FooterActions({
       </View>
     );
   }
-  if (status === 'pending') {
+  if (status === "pending") {
     return (
       <View style={styles.footer}>
         <Pressable
@@ -550,7 +591,10 @@ function FooterActions({
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={`Reject order from ${customerName}`}
-          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+          android_ripple={{
+            color: `${theme.colors.ink.DEFAULT}14`,
+            borderless: false,
+          }}
         >
           {({ pressed }) => (
             <View
@@ -569,8 +613,11 @@ function FooterActions({
           disabled={disabled}
           style={styles.flex1}
           accessibilityRole="button"
-          accessibilityLabel={`Accept order from ${customerName}, you earn ₹${chefEarning.toFixed(0)}`}
-          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+          accessibilityLabel={`Accept order from ${customerName}, you earn ${formatMoney(chefEarning, currency)}`}
+          android_ripple={{
+            color: `${theme.colors.paper}33`,
+            borderless: false,
+          }}
         >
           {({ pressed }) => (
             <View
@@ -583,7 +630,9 @@ function FooterActions({
               {/* The tap has to SAY something. Greying alone reads as a dead
                   button during the undo window, which is what got it tapped
                   again. */}
-              <Text style={styles.primaryLabel}>{busy ? 'Working…' : 'Accept'}</Text>
+              <Text style={styles.primaryLabel}>
+                {busy ? "Working…" : "Accept"}
+              </Text>
             </View>
           )}
         </Pressable>
@@ -591,7 +640,7 @@ function FooterActions({
     );
   }
 
-  if (status === 'accepted') {
+  if (status === "accepted") {
     return (
       <View style={styles.footer}>
         <Pressable
@@ -600,7 +649,10 @@ function FooterActions({
           style={styles.flex1}
           accessibilityRole="button"
           accessibilityLabel="Mark preparing"
-          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+          android_ripple={{
+            color: `${theme.colors.paper}33`,
+            borderless: false,
+          }}
         >
           {({ pressed }) => (
             <View
@@ -619,7 +671,7 @@ function FooterActions({
     );
   }
 
-  if (status === 'preparing') {
+  if (status === "preparing") {
     // Self-deliverable delivery order: the chef chooses, at Mark Ready, whether
     // to deliver it themselves or hand it to a rider. Over-range orders emphasise
     // "Hand to a rider" (primary) and de-emphasise "I'll deliver" (outline).
@@ -636,7 +688,7 @@ function FooterActions({
             </Text>
           ) : null}
           <Pressable
-            onPress={() => onReadyCarrier('chef_delivery')}
+            onPress={() => onReadyCarrier("chef_delivery")}
             disabled={disabled}
             accessibilityRole="button"
             accessibilityLabel="Mark ready, I will deliver it myself"
@@ -650,13 +702,19 @@ function FooterActions({
             {({ pressed }) => (
               <View
                 style={[
-                  emphasizeRider ? styles.carrierBtnSecondary : styles.carrierBtnPrimary,
+                  emphasizeRider
+                    ? styles.carrierBtnSecondary
+                    : styles.carrierBtnPrimary,
                   pressed && { opacity: 0.85 },
                   disabled && { opacity: 0.4 },
                 ]}
               >
                 <Text
-                  style={emphasizeRider ? styles.carrierLabelSecondary : styles.primaryLabel}
+                  style={
+                    emphasizeRider
+                      ? styles.carrierLabelSecondary
+                      : styles.primaryLabel
+                  }
                 >
                   Ready · I&apos;ll deliver
                 </Text>
@@ -665,7 +723,7 @@ function FooterActions({
           </Pressable>
           {riderAvailable ? (
             <Pressable
-              onPress={() => onReadyCarrier('delivery')}
+              onPress={() => onReadyCarrier("delivery")}
               disabled={disabled}
               accessibilityRole="button"
               accessibilityLabel="Mark ready, hand to a rider"
@@ -679,13 +737,19 @@ function FooterActions({
               {({ pressed }) => (
                 <View
                   style={[
-                    emphasizeRider ? styles.carrierBtnPrimary : styles.carrierBtnSecondary,
+                    emphasizeRider
+                      ? styles.carrierBtnPrimary
+                      : styles.carrierBtnSecondary,
                     pressed && { opacity: 0.85 },
                     disabled && { opacity: 0.4 },
                   ]}
                 >
                   <Text
-                    style={emphasizeRider ? styles.primaryLabel : styles.carrierLabelSecondary}
+                    style={
+                      emphasizeRider
+                        ? styles.primaryLabel
+                        : styles.carrierLabelSecondary
+                    }
                   >
                     Ready · Hand to a rider
                   </Text>
@@ -709,8 +773,11 @@ function FooterActions({
           onPress={onMarkReady}
           disabled={disabled}
           accessibilityRole="button"
-          accessibilityLabel={isPickup ? 'Mark ready for pickup' : 'Mark ready'}
-          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+          accessibilityLabel={isPickup ? "Mark ready for pickup" : "Mark ready"}
+          android_ripple={{
+            color: `${theme.colors.paper}33`,
+            borderless: false,
+          }}
         >
           {({ pressed }) => (
             <View
@@ -721,7 +788,7 @@ function FooterActions({
               ]}
             >
               <Text style={styles.primaryLabel}>
-                {isPickup ? 'Mark ready for pickup' : 'Mark ready'}
+                {isPickup ? "Mark ready for pickup" : "Mark ready"}
               </Text>
             </View>
           )}
@@ -741,7 +808,7 @@ function FooterActions({
   //    by tapping "Mark handed over" (ready → delivered, relabeled "Collected").
   //  • Delivery: no chef transition — a 3PL driver collects. Show the elapsed
   //    wait time so the chef knows how long the driver is taking.
-  if (status === 'ready') {
+  if (status === "ready") {
     if (isPickup) {
       return (
         <View style={styles.footer}>
@@ -751,7 +818,10 @@ function FooterActions({
             style={styles.flex1}
             accessibilityRole="button"
             accessibilityLabel={`Mark order handed over to ${customerName}`}
-            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+            android_ripple={{
+              color: `${theme.colors.paper}33`,
+              borderless: false,
+            }}
           >
             {({ pressed }) => (
               <View
@@ -779,7 +849,10 @@ function FooterActions({
             disabled={disabled}
             accessibilityRole="button"
             accessibilityLabel="Mark order out for delivery"
-            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+            android_ripple={{
+              color: `${theme.colors.paper}33`,
+              borderless: false,
+            }}
           >
             {({ pressed }) => (
               <View
@@ -795,15 +868,20 @@ function FooterActions({
           </Pressable>
           {riderAvailable ? (
             <Pressable
-              onPress={() => onSwitchCarrier('delivery')}
+              onPress={() => onSwitchCarrier("delivery")}
               disabled={disabled}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Hand this order to a rider instead"
               style={styles.switchLinkWrap}
-              android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+              android_ripple={{
+                color: `${theme.colors.ink.DEFAULT}14`,
+                borderless: false,
+              }}
             >
-              <Text style={styles.switchLinkLabel}>Hand to a rider instead</Text>
+              <Text style={styles.switchLinkLabel}>
+                Hand to a rider instead
+              </Text>
             </Pressable>
           ) : null}
           {cancelLink}
@@ -813,19 +891,28 @@ function FooterActions({
     // 3PL delivery, still `ready` → waiting on a rider. A self-delivering chef
     // can take it over themselves before anyone is en route.
     return (
-      <View style={[styles.footer, styles.footerColumn, styles.footerCaptionWrap]}>
-        <Text style={styles.footerCaption}>{`Waiting for a rider to pick up${readyElapsed}.`}</Text>
+      <View
+        style={[styles.footer, styles.footerColumn, styles.footerCaptionWrap]}
+      >
+        <Text
+          style={styles.footerCaption}
+        >{`Waiting for a rider to pick up${readyElapsed}.`}</Text>
         {canSelfDeliver ? (
           <Pressable
-            onPress={() => onSwitchCarrier('chef_delivery')}
+            onPress={() => onSwitchCarrier("chef_delivery")}
             disabled={disabled}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Deliver this order yourself instead"
             style={styles.switchLinkWrap}
-            android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+            android_ripple={{
+              color: `${theme.colors.ink.DEFAULT}14`,
+              borderless: false,
+            }}
           >
-            <Text style={styles.switchLinkLabel}>I&apos;ll deliver this instead</Text>
+            <Text style={styles.switchLinkLabel}>
+              I&apos;ll deliver this instead
+            </Text>
           </Pressable>
         ) : null}
         {cancelLink}
@@ -835,7 +922,7 @@ function FooterActions({
 
   // status === 'picked_up' — for chef_delivery the chef is en route and
   // completes the order on arrival. (3PL orders are driver-controlled here.)
-  if (status === 'picked_up' && isChefDelivery) {
+  if (status === "picked_up" && isChefDelivery) {
     return (
       <View style={[styles.footer, styles.footerColumn]}>
         <Pressable
@@ -843,7 +930,10 @@ function FooterActions({
           disabled={disabled}
           accessibilityRole="button"
           accessibilityLabel={`Mark order delivered to ${customerName}`}
-          android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+          android_ripple={{
+            color: `${theme.colors.paper}33`,
+            borderless: false,
+          }}
         >
           {({ pressed }) => (
             <View
@@ -866,11 +956,11 @@ function FooterActions({
   // forward it to the customer if asked. PDF is generated server-side
   // by services.GenerateOrderInvoicePDF and streamed via /chef/orders/
   // :orderId/invoice.pdf.
-  if (status === 'delivered') {
+  if (status === "delivered") {
     return (
       <View style={[styles.footer, styles.footerCaptionWrap]}>
         <Text style={styles.footerCaption}>
-          {isPickup ? 'Collected by the customer.' : 'Delivered to customer.'}
+          {isPickup ? "Collected by the customer." : "Delivered to customer."}
         </Text>
         <Pressable
           onPress={() => downloadInvoice(orderId)}
@@ -878,7 +968,10 @@ function FooterActions({
           accessibilityRole="button"
           accessibilityLabel="Download invoice PDF"
           style={styles.cancelLinkWrap}
-          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+          android_ripple={{
+            color: `${theme.colors.ink.DEFAULT}14`,
+            borderless: false,
+          }}
         >
           <Text style={styles.invoiceLinkLabel}>Download invoice (PDF)</Text>
         </Pressable>
@@ -887,10 +980,10 @@ function FooterActions({
   }
 
   const caption: Partial<Record<OrderDetailStatus, string>> = {
-    picked_up: 'Out for delivery.',
-    delivered: 'Delivered to customer.',
-    cancelled: 'This order was cancelled.',
-    rejected: 'You rejected this order.',
+    picked_up: "Out for delivery.",
+    delivered: "Delivered to customer.",
+    cancelled: "This order was cancelled.",
+    rejected: "You rejected this order.",
   };
   const text = caption[status];
   if (!text) return null;
@@ -925,7 +1018,11 @@ export default function OrderDetailScreen() {
   const { showAlert } = useAlert();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
   const { data: order, isLoading, isError, refetch } = useOrderDetail(orderId);
-  const { triggerAction, isLoading: actionLoading, isActioning } = useOrderAction();
+  const {
+    triggerAction,
+    isLoading: actionLoading,
+    isActioning,
+  } = useOrderAction();
   // Home-tiffin scheduling (#709): at accept the chef confirms the customer's
   // requested time (null) or bumps it by a preset when the kitchen needs longer.
   const [proposeOffsetMin, setProposeOffsetMin] = useState<number | null>(null);
@@ -944,20 +1041,24 @@ export default function OrderDetailScreen() {
   // camera permission is denied or unavailable.
   async function captureAndAdvance(
     kind: OrderPhotoKind,
-    nextStatus: 'ready' | 'delivered',
+    nextStatus: "ready" | "delivered",
   ): Promise<void> {
     if (!order || uploadPhoto.isPending || updateStatus.isPending) return;
     const asset = await pickReadyPhoto();
     if (!asset?.uri) return;
 
     try {
-      await uploadPhoto.mutateAsync({ orderId: order.id, kind, uri: asset.uri });
+      await uploadPhoto.mutateAsync({
+        orderId: order.id,
+        kind,
+        uri: asset.uri,
+      });
       await updateStatus.mutateAsync({ orderId: order.id, status: nextStatus });
       fireHaptic();
     } catch {
       showToast({
-        message: 'Could not upload the photo. Please try again.',
-        tone: 'error',
+        message: "Could not upload the photo. Please try again.",
+        tone: "error",
       });
     }
   }
@@ -967,7 +1068,7 @@ export default function OrderDetailScreen() {
   // ('chef_delivery' = I'll deliver, 'delivery' = hand to a rider). Shares the
   // camera/library capture with captureAndAdvance via pickReadyPhoto().
   async function captureAndAdvanceWithCarrier(
-    carrier: 'chef_delivery' | 'delivery',
+    carrier: "chef_delivery" | "delivery",
   ): Promise<void> {
     if (!order || uploadPhoto.isPending || updateStatus.isPending) return;
     const asset = await pickReadyPhoto();
@@ -975,19 +1076,19 @@ export default function OrderDetailScreen() {
     try {
       await uploadPhoto.mutateAsync({
         orderId: order.id,
-        kind: 'ready',
+        kind: "ready",
         uri: asset.uri,
       });
       await updateStatus.mutateAsync({
         orderId: order.id,
-        status: 'ready',
+        status: "ready",
         carrier,
       });
       fireHaptic();
     } catch {
       showToast({
-        message: 'Could not update the order. Please try again.',
-        tone: 'error',
+        message: "Could not update the order. Please try again.",
+        tone: "error",
       });
     }
   }
@@ -996,19 +1097,19 @@ export default function OrderDetailScreen() {
   // order is still on the chef's side (before anyone is en route). No new photo
   // — the ready photo already exists; only the carrier flips server-side.
   async function switchReadyCarrier(
-    carrier: 'chef_delivery' | 'delivery',
+    carrier: "chef_delivery" | "delivery",
   ): Promise<void> {
     if (!order || updateStatus.isPending) return;
     try {
       await updateStatus.mutateAsync({
         orderId: order.id,
-        status: 'ready',
+        status: "ready",
         carrier,
       });
     } catch {
       showToast({
-        message: 'Could not switch the carrier. Please try again.',
-        tone: 'error',
+        message: "Could not switch the carrier. Please try again.",
+        tone: "error",
       });
     }
   }
@@ -1022,8 +1123,8 @@ export default function OrderDetailScreen() {
     cancelOrder.mutate(reason, {
       onSuccess: () => {
         showToast({
-          message: 'Order cancelled. Customer is being refunded.',
-          tone: 'success',
+          message: "Order cancelled. Customer is being refunded.",
+          tone: "success",
         });
       },
       onError: (err) => {
@@ -1032,8 +1133,8 @@ export default function OrderDetailScreen() {
         // so the chef knows whether to retry or contact support, instead of a
         // dead-end generic message.
         showToast({
-          message: cancelErrorMessage(err, 'Could not cancel. Try again.'),
-          tone: 'error',
+          message: cancelErrorMessage(err, "Could not cancel. Try again."),
+          tone: "error",
         });
       },
     });
@@ -1043,20 +1144,27 @@ export default function OrderDetailScreen() {
   // single OrderItem — backend partial-refunds that line + recomputes
   // totals; order status stays in prep so the chef continues with the
   // remaining items.
-  function submitItemCancel(itemId: string, itemName: string, reason: CancelReason): void {
+  function submitItemCancel(
+    itemId: string,
+    itemName: string,
+    reason: CancelReason,
+  ): void {
     cancelItem.mutate(
       { itemId, reason },
       {
         onSuccess: () => {
           showToast({
             message: `${itemName} marked unavailable. Customer is being refunded.`,
-            tone: 'success',
+            tone: "success",
           });
         },
         onError: (err) => {
           showToast({
-            message: cancelErrorMessage(err, 'Could not cancel this item. Try again.'),
-            tone: 'error',
+            message: cancelErrorMessage(
+              err,
+              "Could not cancel this item. Try again.",
+            ),
+            tone: "error",
           });
         },
       },
@@ -1064,15 +1172,15 @@ export default function OrderDetailScreen() {
   }
 
   function openItemCancelSheet(itemId: string, itemName: string): void {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
         {
           title: `Can't fulfill "${itemName}"?`,
           message:
-            'The customer is refunded for this item only. The rest of the order continues.',
+            "The customer is refunded for this item only. The rest of the order continues.",
           options: [
             ...CANCEL_REASONS.map((r) => CANCEL_REASON_LABEL[r]),
-            'Keep item',
+            "Keep item",
           ],
           cancelButtonIndex: CANCEL_REASONS.length,
           destructiveButtonIndex: CANCEL_REASONS.length - 1,
@@ -1086,28 +1194,30 @@ export default function OrderDetailScreen() {
     }
     showAlert(
       `Can't fulfill "${itemName}"?`,
-      'The customer is refunded for this item only.',
+      "The customer is refunded for this item only.",
       [
-        { text: 'Keep item', style: 'cancel' },
+        { text: "Keep item", style: "cancel" },
         {
           text: "Can't fulfill",
-          style: 'destructive',
+          style: "destructive",
           onPress: () =>
-            promptCancelReasonAndroid((r) => submitItemCancel(itemId, itemName, r)),
+            promptCancelReasonAndroid((r) =>
+              submitItemCancel(itemId, itemName, r),
+            ),
         },
       ],
     );
   }
 
   function openCancelSheet(): void {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          title: 'Cancel order',
-          message: 'The customer will be refunded in full.',
+          title: "Cancel order",
+          message: "The customer will be refunded in full.",
           options: [
             ...CANCEL_REASONS.map((r) => CANCEL_REASON_LABEL[r]),
-            'Keep order',
+            "Keep order",
           ],
           cancelButtonIndex: CANCEL_REASONS.length,
           destructiveButtonIndex: CANCEL_REASONS.length - 1,
@@ -1122,13 +1232,13 @@ export default function OrderDetailScreen() {
     // Android Alert max 3 buttons reliably — split into a 2-step prompt:
     // first confirm intent, then a follow-up to pick a reason.
     showAlert(
-      'Cancel this order?',
-      'The customer will be refunded in full. Pick a reason on the next screen.',
+      "Cancel this order?",
+      "The customer will be refunded in full. Pick a reason on the next screen.",
       [
-        { text: 'Keep order', style: 'cancel' },
+        { text: "Keep order", style: "cancel" },
         {
-          text: 'Cancel order',
-          style: 'destructive',
+          text: "Cancel order",
+          style: "destructive",
           onPress: () => promptCancelReasonAndroid(submitCancel),
         },
       ],
@@ -1144,28 +1254,30 @@ export default function OrderDetailScreen() {
       onSuccess: () => {
         showToast({
           message: "Reported. We'll review it and sort out the payment.",
-          tone: 'success',
+          tone: "success",
         });
       },
       onError: () => {
         showToast({
           message: "Couldn't report that right now. Try again.",
-          tone: 'error',
+          tone: "error",
         });
       },
     });
   }
 
   function openDeliveryFailureSheet(): void {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
         {
           title: "Couldn't deliver this order?",
           message:
             "We'll review what happened. Your payout for this order is held until our team confirms it — you won't be paid or charged automatically.",
           options: [
-            ...DELIVERY_FAILURE_REASONS.map((r) => DELIVERY_FAILURE_REASON_LABEL[r]),
-            'Keep trying',
+            ...DELIVERY_FAILURE_REASONS.map(
+              (r) => DELIVERY_FAILURE_REASON_LABEL[r],
+            ),
+            "Keep trying",
           ],
           cancelButtonIndex: DELIVERY_FAILURE_REASONS.length,
           destructiveButtonIndex: DELIVERY_FAILURE_REASONS.length - 1,
@@ -1181,11 +1293,12 @@ export default function OrderDetailScreen() {
       "Couldn't deliver this order?",
       "We'll review it and your payout is held until our team decides. Pick a reason next.",
       [
-        { text: 'Keep trying', style: 'cancel' },
+        { text: "Keep trying", style: "cancel" },
         {
           text: "Couldn't deliver",
-          style: 'destructive',
-          onPress: () => promptDeliveryFailureReasonAndroid(submitDeliveryFailure),
+          style: "destructive",
+          onPress: () =>
+            promptDeliveryFailureReasonAndroid(submitDeliveryFailure),
         },
       ],
     );
@@ -1198,12 +1311,12 @@ export default function OrderDetailScreen() {
 
   function handleBack(): void {
     if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/orders');
+    else router.replace("/(tabs)/orders");
   }
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
         <CommandBar onBack={handleBack} />
         <DetailSkeleton />
       </SafeAreaView>
@@ -1212,7 +1325,7 @@ export default function OrderDetailScreen() {
 
   if (isError || !order) {
     return (
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
         <CommandBar onBack={handleBack} />
         <View style={styles.centered}>
           <Text style={styles.errorHeadline}>Couldn't load this order</Text>
@@ -1223,7 +1336,10 @@ export default function OrderDetailScreen() {
             onPress={() => refetch()}
             accessibilityRole="button"
             accessibilityLabel="Retry loading order"
-            android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
+            android_ripple={{
+              color: `${theme.colors.paper}33`,
+              borderless: false,
+            }}
           >
             {({ pressed }) => (
               <View style={[styles.retryBtn, pressed && { opacity: 0.85 }]}>
@@ -1241,8 +1357,8 @@ export default function OrderDetailScreen() {
   // estimated from the live order before that. Never recomputed here.
   const payout = order.chefPayout;
   const payoutIsEstimate = isPayoutEstimated(payout);
-  const isPickup = order.fulfillmentType === 'pickup';
-  const isChefDelivery = order.fulfillmentType === 'chef_delivery';
+  const isPickup = order.fulfillmentType === "pickup";
+  const isChefDelivery = order.fulfillmentType === "chef_delivery";
 
   // The delivery fee is the chef's own published price for the distance and is
   // settled at checkout — accepting never re-prices it. Orders placed before
@@ -1260,9 +1376,9 @@ export default function OrderDetailScreen() {
   // (proceed via the normal flow) or decline (cancel → refund). Hidden once the
   // order is no longer actionable. maxDistanceKm of 0 = chef set no radius.
   const isActiveStatus =
-    order.status !== 'delivered' &&
-    order.status !== 'cancelled' &&
-    order.status !== 'rejected';
+    order.status !== "delivered" &&
+    order.status !== "cancelled" &&
+    order.status !== "rejected";
   const overSelfDeliveryRange =
     isChefDelivery &&
     isActiveStatus &&
@@ -1275,14 +1391,14 @@ export default function OrderDetailScreen() {
   // carrier choice for exactly those chefs). The distance fields below stay
   // purely for the soft over-range nudge.
   const canSelfDeliver =
-    order.fulfillmentType === 'delivery' && order.offersSelfDelivery;
+    order.fulfillmentType === "delivery" && order.offersSelfDelivery;
   const overReadyRange =
     canSelfDeliver &&
     order.selfDeliveryMaxDistanceKm > 0 &&
     order.selfDeliveryDistanceKm > order.selfDeliveryMaxDistanceKm;
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
       <CommandBar
         orderNumber={order.orderNumber}
         createdAt={order.timing.orderedAt}
@@ -1302,7 +1418,7 @@ export default function OrderDetailScreen() {
             until they answer it (#475). */}
         {order.cancellationRequested ? (
           <Pressable
-            onPress={() => router.push('/cancel-requests')}
+            onPress={() => router.push("/cancel-requests")}
             accessibilityRole="button"
             accessibilityLabel="Cancellation requested — open your cancellations queue to respond"
             style={styles.cancelBanner}
@@ -1311,7 +1427,7 @@ export default function OrderDetailScreen() {
             <Text style={styles.cancelBannerBody}>
               {order.cancellationRequested.reason
                 ? `“${order.cancellationRequested.reason}” — respond before you carry on.`
-                : 'The customer asked to cancel. Respond before you carry on.'}
+                : "The customer asked to cancel. Respond before you carry on."}
             </Text>
             <Text style={styles.cancelBannerAction}>Respond now →</Text>
           </Pressable>
@@ -1326,7 +1442,7 @@ export default function OrderDetailScreen() {
           <View style={styles.customerRow}>
             <View style={styles.customerTextBlock}>
               <Text style={styles.customerName} numberOfLines={1}>
-                {order.customerName || 'Customer'}
+                {order.customerName || "Customer"}
               </Text>
             </View>
           </View>
@@ -1340,97 +1456,100 @@ export default function OrderDetailScreen() {
         <SectionLabel>ITEMS</SectionLabel>
         <View style={styles.card}>
           <View style={styles.cardClip}>
-          {order.items.length === 0 ? (
-            <Text style={styles.bodyMuted}>No items recorded</Text>
-          ) : (
-            order.items.map((item, idx) => {
-              // A line is per-line-cancellable while the whole order is
-              // cancellable AND this specific line hasn't been struck
-              // already. Backend rejects late attempts; this just avoids
-              // surfacing a button that would error.
-              const itemCancellable =
-                CANCELLABLE_STATUSES.has(order.status) && !item.isCancelled;
-              return (
-                <View
-                  key={item.id || `${item.name}-${idx}`}
-                  style={[
-                    styles.itemRow,
-                    idx < order.items.length - 1 && styles.rowBorderBottom,
-                    item.isCancelled && styles.itemRowCancelled,
-                  ]}
-                >
-                  <DietIcon
-                    kind={
-                      item.isVeg === true
-                        ? 'veg'
-                        : item.isVeg === false
-                          ? 'non-veg'
-                          : 'unknown'
-                    }
-                    size={12}
-                  />
-                  <View style={styles.itemBody}>
-                    <Text
-                      style={[
-                        styles.itemName,
-                        item.isCancelled && styles.itemNameCancelled,
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {item.quantity > 1
-                        ? `${item.quantity} × ${item.name}`
-                        : item.name}
-                    </Text>
-                    {item.bakerySummary ? (
-                      <Text style={styles.itemBakery} numberOfLines={3}>
-                        {item.bakerySummary}
-                      </Text>
-                    ) : null}
-                    {item.specialInstructions ? (
-                      <Text style={styles.itemNote} numberOfLines={2}>
-                        {item.specialInstructions}
-                      </Text>
-                    ) : null}
-                    {item.isCancelled ? (
-                      <Text style={styles.itemCancelledBadge}>
-                        Refunded ₹
-                        {(item.refundAmount ?? 0).toLocaleString('en-IN', {
-                          maximumFractionDigits: 2,
-                        })}
-                      </Text>
-                    ) : (
-                      <Text style={styles.itemUnitPrice}>
-                        ₹{item.unitPrice.toLocaleString('en-IN')} each
-                      </Text>
-                    )}
-                    {itemCancellable ? (
-                      <Pressable
-                        onPress={() => openItemCancelSheet(item.id, item.name)}
-                        disabled={cancelItem.isPending}
-                        hitSlop={6}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Mark ${item.name} as unfulfillable`}
-                        style={styles.itemCancelLinkWrap}
-                        android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
-                      >
-                        <Text style={styles.itemCancelLinkLabel}>
-                          Can't make this?
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                  <Text
+            {order.items.length === 0 ? (
+              <Text style={styles.bodyMuted}>No items recorded</Text>
+            ) : (
+              order.items.map((item, idx) => {
+                // A line is per-line-cancellable while the whole order is
+                // cancellable AND this specific line hasn't been struck
+                // already. Backend rejects late attempts; this just avoids
+                // surfacing a button that would error.
+                const itemCancellable =
+                  CANCELLABLE_STATUSES.has(order.status) && !item.isCancelled;
+                return (
+                  <View
+                    key={item.id || `${item.name}-${idx}`}
                     style={[
-                      styles.itemLineTotal,
-                      item.isCancelled && styles.itemLineTotalCancelled,
+                      styles.itemRow,
+                      idx < order.items.length - 1 && styles.rowBorderBottom,
+                      item.isCancelled && styles.itemRowCancelled,
                     ]}
                   >
-                    ₹{item.lineTotal.toLocaleString('en-IN')}
-                  </Text>
-                </View>
-              );
-            })
-          )}
+                    <DietIcon
+                      kind={
+                        item.isVeg === true
+                          ? "veg"
+                          : item.isVeg === false
+                            ? "non-veg"
+                            : "unknown"
+                      }
+                      size={12}
+                    />
+                    <View style={styles.itemBody}>
+                      <Text
+                        style={[
+                          styles.itemName,
+                          item.isCancelled && styles.itemNameCancelled,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.quantity > 1
+                          ? `${item.quantity} × ${item.name}`
+                          : item.name}
+                      </Text>
+                      {item.bakerySummary ? (
+                        <Text style={styles.itemBakery} numberOfLines={3}>
+                          {item.bakerySummary}
+                        </Text>
+                      ) : null}
+                      {item.specialInstructions ? (
+                        <Text style={styles.itemNote} numberOfLines={2}>
+                          {item.specialInstructions}
+                        </Text>
+                      ) : null}
+                      {item.isCancelled ? (
+                        <Text style={styles.itemCancelledBadge}>
+                          Refunded{" "}
+                          {formatMoney(item.refundAmount, order.currency)}
+                        </Text>
+                      ) : (
+                        <Text style={styles.itemUnitPrice}>
+                          {formatMoney(item.unitPrice, order.currency)} each
+                        </Text>
+                      )}
+                      {itemCancellable ? (
+                        <Pressable
+                          onPress={() =>
+                            openItemCancelSheet(item.id, item.name)
+                          }
+                          disabled={cancelItem.isPending}
+                          hitSlop={6}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Mark ${item.name} as unfulfillable`}
+                          style={styles.itemCancelLinkWrap}
+                          android_ripple={{
+                            color: `${theme.colors.ink.DEFAULT}14`,
+                            borderless: false,
+                          }}
+                        >
+                          <Text style={styles.itemCancelLinkLabel}>
+                            Can't make this?
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    <Text
+                      style={[
+                        styles.itemLineTotal,
+                        item.isCancelled && styles.itemLineTotalCancelled,
+                      ]}
+                    >
+                      {formatMoney(item.lineTotal, order.currency)}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
           </View>
         </View>
 
@@ -1465,12 +1584,12 @@ export default function OrderDetailScreen() {
               <View style={[styles.cardClip, styles.addressGroup]}>
                 <Text style={styles.addressLine}>
                   {addressLines.length > 0
-                    ? addressLines.join('\n')
-                    : 'Address on file'}
+                    ? addressLines.join("\n")
+                    : "Address on file"}
                 </Text>
                 {order.customerPhone ? (
                   <Text style={styles.areaReassurance}>
-                    {order.customerName || 'Customer'} · {order.customerPhone}
+                    {order.customerName || "Customer"} · {order.customerPhone}
                   </Text>
                 ) : null}
                 <Text style={styles.areaReassurance}>
@@ -1479,10 +1598,7 @@ export default function OrderDetailScreen() {
               </View>
             </View>
             {overSelfDeliveryRange ? (
-              <View
-                style={styles.rangeWarning}
-                accessibilityRole="alert"
-              >
+              <View style={styles.rangeWarning} accessibilityRole="alert">
                 <Text style={styles.rangeWarningTitle}>
                   {`This address is ${order.selfDeliveryDistanceKm.toFixed(1)} km away — beyond your ${order.selfDeliveryMaxDistanceKm} km range.`}
                 </Text>
@@ -1500,8 +1616,8 @@ export default function OrderDetailScreen() {
               <View style={[styles.cardClip, styles.addressGroup]}>
                 <Text style={styles.addressLine}>
                   {addressLines.length > 0
-                    ? addressLines.join(' · ')
-                    : 'Delivery area on file'}
+                    ? addressLines.join(" · ")
+                    : "Delivery area on file"}
                 </Text>
                 <Text style={styles.areaReassurance}>
                   Your rider will collect and deliver this order.
@@ -1526,22 +1642,27 @@ export default function OrderDetailScreen() {
         {/* HOME-TIFFIN SCHEDULING (#709): the customer's requested time. For a
             pending order the chef confirms it or proposes a later one; once
             accepted, the confirmed/proposed time is shown. */}
-        {order.status === 'pending' ? (
+        {order.status === "pending" ? (
           <>
-            <SectionLabel>{isPickup ? 'PICKUP TIME' : 'DELIVERY TIME'}</SectionLabel>
+            <SectionLabel>
+              {isPickup ? "PICKUP TIME" : "DELIVERY TIME"}
+            </SectionLabel>
             <View style={styles.card}>
               <View style={[styles.timingRow, styles.rowBorderBottom]}>
                 <Text style={styles.timingLabel}>Customer asked</Text>
                 <Text style={styles.timingValue}>
                   {order.timing.requestedFulfillmentAt
                     ? formatDateTime(order.timing.requestedFulfillmentAt)
-                    : 'As soon as ready'}
+                    : "As soon as ready"}
                 </Text>
               </View>
               <View style={styles.proposeBlock}>
-                <Text style={styles.proposeTitle}>Confirm or propose a new time</Text>
+                <Text style={styles.proposeTitle}>
+                  Confirm or propose a new time
+                </Text>
                 <Text style={styles.proposeHint}>
-                  Accept confirms the requested time. Kitchen busy? Propose a later one — the customer is notified.
+                  Accept confirms the requested time. Kitchen busy? Propose a
+                  later one — the customer is notified.
                 </Text>
 
                 {/* Split by meaning rather than wrapping five chips raggedly:
@@ -1554,12 +1675,14 @@ export default function OrderDetailScreen() {
                   onPress={() => setProposeOffsetMin(null)}
                 />
                 <View style={styles.proposeRow}>
-                  {([
-                    [15, '+15m'],
-                    [30, '+30m'],
-                    [45, '+45m'],
-                    [60, '+1h'],
-                  ] as [number, string][]).map(([off, label]) => (
+                  {(
+                    [
+                      [15, "+15m"],
+                      [30, "+30m"],
+                      [45, "+45m"],
+                      [60, "+1h"],
+                    ] as [number, string][]
+                  ).map(([off, label]) => (
                     <Chip
                       key={label}
                       label={label}
@@ -1574,11 +1697,15 @@ export default function OrderDetailScreen() {
           </>
         ) : order.timing.confirmedFulfillmentAt ? (
           <>
-            <SectionLabel>{isPickup ? 'PICKUP TIME' : 'DELIVERY TIME'}</SectionLabel>
+            <SectionLabel>
+              {isPickup ? "PICKUP TIME" : "DELIVERY TIME"}
+            </SectionLabel>
             <View style={styles.card}>
               <View style={styles.timingRow}>
                 <Text style={styles.timingLabel}>
-                  {order.timing.fulfillmentTimeStatus === 'proposed' ? 'You proposed' : 'Confirmed'}
+                  {order.timing.fulfillmentTimeStatus === "proposed"
+                    ? "You proposed"
+                    : "Confirmed"}
                 </Text>
                 <Text style={styles.timingValue}>
                   {formatDateTime(order.timing.confirmedFulfillmentAt)}
@@ -1590,13 +1717,16 @@ export default function OrderDetailScreen() {
 
         {/* DELIVERY FEE: read-only. The customer paid the chef's published rate
             for this distance at checkout and it is not re-priced at accept. */}
-        {order.pricing.deliveryFee > 0 && typeof order.pricing.deliveryFeeFinal === 'number' ? (
+        {order.pricing.deliveryFee > 0 &&
+        typeof order.pricing.deliveryFeeFinal === "number" ? (
           <>
             <SectionLabel>DELIVERY FEE</SectionLabel>
             <View style={styles.card}>
               <View style={styles.timingRow}>
                 <Text style={styles.timingLabel}>You charged</Text>
-                <Text style={styles.timingValue}>₹{order.pricing.deliveryFeeFinal.toFixed(0)}</Text>
+                <Text style={styles.timingValue}>
+                  {formatMoney(order.pricing.deliveryFeeFinal, order.currency)}
+                </Text>
               </View>
             </View>
           </>
@@ -1610,16 +1740,16 @@ export default function OrderDetailScreen() {
         <View style={styles.card}>
           <OrderStatusTimeline
             steps={[
-              { label: 'Ordered', timestamp: timing.orderedAt },
-              { label: 'Accepted', timestamp: timing.acceptedAt },
-              { label: 'Preparing', timestamp: null },
-              { label: 'Ready', timestamp: timing.preparedAt },
+              { label: "Ordered", timestamp: timing.orderedAt },
+              { label: "Accepted", timestamp: timing.acceptedAt },
+              { label: "Preparing", timestamp: null },
+              { label: "Ready", timestamp: timing.preparedAt },
               {
-                label: 'Out for delivery',
+                label: "Out for delivery",
                 timestamp: isPickup ? null : timing.pickedUpAt,
               },
               {
-                label: isPickup ? 'Collected' : 'Delivered',
+                label: isPickup ? "Collected" : "Delivered",
                 timestamp: timing.deliveredAt,
               },
             ]}
@@ -1636,21 +1766,38 @@ export default function OrderDetailScreen() {
             tesserix-home admin view reads too. Nothing here is recomputed. */}
         <SectionLabel>YOUR EARNINGS</SectionLabel>
         <View style={styles.card}>
-          <TotalRow label="Food" value={payout ? payout.foodAmount : pricing.subtotal} />
+          <TotalRow
+            currency={order.currency}
+            label="Food"
+            value={payout ? payout.foodAmount : pricing.subtotal}
+          />
           {/* Delivery shows ONLY when the chef carried the leg and it was charged
               — a free-zone or platform-carried order omits the line rather than
               stating a ₹0 the chef has to interpret. */}
           {payoutDeliveryFee > 0 ? (
-            <TotalRow label="Delivery you charged" value={payoutDeliveryFee} />
+            <TotalRow
+              currency={order.currency}
+              label="Delivery you charged"
+              value={payoutDeliveryFee}
+            />
           ) : null}
           {payout && payout.chefTip > 0 ? (
-            <TotalRow label="Tip" value={payout.chefTip} />
+            <TotalRow
+              currency={order.currency}
+              label="Tip"
+              value={payout.chefTip}
+            />
           ) : null}
           {payout && payout.penalty > 0 ? (
-            <TotalRow label="Penalty" value={-payout.penalty} />
+            <TotalRow
+              currency={order.currency}
+              label="Penalty"
+              value={-payout.penalty}
+            />
           ) : null}
           {payout ? (
             <TotalRow
+              currency={order.currency}
               label={payoutHeadlineLabel(payout)}
               value={payoutNet}
               emphasis
@@ -1669,8 +1816,9 @@ export default function OrderDetailScreen() {
         ) : null}
         {deliveryFeeRefund > 0 ? (
           <Text style={styles.deliveryHint}>
-            Was ₹{pricing.total.toLocaleString('en-IN', { minimumFractionDigits: 0 })} —
-            ₹{deliveryFeeRefund.toFixed(0)} of delivery was refunded to the customer.
+            Was {formatMoney(pricing.total, order.currency)} —
+            {formatMoney(deliveryFeeRefund, order.currency)} of delivery was
+            refunded to the customer.
           </Text>
         ) : null}
 
@@ -1686,10 +1834,11 @@ export default function OrderDetailScreen() {
       </KeyboardAwareScrollView>
 
       <FooterActions
+        currency={order.currency}
         status={order.status}
         fulfillmentType={order.fulfillmentType}
         orderId={order.id}
-        customerName={order.customerName || 'this customer'}
+        customerName={order.customerName || "this customer"}
         chefEarning={payout ? payoutNet : effectiveTotal}
         disabled={
           // isActioning covers the 3s undo window that actionLoading cannot see
@@ -1715,26 +1864,28 @@ export default function OrderDetailScreen() {
             const base = order.timing.requestedFulfillmentAt
               ? new Date(order.timing.requestedFulfillmentAt)
               : new Date(Date.now() + 45 * 60 * 1000);
-            confirmedAt = new Date(base.getTime() + proposeOffsetMin * 60 * 1000).toISOString();
+            confirmedAt = new Date(
+              base.getTime() + proposeOffsetMin * 60 * 1000,
+            ).toISOString();
           }
-          triggerAction(order.id, 'accepted', undefined, confirmedAt);
+          triggerAction(order.id, "accepted", undefined, confirmedAt);
         }}
-        onReject={() => triggerAction(order.id, 'rejected')}
+        onReject={() => triggerAction(order.id, "rejected")}
         onMarkPreparing={() => {
           fireHaptic();
-          updateStatus.mutate({ orderId: order.id, status: 'preparing' });
+          updateStatus.mutate({ orderId: order.id, status: "preparing" });
         }}
-        onMarkReady={() => captureAndAdvance('ready', 'ready')}
+        onMarkReady={() => captureAndAdvance("ready", "ready")}
         onReadyCarrier={(carrier) => captureAndAdvanceWithCarrier(carrier)}
         onSwitchCarrier={(carrier) => switchReadyCarrier(carrier)}
-        onMarkHandedOver={() => captureAndAdvance('handover', 'delivered')}
+        onMarkHandedOver={() => captureAndAdvance("handover", "delivered")}
         onMarkOutForDelivery={() => {
           fireHaptic();
-          updateStatus.mutate({ orderId: order.id, status: 'picked_up' });
+          updateStatus.mutate({ orderId: order.id, status: "picked_up" });
         }}
         onMarkDelivered={() => {
           fireHaptic();
-          updateStatus.mutate({ orderId: order.id, status: 'delivered' });
+          updateStatus.mutate({ orderId: order.id, status: "delivered" });
         }}
         onCancel={openCancelSheet}
         onReportDeliveryFailure={openDeliveryFailureSheet}
@@ -1758,14 +1909,14 @@ async function pickReadyPhoto(): Promise<
     (await ImagePicker.requestCameraPermissionsAsync()).granted;
   if (canUseCamera) {
     const shot = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ["images"],
       quality: 0.6,
     });
     if (shot.canceled) return undefined;
     return toJpeg(shot.assets[0]);
   }
   const lib = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
+    mediaTypes: ["images"],
     quality: 0.6,
   });
   if (lib.canceled) return undefined;
@@ -1792,29 +1943,38 @@ async function toJpeg(
 // FileSystem.downloadAsync with an explicit Authorization header.
 async function downloadInvoice(orderId: string): Promise<void> {
   try {
-    const token = await SecureStore.getItemAsync('access_token');
+    const token = await SecureStore.getItemAsync("access_token");
     if (!token) {
-      showAlertOutsideReact('Sign in required', 'Sign in again to download invoices.');
+      showAlertOutsideReact(
+        "Sign in required",
+        "Sign in again to download invoices.",
+      );
       return;
     }
-    const apiBase = process.env.EXPO_PUBLIC_API_URL ?? '';
+    const apiBase = process.env.EXPO_PUBLIC_API_URL ?? "";
     const url = `${apiBase}/chef/orders/${orderId}/invoice.pdf`;
     const target = `${FileSystem.cacheDirectory}invoice-${orderId}.pdf`;
     const dl = await FileSystem.downloadAsync(url, target, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (dl.status !== 200) {
-      showAlertOutsideReact('Could not download invoice', `Server returned ${dl.status}.`);
+      showAlertOutsideReact(
+        "Could not download invoice",
+        `Server returned ${dl.status}.`,
+      );
       return;
     }
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(dl.uri, { mimeType: 'application/pdf', dialogTitle: 'Invoice' });
+      await Sharing.shareAsync(dl.uri, {
+        mimeType: "application/pdf",
+        dialogTitle: "Invoice",
+      });
     } else {
-      showAlertOutsideReact('Saved', `Invoice saved to ${dl.uri}`);
+      showAlertOutsideReact("Saved", `Invoice saved to ${dl.uri}`);
     }
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Download failed.';
-    showAlertOutsideReact('Could not download invoice', msg);
+    const msg = err instanceof Error ? err.message : "Download failed.";
+    showAlertOutsideReact("Could not download invoice", msg);
   }
 }
 
@@ -1825,28 +1985,28 @@ function promptCancelReasonAndroid(submit: (r: CancelReason) => void): void {
   // First two reasons + "Other" / "More…" because Android Alert
   // caps reliably at 3 buttons. "More" chains a second prompt with
   // the remaining options.
-  showAlertOutsideReact('Why?', '', [
+  showAlertOutsideReact("Why?", "", [
     {
       text: CANCEL_REASON_LABEL.out_of_ingredient,
-      onPress: () => submit('out_of_ingredient'),
+      onPress: () => submit("out_of_ingredient"),
     },
     {
       text: CANCEL_REASON_LABEL.equipment_failure,
-      onPress: () => submit('equipment_failure'),
+      onPress: () => submit("equipment_failure"),
     },
     {
-      text: 'More…',
+      text: "More…",
       onPress: () =>
-        showAlertOutsideReact('Why?', '', [
+        showAlertOutsideReact("Why?", "", [
           {
             text: CANCEL_REASON_LABEL.customer_request,
-            onPress: () => submit('customer_request'),
+            onPress: () => submit("customer_request"),
           },
           {
             text: CANCEL_REASON_LABEL.other,
-            onPress: () => submit('other'),
+            onPress: () => submit("other"),
           },
-          { text: 'Back', style: 'cancel' },
+          { text: "Back", style: "cancel" },
         ]),
     },
   ]);
@@ -1858,32 +2018,32 @@ function promptCancelReasonAndroid(submit: (r: CancelReason) => void): void {
 function promptDeliveryFailureReasonAndroid(
   submit: (r: DeliveryFailureReason) => void,
 ): void {
-  showAlertOutsideReact('What went wrong?', '', [
+  showAlertOutsideReact("What went wrong?", "", [
     {
       text: DELIVERY_FAILURE_REASON_LABEL.customer_unavailable,
-      onPress: () => submit('customer_unavailable'),
+      onPress: () => submit("customer_unavailable"),
     },
     {
       text: DELIVERY_FAILURE_REASON_LABEL.customer_refused,
-      onPress: () => submit('customer_refused'),
+      onPress: () => submit("customer_refused"),
     },
     {
-      text: 'More…',
+      text: "More…",
       onPress: () =>
-        showAlertOutsideReact('What went wrong?', '', [
+        showAlertOutsideReact("What went wrong?", "", [
           {
             text: DELIVERY_FAILURE_REASON_LABEL.wrong_address,
-            onPress: () => submit('wrong_address'),
+            onPress: () => submit("wrong_address"),
           },
           {
             text: DELIVERY_FAILURE_REASON_LABEL.food_damaged,
-            onPress: () => submit('food_damaged'),
+            onPress: () => submit("food_damaged"),
           },
           {
             text: DELIVERY_FAILURE_REASON_LABEL.other,
-            onPress: () => submit('other'),
+            onPress: () => submit("other"),
           },
-          { text: 'Back', style: 'cancel' },
+          { text: "Back", style: "cancel" },
         ]),
     },
   ]);
@@ -1897,8 +2057,8 @@ const styles = StyleSheet.create({
 
   // Command bar
   commandBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[3],
     paddingBottom: theme.spacing[3],
@@ -1907,12 +2067,12 @@ const styles = StyleSheet.create({
   backBtn: {
     width: 32,
     height: 32,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
+    justifyContent: "center",
+    alignItems: "flex-start",
   },
   commandTitleBlock: { flex: 1 },
   commandTitle: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: 24,
     lineHeight: 28,
     letterSpacing: -0.3,
@@ -1924,8 +2084,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   commandStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: theme.spacing[1],
   },
   // Status chip (UI-V2-SPEC §2) — tint bg pill with dark same-hue text.
@@ -1935,7 +2095,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.full,
   },
   statusChipLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 0.2,
   },
@@ -1947,7 +2107,7 @@ const styles = StyleSheet.create({
 
   // Section label
   sectionLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 1.4,
     color: theme.colors.ink.muted,
@@ -1968,7 +2128,7 @@ const styles = StyleSheet.create({
   // inside the card radius without clipping the outer shadow on iOS.
   cardClip: {
     borderRadius: theme.radius.lg,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 
   // Shared bottom hairline for rows inside a group
@@ -1979,8 +2139,8 @@ const styles = StyleSheet.create({
 
   // CUSTOMER
   customerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     minHeight: 56,
@@ -1988,15 +2148,15 @@ const styles = StyleSheet.create({
   },
   customerTextBlock: { flex: 1 },
   customerName: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
   },
 
   // ITEMS
   itemRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     minHeight: 44,
@@ -2004,13 +2164,13 @@ const styles = StyleSheet.create({
   },
   itemBody: { flex: 1 },
   itemName: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     lineHeight: 22,
   },
   itemNote: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     marginTop: 2,
@@ -2018,24 +2178,24 @@ const styles = StyleSheet.create({
   },
   // Bakery configuration reads as the spec the chef bakes to, not a footnote.
   itemBakery: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.herb.soft,
     marginTop: 2,
     lineHeight: 19,
   },
   itemUnitPrice: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: 3,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   itemLineTotal: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
     paddingTop: 2,
   },
 
@@ -2045,13 +2205,13 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
   },
   addressLine: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     lineHeight: 22,
   },
   areaReassurance: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     lineHeight: 20,
@@ -2069,13 +2229,13 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
   },
   rangeWarningTitle: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
     lineHeight: 20,
   },
   rangeWarningBody: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     lineHeight: 20,
@@ -2092,7 +2252,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
   },
   instructionsText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     lineHeight: 22,
@@ -2100,25 +2260,25 @@ const styles = StyleSheet.create({
 
   // TIMING
   timingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     minHeight: 40,
     gap: theme.spacing[3],
   },
   timingLabel: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
   },
   timingValue: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'right',
+    fontVariant: ["tabular-nums"],
+    textAlign: "right",
     flex: 1,
   },
 
@@ -2126,20 +2286,20 @@ const styles = StyleSheet.create({
   // label + timestamp on the right. Only rendered rows are ones the order
   // data actually has a timestamp for.
   timelineRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingHorizontal: theme.spacing[4],
     gap: theme.spacing[3],
   },
   timelineRail: {
     width: 20,
-    alignItems: 'center',
+    alignItems: "center",
   },
   timelineDot: {
     width: 20,
     height: 20,
     borderRadius: theme.radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: theme.spacing[3],
   },
   timelineConnector: {
@@ -2151,34 +2311,34 @@ const styles = StyleSheet.create({
   },
   timelineContent: {
     flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: theme.spacing[3],
     minHeight: 40,
   },
   timelineLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
   },
   timelineTimestamp: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
 
   // Explanatory copy that sits BELOW a card — aligned to the card gutter.
   deliveryHint: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.soft,
     lineHeight: 16,
     marginHorizontal: theme.spacing[4],
     marginTop: -theme.spacing[2],
     marginBottom: theme.spacing[4],
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
 
   // Home-tiffin scheduling (#709) — propose-time controls. The controls sit in
@@ -2193,12 +2353,12 @@ const styles = StyleSheet.create({
     gap: theme.spacing[3],
   },
   proposeTitle: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
   },
   proposeHint: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.soft,
     lineHeight: 16,
@@ -2206,19 +2366,19 @@ const styles = StyleSheet.create({
   // The four offset chips share one row and divide it evenly (chipGrow), so
   // there is no wrapping and no ragged trailing chip.
   proposeRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: theme.spacing[2],
   },
   chip: {
     paddingHorizontal: theme.spacing[3],
     // 44px floor — the vendor touch-target minimum.
     minHeight: 44,
-    justifyContent: 'center',
+    justifyContent: "center",
     borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.mist.DEFAULT,
     backgroundColor: theme.colors.bone,
-    alignItems: 'center',
+    alignItems: "center",
   },
   chipGrow: {
     flex: 1,
@@ -2230,7 +2390,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.brand[100],
   },
   chipText: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
   },
@@ -2240,30 +2400,30 @@ const styles = StyleSheet.create({
 
   // PRICING / totals
   totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     minHeight: 40,
   },
   totalLabel: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
   },
   totalLabelStrong: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     color: theme.colors.ink.DEFAULT,
   },
   totalValue: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   totalValueStrong: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     letterSpacing: -0.2,
@@ -2271,7 +2431,7 @@ const styles = StyleSheet.create({
 
   // Fallback body
   bodyMuted: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
     paddingHorizontal: theme.spacing[4],
@@ -2287,22 +2447,22 @@ const styles = StyleSheet.create({
   // Error state
   centered: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: theme.spacing[6],
   },
   errorHeadline: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.h2.size,
     color: theme.colors.ink.DEFAULT,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: theme.spacing[2],
   },
   errorBody: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 20,
     marginBottom: theme.spacing[4],
     maxWidth: 320,
@@ -2313,11 +2473,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[6],
     paddingVertical: theme.spacing[3],
     minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   retryLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.paper,
   },
@@ -2325,8 +2485,8 @@ const styles = StyleSheet.create({
   // Footer — white action bar lifted off the canvas with a top shadow
   // (UI-V2-SPEC §6-style elevation, no hairline).
   footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[3],
@@ -2341,25 +2501,25 @@ const styles = StyleSheet.create({
   // Stacks the two Mark-Ready carrier buttons (+ optional hint) vertically
   // inside the footer instead of the default side-by-side row.
   footerColumn: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
+    flexDirection: "column",
+    alignItems: "stretch",
     gap: theme.spacing[2],
   },
   footerCaptionWrap: {
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   // The frozen footer stacks its reason above the one action still open, so
   // `footer`'s row direction has to be overridden here.
   footerBlockedWrap: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
+    flexDirection: "column",
+    alignItems: "stretch",
     gap: theme.spacing[1],
   },
   footerCaptionBlocked: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.destructive.DEFAULT,
-    textAlign: 'center',
+    textAlign: "center",
   },
   // Cancellation banner — destructive tint, not a fill: it must stop the chef
   // without reading as an error state for the whole screen.
@@ -2374,17 +2534,17 @@ const styles = StyleSheet.create({
     gap: theme.spacing[1],
   },
   cancelBannerTitle: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.destructive.DEFAULT,
   },
   cancelBannerBody: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
   },
   cancelBannerAction: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.destructive.DEFAULT,
   },
@@ -2395,8 +2555,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.ink.DEFAULT,
     borderRadius: theme.radius.md,
     minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   carrierBtnSecondary: {
     backgroundColor: theme.colors.paper,
@@ -2404,36 +2564,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.mist.strong,
     minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   carrierLabelSecondary: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.3,
   },
   carrierHint: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     lineHeight: 20,
     paddingHorizontal: theme.spacing[1],
   },
   footerCaption: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
-    textAlign: 'center',
+    textAlign: "center",
     flex: 1,
   },
   // Photo-required Ready step affordance (Task 9) — sits under the action
   // that leads into the camera so the chef isn't surprised mid-tap.
   photoCaption: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
-    textAlign: 'center',
+    textAlign: "center",
   },
   // Ghost Reject button (~96 wide) beside the full-flex Accept primary
   // (UI-V2-SPEC §3).
@@ -2444,11 +2604,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.mist.strong,
     backgroundColor: theme.colors.paper,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   rejectLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.1,
@@ -2457,12 +2617,12 @@ const styles = StyleSheet.create({
   // reconciliation: every accent text link in the canonical spec resolves to
   // ink here — the app carries zero brand-accent color).
   cancelLinkWrap: {
-    alignSelf: 'center',
+    alignSelf: "center",
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
   },
   cancelLinkLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
   },
@@ -2470,12 +2630,12 @@ const styles = StyleSheet.create({
   // ink-link treatment as the cancel link (Task 9: link text stays ink, no
   // muted variant; weight comes from position/order, not a dimmer color).
   switchLinkWrap: {
-    alignSelf: 'center',
+    alignSelf: "center",
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
   },
   switchLinkLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
   },
@@ -2487,16 +2647,16 @@ const styles = StyleSheet.create({
   itemCancelLinkWrap: {
     marginTop: 4,
     paddingVertical: 4,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   itemCancelLinkLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.2,
   },
   invoiceLinkLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
     marginTop: 4,
@@ -2508,39 +2668,39 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bone,
   },
   itemNameCancelled: {
-    textDecorationLine: 'line-through',
+    textDecorationLine: "line-through",
     color: theme.colors.ink.muted,
   },
   itemLineTotalCancelled: {
-    textDecorationLine: 'line-through',
+    textDecorationLine: "line-through",
     color: theme.colors.ink.muted,
   },
   itemCancelledBadge: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.destructive.DEFAULT,
     marginTop: 2,
     letterSpacing: 0.2,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   primaryBtn: {
     flex: 1,
     backgroundColor: theme.colors.ink.DEFAULT,
     borderRadius: theme.radius.md,
     minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   primaryBtnFull: {
     flex: 1,
     backgroundColor: theme.colors.ink.DEFAULT,
     borderRadius: theme.radius.md,
     minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   primaryLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.paper,
     letterSpacing: 0.3,

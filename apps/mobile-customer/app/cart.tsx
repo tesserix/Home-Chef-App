@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import { formatMoney } from "../lib/format";
+import { useChef } from "../hooks/useChefs";
+import React, { useState } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -7,16 +9,22 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { ChevronLeft, Minus, Plus, Trash2, UtensilsCrossed } from 'lucide-react-native';
-import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
-import { useCartStore } from '../store/cart-store';
-import type { CartItem } from '../types/customer';
-import { useRequireAccount } from '../hooks/useRequireAccount';
-import { useDialog } from '@homechef/mobile-shared/ui';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Image } from "expo-image";
+import { router } from "expo-router";
+import {
+  ChevronLeft,
+  Minus,
+  Plus,
+  Trash2,
+  UtensilsCrossed,
+} from "lucide-react-native";
+import { customerColors, customerTheme } from "@homechef/mobile-shared/theme";
+import { useCartStore } from "../store/cart-store";
+import type { CartItem } from "../types/customer";
+import { useRequireAccount } from "../hooks/useRequireAccount";
+import { useDialog } from "@homechef/mobile-shared/ui";
 
 // Android ripple tints — translucent colours derived from existing tokens
 // (never a new literal colour), matching the ChefCard/MenuItemCard convention.
@@ -29,12 +37,12 @@ const CTA_RIPPLE = `${customerColors.canvas}33`;
 // silently failed to open (gorhom v5 + reanimated v4 incompatibility) — so the
 // "View cart" bar appeared to do nothing and the cart was unreachable from the
 // chef screen. A plain route is robust and reads as "take me to the cart".
-function CartItemRow({ item }: { item: CartItem }) {
+function CartItemRow({ item, currency }: { item: CartItem; currency: string }) {
   const updateQty = useCartStore((s) => s.updateQty);
   const removeItem = useCartStore((s) => s.removeItem);
   const setInstructions = useCartStore((s) => s.setInstructions);
   // Local state keeps typing smooth; the store trims only for persistence.
-  const [note, setNote] = useState(item.instructions ?? '');
+  const [note, setNote] = useState(item.instructions ?? "");
 
   return (
     <View className="py-3 border-b border-hairline gap-2">
@@ -44,7 +52,7 @@ function CartItemRow({ item }: { item: CartItem }) {
             source={{ uri: item.imageUrl }}
             style={{ width: 60, height: 60, borderRadius: 12 }}
             contentFit="cover"
-            placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+            placeholder={{ blurhash: "L6PZfSi_.AyE_3t7t7R**0o#DgR4" }}
             transition={150}
             accessible={false}
           />
@@ -55,16 +63,26 @@ function CartItemRow({ item }: { item: CartItem }) {
             style={{ width: 60, height: 60, borderRadius: 12 }}
             className="bg-surface-soft items-center justify-center"
           >
-            <UtensilsCrossed size={22} color={customerColors.charcoal.soft} strokeWidth={1.5} />
+            <UtensilsCrossed
+              size={22}
+              color={customerColors.charcoal.soft}
+              strokeWidth={1.5}
+            />
           </View>
         )}
 
         <View className="flex-1 gap-0.5">
-          <Text className="text-sm font-semibold text-charcoal" numberOfLines={1}>
+          <Text
+            className="text-sm font-semibold text-charcoal"
+            numberOfLines={1}
+          >
             {item.name}
           </Text>
-          <Text className="text-xs text-charcoal-soft" style={{ fontVariant: ['tabular-nums'] }}>
-            ₹{item.price.toFixed(2)} each
+          <Text
+            className="text-xs text-charcoal-soft"
+            style={{ fontVariant: ["tabular-nums"] }}
+          >
+            {formatMoney(item.price, currency)} each
           </Text>
           {item.bakerySummary ? (
             <Text className="text-xs text-charcoal-soft" numberOfLines={2}>
@@ -73,7 +91,7 @@ function CartItemRow({ item }: { item: CartItem }) {
           ) : null}
           {item.modifiers && item.modifiers.length > 0 ? (
             <Text className="text-xs text-charcoal-soft" numberOfLines={2}>
-              {item.modifiers.map((m) => m.optionName).join(', ')}
+              {item.modifiers.map((m) => m.optionName).join(", ")}
             </Text>
           ) : null}
         </View>
@@ -86,12 +104,16 @@ function CartItemRow({ item }: { item: CartItem }) {
             accessibilityRole="button"
             accessibilityLabel={`Decrease quantity of ${item.name}`}
             hitSlop={8}
-            android_ripple={{ color: STEPPER_RIPPLE, borderless: true, radius: 18 }}
+            android_ripple={{
+              color: STEPPER_RIPPLE,
+              borderless: true,
+              radius: 18,
+            }}
           >
             {({ pressed }) => (
               <View
                 className={`w-8 h-8 rounded-full border border-hairline items-center justify-center bg-canvas ${
-                  pressed && Platform.OS === 'ios' ? 'bg-surface-soft' : ''
+                  pressed && Platform.OS === "ios" ? "bg-surface-soft" : ""
                 }`}
               >
                 <Minus size={14} color={customerColors.charcoal.soft} />
@@ -102,7 +124,7 @@ function CartItemRow({ item }: { item: CartItem }) {
           <View className="w-7 h-7 rounded-full bg-coral-tint items-center justify-center">
             <Text
               className="text-xs font-semibold text-coral"
-              style={{ fontVariant: ['tabular-nums'] }}
+              style={{ fontVariant: ["tabular-nums"] }}
             >
               {item.quantity}
             </Text>
@@ -113,12 +135,16 @@ function CartItemRow({ item }: { item: CartItem }) {
             accessibilityRole="button"
             accessibilityLabel={`Increase quantity of ${item.name}`}
             hitSlop={8}
-            android_ripple={{ color: STEPPER_RIPPLE, borderless: true, radius: 18 }}
+            android_ripple={{
+              color: STEPPER_RIPPLE,
+              borderless: true,
+              radius: 18,
+            }}
           >
             {({ pressed }) => (
               <View
                 className={`w-8 h-8 rounded-full border border-coral items-center justify-center bg-canvas ${
-                  pressed && Platform.OS === 'ios' ? 'bg-coral-tint' : ''
+                  pressed && Platform.OS === "ios" ? "bg-coral-tint" : ""
                 }`}
               >
                 <Plus size={14} color={customerColors.coral.DEFAULT} />
@@ -131,12 +157,16 @@ function CartItemRow({ item }: { item: CartItem }) {
             accessibilityRole="button"
             accessibilityLabel={`Remove ${item.name}`}
             hitSlop={8}
-            android_ripple={{ color: REMOVE_RIPPLE, borderless: true, radius: 18 }}
+            android_ripple={{
+              color: REMOVE_RIPPLE,
+              borderless: true,
+              radius: 18,
+            }}
           >
             {({ pressed }) => (
               <View
                 className={`w-8 h-8 rounded-full bg-surface-soft items-center justify-center ml-1 ${
-                  pressed && Platform.OS === 'ios' ? 'opacity-60' : ''
+                  pressed && Platform.OS === "ios" ? "opacity-60" : ""
                 }`}
               >
                 <Trash2 size={14} color={customerColors.charcoal.soft} />
@@ -174,6 +204,9 @@ export default function CartScreen() {
   const items = useCartStore((s) => s.items);
   const total = useCartStore((s) => s.total());
   const chefName = useCartStore((s) => s.chefName);
+  const chefId = useCartStore((s) => s.chefId);
+  const { data: chef } = useChef(chefId ?? "");
+  const currency = chef?.data?.currency ?? "INR";
   const hasHydrated = useCartStore((s) => s.hasHydrated);
   const clearCart = useCartStore((s) => s.clearCart);
   const dialog = useDialog();
@@ -182,18 +215,18 @@ export default function CartScreen() {
   // it sits in the header where a mis-tap is easy.
   function confirmClearCart(): void {
     dialog.confirm({
-      title: 'Clear your cart?',
-      message: 'This removes every dish and any notes you added.',
+      title: "Clear your cart?",
+      message: "This removes every dish and any notes you added.",
       accentColor: customerColors.coral.DEFAULT,
       actions: [
-        { label: 'Keep it', cancel: true },
-        { label: 'Clear cart', destructive: true, onPress: clearCart },
+        { label: "Keep it", cancel: true },
+        { label: "Clear cart", destructive: true, onPress: clearCart },
       ],
     });
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'bottom']}>
+    <SafeAreaView className="flex-1 bg-canvas" edges={["top", "bottom"]}>
       {/* Header — back chevron + title hierarchy (canonical spec §4) */}
       <View className="flex-row items-center px-4 py-3 border-b border-hairline">
         <Pressable
@@ -204,14 +237,22 @@ export default function CartScreen() {
           android_ripple={{ color: BACK_RIPPLE, borderless: true, radius: 20 }}
         >
           {({ pressed }) => (
-            <View style={pressed && Platform.OS === 'ios' ? { opacity: 0.6 } : undefined}>
+            <View
+              style={
+                pressed && Platform.OS === "ios" ? { opacity: 0.6 } : undefined
+              }
+            >
               <ChevronLeft size={26} color={customerColors.charcoal.DEFAULT} />
             </View>
           )}
         </Pressable>
         <View className="ml-2 flex-1">
-          <Text className="text-xl font-bold text-charcoal font-display">Your Cart</Text>
-          {chefName ? <Text className="text-sm text-charcoal-soft">{chefName}</Text> : null}
+          <Text className="text-xl font-bold text-charcoal font-display">
+            Your Cart
+          </Text>
+          {chefName ? (
+            <Text className="text-sm text-charcoal-soft">{chefName}</Text>
+          ) : null}
         </View>
         {/* Emptying the cart one line at a time is the only way out today, and a
             cart is single-chef — someone switching kitchens has to clear it. */}
@@ -221,7 +262,11 @@ export default function CartScreen() {
             accessibilityRole="button"
             accessibilityLabel="Clear cart"
             hitSlop={10}
-            android_ripple={{ color: REMOVE_RIPPLE, borderless: true, radius: 20 }}
+            android_ripple={{
+              color: REMOVE_RIPPLE,
+              borderless: true,
+              radius: 20,
+            }}
           >
             {({ pressed }) => (
               <Text
@@ -242,18 +287,22 @@ export default function CartScreen() {
         <View className="flex-1" />
       ) : items.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-charcoal-soft text-base">Your cart is empty</Text>
+          <Text className="text-charcoal-soft text-base">
+            Your cart is empty
+          </Text>
         </View>
       ) : (
         <KeyboardAvoidingView
           className="flex-1"
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
         >
           <FlatList
             data={items}
             keyExtractor={(item) => item.lineId}
-            renderItem={({ item }) => <CartItemRow item={item} />}
+            renderItem={({ item }) => (
+              <CartItemRow currency={currency} item={item} />
+            )}
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
             keyboardShouldPersistTaps="handled"
           />
@@ -270,22 +319,24 @@ export default function CartScreen() {
             }}
           >
             <View className="flex-row justify-between mb-3">
-              <Text className="text-base font-semibold text-charcoal-soft">Subtotal</Text>
+              <Text className="text-base font-semibold text-charcoal-soft">
+                Subtotal
+              </Text>
               <Text
                 className="text-base font-medium text-charcoal"
-                style={{ fontVariant: ['tabular-nums'] }}
+                style={{ fontVariant: ["tabular-nums"] }}
               >
-                ₹{total.toFixed(2)}
+                {formatMoney(total, currency)}
               </Text>
             </View>
             <Pressable
               onPress={() => {
-            // A guest can build a cart — that needs no account — but paying
-            // does. This is where App Review 5.1.1(iv)'s "directly relevant"
-            // line actually falls.
-            if (!requireAccount('place an order')) return;
-            router.push('/checkout');
-          }}
+                // A guest can build a cart — that needs no account — but paying
+                // does. This is where App Review 5.1.1(iv)'s "directly relevant"
+                // line actually falls.
+                if (!requireAccount("place an order")) return;
+                router.push("/checkout");
+              }}
               accessibilityLabel="Proceed to checkout"
               accessibilityRole="button"
               android_ripple={{ color: CTA_RIPPLE, borderless: false }}
@@ -293,11 +344,15 @@ export default function CartScreen() {
               {({ pressed }) => (
                 <View
                   className={`rounded-lg items-center justify-center ${
-                    pressed && Platform.OS === 'ios' ? 'bg-coral-pressed' : 'bg-coral'
+                    pressed && Platform.OS === "ios"
+                      ? "bg-coral-pressed"
+                      : "bg-coral"
                   }`}
                   style={{ minHeight: 52 }}
                 >
-                  <Text className="text-canvas text-base font-semibold">Proceed to Checkout</Text>
+                  <Text className="text-canvas text-base font-semibold">
+                    Proceed to Checkout
+                  </Text>
                 </View>
               )}
             </Pressable>

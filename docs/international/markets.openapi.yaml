@@ -1,0 +1,87 @@
+openapi: 3.0.3
+info:
+  title: Fe3dr market discovery
+  version: 1.0.0
+  description: Discovery only. Market status is not payment authorization or vendor readiness.
+servers:
+  - url: /api/v1
+paths:
+  /markets:
+    get:
+      operationId: listMarkets
+      security: []
+      responses:
+        '200':
+          description: Supported active and planned markets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [markets]
+                properties:
+                  markets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Market'
+  /markets/{country}:
+    get:
+      operationId: getMarket
+      security: []
+      parameters:
+        - in: path
+          name: country
+          required: true
+          schema:
+            type: string
+          description: ISO 3166-1 alpha-2 code; normalized to uppercase. Only IN, AU and NZ are supported.
+      responses:
+        '200':
+          description: Market policy, including launch state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [market]
+                properties:
+                  market:
+                    $ref: '#/components/schemas/Market'
+        '404':
+          description: Unsupported market; no fallback country or provider
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, code]
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                    enum: [unsupported_market]
+components:
+  schemas:
+    Market:
+      type: object
+      required: [country_code, name, currency, payment_provider, status]
+      properties:
+        country_code:
+          type: string
+          enum: [IN, AU, NZ]
+        name:
+          type: string
+        currency:
+          type: string
+          enum: [INR, AUD, NZD]
+        payment_provider:
+          type: string
+          enum: [cashfree, stripe]
+        status:
+          type: string
+          enum: [active, planned]
+          description: AU and NZ remain planned until separately approved launch gates pass.
+      example:
+        country_code: AU
+        name: Australia
+        currency: AUD
+        payment_provider: stripe
+        status: planned

@@ -23,6 +23,8 @@ import {
   useUpdateSubscriptionConfig,
   type SubscriptionConfig,
 } from '../hooks/useSubscriptionConfig';
+import { useKitchenMarket } from '../hooks/useKitchenMarket';
+import { currencySymbol } from '../lib/format';
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -47,6 +49,7 @@ function amountText(n: number): string {
 // could previously configure everything EXCEPT the recurring offer, which meant
 // opening a laptop to set the one price a subscriber is actually charged.
 export default function SubscriptionsScreen() {
+  const symbol = currencySymbol(useKitchenMarket()?.currency);
   const { showAlert } = useAlert();
   const { data, isLoading } = useSubscriptionConfig();
   const save = useUpdateSubscriptionConfig();
@@ -235,7 +238,7 @@ export default function SubscriptionsScreen() {
           <Text style={styles.cardTitle}>Pricing</Text>
           <FieldRow
             label="Price per meal"
-            prefix="₹"
+            prefix={symbol}
             value={perMeal}
             onChange={setPerMeal}
             placeholder="0"
@@ -244,7 +247,7 @@ export default function SubscriptionsScreen() {
           />
           <FieldRow
             label="Delivery fee per meal"
-            prefix="₹"
+            prefix={symbol}
             value={deliveryFee}
             onChange={setDeliveryFee}
             placeholder="0"
@@ -308,7 +311,7 @@ export default function SubscriptionsScreen() {
               />
               <FieldRow
                 label="Trial price per meal"
-                prefix="₹"
+                prefix={symbol}
                 value={trialPrice}
                 onChange={setTrialPrice}
                 placeholder="0"

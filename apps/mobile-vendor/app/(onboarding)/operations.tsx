@@ -12,6 +12,7 @@ import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import { DeliveryTierEditor } from '../../components/vendor/DeliveryTierEditor';
+import { getMarket } from '../../lib/market';
 import {
   DEFAULT_DELIVERY_FEE_CAP,
   type TierRow,
@@ -50,7 +51,8 @@ export default function OperationsScreen() {
   const cancelOnboarding = useCancelOnboarding();
   const { showAlert } = useAlert();
   const { t } = useTranslation();
-  const { operations, updateOperations, setStep } = useVendorOnboardingStore();
+  const { operations, updateOperations, setStep, kitchenDetails } = useVendorOnboardingStore();
+  const { currency } = getMarket(kitchenDetails.country);
 
   const [hours, setHours] = useState<HoursMap>(operations.operatingHours);
   const [prepTime, setPrepTime] = useState<string>(operations.prepTime);
@@ -103,7 +105,7 @@ export default function OperationsScreen() {
     }
     // The ladder is the price customers pay, so a band the server would reject
     // has to be caught before the chef walks on to the next step.
-    const tierError = validateTierRows(tierRows, DEFAULT_DELIVERY_FEE_CAP);
+    const tierError = validateTierRows(tierRows, DEFAULT_DELIVERY_FEE_CAP, currency);
     if (offersSelfDelivery && tierError) {
       scrollRef.current?.scrollTo({ y: Math.max(0, radiusFieldY.current - 16), animated: true });
       showAlert(t('onboarding.validationError'), tierError);
@@ -334,6 +336,7 @@ export default function OperationsScreen() {
               rows={tierRows}
               cap={DEFAULT_DELIVERY_FEE_CAP}
               onChange={setTierRows}
+              currency={currency}
             />
           </View>
         </>

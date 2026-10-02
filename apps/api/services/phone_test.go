@@ -20,3 +20,17 @@ func TestIsValidPhone(t *testing.T) {
 		t.Error("unknown country should fall back to IN rule")
 	}
 }
+
+func TestIsValidPhoneAUNZ(t *testing.T) {
+	for _, tc := range []struct {
+		country, phone string
+		valid          bool
+	}{
+		{"AU", "412345678", true}, {"AU", "0412345678", false}, {"AU", "9876543210", false},
+		{"NZ", "21123456", true}, {"NZ", "2112345678", true}, {"NZ", "021123456", false},
+	} {
+		if got := IsValidPhone(tc.country, tc.phone); got != tc.valid {
+			t.Errorf("%s %s got %v want %v", tc.country, tc.phone, got, tc.valid)
+		}
+	}
+}

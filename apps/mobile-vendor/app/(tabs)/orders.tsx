@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import { formatMoney } from '../../lib/format';
-import { chefPayoutAmount } from '../../lib/chefPayout';
+import { useMemo, useState } from "react";
+import { formatMoney } from "../../lib/format";
+import { chefPayoutAmount } from "../../lib/chefPayout";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,28 +10,28 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { useTranslation } from 'react-i18next';
-import { formatOrderTimeShort } from '@homechef/mobile-shared/utils';
-import { theme } from '@homechef/mobile-shared/theme';
-import { Skeleton } from '@homechef/mobile-shared/ui';
-import { useDockClearance } from '../../components/navigation/Dock';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { useTranslation } from "react-i18next";
+import { formatOrderTimeShort } from "@homechef/mobile-shared/utils";
+import { theme } from "@homechef/mobile-shared/theme";
+import { Skeleton } from "@homechef/mobile-shared/ui";
+import { useDockClearance } from "../../components/navigation/Dock";
 import {
   useVendorPendingOrders,
   useVendorOrderHistory,
   useOrderAction,
   useUpdateOrderStatus,
   type Order,
-} from '../../hooks/useVendorOrders';
-import { useVendorDashboard } from '../../hooks/useVendorDashboard';
-import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
+} from "../../hooks/useVendorOrders";
+import { useVendorDashboard } from "../../hooks/useVendorDashboard";
+import { PendingOrderCard } from "../../components/vendor/PendingOrderCard";
 import {
   ActiveOrderCard,
   type ActiveOrderCardOrder,
-} from '../../components/vendor/ActiveOrderCard';
-import { UndoSnackbar } from '../../components/vendor/UndoSnackbar';
+} from "../../components/vendor/ActiveOrderCard";
+import { UndoSnackbar } from "../../components/vendor/UndoSnackbar";
 
 // 'active' is the KITCHEN QUEUE. It existed, was deleted, and its consumers were
 // never updated — the comments below still referenced it, `orders.active` and
@@ -39,18 +39,18 @@ import { UndoSnackbar } from '../../components/vendor/UndoSnackbar';
 // left with no home: History excludes them, and the dashboard only showed
 // whichever survived a 10-row recency window. Restored as the authoritative,
 // unbounded surface for everything the chef is cooking (#695).
-type ActiveTab = 'new' | 'active' | 'history';
+type ActiveTab = "new" | "active" | "history";
 
 // Maps order status to its key under the `orders.status` i18n namespace.
 const HISTORY_STATUS_KEY: Record<string, string> = {
-  delivered: 'delivered',
-  picked_up: 'pickedUp',
-  cancelled: 'cancelled',
-  rejected: 'rejected',
-  accepted: 'accepted',
-  preparing: 'preparing',
-  ready: 'ready',
-  pending: 'pending',
+  delivered: "delivered",
+  picked_up: "pickedUp",
+  cancelled: "cancelled",
+  rejected: "rejected",
+  accepted: "accepted",
+  preparing: "preparing",
+  ready: "ready",
+  pending: "pending",
 };
 
 // Status chip palette per UI-V2-SPEC §2: tint bg + dark text of same hue.
@@ -90,22 +90,26 @@ function isHistoryOrder(o: {
   fulfillmentType?: string;
   deliveryFailureReported?: boolean;
 }): boolean {
-  if (o.status === 'delivered' || o.status === 'cancelled' || o.status === 'rejected') {
+  if (
+    o.status === "delivered" ||
+    o.status === "cancelled" ||
+    o.status === "rejected"
+  ) {
     return true;
   }
   // An OPEN delivery-failure review (#393) closes the order off for the chef —
   // it's an admin's call now — so it belongs in History even though the status
   // is still picked_up. Mirrors the dashboard active query, which drops it.
   if (o.deliveryFailureReported) return true;
-  if (o.status === 'picked_up') return o.fulfillmentType !== 'chef_delivery';
+  if (o.status === "picked_up") return o.fulfillmentType !== "chef_delivery";
   return false;
 }
 
 function formatMinutesAgo(iso: string): string {
   const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '';
+  if (Number.isNaN(t)) return "";
   const mins = Math.max(0, Math.floor((Date.now() - t) / 60_000));
-  if (mins < 1) return 'just now';
+  if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
@@ -115,19 +119,19 @@ function formatMinutesAgo(iso: string): string {
 // Bucket history orders into Today / Yesterday / weekday-date headers.
 function dateBucketFor(iso: string): string {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 'Unknown';
+  if (Number.isNaN(d.getTime())) return "Unknown";
   const today = new Date();
   const startOfDay = (dt: Date) =>
     new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
   const diffDays = Math.floor(
     (startOfDay(today) - startOfDay(d)) / (1000 * 60 * 60 * 24),
   );
-  if (diffDays === 0) return 'orders.today';
-  if (diffDays === 1) return 'orders.yesterday';
-  return d.toLocaleDateString('en-IN', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
+  if (diffDays === 0) return "orders.today";
+  if (diffDays === 1) return "orders.yesterday";
+  return d.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
   });
 }
 
@@ -136,8 +140,12 @@ function dateBucketFor(iso: string): string {
 function NewTab() {
   const { t } = useTranslation();
   const { data, isLoading, isError, refetch } = useVendorPendingOrders();
-  const { triggerAction, handleUndo, pendingUndo, isLoading: actionLoading } =
-    useOrderAction();
+  const {
+    triggerAction,
+    handleUndo,
+    pendingUndo,
+    isLoading: actionLoading,
+  } = useOrderAction();
   const orders = data?.orders ?? [];
   const isSurge = orders.length > 3;
   const dockClearance = useDockClearance();
@@ -177,7 +185,10 @@ function NewTab() {
       <FlatList
         data={orders}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.tabList, { paddingBottom: dockClearance }]}
+        contentContainerStyle={[
+          styles.tabList,
+          { paddingBottom: dockClearance },
+        ]}
         ListHeaderComponent={
           isSurge ? (
             <View style={styles.surgeBanner}>
@@ -188,7 +199,7 @@ function NewTab() {
                 ]}
               />
               <Text style={styles.surgeBannerLabel}>
-                {t('orders.ordersAwaiting', { count: orders.length })}
+                {t("orders.ordersAwaiting", { count: orders.length })}
               </Text>
             </View>
           ) : null
@@ -208,7 +219,9 @@ function NewTab() {
             onOpenDetail={() => router.push(`/orders/${item.id}`)}
           />
         )}
-        ItemSeparatorComponent={() => <View style={{ height: theme.spacing[2] }} />}
+        ItemSeparatorComponent={() => (
+          <View style={{ height: theme.spacing[2] }} />
+        )}
         ListEmptyComponent={<NewEmpty />}
       />
       <UndoSnackbar pendingUndo={pendingUndo} onUndo={handleUndo} />
@@ -220,8 +233,8 @@ function NewEmpty() {
   const { t } = useTranslation();
   return (
     <View style={styles.emptyBlock}>
-      <Text style={styles.emptyHeadline}>{t('orders.queueClear')}</Text>
-      <Text style={styles.emptyBody}>{t('orders.queueClearBody')}</Text>
+      <Text style={styles.emptyHeadline}>{t("orders.queueClear")}</Text>
+      <Text style={styles.emptyBody}>{t("orders.queueClearBody")}</Text>
     </View>
   );
 }
@@ -246,7 +259,12 @@ function ErrorRetry({ onRetry }: ErrorRetryProps) {
         android_ripple={{ color: `${theme.colors.paper}33`, borderless: false }}
       >
         {({ pressed }) => (
-          <View style={[styles.retryBtn, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}>
+          <View
+            style={[
+              styles.retryBtn,
+              pressed && Platform.OS === "ios" && { opacity: 0.85 },
+            ]}
+          >
             <Text style={styles.retryLabel}>Retry</Text>
           </View>
         )}
@@ -261,8 +279,8 @@ function ActiveEmpty() {
   const { t } = useTranslation();
   return (
     <View style={styles.emptyBlock}>
-      <Text style={styles.emptyHeadline}>{t('orders.noCookingOrders')}</Text>
-      <Text style={styles.emptyBody}>{t('orders.noCookingOrdersBody')}</Text>
+      <Text style={styles.emptyHeadline}>{t("orders.noCookingOrders")}</Text>
+      <Text style={styles.emptyBody}>{t("orders.noCookingOrdersBody")}</Text>
     </View>
   );
 }
@@ -312,12 +330,15 @@ function ActiveOrdersTab() {
         />
       }
       ListEmptyComponent={<ActiveEmpty />}
-      ItemSeparatorComponent={() => <View style={{ height: theme.spacing[2] }} />}
+      ItemSeparatorComponent={() => (
+        <View style={{ height: theme.spacing[2] }} />
+      )}
       renderItem={({ item }) => (
         <ActiveOrderCard
           order={item}
           isPending={
-            updateStatus.isPending && updateStatus.variables?.orderId === item.id
+            updateStatus.isPending &&
+            updateStatus.variables?.orderId === item.id
           }
           onAdvance={(orderId, nextStatus) =>
             updateStatus.mutate({ orderId, status: nextStatus })
@@ -332,7 +353,7 @@ function ActiveOrdersTab() {
 // ----- History tab (delivered/cancelled/rejected, paginated, date-grouped) ---
 
 interface HistoryListItem {
-  type: 'header' | 'order';
+  type: "header" | "order";
   key: string;
   bucket?: string;
   order?: Order;
@@ -374,10 +395,10 @@ function HistoryTab() {
     }
     const out: HistoryListItem[] = [];
     for (const [bucket, ords] of groups) {
-      out.push({ type: 'header', key: `h-${bucket}`, bucket });
+      out.push({ type: "header", key: `h-${bucket}`, bucket });
       ords.forEach((o, idx) => {
         out.push({
-          type: 'order',
+          type: "order",
           key: o.id,
           order: o,
           first: idx === 0,
@@ -407,7 +428,10 @@ function HistoryTab() {
     <FlatList
       data={listItems}
       keyExtractor={(item) => item.key}
-      contentContainerStyle={[styles.historyList, { paddingBottom: dockClearance }]}
+      contentContainerStyle={[
+        styles.historyList,
+        { paddingBottom: dockClearance },
+      ]}
       refreshControl={
         <RefreshControl
           refreshing={isPulling}
@@ -423,11 +447,11 @@ function HistoryTab() {
         if (hasMore) setPage((p) => p + 1);
       }}
       renderItem={({ item }) =>
-        item.type === 'header' ? (
+        item.type === "header" ? (
           <Text style={styles.dateHeader}>
-            {(item.bucket?.startsWith('orders.')
+            {(item.bucket?.startsWith("orders.")
               ? t(item.bucket)
-              : (item.bucket ?? '')
+              : (item.bucket ?? "")
             ).toUpperCase()}
           </Text>
         ) : item.order ? (
@@ -447,8 +471,8 @@ function HistoryTab() {
       }
       ListEmptyComponent={
         <View style={styles.emptyBlock}>
-          <Text style={styles.emptyHeadline}>{t('orders.noOrdersYet')}</Text>
-          <Text style={styles.emptyBody}>{t('orders.noOrdersBody')}</Text>
+          <Text style={styles.emptyHeadline}>{t("orders.noOrdersYet")}</Text>
+          <Text style={styles.emptyBody}>{t("orders.noOrdersBody")}</Text>
         </View>
       }
     />
@@ -485,14 +509,20 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
           onPress={() => router.push(`/orders/${order.id}`)}
           accessibilityRole="button"
           accessibilityLabel={`Open order details for ${order.customerName}`}
-          android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+          android_ripple={{
+            color: `${theme.colors.ink.DEFAULT}14`,
+            borderless: false,
+          }}
         >
           {({ pressed }) => (
             // Inner-View pattern — keeps flex layout under iOS Pressable bug.
             <View
               style={[
                 historyRowStyles.root,
-                pressed && Platform.OS === 'ios' && { backgroundColor: theme.colors.bone },
+                pressed &&
+                  Platform.OS === "ios" && {
+                    backgroundColor: theme.colors.bone,
+                  },
               ]}
             >
               <View
@@ -515,7 +545,10 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
               {/* What the chef earned on it — the history list has to agree
                   with the payout the detail screen and the statement show. */}
               <Text style={historyRowStyles.total}>
-                {formatMoney(chefPayoutAmount(order.chefPayout, order.total))}
+                {formatMoney(
+                  chefPayoutAmount(order.chefPayout, order.total),
+                  order.currency ?? order.chefPayout?.currency,
+                )}
               </Text>
             </View>
           )}
@@ -544,7 +577,10 @@ function TabLabel({ label, badge, active, onPress }: TabLabelProps) {
       accessibilityState={{ selected: active }}
       accessibilityLabel={badge ? `${label}, ${badge}` : label}
       hitSlop={7}
-      android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
+      android_ripple={{
+        color: `${theme.colors.ink.DEFAULT}14`,
+        borderless: false,
+      }}
     >
       {/* Inner-View pattern — visual styles live on View to dodge iOS
           function-style style drop. */}
@@ -556,7 +592,7 @@ function TabLabel({ label, badge, active, onPress }: TabLabelProps) {
           {badge != null && badge > 0 ? (
             <View style={tabStyles.badge}>
               <Text style={tabStyles.badgeLabel}>
-                {badge > 9 ? '9+' : String(badge)}
+                {badge > 9 ? "9+" : String(badge)}
               </Text>
             </View>
           ) : null}
@@ -570,7 +606,7 @@ function TabLabel({ label, badge, active, onPress }: TabLabelProps) {
 
 export default function OrdersScreen() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<ActiveTab>('new');
+  const [activeTab, setActiveTab] = useState<ActiveTab>("new");
 
   // Badge count for the New segment so the chef knows there are orders waiting
   // without having to switch tabs.
@@ -582,35 +618,41 @@ export default function OrdersScreen() {
   const activeCount = dashboard?.activeOrders?.length ?? 0;
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
       {/* Zone A — Command bar */}
       <View style={styles.commandBar}>
-        <Text style={styles.commandTitle}>{t('orders.title')}</Text>
+        <Text style={styles.commandTitle}>{t("orders.title")}</Text>
       </View>
 
       {/* Three segments: New (accept queue) / Active (kitchen queue) / History.
           The dashboard shows a capped PREVIEW of Active; this is the full list. */}
       <View style={styles.segmentTrack}>
         <TabLabel
-          label={t('orders.new')}
+          label={t("orders.new")}
           badge={newCount}
-          active={activeTab === 'new'}
-          onPress={() => setActiveTab('new')}
+          active={activeTab === "new"}
+          onPress={() => setActiveTab("new")}
         />
         <TabLabel
-          label={t('orders.active')}
+          label={t("orders.active")}
           badge={activeCount}
-          active={activeTab === 'active'}
-          onPress={() => setActiveTab('active')}
+          active={activeTab === "active"}
+          onPress={() => setActiveTab("active")}
         />
         <TabLabel
-          label={t('orders.history')}
-          active={activeTab === 'history'}
-          onPress={() => setActiveTab('history')}
+          label={t("orders.history")}
+          active={activeTab === "history"}
+          onPress={() => setActiveTab("history")}
         />
       </View>
 
-      {activeTab === 'new' ? <NewTab /> : activeTab === 'active' ? <ActiveOrdersTab /> : <HistoryTab />}
+      {activeTab === "new" ? (
+        <NewTab />
+      ) : activeTab === "active" ? (
+        <ActiveOrdersTab />
+      ) : (
+        <HistoryTab />
+      )}
     </SafeAreaView>
   );
 }
@@ -627,7 +669,7 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing[3],
   },
   commandTitle: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: 28,
     lineHeight: 32,
     letterSpacing: -0.3,
@@ -636,7 +678,7 @@ const styles = StyleSheet.create({
 
   // Two-segment control track (UI-V2-SPEC §5)
   segmentTrack: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[2],
     backgroundColor: theme.colors.mist.DEFAULT,
@@ -653,8 +695,8 @@ const styles = StyleSheet.create({
 
   // Surge banner (reused from dashboard pattern)
   surgeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
@@ -663,7 +705,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[3],
   },
   surgeBannerLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.1,
@@ -679,7 +721,7 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing[10],
   },
   dateHeader: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 1.4,
     color: theme.colors.ink.muted,
@@ -689,7 +731,7 @@ const styles = StyleSheet.create({
 
   // Infinite-scroll load-more indicator
   loadMoreRow: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: theme.spacing[4],
   },
 
@@ -699,14 +741,14 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing[10],
   },
   emptyHeadline: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.h2.size,
     color: theme.colors.ink.DEFAULT,
     letterSpacing: -0.2,
     marginBottom: theme.spacing[2],
   },
   emptyBody: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     lineHeight: 20,
@@ -716,16 +758,16 @@ const styles = StyleSheet.create({
 
   // R8 retry error state
   retryBtn: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     backgroundColor: theme.colors.ink.DEFAULT,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[6],
     minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   retryLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.paper,
   },
@@ -738,8 +780,8 @@ const tabStyles = StyleSheet.create({
   segment: {
     flex: 1,
     minHeight: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 9,
   },
   segmentActive: {
@@ -747,12 +789,12 @@ const tabStyles = StyleSheet.create({
     ...theme.shadow[1],
   },
   labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   label: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
     letterSpacing: 0.1,
@@ -766,15 +808,15 @@ const tabStyles = StyleSheet.create({
     borderRadius: theme.radius.full,
     minWidth: 16,
     height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 3,
   },
   badgeLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: 10,
     color: theme.colors.paper,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
     lineHeight: 14,
   },
 });
@@ -793,12 +835,12 @@ const historyRowStyles = StyleSheet.create({
     borderBottomRightRadius: theme.radius.lg,
   },
   clip: {
-    overflow: 'hidden',
+    overflow: "hidden",
     backgroundColor: theme.colors.paper,
   },
   root: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: theme.spacing[3],
     minHeight: 56,
     paddingHorizontal: theme.spacing[4],
@@ -815,27 +857,27 @@ const historyRowStyles = StyleSheet.create({
     borderRadius: theme.radius.full,
   },
   chipLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 0.2,
   },
   nameBlock: { flex: 1 },
   name: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
   },
   meta: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: 1,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   total: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
 });

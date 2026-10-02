@@ -1,7 +1,9 @@
+import { addressSchema } from '../lib/address';
+import { AddressCountrySelect } from '../components/address/AddressCountrySelect';
 // Checkout screen — address selection, order summary, then payment.
 //
 // This screen creates the order, then calls startOrderPayment (lib/payment),
-// which opens the Cashfree sheet and routes to /payment/result.
+// which opens the selected payment sheet and routes to /payment/result.
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
@@ -43,6 +45,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { customerColors, customerTheme } from "@homechef/mobile-shared/theme";
 import { earliestBakeryFulfillment } from "@homechef/mobile-shared/bakery";
+import { checkoutCreditIntent } from "@homechef/mobile-shared/payments";
 import { useCartStore } from "../store/cart-store";
 import { useCreateOrder } from "../hooks/useOrderCheckout";
 import { useChef } from "../hooks/useChefs";
@@ -94,15 +97,7 @@ const MAX_TIP = 5000;
 
 // ─── Address form schema ──────────────────────────────────────────────────────
 
-const addressSchema = z.object({
-  label: z.string().min(1),
-  addressLine1: z.string().min(1, "Address line 1 is required"),
-  addressLine2: z.string().optional(),
-  city: z.string().min(1, "City is required"),
-  state: z.string().min(1, "State is required"),
-  pincode: z.string().regex(/^\d{6}$/, "Pincode must be 6 digits"),
-  isDefault: z.boolean().optional(),
-});
+
 
 type AddressFormValues = z.infer<typeof addressSchema>;
 
@@ -407,6 +402,7 @@ export default function CheckoutScreen() {
     handleSubmit: handleAddrSubmit,
     reset: resetAddrForm,
     setValue: setAddrValue,
+    watch: watchAddress,
     formState: { errors: addrErrors, isSubmitting: addrSubmitting },
   } = useForm<AddressFormValues>({
     resolver: zodResolver(addressSchema),
@@ -417,6 +413,7 @@ export default function CheckoutScreen() {
       city: "",
       state: "",
       pincode: "",
+      country: "IN",
       isDefault: false,
     },
   });
@@ -436,6 +433,7 @@ export default function CheckoutScreen() {
     useAddressAutocomplete(addrQuery);
 
   function pickAddrSuggestion(s: AddressSuggestion): void {
+    setAddrValue("country", (s.country ?? "").toUpperCase() as AddressFormValues["country"], { shouldValidate: true });
     setAddrValue("addressLine1", s.line1 || s.description, {
       shouldValidate: true,
     });
@@ -463,6 +461,7 @@ export default function CheckoutScreen() {
         city: values.city,
         state: values.state,
         pincode: values.pincode,
+        country: values.country,
         // Persist the picked drop point so delivery distance/fee can be computed.
         latitude: addrCoords?.lat,
         longitude: addrCoords?.lon,
@@ -549,6 +548,7 @@ export default function CheckoutScreen() {
     });
 
     try {
+      const paymentCredit = checkoutCreditIntent(quote?.paymentProvider, credit);
       // Step 1: Create the order on the server
       const orderResult = await createOrder.mutateAsync({
         chefId: cartStore.chefId,
@@ -598,7 +598,7 @@ export default function CheckoutScreen() {
       // A short hold sits between the order and the gateway (#hold): nothing is
       // charged until it elapses, so a change of mind costs a tap rather than a
       // refund. Only on first placement — a retry from an unpaid order pays now.
-      await startOrderPayment(orderId, credit, { holdSeconds: 10 });
+      await startOrderPayment(orderId, paymentCredit, { holdSeconds: 10 });
     } catch (err: unknown) {
       // Surface the real reason in a modal — the inline banner sits in the
       // scroll body, far from the sticky button, so a failed tap otherwise
@@ -649,6 +649,7 @@ export default function CheckoutScreen() {
     latitude: selectedAddr?.latitude,
     longitude: selectedAddr?.longitude,
     city: selectedAddr?.city,
+    country: selectedAddr?.country,
     state: selectedAddr?.state,
     subtotal,
     discount,
@@ -657,6 +658,8 @@ export default function CheckoutScreen() {
     credit,
   });
   const quote = useStaleValue(quoteFresh);
+  const currency = quote?.currency?.toUpperCase() || "INR";
+  const money = (amount: number) => formatMoney(amount, currency);
   // Out-of-range guard (#709): the kitchen's delivery has a hard radius (the chef's
   // own range, else the platform's 10 km default). When the selected address is
   // beyond it, delivery isn't possible — block placing and tell the customer why,
@@ -675,7 +678,7 @@ export default function CheckoutScreen() {
 
   // Pickup is always free; delivery is the quoted fee (0 until the quote lands or
   // when delivery is genuinely free).
-  const deliveryFee = fulfillment === "pickup" ? 0 : (quote?.deliveryFee ?? 0);
+  const deliveryFee = fulfillment === "pickup" ? 0 : (quote?.effectiveDeliveryFee ?? quote?.deliveryFee ?? 0);
   // What the customer would save by switching to pickup — only real when delivery
   // actually costs something. Drives the incentive nudge; 0 shows nothing.
   const pickupSaving = quote?.pickupSaving ?? 0;
@@ -958,7 +961,7 @@ export default function CheckoutScreen() {
           <Pressable
             onPress={() => setFulfillment("pickup")}
             accessibilityRole="button"
-            accessibilityLabel={`Switch to pickup and save ${formatMoney(pickupSaving)}`}
+            accessibilityLabel={`Switch to pickup and save ${money(pickupSaving)}`}
             android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
@@ -969,7 +972,7 @@ export default function CheckoutScreen() {
               >
                 <View className="flex-1 pr-3">
                   <Text className="text-sm font-semibold text-coral-pressed tabular-nums">
-                    Pick up & save {formatMoney(pickupSaving)}
+                    Pick up & save {money(pickupSaving)}
                   </Text>
                   <Text className="text-xs text-charcoal-soft mt-0.5">
                     Collect from the kitchen — no delivery fee.
@@ -1238,6 +1241,16 @@ export default function CheckoutScreen() {
                         )}
                       />
                     </View>
+                    <Controller control={addrControl} name="country" render={({ field: { value, onChange } }) => (
+                      <AddressCountrySelect value={value} onChange={(country) => {
+                        onChange(country);
+                        setAddrValue('pincode', '');
+                        setAddrCoords(null);
+                      }} />
+                    )} />
+                    {addrErrors.country && (
+                      <Text className="text-xs text-destructive">Choose India, Australia or New Zealand.</Text>
+                    )}
                     <Controller
                       control={addrControl}
                       name="pincode"
@@ -1246,12 +1259,12 @@ export default function CheckoutScreen() {
                           <TextInput
                             value={value}
                             onChangeText={onChange}
-                            placeholder="Pincode *"
+                            placeholder={watchAddress("country") === "IN" ? "Pincode *" : "Postcode *"}
                             placeholderTextColor={customerColors.charcoal.soft}
                             keyboardType="numeric"
-                            maxLength={6}
+                            maxLength={watchAddress("country") === "IN" ? 6 : 4}
                             className="bg-surface-soft rounded-xl px-3 py-2.5 text-sm text-charcoal"
-                            accessibilityLabel="Pincode"
+                            accessibilityLabel={watchAddress("country") === "IN" ? "Pincode" : "Postcode"}
                           />
                           {addrErrors.pincode && (
                             <Text className="text-xs text-destructive mt-1">
@@ -1345,7 +1358,7 @@ export default function CheckoutScreen() {
                   className="text-sm font-medium text-charcoal"
                   style={{ fontVariant: ["tabular-nums"] }}
                 >
-                  ₹{(item.price * item.quantity).toFixed(2)}
+                  {money(item.price * item.quantity)}
                 </Text>
               </View>
             )}
@@ -1374,7 +1387,7 @@ export default function CheckoutScreen() {
             100% of your tip goes to the home chef.
           </Text>
           <View className="flex-row flex-wrap gap-2">
-            {TIP_PRESETS.map((amount) => {
+            {(currency === "INR" ? TIP_PRESETS : [0, 2, 3, 5]).map((amount) => {
               const selected = tip === amount && !customTip;
               return (
                 <Pressable
@@ -1386,7 +1399,7 @@ export default function CheckoutScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
                   accessibilityLabel={
-                    amount === 0 ? "No tip" : `Tip ₹${amount}`
+                    amount === 0 ? "No tip" : `Tip ${money(amount)}`
                   }
                   android_ripple={{ color: CORAL_RIPPLE, borderless: false }}
                 >
@@ -1403,7 +1416,7 @@ export default function CheckoutScreen() {
                         className={`text-sm font-medium ${selected ? "text-canvas" : "text-charcoal"}`}
                         style={{ fontVariant: ["tabular-nums"] }}
                       >
-                        {amount === 0 ? "No tip" : `₹${amount}`}
+                        {amount === 0 ? "No tip" : money(amount)}
                       </Text>
                     </View>
                   )}
@@ -1424,7 +1437,7 @@ export default function CheckoutScreen() {
               keyboardType="number-pad"
               returnKeyType="done"
               maxLength={5}
-              accessibilityLabel="Custom tip amount in rupees"
+              accessibilityLabel={`Custom tip amount in ${currency}`}
               className={`w-24 rounded-xl border px-3 text-sm text-charcoal text-center ${
                 customTip
                   ? "border-coral bg-coral-tint"
@@ -1466,7 +1479,7 @@ export default function CheckoutScreen() {
                   textAlign: "right",
                 }}
               >
-                ₹{subtotal.toFixed(2)}
+                {money(quote?.subtotal ?? subtotal)}
               </Text>
             </View>
             <View className="flex-row justify-between">
@@ -1480,7 +1493,7 @@ export default function CheckoutScreen() {
                   className="text-sm text-charcoal font-medium"
                   style={{ fontVariant: ["tabular-nums"] }}
                 >
-                  ₹{deliveryFee.toFixed(2)}
+                  {money(deliveryFee)}
                 </Text>
               ) : (
                 <Text className="text-sm text-success font-medium">Free</Text>
@@ -1495,7 +1508,7 @@ export default function CheckoutScreen() {
                   className="text-sm text-charcoal font-medium"
                   style={{ fontVariant: ["tabular-nums"] }}
                 >
-                  ₹{platformFee.toFixed(2)}
+                  {money(platformFee)}
                 </Text>
               </View>
             ) : null}
@@ -1509,7 +1522,7 @@ export default function CheckoutScreen() {
                   className="text-sm text-charcoal font-medium"
                   style={{ fontVariant: ["tabular-nums"] }}
                 >
-                  ₹{row.amount.toFixed(2)}
+                  {money(row.amount)}
                 </Text>
               </View>
             ))}
@@ -1546,7 +1559,7 @@ export default function CheckoutScreen() {
                             className="text-xs font-semibold text-charcoal"
                             style={{ fontVariant: ["tabular-nums"] }}
                           >
-                            ₹{selfDeliveryBreakdown.fee.toFixed(2)}
+                            {money(selfDeliveryBreakdown.fee)}
                           </Text>
                         ) : (
                           <Text className="text-xs font-semibold text-success">
@@ -1578,7 +1591,7 @@ export default function CheckoutScreen() {
                           style={{ fontVariant: ["tabular-nums"] }}
                         >
                           {selfDeliveryBreakdown.fee > 0
-                            ? `₹${selfDeliveryBreakdown.fee.toFixed(2)}`
+                            ? money(selfDeliveryBreakdown.fee)
                             : "Free"}
                         </Text>
                       </View>
@@ -1596,7 +1609,7 @@ export default function CheckoutScreen() {
                             showing its raw value would contradict the "Free" total. */}
                             {selfDeliveryBreakdown.withinFreeZone
                               ? "Waived"
-                              : `₹${selfDeliveryBreakdown.baseFee.toFixed(2)}`}
+                              : money(selfDeliveryBreakdown.baseFee)}
                           </Text>
                         </View>
                         {selfDeliveryBreakdown.distanceKnown &&
@@ -1613,10 +1626,7 @@ export default function CheckoutScreen() {
                               className="text-xs text-charcoal-soft"
                               style={{ fontVariant: ["tabular-nums"] }}
                             >
-                              ₹
-                              {selfDeliveryBreakdown.distanceComponent.toFixed(
-                                2,
-                              )}
+                              {money(selfDeliveryBreakdown.distanceComponent)}
                             </Text>
                           </View>
                         ) : null}
@@ -1639,7 +1649,7 @@ export default function CheckoutScreen() {
                     {selfDeliveryBreakdown.capped ? (
                       <Text className="text-xs text-charcoal-soft leading-4 tabular-nums">
                         Capped at the chef's{" "}
-                        {formatMoney(selfDeliveryBreakdown.maxFee)} maximum
+                        {money(selfDeliveryBreakdown.maxFee)} maximum
                       </Text>
                     ) : null}
                     <Text className="text-xs text-charcoal-soft leading-4 pt-2 border-t border-hairline">
@@ -1680,7 +1690,7 @@ export default function CheckoutScreen() {
                   className="text-sm text-success font-medium"
                   style={{ fontVariant: ["tabular-nums"] }}
                 >
-                  −₹{discount.toFixed(2)}
+                  −{money(discount)}
                 </Text>
               </View>
             ) : (
@@ -1748,7 +1758,7 @@ export default function CheckoutScreen() {
                   className="text-sm text-charcoal font-medium"
                   style={{ fontVariant: ["tabular-nums"] }}
                 >
-                  ₹{tip.toFixed(2)}
+                  {money(tip)}
                 </Text>
               </View>
             ) : null}
@@ -1765,7 +1775,7 @@ export default function CheckoutScreen() {
                   textAlign: "right",
                 }}
               >
-                ₹{payable.toFixed(2)}
+                {money(payable)}
               </Text>
             </View>
           </View>
@@ -2260,7 +2270,7 @@ export default function CheckoutScreen() {
                 >
                   {isLoading
                     ? "Processing..."
-                    : `Place Order · ₹${payable.toFixed(2)}`}
+                    : `Place Order · ${money(payable)}`}
                 </Text>
               )}
             </View>

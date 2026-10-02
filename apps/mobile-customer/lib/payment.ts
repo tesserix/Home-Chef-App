@@ -3,6 +3,7 @@
 // create-order → gateway hand-off identical everywhere.
 
 import { router } from 'expo-router';
+import { Linking } from 'react-native';
 import { api } from './api';
 import { useCartStore } from '../store/cart-store';
 
@@ -35,6 +36,9 @@ export interface GatewayPaymentData {
   cashfreePaymentSessionId?: string;
   cashfreeOrderId?: string;
   cashfreeEnv?: string;
+  stripePaymentIntentId?: string;
+  clientSecret?: string;
+  publishableKey?: string;
   amount: number;
   currency: string;
   orderNumber?: string;
@@ -74,6 +78,49 @@ export async function launchGateway(
   // for the customer to return to a countdown that has already elapsed.
   opts: { replace?: boolean } = {},
 ): Promise<void> {
+  if (data.provider === 'stripe') {
+    if (!data.stripePaymentIntentId || !data.clientSecret || !data.publishableKey) {
+      throw new Error('Stripe payment details are missing. Please retry payment.');
+    }
+    const { initStripe, initPaymentSheet, presentPaymentSheet, handleURLCallback } =
+      require('@stripe/stripe-react-native') as typeof import('@stripe/stripe-react-native');
+    await initStripe({
+      publishableKey: data.publishableKey,
+      urlScheme: 'homechef-customer',
+    });
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      void handleURLCallback(url);
+    });
+    try {
+      const { error: setupError } = await initPaymentSheet({
+        merchantDisplayName: 'Fe3dr',
+        paymentIntentClientSecret: data.clientSecret,
+        returnURL: `homechef-customer://payment/result?order_id=${encodeURIComponent(orderId)}`,
+        allowsDelayedPaymentMethods: false,
+        defaultBillingDetails: {
+          name: data.prefill?.name,
+          email: data.prefill?.email,
+          phone: data.prefill?.phone,
+        },
+      });
+      if (setupError) throw new Error(setupError.message);
+      const { error } = await presentPaymentSheet();
+      if (error && error.code !== 'Canceled') throw new Error(error.message);
+      if (!error) {
+        try {
+          await api.post(`/v1/payments/order/${encodeURIComponent(orderId)}/verify`, {
+            stripePaymentIntentId: data.stripePaymentIntentId,
+          });
+        } catch {
+          // The capture may have succeeded; the result screen reconciles server state.
+        }
+      }
+      router.replace(`/payment/result?order_id=${encodeURIComponent(orderId)}`);
+    } finally {
+      subscription.remove();
+    }
+    return;
+  }
   if (data.provider === 'cashfree') {
     // Built at runtime, so typedRoutes can't narrow it — `as never` is the cast
     // this app already uses for a composed href (see checkout's group-order push).
@@ -86,10 +133,25 @@ export async function launchGateway(
     return;
   }
 
-  // No second rail since #1086. A response the server minted on something other
-  // than Cashfree cannot be opened here, so send the customer to the result screen
-  // rather than silently doing nothing — it polls the real status and offers Retry.
+  // Unknown providers stay on the order result screen, which offers a safe retry.
   router.replace(`/payment/result?order_id=${orderId}`);
+}
+
+export function isPaymentSetupRejection(error: unknown): boolean {
+  const response = (
+    error as {
+      response?: { status?: number; data?: { error?: string } };
+    } | null
+  )?.response;
+  // These API preflight responses occur before creating a Stripe intent.
+  return (
+    response?.status === 503 &&
+    [
+      'Stripe gateway not configured',
+      'Stripe credentials do not match the order environment',
+      'Stripe publishable key is not configured for this environment',
+    ].includes(response.data?.error ?? '')
+  );
 }
 
 /**
@@ -122,15 +184,19 @@ export async function startOrderPayment(
   // a retry on an unpaid order should go straight to paying. 0 = no hold.
   opts: { holdSeconds?: number } = {},
 ): Promise<void> {
-  const resp = await api.post<{ data: GatewayPaymentData }>(
-    `/v1/payments/order/${orderId}/create`,
-    credit,
-  ).catch((error: unknown) => {
-    if ((opts.holdSeconds ?? 0) <= 0) throw error;
-    // The order already exists. Recover it instead of offering another placement.
-    router.replace(`/payment/result?order_id=${encodeURIComponent(orderId)}`);
-    return null;
-  });
+  const resp = await api
+    .post<{
+      data: GatewayPaymentData;
+    }>(`/v1/payments/order/${orderId}/create`, credit)
+    .catch((error: unknown) => {
+      if ((opts.holdSeconds ?? 0) <= 0) throw error;
+      const notStarted = isPaymentSetupRejection(error);
+      // The order already exists. Recover it instead of offering another placement.
+      router.replace(
+        `/payment/result?order_id=${encodeURIComponent(orderId)}${notStarted ? '&not_started=1' : ''}`,
+      );
+      return null;
+    });
   if (!resp) return;
   const data = resp.data.data ?? (resp.data as unknown as GatewayPaymentData);
 
@@ -149,9 +215,7 @@ export async function startOrderPayment(
   const holdSeconds = opts.holdSeconds ?? 0;
   if (holdSeconds > 0) {
     pendingGateway = { orderId, data };
-    router.replace(
-      `/payment/hold?orderId=${encodeURIComponent(orderId)}&seconds=${holdSeconds}`,
-    );
+    router.replace(`/payment/hold?orderId=${encodeURIComponent(orderId)}&seconds=${holdSeconds}`);
     return;
   }
 

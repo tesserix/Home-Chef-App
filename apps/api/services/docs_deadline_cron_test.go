@@ -153,6 +153,28 @@ func TestDocsDeadline_CompleteDocsAreLeftAlone(t *testing.T) {
 	require.Equal(t, string(models.ApprovalPending), status, "docs-complete application stays in the admin queue")
 }
 
+func TestChefDocsComplete_IgnoresRejectedAndExpiredDocuments(t *testing.T) {
+	db := setupDocsDeadlineDB(t)
+	chefID := seedDeadlineChef(t, db, time.Hour, indiaDocs)
+	require.True(t, ChefDocsComplete(db, chefID))
+
+	require.NoError(t, db.Exec(`UPDATE chef_documents SET status = 'rejected' WHERE chef_id = ? AND type = ?`,
+		chefID.String(), string(models.DocFSSAILicense)).Error)
+	require.False(t, ChefDocsComplete(db, chefID), "a rejected licence must be re-uploaded")
+
+	require.NoError(t, db.Exec(`UPDATE chef_documents SET status = 'verified', expiry_date = ? WHERE chef_id = ? AND type = ?`,
+		time.Now().AddDate(0, 0, -2), chefID.String(), string(models.DocFSSAILicense)).Error)
+	require.False(t, ChefDocsComplete(db, chefID), "an expired licence does not count")
+}
+
+func TestChefDocsComplete_UnsupportedCountryFailsClosed(t *testing.T) {
+	db := setupDocsDeadlineDB(t)
+	chefID := seedDeadlineChef(t, db, time.Hour, append(indiaDocs, string(models.DocFoodSafetyCert)))
+	require.NoError(t, db.Exec(`UPDATE chef_profiles SET payout_country = 'US' WHERE id = ?`, chefID.String()).Error)
+	require.False(t, ChefDocsComplete(db, chefID))
+	require.False(t, ChefDocsComplete(db, uuid.New()), "a missing kitchen is never complete")
+}
+
 func TestChefDocsComplete_FollowsKitchenCountry(t *testing.T) {
 	db := setupDocsDeadlineDB(t)
 	au := seedDeadlineChef(t, db, time.Hour, []string{

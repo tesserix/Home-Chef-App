@@ -195,16 +195,20 @@ func payoutGraceUntilRaw(db *gorm.DB) string {
 	return setting.Value
 }
 
-// ChefHasPayoutMethod reports whether a chef has saved a payout destination.
-//
-// The selector lives in chef_profiles.payout_method; the sensitive fields live
-// in Secret Manager (SavePayoutDetails blanks the DB columns deliberately), so
-// the selector is the only queryable signal and is what the gate reads.
+// ChefHasPayoutMethod requires the destination supported by the kitchen market.
+// Stripe destinations must be able to accept charges and pay out funds.
 func ChefHasPayoutMethod(chef *models.ChefProfile) bool {
 	if chef == nil {
 		return false
 	}
-	return strings.TrimSpace(chef.PayoutMethod) != ""
+	switch strings.ToUpper(strings.TrimSpace(chef.PayoutCountry)) {
+	case "AU", "NZ":
+		return strings.TrimSpace(chef.StripeAccountID) != "" && chef.StripeChargesEnabled && chef.StripePayoutsEnabled
+	case "", "IN":
+		return strings.TrimSpace(chef.PayoutMethod) != ""
+	default:
+		return false
+	}
 }
 
 // chefPayoutVerified reports whether the chef's method passed verification.
@@ -238,7 +242,13 @@ func PayoutGateOpenFilter(db *gorm.DB, now time.Time) (predicate string, enforce
 	}
 	// Only method_on_file is reachable here: resolveGateLevel downgrades
 	// `verified` until #740 lands, and will extend this predicate when it does.
-	return "COALESCE(payout_method, '') <> ''", true
+	return `(
+  (COALESCE(NULLIF(UPPER(TRIM(payout_country)), ''), 'IN') = 'IN'
+   AND COALESCE(TRIM(payout_method), '') <> '')
+  OR (UPPER(TRIM(payout_country)) IN ('AU', 'NZ')
+   AND COALESCE(TRIM(stripe_account_id), '') <> ''
+   AND stripe_charges_enabled = TRUE AND stripe_payouts_enabled = TRUE)
+ )`, true
 }
 
 // ErrPayoutSetupRequired is returned when the gate refuses a transition into

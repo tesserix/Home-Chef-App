@@ -256,7 +256,7 @@ export function OrderCard({ order }: OrderCardProps) {
                 {formatOrderDateTime(order.createdAt)}
               </Text>
               <Text style={[styles.total, weight === 'quiet' && styles.totalQuiet]}>
-                {formatMoney(order.totalAmount)}
+                {formatMoney(order.totalAmount, order.currency)}
               </Text>
             </View>
 

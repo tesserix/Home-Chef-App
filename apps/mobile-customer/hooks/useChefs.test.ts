@@ -7,6 +7,9 @@ jest.mock('../lib/api', () => ({ api: { get: jest.fn() } }));
 import { mapChef, mapMenuItem } from './useChefs';
 
 describe('mapChef', () => {
+  it.each(['AUD', 'NZD'])('preserves kitchen currency %s', (currency) => {
+    expect(mapChef({ id: 'market-chef', currency })).toMatchObject({ currency });
+  });
   it('translates the API shape to the customer UI shape', () => {
     const chef = mapChef({
       id: 'c1',

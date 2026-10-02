@@ -26,6 +26,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, ChevronDown, Pencil, X } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorMenu, type MenuItem } from '../../hooks/useVendorMenu';
+import { useKitchenMarket } from '../../hooks/useKitchenMarket';
+import { currencySymbol } from '../../lib/format';
 
 export interface DishPrefill {
   menuItemId: string;
@@ -57,8 +59,11 @@ function optionsForVariant(items: MenuItem[], variant: 'veg' | 'nonveg'): MenuIt
   );
 }
 
-function summarise(o: { price: number; portionSize?: string; serves?: number }): string {
-  const bits = [`₹${o.price}`];
+function summarise(
+  o: { price: number; portionSize?: string; serves?: number },
+  symbol: string,
+): string {
+  const bits = [`${symbol}${o.price}`];
   if (o.portionSize) bits.push(o.portionSize);
   if ((o.serves ?? 1) > 1) bits.push(`serves ${o.serves}`);
   return bits.join(' · ');
@@ -73,6 +78,7 @@ export function DishPicker({
   placeholder = 'Choose a dish',
 }: DishPickerProps) {
   const { data } = useVendorMenu();
+  const symbol = currencySymbol(useKitchenMarket()?.currency);
   const options = useMemo(
     () => optionsForVariant(data?.items ?? [], variant),
     [data, variant],
@@ -117,7 +123,7 @@ export function DishPicker({
                 {name}
               </Text>
               <Text style={styles.triggerMeta} numberOfLines={1}>
-                {picked ? summarise(picked) : 'Custom dish'}
+                {picked ? summarise(picked, symbol) : 'Custom dish'}
               </Text>
             </>
           ) : (
@@ -174,7 +180,7 @@ export function DishPicker({
                         {o.name}
                       </Text>
                       <Text style={styles.optionMeta} numberOfLines={1}>
-                        {summarise(o)}
+                        {summarise(o, symbol)}
                         {/* Still pickable when off-menu: a plan is a schedule,
                             and the chef may re-enable it before serving day. */}
                         {o.isAvailable === false ? ' · currently off menu' : ''}
@@ -212,14 +218,19 @@ export function DishPicker({
  * reasons about it: total, portion, how many it feeds, and the per-person figure
  * derived rather than typed, so the two can never disagree.
  */
-export function cellSummary(price: number, portionSize: string, serves: number): string {
-  const bits = [`₹${Math.round(price)}`];
+export function cellSummary(
+  price: number,
+  portionSize: string,
+  serves: number,
+  symbol = '₹',
+): string {
+  const bits = [`${symbol}${Math.round(price)}`];
   if (portionSize.trim()) bits.push(portionSize.trim());
   bits.push(serves > 1 ? `feeds ${serves}` : 'single portion');
   let out = bits.join(' · ');
   // Only worth showing when it differs from the total — "₹140 per person" under
   // "₹140" is noise.
-  if (serves > 1 && price > 0) out += `  →  ₹${Math.round(price / serves)} per person`;
+  if (serves > 1 && price > 0) out += `  →  ${symbol}${Math.round(price / serves)} per person`;
   return out;
 }
 
@@ -230,8 +241,9 @@ interface PriceSummaryProps {
 }
 
 export function PriceSummary({ price, portionSize, serves }: PriceSummaryProps) {
+  const symbol = currencySymbol(useKitchenMarket()?.currency);
   if (!price) return null;
-  return <Text style={styles.summary}>{cellSummary(price, portionSize, serves)}</Text>;
+  return <Text style={styles.summary}>{cellSummary(price, portionSize, serves, symbol)}</Text>;
 }
 
 interface PortionFieldsProps {

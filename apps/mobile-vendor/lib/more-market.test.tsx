@@ -1,0 +1,22 @@
+import { jest, it, expect, afterEach } from '@jest/globals';
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+jest.mock('react-native', () => ({ Platform: { OS: 'ios' }, Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', View: 'View', StyleSheet: { create: (x: unknown) => x } }));
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }));
+jest.mock('lucide-react-native', () => new Proxy({}, { get: (_, name) => String(name) }));
+jest.mock('@homechef/mobile-shared/ui', () => ({ useAlert: () => ({ showAlert: jest.fn() }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('../components/navigation/Dock', () => ({ useDockClearance: () => 80 }));
+jest.mock('@tanstack/react-query', () => ({ useQuery: jest.fn() }));
+jest.mock('./api', () => ({ api: { get: jest.fn() } }));
+import { useQuery } from '@tanstack/react-query';
+import MoreScreen from '../app/(tabs)/more';
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+let screen: ReturnType<typeof create>;
+afterEach(async () => { if (screen) await act(async () => screen.unmount()); });
+it.each(['AU', 'NZ', undefined, 'IN'])('offers Indian registration only for the IN payout country (%s)', async (payoutCountry) => {
+  jest.mocked(useQuery).mockReturnValue({ data: payoutCountry ? { country: payoutCountry } : undefined } as never);
+  await act(async () => { screen = create(<MoreScreen />); });
+  expect(screen.root.findAllByProps({ accessibilityLabel: 'more.fssai' })).toHaveLength(payoutCountry === 'IN' ? 1 : 0);
+  expect(screen.root.findAllByProps({ accessibilityLabel: 'more.payout' })).toHaveLength(1);
+});

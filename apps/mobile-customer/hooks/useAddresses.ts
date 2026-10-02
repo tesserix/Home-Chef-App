@@ -24,6 +24,7 @@ interface ApiAddress {
   city: string;
   state: string;
   postalCode: string;
+  country?: string;
   latitude?: number;
   longitude?: number;
   isDefault?: boolean;
@@ -38,6 +39,7 @@ function mapAddress(a: ApiAddress): Address {
     city: a.city,
     state: a.state,
     pincode: a.postalCode,
+    country: a.country ?? 'IN',
     latitude: a.latitude,
     longitude: a.longitude,
     isDefault: a.isDefault,
@@ -76,6 +78,7 @@ export function useCreateAddress() {
           city: payload.city,
           state: payload.state,
           postalCode: payload.pincode,
+          country: payload.country ?? 'IN',
           latitude: payload.latitude ?? 0,
           longitude: payload.longitude ?? 0,
           isDefault: payload.isDefault ?? false,
@@ -108,6 +111,7 @@ export function useSetDefaultAddress() {
           city: address.city,
           state: address.state,
           postalCode: address.pincode,
+          country: address.country ?? 'IN',
           latitude: address.latitude ?? 0,
           longitude: address.longitude ?? 0,
           isDefault: true,
