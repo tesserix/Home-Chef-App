@@ -130,7 +130,7 @@ func (e *twoDeviceEnv) codeFor(t *testing.T, install string) string {
 	t.Helper()
 	suffix := ":customer:" + install
 	for _, k := range e.redis.Keys() {
-		if strings.HasPrefix(k, "otp:mfa_login:code:") && strings.HasSuffix(k, suffix) {
+		if strings.HasPrefix(k, services.RedisKey("otp:mfa_login:code:")) && strings.HasSuffix(k, suffix) {
 			v, err := e.redis.Get(k)
 			require.NoError(t, err)
 			return v

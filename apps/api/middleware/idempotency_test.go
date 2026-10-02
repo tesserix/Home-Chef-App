@@ -11,6 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/homechef/api/services"
 )
 
 // --- pure helpers ---
@@ -254,7 +256,7 @@ func TestIdempotency_InFlightCollision_409(t *testing.T) {
 	// another pod/request mid-flight on the same key (anon user, body "{}").
 	body := []byte(`{}`)
 	pendingKey := idempotencyCacheKey("", "kflight", "POST", "/api/v1/orders", body) + ":pending"
-	mr.Set(pendingKey, "1")
+	mr.Set(services.RedisKey(pendingKey), "1")
 
 	w := postIdem(r, `{}`, "kflight")
 	require.Equal(t, http.StatusConflict, w.Code)
