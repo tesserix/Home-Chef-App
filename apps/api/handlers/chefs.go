@@ -842,6 +842,8 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		"selfDeliveryPerKm":         chef.SelfDeliveryPerKm,
 		"selfDeliveryMaxFee":        chef.SelfDeliveryMaxFee,
 		"selfDeliveryMaxDistanceKm": chef.SelfDeliveryMaxDistanceKm,
+		"country":                   resp.Country,
+		"currency":                  resp.Currency,
 	}
 
 	c.JSON(http.StatusOK, result)

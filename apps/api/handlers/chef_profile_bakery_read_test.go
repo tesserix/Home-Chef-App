@@ -50,6 +50,18 @@ func TestGetChefProfile_MealsOnlyKitchenSellsNoBakery(t *testing.T) {
 	require.Equal(t, false, getChefProfile(t, userID)["sellsBakery"])
 }
 
+// The vendor app picks India-only UI (FSSAI filing, ₹ upsells) off this field.
+func TestGetChefProfile_ReturnsTheKitchenMarket(t *testing.T) {
+	db := setupChefGuardDB(t)
+	userID, chefID := seedLiveKitchen(t, db)
+	require.NoError(t, db.Exec(`UPDATE chef_profiles SET payout_country = 'AU' WHERE id = ?`, chefID.String()).Error)
+
+	body := getChefProfile(t, userID)
+
+	require.Equal(t, "AU", body["country"])
+	require.Equal(t, "AUD", body["currency"])
+}
+
 func TestGetChefProfile_BakeryVerticalOffersBakeryWithoutTheOptIn(t *testing.T) {
 	db := setupChefGuardDB(t)
 	userID, chefID := seedLiveKitchen(t, db)
