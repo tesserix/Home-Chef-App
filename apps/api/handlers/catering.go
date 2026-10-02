@@ -370,6 +370,12 @@ func (h *CateringHandler) GetAvailableRequests(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
+	// Catering deposits are INR-only; other markets have nothing they could quote on.
+	if !services.IsRupeeMarket(chef.PayoutCountry) {
+		c.JSON(http.StatusOK, gin.H{"data": []models.CateringRequestResponse{}, "total": 0, "page": page, "limit": limit})
+		return
+	}
+
 	cuisine := c.Query("cuisine")
 	eventType := c.Query("eventType")
 	minGuests := c.Query("minGuests")
@@ -440,6 +446,11 @@ func (h *CateringHandler) SubmitQuote(c *gin.Context) {
 	var chef models.ChefProfile
 	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+
+	if !services.IsRupeeMarket(chef.PayoutCountry) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Catering isn't available in this country yet", "code": "market_not_supported"})
 		return
 	}
 
