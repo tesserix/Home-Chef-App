@@ -167,6 +167,8 @@ export default function DashboardScreen() {
     staleTime: 60_000,
   });
   const payoutMissing = payoutQ.data?.data ? !payoutQ.data.data.methodOnFile : false;
+  const payoutBannerPrefix =
+    market?.payoutRail === 'stripe' ? 'onboarding.payoutBannerStripe' : 'onboarding.payoutBanner';
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const dockClearance = useDockClearance();
@@ -501,8 +503,8 @@ export default function DashboardScreen() {
             accessibilityRole="button"
           >
             <Text style={styles.reviewBannerTitle}>{t('onboarding.payoutBannerTitle')}</Text>
-            <Text style={styles.reviewBannerBody}>{t('onboarding.payoutBannerBody')}</Text>
-            <Text style={styles.reviewBannerCta}>{t('onboarding.payoutBannerCta')} →</Text>
+            <Text style={styles.reviewBannerBody}>{t(`${payoutBannerPrefix}Body`)}</Text>
+            <Text style={styles.reviewBannerCta}>{t(`${payoutBannerPrefix}Cta`)} →</Text>
           </Pressable>
         ) : null}
 
@@ -1229,7 +1231,7 @@ export default function DashboardScreen() {
                     ? t('dashboard.quietLastOrder', {
                         ago: formatMinutesAgo(lastOrderIso),
                       })
-                    : t('dashboard.quietOpen')
+                    : t(underReview ? 'dashboard.quietOpenUnderReview' : 'dashboard.quietOpen')
                   : t('dashboard.quietClosed')}
               </Text>
             </View>
