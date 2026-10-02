@@ -35,12 +35,12 @@ import {
   type CateringQuote,
   type CateringRequest,
 } from '../hooks/useCateringVendor';
+import { useKitchenMoney } from '../hooks/useKitchenMarket';
+import { currencySymbol } from '../lib/format';
+import { useKitchenMarket } from '../hooks/useKitchenMarket';
 
 type TabKey = 'open' | 'quotes' | 'bookings';
 
-function money(n: number): string {
-  return `₹${Math.round(n).toLocaleString('en-IN')}`;
-}
 function fmtDate(d?: string): string {
   if (!d) return '';
   return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -93,6 +93,7 @@ function Tags({ items }: { items?: string[] }) {
 // ─── Open request card ──────────────────────────────────────────────────────
 
 function RequestCard({ request, onQuote }: { request: CateringRequest; onQuote: () => void }) {
+  const money = useKitchenMoney();
   return (
     <View style={styles.card}>
       <View style={styles.rowBetween}>
@@ -120,6 +121,7 @@ function RequestCard({ request, onQuote }: { request: CateringRequest; onQuote: 
 // ─── My quote card ──────────────────────────────────────────────────────────
 
 function QuoteCard({ quote }: { quote: CateringQuote }) {
+  const money = useKitchenMoney();
   return (
     <View style={styles.card}>
       <View style={styles.rowBetween}>
@@ -140,6 +142,7 @@ function QuoteCard({ quote }: { quote: CateringQuote }) {
 // ─── Booking card ───────────────────────────────────────────────────────────
 
 function BookingCard({ booking, onComplete, busy }: { booking: CateringBooking; onComplete: () => void; busy: boolean }) {
+  const money = useKitchenMoney();
   const { request, quote } = booking;
   const done = request.status === 'completed';
   return (
@@ -183,6 +186,7 @@ function QuoteModal({
   onClose: () => void;
   onSubmitted: () => void;
 }) {
+  const symbol = currencySymbol(useKitchenMarket()?.currency);
   const { showAlert } = useAlert();
   const submit = useSubmitCateringQuote();
   const [proposedMenu, setProposedMenu] = useState('');
@@ -291,7 +295,7 @@ function QuoteModal({
 
           <View style={styles.twoCol}>
             <View style={styles.col}>
-              <Text style={styles.label}>Price / person (₹)</Text>
+              <Text style={styles.label}>Price / person ({symbol})</Text>
               <TextInput
                 style={styles.input}
                 value={pricePerPerson}
@@ -302,7 +306,7 @@ function QuoteModal({
               />
             </View>
             <View style={styles.col}>
-              <Text style={styles.label}>Total (₹)</Text>
+              <Text style={styles.label}>Total ({symbol})</Text>
               <TextInput
                 style={styles.input}
                 value={totalPrice}
@@ -314,7 +318,7 @@ function QuoteModal({
             </View>
           </View>
 
-          <Text style={styles.label}>Deposit to confirm (₹) — defaults to 25%</Text>
+          <Text style={styles.label}>Deposit to confirm ({symbol}) — defaults to 25%</Text>
           <TextInput
             style={styles.input}
             value={deposit}

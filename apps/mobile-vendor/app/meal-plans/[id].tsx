@@ -27,6 +27,7 @@ import {
   planStatusLabel,
   type BreakdownLine,
 } from '../../lib/meal-plan-breakdown';
+import { useKitchenMoney } from '../../hooks/useKitchenMarket';
 
 function dayLabel(d: MealPlanDay): string {
   return new Date(d.date).toLocaleDateString(undefined, {
@@ -36,10 +37,6 @@ function dayLabel(d: MealPlanDay): string {
   });
 }
 
-function money(n: number): string {
-  const sign = n < 0 ? '−' : '';
-  return `${sign}₹${Math.abs(n).toFixed(2)}`;
-}
 
 // Chef plan screen (#195/#1029). While the plan awaits the chef it is the respond
 // flow: accept every day, or cherry-pick the days they can cook (a trim routes back
@@ -47,6 +44,7 @@ function money(n: number): string {
 // record of the booking, with the same tax/commission/payout breakdown an à la carte
 // order shows — the plan used to be unreachable the moment it was accepted.
 export default function MealPlanDetailScreen() {
+  const money = useKitchenMoney();
   const { showAlert } = useAlert();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useChefMealPlan(id);
@@ -146,8 +144,8 @@ export default function MealPlanDetailScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.planNo}>{plan.mealPlanNumber}</Text>
         <Text style={styles.summary}>
-          {days.length} day{days.length === 1 ? '' : 's'} requested · ₹
-          {plan.total.toFixed(0)}
+          {days.length} day{days.length === 1 ? '' : 's'} requested ·{' '}
+          {money(Math.round(plan.total))}
         </Text>
         <Text style={styles.hint}>
           Toggle off any day you can&apos;t cook. Leave all on to accept the
@@ -199,7 +197,7 @@ export default function MealPlanDetailScreen() {
                   </View>
                 </View>
                 <Text style={[styles.price, !on && styles.dimmed]}>
-                  ₹{(d.price ?? 0).toFixed(0)}
+                  {money(Math.round(d.price ?? 0))}
                 </Text>
                 <Switch
                   value={on}
@@ -219,7 +217,7 @@ export default function MealPlanDetailScreen() {
           <Text style={styles.footerLabel}>
             {acceptedDays.length} of {days.length} days
           </Text>
-          <Text style={styles.footerTotal}>₹{acceptedTotal.toFixed(0)}</Text>
+          <Text style={styles.footerTotal}>{money(Math.round(acceptedTotal))}</Text>
         </View>
         <Button
           label={acceptAll ? 'Accept all days' : `Confirm ${acceptedDays.length} days`}
@@ -243,6 +241,7 @@ function PlanRecord({
   plan: NonNullable<ReturnType<typeof useChefMealPlan>['data']>['data'];
   earnings?: MealPlanChefEarnings;
 }) {
+  const money = useKitchenMoney();
   const days = plan.days ?? [];
   const cooking = days.filter((d) => d.status !== 'declined');
   return (
@@ -283,7 +282,7 @@ function PlanRecord({
                 </View>
               </View>
               <View style={styles.dayRight}>
-                <Text style={styles.price}>₹{(d.price ?? 0).toFixed(0)}</Text>
+                <Text style={styles.price}>{money(Math.round(d.price ?? 0))}</Text>
                 <Text style={styles.dayStatus}>{d.status}</Text>
               </View>
             </View>
@@ -328,6 +327,8 @@ function LineCard({
   total: number;
   emphasise?: boolean;
 }) {
+  const fmt = useKitchenMoney();
+  const money = (n: number) => `${n < 0 ? '−' : ''}${fmt(Math.abs(n))}`;
   return (
     <View style={styles.card}>
       {lines.map((l) => (

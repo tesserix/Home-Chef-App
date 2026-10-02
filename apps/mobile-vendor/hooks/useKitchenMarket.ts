@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { formatMoney } from '../lib/format';
 import { getMarket, type Market } from '../lib/market';
 
 function useKitchenMarketQuery() {
@@ -27,4 +28,10 @@ export function useKitchenMarketState(): {
 } {
   const { data, isError, refetch } = useKitchenMarketQuery();
   return { market: data ? getMarket(data.country) : undefined, isError, refetch: () => void refetch() };
+}
+
+// Formats an amount in the kitchen's own currency.
+export function useKitchenMoney(): (amount: number | null | undefined) => string {
+  const currency = useKitchenMarket()?.currency;
+  return (amount) => formatMoney(amount, currency);
 }

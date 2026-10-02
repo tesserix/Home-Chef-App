@@ -23,6 +23,7 @@ import {
   type PopularItem,
   type Trend,
 } from '../hooks/useChefAnalytics';
+import { useKitchenMoney } from '../hooks/useKitchenMarket';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -33,10 +34,6 @@ const PERIODS: { label: string; value: AnalyticsPeriod }[] = [
   { label: '30 Days', value: '30d' },
   { label: '90 Days', value: '90d' },
 ];
-
-function inr(n: number): string {
-  return `₹${Math.round(n).toLocaleString('en-IN')}`;
-}
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -126,7 +123,6 @@ function TrendBars({ trend }: { trend: Trend }) {
   );
 }
 
-
 // One line of the P/L card. Deliberately plain rows rather than stat tiles: a
 // P/L is read down a column, and the figures must line up to be compared.
 function PLRow({
@@ -213,6 +209,8 @@ const plStyles = StyleSheet.create({
 // ---------------------------------------------------------------------------
 
 export default function AnalyticsScreen() {
+  const money = useKitchenMoney();
+  const inr = (n: number) => money(Math.round(n));
   const [period, setPeriod] = useState<AnalyticsPeriod>('7d');
   const { data, isLoading, isError, isRefetching, refetch } =
     useChefAnalytics(period);

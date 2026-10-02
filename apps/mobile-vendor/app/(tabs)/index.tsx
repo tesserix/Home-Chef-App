@@ -50,6 +50,7 @@ import {
 } from '../../hooks/useExpiringDocuments';
 import { useFssaiRequest } from '../../hooks/useFssai';
 import { useKitchenMarket } from '../../hooks/useKitchenMarket';
+import { formatMoney } from '../../lib/format';
 import { fssaiDashboardNotice } from '../../lib/fssai';
 import { useDismissedNotice } from '../../hooks/useDismissedNotice';
 import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
@@ -179,6 +180,7 @@ export default function DashboardScreen() {
     isError,
     error,
   } = useVendorDashboard();
+  const totalEarnings = formatMoney(Math.round(dashboard?.totalEarnings ?? 0), market?.currency);
 
   // Notification bell — unread badge + live socket so a new order or meal-plan
   // request lights the hero bell instantly. Gated on auth: previously mounted
@@ -617,19 +619,19 @@ export default function DashboardScreen() {
               <Pressable
                 onPress={() => router.push('/earnings')}
                 accessibilityRole="button"
-                accessibilityLabel={`Total earnings: ₹${(dashboard?.totalEarnings ?? 0).toFixed(0)}. Tap to see payouts and transactions.`}
+                accessibilityLabel={`Total earnings: ${totalEarnings}. Tap to see payouts and transactions.`}
                 hitSlop={8}
                 style={styles.heroStatMain}
               >
                 {/* Scales rather than truncating: a lakh-plus earner would
-                    otherwise read "₹1,23,4…" now the row carries four stats. */}
+                    otherwise read "1,23,4…" now the row carries four stats. */}
                 <Text
                   style={styles.heroEarnings}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.7}
                 >
-                  ₹{Math.round(dashboard?.totalEarnings ?? 0).toLocaleString('en-IN')}
+                  {totalEarnings}
                 </Text>
                 <Text style={styles.heroStatLabel} numberOfLines={1}>
                   {t('dashboard.totalEarnings')}

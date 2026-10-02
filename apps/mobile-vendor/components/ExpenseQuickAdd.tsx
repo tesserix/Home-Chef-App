@@ -21,6 +21,8 @@ import {
   useUploadExpenseReceipt,
   type ExpenseCategory,
 } from '../hooks/useChefExpenses';
+import { useKitchenMarket } from '../hooks/useKitchenMarket';
+import { currencySymbol } from '../lib/format';
 
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 
@@ -49,6 +51,7 @@ interface ExpenseQuickAddProps {
 }
 
 export function ExpenseQuickAdd({ orderId, showDatePicker = true, onSaved }: ExpenseQuickAddProps) {
+  const symbol = currencySymbol(useKitchenMarket()?.currency);
   const { create } = useExpenseMutations();
   const uploadReceipt = useUploadExpenseReceipt();
 
@@ -109,7 +112,7 @@ export function ExpenseQuickAdd({ orderId, showDatePicker = true, onSaved }: Exp
   async function onSave(): Promise<void> {
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) {
-      Alert.alert('Enter a valid amount', 'The expense amount must be more than ₹0.');
+      Alert.alert('Enter a valid amount', `The expense amount must be more than ${symbol}0.`);
       return;
     }
     const expenseDate = resolvedDate();
@@ -164,7 +167,7 @@ export function ExpenseQuickAdd({ orderId, showDatePicker = true, onSaved }: Exp
 
       <TextInput
         style={styles.input}
-        placeholder="Amount (₹)"
+        placeholder={`Amount (${symbol})`}
         placeholderTextColor={theme.colors.ink.muted}
         keyboardType="decimal-pad"
         value={amount}

@@ -18,6 +18,8 @@ import {
 } from '@homechef/mobile-shared/bakery';
 import { BAKERY_DIET_OPTIONS, BAKERY_ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import type { BakeryOptionInput, BakerySpecInput } from '../../hooks/useVendorMenu';
+import { useKitchenMarket } from '../../hooks/useKitchenMarket';
+import { currencySymbol } from '../../lib/format';
 
 interface Props {
   spec: BakerySpecInput | null;
@@ -43,6 +45,7 @@ const num = (s: string) => parseFloat(s.replace(/[^0-9.]/g, '')) || 0;
 const int = (s: string) => parseInt(s.replace(/[^0-9]/g, ''), 10) || 0;
 
 export function BakerySpecEditor({ spec, setSpec }: Props) {
+  const symbol = currencySymbol(useKitchenMarket()?.currency);
   const on = spec !== null;
   const patch = (p: Partial<BakerySpecInput>): void => {
     if (spec) setSpec({ ...spec, ...p });
@@ -124,7 +127,7 @@ export function BakerySpecEditor({ spec, setSpec }: Props) {
             <View style={styles.gridRow}>
               <Field
                 label="Per kg"
-                prefix="₹"
+                prefix={symbol}
                 value={spec.pricePerKg ? String(spec.pricePerKg) : ''}
                 onChangeText={(t) => patch({ pricePerKg: num(t) })}
               />
@@ -158,7 +161,7 @@ export function BakerySpecEditor({ spec, setSpec }: Props) {
                 </View>
                 <Text style={styles.hint}>
                   {sizes.length > 0
-                    ? `Customers see ${sizes.map((s) => `${s} kg`).join(', ')} — from ₹${Math.round(
+                    ? `Customers see ${sizes.map((s) => `${s} kg`).join(', ')} — from ${symbol}${Math.round(
                         spec.pricePerKg * (sizes[0] ?? 0),
                       )}.`
                     : 'Set a smallest and largest size to show a size picker.'}
@@ -205,7 +208,7 @@ export function BakerySpecEditor({ spec, setSpec }: Props) {
                           onChangeText={(t) => patchOption(i, { name: t })}
                         />
                         <View style={[styles.priceWrap, styles.optionPrice]}>
-                          <Text style={styles.pricePrefix}>₹</Text>
+                          <Text style={styles.pricePrefix}>{symbol}</Text>
                           <TextInput
                             style={styles.priceInput}
                             placeholder="0"

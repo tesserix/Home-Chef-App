@@ -41,6 +41,8 @@ import {
 import { DietIcon } from './DietIcon';
 import { ModifierComboEditor } from './ModifierComboEditor';
 import { BakerySpecEditor } from './BakerySpecEditor';
+import { useKitchenMarket } from '../../hooks/useKitchenMarket';
+import { currencySymbol } from '../../lib/format';
 import type {
   MenuItemImage,
   Category,
@@ -427,6 +429,8 @@ export function MenuItemForm({
   onBack,
   onDraftChange,
 }: MenuItemFormProps) {
+  const currency = useKitchenMarket()?.currency;
+  const symbol = currencySymbol(currency);
   const { showAlert } = useAlert();
   const { show: showToast } = useToast();
   // validate() writes errors via setState; handleSave runs in the same tick and
@@ -617,7 +621,7 @@ export function MenuItemForm({
     if (description.trim().length < 20) next.description = 'Description must be at least 20 characters';
     const priceNum = Number(price);
     if (!price.trim() || isNaN(priceNum) || priceNum <= 0 || priceNum > 10_000) {
-      next.price = 'Price must be between ₹1 and ₹10,000';
+      next.price = `Price must be between ${symbol}1 and ${symbol}10,000`;
     }
     if (!categoryId) next.categoryId = 'Select a category';
     setErrors(next);
@@ -627,7 +631,7 @@ export function MenuItemForm({
 
   // ---- Handlers -------------------------------------------------------------
 
-  const priceGuidance = pricingHint(price, { isBakery });
+  const priceGuidance = pricingHint(price, { isBakery, currency });
 
   function handleSave() {
     if (!validate()) {
@@ -967,7 +971,7 @@ export function MenuItemForm({
               />
             </FormField>
 
-            {/* Price — inline ₹ prefix + tabular value. Matches body-size
+            {/* Price — inline currency prefix + tabular value. Matches body-size
                 inputs above for consistent rhythm; the dashboard / detail
                 hero treatments are where the Geist-Bold display weight
                 lives, not here on an inline form field. */}
@@ -975,7 +979,7 @@ export function MenuItemForm({
               <View
                 style={[styles.priceRow, fieldBorderStyle('price', !!errors.price)]}
               >
-                <Text style={styles.pricePrefix}>₹</Text>
+                <Text style={styles.pricePrefix}>{symbol}</Text>
                 <TextInput
                   ref={priceInputRef}
                   value={price}
@@ -1407,7 +1411,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
   },
 
-  // Price input — ₹ prefix + value share one bone-filled field so it
+  // Price input — currency prefix + value share one bone-filled field so it
   // reads as a single cohesive input instead of a floating numeral.
   priceRow: {
     flexDirection: 'row',

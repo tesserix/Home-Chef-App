@@ -8,12 +8,10 @@ import {
   useChefExpenses,
   useExpenseMutations,
 } from '../hooks/useChefExpenses';
-
-function fmtInr(value: number): string {
-  return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
+import { useKitchenMoney } from '../hooks/useKitchenMarket';
 
 export function OrderExpensesCard({ orderId }: { orderId: string }) {
+  const money = useKitchenMoney();
   const { data } = useChefExpenses({ orderId });
   const { remove } = useExpenseMutations();
   const [adding, setAdding] = useState(false);
@@ -43,7 +41,7 @@ export function OrderExpensesCard({ orderId }: { orderId: string }) {
           <Text style={styles.title}>Order expenses</Text>
           {expenses.length > 0 ? (
             <Text style={styles.totalText}>
-              {expenses.length} · {fmtInr(total)}
+              {expenses.length} · {money(total)}
             </Text>
           ) : null}
         </View>
@@ -84,9 +82,9 @@ export function OrderExpensesCard({ orderId }: { orderId: string }) {
               {e.note ? ` · ${e.note}` : ''}
             </Text>
           </View>
-          <Text style={styles.rowAmount}>{fmtInr(e.amount)}</Text>
+          <Text style={styles.rowAmount}>{money(e.amount)}</Text>
           <Pressable
-            onPress={() => onDelete(e.id, `${expenseCategoryLabel(e.category)} ${fmtInr(e.amount)}`)}
+            onPress={() => onDelete(e.id, `${expenseCategoryLabel(e.category)} ${money(e.amount)}`)}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={`Delete ${expenseCategoryLabel(e.category)} expense`}

@@ -66,6 +66,7 @@ describe('validateTierRows', () => {
 
   it('rejects a band above the platform ceiling for its distance', () => {
     expect(validateTierRows([{ km: '5', fee: '91' }], cap)).toMatch(/₹90/);
+    expect(validateTierRows([{ km: '5', fee: '91' }], cap, 'AUD')).toMatch(/ \$90\.$/);
   });
 
   it('rejects a distance that does not increase', () => {

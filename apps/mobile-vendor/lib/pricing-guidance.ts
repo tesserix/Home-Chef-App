@@ -33,6 +33,8 @@ export interface PricingHint {
 export interface PricingHintOptions {
   /** True for a cake or bake, which is priced per whole item. */
   isBakery?: boolean;
+  /** The parity lines are rupee figures, so only INR kitchens get a hint. */
+  currency?: string | null;
 }
 
 /**
@@ -44,8 +46,9 @@ export interface PricingHintOptions {
  */
 export function pricingHint(
   price: string,
-  { isBakery = false }: PricingHintOptions = {},
+  { isBakery = false, currency }: PricingHintOptions = {},
 ): PricingHint | null {
+  if ((currency ?? 'INR').toUpperCase() !== 'INR') return null;
   const value = Number(String(price).trim());
   if (!Number.isFinite(value) || value <= 0) return null;
 

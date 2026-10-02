@@ -21,10 +21,7 @@ import { AlertCircle, ChevronLeft, Gift, Share2, Users } from 'lucide-react-nati
 import * as Haptics from 'expo-haptics';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useChefRewards, useConvertRewards } from '../hooks/useChefRewards';
-
-function fmtInr(value: number): string {
-  return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
-}
+import { useKitchenMoney } from '../hooks/useKitchenMarket';
 
 function fmtPts(value: number): string {
   return value.toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -33,6 +30,7 @@ function fmtPts(value: number): string {
 const INK_RIPPLE = `${theme.colors.ink.DEFAULT}14`;
 
 export default function RewardsScreen() {
+  const money = useKitchenMoney();
   const { data, isLoading, isError, refetch, isRefetching } = useChefRewards();
   const convert = useConvertRewards();
 
@@ -43,7 +41,7 @@ export default function RewardsScreen() {
       await Share.share({
         message:
           `Cook with me on Fe3dr! Join as a home chef with my referral code ${data.referral.code} — ` +
-          `you earn ${fmtInr(data.referral.refereeAmount)} after your first ${data.referral.milestoneOrders} orders. ` +
+          `you earn ${money(data.referral.refereeAmount)} after your first ${data.referral.milestoneOrders} orders. ` +
           data.referral.link,
       });
     } catch {
@@ -56,7 +54,7 @@ export default function RewardsScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
       'Convert points to cashback?',
-      `${fmtPts(data.loyalty.points)} points become ${fmtInr(data.loyalty.convertValue)}, added to your next weekly payout.`,
+      `${fmtPts(data.loyalty.points)} points become ${money(data.loyalty.convertValue)}, added to your next weekly payout.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -122,7 +120,7 @@ export default function RewardsScreen() {
           {data.pendingPayoutCredit > 0 ? (
             <View style={styles.pendingBanner}>
               <Text style={styles.pendingBannerText}>
-                {fmtInr(data.pendingPayoutCredit)} in rewards will be added to your next payout
+                {money(data.pendingPayoutCredit)} in rewards will be added to your next payout
               </Text>
             </View>
           ) : null}
@@ -135,7 +133,7 @@ export default function RewardsScreen() {
             </View>
             <Text style={styles.points}>{fmtPts(data.loyalty.points)}</Text>
             <Text style={styles.pointsSub}>
-              worth {fmtInr(data.loyalty.convertValue)} · lifetime {fmtPts(data.loyalty.lifetimePoints)} pts
+              worth {money(data.loyalty.convertValue)} · lifetime {fmtPts(data.loyalty.lifetimePoints)} pts
             </Text>
             <View style={styles.progressTrack}>
               <View
@@ -148,7 +146,7 @@ export default function RewardsScreen() {
               />
             </View>
             <Text style={styles.hint}>
-              Earn {data.loyalty.earnRate} pt per ₹1 of delivered orders. Convert at{' '}
+              Earn {data.loyalty.earnRate} pt per {money(1)} of delivered orders. Convert at{' '}
               {fmtPts(data.loyalty.minConvertPoints)} points into cashback on your weekly payout.
             </Text>
             <Pressable
@@ -168,7 +166,7 @@ export default function RewardsScreen() {
                 >
                   <Text style={styles.primaryBtnText}>
                     {data.loyalty.canConvert
-                      ? `Convert to ${fmtInr(data.loyalty.convertValue)} cashback`
+                      ? `Convert to ${money(data.loyalty.convertValue)} cashback`
                       : `${fmtPts(Math.max(0, data.loyalty.minConvertPoints - data.loyalty.points))} points to go`}
                   </Text>
                 </View>
@@ -183,8 +181,8 @@ export default function RewardsScreen() {
               <Text style={styles.cardTitle}>Refer a chef</Text>
             </View>
             <Text style={styles.body}>
-              You earn {fmtInr(data.referral.referrerAmount)}, they earn{' '}
-              {fmtInr(data.referral.refereeAmount)} — paid once their kitchen completes{' '}
+              You earn {money(data.referral.referrerAmount)}, they earn{' '}
+              {money(data.referral.refereeAmount)} — paid once their kitchen completes{' '}
               {data.referral.milestoneOrders} orders.
             </Text>
             <View style={styles.codeBox}>
@@ -207,7 +205,7 @@ export default function RewardsScreen() {
             </Pressable>
             {data.referral.totalEarned > 0 ? (
               <Text style={styles.hint}>
-                Earned so far: {fmtInr(data.referral.totalEarned)}
+                Earned so far: {money(data.referral.totalEarned)}
               </Text>
             ) : null}
           </View>
@@ -238,7 +236,7 @@ export default function RewardsScreen() {
                     ]}
                   >
                     {r.status === 'rewarded'
-                      ? `+${fmtInr(r.reward)}`
+                      ? `+${money(r.reward)}`
                       : r.status === 'pending'
                         ? 'In progress'
                         : 'Rejected'}

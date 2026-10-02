@@ -3,6 +3,8 @@
 // enforces (models/delivery_fee_tier.go) is mirrored here to catch a bad band on
 // the keypad rather than on save.
 
+import { currencySymbol } from './format';
+
 export interface DeliveryTier {
   upToKm: number;
   fee: number;
@@ -62,7 +64,11 @@ function isBlank(row: TierRow): boolean {
  * is publishable. An entirely blank ladder is valid: it just means the chef
  * prices delivery the old way.
  */
-export function validateTierRows(rows: TierRow[], cap: DeliveryFeeCap): string | null {
+export function validateTierRows(
+  rows: TierRow[],
+  cap: DeliveryFeeCap,
+  currency?: string | null,
+): string | null {
   const filled = rows.filter((r) => !isBlank(r));
   if (filled.length === 0) return null;
   if (filled.length > cap.maxBands) {
@@ -84,7 +90,7 @@ export function validateTierRows(rows: TierRow[], cap: DeliveryFeeCap): string |
     if (fee < prevFee) return "A farther band can't cost less than a nearer one.";
     const ceiling = bandCeiling(cap, km);
     if (fee > ceiling) {
-      return `The most you can charge for ${formatKm(km)} km is ₹${formatMoneyish(ceiling)}.`;
+      return `The most you can charge for ${formatKm(km)} km is ${currencySymbol(currency)}${formatMoneyish(ceiling)}.`;
     }
     prevKm = km;
     prevFee = fee;

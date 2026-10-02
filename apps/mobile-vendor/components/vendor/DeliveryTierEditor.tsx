@@ -8,6 +8,7 @@ import {
   bandCeiling,
   validateTierRows,
 } from '../../lib/deliveryTiers';
+import { currencySymbol } from '../../lib/format';
 
 // The chef publishes one ladder — "up to 5 km ₹75, up to 10 km ₹150" — and it is
 // the fee the customer pays. Shared by the profile screen and onboarding so a
@@ -17,10 +18,12 @@ interface DeliveryTierEditorProps {
   rows: TierRow[];
   cap: DeliveryFeeCap;
   onChange: (rows: TierRow[]) => void;
+  currency?: string;
 }
 
-export function DeliveryTierEditor({ rows, cap, onChange }: DeliveryTierEditorProps) {
-  const error = validateTierRows(rows, cap);
+export function DeliveryTierEditor({ rows, cap, onChange, currency }: DeliveryTierEditorProps) {
+  const error = validateTierRows(rows, cap, currency);
+  const symbol = currencySymbol(currency);
   const canAdd = rows.length < cap.maxBands;
 
   function update(index: number, patch: Partial<TierRow>) {
@@ -49,7 +52,7 @@ export function DeliveryTierEditor({ rows, cap, onChange }: DeliveryTierEditorPr
                 <Text style={styles.suffix}>km</Text>
               </View>
               <View style={styles.field}>
-                <Text style={styles.prefix}>₹</Text>
+                <Text style={styles.prefix}>{symbol}</Text>
                 <TextInput
                   value={row.fee}
                   onChangeText={(fee) => update(i, { fee })}
@@ -57,7 +60,7 @@ export function DeliveryTierEditor({ rows, cap, onChange }: DeliveryTierEditorPr
                   placeholder={ceiling != null ? String(Math.round(ceiling)) : '75'}
                   placeholderTextColor={theme.colors.ink.muted}
                   style={styles.input}
-                  accessibilityLabel={`Band ${i + 1} fee in rupees`}
+                  accessibilityLabel={`Band ${i + 1} fee in ${symbol}`}
                 />
               </View>
               <Pressable
@@ -97,7 +100,8 @@ export function DeliveryTierEditor({ rows, cap, onChange }: DeliveryTierEditorPr
       ) : (
         <Text style={styles.hint}>
           Customers pay exactly this at checkout — you're never asked for more later.
-          The platform allows up to ₹{Math.round(bandCeiling(cap, 5))} for 5 km and ₹
+          The platform allows up to {symbol}
+          {Math.round(bandCeiling(cap, 5))} for 5 km and {symbol}
           {Math.round(bandCeiling(cap, 10))} for 10 km.
         </Text>
       )}

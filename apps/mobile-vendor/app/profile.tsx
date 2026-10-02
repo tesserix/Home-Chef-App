@@ -37,6 +37,8 @@ import {
 } from '../lib/deliveryTiers';
 import { focusedProfileSection } from '../lib/profileFocus';
 import { SelectField } from '../components/SelectField';
+import { useKitchenMarket } from '../hooks/useKitchenMarket';
+import { currencySymbol } from '../lib/format';
 
 // ---- Data types -----------------------------------------------------------
 // Matches the backend GET /chef/profile response.
@@ -322,6 +324,8 @@ function EditableField({
 export default function ProfileScreen() {
   const { showAlert } = useAlert();
   const { data, isLoading, isError, refetch, isRefetching } = useChefProfile();
+  const currency = useKitchenMarket()?.currency;
+  const symbol = currencySymbol(currency);
   const updateMutation = useUpdateProfile();
   const uploadProfileImageMutation = useUploadProfileImage();
   const uploadBannerImageMutation = useUploadBannerImage();
@@ -499,7 +503,7 @@ export default function ProfileScreen() {
       );
       return;
     }
-    const tierError = validateTierRows(tierRows, deliveryFeeCap);
+    const tierError = validateTierRows(tierRows, deliveryFeeCap, currency);
     if (tierError) {
       showAlert('Check your delivery pricing', tierError);
       return;
@@ -947,7 +951,7 @@ export default function ProfileScreen() {
               </View>
             </View>
             <EditableField
-              label="Minimum order (₹)"
+              label={`Minimum order (${symbol})`}
               value={minimumOrder}
               onChangeText={setMinimumOrder}
               keyboardType="decimal-pad"
@@ -1053,12 +1057,13 @@ export default function ProfileScreen() {
                 rows={tierRows}
                 cap={deliveryFeeCap}
                 onChange={setTierRows}
+                currency={currency}
               />
 
               <Text style={styles.sectionLabel}>SELF-DELIVERY PRICING</Text>
               <View style={styles.hairlineGroup}>
                 <EditableField
-                  label="Base fee (₹)"
+                  label={`Base fee (${symbol})`}
                   value={selfDeliveryBaseFee}
                   onChangeText={setSelfDeliveryBaseFee}
                   keyboardType="decimal-pad"
@@ -1072,14 +1077,14 @@ export default function ProfileScreen() {
                   placeholder="0"
                 />
                 <EditableField
-                  label="Per km beyond (₹)"
+                  label={`Per km beyond (${symbol})`}
                   value={selfDeliveryPerKm}
                   onChangeText={setSelfDeliveryPerKm}
                   keyboardType="decimal-pad"
                   placeholder="0"
                 />
                 <EditableField
-                  label="Max fee (₹)"
+                  label={`Max fee (${symbol})`}
                   value={selfDeliveryMaxFee}
                   onChangeText={setSelfDeliveryMaxFee}
                   keyboardType="decimal-pad"

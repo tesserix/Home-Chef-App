@@ -32,12 +32,9 @@ import {
   useExpenseMutations,
   useFYStatement,
 } from '../hooks/useChefExpenses';
+import { useKitchenMoney } from '../hooks/useKitchenMarket';
 
 const INK_RIPPLE = `${theme.colors.ink.DEFAULT}14`;
-
-function fmtInr(value: number): string {
-  return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
 
 function fmtShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-IN', {
@@ -48,6 +45,7 @@ function fmtShortDate(iso: string): string {
 }
 
 export default function ExpensesScreen() {
+  const money = useKitchenMoney();
   const fy = currentFyStartYear();
   const { data, isLoading, refetch, isRefetching } = useChefExpenses();
   const { data: stmt } = useFYStatement(fy);
@@ -121,16 +119,16 @@ export default function ExpensesScreen() {
               <View style={styles.statRow}>
                 <View style={styles.stat}>
                   <Text style={styles.statLabel}>Net earnings</Text>
-                  <Text style={styles.statValue}>{fmtInr(stmt.netEarnings)}</Text>
+                  <Text style={styles.statValue}>{money(stmt.netEarnings)}</Text>
                 </View>
                 <View style={styles.stat}>
                   <Text style={styles.statLabel}>Expenses</Text>
-                  <Text style={styles.statValue}>{fmtInr(stmt.totalExpenses)}</Text>
+                  <Text style={styles.statValue}>{money(stmt.totalExpenses)}</Text>
                 </View>
                 <View style={styles.stat}>
                   <Text style={styles.statLabel}>Net income</Text>
                   <Text style={[styles.statValue, { color: theme.colors.herb.DEFAULT }]}>
-                    {fmtInr(stmt.netIncome)}
+                    {money(stmt.netIncome)}
                   </Text>
                 </View>
               </View>
@@ -283,14 +281,14 @@ export default function ExpensesScreen() {
                     )}
                   </Pressable>
                 ) : null}
-                <Text style={styles.expenseAmount}>{fmtInr(e.amount)}</Text>
+                <Text style={styles.expenseAmount}>{money(e.amount)}</Text>
                 <Pressable
                   onPress={() =>
-                    onDelete(e.id, `${expenseCategoryLabel(e.category)} ${fmtInr(e.amount)}`)
+                    onDelete(e.id, `${expenseCategoryLabel(e.category)} ${money(e.amount)}`)
                   }
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel={`Delete ${expenseCategoryLabel(e.category)} expense of ${fmtInr(e.amount)}`}
+                  accessibilityLabel={`Delete ${expenseCategoryLabel(e.category)} expense of ${money(e.amount)}`}
                 >
                   {({ pressed }) => (
                     <View style={pressed ? { opacity: 0.6 } : null}>
@@ -326,6 +324,7 @@ function Line({
   negative?: boolean;
   highlight?: boolean;
 }) {
+  const money = useKitchenMoney();
   return (
     <View style={styles.lineRow}>
       <Text style={[styles.lineLabel, strong && styles.lineLabelStrong]} numberOfLines={2}>
@@ -339,7 +338,7 @@ function Line({
         ]}
       >
         {negative ? '−' : ''}
-        {fmtInr(amount)}
+        {money(amount)}
       </Text>
     </View>
   );
