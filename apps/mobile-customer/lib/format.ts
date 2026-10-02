@@ -5,6 +5,13 @@ const CURRENCIES: Record<string, { symbol: string; locale: string }> = {
   NZD: { symbol: '$', locale: 'en-NZ' },
 };
 
+const COUNTRY_CURRENCY: Record<string, string> = { IN: 'INR', AU: 'AUD', NZ: 'NZD' };
+
+/** The currency a market prices in, from an address or kitchen country code. */
+export function currencyForCountry(country?: string | null): string {
+  return COUNTRY_CURRENCY[(country ?? '').trim().toUpperCase()] ?? 'INR';
+}
+
 function currencyCode(currency: string | null | undefined): string {
   return (currency ?? '').trim().toUpperCase() || 'INR';
 }

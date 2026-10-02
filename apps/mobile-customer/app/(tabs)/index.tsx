@@ -84,6 +84,7 @@ import { useAuthStore } from '../../store/auth-store';
 import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
 import { useCustomerCoords, useActiveAddress } from '../../hooks/useCustomerCoords';
+import { currencyForCountry, formatMoney } from '../../lib/format';
 import { useWallet } from '../../hooks/useWallet';
 import { HAIRLINE } from '../../lib/hairline';
 
@@ -94,15 +95,6 @@ const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 // ink derived from the charcoal token (never a new literal colour), matching
 // the primitive Button's `withAlpha` convention.
 const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}14`;
-
-// Compact rupee label for the header wallet chip — whole rupees show without
-// decimals, paise show two places; tabular numerals keep it steady. The precise
-// balance + history live on the wallet screen this chip taps through to.
-function walletChipLabel(n: number): string {
-  return n % 1 === 0
-    ? `₹${n.toLocaleString('en-IN')}`
-    : `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 // The category rail. Each tile shows that cuisine's own photo (see
 // lib/cuisine-art); the glyph is the fallback for a photo that fails to load.
@@ -263,7 +255,7 @@ export default function HomeScreen() {
           <Pressable
             onPress={() => router.push('/wallet')}
             accessibilityRole="button"
-            accessibilityLabel={`Wallet, balance ${walletChipLabel(wallet?.balance ?? 0)}`}
+            accessibilityLabel={`Wallet, balance ${formatMoney(wallet?.balance ?? 0, wallet?.currency)}`}
             android_ripple={{ color: ROW_RIPPLE, borderless: false }}
           >
             {({ pressed }) => (
@@ -275,7 +267,7 @@ export default function HomeScreen() {
               >
                 <Wallet size={15} color={customerColors.charcoal.DEFAULT} />
                 <Text style={styles.walletPillText}>
-                  {walletChipLabel(wallet?.balance ?? 0)}
+                  {formatMoney(wallet?.balance ?? 0, wallet?.currency)}
                 </Text>
               </View>
             )}
@@ -775,6 +767,7 @@ export default function HomeScreen() {
           onDietChange={setSelectedDiet}
           maxPrice={maxPrice}
           onMaxPriceChange={setMaxPrice}
+          currency={currencyForCountry(activeAddress?.country)}
           sort={sort}
           onSortChange={setSort}
           isOpenOnly={isOpenOnly}

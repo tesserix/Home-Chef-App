@@ -23,6 +23,7 @@ import { KeyboardAwareScrollView, useAlert } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReportIssue, type IssueReason } from '../../../hooks/useReportIssue';
 import { friendlyErrorMessage } from '../../../lib/errors';
+import { formatMoney } from '../../../lib/format';
 
 const REASONS: { value: IssueReason; label: string }[] = [
   { value: 'missing_item', label: 'Missing item' },
@@ -38,9 +39,6 @@ const REASON_RIPPLE = `${customerColors.coral.DEFAULT}1F`;
 const ROW_RIPPLE = `${customerColors.charcoal.DEFAULT}0F`;
 const CTA_RIPPLE = `${customerColors.canvas}33`;
 
-function money(n: number): string {
-  return `₹${Math.round(n).toLocaleString('en-IN')}`;
-}
 
 // Per-order draft envelope. Photo URIs are local file paths that may dangle
 // across cold starts, so they're intentionally not persisted.
@@ -164,7 +162,7 @@ export default function ReportIssueScreen() {
           if (res.status === 'auto_refunded' && res.refundAmount > 0) {
             showAlert(
               'Refunded to your wallet',
-              `${money(res.refundAmount)} has been added to your Fe3dr wallet. Sorry about that!`,
+              `${formatMoney(res.refundAmount, order?.currency)} has been added to your Fe3dr wallet. Sorry about that!`,
               [{ text: 'View wallet', onPress: () => router.replace('/wallet' as never) }, { text: 'Done', onPress: () => router.back() }],
             );
           } else {

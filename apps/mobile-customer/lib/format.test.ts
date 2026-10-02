@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { currencySymbol, formatMoney } from './format';
+import { currencyForCountry, currencySymbol, formatMoney } from './format';
 
 describe('formatMoney', () => {
   it('preserves Indian grouping for existing callers', () => {
@@ -20,5 +20,15 @@ describe('formatMoney', () => {
   it('gives an input-prefix symbol per currency', () => {
     expect(currencySymbol('AUD')).toBe('$');
     expect(currencySymbol(undefined)).toBe('₹');
+  });
+});
+
+describe('currencyForCountry', () => {
+  it('maps each market to its currency and defaults to INR', () => {
+    expect(currencyForCountry('AU')).toBe('AUD');
+    expect(currencyForCountry('nz')).toBe('NZD');
+    expect(currencyForCountry('IN')).toBe('INR');
+    expect(currencyForCountry(undefined)).toBe('INR');
+    expect(currencyForCountry('US')).toBe('INR');
   });
 });
