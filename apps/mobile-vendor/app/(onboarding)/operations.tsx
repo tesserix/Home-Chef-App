@@ -438,15 +438,16 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
 
+  // Input's own padding and border already take ~26pt; "09:00" needs the rest.
   timeInputWrap: {
-    width: 64,
+    width: 76,
   },
 
   timeInput: {
     textAlign: 'center',
     fontSize: theme.typography.size.bodySm.size,
     fontVariant: ['tabular-nums'],
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: 0,
     paddingVertical: theme.spacing[1],
   },
 
