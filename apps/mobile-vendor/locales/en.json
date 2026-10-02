@@ -62,6 +62,7 @@
     "kitchenClosed": "Kitchen is closed",
     "quietLastOrder": "Last order {{ago}}. You're open and visible to customers.",
     "quietOpen": "You're open and visible to customers. New orders will appear here.",
+    "quietOpenUnderReview": "Customers will see your kitchen once it's approved. New orders will appear here.",
     "quietClosed": "Tap the Closed button above to start receiving orders.",
     "errorTitle": "Couldn't load your dashboard",
     "errorBody": "Check your connection and try again.",

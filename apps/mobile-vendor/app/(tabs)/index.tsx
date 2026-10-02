@@ -1231,7 +1231,7 @@ export default function DashboardScreen() {
                     ? t('dashboard.quietLastOrder', {
                         ago: formatMinutesAgo(lastOrderIso),
                       })
-                    : t('dashboard.quietOpen')
+                    : t(underReview ? 'dashboard.quietOpenUnderReview' : 'dashboard.quietOpen')
                   : t('dashboard.quietClosed')}
               </Text>
             </View>
