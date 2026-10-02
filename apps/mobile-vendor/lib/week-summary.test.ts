@@ -8,7 +8,7 @@ describe('weekSummary', () => {
     // everything.
     expect(weekSummary({ revenue: 1200, settledOrders: 5, orders: 5 })).toEqual({
       key: 'dashboard.weekSummary',
-      params: { amount: '1,200', count: 5 },
+      params: { currency: '₹', amount: '1,200', count: 5 },
     });
   });
 
@@ -17,7 +17,7 @@ describe('weekSummary', () => {
     // count came from different populations and the arithmetic did not work.
     expect(weekSummary({ revenue: 1200, settledOrders: 3, orders: 5 })).toEqual({
       key: 'dashboard.weekSummaryPartial',
-      params: { amount: '1,200', settled: 3, count: 5 },
+      params: { currency: '₹', amount: '1,200', settled: 3, count: 5 },
     });
   });
 
@@ -34,7 +34,7 @@ describe('weekSummary', () => {
 
   it('groups the amount in the Indian system and rounds to the rupee', () => {
     expect(weekSummary({ revenue: 123456.78, settledOrders: 9, orders: 9 })?.params).toEqual({
-      amount: '1,23,457',
+      currency: '₹', amount: '1,23,457',
       count: 9,
     });
   });
@@ -44,14 +44,19 @@ describe('weekSummary', () => {
     // keeps the line honest rather than claiming nothing was delivered.
     expect(weekSummary({ revenue: 800, settledOrders: undefined, orders: 3 })).toEqual({
       key: 'dashboard.weekSummary',
-      params: { amount: '800', count: 3 },
+      params: { currency: '₹', amount: '800', count: 3 },
     });
   });
 
   it('never claims more delivered than placed', () => {
     expect(weekSummary({ revenue: 900, settledOrders: 7, orders: 3 })).toEqual({
       key: 'dashboard.weekSummary',
-      params: { amount: '900', count: 3 },
+      params: { currency: '₹', amount: '900', count: 3 },
     });
   });
+});
+
+it('uses the kitchen currency for the weekly summary', () => {
+ const totals={revenue:19.5,settledOrders:1,orders:3,currency:'NZD'};
+ expect(weekSummary(totals)?.params).toMatchObject({currency:'$',amount:'20'});
 });

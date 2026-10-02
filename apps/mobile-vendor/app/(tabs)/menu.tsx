@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../lib/api';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton, EmptyState } from '@homechef/mobile-shared/ui';
 import { useVendorMenu } from '../../hooks/useVendorMenu';
@@ -37,6 +39,12 @@ interface ListEntry {
 
 export default function MenuScreen() {
   const { data, isLoading, isError, refetch } = useVendorMenu();
+  const { data: profile } = useQuery({
+    queryKey: ['chef', 'profile'],
+    queryFn: () => api.get<{ payoutCountry?: string }>('/chef/profile').then(r => r.data),
+    staleTime: 60_000,
+  });
+  const currency = profile?.payoutCountry === 'NZ' ? 'NZD' : profile?.payoutCountry === 'AU' ? 'AUD' : 'INR';
   const [selectedCategoryId, setSelectedCategoryId] =
     useState<string>(ALL_CATEGORIES);
   const [searchQuery, setSearchQuery] = useState('');
@@ -281,6 +289,7 @@ export default function MenuScreen() {
                 >
                   <MenuItemRow
                     item={entry.item}
+                    currency={currency}
                     onPress={() =>
                       router.push(`/menu/${entry.item!.id}/edit` as never)
                     }

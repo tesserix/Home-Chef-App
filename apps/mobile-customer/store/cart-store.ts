@@ -1,18 +1,3 @@
-// Zustand cart store for the customer app.
-// Cart is pure client state — no API calls until checkout.
-// All mutations use immutable spread (never push/splice in place).
-// Reference: RESEARCH.md Pattern 3 + CLAUDE.md immutability rule.
-//
-// Lines are keyed by `lineId` (#232): the same dish with different add-on
-// selections is a distinct line. For an item with no modifiers, lineId equals
-// menuItemId, so the no-modifier flow is unchanged.
-//
-// The basket is persisted to AsyncStorage: the target persona is an interrupted,
-// distracted customer, so an app kill / OS eviction mid-order must NOT silently
-// empty the cart. Only the contents (chef + items) are persisted — the derived
-// total()/totalCount() selectors are re-created from the initializer on rehydrate
-// (mirrors store/onboarding-store.ts).
-
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,7 +8,12 @@ interface ChefSummary {
   name: string;
 }
 
-type AddItemResult = 'ok' | 'cross_chef_conflict';
+type AddItemResult = 'ok' | 'cart-limit' | 'location-pending';
+
+export const CART_ADD_ERRORS = {
+  'cart-limit': 'You can save up to 10 vendor carts for this location. Remove a saved cart before adding another vendor.',
+  'location-pending': 'Checking saved carts for your address. Please try again in a moment.',
+};
 
 /**
  * Stable line id for a menu item + its modifier selection + its bakery
@@ -56,141 +46,144 @@ function bakeryKey(b: CartBakeryConfig): string {
   ].join('~');
 }
 
+export interface SavedBasket {
+  chefId: string;
+  chefName: string;
+  items: CartItem[];
+  updatedAt: number;
+  locationKey?: string | null;
+}
+
+const RETENTION_MS = 45 * 24 * 60 * 60 * 1000;
+const MAX_LOCAL_CARTS = 10;
+const emptyCart = { chefId: null, chefName: null, items: [] as CartItem[] };
+
 interface CartState {
   chefId: string | null;
   chefName: string | null;
   items: CartItem[];
-
-  /**
-   * Add a line to the cart. The item's lineId is honored (or derived from its
-   * menuItemId + modifiers). An identical line increments its quantity.
-   * Returns 'cross_chef_conflict' if the item belongs to a different chef than
-   * the current cart — caller must prompt + clearCart() before retrying.
-   */
+  baskets: Record<string, SavedBasket>;
+  accounts: Record<string, Record<string, SavedBasket>>;
+  ownerId: string | null;
+  eligibleChefIds: string[] | null;
+  locationKey: string | null;
+  setOwner: (id: string) => void;
+  beginLocation: (key: string) => void;
+  applyAvailability: (key: string, ids: string[] | null) => void;
+  selectBasket: (id: string) => void;
+  pruneExpired: (now?: number) => void;
   addItem: (item: CartItem, chef: ChefSummary) => AddItemResult;
-
-  /** Remove a line completely from the cart. */
   removeItem: (lineId: string) => void;
-
-  /** Set absolute quantity for a line. If qty <= 0 the line is removed. */
   updateQty: (lineId: string, quantity: number) => void;
-
-  /** Set per-line special instructions. Empty string clears it. */
   setInstructions: (lineId: string, instructions: string) => void;
-
-  /** Clear all cart items and reset chef context. */
-  clearCart: () => void;
-
-  /** Derived: sum of price * quantity for all lines. */
+  clearCart: (chefId?: string) => void;
   total: () => number;
-
-  /** Derived: total item count across all lines. */
   totalCount: () => number;
-
-  /**
-   * True once AsyncStorage rehydration has run (or resolved to "nothing
-   * saved"). R13: screens that branch on `items.length === 0` to show an
-   * empty state must gate on this first — otherwise a cold start with a
-   * saved non-empty cart renders "empty" for one frame, then pops the real
-   * cart in, which reads as a flicker.
-   */
   hasHydrated: boolean;
-  setHasHydrated: (hasHydrated: boolean) => void;
+  setHasHydrated: (value: boolean) => void;
 }
 
-export const useCartStore = create<CartState>()(
-  persist(
-    (set, get) => ({
-      chefId: null,
-      chefName: null,
-      items: [],
+function surviving(baskets: Record<string, SavedBasket>, now: number) {
+  return Object.fromEntries(Object.entries(baskets).filter(([, b]) =>
+    b.items.length > 0 && Number.isFinite(b.updatedAt) && now - b.updatedAt < RETENTION_MS));
+}
 
-      addItem: (item: CartItem, chef: ChefSummary): AddItemResult => {
-        const { chefId, items } = get();
+function project(baskets: Record<string, SavedBasket>, ids: string[], preferred: string | null) {
+  const basket = (preferred && ids.includes(preferred) ? baskets[preferred] : undefined)
+    ?? Object.values(baskets).sort((a, b) => b.updatedAt - a.updatedAt).find(b => ids.includes(b.chefId));
+  return basket ? { chefId: basket.chefId, chefName: basket.chefName, items: basket.items } : emptyCart;
+}
 
-        // Cross-chef conflict: caller must confirm clear before re-adding
-        if (chefId !== null && chefId !== chef.id) {
-          return 'cross_chef_conflict';
-        }
-
-        const lineId = item.lineId || makeLineId(item.menuItemId, item.modifiers, item.bakery);
-        const existing = items.find((i) => i.lineId === lineId);
-
-        if (existing) {
-          set({
-            items: items.map((i) =>
-              i.lineId === lineId ? { ...i, quantity: i.quantity + item.quantity } : i
-            ),
-          });
-        } else {
-          set({
-            chefId: chef.id,
-            chefName: chef.name,
-            items: [...items, { ...item, lineId }],
-          });
-        }
-
-        return 'ok';
-      },
-
-      removeItem: (lineId: string) => {
-        set({ items: get().items.filter((i) => i.lineId !== lineId) });
-      },
-
-      updateQty: (lineId: string, quantity: number) => {
-        if (quantity <= 0) {
-          get().removeItem(lineId);
-          return;
-        }
-        set({
-          items: get().items.map((i) => (i.lineId === lineId ? { ...i, quantity } : i)),
-        });
-      },
-
-      setInstructions: (lineId: string, instructions: string) => {
-        const trimmed = instructions.trim();
-        set({
-          items: get().items.map((i) =>
-            i.lineId === lineId ? { ...i, instructions: trimmed || undefined } : i
-          ),
-        });
-      },
-
-      clearCart: () => {
-        set({ chefId: null, chefName: null, items: [] });
-      },
-
-      total: () => {
-        return get().items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-      },
-
-      totalCount: () => {
-        return get().items.reduce((sum, i) => sum + i.quantity, 0);
-      },
-
-      hasHydrated: false,
-      setHasHydrated: (hasHydrated: boolean) => set({ hasHydrated }),
-    }),
-    {
-      name: 'customer-cart',
-      storage: createJSONStorage(() => AsyncStorage),
-      // Persist only the basket contents, never the action/selector methods.
-      partialize: (state) => ({
-        chefId: state.chefId,
-        chefName: state.chefName,
-        items: state.items,
-      }),
-      onRehydrateStorage: () => (state, error) => {
-        state?.setHasHydrated(true);
-        // Hydration can finish with `state` undefined (nothing persisted yet,
-        // or a storage read error) — the optional chain above then silently
-        // no-ops and the gate never opens, leaving the cart screen blank
-        // forever. Always open the gate; on error we just proceed with the
-        // in-memory cart.
-        if (!state || error) {
-          useCartStore.setState({ hasHydrated: true });
-        }
-      },
-    }
-  )
-);
+export const useCartStore = create<CartState>()(persist((set, get) => {
+  const updateItems = (items: CartItem[]) => {
+    const state = get();
+    if (!state.chefId) return;
+    const baskets = { ...state.baskets };
+    if (items.length) baskets[state.chefId] = { ...baskets[state.chefId], chefId: state.chefId, chefName: state.chefName ?? '', items, updatedAt: Date.now() };
+    else delete baskets[state.chefId];
+    set({ baskets, ...(items.length ? { items } : emptyCart) });
+  };
+  return {
+    ...emptyCart, baskets: {}, accounts: {}, ownerId: null, eligibleChefIds: null, locationKey: null,
+    setOwner: (ownerId) => {
+      const state = get();
+      if (state.ownerId === ownerId) return;
+      const accounts = { ...state.accounts };
+      if (state.ownerId) accounts[state.ownerId] = state.baskets;
+      const claimGuest = state.ownerId === 'guest' && ownerId !== 'guest' && !accounts[ownerId];
+      const baskets = surviving(state.ownerId === null || claimGuest ? state.baskets : accounts[ownerId] ?? {}, Date.now());
+      if (claimGuest) delete accounts.guest;
+      set({ ownerId, accounts, baskets, ...emptyCart, eligibleChefIds: null, locationKey: null });
+    },
+    beginLocation: (locationKey) => {
+      if (get().locationKey === locationKey) return;
+      get().pruneExpired();
+      set({ locationKey, eligibleChefIds: null, ...emptyCart });
+    },
+    applyAvailability: (key, ids) => {
+      if (get().locationKey !== key) return;
+      const baskets = surviving(get().baskets, Date.now());
+      set({ baskets, eligibleChefIds: ids, ...project(baskets, ids ?? [], get().chefId) });
+    },
+    selectBasket: (id) => {
+      const state = get();
+      const baskets = surviving(state.baskets, Date.now());
+      if (state.eligibleChefIds?.includes(id) && baskets[id]) {
+        set({ baskets, ...project(baskets, [id], id) });
+      }
+    },
+    pruneExpired: (now = Date.now()) => {
+      const state = get();
+      const baskets = surviving(state.baskets, now);
+      const accounts = Object.fromEntries(Object.entries(state.accounts).map(([id, saved]) => [id, surviving(saved, now)]));
+      set({ baskets, accounts, ...(state.chefId && !baskets[state.chefId] ? emptyCart : {}) });
+    },
+    addItem: (item, chef) => {
+      const state = get();
+      const baskets = surviving(state.baskets, Date.now());
+      if (state.locationKey !== null && state.eligibleChefIds === null) return 'location-pending';
+      const localCount = Object.values(baskets).filter(b =>
+        state.locationKey === null || b.locationKey === state.locationKey || state.eligibleChefIds?.includes(b.chefId)).length;
+      if (!baskets[chef.id] && localCount >= MAX_LOCAL_CARTS) return 'cart-limit';
+      const items = baskets[chef.id]?.items ?? [];
+      const lineId = item.lineId || makeLineId(item.menuItemId, item.modifiers, item.bakery);
+      const existing = items.some(i => i.lineId === lineId);
+      const next = existing ? items.map(i => i.lineId === lineId ? { ...i, quantity: i.quantity + item.quantity } : i)
+        : [...items, { ...item, lineId }];
+      baskets[chef.id] = { chefId: chef.id, chefName: chef.name, items: next, updatedAt: Date.now(), locationKey: state.locationKey };
+      const visible = state.locationKey === null || state.eligibleChefIds?.includes(chef.id);
+      set({ baskets, ...(visible ? { chefId: chef.id, chefName: chef.name, items: next } : {}) });
+      return 'ok';
+    },
+    removeItem: id => updateItems(get().items.filter(i => i.lineId !== id)),
+    updateQty: (id, quantity) => quantity <= 0 ? get().removeItem(id) : updateItems(get().items.map(i => i.lineId === id ? { ...i, quantity } : i)),
+    setInstructions: (id, value) => updateItems(get().items.map(i => i.lineId === id ? { ...i, instructions: value.trim() || undefined } : i)),
+    clearCart: (chefId = get().chefId ?? undefined) => {
+      if (!chefId) return;
+      const state = get();
+      const baskets = { ...state.baskets };
+      delete baskets[chefId];
+      set({ baskets, ...(state.chefId === chefId ? emptyCart : {}) });
+    },
+    total: () => get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+    totalCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
+    hasHydrated: false,
+    setHasHydrated: hasHydrated => set({ hasHydrated }),
+  };
+}, {
+  name: 'customer-cart',
+  version: 1,
+  storage: createJSONStorage(() => AsyncStorage),
+  partialize: state => ({ baskets: state.baskets, accounts: state.accounts, ownerId: state.ownerId }),
+  migrate: (persisted) => {
+    const old = persisted as Partial<CartState>;
+    const baskets = old.baskets ?? (old.chefId && old.items?.length ? {
+      [old.chefId]: { chefId: old.chefId, chefName: old.chefName ?? '', items: old.items, updatedAt: Date.now() },
+    } : {});
+    return { baskets: surviving(baskets, Date.now()), accounts: old.accounts ?? {}, ownerId: old.ownerId ?? null };
+  },
+  onRehydrateStorage: () => state => {
+    state?.pruneExpired();
+    state?.setHasHydrated(true);
+  },
+}));

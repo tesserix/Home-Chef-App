@@ -51,7 +51,8 @@ interface ExpenseQuickAddProps {
 }
 
 export function ExpenseQuickAdd({ orderId, showDatePicker = true, onSaved }: ExpenseQuickAddProps) {
-  const symbol = currencySymbol(useKitchenMarket()?.currency);
+  const currency = useKitchenMarket()?.currency;
+  const symbol = currencySymbol(currency);
   const { create } = useExpenseMutations();
   const uploadReceipt = useUploadExpenseReceipt();
 
@@ -172,7 +173,7 @@ export function ExpenseQuickAdd({ orderId, showDatePicker = true, onSaved }: Exp
         keyboardType="decimal-pad"
         value={amount}
         onChangeText={setAmount}
-        accessibilityLabel="Expense amount in rupees"
+        accessibilityLabel={`Expense amount in ${currency ?? "local currency"}`}
       />
 
       {showDatePicker ? (

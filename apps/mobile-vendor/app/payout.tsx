@@ -174,7 +174,7 @@ export default function PayoutScreen() {
   // flight, back prompts to save or discard.
   const hasUnsavedSensitive = bankAccountNumber.trim() !== '' || panNumber.trim() !== '';
   const methodChanged = data && data.payoutMethod !== method;
-  const isDirty = !savedRef.current && (hasUnsavedSensitive || Boolean(methodChanged));
+  const isDirty = getMarket(data?.payoutCountry).payoutRail !== 'stripe' && !savedRef.current && (hasUnsavedSensitive || Boolean(methodChanged));
 
   function popBack(): void {
     if (router.canGoBack()) router.back();

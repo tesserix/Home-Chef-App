@@ -9,7 +9,7 @@ import {
   Plus,
   UtensilsCrossed,
 } from "lucide-react-native";
-import { useCartStore, makeLineId } from "../../store/cart-store";
+import { useCartStore, makeLineId, CART_ADD_ERRORS } from "../../store/cart-store";
 import { useDietaryConflicts } from "../../hooks/useDietaryConflicts";
 import {
   useFavoriteDishIds,
@@ -71,31 +71,12 @@ export function MenuItemCard({
   const toggleFavoriteDish = useToggleFavoriteDish();
 
   const addToCart = (cartItem: CartItem) => {
-    const result = useCartStore
-      .getState()
-      .addItem(cartItem, { id: chefId, name: chefName });
-    if (result === "cross_chef_conflict") {
-      showAlert(
-        "Replace Cart?",
-        "You have items from another chef. Replace cart?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Replace",
-            style: "destructive",
-            onPress: () => {
-              useCartStore.getState().clearCart();
-              useCartStore
-                .getState()
-                .addItem(cartItem, { id: chefId, name: chefName });
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            },
-          },
-        ],
-      );
-    } else {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const result = useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
+    if (result !== 'ok') {
+      showAlert('Cart unavailable', CART_ADD_ERRORS[result]);
+      return;
     }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const handleAdd = () => {

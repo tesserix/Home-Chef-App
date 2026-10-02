@@ -171,7 +171,7 @@ func ComputeFYStatement(chefID uuid.UUID, fyStartYear int) (*FYStatement, error)
 	// FY, split-settled or not, with the per-order frozen commission rate.
 	var rows []statementOrderRow
 	err := database.DB.Raw(`
-		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax,
+		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax, o.currency, o.tax_inclusive,
 		       o.tax_food, o.tax_service, o.chef_funded_discount,
 		       o.delivery_fee, o.chef_tip, o.driver_tip, o.delivery_address_state, o.commission_rate,
 		       o.fulfillment_type, o.delivery_fee_final,
@@ -206,7 +206,7 @@ func ComputeFYStatement(chefID uuid.UUID, fyStartYear int) (*FYStatement, error)
 
 		stmt.OrdersCount++
 		stmt.FoodRevenue += r.ItemRevenue - r.ChefFundedDiscount
-		stmt.GSTCollected += r.Tax
+		stmt.GSTCollected += ChefTaxOf(r.Tax, r.TaxFood, r.TaxService)
 		stmt.Tips += r.ChefTip
 		stmt.GrossReceipts += e.Gross
 		stmt.PlatformCommission += e.PlatformCommission

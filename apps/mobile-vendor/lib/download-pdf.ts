@@ -1,43 +1,31 @@
-import * as FileSystem from 'expo-file-system/legacy';
+import { File, Paths } from 'expo-file-system';
+import { api } from './api';
 import * as Sharing from 'expo-sharing';
-import * as SecureStore from 'expo-secure-store';
+import { useAuthStore } from '../store/auth-store';
 import { showAlertOutsideReact } from '@homechef/mobile-shared/ui';
 
-/**
- * Download an authenticated PDF from the API and open the platform share
- * sheet. The access token is read from the secure store and sent as a Bearer
- * header (it can't be embedded in the URL for FileSystem.downloadAsync).
- *
- * @param path - API path beginning with '/', e.g. '/chef/statements/{id}/statement.pdf'
- * @param localName - cache filename, e.g. 'statement-2026-06-01.pdf'
- */
+// Use the same authenticated transport as the rest of the app, including token refresh.
 export async function downloadAndSharePdf(
   path: string,
   localName: string,
 ): Promise<void> {
   try {
-    const token = await SecureStore.getItemAsync('access_token');
+    const token = useAuthStore.getState().accessToken;
     if (!token) {
       showAlertOutsideReact('Sign in required', 'Sign in again to download PDFs.');
       return;
     }
-    const apiBase = process.env.EXPO_PUBLIC_API_URL ?? '';
-    const url = `${apiBase}${path}`;
-    const target = `${FileSystem.cacheDirectory}${localName}`;
-    const dl = await FileSystem.downloadAsync(url, target, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (dl.status !== 200) {
-      showAlertOutsideReact('Could not download', `Server returned ${dl.status}.`);
-      return;
-    }
+    const response = await api.get<ArrayBuffer>(path, { responseType: 'arraybuffer' });
+    const file = new File(Paths.cache, localName);
+    file.write(new Uint8Array(response.data));
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(dl.uri, {
+      await Sharing.shareAsync(file.uri, {
         mimeType: 'application/pdf',
+        UTI: 'com.adobe.pdf',
         dialogTitle: localName,
       });
     } else {
-      showAlertOutsideReact('Saved', `Saved to ${dl.uri}`);
+      showAlertOutsideReact('Saved', `Saved to ${file.uri}`);
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Download failed.';

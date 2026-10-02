@@ -24,7 +24,7 @@ import { useOrderReview } from '../../../hooks/useOrderReview';
 import { canConfirmReceipt, payoutHoldMeta } from '../../../lib/payout-hold';
 import { friendlyErrorMessage } from '../../../lib/errors';
 import { CancellationSection } from '../../../components/orders/CancellationSection';
-import { useCartStore, makeLineId } from '../../../store/cart-store';
+import { useCartStore, makeLineId, CART_ADD_ERRORS } from '../../../store/cart-store';
 import { startOrderPayment } from '../../../lib/payment';
 import { CookingIndicator } from '../../../components/status/CookingIndicator';
 import { StageIcon } from '../../../components/status/StageIcon';
@@ -424,7 +424,7 @@ export default function OrderDetailScreen() {
         const fillAndGo = () => {
           for (const it of available) {
             const modifiers = it.modifiers ?? [];
-            useCartStore.getState().addItem(
+            const result = useCartStore.getState().addItem(
               {
                 lineId: makeLineId(it.menuItemId, modifiers),
                 menuItemId: it.menuItemId,
@@ -437,6 +437,10 @@ export default function OrderDetailScreen() {
               },
               { id: res.chefId, name: res.chefName },
             );
+            if (result !== 'ok') {
+              showAlert('Cart unavailable', CART_ADD_ERRORS[result]);
+              return;
+            }
           }
           const dropped = res.items.length - available.length - needsConfig.length;
           const needsReview = available.some((i) => i.needsReview);
@@ -463,24 +467,7 @@ export default function OrderDetailScreen() {
         const hasItems = cart.items.length > 0;
         const sameChef = cart.chefId === res.chefId;
 
-        if (hasItems && cart.chefId && !sameChef) {
-          // Cross-chef conflict: confirm before replacing the current cart.
-          showAlert(
-            'Replace cart?',
-            'Your cart has items from another chef. Replace them with this order?',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Replace',
-                style: 'destructive',
-                onPress: () => {
-                  useCartStore.getState().clearCart();
-                  fillAndGo();
-                },
-              },
-            ],
-          );
-        } else if (hasItems && sameChef) {
+        if (hasItems && sameChef) {
           // Same chef, cart not empty. This used to fall through to fillAndGo(),
           // which ADDS on top of what is already there — so a second tap of
           // Reorder silently doubled the order and a third tripled it, with no

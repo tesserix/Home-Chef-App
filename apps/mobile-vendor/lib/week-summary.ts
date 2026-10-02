@@ -1,3 +1,4 @@
+import { currencySymbol } from './format';
 // week-summary.ts — the dashboard's one-line "this week".
 //
 // The money settles on delivery and the tab counters count placed orders, so the
@@ -7,6 +8,7 @@
 
 export interface WeekTotals {
   revenue: number;
+  currency?: string;
   settledOrders: number | undefined;
   orders: number;
 }
@@ -21,12 +23,12 @@ export interface WeekSummary {
   params: Record<string, string | number>;
 }
 
-function inr(n: number): string {
-  return Math.round(n).toLocaleString('en-IN');
+function roundedAmount(n: number, currency: string): string {
+  return Math.round(n).toLocaleString(currency === 'INR' ? 'en-IN' : 'en-NZ');
 }
 
 /** null when the week is empty — the line is hidden rather than showing zeroes. */
-export function weekSummary({ revenue, settledOrders, orders }: WeekTotals): WeekSummary | null {
+export function weekSummary({ revenue, settledOrders, orders, currency = 'INR' }: WeekTotals): WeekSummary | null {
   if (orders <= 0) return null;
 
   // An API build without weekSettledOrders is read as "all of them": claiming
@@ -39,8 +41,8 @@ export function weekSummary({ revenue, settledOrders, orders }: WeekTotals): Wee
   if (settled < orders) {
     return {
       key: 'dashboard.weekSummaryPartial',
-      params: { amount: inr(revenue), settled, count: orders },
+      params: { amount: roundedAmount(revenue,currency), currency: currencySymbol(currency), settled, count: orders },
     };
   }
-  return { key: 'dashboard.weekSummary', params: { amount: inr(revenue), count: orders } };
+  return { key: 'dashboard.weekSummary', params: { amount: roundedAmount(revenue,currency), currency: currencySymbol(currency), count: orders } };
 }

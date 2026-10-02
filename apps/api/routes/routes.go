@@ -1502,6 +1502,7 @@ func SetupRouter() *gin.Engine {
 		{
 			addresses.GET("", addressHandler.GetAddresses)
 			addresses.POST("", addressHandler.CreateAddress)
+			addresses.POST("/:id/cart-availability", addressHandler.CartAvailability)
 			addresses.PUT("/:id", addressHandler.UpdateAddress)
 			addresses.DELETE("/:id", addressHandler.DeleteAddress)
 		}

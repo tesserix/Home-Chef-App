@@ -1,3 +1,4 @@
+import { downloadAndSharePdf } from "../../lib/download-pdf";
 import { formatMoney } from "../../lib/format";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -8,9 +9,6 @@ import {
   Text,
   View,
 } from "react-native";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
-import * as SecureStore from "expo-secure-store";
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import * as Device from "expo-device";
@@ -1942,40 +1940,7 @@ async function toJpeg(
 // email it. Side-stepped having to embed the token in a URL by using
 // FileSystem.downloadAsync with an explicit Authorization header.
 async function downloadInvoice(orderId: string): Promise<void> {
-  try {
-    const token = await SecureStore.getItemAsync("access_token");
-    if (!token) {
-      showAlertOutsideReact(
-        "Sign in required",
-        "Sign in again to download invoices.",
-      );
-      return;
-    }
-    const apiBase = process.env.EXPO_PUBLIC_API_URL ?? "";
-    const url = `${apiBase}/chef/orders/${orderId}/invoice.pdf`;
-    const target = `${FileSystem.cacheDirectory}invoice-${orderId}.pdf`;
-    const dl = await FileSystem.downloadAsync(url, target, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (dl.status !== 200) {
-      showAlertOutsideReact(
-        "Could not download invoice",
-        `Server returned ${dl.status}.`,
-      );
-      return;
-    }
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(dl.uri, {
-        mimeType: "application/pdf",
-        dialogTitle: "Invoice",
-      });
-    } else {
-      showAlertOutsideReact("Saved", `Invoice saved to ${dl.uri}`);
-    }
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Download failed.";
-    showAlertOutsideReact("Could not download invoice", msg);
-  }
+ await downloadAndSharePdf(`/chef/orders/${orderId}/invoice.pdf`, `invoice-${orderId}.pdf`);
 }
 
 // promptCancelReasonAndroid emulates an action sheet with a chained
