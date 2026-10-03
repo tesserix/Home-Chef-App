@@ -38,6 +38,7 @@ import { ocrDocument, billDateTooOld } from '../../lib/ocr';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import { useCancelOnboarding } from '../../lib/use-cancel-onboarding';
 import { getMarket } from '../../lib/market';
+import { FoodSafetyGuideCard } from '../../components/vendor/FoodSafetyGuideCard';
 
 type DocumentType = 'id_proof' | 'fssai_license' | 'food_safety_cert' | 'address_proof';
 
@@ -643,6 +644,13 @@ export default function DocumentsScreen() {
       )}
 
       <View style={styles.tileSpacer} />
+
+      {!isIndia ? (
+        <>
+          <FoodSafetyGuideCard country={market.code} />
+          <View style={styles.tileSpacer} />
+        </>
+      ) : null}
 
       {renderUploadTile(
         t(isIndia ? 'onboarding.fssaiLicense' : 'onboarding.foodRegCert'),

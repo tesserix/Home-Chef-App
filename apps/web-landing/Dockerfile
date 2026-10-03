@@ -41,6 +41,9 @@ RUN pnpm build
 # Trivy-clean. The apps/web SPA uses the same base + passes the gate. The
 # landing's nginx.conf has no ${VAR}s, so envsubst leaves it unchanged.
 FROM ghcr.io/tesserix/base-nginx-spa:latest AS runtime
+USER 0:0
+RUN apk add --no-cache --upgrade 'pcre2>=10.49-r0'
+USER 10001:10001
 
 COPY apps/web-landing/nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=builder --chown=10001:10001 /app/apps/web-landing/out /usr/share/nginx/html

@@ -15,6 +15,7 @@ const PHOTO_BLURHASH = "L6PZfSi_.AyE_3t7t7R**0o#DgR4";
 
 interface MenuItemRowProps {
   item: MenuItem;
+  currency: string;
   onPress: () => void;
 }
 
@@ -32,7 +33,7 @@ interface MenuItemRowProps {
  * Unavailable items dim to 0.55 opacity and surface a "Hidden from
  * customers" caption — visible enough to scan, demoted enough to skip.
  */
-export function MenuItemRow({ item, onPress }: MenuItemRowProps) {
+export function MenuItemRow({ item, currency, onPress }: MenuItemRowProps) {
   const toggleMutation = useToggleAvailability();
   const { show: showToast } = useToast();
   const isDimmed = !item.isAvailable;
@@ -88,7 +89,7 @@ export function MenuItemRow({ item, onPress }: MenuItemRowProps) {
                   {item.name}
                 </Text>
               </View>
-              <Text style={styles.price}>{formatMoney(item.price)}</Text>
+            <Text style={styles.price}>{formatMoney(item.price, currency)}</Text>
               {isDimmed && (
                 <Text style={styles.hiddenLabel}>Hidden from customers</Text>
               )}

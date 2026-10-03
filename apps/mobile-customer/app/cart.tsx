@@ -210,6 +210,10 @@ export default function CartScreen() {
   const hasHydrated = useCartStore((s) => s.hasHydrated);
   const clearCart = useCartStore((s) => s.clearCart);
   const dialog = useDialog();
+  const baskets = useCartStore(s => s.baskets);
+  const eligibleIds = useCartStore(s => s.eligibleChefIds);
+  const selectBasket = useCartStore(s => s.selectBasket);
+  const visibleBaskets = Object.values(baskets).filter(b => eligibleIds?.includes(b.chefId));
 
   // Confirmed, not immediate: this throws away every line plus their notes, and
   // it sits in the header where a mis-tap is easy.
@@ -280,6 +284,18 @@ export default function CartScreen() {
         ) : null}
       </View>
 
+      {visibleBaskets.length > 1 ? (
+        <View className="px-4 py-3 gap-2">
+          {visibleBaskets.map(basket => (
+            <Pressable key={basket.chefId} onPress={() => selectBasket(basket.chefId)}
+              accessibilityRole="button" accessibilityLabel={`Open saved cart from ${basket.chefName}`}
+              accessibilityState={{ selected: basket.chefId === chefId }}
+              style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text className="text-charcoal">{basket.chefName} · {basket.items.reduce((sum, item) => sum + item.quantity, 0)} items</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       {!hasHydrated ? (
         // R13: skip the empty state for one frame while AsyncStorage
         // rehydrates — otherwise a cold start with a saved cart flashes

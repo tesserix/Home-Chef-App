@@ -3,7 +3,7 @@
     "name": "Fe3dr",
     "slug": "homechef-customer",
     "scheme": "homechef-customer",
-    "version": "1.0.1",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -270,7 +270,7 @@
       "url": "https://u.expo.dev/259c48bf-fb51-4f93-8fdc-7149aa15f881",
       "fallbackToCacheTimeout": 0
     },
-    "runtimeVersion": "1.0.1-stripe.1",
+    "runtimeVersion": "1.0.2",
     "extra": {
       "router": {},
       "eas": {

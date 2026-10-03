@@ -1,7 +1,7 @@
 // push-observability.test.ts — covers #870's fix: the iOS-only simulator
 // guard (Android emulators with Play Services CAN receive FCM and must not
-// be blocked), a distinct greppable `[push]` console.warn on every silent
-// exit from getRawFCMToken, and registerDeviceTokenSafe never throwing past
+// be blocked), warnings for failed registration rather than expected simulator
+// behavior, and registerDeviceTokenSafe never throwing past
 // a failed registration so listener setup in _layout.tsx is unaffected.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,7 +56,7 @@ describe('getRawFCMToken', () => {
 
     expect(result).toBeNull();
     expect(mockNotifications.getPermissionsAsync).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('iOS simulator'));
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('does NOT short-circuit an Android emulator — resolves a real token', async () => {

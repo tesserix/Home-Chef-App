@@ -24,7 +24,7 @@ export async function getRawFCMToken(): Promise<string | null> {
   // Android emulator from ever registering a token (#870) — do not re-broaden
   // this back to blocking non-iOS emulators.
   if (Platform.OS === 'ios' && !Device.isDevice) {
-    console.warn('[push] Skipped: iOS simulator cannot receive push notifications');
+    console.info('[push] Skipped: iOS simulator cannot receive push notifications');
     return null;
   }
 

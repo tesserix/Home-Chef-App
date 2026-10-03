@@ -76,7 +76,7 @@ export function CartFab() {
             // does. This is where App Review 5.1.1(iv)'s "directly relevant"
             // line actually falls.
             if (!requireAccount('place an order')) return;
-            router.push('/checkout');
+            router.push('/cart');
           }}
           accessibilityRole="button"
           accessibilityLabel={`View cart — ${itemCount} ${

@@ -272,10 +272,11 @@ export default function DashboardScreen() {
     () =>
       weekSummary({
         revenue: dashboard?.weekRevenue ?? 0,
+        currency: market?.currency,
         settledOrders: dashboard?.weekSettledOrders,
         orders: dashboard?.weekOrders ?? 0,
       }),
-    [dashboard?.weekRevenue, dashboard?.weekSettledOrders, dashboard?.weekOrders],
+    [dashboard?.weekRevenue, dashboard?.weekSettledOrders, dashboard?.weekOrders, market?.currency],
   );
 
   // Last order timestamp across pending + recent. Drives the dead-screen

@@ -5,7 +5,6 @@
 import { router } from 'expo-router';
 import { Linking } from 'react-native';
 import { api } from './api';
-import { useCartStore } from '../store/cart-store';
 
 /** Caches a settled non-order charge invalidates. Both gateway screens replace()
  *  back onto a screen that is already mounted, so without this it re-renders its
@@ -203,7 +202,6 @@ export async function startOrderPayment(
   // Full-wallet order: store credit covered the total, so the server already
   // marked it paid — no gateway sheet. Go straight to the result poller.
   if (data.provider === 'wallet' || data.paid) {
-    useCartStore.getState().clearCart();
     router.replace(`/payment/result?order_id=${orderId}`);
     return;
   }

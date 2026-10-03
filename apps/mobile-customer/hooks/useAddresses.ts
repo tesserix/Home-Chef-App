@@ -56,8 +56,8 @@ export function useAddresses() {
   return useQuery<{ data: Address[] }>({
     queryKey: ['addresses'],
     enabled: hasAccount,
-    queryFn: () =>
-      api.get<ApiAddress[]>('/v1/addresses').then((r) => ({
+    queryFn: ({ signal }) =>
+      api.get<ApiAddress[]>('/v1/addresses', { signal }).then((r) => ({
         data: (r.data ?? []).map(mapAddress),
       })),
     staleTime: 1000 * 60 * 5, // 5 minutes
@@ -90,15 +90,43 @@ export function useCreateAddress() {
   });
 }
 
-// Switches the customer's active delivery/discovery address by PUTting the
-// chosen address back with isDefault: true. PUT /v1/addresses/:id requires
+// Updates discovery immediately and persists the chosen default address.
+// A failed save restores the previous location. PUT /v1/addresses/:id requires
 // the FULL createAddressRequest shape (label/line1/city/state/postalCode are
 // all `binding:"required"` server-side — see apps/api/handlers/address.go
 // UpdateAddress), so we round-trip every existing field, not just isDefault;
 // the server clears the previous default in the same request.
 export function useSetDefaultAddress() {
   const queryClient = useQueryClient();
-  return useMutation<{ data: Address }, Error, Address>({
+  return useMutation<
+    { data: Address },
+    Error,
+    Address,
+    { previous: { data: Address[] } | undefined }
+  >({
+    onMutate: async (address) => {
+      if (!address.id) throw new Error('Address is missing an id');
+      await queryClient.cancelQueries({ queryKey: ['addresses'] });
+      const previous = queryClient.getQueryData<{ data: Address[] }>([
+        'addresses',
+      ]);
+      await queryClient.cancelQueries({ queryKey: ['chefs'] });
+      await queryClient.invalidateQueries({
+        queryKey: ['chefs'],
+        refetchType: 'none',
+      });
+      queryClient.setQueryData(['addresses'], {
+        data: (previous?.data ?? [address]).map((item) => ({
+          ...item,
+          isDefault: item.id === address.id,
+        })),
+      });
+      return { previous };
+    },
+    onError: (_error, _address, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(['addresses'], context.previous);
+    },
     mutationFn: (address) => {
       if (!address.id) {
         return Promise.reject(new Error('Address is missing an id'));
@@ -118,15 +146,18 @@ export function useSetDefaultAddress() {
         })
         .then((r) => ({ data: mapAddress(r.data) }));
     },
-    onSuccess: () => {
-      // Refresh the address list (new default) AND every chef/discovery query —
-      // useCustomerCoords derives lat/lng from the default address, so the home
-      // feed and chef-detail deliverableToYou checks must re-fetch with the
-      // newly active address's coordinates instead of stale results keyed on
-      // the previous default.
-      queryClient.invalidateQueries({ queryKey: ['addresses'] });
-      queryClient.invalidateQueries({ queryKey: ['chefs'] });
-      queryClient.invalidateQueries({ queryKey: ['chef'] });
+    onSuccess: async ({ data: address }) => {
+      await queryClient.cancelQueries({ queryKey: ['addresses'] });
+      queryClient.setQueryData<{ data: Address[] }>(
+        ['addresses'],
+        (current) => ({
+          data: (current?.data ?? [address]).map((item) =>
+            item.id === address.id ? address : { ...item, isDefault: false },
+          ),
+        }),
+      );
+      void queryClient.invalidateQueries({ queryKey: ['chefs'] });
+      void queryClient.invalidateQueries({ queryKey: ['chef'] });
     },
   });
 }

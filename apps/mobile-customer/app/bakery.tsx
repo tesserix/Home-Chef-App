@@ -19,7 +19,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { BakerySheet } from '../components/cart/BakerySheet';
 import { useBakeryOptions, useBakeryProducts, type BakeryProduct } from '../hooks/useBakery';
-import { useCartStore, makeLineId } from '../store/cart-store';
+import { useCartStore, makeLineId, CART_ADD_ERRORS } from '../store/cart-store';
 import type { CartBakeryConfig, CartItem } from '../types/customer';
 import { formatMoney } from '../lib/format';
 
@@ -48,22 +48,11 @@ export default function BakeryScreen() {
   const addToCart = (item: BakeryProduct, cartItem: CartItem) => {
     const chef = { id: item.chefId, name: item.chefName ?? 'Bakery' };
     const result = useCartStore.getState().addItem(cartItem, chef);
-    if (result === 'cross_chef_conflict') {
-      showAlert('Replace Cart?', 'You have items from another kitchen. Replace cart?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Replace',
-          style: 'destructive',
-          onPress: () => {
-            useCartStore.getState().clearCart();
-            useCartStore.getState().addItem(cartItem, chef);
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          },
-        },
-      ]);
-    } else {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (result !== 'ok') {
+      showAlert('Cart unavailable', CART_ADD_ERRORS[result]);
+      return;
     }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const handleConfirm = (

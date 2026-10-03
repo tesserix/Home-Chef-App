@@ -167,8 +167,8 @@ export function mapMenuItem(
 export function useChefs(filters: ChefFilters = {}) {
   return useQuery<{ data: Chef[] }>({
     queryKey: ['chefs', filters],
-    queryFn: async () => {
-      const r = await api.get('/v1/chefs', { params: filters });
+    queryFn: async ({ signal }) => {
+      const r = await api.get('/v1/chefs', { params: filters, signal });
       const list = (r.data?.data ?? []) as ApiChefProfile[];
       return { data: list.map(mapChef) };
     },

@@ -1,31 +1,36 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   Animated,
   Easing,
+  Image,
+  type ImageSourcePropType,
   Pressable,
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Screen } from '../ui/Screen';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { theme } from '../theme/tokens';
-import { resolveAuthErrorMessage } from '../auth/bff-session';
-import { SocialIconButton, GoogleGlyph, AppleGlyph } from './_socialIcons';
+} from "react-native";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Screen } from "../ui/Screen";
+import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
+import { theme } from "../theme/tokens";
+import { resolveAuthErrorMessage } from "../auth/bff-session";
+import { SocialIconButton, GoogleGlyph, AppleGlyph } from "./_socialIcons";
+import { KitchenBackdrop } from "./_kitchenBackdrop";
 
 const loginSchema = z.object({
-  email: z.string().email('Enter a valid email'),
-  password: z.string().min(1, 'Password is required'),
+  email: z.string().email("Enter a valid email"),
+  password: z.string().min(1, "Password is required"),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
 interface LoginScreenProps {
+  presentation?: "default" | "kitchen";
+  heroImage?: ImageSourcePropType;
   /** Email/password submit — legacy path; omit when using hosted sign-in. */
   onLogin?: (data: LoginFormData) => Promise<void>;
   /**
@@ -95,23 +100,26 @@ interface LoginScreenProps {
  *     same column flow as everything else; no overlay.
  */
 export function LoginScreen({
+  presentation = "default",
+  heroImage,
   onLogin,
   onHostedSignIn,
-  hostedCtaLabel = 'Sign in',
+  hostedCtaLabel = "Sign in",
   registerPrompt = "Don't have an account?",
-  registerCta = 'Sign up',
+  registerCta = "Sign up",
   onNavigateToRegister,
   onNavigateToForgotPassword,
   onGoogleSignIn,
   onAppleSignIn,
   onBiometricLogin,
-  title = 'Welcome back',
-  subtitle = 'Sign in to continue',
+  title = "Welcome back",
+  subtitle = "Sign in to continue",
   brand,
   accent,
   linkColor,
   onContinueAsGuest,
 }: LoginScreenProps) {
+  const kitchen = presentation === "kitchen";
   const resolvedLinkColor = linkColor ?? accent;
   const [error, setError] = useState<string | null>(null);
   const [hostedSubmitting, setHostedSubmitting] = useState(false);
@@ -129,9 +137,12 @@ export function LoginScreen({
         if (mounted) setReduceMotion(enabled);
       })
       .catch(() => {});
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      setReduceMotion(enabled);
-    });
+    const subscription = AccessibilityInfo.addEventListener(
+      "reduceMotionChanged",
+      (enabled) => {
+        setReduceMotion(enabled);
+      },
+    );
     return () => {
       mounted = false;
       subscription.remove();
@@ -144,7 +155,7 @@ export function LoginScreen({
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: "", password: "" },
   });
 
   useEffect(() => {
@@ -202,248 +213,352 @@ export function LoginScreen({
   };
 
   return (
-    <Screen scroll paddingX={theme.spacing[6]}>
-      <View style={styles.topGap} />
+    <Screen
+      scroll
+      paddingX={theme.spacing[6]}
+      background={kitchen ? theme.colors.bone : undefined}
+      edges={kitchen ? ["top", "bottom", "left", "right"] : undefined}
+    >
+      {kitchen ? <KitchenBackdrop /> : null}
+      <View style={kitchen ? styles.centeredPage : undefined}>
+        <View style={kitchen ? styles.welcomeContent : undefined}>
+          {!kitchen ? <View style={styles.topGap} /> : null}
 
-      {brand ? <Text style={styles.brand}>{brand}</Text> : null}
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.subtitle}>{subtitle}</Text>
-
-      <Animated.View
-        style={[
-          styles.errorBannerWrap,
-          {
-            opacity: errorOpacity,
-            transform: [{ translateY: errorTranslate }],
-            // Reserve no space when error is null, so layout doesn't jump.
-            height: error ? undefined : 0,
-            marginBottom: error ? theme.spacing[4] : 0,
-          },
-        ]}
-        pointerEvents={error ? 'auto' : 'none'}
-      >
-        {error ? (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-      </Animated.View>
-
-      {onHostedSignIn ? (
-        <View style={styles.primaryActions}>
-          <Button
-            label={hostedSubmitting ? 'Opening…' : hostedCtaLabel}
-            onPress={hostedPress}
-            loading={hostedSubmitting}
-            disabled={hostedSubmitting}
-            accentColor={accent}
-          />
-          {onBiometricLogin ? (
-            <Button
-              label="Use Face ID / Touch ID"
-              variant="ghost"
-              onPress={wrap(onBiometricLogin)}
+          {brand ? (
+            <Text
+              maxFontSizeMultiplier={kitchen ? 1.8 : undefined}
+              style={[styles.brand, kitchen && styles.centeredBrand]}
+            >
+              {brand}
+            </Text>
+          ) : null}
+          {kitchen && heroImage ? (
+            <Image
+              source={heroImage}
+              style={styles.foodImage}
+              resizeMode="cover"
+              accessible={false}
             />
           ) : null}
-          <Text style={styles.hostedHint}>
-            You'll sign in securely in your browser and come right back.
+          <Text
+            maxFontSizeMultiplier={kitchen ? 2 : undefined}
+            style={[styles.title, kitchen && styles.centeredTitle]}
+          >
+            {title}
           </Text>
-        </View>
-      ) : null}
+          <Text style={[styles.subtitle, kitchen && styles.centeredSubtitle]}>
+            {subtitle}
+          </Text>
 
-      {!onHostedSignIn ? (
-        <>
-      <Controller
-        control={control}
-        name="email"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Email"
-            placeholder="you@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
-            error={errors.email?.message}
-            accentColor={accent}
-          />
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="password"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Password"
-            placeholder="••••••••"
-            secureTextEntry
-            passwordPeek
-            autoComplete="password"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
-            error={errors.password?.message}
-            accentColor={accent}
-          />
-        )}
-      />
-
-      {onNavigateToForgotPassword ? (
-        <View style={styles.forgotRow}>
-          <Pressable
-            onPress={onNavigateToForgotPassword}
-            hitSlop={8}
-            accessibilityRole="link"
-            accessibilityLabel="Forgot password?"
+          <Animated.View
+            style={[
+              styles.errorBannerWrap,
+              {
+                opacity: errorOpacity,
+                transform: [{ translateY: errorTranslate }],
+                // Reserve no space when error is null, so layout doesn't jump.
+                height: error ? undefined : 0,
+                marginBottom: error ? theme.spacing[4] : 0,
+              },
+            ]}
+            pointerEvents={error ? "auto" : "none"}
           >
-            <Text
-              style={[
-                styles.linkText,
-                resolvedLinkColor
-                  ? { color: resolvedLinkColor, textDecorationLine: 'none' }
-                  : null,
-              ]}
-            >
-              Forgot password?
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      <View style={styles.primaryActions}>
-        <Button
-          label={isSubmitting ? 'Signing in…' : 'Sign in'}
-          onPress={handleSubmit(onSubmit)}
-          loading={isSubmitting}
-          disabled={isSubmitting}
-          accentColor={accent}
-        />
-        {onBiometricLogin ? (
-          <Button
-            label="Use Face ID / Touch ID"
-            variant="ghost"
-            onPress={wrap(onBiometricLogin)}
-          />
-        ) : null}
-      </View>
-
-      {onGoogleSignIn || onAppleSignIn ? (
-        <>
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerLabel}>or continue with</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <View style={styles.socialIconRow}>
-            {onGoogleSignIn ? (
-              <SocialIconButton
-                label="Continue with Google"
-                onPress={wrap(onGoogleSignIn)}
-                icon={<GoogleGlyph />}
-              />
+            {error ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
             ) : null}
-            {onAppleSignIn ? (
-              <SocialIconButton
-                label="Continue with Apple"
-                onPress={wrap(onAppleSignIn)}
-                icon={<AppleGlyph />}
+          </Animated.View>
+
+          {onHostedSignIn ? (
+            <View style={styles.primaryActions}>
+              <Button
+                label={hostedSubmitting ? "Opening…" : hostedCtaLabel}
+                onPress={hostedPress}
+                loading={hostedSubmitting}
+                disabled={hostedSubmitting}
+                accentColor={accent}
               />
-            ) : null}
-          </View>
-        </>
-      ) : null}
-
-        </>
-      ) : null}
-
-      {onContinueAsGuest ? (
-        <View style={styles.guestRow}>
-          <Pressable
-            onPress={onContinueAsGuest}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Browse without an account"
-            style={styles.guestButton}
-          >
-            <Text
-              style={[
-                styles.guestText,
-                resolvedLinkColor ? { color: resolvedLinkColor } : null,
-              ]}
-            >
-              Browse without an account
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {onNavigateToRegister ? (
-        <View style={styles.signupRow}>
-          <Pressable
-            onPress={onNavigateToRegister}
-            hitSlop={8}
-            accessibilityRole="link"
-            accessibilityLabel={`${registerPrompt} ${registerCta}`}
-          >
-            <Text style={styles.signupPrompt}>
-              {registerPrompt}{' '}
-              <Text
-                style={[
-                  styles.signupCTA,
-                  resolvedLinkColor
-                    ? { color: resolvedLinkColor, textDecorationLine: 'none' }
-                    : null,
-                ]}
-              >
-                {registerCta}
+              {onBiometricLogin ? (
+                <Button
+                  label="Use Face ID / Touch ID"
+                  variant="ghost"
+                  onPress={wrap(onBiometricLogin)}
+                />
+              ) : null}
+              <Text style={[styles.hostedHint, kitchen && styles.centeredHint]}>
+                You'll sign in securely in your browser and come right back.
               </Text>
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
+            </View>
+          ) : null}
 
-      {/* Operator attribution. Sits on the sign-in screen because that is the
+          {!onHostedSignIn ? (
+            <>
+              <Controller
+                control={control}
+                name="email"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <Input
+                    label="Email"
+                    placeholder="you@example.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                    error={errors.email?.message}
+                    accentColor={accent}
+                  />
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="password"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <Input
+                    label="Password"
+                    placeholder="••••••••"
+                    secureTextEntry
+                    passwordPeek
+                    autoComplete="password"
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                    error={errors.password?.message}
+                    accentColor={accent}
+                  />
+                )}
+              />
+
+              {onNavigateToForgotPassword ? (
+                <View style={styles.forgotRow}>
+                  <Pressable
+                    onPress={onNavigateToForgotPassword}
+                    hitSlop={8}
+                    accessibilityRole="link"
+                    accessibilityLabel="Forgot password?"
+                  >
+                    <Text
+                      style={[
+                        styles.linkText,
+                        resolvedLinkColor
+                          ? {
+                              color: resolvedLinkColor,
+                              textDecorationLine: "none",
+                            }
+                          : null,
+                      ]}
+                    >
+                      Forgot password?
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              <View style={styles.primaryActions}>
+                <Button
+                  label={isSubmitting ? "Signing in…" : "Sign in"}
+                  onPress={handleSubmit(onSubmit)}
+                  loading={isSubmitting}
+                  disabled={isSubmitting}
+                  accentColor={accent}
+                />
+                {onBiometricLogin ? (
+                  <Button
+                    label="Use Face ID / Touch ID"
+                    variant="ghost"
+                    onPress={wrap(onBiometricLogin)}
+                  />
+                ) : null}
+              </View>
+
+              {onGoogleSignIn || onAppleSignIn ? (
+                <>
+                  <View style={styles.divider}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerLabel}>or continue with</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+
+                  <View style={styles.socialIconRow}>
+                    {onGoogleSignIn ? (
+                      <SocialIconButton
+                        label="Continue with Google"
+                        onPress={wrap(onGoogleSignIn)}
+                        icon={<GoogleGlyph />}
+                      />
+                    ) : null}
+                    {onAppleSignIn ? (
+                      <SocialIconButton
+                        label="Continue with Apple"
+                        onPress={wrap(onAppleSignIn)}
+                        icon={<AppleGlyph />}
+                      />
+                    ) : null}
+                  </View>
+                </>
+              ) : null}
+            </>
+          ) : null}
+
+          {onContinueAsGuest ? (
+            <View style={styles.guestRow}>
+              <Pressable
+                onPress={onContinueAsGuest}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Browse without an account"
+                style={styles.guestButton}
+              >
+                <Text
+                  style={[
+                    styles.guestText,
+                    resolvedLinkColor ? { color: resolvedLinkColor } : null,
+                  ]}
+                >
+                  Browse without an account
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {onNavigateToRegister ? (
+            <View style={styles.signupRow}>
+              <Pressable
+                onPress={onNavigateToRegister}
+                hitSlop={8}
+                accessibilityRole="link"
+                accessibilityLabel={`${registerPrompt} ${registerCta}`}
+                style={kitchen ? styles.signupTouchTarget : undefined}
+              >
+                <Text
+                  style={[
+                    styles.signupPrompt,
+                    kitchen && styles.centeredPrompt,
+                  ]}
+                >
+                  {registerPrompt}{" "}
+                  <Text
+                    style={[
+                      styles.signupCTA,
+                      resolvedLinkColor
+                        ? {
+                            color: resolvedLinkColor,
+                            textDecorationLine: "none",
+                          }
+                        : null,
+                    ]}
+                  >
+                    {registerCta}
+                  </Text>
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Operator attribution. Sits on the sign-in screen because that is the
           first place a person decides whether to trust the app with money, and
           because the name on their bank statement will be Zivana's, not the
           brand's. Kept small and muted — disclosure, not marketing. */}
-      <Text style={styles.operatorLine}>
-        Powered by Zivana Innovations LLP{'\n'}
-        part of Tesserix Pty Ltd · ACN 694 070 865 · ABN 59 694 070 865
-      </Text>
+        <Text style={[styles.operatorLine, kitchen && styles.centeredOperator]}>
+          Powered by Zivana Innovations LLP{"\n"}
+          part of Tesserix Pty Ltd · ACN 694 070 865 · ABN 59 694 070 865
+        </Text>
 
-      <View style={styles.bottomGap} />
+        {!kitchen ? <View style={styles.bottomGap} /> : null}
+      </View>
     </Screen>
   );
 }
 
-
 const styles = StyleSheet.create({
+  centeredPage: { flex: 1, paddingTop: 32, paddingBottom: 20 },
+  welcomeContent: {
+    flex: 1,
+    justifyContent: "center",
+    width: "100%",
+    maxWidth: 420,
+    alignSelf: "center",
+    paddingVertical: 20,
+  },
+  centeredBrand: {
+    textAlign: "center",
+    color: theme.colors.ink.soft,
+    alignSelf: "center",
+    marginBottom: 20,
+    letterSpacing: 2,
+  },
+  foodImage: {
+    width: "100%",
+    height: 148,
+    maxWidth: 320,
+    alignSelf: "center",
+    borderRadius: theme.radius.lg,
+    marginBottom: 24,
+  },
+  centeredTitle: {
+    textAlign: "center",
+    fontSize: 32,
+    lineHeight: 39,
+    letterSpacing: -0.8,
+    marginBottom: 12,
+  },
+  centeredSubtitle: {
+    textAlign: "center",
+    fontSize: 16,
+    lineHeight: 24,
+    alignSelf: "center",
+    marginBottom: 28,
+  },
+  centeredHint: {
+    fontSize: 13,
+    lineHeight: 20,
+    paddingHorizontal: 12,
+    color: theme.colors.ink.soft,
+  },
+  centeredPrompt: {
+    textAlign: "center",
+    color: theme.colors.ink.soft,
+    lineHeight: 22,
+  },
+  signupTouchTarget: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  centeredOperator: {
+    maxWidth: 320,
+    alignSelf: "center",
+    color: theme.colors.ink.soft,
+    marginTop: 16,
+    fontSize: 11,
+    lineHeight: 17,
+  },
   topGap: { height: theme.spacing[6] },
   bottomGap: { height: theme.spacing[8] },
 
   operatorLine: {
     marginTop: theme.spacing[6],
-    textAlign: 'center',
-    fontFamily: 'Inter',
+    textAlign: "center",
+    fontFamily: "Inter",
     fontSize: 11,
     lineHeight: 16,
     color: theme.colors.ink.muted,
   },
 
   brand: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     marginBottom: theme.spacing[6],
   },
   title: {
-    fontFamily: 'Geist-Bold',
+    fontFamily: "Geist-Bold",
     fontSize: theme.typography.size.display.size,
     lineHeight:
       theme.typography.size.display.size *
@@ -453,13 +568,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[1],
   },
   subtitle: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.soft,
     marginBottom: theme.spacing[8],
   },
 
-  errorBannerWrap: { overflow: 'hidden' },
+  errorBannerWrap: { overflow: "hidden" },
   errorBanner: {
     backgroundColor: theme.colors.destructive.tint,
     borderLeftWidth: 3,
@@ -469,20 +584,20 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
   },
   errorText: {
-    fontFamily: 'Inter-Medium',
+    fontFamily: "Inter-Medium",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.destructive.DEFAULT,
   },
 
   forgotRow: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
     marginBottom: theme.spacing[5],
   },
   linkText: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.label.size,
     color: theme.colors.ink.DEFAULT,
-    textDecorationLine: 'underline',
+    textDecorationLine: "underline",
   },
 
   primaryActions: {
@@ -491,15 +606,15 @@ const styles = StyleSheet.create({
   },
   hostedHint: {
     marginTop: theme.spacing[2],
-    textAlign: 'center',
-    fontFamily: 'Inter',
+    textAlign: "center",
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
   },
 
   divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: theme.spacing[4],
   },
   dividerLine: {
@@ -509,46 +624,46 @@ const styles = StyleSheet.create({
   },
   dividerLabel: {
     marginHorizontal: theme.spacing[3],
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     letterSpacing: 1,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
 
   socialIconRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: theme.spacing[3],
-    justifyContent: 'center',
+    justifyContent: "center",
     marginBottom: theme.spacing[6],
   },
 
   guestRow: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: theme.spacing[4],
   },
   guestButton: {
     minHeight: 44, // touch-target floor — this is a real action, not fine print
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: theme.spacing[4],
   },
   guestText: {
-    fontFamily: 'Inter-Medium',
+    fontFamily: "Inter-Medium",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
   },
   signupRow: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: theme.spacing[2],
   },
   signupPrompt: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
   },
   signupCTA: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     color: theme.colors.ink.DEFAULT,
-    textDecorationLine: 'underline',
+    textDecorationLine: "underline",
   },
 });

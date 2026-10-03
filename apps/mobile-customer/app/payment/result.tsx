@@ -129,8 +129,8 @@ export default function PaymentResult() {
 
   // Clear the cart once payment is confirmed (the verify path may not have run).
   useEffect(() => {
-    if (state === 'success') useCartStore.getState().clearCart();
-  }, [state]);
+    if (state === 'success' && data?.data?.chef?.id) useCartStore.getState().clearCart(data.data.chef.id);
+  }, [state, data?.data?.chef?.id]);
 
   async function handleRetry() {
     if (!orderId) {

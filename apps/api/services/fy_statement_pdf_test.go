@@ -2,6 +2,7 @@ package services
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/homechef/api/models"
@@ -61,7 +62,7 @@ func TestFYStatementDocumentRenders(t *testing.T) {
 	addFYQuarters(m, stmt)
 	addFYExpenses(m, stmt)
 	addFYNetIncome(m, stmt)
-	addFYFooter(m)
+	addFYFooter(m, "IN")
 
 	doc, err := m.Generate()
 	if err != nil {
@@ -88,7 +89,7 @@ func TestFYStatementRendersWithNoActivity(t *testing.T) {
 	addFYQuarters(m, stmt)
 	addFYExpenses(m, stmt)
 	addFYNetIncome(m, stmt)
-	addFYFooter(m)
+	addFYFooter(m, "IN")
 
 	if _, err := m.Generate(); err != nil {
 		t.Fatalf("generate: %v", err)
@@ -124,5 +125,30 @@ func TestFormatStatementAmount(t *testing.T) {
 		if got := formatStatementAmount(in); got != want {
 			t.Errorf("formatStatementAmount(%v) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestNZStatementOmitsIndianTaxReferences(t *testing.T) {
+	stmt := fyStatementFixture()
+	stmt.Currency = "NZD"
+	stmt.TDSWithheld = 0
+	m := maroto.New(config.NewBuilder().WithCompression(false).Build())
+	addFYHeader(m, stmt)
+	addFYParties(m, &models.ChefProfile{PayoutCountry: "NZ", BusinessName: "NZ Test Kitchen"})
+	addFYIncome(m, stmt)
+	addFYQuarters(m, stmt)
+	addFYFooter(m, "NZ")
+	doc, err := m.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(doc.GetBytes())
+	for _, unwanted := range []string{"194-O", "TDS", "AY 2027", "input tax credit eligible", "Form 16A", " IST"} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("NZ statement contains %q", unwanted)
+		}
+	}
+	if !strings.Contains(body, "NZD") {
+		t.Error("NZ currency missing")
 	}
 }

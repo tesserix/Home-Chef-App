@@ -1,3 +1,4 @@
+import { SavedCartSync } from '../hooks/useSavedCarts';
 import '../global.css';
 
 import { useEffect, useRef, useState } from 'react';
@@ -381,6 +382,7 @@ export default function RootLayout() {
         tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
       >
         <QueryClientProvider client={queryClient}>
+          <SavedCartSync />
           <ToastProvider>
             {/* One branded Dialog for the whole app, replacing Alert.alert. */}
             <DialogProvider accentColor={customerColors.coral.DEFAULT}>

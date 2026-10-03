@@ -73,7 +73,7 @@ func GenerateFYStatementPDF(chefID uuid.UUID, fyStartYear int) ([]byte, string, 
 	addFYQuarters(m, stmt)
 	addFYExpenses(m, stmt)
 	addFYNetIncome(m, stmt)
-	addFYFooter(m)
+	addFYFooter(m, chef.PayoutCountry)
 
 	doc, err := m.Generate()
 	if err != nil {
@@ -126,6 +126,10 @@ func sectionHeading(m core.Maroto, label string) {
 func sectionGap(m core.Maroto) { m.AddRow(5, col.New(12).Add(spacer())) }
 
 func addFYHeader(m core.Maroto, stmt *FYStatement) {
+	yearLabel := stmt.FYLabel
+	if strOrDefault(stmt.Currency, "INR") == "INR" {
+		yearLabel = fmt.Sprintf("%s · AY %d-%02d", stmt.FYLabel, stmt.FYStartYear+1, (stmt.FYStartYear+2)%100)
+	}
 	// Masthead: app mark and wordmark left, document type right, on one baseline.
 	m.AddRow(12,
 		// No Top offset — the mark is square and any nudge pushes it past the
@@ -137,7 +141,7 @@ func addFYHeader(m core.Maroto, stmt *FYStatement) {
 		),
 		col.New(6).Add(
 			text.New("ANNUAL STATEMENT", props.Text{Top: 2, Size: 13, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()}),
-			text.New(fmt.Sprintf("%s · AY %d-%02d", stmt.FYLabel, stmt.FYStartYear+1, (stmt.FYStartYear+2)%100),
+			text.New(yearLabel,
 				props.Text{Top: 8.5, Size: 8, Align: align.Right, Color: docMutedColor()}),
 		),
 	)
@@ -170,10 +174,10 @@ func addFYSummaryBand(m core.Maroto, stmt *FYStatement) {
 
 func addFYParties(m core.Maroto, chef *models.ChefProfile) {
 	right := []string{}
-	if chef.PanNumber != "" {
+	if ReportingCurrency(chef.PayoutCountry) == "INR" && chef.PanNumber != "" {
 		right = append(right, "PAN: "+chef.PanNumber)
 	}
-	if chef.GSTIN != "" {
+	if ReportingCurrency(chef.PayoutCountry) == "INR" && chef.GSTIN != "" {
 		right = append(right, "GSTIN: "+chef.GSTIN)
 	}
 	if addr := joinNonEmpty([]string{chef.City, chef.State, chef.PostalCode}, ", "); addr != "" {
@@ -183,9 +187,9 @@ func addFYParties(m core.Maroto, chef *models.ChefProfile) {
 	left := []core.Component{
 		text.New("PLATFORM", props.Text{Size: 7, Style: fontstyle.Bold, Color: docMutedColor()}),
 		text.New(BrandLegalName, props.Text{Top: 4, Size: 10, Style: fontstyle.Bold}),
-		// Names who withheld the TDS the income section deducts, which is the
-		// first thing an accountant reading this asks.
-		text.New("E-commerce operator u/s 194-O", props.Text{Top: 9.5, Size: 8.5, Color: docMutedColor()}),
+	}
+	if ReportingCurrency(chef.PayoutCountry) == "INR" {
+		left = append(left, text.New("E-commerce operator u/s 194-O", props.Text{Top: 9.5, Size: 8.5, Color: docMutedColor()}))
 	}
 	sellerCol := []core.Component{
 		text.New("SELLER (YOU)", props.Text{Size: 7, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()}),
@@ -245,23 +249,29 @@ func addFYIncome(m core.Maroto, stmt *FYStatement) {
 	)
 	m.AddRows(totalRow("Gross receipts", stmt.GrossReceipts))
 	m.AddRow(2, col.New(12).Add(spacer()))
-	m.AddRows(
-		moneyRow("Less: platform commission", -stmt.PlatformCommission, false),
-		moneyRow("GST charged on commission (input tax credit eligible)", gstOnCommission, false),
-		moneyRow("Less: TDS withheld u/s 194-O (credit against income tax)", -stmt.TDSWithheld, false),
-	)
+	m.AddRows(moneyRow("Less: platform commission", -stmt.PlatformCommission, false))
+	if strOrDefault(stmt.Currency, "INR") == "INR" {
+		m.AddRows(
+			moneyRow("GST charged on commission (input tax credit eligible)", gstOnCommission, false),
+			moneyRow("Less: TDS withheld u/s 194-O (credit against income tax)", -stmt.TDSWithheld, false),
+		)
+	}
 	m.AddRows(totalRow("Net earnings from platform", stmt.NetEarnings))
 	sectionGap(m)
 }
 
 func addFYQuarters(m core.Maroto, stmt *FYStatement) {
+	deductionLabel := "Fees"
+	if strOrDefault(stmt.Currency, "INR") == "INR" {
+		deductionLabel = "TDS"
+	}
 	sectionHeading(m, "QUARTERLY BREAKDOWN")
 	m.AddRows(
 		row.New(7).Add(
 			col.New(4).Add(text.New("Quarter", props.Text{Left: 2, Top: 2, Size: 8, Style: fontstyle.Bold, Color: docMutedColor()})),
 			col.New(2).Add(text.New("Orders", props.Text{Top: 2, Size: 8, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()})),
 			col.New(2).Add(text.New("Gross", props.Text{Top: 2, Size: 8, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()})),
-			col.New(2).Add(text.New("TDS", props.Text{Top: 2, Size: 8, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()})),
+			col.New(2).Add(text.New(deductionLabel, props.Text{Top: 2, Size: 8, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()})),
 			col.New(2).Add(text.New("Net", props.Text{Right: 2, Top: 2, Size: 8, Style: fontstyle.Bold, Align: align.Right, Color: docMutedColor()})),
 		).WithStyle(&props.Cell{BackgroundColor: docTintColor()}),
 	)
@@ -272,11 +282,15 @@ func addFYQuarters(m core.Maroto, stmt *FYStatement) {
 		if q.OrdersCount == 0 {
 			color = docFaintColor()
 		}
+		deduction := q.TDS
+		if deductionLabel == "Fees" {
+			deduction = Round2(q.Gross - q.NetPayout)
+		}
 		rows = append(rows, row.New(5.6).Add(
 			col.New(4).Add(text.New(q.Label, props.Text{Left: 2, Top: 1.4, Size: 9, Color: color})),
 			col.New(2).Add(text.New(fmt.Sprintf("%d", q.OrdersCount), props.Text{Top: 1.4, Size: 9, Align: align.Right, Color: color})),
 			col.New(2).Add(text.New(formatStatementAmount(q.Gross), props.Text{Top: 1.4, Size: 9, Align: align.Right, Color: color})),
-			col.New(2).Add(text.New(formatStatementAmount(q.TDS), props.Text{Top: 1.4, Size: 9, Align: align.Right, Color: color})),
+			col.New(2).Add(text.New(formatStatementAmount(deduction), props.Text{Top: 1.4, Size: 9, Align: align.Right, Color: color})),
 			col.New(2).Add(text.New(formatStatementAmount(q.NetPayout), props.Text{Right: 2, Top: 1.4, Size: 9, Align: align.Right, Color: color})),
 		), hairline())
 	}
@@ -329,18 +343,21 @@ func addFYNetIncome(m core.Maroto, stmt *FYStatement) {
 	)
 }
 
-func addFYFooter(m core.Maroto) {
+func addFYFooter(m core.Maroto, country string) {
+	disclaimer := "This document is a working summary for GST and income-tax preparation — it is not a GST return or audited financial statement. Please consult a tax professional before filing."
+	if ReportingCurrency(country) == "INR" {
+		disclaimer = "This document is a working summary for GST and income-tax preparation — it is not a GST return, Form 16A, or audited financial statement. Please consult a tax professional before filing."
+	}
 	m.AddRow(6, col.New(12).Add(spacer()))
 	m.AddRows(hairline())
 	m.AddRow(3, col.New(12).Add(spacer()))
 	m.AddRow(9, col.New(12).Add(text.New(
 		"Expenses in this statement are self-declared by the seller and are not verified by "+BrandName+". "+
-			"This document is a working summary for GST and income-tax preparation — it is not a GST return, "+
-			"Form 16A, or audited financial statement. Please consult a tax professional before filing.",
+			disclaimer,
 		props.Text{Size: 7, Align: align.Center, Color: docFaintColor(), Style: fontstyle.Italic},
 	)))
 	m.AddRow(4, col.New(12).Add(text.New(
-		fmt.Sprintf("Generated %s · "+BrandLegalName, time.Now().In(istLoc).Format("02 Jan 2006 15:04 IST")),
+		fmt.Sprintf("Generated %s · "+BrandLegalName, time.Now().In(FiscalCalendarFor(country).Loc).Format("02 Jan 2006 15:04 MST")),
 		props.Text{Size: 7, Align: align.Center, Color: docFaintColor()},
 	)))
 }

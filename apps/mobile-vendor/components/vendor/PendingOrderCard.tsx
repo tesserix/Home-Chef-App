@@ -122,7 +122,7 @@ export function PendingOrderCard({
         {/* Labelled, because the figure changed meaning: this is the chef's
             earning, not the customer's bill it used to show. */}
         <View style={styles.earningBlock}>
-          <Text style={styles.total}>{formatMoney(earning)}</Text>
+          <Text style={styles.total}>{formatMoney(earning, order.currency)}</Text>
           <Text style={styles.earningLabel}>you earn</Text>
         </View>
       </View>
@@ -154,7 +154,7 @@ export function PendingOrderCard({
         onPress={onOpenDetail}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel={`Review order from ${order.customerName}, you earn ${formatMoney(earning)}`}
+        accessibilityLabel={`Review order from ${order.customerName}, you earn ${formatMoney(earning, order.currency)}`}
         accessibilityHint="Opens the order to review and respond"
         android_ripple={{ color: `${theme.colors.ink.DEFAULT}14`, borderless: false }}
       >

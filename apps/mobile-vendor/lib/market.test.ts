@@ -1,6 +1,6 @@
 import { describe, it, expect } from "@jest/globals";
 
-import { getMarket, isValidPostcode, MARKET_CODES, taxYearStart } from "./market";
+import { getMarket, isValidPostcode, MARKET_CODES, taxYearStart, marketDateISO, formatExpenseDate } from "./market";
 
 describe("kitchen markets", () => {
   it("serves India, Australia and New Zealand", () => {
@@ -47,4 +47,17 @@ describe("kitchen markets", () => {
     expect(taxYearStart(getMarket("NZ"), may)).toBe(2026);
     expect(taxYearStart(getMarket("IN"), new Date(2026, 2, 31))).toBe(2025);
   });
+});
+
+it('rolls the NZ tax year at Auckland midnight even when UTC is March', () => {
+ expect(taxYearStart(getMarket('NZ'), new Date('2026-03-31T11:00:00Z'))).toBe(2026);
+});
+
+it('keeps Auckland expense dates across UTC boundaries and daylight saving', () => {
+ const nz = getMarket('NZ');
+ expect(marketDateISO(nz,new Date('2026-10-02T11:00:00Z'))).toBe('2026-10-03');
+ expect(marketDateISO(nz,new Date('2026-09-27T11:00:00Z'),1)).toBe('2026-09-27');
+ expect(formatExpenseDate('2026-10-03',nz)).toBe('03 Oct 2026');
+ expect(formatExpenseDate('2026-10-02T11:00:00Z',nz)).toBe('03 Oct 2026');
+ expect(formatExpenseDate('2026-06-30T12:00:00Z',nz)).toBe('01 Jul 2026');
 });

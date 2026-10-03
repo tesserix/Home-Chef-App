@@ -32,17 +32,9 @@ import {
   useFYStatement,
 } from '../hooks/useChefExpenses';
 import { useKitchenMarket, useKitchenMoney } from '../hooks/useKitchenMarket';
-import { taxYearStart } from '../lib/market';
+import { taxYearStart, formatExpenseDate, getMarket } from '../lib/market';
 
 const INK_RIPPLE = `${theme.colors.ink.DEFAULT}14`;
-
-function fmtShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
 
 export default function ExpensesScreen() {
   const money = useKitchenMoney();
@@ -274,7 +266,7 @@ export default function ExpensesScreen() {
                     {e.orderNumber ? ` · #${e.orderNumber}` : ''}
                   </Text>
                   <Text style={styles.expenseSub} numberOfLines={1}>
-                    {fmtShortDate(e.expenseDate)}
+                    {formatExpenseDate(e.expenseDate, market ?? getMarket(undefined))}
                     {e.note ? ` · ${e.note}` : ''}
                   </Text>
                 </View>
