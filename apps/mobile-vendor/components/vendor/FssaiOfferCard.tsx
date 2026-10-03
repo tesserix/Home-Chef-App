@@ -14,6 +14,7 @@ import { formatMoney } from '../../lib/format';
 import { fssaiStatusLabel, isFssaiClosed } from '../../lib/fssai';
 import { useFssaiQuote, useFssaiRequest } from '../../hooks/useFssai';
 import { useKitchenMarket } from '../../hooks/useKitchenMarket';
+import { FoodSafetyGuideCard } from './FoodSafetyGuideCard';
 
 /** Whether a licence is already on file. Shares the documents query key, so
  *  placing this on the Documents screen costs no extra request. */
@@ -27,17 +28,20 @@ function useHasFssaiLicence(): boolean | undefined {
 }
 
 export function FssaiOfferCard() {
+  const market = useKitchenMarket();
+  if (!market) return null;
+  return market.code === 'IN' ? <IndianFssaiOfferCard /> : <FoodSafetyGuideCard country={market.code} />;
+}
+
+function IndianFssaiOfferCard() {
   const quoteQuery = useFssaiQuote();
   const requestQuery = useFssaiRequest();
   const hasLicence = useHasFssaiLicence();
-  const market = useKitchenMarket();
 
   const enabled = quoteQuery.data?.enabled ?? false;
   const request = requestQuery.data?.request ?? null;
   const live = request && !isFssaiClosed(request.status) ? request : null;
 
-  // FSSAI filing is an Indian service.
-  if (market?.code !== 'IN') return null;
   // Nothing to offer and nothing to track — stay out of the way entirely.
   if (!enabled && !live) return null;
   // A chef who already holds a licence is not a candidate for the service. The

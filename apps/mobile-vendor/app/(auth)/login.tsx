@@ -64,9 +64,11 @@ export default function LoginPage() {
 
   return (
     <LoginScreen
+      presentation="kitchen"
+      heroImage={require('../../assets/auth-food.png')}
       brand="Fe3dr · Vendor"
       title="Welcome back"
-      subtitle="For those who love to eat — and those who love to cook."
+      subtitle={'Your kitchen. Your community.\nLet’s get cooking.'}
       onHostedSignIn={handleHostedSignIn}
       onNavigateToRegister={() => router.push('/(auth)/register')}
       onBiometricLogin={biometricsEnabled ? handleBiometricLogin : undefined}

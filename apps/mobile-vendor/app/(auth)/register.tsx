@@ -47,6 +47,8 @@ export default function RegisterPage() {
 
   return (
     <LoginScreen
+      presentation="kitchen"
+      heroImage={require('../../assets/auth-food.png')}
       brand="Fe3dr · Vendor"
       title="Open your kitchen"
       subtitle="Turn your cooking into income — your menu, your prices."

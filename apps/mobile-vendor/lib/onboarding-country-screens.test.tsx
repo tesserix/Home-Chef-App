@@ -32,11 +32,13 @@ it.each(['AU', 'NZ'])('shows local registration without Indian tax fields for %s
   expect(output).toContain('onboarding.foodRegCert');
   expect(output).not.toContain('onboarding.licenseNumber');
   expect(output).not.toContain('onboarding.gstinOptional');
+  expect(screen.root.findAllByProps({ accessibilityLabel: 'Food safety registration guide' })).toHaveLength(1);
 });
 it('preserves Indian registration fields', async () => {
   draft('IN');
   await act(async () => { screen = create(<DocumentsScreen />); });
   expect(JSON.stringify(screen.toJSON())).toContain('onboarding.licenseNumber');
+  expect(screen.root.findAllByProps({ accessibilityLabel: 'Food safety registration guide' })).toHaveLength(0);
 });
 it.each(['AU', 'NZ'])('defers Stripe connection until application submission for %s', async (country) => {
   draft(country);
